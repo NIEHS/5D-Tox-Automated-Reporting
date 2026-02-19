@@ -1,0 +1,15 @@
+[project]
+name = "bmdx"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.82.0",
+    "duckdb>=1.2.0",
+    "networkx>=3.6.1",
+    "pandas>=2.2.0",
+    "python-docx>=1.2.0",
+    "requests>=2.32.5",
+    "scipy>=1.14.0",
+]

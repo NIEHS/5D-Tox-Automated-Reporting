@@ -1,0 +1,2856 @@
+{
+  "consensus_genes": {
+    "NFE2L2": {
+      "count": 27,
+      "organs": [
+        "brain",
+        "fibroblasts",
+        "heart",
+        "intestine",
+        "kidney",
+        "liver",
+        "lung",
+        "neurodegenerative tissues (alzheimer\u2019s and parkinson\u2019s diseases)",
+        "reproductive organs",
+        "skin",
+        "stomach",
+        "tumor"
+      ],
+      "years": [
+        2013,
+        2014,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "b51efd464b74f2218a73f27abf59b2830ea86c19",
+          "title": "Toxicogenomic module associations with pathogenesis: a network-based approach to understanding drug toxicity",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "de4a712f0ee14f3269b12f933fbbd34b797bcb83",
+          "title": "Literature optimized integration of gene expression for organ-specific evaluation of toxicogenomics datasets",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2f18ea4855a57f6edd269458e6658203ef69a288",
+          "title": "Comparison of RNA-Seq and Microarray Gene Expression Platforms for the Toxicogenomic Evaluation of Liver From Short-Term Rat Toxicity Studies",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "122c32b6c5f185dca5d817bda1c840ea5ba2517e",
+          "title": "Heavy metals: toxicity and human health effects",
+          "year": 2024,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "4dda5eb7b616a144d67fd79081128e67cdbee972",
+          "title": "Research Advances on Cadmium-Induced Toxicity in Hepatic Macrophages",
+          "year": 2026,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "e0848c07229f24abf7065000aa16e9122e7929b4",
+          "title": "Development and Application of a Transcriptomic Signature of Bioactivation in an Advanced In Vitro Liver Model to Reduce Drug-induced Liver Injury Risk Early in the Pharmaceutical Pipeline.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "30a3c425ed727743fb4e3a8548801dad86e02426",
+          "title": "N-acetyl cysteine and vitamin E attenuate acrylamide-induced hepatotoxicity via regulation of miRNA-34a and P53/Nrf2/SIRT 1 signaling pathways.",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "7cc5af2befb7a291dbf092b463fca47fe77da722",
+          "title": "Application of a Rat Liver Drug Bioactivation Transcriptional Response Assay Early in Drug Development That Informs Chemically Reactive Metabolite Formation and Potential for Drug-induced Liver Injury",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "641feed19825e160511c1dbab338f8e1fac1ca6c",
+          "title": "Idiosyncratic Drug-Induced Liver Injury (IDILI): Potential Mechanisms and Predictive Assays",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "849bf66e8fa0004899ba6f66854ca71bc76cb3f2",
+          "title": "Aerial Yam Bulbils Protect Against APAP-Induced Hepatotoxicity by Inhibiting Oxidative Stress and Mitochondrial Dysfunction Through Nrf2 Activation",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e05d76c73f3cb8fc7c0b438c2085aba645511a92",
+          "title": "Exposure to Cobalt Causes Transcriptomic and Proteomic Changes in Two Rat Liver Derived Cell Lines",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e63e880049b88a51400c410ebd117048fa6d886e",
+          "title": "Combined administration of synthetic monophenol TS-13 with doxorubicin enhances the antimitotic effect and mitigates adverse effects of the cytostatic in tumor growth model",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "0764529a715f76c063482c392d25849efd1c41ce",
+          "title": "p53 attenuates acetaminophen-induced hepatotoxicity by regulating drug-metabolizing enzymes and transporter expression",
+          "year": 2018,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "9a088f397e4627ff46e65e51c879cc51d92e8af3",
+          "title": "Protein tyrosine phosphatase 1B modulates GSK3\u03b2/Nrf2 and IGFIR signaling pathways in acetaminophen-induced hepatotoxicity",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bd899665bb12d59512165e7ef696fb5665a96c7c",
+          "title": "Antioxidant Natural Compounds Integrated with Targeted Protein Degradation: A Multi-Modal Strategy for Alzheimer\u2019s Disease Therapy",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b3663fabf49bfce8b8b3dbb0dadbe93e0d118941",
+          "title": "Role of Nrf2 in chronic liver disease.",
+          "year": 2014,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ae6e6184c180485e786f5a18d30fc4f5fa906e12",
+          "title": "Zn and Se protect toxic metal mixture-mediated memory deficit by activation of Nrf2-hmox-1 signaling in the hippocampus of female rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "777fab3a04d541e49da3a342dfa50ac991ccadbd",
+          "title": "A Point Mutation at C151 of Keap1 of Mice Abrogates NRF2 Signaling, Cytoprotection in Vitro, and Hepatoprotection in Vivo by Bardoxolone Methyl (CDDO-Me)",
+          "year": 2023,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "dbc7fc69c9a9c4a3c2ba1ba4b07e41705b0477d8",
+          "title": "A Gene Expression Biomarker Predicts Heat Shock Factor 1 Activation in a Gene Expression Compendium.",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "fd80562c42aff6f140a5a503960cf4b3141e07b5",
+          "title": "Dual role of Nrf2 signaling in hepatocellular carcinoma: promoting development, immune evasion, and therapeutic challenges",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "65c5a9f8392bd720bf17f66fe5380c9747b7d784",
+          "title": "Cardiomyocyte gene programs encoding morphological and functional signatures in cardiac hypertrophy and failure",
+          "year": 2018,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "809b662f43a881170cb51cba10dc3dfe8bcafdff",
+          "title": "Liver carcinogenesis: from naughty chemicals to soothing fat and the surprising role of NRF2.",
+          "year": 2016,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "86b3f5cdebc4bd6aa8c3b1e7607b20d9299f80ed",
+          "title": "A systems approach reveals species differences in hepatic stress response capacity",
+          "year": 2022,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "TP53": {
+      "count": 14,
+      "organs": [
+        "brain",
+        "heart",
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2015,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "081ac728287afd6afb9851de9ca6445d87000d6c",
+          "title": "A mechanistic biomarker investigation of fialuridine hepatotoxicity using the chimeric TK-NOG Hu-liver mouse model and in vitro micropatterned hepatocyte cocultures.",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "0edccae0940a50439438fcff467cc9375acd93de",
+          "title": "Olmutinib Reverses Thioacetamide-Induced Cell Cycle Gene Alterations in Mice Liver and Kidney Tissues, While Wheat Germ Treatment Exhibits Limited Efficacy at Gene Level",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "0bc54305067c7d39e46a1a1aceafbe6653b562cb",
+          "title": "Cadmium Exposure: Mechanisms and Pathways of Toxicity and Implications for Human Health",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "30a3c425ed727743fb4e3a8548801dad86e02426",
+          "title": "N-acetyl cysteine and vitamin E attenuate acrylamide-induced hepatotoxicity via regulation of miRNA-34a and P53/Nrf2/SIRT 1 signaling pathways.",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "3836b733eb6918b6ed0370596eef2ff993b6838e",
+          "title": "Neuronal specific and non-specific responses to cadmium possibly involved in neurodegeneration: A toxicogenomics study in a human neuronal cell model.",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "eec077c6e907fac00218408ad45ee31b840580dd",
+          "title": "Fraxinellone Induces Hepatotoxicity in Zebrafish through Oxidative Stress and the Transporters Pathway",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "0764529a715f76c063482c392d25849efd1c41ce",
+          "title": "p53 attenuates acetaminophen-induced hepatotoxicity by regulating drug-metabolizing enzymes and transporter expression",
+          "year": 2018,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2d390fb74c001a1333f3960771e43c08541c7363",
+          "title": "Implementing Toxicity Testing in the 21st Century (TT21C): Making safety decisions using toxicity pathways, and progress in a prototype risk assessment.",
+          "year": 2015,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b815758e6a2c820e3a699811acd430eb585e97dd",
+          "title": "Application of a metabolic network-based graph neural network for the identification of toxicant-induced perturbations",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ad3e0139c85086fb9b45cf6dce186dd3206d09c2",
+          "title": "Protective effect of valsartan against doxorubicin\u2010induced cardiotoxicity: Histopathology and metabolomics in vivo study",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e46a5a9015a6b53fd18cd7e86c453f11bf3535d1",
+          "title": "Protective Role of Menthol Against Doxorubicin-Induced Cardiac Injury Through Suppression of TLR4/MAPK/NF-\u03baB Signaling and Oxidative Stress",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "65c5a9f8392bd720bf17f66fe5380c9747b7d784",
+          "title": "Cardiomyocyte gene programs encoding morphological and functional signatures in cardiac hypertrophy and failure",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "BAX": {
+      "count": 12,
+      "organs": [
+        "brain",
+        "heart",
+        "intestine",
+        "kidney",
+        "liver",
+        "lung",
+        "neurodegenerative tissues (alzheimer\u2019s and parkinson\u2019s diseases)",
+        "reproductive organs",
+        "skin",
+        "stomach"
+      ],
+      "years": [
+        2017,
+        2021,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "122c32b6c5f185dca5d817bda1c840ea5ba2517e",
+          "title": "Heavy metals: toxicity and human health effects",
+          "year": 2024,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "ceeab10f6a5221424083babed2d5684386df1cce",
+          "title": "Four functional genotoxic marker genes (Bax, Btg2, Ccng1, and Cdkn1a) discriminate genotoxic hepatocarcinogens from non-genotoxic hepatocarcinogens and non-genotoxic non-hepatocarcinogens in rat public toxicogenomics data, Open TG-GATEs",
+          "year": 2024,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5e8046b1049d9dfe8cc34e08e831d5c6f8565dc0",
+          "title": "The cardioprotective effect of whey protein against thioacetamide-induced toxicity through its antioxidant, anti-inflammatory, and anti-apoptotic effects in male albino rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b53be27f948705f81df2668f6b762afc6a408add",
+          "title": "Curcumin Protects against Arsenic and Cadmium\u2010Induced Lung Toxicity in Rats by Modulating Bax/Bcl\u20102/caspase\u20103 Pathway: In Vivo and In Silico Approaches",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e5aee7e0a8f05a6b43919c73afe2711302d4ce34",
+          "title": "Transcriptome Analysis Reveals the AhR, Smad2/3, and HIF-1\u03b1 Pathways as the Mechanism of Ochratoxin A Toxicity in Kidney Cells",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e8e6923b354b19f2ab41c6bb6edd61b30887445b",
+          "title": "Oral administration of Ginsenoside Rg1 prevents cardiac toxicity induced by doxorubicin in mice through anti-apoptosis",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4353e4edfceb97f47db13b4922056edafed6f85f",
+          "title": "The Histone Deacetylase Activator ITSA-1 Improves the Prognosis of Cardiac Arrest Rats by Alleviating Systemic Inflammatory Responses Following Cardiopulmonary Resuscitation",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "71695530512e0899cf43cb0f02120cd5433eee08",
+          "title": "Novel thiazole\u2013phthalimide-based heterobimetallic Cu(ii)\u2013M(ii) complexes: synthesis, characterization, and therapeutic properties against arsenic-induced lung damage in rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "f26ed88fe082e44ea1de2510fef05c082a2136d2",
+          "title": "The Protective Potential of Aronia melanocarpa L. Berry Extract against Cadmium-Induced Kidney Damage: A Study in an Animal Model of Human Environmental Exposure to This Toxic Element",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ad3e0139c85086fb9b45cf6dce186dd3206d09c2",
+          "title": "Protective effect of valsartan against doxorubicin\u2010induced cardiotoxicity: Histopathology and metabolomics in vivo study",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PPARA": {
+      "count": 12,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2016,
+        2017,
+        2020,
+        2022,
+        2023,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "916d20b5743f640d1bef9ff07ff31d4920042297",
+          "title": "Fenofibrate differentially activates PPAR\u03b1-mediated lipid metabolism in rat kidney and liver",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "9f98b5c233cf9980bbef83ae084b501439793786",
+          "title": "Comparison of phenotypic and transcriptomic profiles between HFPO-DA and prototypical PPAR\u03b1, PPAR\u03b3, and cytotoxic agents in wild-type and Ppara-null mouse livers",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "20adce8941d8530530229fede13a688e90e39a6b",
+          "title": "A Set of Six Gene Expression Biomarkers Identify Rat Liver Tumorigens in Short-Term Assays.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "7d8b4c018b4b43089f58172efec6eb8216280205",
+          "title": "Mitochondrial dysfunction in drug-induced hepatic steatosis: recent findings and current concept.",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6eafda88d9a85a2bd0c7cfa21e9a5af8936866bd",
+          "title": "BDE-47, -99, -209 and Their Ternary Mixture Disrupt Glucose and Lipid Metabolism of Hepg2 Cells at Dietary Relevant Concentrations: Mechanistic Insight through Integrated Transcriptomics and Proteomics Analysis",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "63dce5041465621e6b32dd49ee32610f8b7e4da2",
+          "title": "Detection of non-genotoxic hepatocarcinogens and prediction of their mechanism of action in rats using gene marker sets.",
+          "year": 2016,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5dce0ec9ff843d87287ef162f08db1480904c17e",
+          "title": "Assessment of Mouse Liver Histopathology Following Exposure to HFPO-DA With Emphasis on Understanding Mechanisms of Hepatocellular Death",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "acff4645698bef13754d778cad1c9e0d393fa982",
+          "title": "Interactive Toxicogenomics: Gene set discovery, clustering and analysis in Toxygates",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ac4ce09a292dfc918aea53340fe989ae4b43bab8",
+          "title": "Assessment of the mode of action underlying development of liver lesions in mice following oral exposure to HFPO-DA and relevance to humans",
+          "year": 2023,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "1fbcc4706be25728f7a88aeaecd854a3a7c1c380",
+          "title": "A High Phosphorus Diet Affects Lipid Metabolism in Rat Liver: A DNA Microarray Analysis",
+          "year": 2016,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "BCL2": {
+      "count": 11,
+      "organs": [
+        "brain",
+        "heart",
+        "intestine",
+        "kidney",
+        "liver",
+        "lung",
+        "neurodegenerative tissues (alzheimer\u2019s and parkinson\u2019s diseases)",
+        "reproductive organs",
+        "skin",
+        "stomach"
+      ],
+      "years": [
+        2015,
+        2017,
+        2021,
+        2023,
+        2024,
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "122c32b6c5f185dca5d817bda1c840ea5ba2517e",
+          "title": "Heavy metals: toxicity and human health effects",
+          "year": 2024,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "5e8046b1049d9dfe8cc34e08e831d5c6f8565dc0",
+          "title": "The cardioprotective effect of whey protein against thioacetamide-induced toxicity through its antioxidant, anti-inflammatory, and anti-apoptotic effects in male albino rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b53be27f948705f81df2668f6b762afc6a408add",
+          "title": "Curcumin Protects against Arsenic and Cadmium\u2010Induced Lung Toxicity in Rats by Modulating Bax/Bcl\u20102/caspase\u20103 Pathway: In Vivo and In Silico Approaches",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b0e866f493f5f1f052f9664c05563d0fee918903",
+          "title": "Hepatoprotective potentials of Bryophyllum pinnatum against doxorubicin induced liver damage in Wistar rats.",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e8e6923b354b19f2ab41c6bb6edd61b30887445b",
+          "title": "Oral administration of Ginsenoside Rg1 prevents cardiac toxicity induced by doxorubicin in mice through anti-apoptosis",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4353e4edfceb97f47db13b4922056edafed6f85f",
+          "title": "The Histone Deacetylase Activator ITSA-1 Improves the Prognosis of Cardiac Arrest Rats by Alleviating Systemic Inflammatory Responses Following Cardiopulmonary Resuscitation",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "71695530512e0899cf43cb0f02120cd5433eee08",
+          "title": "Novel thiazole\u2013phthalimide-based heterobimetallic Cu(ii)\u2013M(ii) complexes: synthesis, characterization, and therapeutic properties against arsenic-induced lung damage in rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "cd68f1567c7795c5a184ee8991b25d42e2718a2a",
+          "title": "Effects of Valproic Acid and Dexamethasone Administration on Early Bio-Markers and Gene Expression Profile in Acute Kidney Ischemia-Reperfusion Injury in the Rat",
+          "year": 2015,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ad3e0139c85086fb9b45cf6dce186dd3206d09c2",
+          "title": "Protective effect of valsartan against doxorubicin\u2010induced cardiotoxicity: Histopathology and metabolomics in vivo study",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "TNF": {
+      "count": 8,
+      "organs": [
+        "blood",
+        "brain",
+        "heart",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "5e8046b1049d9dfe8cc34e08e831d5c6f8565dc0",
+          "title": "The cardioprotective effect of whey protein against thioacetamide-induced toxicity through its antioxidant, anti-inflammatory, and anti-apoptotic effects in male albino rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5bd0eedfb4451b145442480221c27e536c22acb3",
+          "title": "Targeting TNF\u03b1-mediated cytotoxicity using thalidomide after experimental cardiac arrest in rats: An exploratory study.",
+          "year": 2022,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "da97e03e41b0150587a1634feb5477576250d61e",
+          "title": "High-Dose Fenofibrate Stimulates Multiple Cellular Stress Pathways in the Kidney of Old Rats",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "00a53403502505e120f96b9a6fd83bb292e5acc0",
+          "title": "Apigenin ameliorates doxorubicin-induced renal injury via inhibition of oxidative stress and inflammation.",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "05b1b860781adb2388326066f1598c00dcd3bd90",
+          "title": "Macrophage Inhibitory Factor in Myocardial Oxidative Stress and Inflammation During Thioacetamide-Induced Liver Fibrosis: Modulation by Betaine",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "NFKB1": {
+      "count": 7,
+      "organs": [
+        "brain",
+        "heart",
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2023,
+        2024,
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "4dda5eb7b616a144d67fd79081128e67cdbee972",
+          "title": "Research Advances on Cadmium-Induced Toxicity in Hepatic Macrophages",
+          "year": 2026,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "0bc54305067c7d39e46a1a1aceafbe6653b562cb",
+          "title": "Cadmium Exposure: Mechanisms and Pathways of Toxicity and Implications for Human Health",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4353e4edfceb97f47db13b4922056edafed6f85f",
+          "title": "The Histone Deacetylase Activator ITSA-1 Improves the Prognosis of Cardiac Arrest Rats by Alleviating Systemic Inflammatory Responses Following Cardiopulmonary Resuscitation",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "44a38eb8596c90674763a0c2c869689c574dcd88",
+          "title": "Protective Effects of Crocetin against Thioacetamide-induced Liver Fibrosis in Rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e46a5a9015a6b53fd18cd7e86c453f11bf3535d1",
+          "title": "Protective Role of Menthol Against Doxorubicin-Induced Cardiac Injury Through Suppression of TLR4/MAPK/NF-\u03baB Signaling and Oxidative Stress",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CASP3": {
+      "count": 7,
+      "organs": [
+        "brain",
+        "heart",
+        "kidney",
+        "lung"
+      ],
+      "years": [
+        2015,
+        2021,
+        2022,
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "5e8046b1049d9dfe8cc34e08e831d5c6f8565dc0",
+          "title": "The cardioprotective effect of whey protein against thioacetamide-induced toxicity through its antioxidant, anti-inflammatory, and anti-apoptotic effects in male albino rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b53be27f948705f81df2668f6b762afc6a408add",
+          "title": "Curcumin Protects against Arsenic and Cadmium\u2010Induced Lung Toxicity in Rats by Modulating Bax/Bcl\u20102/caspase\u20103 Pathway: In Vivo and In Silico Approaches",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e5aee7e0a8f05a6b43919c73afe2711302d4ce34",
+          "title": "Transcriptome Analysis Reveals the AhR, Smad2/3, and HIF-1\u03b1 Pathways as the Mechanism of Ochratoxin A Toxicity in Kidney Cells",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4353e4edfceb97f47db13b4922056edafed6f85f",
+          "title": "The Histone Deacetylase Activator ITSA-1 Improves the Prognosis of Cardiac Arrest Rats by Alleviating Systemic Inflammatory Responses Following Cardiopulmonary Resuscitation",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "db8d2659c0238d2163644e5801e5e4a4e2b72e0d",
+          "title": "Extracellular Vesicles Derived from Mesenchymal Stromal Cells Delivered during Hypothermic Oxygenated Machine Perfusion Repair Ischemic/Reperfusion Damage of Kidneys from Extended Criteria Donors",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "d16390b2699911f67ac7ce931539d9f7ec827426",
+          "title": "Effect of Metformin and Sitagliptin on Doxorubicin-Induced Cardiotoxicity in Rats: Impact of Oxidative Stress, Inflammation, and Apoptosis",
+          "year": 2015,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e46a5a9015a6b53fd18cd7e86c453f11bf3535d1",
+          "title": "Protective Role of Menthol Against Doxorubicin-Induced Cardiac Injury Through Suppression of TLR4/MAPK/NF-\u03baB Signaling and Oxidative Stress",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "IL6": {
+      "count": 7,
+      "organs": [
+        "heart",
+        "intestine",
+        "kidney",
+        "liver",
+        "pancreas",
+        "stomach"
+      ],
+      "years": [
+        2015,
+        2020,
+        2021,
+        2023,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "cd68f1567c7795c5a184ee8991b25d42e2718a2a",
+          "title": "Effects of Valproic Acid and Dexamethasone Administration on Early Bio-Markers and Gene Expression Profile in Acute Kidney Ischemia-Reperfusion Injury in the Rat",
+          "year": 2015,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "00a53403502505e120f96b9a6fd83bb292e5acc0",
+          "title": "Apigenin ameliorates doxorubicin-induced renal injury via inhibition of oxidative stress and inflammation.",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "6236948135d953ddc3e56f8dbe2f77afe3ffabe8",
+          "title": "Aloesin activates Nrf2 signaling to attenuate obesity-associated oxidative stress and hepatic steatosis in high-fat diet-fed rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "05b1b860781adb2388326066f1598c00dcd3bd90",
+          "title": "Macrophage Inhibitory Factor in Myocardial Oxidative Stress and Inflammation During Thioacetamide-Induced Liver Fibrosis: Modulation by Betaine",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "9c33e2af4aebf60e846621391b125f7b1793f94e",
+          "title": "The Role of IL\u20106, IL\u201010 and CRP in Gastrointestinal Cancers",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "NQO1": {
+      "count": 6,
+      "organs": [
+        "fibroblasts",
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2018,
+        2019,
+        2023,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "de4a712f0ee14f3269b12f933fbbd34b797bcb83",
+          "title": "Literature optimized integration of gene expression for organ-specific evaluation of toxicogenomics datasets",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "0764529a715f76c063482c392d25849efd1c41ce",
+          "title": "p53 attenuates acetaminophen-induced hepatotoxicity by regulating drug-metabolizing enzymes and transporter expression",
+          "year": 2018,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4be796128dab78b900d6678dfa4a58f32871845b",
+          "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "777fab3a04d541e49da3a342dfa50ac991ccadbd",
+          "title": "A Point Mutation at C151 of Keap1 of Mice Abrogates NRF2 Signaling, Cytoprotection in Vitro, and Hepatoprotection in Vivo by Bardoxolone Methyl (CDDO-Me)",
+          "year": 2023,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "IL1B": {
+      "count": 5,
+      "organs": [
+        "brain",
+        "heart",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2021,
+        2023,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "e80b7464b03043d2bcad6cd59f722b1f46f390df",
+          "title": "Bio-physiological susceptibility of the brain, heart, and lungs to systemic ischemia reperfusion and hyperoxia-induced injury in post-cardiac arrest rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5e8046b1049d9dfe8cc34e08e831d5c6f8565dc0",
+          "title": "The cardioprotective effect of whey protein against thioacetamide-induced toxicity through its antioxidant, anti-inflammatory, and anti-apoptotic effects in male albino rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "00a53403502505e120f96b9a6fd83bb292e5acc0",
+          "title": "Apigenin ameliorates doxorubicin-induced renal injury via inhibition of oxidative stress and inflammation.",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "44a38eb8596c90674763a0c2c869689c574dcd88",
+          "title": "Protective Effects of Crocetin against Thioacetamide-induced Liver Fibrosis in Rats",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "HSP90AA1": {
+      "count": 5,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2021,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "5dcbc031a60822a43f527e80d03ddcd625595460",
+          "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "db9d8962cd5e91dc89a42ce1e4d6117faab08503",
+          "title": "CDK4/6 inhibitors in drug-induced liver injury: a pharmacovigilance study of the FAERS database and analysis of the drug\u2013gene interaction network",
+          "year": 2024,
+          "confidence": 0.8
+        },
+        {
+          "paper_id": "39e3856eb8d64aba284e7a4b1a261b37f8e63ff6",
+          "title": "Searching for LINCS to Stress: Using Text Mining to Automate Reference Chemical Curation.",
+          "year": 2024,
+          "confidence": 1.0
+        },
+        {
+          "paper_id": "03a59080b7026c71a74be089cc92a344cc9a1a0c",
+          "title": "Heat shock protein family H member 1 HSPH1 expression correlates with progression and prognosis of hepatocellular carcinoma",
+          "year": 2025,
+          "confidence": 1.0
+        },
+        {
+          "paper_id": "dbc7fc69c9a9c4a3c2ba1ba4b07e41705b0477d8",
+          "title": "A Gene Expression Biomarker Predicts Heat Shock Factor 1 Activation in a Gene Expression Compendium.",
+          "year": 2021,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "HAVCR1": {
+      "count": 4,
+      "organs": [
+        "kidney"
+      ],
+      "years": [
+        2016,
+        2021,
+        2023
+      ],
+      "papers": [
+        {
+          "paper_id": "4ed86c91ee8c3ebbaf82bf69b986cefab54ec01b",
+          "title": "Spatio-temporal transcriptomic analysis reveals distinct nephrotoxicity, DNA damage, and regeneration response after cisplatin",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e5aee7e0a8f05a6b43919c73afe2711302d4ce34",
+          "title": "Transcriptome Analysis Reveals the AhR, Smad2/3, and HIF-1\u03b1 Pathways as the Mechanism of Ochratoxin A Toxicity in Kidney Cells",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2cccbfdf0256ac0b0669e388248c4146bfe53940",
+          "title": "Mining kidney toxicogenomic data by using gene co-expression modules",
+          "year": 2016,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "618d9617a11b0ede9d1a1fcd05c06d6ea352186e",
+          "title": "Current concepts and advances in biomarkers of acute kidney injury",
+          "year": 2021,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CDKN1A": {
+      "count": 4,
+      "organs": [
+        "intestine",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2019,
+        2020,
+        2023,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "ceeab10f6a5221424083babed2d5684386df1cce",
+          "title": "Four functional genotoxic marker genes (Bax, Btg2, Ccng1, and Cdkn1a) discriminate genotoxic hepatocarcinogens from non-genotoxic hepatocarcinogens and non-genotoxic non-hepatocarcinogens in rat public toxicogenomics data, Open TG-GATEs",
+          "year": 2024,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "NFE2L1": {
+      "count": 4,
+      "organs": [
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2018,
+        2020
+      ],
+      "papers": [
+        {
+          "paper_id": "e0848c07229f24abf7065000aa16e9122e7929b4",
+          "title": "Development and Application of a Transcriptomic Signature of Bioactivation in an Advanced In Vitro Liver Model to Reduce Drug-induced Liver Injury Risk Early in the Pharmaceutical Pipeline.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "7cc5af2befb7a291dbf092b463fca47fe77da722",
+          "title": "Application of a Rat Liver Drug Bioactivation Transcriptional Response Assay Early in Drug Development That Informs Chemically Reactive Metabolite Formation and Potential for Drug-induced Liver Injury",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "65c5a9f8392bd720bf17f66fe5380c9747b7d784",
+          "title": "Cardiomyocyte gene programs encoding morphological and functional signatures in cardiac hypertrophy and failure",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "AHR": {
+      "count": 4,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2020,
+        2021,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e5aee7e0a8f05a6b43919c73afe2711302d4ce34",
+          "title": "Transcriptome Analysis Reveals the AhR, Smad2/3, and HIF-1\u03b1 Pathways as the Mechanism of Ochratoxin A Toxicity in Kidney Cells",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "055f1aec28f7b9a1734b74f3222083f88d96074d",
+          "title": "Aryl Hydrocarbon Receptor (AhR) and Vascular Endothelial Growth Factor (VEGF) Crosstalk in Doxorubicin Nephrotoxicity: Mechanisms and Therapeutic Perspectives",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "20adce8941d8530530229fede13a688e90e39a6b",
+          "title": "A Set of Six Gene Expression Biomarkers Identify Rat Liver Tumorigens in Short-Term Assays.",
+          "year": 2020,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "HMOX1": {
+      "count": 4,
+      "organs": [
+        "brain",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2019,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "3836b733eb6918b6ed0370596eef2ff993b6838e",
+          "title": "Neuronal specific and non-specific responses to cadmium possibly involved in neurodegeneration: A toxicogenomics study in a human neuronal cell model.",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ae6e6184c180485e786f5a18d30fc4f5fa906e12",
+          "title": "Zn and Se protect toxic metal mixture-mediated memory deficit by activation of Nrf2-hmox-1 signaling in the hippocampus of female rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4be796128dab78b900d6678dfa4a58f32871845b",
+          "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "SQSTM1": {
+      "count": 4,
+      "organs": [
+        "astrocytes",
+        "heart",
+        "liver",
+        "neurons"
+      ],
+      "years": [
+        2018,
+        2021,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "5dcbc031a60822a43f527e80d03ddcd625595460",
+          "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4f255eb8bdb0c1cf1e2a1afd9f7e94303e8deff3",
+          "title": "DNA damage as a mechanism of neurodegeneration in ALS and a contributor to astrocyte toxicity",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "ad3e0139c85086fb9b45cf6dce186dd3206d09c2",
+          "title": "Protective effect of valsartan against doxorubicin\u2010induced cardiotoxicity: Histopathology and metabolomics in vivo study",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "487b8335cbb81a6c03df51f38881f705dfeca85f",
+          "title": "The Cardioprotective Effect of Metformin in Doxorubicin-Induced Cardiotoxicity: The Role of Autophagy",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "SRXN1": {
+      "count": 3,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2019,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "de4a712f0ee14f3269b12f933fbbd34b797bcb83",
+          "title": "Literature optimized integration of gene expression for organ-specific evaluation of toxicogenomics datasets",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4be796128dab78b900d6678dfa4a58f32871845b",
+          "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "ER": {
+      "count": 3,
+      "organs": [
+        "a549 lung cells",
+        "liver",
+        "lung",
+        "mcf-7 cells",
+        "prostate"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "e67eda2694923151226daf541a133cfb12edda84",
+          "title": "A transcriptomic biomarker predictive of cell proliferation for use in adverse outcome pathway-informed testing and assessment.",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "20adce8941d8530530229fede13a688e90e39a6b",
+          "title": "A Set of Six Gene Expression Biomarkers Identify Rat Liver Tumorigens in Short-Term Assays.",
+          "year": 2020,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CYP1A1": {
+      "count": 3,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2017,
+        2019,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "2f18ea4855a57f6edd269458e6658203ef69a288",
+          "title": "Comparison of RNA-Seq and Microarray Gene Expression Platforms for the Toxicogenomic Evaluation of Liver From Short-Term Rat Toxicity Studies",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "641feed19825e160511c1dbab338f8e1fac1ca6c",
+          "title": "Idiosyncratic Drug-Induced Liver Injury (IDILI): Potential Mechanisms and Predictive Assays",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "02b317295d0eea2a399c9657ca6d8a4da4aff75a",
+          "title": "Transcriptomics Points-of-Departure (tPODs) to Support Hazard Assessment of Benzo[a]pyrene in Early-Life-Stage Rainbow Trout.",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "BTG2": {
+      "count": 3,
+      "organs": [
+        "intestine",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2019,
+        2023,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "ceeab10f6a5221424083babed2d5684386df1cce",
+          "title": "Four functional genotoxic marker genes (Bax, Btg2, Ccng1, and Cdkn1a) discriminate genotoxic hepatocarcinogens from non-genotoxic hepatocarcinogens and non-genotoxic non-hepatocarcinogens in rat public toxicogenomics data, Open TG-GATEs",
+          "year": 2024,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "GDF15": {
+      "count": 3,
+      "organs": [
+        "intestine",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2013,
+        2023,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "fbf0857deea476a7a3beb6cda59b50c66e5655a6",
+          "title": "Data mining reveals a network of early-response genes as a consensus signature of drug-induced in vitro and in vivo toxicity",
+          "year": 2013,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5dcbc031a60822a43f527e80d03ddcd625595460",
+          "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CAR": {
+      "count": 3,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2020
+      ],
+      "papers": [
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "8e8a75d6486d8887a26f29fe71b86483ed2820ae",
+          "title": "Recent advances in 2D and 3D in vitro systems using primary hepatocytes, alternative hepatocyte sources and non-parenchymal liver cells and their use in investigating mechanisms of hepatotoxicity, cell signaling and ADME",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "20adce8941d8530530229fede13a688e90e39a6b",
+          "title": "A Set of Six Gene Expression Biomarkers Identify Rat Liver Tumorigens in Short-Term Assays.",
+          "year": 2020,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "MFN2": {
+      "count": 3,
+      "organs": [
+        "brain",
+        "heart",
+        "lung"
+      ],
+      "years": [
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "c5f6d7206bf3b40a71c8d43874d0f1841452b050",
+          "title": "Astaxanthin mitigates cardiac toxicity induced via doxorubicin by alleviating mitochondrial fission and autophagy in rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "c631129a325b35bf71746673149fc260e0fc62db",
+          "title": "Integrated transcriptomic analysis and experimental validation identify ACADL as a mitochondrial tumor suppressor via the FOXO3a/PUMA axis in lung adenocarcinoma",
+          "year": 2026,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "7b5672e4d2b141488753ac1a5cc5f9581e89dcb7",
+          "title": "Feasibility of Xenogeneic Mitochondrial Transplantation in Neuronal Systems: An Exploratory Study",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "GCLC": {
+      "count": 3,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2018,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "6ebdee525526228bd1d5a9815c78fc2c612ff1ef",
+          "title": "Robust hierarchical co-clustering for exploring toxicogenomic biomarkers and their chemical regulators",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5b7523cee1a0ba8ef71d2d05140638bbc11ff838",
+          "title": "A novel computational approach for toxicogenomics biomarker discovery in drug development pipeline",
+          "year": 2018,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4be796128dab78b900d6678dfa4a58f32871845b",
+          "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "VEGFA": {
+      "count": 3,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2020,
+        2022,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "055f1aec28f7b9a1734b74f3222083f88d96074d",
+          "title": "Aryl Hydrocarbon Receptor (AhR) and Vascular Endothelial Growth Factor (VEGF) Crosstalk in Doxorubicin Nephrotoxicity: Mechanisms and Therapeutic Perspectives",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "db8d2659c0238d2163644e5801e5e4a4e2b72e0d",
+          "title": "Extracellular Vesicles Derived from Mesenchymal Stromal Cells Delivered during Hypothermic Oxygenated Machine Perfusion Repair Ischemic/Reperfusion Damage of Kidneys from Extended Criteria Donors",
+          "year": 2022,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "SIRT1": {
+      "count": 3,
+      "organs": [
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "30a3c425ed727743fb4e3a8548801dad86e02426",
+          "title": "N-acetyl cysteine and vitamin E attenuate acrylamide-induced hepatotoxicity via regulation of miRNA-34a and P53/Nrf2/SIRT 1 signaling pathways.",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "c1efc558c8ff47146c2a3cae6d07f0af8e10fcc9",
+          "title": "Cardiac PTN-SIRT1 axis alleviates oxidative stress and promotes mitochondrial energy reprogramming to mitigate doxorubicin-induced cardiotoxicity through AMPK/PGC1\u03b1 signaling",
+          "year": 2026,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "af53eaae63bbb7c034533030aabf1e72025f5ffb",
+          "title": "Involvement of SIRT1-mediated aging in liver diseases",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "KEAP1": {
+      "count": 3,
+      "organs": [
+        "fibroblasts",
+        "liver",
+        "lung",
+        "tumor"
+      ],
+      "years": [
+        2020,
+        2023,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "7cc5af2befb7a291dbf092b463fca47fe77da722",
+          "title": "Application of a Rat Liver Drug Bioactivation Transcriptional Response Assay Early in Drug Development That Informs Chemically Reactive Metabolite Formation and Potential for Drug-induced Liver Injury",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e63e880049b88a51400c410ebd117048fa6d886e",
+          "title": "Combined administration of synthetic monophenol TS-13 with doxorubicin enhances the antimitotic effect and mitigates adverse effects of the cytostatic in tumor growth model",
+          "year": 2026,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "777fab3a04d541e49da3a342dfa50ac991ccadbd",
+          "title": "A Point Mutation at C151 of Keap1 of Mice Abrogates NRF2 Signaling, Cytoprotection in Vitro, and Hepatoprotection in Vivo by Bardoxolone Methyl (CDDO-Me)",
+          "year": 2023,
+          "confidence": 0.95
+        }
+      ]
+    },
+    "TGFB1": {
+      "count": 3,
+      "organs": [
+        "bone marrow",
+        "heart",
+        "kidney",
+        "muscle"
+      ],
+      "years": [
+        2022,
+        2023,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "15409b3cf9539646667e78875c94942a86613fa9",
+          "title": "Asperuloside attenuates cadmium-induced toxicity by inhibiting oxidative stress, inflammation, fibrosis and apoptosis in rats",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e41ff1c515d33102727a0d063c3a80628e785806",
+          "title": "Cardiac fibroblasts regulate the development of heart failure via Htra3-TGF-\u03b2-IGFBP7 axis",
+          "year": 2022,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "5b23fce4631ce8e0690c113f8b73d7b949c9c075",
+          "title": "Heart failure promotes multimorbidity through innate immune memory",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "AKT1": {
+      "count": 3,
+      "organs": [
+        "breast",
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2017,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "e8e6923b354b19f2ab41c6bb6edd61b30887445b",
+          "title": "Oral administration of Ginsenoside Rg1 prevents cardiac toxicity induced by doxorubicin in mice through anti-apoptosis",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "c725ed7520410ebae1024ec7b18923bf4ecdbac7",
+          "title": "SIMD: Synergistic integration mutualistic platform based on single-cell and proteotranscriptomics for drug repositioning",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "9a088f397e4627ff46e65e51c879cc51d92e8af3",
+          "title": "Protein tyrosine phosphatase 1B modulates GSK3\u03b2/Nrf2 and IGFIR signaling pathways in acetaminophen-induced hepatotoxicity",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "MAPK1": {
+      "count": 3,
+      "organs": [
+        "heart",
+        "lung"
+      ],
+      "years": [
+        2017,
+        2018,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "e8e6923b354b19f2ab41c6bb6edd61b30887445b",
+          "title": "Oral administration of Ginsenoside Rg1 prevents cardiac toxicity induced by doxorubicin in mice through anti-apoptosis",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "71695530512e0899cf43cb0f02120cd5433eee08",
+          "title": "Novel thiazole\u2013phthalimide-based heterobimetallic Cu(ii)\u2013M(ii) complexes: synthesis, characterization, and therapeutic properties against arsenic-induced lung damage in rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "65c5a9f8392bd720bf17f66fe5380c9747b7d784",
+          "title": "Cardiomyocyte gene programs encoding morphological and functional signatures in cardiac hypertrophy and failure",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CYP7A1": {
+      "count": 3,
+      "organs": [
+        "intestine",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2017,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "36eafc78a289e72785bbf1810406ba2ba71e6e59",
+          "title": "Exposure to PFAS chemicals induces sex-dependent alterations in key rate-limiting steps of lipid metabolism in liver steatosis",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5923ce324941f785525fe74d9d74a8b8af560ba4",
+          "title": "Integrated gut/liver microphysiological systems elucidates inflammatory inter\u2010tissue crosstalk",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "HGF": {
+      "count": 3,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2020,
+        2022
+      ],
+      "papers": [
+        {
+          "paper_id": "d54dd07b6e7ecbae9e5da8992549b6b9b44c99b2",
+          "title": "Mesenchymal stem cells protect against acetaminophen hepatotoxicity by secreting regenerative cytokine hepatocyte growth factor",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "200df60b1bd6223ac09aae5e135fcb2956fa83eb",
+          "title": "RNA-Seq transcriptome profiling in three liver regeneration models in rats: comparative analysis of partial hepatectomy, ALLPS, and PVL",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "db8d2659c0238d2163644e5801e5e4a4e2b72e0d",
+          "title": "Extracellular Vesicles Derived from Mesenchymal Stromal Cells Delivered during Hypothermic Oxygenated Machine Perfusion Repair Ischemic/Reperfusion Damage of Kidneys from Extended Criteria Donors",
+          "year": 2022,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "STAT3": {
+      "count": 3,
+      "organs": [
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2014,
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "db9d8962cd5e91dc89a42ce1e4d6117faab08503",
+          "title": "CDK4/6 inhibitors in drug-induced liver injury: a pharmacovigilance study of the FAERS database and analysis of the drug\u2013gene interaction network",
+          "year": 2024,
+          "confidence": 0.8
+        },
+        {
+          "paper_id": "8202d6a1718f8f01ae5e4ff045acf335bc2bf423",
+          "title": "Whole Genome Transcript Profiling of Drug Induced Steatosis in Rats Reveals a Gene Signature Predictive of Outcome",
+          "year": 2014,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "a82ccce6a4268a8bae431c5a1aa0ea992dd78073",
+          "title": "The \u03b2IV-Spectrin/STAT3 Complex Regulates the Orientation of Cardiac Hypertrophic Growth.",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    }
+  },
+  "moderate_evidence": {
+    "CLU": {
+      "count": 2,
+      "organs": [
+        "kidney"
+      ],
+      "years": [
+        2016,
+        2023
+      ],
+      "papers": [
+        {
+          "paper_id": "4ed86c91ee8c3ebbaf82bf69b986cefab54ec01b",
+          "title": "Spatio-temporal transcriptomic analysis reveals distinct nephrotoxicity, DNA damage, and regeneration response after cisplatin",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2cccbfdf0256ac0b0669e388248c4146bfe53940",
+          "title": "Mining kidney toxicogenomic data by using gene co-expression modules",
+          "year": 2016,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "BAK1": {
+      "count": 2,
+      "organs": [
+        "brain",
+        "heart",
+        "intestine",
+        "kidney",
+        "lung",
+        "neurodegenerative tissues (alzheimer\u2019s and parkinson\u2019s diseases)",
+        "reproductive organs",
+        "skin",
+        "stomach"
+      ],
+      "years": [
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "122c32b6c5f185dca5d817bda1c840ea5ba2517e",
+          "title": "Heavy metals: toxicity and human health effects",
+          "year": 2024,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "7b5672e4d2b141488753ac1a5cc5f9581e89dcb7",
+          "title": "Feasibility of Xenogeneic Mitochondrial Transplantation in Neuronal Systems: An Exploratory Study",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CCNG1": {
+      "count": 2,
+      "organs": [
+        "intestine",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2023,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "ceeab10f6a5221424083babed2d5684386df1cce",
+          "title": "Four functional genotoxic marker genes (Bax, Btg2, Ccng1, and Cdkn1a) discriminate genotoxic hepatocarcinogens from non-genotoxic hepatocarcinogens and non-genotoxic non-hepatocarcinogens in rat public toxicogenomics data, Open TG-GATEs",
+          "year": 2024,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "EGR1": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2022
+      ],
+      "papers": [
+        {
+          "paper_id": "fbf0857deea476a7a3beb6cda59b50c66e5655a6",
+          "title": "Data mining reveals a network of early-response genes as a consensus signature of drug-induced in vitro and in vivo toxicity",
+          "year": 2013,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "7362f57547eac276f413a2a3a47a8e69b8d44f5c",
+          "title": "Egr1 confers protection against acetaminophen\u2011induced hepatotoxicity via transcriptional upregulating of Acaa2",
+          "year": 2022,
+          "confidence": 0.95
+        }
+      ]
+    },
+    "FGF21": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2014
+      ],
+      "papers": [
+        {
+          "paper_id": "fbf0857deea476a7a3beb6cda59b50c66e5655a6",
+          "title": "Data mining reveals a network of early-response genes as a consensus signature of drug-induced in vitro and in vivo toxicity",
+          "year": 2013,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "8202d6a1718f8f01ae5e4ff045acf335bc2bf423",
+          "title": "Whole Genome Transcript Profiling of Drug Induced Steatosis in Rats Reveals a Gene Signature Predictive of Outcome",
+          "year": 2014,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CDKN3": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2020,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "0edccae0940a50439438fcff467cc9375acd93de",
+          "title": "Olmutinib Reverses Thioacetamide-Induced Cell Cycle Gene Alterations in Mice Liver and Kidney Tissues, While Wheat Germ Treatment Exhibits Limited Efficacy at Gene Level",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "3fc5b1942e7a9962b54b19e75c18b00089a1b10d",
+          "title": "Identification of Time-Invariant Biomarkers for Non-Genotoxic Hepatocarcinogen Assessment",
+          "year": 2020,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PLK2": {
+      "count": 2,
+      "organs": [
+        "intestine",
+        "kidney",
+        "liver",
+        "lung"
+      ],
+      "years": [
+        2016,
+        2023
+      ],
+      "papers": [
+        {
+          "paper_id": "a5f431e4c3c36723796f9435622d5ca626b849b5",
+          "title": "Short-term in vivo testing to discriminate genotoxic carcinogens from non-genotoxic carcinogens and non-carcinogens using next-generation RNA sequencing, DNA microarray, and qPCR",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2cccbfdf0256ac0b0669e388248c4146bfe53940",
+          "title": "Mining kidney toxicogenomic data by using gene co-expression modules",
+          "year": 2016,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CYP2E1": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2017,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "9f4506201339872c72e0de0ae865cb01144cd666",
+          "title": "AIVIVE: a novel AI framework for enhanced in vitro to in vivo extrapolation (IVIVE) of toxicogenomics data",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e444cbfc6af56264fb248c4dad387c042be7003d",
+          "title": "Customised in vitro model to detect human metabolism-dependent idiosyncratic drug-induced liver injury",
+          "year": 2017,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "BSEP": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2019
+      ],
+      "papers": [
+        {
+          "paper_id": "9bc7abbd19f46974f23d229f67135c958875d09b",
+          "title": "Use of a Bile Salt Export Pump Knockdown Rat Susceptibility Model to Interrogate Mechanism of Drug-Induced Liver Toxicity.",
+          "year": 2019,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PXR": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2020
+      ],
+      "papers": [
+        {
+          "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+          "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "8e8a75d6486d8887a26f29fe71b86483ed2820ae",
+          "title": "Recent advances in 2D and 3D in vitro systems using primary hepatocytes, alternative hepatocyte sources and non-parenchymal liver cells and their use in investigating mechanisms of hepatotoxicity, cell signaling and ADME",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "DNM1L": {
+      "count": 2,
+      "organs": [
+        "heart",
+        "lung"
+      ],
+      "years": [
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "c5f6d7206bf3b40a71c8d43874d0f1841452b050",
+          "title": "Astaxanthin mitigates cardiac toxicity induced via doxorubicin by alleviating mitochondrial fission and autophagy in rats",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "c631129a325b35bf71746673149fc260e0fc62db",
+          "title": "Integrated transcriptomic analysis and experimental validation identify ACADL as a mitochondrial tumor suppressor via the FOXO3a/PUMA axis in lung adenocarcinoma",
+          "year": 2026,
+          "confidence": 0.95
+        }
+      ]
+    },
+    "MGST2": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2018,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "6ebdee525526228bd1d5a9815c78fc2c612ff1ef",
+          "title": "Robust hierarchical co-clustering for exploring toxicogenomic biomarkers and their chemical regulators",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5b7523cee1a0ba8ef71d2d05140638bbc11ff838",
+          "title": "A novel computational approach for toxicogenomics biomarker discovery in drug development pipeline",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "GCLM": {
+      "count": 2,
+      "organs": [],
+      "years": [
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "6ebdee525526228bd1d5a9815c78fc2c612ff1ef",
+          "title": "Robust hierarchical co-clustering for exploring toxicogenomic biomarkers and their chemical regulators",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "4be796128dab78b900d6678dfa4a58f32871845b",
+          "title": "Biomarkers of NRF2 signalling: Current status and future challenges",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "G6PD": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2018,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "6ebdee525526228bd1d5a9815c78fc2c612ff1ef",
+          "title": "Robust hierarchical co-clustering for exploring toxicogenomic biomarkers and their chemical regulators",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "5b7523cee1a0ba8ef71d2d05140638bbc11ff838",
+          "title": "A novel computational approach for toxicogenomics biomarker discovery in drug development pipeline",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "HIF1A": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2013,
+        2021
+      ],
+      "papers": [
+        {
+          "paper_id": "e5aee7e0a8f05a6b43919c73afe2711302d4ce34",
+          "title": "Transcriptome Analysis Reveals the AhR, Smad2/3, and HIF-1\u03b1 Pathways as the Mechanism of Ochratoxin A Toxicity in Kidney Cells",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "e05d76c73f3cb8fc7c0b438c2085aba645511a92",
+          "title": "Exposure to Cobalt Causes Transcriptomic and Proteomic Changes in Two Rat Liver Derived Cell Lines",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "FXR": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "8e8a75d6486d8887a26f29fe71b86483ed2820ae",
+          "title": "Recent advances in 2D and 3D in vitro systems using primary hepatocytes, alternative hepatocyte sources and non-parenchymal liver cells and their use in investigating mechanisms of hepatotoxicity, cell signaling and ADME",
+          "year": 2013,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "cf7b2d078ef320cd6d4bbc95d7de640c3ac371c9",
+          "title": "FXR adapts hepatic mitochondrial function to increased substrate oxidation in patients with obesity.",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CD44": {
+      "count": 2,
+      "organs": [
+        "kidney"
+      ],
+      "years": [
+        2016,
+        2023
+      ],
+      "papers": [
+        {
+          "paper_id": "2523a912384c03f086225222c491f5a565962265",
+          "title": "Role of CD44 expressed in renal tubules during maladaptive repair in renal fibrogenesis in an allopurinol\u2010induced rat model of chronic kidney disease",
+          "year": 2023,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2cccbfdf0256ac0b0669e388248c4146bfe53940",
+          "title": "Mining kidney toxicogenomic data by using gene co-expression modules",
+          "year": 2016,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "MDM2": {
+      "count": 2,
+      "organs": [
+        "kidney"
+      ],
+      "years": [
+        2015,
+        2016
+      ],
+      "papers": [
+        {
+          "paper_id": "2cccbfdf0256ac0b0669e388248c4146bfe53940",
+          "title": "Mining kidney toxicogenomic data by using gene co-expression modules",
+          "year": 2016,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "2d390fb74c001a1333f3960771e43c08541c7363",
+          "title": "Implementing Toxicity Testing in the 21st Century (TT21C): Making safety decisions using toxicity pathways, and progress in a prototype risk assessment.",
+          "year": 2015,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PRKAA1": {
+      "count": 2,
+      "organs": [
+        "heart"
+      ],
+      "years": [
+        2018,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "c1efc558c8ff47146c2a3cae6d07f0af8e10fcc9",
+          "title": "Cardiac PTN-SIRT1 axis alleviates oxidative stress and promotes mitochondrial energy reprogramming to mitigate doxorubicin-induced cardiotoxicity through AMPK/PGC1\u03b1 signaling",
+          "year": 2026,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "487b8335cbb81a6c03df51f38881f705dfeca85f",
+          "title": "The Cardioprotective Effect of Metformin in Doxorubicin-Induced Cardiotoxicity: The Role of Autophagy",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PPARGC1A": {
+      "count": 2,
+      "organs": [
+        "heart",
+        "kidney"
+      ],
+      "years": [
+        2024,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "c1efc558c8ff47146c2a3cae6d07f0af8e10fcc9",
+          "title": "Cardiac PTN-SIRT1 axis alleviates oxidative stress and promotes mitochondrial energy reprogramming to mitigate doxorubicin-induced cardiotoxicity through AMPK/PGC1\u03b1 signaling",
+          "year": 2026,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "da97e03e41b0150587a1634feb5477576250d61e",
+          "title": "High-Dose Fenofibrate Stimulates Multiple Cellular Stress Pathways in the Kidney of Old Rats",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PLIN2": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2018,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "5dcbc031a60822a43f527e80d03ddcd625595460",
+          "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "47c991dcbc14ed83e37714c620bc31a0a8b43cd0",
+          "title": "The whole transcriptome effects of the PPAR\u03b1 agonist fenofibrate on livers of hepatocyte humanized mice",
+          "year": 2018,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "ACOX1": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2024,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "5dcbc031a60822a43f527e80d03ddcd625595460",
+          "title": "Decoding Cellular Stress States for Toxicology Using Single-Cell Transcriptomics",
+          "year": 2025,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "36eafc78a289e72785bbf1810406ba2ba71e6e59",
+          "title": "Exposure to PFAS chemicals induces sex-dependent alterations in key rate-limiting steps of lipid metabolism in liver steatosis",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "FOXO3": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "lung"
+      ],
+      "years": [
+        2022,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "dc82063716bad06b66200b61c92cfb1cfa03aeef",
+          "title": "Olanzapine-Induced Therapeutic Hypothermia Attenuates Renal Injury in Rats after Asphyxial Cardiac Arrest and Resuscitation",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "c631129a325b35bf71746673149fc260e0fc62db",
+          "title": "Integrated transcriptomic analysis and experimental validation identify ACADL as a mitochondrial tumor suppressor via the FOXO3a/PUMA axis in lung adenocarcinoma",
+          "year": 2026,
+          "confidence": 0.95
+        }
+      ]
+    },
+    "A2M": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2017,
+        2020
+      ],
+      "papers": [
+        {
+          "paper_id": "3fc5b1942e7a9962b54b19e75c18b00089a1b10d",
+          "title": "Identification of Time-Invariant Biomarkers for Non-Genotoxic Hepatocarcinogen Assessment",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "79ebdcba978dbd78492b97be70e2a6d35b11020b",
+          "title": "Identification of consensus biomarkers for predicting non-genotoxic hepatocarcinogens",
+          "year": 2017,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CA3": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2017,
+        2020
+      ],
+      "papers": [
+        {
+          "paper_id": "3fc5b1942e7a9962b54b19e75c18b00089a1b10d",
+          "title": "Identification of Time-Invariant Biomarkers for Non-Genotoxic Hepatocarcinogen Assessment",
+          "year": 2020,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "79ebdcba978dbd78492b97be70e2a6d35b11020b",
+          "title": "Identification of consensus biomarkers for predicting non-genotoxic hepatocarcinogens",
+          "year": 2017,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "IL33": {
+      "count": 2,
+      "organs": [
+        "airway epithelial cells",
+        "kidney"
+      ],
+      "years": [
+        2021,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "dd9303054d5310039781f0a7a45c1db5f16e0feb",
+          "title": "Bioinformatics analysis identifies diagnostic biomarkers and their correlation with immune infiltration in diabetic nephropathy",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "f257e3c2f57c2701f6504a1f04ea05b72a9fb60a",
+          "title": "Ferroptosis-immune-metabolic axis in asthma: mechanistic crosstalk, endotype-specific regulation, and translational targeting",
+          "year": 2026,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "MAPK8": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2022
+      ],
+      "papers": [
+        {
+          "paper_id": "eec077c6e907fac00218408ad45ee31b840580dd",
+          "title": "Fraxinellone Induces Hepatotoxicity in Zebrafish through Oxidative Stress and the Transporters Pathway",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "9a088f397e4627ff46e65e51c879cc51d92e8af3",
+          "title": "Protein tyrosine phosphatase 1B modulates GSK3\u03b2/Nrf2 and IGFIR signaling pathways in acetaminophen-induced hepatotoxicity",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CYP8B1": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2013,
+        2017
+      ],
+      "papers": [
+        {
+          "paper_id": "79ebdcba978dbd78492b97be70e2a6d35b11020b",
+          "title": "Identification of consensus biomarkers for predicting non-genotoxic hepatocarcinogens",
+          "year": 2017,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bd155ce636be0db708ae98b81ad789162cd0e6d0",
+          "title": "Repeated Oral Administration of Oleanolic Acid Produces Cholestatic Liver Injury in Mice",
+          "year": 2013,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "TTN": {
+      "count": 2,
+      "organs": [
+        "heart"
+      ],
+      "years": [
+        2017,
+        2025
+      ],
+      "papers": [
+        {
+          "paper_id": "b58a70ec080bc98b9e8d93d24e0c8ce279120f76",
+          "title": "Quaking Inhibits Doxorubicin-Mediated Cardiotoxicity Through Regulation of Cardiac Circular RNA Expression",
+          "year": 2017,
+          "confidence": 0.85
+        },
+        {
+          "paper_id": "dfde165bc1b2f008c0c2761e6f7a56264c56f2a9",
+          "title": "Metabolic Modulation in Dilated Cardiomyopathy: From Pathophysiology to Therapy",
+          "year": 2025,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "CHOP": {
+      "count": 2,
+      "organs": [
+        "liver"
+      ],
+      "years": [
+        2019,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "5415a8e0b4862347d65fade1ef28734a5a2d6465",
+          "title": "The integrated stress response\u2010related expression of CHOP due to mitochondrial toxicity is a warning sign for DILI liability",
+          "year": 2024,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "b6a4f1dc4e0079153886db305cb03df39ea777fa",
+          "title": "High-throughput confocal imaging of differentiated 3D liver-like spheroid cellular stress response reporters for identification of drug-induced liver injury liability",
+          "year": 2019,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "PTGS2": {
+      "count": 2,
+      "organs": [
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2015,
+        2022
+      ],
+      "papers": [
+        {
+          "paper_id": "e8d0522c4934a0d61c109b67341d56161e360815",
+          "title": "Aluminum, Arsenic, Beryllium, Cadmium, Chromium, Cobalt, Copper, Iron, Lead, Mercury, Molybdenum, Nickel, Platinum, Thallium, Titanium, Vanadium, and Zinc: Molecular Aspects in Experimental Liver Injury",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "d16390b2699911f67ac7ce931539d9f7ec827426",
+          "title": "Effect of Metformin and Sitagliptin on Doxorubicin-Induced Cardiotoxicity in Rats: Impact of Oxidative Stress, Inflammation, and Apoptosis",
+          "year": 2015,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "GPX4": {
+      "count": 2,
+      "organs": [
+        "airway epithelial cells",
+        "liver"
+      ],
+      "years": [
+        2022,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "e8d0522c4934a0d61c109b67341d56161e360815",
+          "title": "Aluminum, Arsenic, Beryllium, Cadmium, Chromium, Cobalt, Copper, Iron, Lead, Mercury, Molybdenum, Nickel, Platinum, Thallium, Titanium, Vanadium, and Zinc: Molecular Aspects in Experimental Liver Injury",
+          "year": 2022,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "f257e3c2f57c2701f6504a1f04ea05b72a9fb60a",
+          "title": "Ferroptosis-immune-metabolic axis in asthma: mechanistic crosstalk, endotype-specific regulation, and translational targeting",
+          "year": 2026,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "NLRP3": {
+      "count": 2,
+      "organs": [
+        "kidney",
+        "liver"
+      ],
+      "years": [
+        2021,
+        2024
+      ],
+      "papers": [
+        {
+          "paper_id": "00a53403502505e120f96b9a6fd83bb292e5acc0",
+          "title": "Apigenin ameliorates doxorubicin-induced renal injury via inhibition of oxidative stress and inflammation.",
+          "year": 2021,
+          "confidence": 0.9
+        },
+        {
+          "paper_id": "bdc70e7be66a4000df7a6cf3d87d87cbe43af741",
+          "title": "Mitochondrial ROS, a trigger for mitochondrial dysfunction and inflammasome activation and a therapeutic target in liver diseases",
+          "year": 2024,
+          "confidence": 0.9
+        }
+      ]
+    },
+    "MMP9": {
+      "count": 2,
+      "organs": [
+        "heart",
+        "liver"
+      ],
+      "years": [
+        2025,
+        2026
+      ],
+      "papers": [
+        {
+          "paper_id": "a29d31af672b07a1fb640f76a658d2d36fe46fdc",
+          "title": "Integrating Single\u2010Cell Sequencing, Machine Learning, and Molecular Docking to Elucidate the Molecular Network Linking Myocardial Infarction and DEHP Exposure",
+          "year": 2025,
+          "confidence": 0.95
+        },
+        {
+          "paper_id": "ace436f1c4a8e67de58a273c62cb9e750be17fe9",
+          "title": "UriPred: Machine learning prediction of urinary proteins and identification of biomarkers for liver cancer.",
+          "year": 2026,
+          "confidence": 0.95
+        }
+      ]
+    }
+  },
+  "single_mentions": 363,
+  "organ_specific_genes": {
+    "a549 lung cells": {
+      "ER": 3,
+      "PCNA": 1,
+      "KI67": 1,
+      "BRDU": 1
+    },
+    "airway epithelial cells": {
+      "IL33": 2,
+      "GPX4": 2,
+      "ALOX15": 1
+    },
+    "astrocytes": {
+      "SQSTM1": 4,
+      "C9ORF72": 1,
+      "TARDBP": 1,
+      "FUS": 1,
+      "NEK1": 1,
+      "SETX": 1,
+      "APOE": 1
+    },
+    "blood": {
+      "TNF": 8,
+      "CDCP1": 1,
+      "CORO1C": 1,
+      "DACH1": 1,
+      "GSTA4": 1,
+      "MAFB": 1,
+      "TCF21": 1,
+      "TGFBR3": 1,
+      "TGIF1": 1,
+      "DDX17": 1,
+      "KLF11": 1,
+      "MAN1C1": 1,
+      "POLR2K": 1,
+      "ST14": 1,
+      "TRIM66": 1
+    },
+    "bone marrow": {
+      "TGFB1": 3
+    },
+    "brain": {
+      "NFE2L2": 27,
+      "TP53": 14,
+      "BAX": 12,
+      "BCL2": 11,
+      "TNF": 8,
+      "NFKB1": 7,
+      "CASP3": 7,
+      "IL1B": 5,
+      "HMOX1": 4,
+      "MFN2": 3,
+      "BAK1": 2,
+      "PARK7": 1,
+      "MTS": 1,
+      "ZNT-1": 1,
+      "FERRITIN": 1,
+      "S100A2": 1,
+      "NEK3": 1,
+      "KIK15": 1,
+      "GREM2": 1,
+      "GALR1": 1
+    },
+    "brain cell populations": {
+      "APOE": 1
+    },
+    "breast": {
+      "AKT1": 3,
+      "PIK3CA": 1
+    },
+    "fibroblasts": {
+      "NFE2L2": 27,
+      "NQO1": 6,
+      "KEAP1": 3
+    },
+    "heart": {
+      "NFE2L2": 27,
+      "TP53": 14,
+      "BAX": 12,
+      "BCL2": 11,
+      "TNF": 8,
+      "NFKB1": 7,
+      "CASP3": 7,
+      "IL6": 7,
+      "IL1B": 5,
+      "NFE2L1": 4,
+      "SQSTM1": 4,
+      "MFN2": 3,
+      "SIRT1": 3,
+      "TGFB1": 3,
+      "AKT1": 3,
+      "MAPK1": 3,
+      "STAT3": 3,
+      "BAK1": 2,
+      "DNM1L": 2,
+      "PRKAA1": 2
+    },
+    "immune cells": {
+      "APOE": 1
+    },
+    "intervertebral disc": {
+      "HLA\u2010A": 1,
+      "AP2M1": 1
+    },
+    "intestine": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "IL6": 7,
+      "CDKN1A": 4,
+      "BTG2": 3,
+      "GDF15": 3,
+      "CYP7A1": 3,
+      "BAK1": 2,
+      "CCNG1": 2,
+      "PLK2": 2,
+      "AEN": 1,
+      "CCNF": 1,
+      "LRP1": 1,
+      "MBD1": 1,
+      "PHLDA3": 1,
+      "TUBB4B": 1,
+      "BCMP1": 1,
+      "CGR19": 1,
+      "MGMT": 1
+    },
+    "kidney": {
+      "NFE2L2": 27,
+      "TP53": 14,
+      "BAX": 12,
+      "PPARA": 12,
+      "BCL2": 11,
+      "TNF": 8,
+      "NFKB1": 7,
+      "CASP3": 7,
+      "IL6": 7,
+      "NQO1": 6,
+      "IL1B": 5,
+      "HAVCR1": 4,
+      "CDKN1A": 4,
+      "AHR": 4,
+      "SRXN1": 3,
+      "BTG2": 3,
+      "GDF15": 3,
+      "VEGFA": 3,
+      "TGFB1": 3,
+      "HGF": 3
+    },
+    "liver": {
+      "NFE2L2": 27,
+      "TP53": 14,
+      "BAX": 12,
+      "PPARA": 12,
+      "BCL2": 11,
+      "TNF": 8,
+      "NFKB1": 7,
+      "IL6": 7,
+      "NQO1": 6,
+      "IL1B": 5,
+      "HSP90AA1": 5,
+      "CDKN1A": 4,
+      "NFE2L1": 4,
+      "AHR": 4,
+      "HMOX1": 4,
+      "SQSTM1": 4,
+      "SRXN1": 3,
+      "ER": 3,
+      "CYP1A1": 3,
+      "BTG2": 3
+    },
+    "lung": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "TNF": 8,
+      "CASP3": 7,
+      "IL1B": 5,
+      "CDKN1A": 4,
+      "ER": 3,
+      "BTG2": 3,
+      "GDF15": 3,
+      "MFN2": 3,
+      "KEAP1": 3,
+      "MAPK1": 3,
+      "BAK1": 2,
+      "CCNG1": 2,
+      "PLK2": 2,
+      "DNM1L": 2,
+      "FOXO3": 2,
+      "PCNA": 1,
+      "KI67": 1
+    },
+    "mcf-7 cells": {
+      "ER": 3,
+      "PCNA": 1,
+      "KI67": 1,
+      "BRDU": 1
+    },
+    "muscle": {
+      "TGFB1": 3
+    },
+    "neurodegenerative tissues (alzheimer\u2019s and parkinson\u2019s diseases)": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "BAK1": 2
+    },
+    "neurons": {
+      "SQSTM1": 4,
+      "C9ORF72": 1,
+      "TARDBP": 1,
+      "FUS": 1,
+      "NEK1": 1,
+      "SETX": 1
+    },
+    "pancreas": {
+      "IL6": 7,
+      "PDX1": 1,
+      "IL10": 1
+    },
+    "prostate": {
+      "ER": 3,
+      "PCNA": 1,
+      "KI67": 1,
+      "BRDU": 1,
+      "MET": 1,
+      "ALK": 1,
+      "SRC": 1,
+      "CYP3A5": 1,
+      "CYP3A7": 1
+    },
+    "reproductive organs": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "BAK1": 2
+    },
+    "skin": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "BAK1": 2
+    },
+    "stomach": {
+      "NFE2L2": 27,
+      "BAX": 12,
+      "BCL2": 11,
+      "IL6": 7,
+      "BAK1": 2,
+      "IL10": 1
+    },
+    "tumor": {
+      "NFE2L2": 27,
+      "KEAP1": 3
+    }
+  },
+  "total_unique_genes": 432
+}

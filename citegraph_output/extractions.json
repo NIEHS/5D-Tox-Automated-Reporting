@@ -1,0 +1,1287 @@
+[
+  {
+    "paper_id": "41c92761dd8647efd79f66e3f90fa90579bf8d86",
+    "title": "Progress in toxicogenomics to protect human health",
+    "year": 2024,
+    "claims": [],
+    "genes": [],
+    "organs": [],
+    "methods": [],
+    "species": [],
+    "stance": "",
+    "confidence": 0.0,
+    "summary": "",
+    "raw_response": ""
+  },
+  {
+    "paper_id": "b51efd464b74f2218a73f27abf59b2830ea86c19",
+    "title": "Toxicogenomic module associations with pathogenesis: a network-based approach to understanding drug toxicity",
+    "year": 2017,
+    "claims": [
+      "Network-based approaches using co-expression network analysis can predict drug toxicity mechanisms and phenotypes more effectively than traditional gene-level analysis.",
+      "Early network responses complement histology-based assessment in predicting long-term study outcomes.",
+      "A novel mechanism of hepatotoxicity involving endoplasmic reticulum stress and Nrf2 activation is identified."
+    ],
+    "genes": [
+      "NRF2"
+    ],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "co-expression network analysis",
+      "transcriptome profiling"
+    ],
+    "species": [
+      "rat",
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The paper introduces a novel approach using co-expression network analysis to predict drug toxicity mechanisms and phenotypes, demonstrating its effectiveness in identifying new toxicogenomic modules.",
+    "raw_response": "{\n  \"claims\": [\"Network-based approaches using co-expression network analysis can predict drug toxicity mechanisms and phenotypes more effectively than traditional gene-level analysis.\", \"Early network responses complement histology-based assessment in predicting long-term study outcomes.\", \"A novel mechanism of hepatotoxicity involving endoplasmic reticulum stress and Nrf2 activation is identified.\"],\n  \"genes\": [\"NRF2\"],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"co-expression network analysis\", \"transcriptome profiling\"],\n  \"species\": [\"rat\", \"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper introduces a novel approach using co-expression network analysis to predict drug toxicity mechanisms and phenotypes, demonstrating its effectiveness in identifying new toxicogenomic modules.\"\n}"
+  },
+  {
+    "paper_id": "b155a083f52b3e3f55c2c69ff61b6c0768cdff28",
+    "title": "The human hepatocyte TXG-MAPr: gene co-expression network modules to support mechanism-based risk assessment",
+    "year": 2021,
+    "claims": [
+      "TXG-MAPr webtool uses WGCNA from PHH TG-GATEs dataset to reveal mechanistic interpretation through gene co-expression network modules",
+      "The tool captures stress response pathways perturbed by specific stressors and shows preservation in rat systems except for DNA damage and oxidative stress responses",
+      "Module responses can be calculated from external datasets obtained with different hepatocyte cells and platforms, including targeted RNA-seq data",
+      "TXG-MAPr identifies higher basal level of intrinsic immune response in donors with pre-existing liver pathology"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "WGCNA",
+      "RNA-seq"
+    ],
+    "species": [
+      "human",
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The TXG-MAPr webtool uses weighted gene co-expression network analysis to provide a mechanistic interpretation of toxicogenomic data, supporting cross-species and cross-platform evaluation.",
+    "raw_response": "{\n  \"claims\": [\"TXG-MAPr webtool uses WGCNA from PHH TG-GATEs dataset to reveal mechanistic interpretation through gene co-expression network modules\", \"The tool captures stress response pathways perturbed by specific stressors and shows preservation in rat systems except for DNA damage and oxidative stress responses\", \"Module responses can be calculated from external datasets obtained with different hepatocyte cells and platforms, including targeted RNA-seq data\", \"TXG-MAPr identifies higher basal level of intrinsic immune response in donors with pre-existing liver pathology\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"WGCNA\", \"RNA-seq\"],\n  \"species\": [\"human\", \"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The TXG-MAPr webtool uses weighted gene co-expression network analysis to provide a mechanistic interpretation of toxicogenomic data, supporting cross-species and cross-platform evaluation.\"\n}"
+  },
+  {
+    "paper_id": "547b578a2af13e8048293495ced5df780434b56a",
+    "title": "Open TG-GATEs: a large-scale toxicogenomics database",
+    "year": 2014,
+    "claims": [
+      "Gene expression signatures from large databases like Open TG-GATEs are expected to perform better in identifying biomarkers for drug safety compared to smaller databases.",
+      "Open TG-GATEs provides comprehensive gene expression data and metadata freely available to the public."
+    ],
+    "genes": [],
+    "organs": [],
+    "methods": [
+      "microarray"
+    ],
+    "species": [
+      "rat",
+      "mouse"
+    ],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "Open TG-GATEs is a large-scale toxicogenomics database that provides comprehensive gene expression data and metadata from over 170 compounds for enhancing drug safety assessment.",
+    "raw_response": "{\n  \"claims\": [\"Gene expression signatures from large databases like Open TG-GATEs are expected to perform better in identifying biomarkers for drug safety compared to smaller databases.\", \"Open TG-GATEs provides comprehensive gene expression data and metadata freely available to the public.\"],\n  \"genes\": [],\n  \"organs\": [],\n  \"methods\": [\"microarray\"],\n  \"species\": [\"rat\", \"mouse\"],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"Open TG-GATEs is a large-scale toxicogenomics database that provides comprehensive gene expression data and metadata from over 170 compounds for enhancing drug safety assessment.\"\n}"
+  },
+  {
+    "paper_id": "e6af409b7cb30378fc8b002204def0e4808bf019",
+    "title": "Bridging organ transcriptomics for advancing multiple organ toxicity assessment with a generative AI approach",
+    "year": 2024,
+    "claims": [
+      "TransTox model demonstrates robust performance in bidirectional translation of transcriptomic profiles between liver and kidney",
+      "Synthetic data generated by TransTox can be used for developing gene expression predictive models or as digital twins for diagnostic applications"
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "transcriptomic profiling",
+      "Generative Adversarial Network (GAN) method"
+    ],
+    "species": [],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The paper introduces TransTox, an AI model using GAN to facilitate bidirectional translation of transcriptomic profiles between liver and kidney, advancing multi-organ toxicity assessment in toxicology.",
+    "raw_response": "{\n  \"claims\": [\"TransTox model demonstrates robust performance in bidirectional translation of transcriptomic profiles between liver and kidney\", \"Synthetic data generated by TransTox can be used for developing gene expression predictive models or as digital twins for diagnostic applications\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"kidney\"],\n  \"methods\": [\"transcriptomic profiling\", \"Generative Adversarial Network (GAN) method\"],\n  \"species\": [],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper introduces TransTox, an AI model using GAN to facilitate bidirectional translation of transcriptomic profiles between liver and kidney, advancing multi-organ toxicity assessment in toxicology.\"\n}"
+  },
+  {
+    "paper_id": "986e63a3f31338ce615cfcd5ca8cb62e08397abf",
+    "title": "Reconciled rat and human metabolic networks for comparative toxicogenomics and biomarker predictions",
+    "year": 2017,
+    "claims": [
+      "Reconstructed genome-scale metabolic networks for rat (iRno) and human (iHsa) metabolism",
+      "Integrated toxicogenomics data from rat and human hepatocytes to predict biomarkers in response to drugs",
+      "Validated comparative predictions with new experimental data"
+    ],
+    "genes": [],
+    "organs": [
+      "hepatocytes"
+    ],
+    "methods": [
+      "toxicogenomics data integration"
+    ],
+    "species": [
+      "rat",
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The paper presents the first genome-scale metabolic network reconstruction for rat and an improved one for human, integrating toxicogenomic data to predict species-specific biomarkers in response to drugs.",
+    "raw_response": "{\n  \"claims\": [\"Reconstructed genome-scale metabolic networks for rat (iRno) and human (iHsa) metabolism\", \"Integrated toxicogenomics data from rat and human hepatocytes to predict biomarkers in response to drugs\", \"Validated comparative predictions with new experimental data\"],\n  \"genes\": [],\n  \"organs\": [\"hepatocytes\"],\n  \"methods\": [\"toxicogenomics data integration\"],\n  \"species\": [\"rat\", \"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper presents the first genome-scale metabolic network reconstruction for rat and an improved one for human, integrating toxicogenomic data to predict species-specific biomarkers in response to drugs.\"\n}"
+  },
+  {
+    "paper_id": "93d5369a0be3134c6018373d5290923f3d718815",
+    "title": "The Molecular Signatures Database Hallmark Gene Set Collection",
+    "year": 2015,
+    "claims": [],
+    "genes": [],
+    "organs": [],
+    "methods": [],
+    "species": [],
+    "stance": "",
+    "confidence": 0.0,
+    "summary": "",
+    "raw_response": ""
+  },
+  {
+    "paper_id": "a1c5acb2049eba297a4f9c592e821d04ccd5458e",
+    "title": "Genotoxic Drug-Induced Hepatotoxicity: An In Silico Prediction Using Rattus norvegicus Microarray Gene Expression Data.",
+    "year": 2025,
+    "claims": [
+      "Four drug combinations (CPT/CPL, CP/CPT, EES/CP, and ETP/CPL) have a high potential for causing hepatotoxicity through mechanisms involving chemical carcinogenesis and ROS receptor activation.",
+      "The study uses in silico methods to predict genotoxic drug-induced hepatotoxicity using Rattus norvegicus microarray gene expression data."
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "microarray",
+      "dChip software analysis",
+      "R software analysis",
+      "protein-protein interaction network construction",
+      "Gene Ontology Biological Process (GOBP) analysis",
+      "Kyoto Encyclopedia of Genes and Genomes (KEGG) pathway analysis",
+      "principal component analysis (PCA)"
+    ],
+    "species": [
+      "Rattus norvegicus"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study presents a systematic in silico approach using Rattus norvegicus microarray gene expression data to predict mechanisms of genotoxic drug-induced hepatotoxicity, identifying specific drug combinations with high potential for causing liver injury.",
+    "raw_response": "{\n  \"claims\": [\"Four drug combinations (CPT/CPL, CP/CPT, EES/CP, and ETP/CPL) have a high potential for causing hepatotoxicity through mechanisms involving chemical carcinogenesis and ROS receptor activation.\", \"The study uses in silico methods to predict genotoxic drug-induced hepatotoxicity using Rattus norvegicus microarray gene expression data.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"microarray\", \"dChip software analysis\", \"R software analysis\", \"protein-protein interaction network construction\", \"Gene Ontology Biological Process (GOBP) analysis\", \"Kyoto Encyclopedia of Genes and Genomes (KEGG) pathway analysis\", \"principal component analysis (PCA)\"],\n  \"species\": [\"Rattus norvegicus\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study presents a systematic in silico approach using Rattus norvegicus microarray gene expression data to predict mechanisms of genotoxic drug-induced hepatotoxicity, identifying specific drug combinations with high potential for causing liver injury.\"\n}"
+  },
+  {
+    "paper_id": "0bd566d4463b15f9f18a9a52c1fc1998a823263d",
+    "title": "Advancing transcriptomics-based mechanistic assessment of nephrotoxicity in vitro using the human RPTEC/TERT1 TXG-MAPr gene co-expression network",
+    "year": 2025,
+    "claims": [
+      "High-throughput in vitro transcriptomic screening is pivotal for elucidating toxicity mechanisms.",
+      "Distinct gene co-expression modules can differentiate mechanisms of action.",
+      "Gene co-expression network approaches support mechanism-based risk assessment and next-generation chemical safety assessment."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney"
+    ],
+    "methods": [
+      "weighted correlation network analysis",
+      "transcriptomic profiling",
+      "R Shiny platform"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study introduces a human kidney in vitro toxicogenomic co-expression network using RPTEC/TERT1 cells, demonstrating its utility for mechanism-based risk assessment.",
+    "raw_response": "{\n  \"claims\": [\"High-throughput in vitro transcriptomic screening is pivotal for elucidating toxicity mechanisms.\", \"Distinct gene co-expression modules can differentiate mechanisms of action.\", \"Gene co-expression network approaches support mechanism-based risk assessment and next-generation chemical safety assessment.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\"],\n  \"methods\": [\"weighted correlation network analysis\", \"transcriptomic profiling\", \"R Shiny platform\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study introduces a human kidney in vitro toxicogenomic co-expression network using RPTEC/TERT1 cells, demonstrating its utility for mechanism-based risk assessment.\"\n}"
+  },
+  {
+    "paper_id": "45d53bbb34c71afdf7ece231c8d511330851a9f5",
+    "title": "A large-scale human toxicogenomics resource for drug-induced liver injury prediction",
+    "year": 2025,
+    "claims": [
+      "ToxPredictor achieves high accuracy in predicting DILI risks with RNA-seq data from human hepatocytes",
+      "It provides mechanistic insights into hepatotoxic pathways not captured by conventional assays"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "RNA-seq",
+      "pharmacokinetic analysis"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "ToxPredictor, a toxicogenomics framework using RNA-seq data from human hepatocytes and pharmacokinetic information, accurately predicts drug-induced liver injury risks with high sensitivity and specificity.",
+    "raw_response": "{\n  \"claims\": [\"ToxPredictor achieves high accuracy in predicting DILI risks with RNA-seq data from human hepatocytes\", \"It provides mechanistic insights into hepatotoxic pathways not captured by conventional assays\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"RNA-seq\", \"pharmacokinetic analysis\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"ToxPredictor, a toxicogenomics framework using RNA-seq data from human hepatocytes and pharmacokinetic information, accurately predicts drug-induced liver injury risks with high sensitivity and specificity.\"\n}"
+  },
+  {
+    "paper_id": "bd8b78182eef5cf8de68236b621c4345a21d5bc2",
+    "title": "Utilizing gene co-expression networks with the rat kidney TXG-MAPr tool to enhance safety assessment, biomarker identification and human translation",
+    "year": 2025,
+    "claims": [
+      "Gene co-expression networks can reduce complexity in gene-level transcriptomic data and provide insights into mechanisms of drug-induced adverse outcomes.",
+      "Several modules annotated for cellular stress, renal injury, and inflammation were statistically associated with concurrent renal pathologies.",
+      "Many rat kidney modules contain well-annotated, robust gene networks that are preserved across different datasets, suggesting translatability to human cases.",
+      "The TXG-MAPr tool enables the analysis of kidney gene expression data in the context of co-expression networks for safety assessment and biomarker identification."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney"
+    ],
+    "methods": [
+      "weighted gene co-expression network analysis (WGCNA)",
+      "transcriptomic data analysis",
+      "preservation analysis"
+    ],
+    "species": [
+      "rat",
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The paper introduces the rat kidney TXG-MAPr tool, which uses gene co-expression networks to enhance safety assessment and biomarker identification by analyzing complex transcriptomic data.",
+    "raw_response": "{\n  \"claims\": [\"Gene co-expression networks can reduce complexity in gene-level transcriptomic data and provide insights into mechanisms of drug-induced adverse outcomes.\", \"Several modules annotated for cellular stress, renal injury, and inflammation were statistically associated with concurrent renal pathologies.\", \"Many rat kidney modules contain well-annotated, robust gene networks that are preserved across different datasets, suggesting translatability to human cases.\", \"The TXG-MAPr tool enables the analysis of kidney gene expression data in the context of co-expression networks for safety assessment and biomarker identification.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\"],\n  \"methods\": [\"weighted gene co-expression network analysis (WGCNA)\", \"transcriptomic data analysis\", \"preservation analysis\"],\n  \"species\": [\"rat\", \"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper introduces the rat kidney TXG-MAPr tool, which uses gene co-expression networks to enhance safety assessment and biomarker identification by analyzing complex transcriptomic data.\"\n}"
+  },
+  {
+    "paper_id": "a8b0ea5b7ea58665db959e8c6226e31a8fb7c462",
+    "title": "Transcriptomics in Toxicogenomics, Part I: Experimental Design, Technologies, Publicly Available Data, and Regulatory Aspects",
+    "year": 2020,
+    "claims": [
+      "Transcriptomics enables detailed exploration of molecular changes in biological systems exposed to environmental, chemical, and physical agents.",
+      "Toxicogenomics integrates classical toxicology with omics assays for characterizing MOA of various compounds.",
+      "Standardization is crucial for the full exploitation of toxicogenomics-based evidence in risk assessment."
+    ],
+    "genes": [],
+    "organs": [],
+    "methods": [
+      "DNA microarray",
+      "RNA sequencing (RNA-Seq)",
+      "single-cell RNA-Seq (scRNA-Seq)"
+    ],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The paper reviews recent advancements in transcriptomics technologies and their application in toxicogenomics, emphasizing the importance of standardization for reliable risk assessment.",
+    "raw_response": "{\n  \"claims\": [\"Transcriptomics enables detailed exploration of molecular changes in biological systems exposed to environmental, chemical, and physical agents.\", \"Toxicogenomics integrates classical toxicology with omics assays for characterizing MOA of various compounds.\", \"Standardization is crucial for the full exploitation of toxicogenomics-based evidence in risk assessment.\"],\n  \"genes\": [],\n  \"organs\": [],\n  \"methods\": [\"DNA microarray\", \"RNA sequencing (RNA-Seq)\", \"single-cell RNA-Seq (scRNA-Seq)\"],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper reviews recent advancements in transcriptomics technologies and their application in toxicogenomics, emphasizing the importance of standardization for reliable risk assessment.\"\n}"
+  },
+  {
+    "paper_id": "4ed86c91ee8c3ebbaf82bf69b986cefab54ec01b",
+    "title": "Spatio-temporal transcriptomic analysis reveals distinct nephrotoxicity, DNA damage, and regeneration response after cisplatin",
+    "year": 2023,
+    "claims": [
+      "Cisplatin induces early DNA damage in cortical and outer-medulla proximal tubules but not glomeruli",
+      "Outer-medulla proximal tubules show sustained DNA damage response, inflammation, actin cytoskeletal remodeling, increased glycolysis, and suppression of mitochondrial activity",
+      "Later responses include cell cycle pathway activation and ribosomal biogenesis in injured OMPT regions",
+      "Whole kidney analysis is less sensitive than outer-medulla proximal tubule analysis for detecting nephrotoxicity"
+    ],
+    "genes": [
+      "CLU",
+      "KIM1"
+    ],
+    "organs": [
+      "kidney"
+    ],
+    "methods": [
+      "laser capture microdissection (LCM)",
+      "RNA-sequencing-TempO-Seq",
+      "co-expression gene-network analysis"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The study uses LCM and TempO-Seq to reveal detailed spatio-temporal transcriptomic responses in rat kidney segments after cisplatin exposure, identifying OMPT as the most sensitive segment for nephrotoxicity biomarker detection.",
+    "raw_response": "{\n  \"claims\": [\"Cisplatin induces early DNA damage in cortical and outer-medulla proximal tubules but not glomeruli\", \"Outer-medulla proximal tubules show sustained DNA damage response, inflammation, actin cytoskeletal remodeling, increased glycolysis, and suppression of mitochondrial activity\", \"Later responses include cell cycle pathway activation and ribosomal biogenesis in injured OMPT regions\", \"Whole kidney analysis is less sensitive than outer-medulla proximal tubule analysis for detecting nephrotoxicity\"],\n  \"genes\": [\"Clu\", \"Kim1\"],\n  \"organs\": [\"kidney\"],\n  \"methods\": [\"laser capture microdissection (LCM)\", \"RNA-sequencing-TempO-Seq\", \"co-expression gene-network analysis\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The study uses LCM and TempO-Seq to reveal detailed spatio-temporal transcriptomic responses in rat kidney segments after cisplatin exposure, identifying OMPT as the most sensitive segment for nephrotoxicity biomarker detection.\"\n}"
+  },
+  {
+    "paper_id": "0a75d3cbfc703079c377d985cd97cfdf54a31b65",
+    "title": "Assessing Chemical-Induced Liver Injury In Vivo From In Vitro Gene Expression Data in the Rat: The Case of Thioacetamide Toxicity",
+    "year": 2019,
+    "claims": [
+      "RNA-seq data from in vitro exposure of primary liver and kidney cells can predict chemical-induced organ injuries in vivo.",
+      "A modular approach for analyzing gene expression data derived from RNA-seq strongly correlates with in vitro results at different dose levels after 24 hours of thioacetamide/thioacetamide-S-oxide exposure."
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "RNA-seq"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study demonstrates the potential of using in vitro RNA-seq data to predict chemical-induced liver and kidney injuries in vivo, providing a novel approach for toxicogenomics.",
+    "raw_response": "{\n  \"claims\": [\"RNA-seq data from in vitro exposure of primary liver and kidney cells can predict chemical-induced organ injuries in vivo.\", \"A modular approach for analyzing gene expression data derived from RNA-seq strongly correlates with in vitro results at different dose levels after 24 hours of thioacetamide/thioacetamide-S-oxide exposure.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"kidney\"],\n  \"methods\": [\"RNA-seq\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study demonstrates the potential of using in vitro RNA-seq data to predict chemical-induced liver and kidney injuries in vivo, providing a novel approach for toxicogenomics.\"\n}"
+  },
+  {
+    "paper_id": "a90c4717c4901ac186b087fcd5b05fd512e29f62",
+    "title": "Physiological liver microtissue 384-well microplate system for preclinical hepatotoxicity assessment of therapeutic small molecule drugs",
+    "year": 2024,
+    "claims": [
+      "Human liver microtissues in a 384-well microplate system can predict hepatotoxicity with high sensitivity and specificity.",
+      "The model uses ATP content changes to assess cytotoxicity of drugs."
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "high throughput screening",
+      "5-fold cross-validation"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "A study demonstrates the efficacy of human liver microtissues in a 384-well plate system for predicting drug-induced hepatotoxicity, offering an improved alternative to traditional cell line models.",
+    "raw_response": "{\n  \"claims\": [\"Human liver microtissues in a 384-well microplate system can predict hepatotoxicity with high sensitivity and specificity.\", \"The model uses ATP content changes to assess cytotoxicity of drugs.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"high throughput screening\", \"5-fold cross-validation\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"A study demonstrates the efficacy of human liver microtissues in a 384-well plate system for predicting drug-induced hepatotoxicity, offering an improved alternative to traditional cell line models.\"\n}"
+  },
+  {
+    "paper_id": "91c982f1b438da703e65f36f7cea065ed87818cd",
+    "title": "Drug-induced liver injury prediction based on graph convolutional networks and toxicogenomics",
+    "year": 2025,
+    "claims": [
+      "BioGL-GCN model predicts drug-induced liver injury with high accuracy using toxicogenomic profiles",
+      "The BioGL module optimizes graph representations of gene interactions for improved predictive performance"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "graph convolutional networks",
+      "biological graph learning (BioGL) module",
+      "protein-protein interaction network construction",
+      "gene enrichment analysis"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The paper introduces BioGL-GCN, a novel method using graph convolutional networks and biological graph learning to predict drug-induced liver injury with high accuracy based on toxicogenomic profiles.",
+    "raw_response": "{\n  \"claims\": [\"BioGL-GCN model predicts drug-induced liver injury with high accuracy using toxicogenomic profiles\", \"The BioGL module optimizes graph representations of gene interactions for improved predictive performance\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"graph convolutional networks\", \"biological graph learning (BioGL) module\", \"protein-protein interaction network construction\", \"gene enrichment analysis\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper introduces BioGL-GCN, a novel method using graph convolutional networks and biological graph learning to predict drug-induced liver injury with high accuracy based on toxicogenomic profiles.\"\n}"
+  },
+  {
+    "paper_id": "d987d4cfcab52205f5d22c4d453a4efd522e8a7c",
+    "title": "The Mechanisms of Cadmium Toxicity in Living Organisms",
+    "year": 2024,
+    "claims": [
+      "Cadmium is a carcinogenic metal with long-term biological retention in soft tissues.",
+      "Cd exposure primarily occurs through ingestion and inhalation, leading to accumulation in organs like kidney and liver.",
+      "Cd induces oxidative stress, DNA damage, and alters gene expression related to apoptosis, autophagy, and ROS formation."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney",
+      "liver"
+    ],
+    "methods": [],
+    "species": [
+      "human"
+    ],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The paper reviews the mechanisms of cadmium toxicity in various organisms, focusing on its carcinogenic properties and effects on gene expression and cellular processes.",
+    "raw_response": "{\n  \"claims\": [\"Cadmium is a carcinogenic metal with long-term biological retention in soft tissues.\", \"Cd exposure primarily occurs through ingestion and inhalation, leading to accumulation in organs like kidney and liver.\", \"Cd induces oxidative stress, DNA damage, and alters gene expression related to apoptosis, autophagy, and ROS formation.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\", \"liver\"],\n  \"methods\": [],\n  \"species\": [\"human\"],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper reviews the mechanisms of cadmium toxicity in various organisms, focusing on its carcinogenic properties and effects on gene expression and cellular processes.\"\n}"
+  },
+  {
+    "paper_id": "2cd3387f4e9872996f538e20ff542569651b055a",
+    "title": "Identification of the Toxicity Pathways Associated With Thioacetamide-Induced Injuries in Rat Liver and Kidney",
+    "year": 2018,
+    "claims": [
+      "Thioacetamide-induced injuries in rat liver and kidney are associated with specific gene expression modules",
+      "Gene expression data can identify organ-specific injury patterns"
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "kidney",
+      "heart"
+    ],
+    "methods": [
+      "gene expression analysis",
+      "histopathology"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies specific gene expression modules associated with thioacetamide-induced injuries in rat liver and kidney, demonstrating the potential of gene expression data to detect organ-specific injury patterns.",
+    "raw_response": "{\n  \"claims\": [\"Thioacetamide-induced injuries in rat liver and kidney are associated with specific gene expression modules\", \"Gene expression data can identify organ-specific injury patterns\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"kidney\", \"heart\"],\n  \"methods\": [\"gene expression analysis\", \"histopathology\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies specific gene expression modules associated with thioacetamide-induced injuries in rat liver and kidney, demonstrating the potential of gene expression data to detect organ-specific injury patterns.\"\n}"
+  },
+  {
+    "paper_id": "08914dd0b8c029aeea4ae36eeb41970db70603f3",
+    "title": "A narrative review of metabolomics approaches in identifying biomarkers of doxorubicin-induced cardiotoxicity",
+    "year": 2025,
+    "claims": [
+      "Metabolites such as inosine, phenylalanine, arginine, and tryptophan are commonly perturbed across all study models in doxorubicin-induced cardiotoxicity",
+      "Carnitine metabolism and purine and pyrimidine metabolism pathways are the most affected by DIC",
+      "Metabolomics approaches have potential for identifying early biomarkers of DIC"
+    ],
+    "genes": [],
+    "organs": [
+      "heart"
+    ],
+    "methods": [
+      "LC\u2013MS",
+      "GC\u2013MS",
+      "NMR",
+      "Metabolite Set Enrichment Analysis (MSEA) using MetaboAnalyst"
+    ],
+    "species": [
+      "human",
+      "animal models"
+    ],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The review highlights the potential of metabolomics in identifying early biomarkers for doxorubicin-induced cardiotoxicity, emphasizing metabolic alterations and enriched pathways.",
+    "raw_response": "{\n  \"claims\": [\"Metabolites such as inosine, phenylalanine, arginine, and tryptophan are commonly perturbed across all study models in doxorubicin-induced cardiotoxicity\", \"Carnitine metabolism and purine and pyrimidine metabolism pathways are the most affected by DIC\", \"Metabolomics approaches have potential for identifying early biomarkers of DIC\"],\n  \"genes\": [],\n  \"organs\": [\"heart\"],\n  \"methods\": [\"LC\u2013MS\", \"GC\u2013MS\", \"NMR\", \"Metabolite Set Enrichment Analysis (MSEA) using MetaboAnalyst\"],\n  \"species\": [\"human\", \"animal models\"],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The review highlights the potential of metabolomics in identifying early biomarkers for doxorubicin-induced cardiotoxicity, emphasizing metabolic alterations and enriched pathways.\"\n}"
+  },
+  {
+    "paper_id": "fbf0857deea476a7a3beb6cda59b50c66e5655a6",
+    "title": "Data mining reveals a network of early-response genes as a consensus signature of drug-induced in vitro and in vivo toxicity",
+    "year": 2013,
+    "claims": [
+      "Four early-response genes (EGR1, ATF3, GDF15 and FGF21) form a functional network predictive of drug-induced liver and kidney toxicity",
+      "Early gene-expression signatures can predict compound-induced toxicity with high accuracy"
+    ],
+    "genes": [
+      "EGR1",
+      "ATF3",
+      "GDF15",
+      "FGF21"
+    ],
+    "organs": [
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "gene expression analysis",
+      "cell-based assays",
+      "histopathological data analysis",
+      "multivariate analysis",
+      "modelling and simulation"
+    ],
+    "species": [
+      "human",
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The paper identifies a network of early-response genes that predict drug-induced liver and kidney toxicity, demonstrating the utility of gene-expression signatures in toxicogenomics.",
+    "raw_response": "{\n  \"claims\": [\"Four early-response genes (EGR1, ATF3, GDF15 and FGF21) form a functional network predictive of drug-induced liver and kidney toxicity\", \"Early gene-expression signatures can predict compound-induced toxicity with high accuracy\"],\n  \"genes\": [\"EGR1\", \"ATF3\", \"GDF15\", \"FGF21\"],\n  \"organs\": [\"liver\", \"kidney\"],\n  \"methods\": [\"gene expression analysis\", \"cell-based assays\", \"histopathological data analysis\", \"multivariate analysis\", \"modelling and simulation\"],\n  \"species\": [\"human\", \"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper identifies a network of early-response genes that predict drug-induced liver and kidney toxicity, demonstrating the utility of gene-expression signatures in toxicogenomics.\"\n}"
+  },
+  {
+    "paper_id": "e17ca52c7ae40fb5677657963767f7064b1e7a42",
+    "title": "Apoptotic signatures allow early and rapid screening of drug-induced liver injury to accelerate drug discovery",
+    "year": 2025,
+    "claims": [
+      "AEGIS distinguishes compounds with different degrees of DILI concern",
+      "AEGIS achieves high specificity, sensitivity and precision in PHHs",
+      "Cells from patients with MASLD develop more severe DILI from troglitazone treatment"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "transcriptomics profiling",
+      "quantification of apoptosis-regulating transcription factors perturbation"
+    ],
+    "species": [
+      "human",
+      "mouse"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "AEGIS is a novel tool that uses transcriptomic data to quantify dose-dependent perturbations in apoptosis-regulating transcription factors, enabling early and accurate screening of drug-induced liver injury.",
+    "raw_response": "{\n  \"claims\": [\"AEGIS distinguishes compounds with different degrees of DILI concern\", \"AEGIS achieves high specificity, sensitivity and precision in PHHs\", \"Cells from patients with MASLD develop more severe DILI from troglitazone treatment\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"transcriptomics profiling\", \"quantification of apoptosis-regulating transcription factors perturbation\"],\n  \"species\": [\"human\", \"mouse\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"AEGIS is a novel tool that uses transcriptomic data to quantify dose-dependent perturbations in apoptosis-regulating transcription factors, enabling early and accurate screening of drug-induced liver injury.\"\n}"
+  },
+  {
+    "paper_id": "f655cea356fb5488822e3a2c394d05fa75e320e1",
+    "title": "TCN-RDP: Predicting Drug-Induced Liver Injury from Time-Series Toxicogenomic Data",
+    "year": 2025,
+    "claims": [
+      "TCN-RDP model predicts drug-induced liver injury with an accuracy of 84.05%",
+      "The model integrates Temporal Convolutional Networks (TCN) and Random Dimension Permutation (RDP) for better feature representation",
+      "XGBoost-based gene selection improves the interpretability of TCN-RDP"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "Temporal Convolutional Networks (TCN)",
+      "Random Dimension Permutation (RDP)",
+      "XGBoost"
+    ],
+    "species": [],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The paper introduces TCN-RDP, a novel model that uses Temporal Convolutional Networks and Random Dimension Permutation to predict drug-induced liver injury with high accuracy.",
+    "raw_response": "{\n  \"claims\": [\"TCN-RDP model predicts drug-induced liver injury with an accuracy of 84.05%\", \"The model integrates Temporal Convolutional Networks (TCN) and Random Dimension Permutation (RDP) for better feature representation\", \"XGBoost-based gene selection improves the interpretability of TCN-RDP\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"Temporal Convolutional Networks (TCN)\", \"Random Dimension Permutation (RDP)\", \"XGBoost\"],\n  \"species\": [],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper introduces TCN-RDP, a novel model that uses Temporal Convolutional Networks and Random Dimension Permutation to predict drug-induced liver injury with high accuracy.\"\n}"
+  },
+  {
+    "paper_id": "ccfd66ac3ac59762876842bad7bc00a58641ce40",
+    "title": "ToxAssay: a hierarchical model-driven tool for advanced toxicogenomics biomarker discovery",
+    "year": 2025,
+    "claims": [
+      "ToxAssay improves biomarker detection and computational efficiency in toxicogenomics",
+      "Identified 71 key genes and 26 core genes with high discriminative accuracy for glutathione depletion-induced toxicity"
+    ],
+    "genes": [
+      "KEY GENES (71 TOTAL)",
+      "CORE GENES (26 TOTAL)"
+    ],
+    "organs": [],
+    "methods": [
+      "Hierarchical Linear Model (HLM)",
+      "Advance Outcome Pathway (AOP) analysis",
+      "R package implementation"
+    ],
+    "species": [],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "ToxAssay, an R package implementing Hierarchical Linear Models, enhances the identification of toxicity biomarkers and provides precise insights into molecular mechanisms driving drug-induced toxicity.",
+    "raw_response": "{\n  \"claims\": [\"ToxAssay improves biomarker detection and computational efficiency in toxicogenomics\", \"Identified 71 key genes and 26 core genes with high discriminative accuracy for glutathione depletion-induced toxicity\"],\n  \"genes\": [\"key genes (71 total)\", \"core genes (26 total)\"],\n  \"organs\": [],\n  \"methods\": [\"Hierarchical Linear Model (HLM)\", \"Advance Outcome Pathway (AOP) analysis\", \"R package implementation\"],\n  \"species\": [],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"ToxAssay, an R package implementing Hierarchical Linear Models, enhances the identification of toxicity biomarkers and provides precise insights into molecular mechanisms driving drug-induced toxicity.\"\n}"
+  },
+  {
+    "paper_id": "9f4506201339872c72e0de0ae865cb01144cd666",
+    "title": "AIVIVE: a novel AI framework for enhanced in vitro to in vivo extrapolation (IVIVE) of toxicogenomics data",
+    "year": 2025,
+    "claims": [
+      "AIVIVE improves in vitro to in vivo extrapolation (IVIVE) by synthesizing gene expression data that closely matches real biological profiles.",
+      "The framework captures liver-specific pathways and adverse outcome pathways, enhancing toxicity evaluations.",
+      "AIVIVE slightly outperforms real data in necrosis classification tasks."
+    ],
+    "genes": [
+      "CYTOCHROME P450",
+      "CYP2E1"
+    ],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "GANs",
+      "local optimizers guided by biologically relevant gene modules"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "AIVIVE, a novel AI framework integrating GANs with local optimizers, enhances in vitro to in vivo extrapolation of toxicogenomics data by generating biologically relevant gene expression profiles.",
+    "raw_response": "{\n  \"claims\": [\"AIVIVE improves in vitro to in vivo extrapolation (IVIVE) by synthesizing gene expression data that closely matches real biological profiles.\", \"The framework captures liver-specific pathways and adverse outcome pathways, enhancing toxicity evaluations.\", \"AIVIVE slightly outperforms real data in necrosis classification tasks.\"],\n  \"genes\": [\"Cytochrome P450\", \"Cyp2e1\"],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"GANs\", \"local optimizers guided by biologically relevant gene modules\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"AIVIVE, a novel AI framework integrating GANs with local optimizers, enhances in vitro to in vivo extrapolation of toxicogenomics data by generating biologically relevant gene expression profiles.\"\n}"
+  },
+  {
+    "paper_id": "ae3f33a252e9d50312a63c61e57522ce00fd2359",
+    "title": "Qualitative and Quantitative Concentration-Response Modelling of Gene Co-expression Networks to Unlock Hepatotoxic Mechanisms for Next Generation Chemical Safety Assessment",
+    "year": 2024,
+    "claims": [
+      "Benchmark concentration-response modelling of gene co-expression networks in human hepatocytes and HepaRG cells can identify early responsive modules at low benchmark concentrations, which could be linked to key events in liver adverse outcome pathways.",
+      "Primary human hepatocytes showed higher responsiveness than HepaRG cells based on lower benchmark concentrations for co-regulated gene modules."
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "transcriptomics",
+      "gene co-expression network analysis",
+      "concentration-response modelling"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study demonstrates the utility of benchmark concentration-response modeling of gene co-expression networks in human hepatocytes and HepaRG cells for identifying early responsive modules linked to liver adverse outcomes, advancing next generation chemical safety assessment.",
+    "raw_response": "{\n  \"claims\": [\"Benchmark concentration-response modelling of gene co-expression networks in human hepatocytes and HepaRG cells can identify early responsive modules at low benchmark concentrations, which could be linked to key events in liver adverse outcome pathways.\", \"Primary human hepatocytes showed higher responsiveness than HepaRG cells based on lower benchmark concentrations for co-regulated gene modules.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"transcriptomics\", \"gene co-expression network analysis\", \"concentration-response modelling\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study demonstrates the utility of benchmark concentration-response modeling of gene co-expression networks in human hepatocytes and HepaRG cells for identifying early responsive modules linked to liver adverse outcomes, advancing next generation chemical safety assessment.\"\n}"
+  },
+  {
+    "paper_id": "1ff25234f3186f82911fd0e6c535fd008e12c045",
+    "title": "Systems toxicology of chemically induced liver and kidney injuries: histopathology\u2010associated gene co\u2010expression modules",
+    "year": 2016,
+    "claims": [
+      "Co-expressed gene modules specific to liver and kidney injury endpoints can be identified using TG-GATEs database",
+      "Activation of these modules correlates with severity of histopathological damage in a dose-dependent manner"
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "WGCNA (Weighted Gene Co-expression Network Analysis)"
+    ],
+    "species": [
+      "Sprague\u2013Dawley rats"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies gene co-expression modules specific to liver and kidney injuries caused by chemical exposures, providing a link between toxicant exposure and resultant organ damage.",
+    "raw_response": "{\n  \"claims\": [\"Co-expressed gene modules specific to liver and kidney injury endpoints can be identified using TG-GATEs database\", \"Activation of these modules correlates with severity of histopathological damage in a dose-dependent manner\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"kidney\"],\n  \"methods\": [\"WGCNA (Weighted Gene Co-expression Network Analysis)\"],\n  \"species\": [\"Sprague\u2013Dawley rats\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies gene co-expression modules specific to liver and kidney injuries caused by chemical exposures, providing a link between toxicant exposure and resultant organ damage.\"\n}"
+  },
+  {
+    "paper_id": "45549d3b43b103cba6ca33f9ad9ce457dc73b2e9",
+    "title": "Development of an adverse outcome pathway network for nephrotoxicity",
+    "year": 2024,
+    "claims": [
+      "AOP networks were developed to connect thirteen individual AOPs associated with nephrotoxicity, identifying mitochondrial dysfunction, oxidative stress, and tubular necrosis as key events.",
+      "These key events provide a basis for guiding the selection and creation of in vitro assays and in silico tools to predict chemical-induced nephrotoxicity."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study develops an AOP network for nephrotoxicity, identifying key events that can guide the development of in vitro and in silico tools to predict chemical-induced kidney damage.",
+    "raw_response": "{\n  \"claims\": [\"AOP networks were developed to connect thirteen individual AOPs associated with nephrotoxicity, identifying mitochondrial dysfunction, oxidative stress, and tubular necrosis as key events.\", \"These key events provide a basis for guiding the selection and creation of in vitro assays and in silico tools to predict chemical-induced nephrotoxicity.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study develops an AOP network for nephrotoxicity, identifying key events that can guide the development of in vitro and in silico tools to predict chemical-induced kidney damage.\"\n}"
+  },
+  {
+    "paper_id": "e661a20c2ba079f7bef6a9eacbafda828e6f374b",
+    "title": "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver for The Early Assessment of Drug Safety Liabilities.",
+    "year": 2020,
+    "claims": [
+      "Quantitative transcriptional biomarkers for xenobiotic receptor activation in rat liver can predict drug-induced liver injury (DILI) with high sensitivity and specificity.",
+      "Gene expression panels associated with key xenobiotic nuclear receptors, stress response mediators, and innate immune responses are proposed as quantitative mechanistic biomarkers for DILI assessment."
+    ],
+    "genes": [
+      "AHR",
+      "CAR",
+      "PXR",
+      "PPAR\u0391",
+      "ER",
+      "NRF2",
+      "NRF1",
+      "TP53"
+    ],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "RNA sequencing",
+      "clustering analysis",
+      "correlation analysis",
+      "linear modeling"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies and validates gene expression signatures in rat liver as quantitative biomarkers for early drug safety assessment, focusing on xenobiotic receptor activation and stress response pathways.",
+    "raw_response": "{\n  \"claims\": [\"Quantitative transcriptional biomarkers for xenobiotic receptor activation in rat liver can predict drug-induced liver injury (DILI) with high sensitivity and specificity.\", \"Gene expression panels associated with key xenobiotic nuclear receptors, stress response mediators, and innate immune responses are proposed as quantitative mechanistic biomarkers for DILI assessment.\"],\n  \"genes\": [\"AHR\", \"CAR\", \"PXR\", \"PPAR\u03b1\", \"ER\", \"NRF2\", \"NRF1\", \"TP53\"],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"RNA sequencing\", \"clustering analysis\", \"correlation analysis\", \"linear modeling\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies and validates gene expression signatures in rat liver as quantitative biomarkers for early drug safety assessment, focusing on xenobiotic receptor activation and stress response pathways.\"\n}"
+  },
+  {
+    "paper_id": "d39f2892a1e8eed4d5e952b44886ccb53b4ddfb8",
+    "title": "Unraveling the Vicious Cycle: Oxidative Stress and Neurotoxicity in Neurodegenerative Diseases",
+    "year": 2025,
+    "claims": [
+      "Oxidative stress contributes to neurotoxicity and exacerbates neurodegenerative diseases.",
+      "Mitochondrial metabolism disruption and impaired antioxidant enzyme activity intensify neurotoxic effects."
+    ],
+    "genes": [],
+    "organs": [
+      "nervous system"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.85,
+    "summary": "The paper reviews the mechanisms of oxidative stress-induced neurotoxicity and its role in neurodegenerative diseases, emphasizing the need for strategies to reduce oxidative stress.",
+    "raw_response": "{\n  \"claims\": [\"Oxidative stress contributes to neurotoxicity and exacerbates neurodegenerative diseases.\", \"Mitochondrial metabolism disruption and impaired antioxidant enzyme activity intensify neurotoxic effects.\"],\n  \"genes\": [],\n  \"organs\": [\"nervous system\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.85,\n  \"summary\": \"The paper reviews the mechanisms of oxidative stress-induced neurotoxicity and its role in neurodegenerative diseases, emphasizing the need for strategies to reduce oxidative stress.\"\n}"
+  },
+  {
+    "paper_id": "9c0ead66e6683318bb7aed10d903c9042b8976f5",
+    "title": "TransOrGAN: An Artificial Intelligence Mapping of Rat Transcriptomic Profiles between Organs, Ages, and Sexes",
+    "year": 2023,
+    "claims": [
+      "TransOrGAN can infer transcriptomic profiles between different organs with high accuracy",
+      "TransOrGAN can map gene expression data across sexes and ages accurately"
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "kidney",
+      "brain",
+      "heart",
+      "lung",
+      "spleen",
+      "testis",
+      "ovary",
+      "small intestine"
+    ],
+    "methods": [
+      "RNA-seq"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "TransOrGAN is a novel AI framework that accurately maps gene expression profiles across different organs, sexes, and ages in rats, potentially reducing the need for extensive animal testing.",
+    "raw_response": "{\n  \"claims\": [\"TransOrGAN can infer transcriptomic profiles between different organs with high accuracy\", \"TransOrGAN can map gene expression data across sexes and ages accurately\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"kidney\", \"brain\", \"heart\", \"lung\", \"spleen\", \"testis\", \"ovary\", \"small intestine\"],\n  \"methods\": [\"RNA-seq\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"TransOrGAN is a novel AI framework that accurately maps gene expression profiles across different organs, sexes, and ages in rats, potentially reducing the need for extensive animal testing.\"\n}"
+  },
+  {
+    "paper_id": "a6525b4e3795977812722a0f1dbce184d68bc76f",
+    "title": "Assessment of Drug-Induced Toxicity Biomarkers in the Brain Microphysiological System (MPS) Using Targeted and Untargeted Molecular Profiling",
+    "year": 2019,
+    "claims": [
+      "Early detection of neurotoxic effects using brain MPS and targeted/untargeted molecular profiling can predict later cell death.",
+      "Changes in N-acetylaspartic acid (NAA) levels correlate with early cellular metabolic dysfunction leading to oxidative stress and cell death."
+    ],
+    "genes": [
+      "DJ-1/PARK7"
+    ],
+    "organs": [
+      "brain"
+    ],
+    "methods": [
+      "targeted molecular profiling",
+      "untargeted extracellular metabolomics approach"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study demonstrates the utility of brain microphysiological systems and targeted/untargeted molecular profiling for early detection of neurotoxic effects, providing a proof-of-concept for predictive biomarker discovery in toxicogenomics.",
+    "raw_response": "{\n  \"claims\": [\"Early detection of neurotoxic effects using brain MPS and targeted/untargeted molecular profiling can predict later cell death.\", \"Changes in N-acetylaspartic acid (NAA) levels correlate with early cellular metabolic dysfunction leading to oxidative stress and cell death.\"],\n  \"genes\": [\"DJ-1/PARK7\"],\n  \"organs\": [\"brain\"],\n  \"methods\": [\"targeted molecular profiling\", \"untargeted extracellular metabolomics approach\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study demonstrates the utility of brain microphysiological systems and targeted/untargeted molecular profiling for early detection of neurotoxic effects, providing a proof-of-concept for predictive biomarker discovery in toxicogenomics.\"\n}"
+  },
+  {
+    "paper_id": "a0ef7eef0d9cabdb2dfc7fcb675a70a6202fc159",
+    "title": "TGx-DDI (toxicogenomic DNA damage-inducing) biomarker validation: multi-site ring trial supporting regulatory use",
+    "year": 2025,
+    "claims": [
+      "TGx-DDI biomarker demonstrates high sensitivity (100%), specificity (86%) and accuracy (91%) in identifying DNA damage-inducing compounds.",
+      "High interlaboratory concordance was observed with agreement coefficients \u22650.61.",
+      "Transcriptomic data showed strong cross-site correlation (Pearson r\u2009>\u20090.84).",
+      "TGx-DDI enhances the specificity of genotoxicity testing by distinguishing biologically relevant DNA damage responses."
+    ],
+    "genes": [],
+    "organs": [
+      "TK6 lymphoblastoid cells"
+    ],
+    "methods": [
+      "Nearest Shrunken Centroid Probability Analysis",
+      "Principal Component Analysis",
+      "Hierarchical Clustering",
+      "NanoString nCounter platform for RNA extraction and digital nucleic acid counting"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "supports_consensus",
+    "confidence": 0.95,
+    "summary": "The paper validates the TGx-DDI biomarker as a robust, reproducible transcriptomic tool to enhance genotoxicity testing specificity by accurately identifying DNA damage-inducing compounds.",
+    "raw_response": "{\n  \"claims\": [\"TGx-DDI biomarker demonstrates high sensitivity (100%), specificity (86%) and accuracy (91%) in identifying DNA damage-inducing compounds.\", \"High interlaboratory concordance was observed with agreement coefficients \u22650.61.\", \"Transcriptomic data showed strong cross-site correlation (Pearson r\u2009>\u20090.84).\", \"TGx-DDI enhances the specificity of genotoxicity testing by distinguishing biologically relevant DNA damage responses.\"],\n  \"genes\": [],\n  \"organs\": [\"TK6 lymphoblastoid cells\"],\n  \"methods\": [\"Nearest Shrunken Centroid Probability Analysis\", \"Principal Component Analysis\", \"Hierarchical Clustering\", \"NanoString nCounter platform for RNA extraction and digital nucleic acid counting\"],\n  \"species\": [\"human\"],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.95,\n  \"summary\": \"The paper validates the TGx-DDI biomarker as a robust, reproducible transcriptomic tool to enhance genotoxicity testing specificity by accurately identifying DNA damage-inducing compounds.\"\n}"
+  },
+  {
+    "paper_id": "916d20b5743f640d1bef9ff07ff31d4920042297",
+    "title": "Fenofibrate differentially activates PPAR\u03b1-mediated lipid metabolism in rat kidney and liver",
+    "year": 2025,
+    "claims": [
+      "Fenofibrate differentially activates PPAR\u03b1-mediated lipid metabolism in rat liver and kidney, leading to organ-specific toxicity mechanisms.",
+      "PPAR\u03b1 and RXR\u03b1 gene regulation differs between liver and kidney under fenofibrate exposure.",
+      "Transcriptomic changes indicate a switch from beneficial to deleterious effects of PPAR\u03b1 activation as fenofibrate concentration increases."
+    ],
+    "genes": [
+      "PPAR\u0391",
+      "RXR\u0391"
+    ],
+    "organs": [
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "high-throughput transcriptomic data analysis",
+      "pathway enrichment analysis",
+      "injury module analysis",
+      "individual gene comparison"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies differential PPAR\u03b1-mediated lipid metabolism regulation by fenofibrate in rat liver and kidney, elucidating organ-specific toxicity mechanisms.",
+    "raw_response": "{\n  \"claims\": [\"Fenofibrate differentially activates PPAR\u03b1-mediated lipid metabolism in rat liver and kidney, leading to organ-specific toxicity mechanisms.\", \"PPAR\u03b1 and RXR\u03b1 gene regulation differs between liver and kidney under fenofibrate exposure.\", \"Transcriptomic changes indicate a switch from beneficial to deleterious effects of PPAR\u03b1 activation as fenofibrate concentration increases.\"],\n  \"genes\": [\"PPAR\u03b1\", \"RXR\u03b1\"],\n  \"organs\": [\"liver\", \"kidney\"],\n  \"methods\": [\"high-throughput transcriptomic data analysis\", \"pathway enrichment analysis\", \"injury module analysis\", \"individual gene comparison\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies differential PPAR\u03b1-mediated lipid metabolism regulation by fenofibrate in rat liver and kidney, elucidating organ-specific toxicity mechanisms.\"\n}"
+  },
+  {
+    "paper_id": "7bc980cad85d61fb2e0338bcbee67cd518630167",
+    "title": "Untargeted metabolomics and transcriptomics joint analysis of the effects of polystyrene nanoplastics on lipid metabolism in the mouse liver",
+    "year": 2025,
+    "claims": [
+      "Nanoplastics exposure leads to obesity and hepatic lipid accumulation in male mice independently of food intake.",
+      "Alterations in lipid metabolism due to nanoplastics exposure involve arachidonic acid metabolism, with phosphatidylcholine (PC) being a key substance.",
+      "The CYP gene family (Cyp2c23, Cyp2c40) plays a critical role in regulating liver lipid metabolism during nanoplastics exposure."
+    ],
+    "genes": [
+      "CYP2C23",
+      "CYP2C40"
+    ],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "metabolomics",
+      "transcriptomics"
+    ],
+    "species": [
+      "mouse (C57BL/6J)"
+    ],
+    "stance": "novel_finding",
+    "confidence": 1.0,
+    "summary": "The study identifies the impact of nanoplastics on liver lipid metabolism in mice, revealing dysregulated phosphatidylcholine metabolism and CYP gene family expression as key mechanisms.",
+    "raw_response": "{\n  \"claims\": [\"Nanoplastics exposure leads to obesity and hepatic lipid accumulation in male mice independently of food intake.\", \"Alterations in lipid metabolism due to nanoplastics exposure involve arachidonic acid metabolism, with phosphatidylcholine (PC) being a key substance.\", \"The CYP gene family (Cyp2c23, Cyp2c40) plays a critical role in regulating liver lipid metabolism during nanoplastics exposure.\"],\n  \"genes\": [\"Cyp2c23\", \"Cyp2c40\"],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"metabolomics\", \"transcriptomics\"],\n  \"species\": [\"mouse (C57BL/6J)\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 1.0,\n  \"summary\": \"The study identifies the impact of nanoplastics on liver lipid metabolism in mice, revealing dysregulated phosphatidylcholine metabolism and CYP gene family expression as key mechanisms.\"\n}"
+  },
+  {
+    "paper_id": "da0c1cbe6a536c029af3b6edcd71041429411854",
+    "title": "401-Gene Signature of Myocardial Dysfunction in Human Heart Failure: A Transcriptomic Analysis",
+    "year": 2025,
+    "claims": [
+      "A 401-gene transcriptomic signature was identified in human heart failure, providing insights into molecular mechanisms and potential therapeutic targets.",
+      "The gene expression profile shows balanced dysregulation with enrichment in pathways related to mitochondrial dysfunction, immune activation, and extracellular matrix remodeling."
+    ],
+    "genes": [
+      "AIDC1",
+      "SECA1",
+      "PVRL2",
+      "PLD1",
+      "KTR3CL3"
+    ],
+    "organs": [
+      "heart"
+    ],
+    "methods": [
+      "differential expression analysis",
+      "pathway analysis",
+      "cross-validation with established heart failure signatures"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.95,
+    "summary": "The study identifies a 401-gene transcriptomic signature in human heart failure, offering new insights into the molecular mechanisms and potential therapeutic targets for this condition.",
+    "raw_response": "{\n  \"claims\": [\"A 401-gene transcriptomic signature was identified in human heart failure, providing insights into molecular mechanisms and potential therapeutic targets.\", \"The gene expression profile shows balanced dysregulation with enrichment in pathways related to mitochondrial dysfunction, immune activation, and extracellular matrix remodeling.\"],\n  \"genes\": [\"AIDC1\", \"SECA1\", \"PVRL2\", \"PLD1\", \"KTR3CL3\"],\n  \"organs\": [\"heart\"],\n  \"methods\": [\"differential expression analysis\", \"pathway analysis\", \"cross-validation with established heart failure signatures\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.95,\n  \"summary\": \"The study identifies a 401-gene transcriptomic signature in human heart failure, offering new insights into the molecular mechanisms and potential therapeutic targets for this condition.\"\n}"
+  },
+  {
+    "paper_id": "0fd94283d87aaa6f98fa0e5d91cb978f15021f6f",
+    "title": "Renohepatic crosstalk: a review of the effects of acute kidney injury on the liver.",
+    "year": 2021,
+    "claims": [
+      "Acute kidney injury (AKI) can directly and adversely affect liver function through various mechanisms including uremia, volume overload, acute metabolic acidosis, systemic inflammation, hepatic leukocyte infiltration, cytokine-mediated liver injury, and hepatic oxidative stress.",
+      "The review highlights the need for further human studies to support the relationship between AKI and liver dysfunction."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney",
+      "liver"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.8,
+    "summary": "The review supports the idea that acute kidney injury negatively impacts liver function through multiple mechanisms, emphasizing the need for further human studies to confirm these findings.",
+    "raw_response": "{\n  \"claims\": [\"Acute kidney injury (AKI) can directly and adversely affect liver function through various mechanisms including uremia, volume overload, acute metabolic acidosis, systemic inflammation, hepatic leukocyte infiltration, cytokine-mediated liver injury, and hepatic oxidative stress.\", \"The review highlights the need for further human studies to support the relationship between AKI and liver dysfunction.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\", \"liver\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.8,\n  \"summary\": \"The review supports the idea that acute kidney injury negatively impacts liver function through multiple mechanisms, emphasizing the need for further human studies to confirm these findings.\"\n}"
+  },
+  {
+    "paper_id": "5bd0eedfb4451b145442480221c27e536c22acb3",
+    "title": "Targeting TNF\u03b1-mediated cytotoxicity using thalidomide after experimental cardiac arrest in rats: An exploratory study.",
+    "year": 2022,
+    "claims": [
+      "Cardiac arrest in rats leads to a systemic and organ-specific TNF\u03b1 and cytokine response, with increased biomarkers of injury.",
+      "Thalidomide at a dose previously shown to be neuroprotective did not decrease TNF\u03b1 or cytokine levels post-cardiac arrest."
+    ],
+    "genes": [
+      "TNF\u0391"
+    ],
+    "organs": [
+      "cortex",
+      "hippocampus",
+      "striatum",
+      "cerebellum",
+      "plasma",
+      "heart",
+      "lung"
+    ],
+    "methods": [
+      "assessment of biomarkers and cytokines in tissues and plasma"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "challenges_consensus",
+    "confidence": 0.85,
+    "summary": "The study challenges the efficacy of thalidomide in reducing TNF\u03b1-mediated cytotoxicity after cardiac arrest, despite its known neuroprotective properties.",
+    "raw_response": "{\n  \"claims\": [\"Cardiac arrest in rats leads to a systemic and organ-specific TNF\u03b1 and cytokine response, with increased biomarkers of injury.\", \"Thalidomide at a dose previously shown to be neuroprotective did not decrease TNF\u03b1 or cytokine levels post-cardiac arrest.\"],\n  \"genes\": [\"TNF\u03b1\"],\n  \"organs\": [\"cortex\", \"hippocampus\", \"striatum\", \"cerebellum\", \"plasma\", \"heart\", \"lung\"],\n  \"methods\": [\"assessment of biomarkers and cytokines in tissues and plasma\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"challenges_consensus\",\n  \"confidence\": 0.85,\n  \"summary\": \"The study challenges the efficacy of thalidomide in reducing TNF\u03b1-mediated cytotoxicity after cardiac arrest, despite its known neuroprotective properties.\"\n}"
+  },
+  {
+    "paper_id": "93c718c986426c1071362aaa205c847b430c5a72",
+    "title": "Evaluating the synergistic use of advanced liver models and AI for the prediction of drug-induced liver injury",
+    "year": 2025,
+    "claims": [
+      "Advanced human liver models can mimic hepatotoxicity events in vitro",
+      "Integration of diverse data types from liver models with machine learning improves DILI predictions"
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "machine learning strategies",
+      "biochemical analysis",
+      "histological analysis",
+      "toxicogenomic analysis"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The paper discusses the use of advanced human liver models and machine learning to predict drug-induced liver injury, highlighting improvements in preclinical DILI predictions.",
+    "raw_response": "{\n  \"claims\": [\"Advanced human liver models can mimic hepatotoxicity events in vitro\", \"Integration of diverse data types from liver models with machine learning improves DILI predictions\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"machine learning strategies\", \"biochemical analysis\", \"histological analysis\", \"toxicogenomic analysis\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper discusses the use of advanced human liver models and machine learning to predict drug-induced liver injury, highlighting improvements in preclinical DILI predictions.\"\n}"
+  },
+  {
+    "paper_id": "7cd33f10f38ff799d7b7ff40f5312735c94f4d93",
+    "title": "A systematic review of the potential neurotoxicity of micro-and nanoplastics: the known and unknown",
+    "year": 2025,
+    "claims": [
+      "MNPs may reach the brain via olfactory translocation or by penetrating the blood\u2013brain barrier",
+      "Neurotoxic outcomes vary widely depending on particle size, shape, polymer type, exposure concentration, and host species",
+      "Most current studies employ spherical polystyrene particles at supraphysiological concentrations"
+    ],
+    "genes": [],
+    "organs": [
+      "Brain"
+    ],
+    "methods": [],
+    "species": [
+      "vertebrates"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.85,
+    "summary": "The review synthesizes evidence on the potential neurotoxicity of micro- and nanoplastics, highlighting variability in toxic outcomes based on particle characteristics and host species.",
+    "raw_response": "{\n  \"claims\": [\"MNPs may reach the brain via olfactory translocation or by penetrating the blood\u2013brain barrier\", \"Neurotoxic outcomes vary widely depending on particle size, shape, polymer type, exposure concentration, and host species\", \"Most current studies employ spherical polystyrene particles at supraphysiological concentrations\"],\n  \"genes\": [],\n  \"organs\": [\"Brain\"],\n  \"methods\": [],\n  \"species\": [\"vertebrates\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.85,\n  \"summary\": \"The review synthesizes evidence on the potential neurotoxicity of micro- and nanoplastics, highlighting variability in toxic outcomes based on particle characteristics and host species.\"\n}"
+  },
+  {
+    "paper_id": "ee88cfad1243c89feadf1ee61be9983a7d08fdac",
+    "title": "Toxic Effect of Acute Cadmium and Lead Exposure in Rat Blood, Liver, and Kidney",
+    "year": 2019,
+    "claims": [
+      "Exposure to cadmium and lead mixtures produces more pronounced effects compared to single metal exposures.",
+      "Further research is needed to confirm interactions between cadmium and lead in organisms."
+    ],
+    "genes": [],
+    "organs": [
+      "blood",
+      "liver",
+      "kidney"
+    ],
+    "methods": [
+      "hematological analysis",
+      "biochemical parameter assessment",
+      "redox status evaluation"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.85,
+    "summary": "The study investigates the toxic effects of acute exposure to cadmium and lead alone or in combination on hematological, biochemical parameters, and redox status in rat blood, liver, and kidney.",
+    "raw_response": "{\n  \"claims\": [\"Exposure to cadmium and lead mixtures produces more pronounced effects compared to single metal exposures.\", \"Further research is needed to confirm interactions between cadmium and lead in organisms.\"],\n  \"genes\": [],\n  \"organs\": [\"blood\", \"liver\", \"kidney\"],\n  \"methods\": [\"hematological analysis\", \"biochemical parameter assessment\", \"redox status evaluation\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.85,\n  \"summary\": \"The study investigates the toxic effects of acute exposure to cadmium and lead alone or in combination on hematological, biochemical parameters, and redox status in rat blood, liver, and kidney.\"\n}"
+  },
+  {
+    "paper_id": "231beae808e9487aeeaafab741cd6de496a54dd9",
+    "title": "Evaluation of in Vitro Mitochondrial Toxicity Assays and Physicochemical Properties for Prediction of Organ Toxicity Using 228 Pharmaceutical Drugs.",
+    "year": 2018,
+    "claims": [
+      "Mitochondrial toxicity assays have superior predictive performance for hepatotoxicity compared to cardiotoxicity and nephrotoxicity.",
+      "Calculated log partition coefficient (cLogP) is significantly associated with mitochondrial toxicity."
+    ],
+    "genes": [],
+    "organs": [
+      "liver",
+      "heart",
+      "kidney"
+    ],
+    "methods": [
+      "screening assays using isolated rat liver mitochondria; glucose-galactose grown HepG2 cells"
+    ],
+    "species": [
+      "rat",
+      "human"
+    ],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The study evaluates the predictive performance of mitochondrial toxicity assays for organ toxicities and finds superior prediction accuracy for hepatotoxicity compared to cardiotoxicity and nephrotoxicity.",
+    "raw_response": "{\n  \"claims\": [\"Mitochondrial toxicity assays have superior predictive performance for hepatotoxicity compared to cardiotoxicity and nephrotoxicity.\", \"Calculated log partition coefficient (cLogP) is significantly associated with mitochondrial toxicity.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\", \"heart\", \"kidney\"],\n  \"methods\": [\"screening assays using isolated rat liver mitochondria; glucose-galactose grown HepG2 cells\"],\n  \"species\": [\"rat\", \"human\"],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study evaluates the predictive performance of mitochondrial toxicity assays for organ toxicities and finds superior prediction accuracy for hepatotoxicity compared to cardiotoxicity and nephrotoxicity.\"\n}"
+  },
+  {
+    "paper_id": "20adce8941d8530530229fede13a688e90e39a6b",
+    "title": "A Set of Six Gene Expression Biomarkers Identify Rat Liver Tumorigens in Short-Term Assays.",
+    "year": 2020,
+    "claims": [
+      "A set of six gene expression biomarkers can identify rat liver tumorigens in short-term assays",
+      "Chemicals administered at tumorigenic doses have the highest ranked scores based on their ability to activate molecular initiating events (MIEs)",
+      "Balanced accuracies up to 93% were achieved using thresholds derived from TG-GATES or DrugMatrix datasets to predict tumorigenicity"
+    ],
+    "genes": [
+      "AHR",
+      "CAR",
+      "ER",
+      "PPAR\u0391"
+    ],
+    "organs": [
+      "liver"
+    ],
+    "methods": [
+      "microarray",
+      "TXG-MAP network model",
+      "Toxicological Priority Index (ToxPi)"
+    ],
+    "species": [
+      "rat"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "A study demonstrates that a set of six gene expression biomarkers can accurately predict liver tumorigenicity in rats using short-term assays, offering a novel approach to toxicogenomics.",
+    "raw_response": "{\n  \"claims\": [\"A set of six gene expression biomarkers can identify rat liver tumorigens in short-term assays\", \"Chemicals administered at tumorigenic doses have the highest ranked scores based on their ability to activate molecular initiating events (MIEs)\", \"Balanced accuracies up to 93% were achieved using thresholds derived from TG-GATES or DrugMatrix datasets to predict tumorigenicity\"],\n  \"genes\": [\"AhR\", \"CAR\", \"ER\", \"PPAR\u03b1\"],\n  \"organs\": [\"liver\"],\n  \"methods\": [\"microarray\", \"TXG-MAP network model\", \"Toxicological Priority Index (ToxPi)\"],\n  \"species\": [\"rat\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"A study demonstrates that a set of six gene expression biomarkers can accurately predict liver tumorigenicity in rats using short-term assays, offering a novel approach to toxicogenomics.\"\n}"
+  },
+  {
+    "paper_id": "b917de6c78b750b9f37d9d0052b76979cbeb5bef",
+    "title": "Network-Based Assessment of Environmental Neurotoxicants Using High-Throughput Transcriptomics in Zebrafish Embryos.",
+    "year": 2026,
+    "claims": [
+      "An AOP network-based framework was developed for interpreting concentration-dependent transcriptomics in zebrafish embryos related to behavioral outcomes.",
+      "Transcriptomic points of departure (tPOD) were significantly correlated with behavioral apical POD (aPOD).",
+      "Partial least-squares regression integrating neurotoxicity-relevant CRKEs and TRKEs showed the best performance for estimating aPOD.",
+      "External validation using published fish transcriptomics data supported the approach's predictive power."
+    ],
+    "genes": [],
+    "organs": [
+      "embryos"
+    ],
+    "methods": [
+      "high-throughput transcriptomics",
+      "AOP network-based framework",
+      "partial least-squares regression"
+    ],
+    "species": [
+      "zebrafish"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The paper presents a novel AOP network-based approach for interpreting zebrafish embryo transcriptomics data to predict neurotoxicity, demonstrating its potential in quantitative toxicogenomic assessments.",
+    "raw_response": "{\n  \"claims\": [\"An AOP network-based framework was developed for interpreting concentration-dependent transcriptomics in zebrafish embryos related to behavioral outcomes.\", \"Transcriptomic points of departure (tPOD) were significantly correlated with behavioral apical POD (aPOD).\", \"Partial least-squares regression integrating neurotoxicity-relevant CRKEs and TRKEs showed the best performance for estimating aPOD.\", \"External validation using published fish transcriptomics data supported the approach's predictive power.\"],\n  \"genes\": [],\n  \"organs\": [\"embryos\"],\n  \"methods\": [\"high-throughput transcriptomics\", \"AOP network-based framework\", \"partial least-squares regression\"],\n  \"species\": [\"zebrafish\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper presents a novel AOP network-based approach for interpreting zebrafish embryo transcriptomics data to predict neurotoxicity, demonstrating its potential in quantitative toxicogenomic assessments.\"\n}"
+  },
+  {
+    "paper_id": "73971295a696a68cd5d1fa3f02ad446748f8d0e4",
+    "title": "Endoplasmic reticulum stress in ischemic and nephrotoxic acute kidney injury",
+    "year": 2018,
+    "claims": [
+      "Perturbations in kidney cells during acute kidney injury lead to accumulation of unfolded and misfolded proteins in the endoplasmic reticulum, triggering ER stress.",
+      "The balance between adaptive and apoptotic pathways of UPR is crucial for cell fate determination under ER stress conditions.",
+      "Regulation of ER stress may offer a therapeutic approach for treating acute kidney injury."
+    ],
+    "genes": [],
+    "organs": [
+      "kidney"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The paper reviews the role of endoplasmic reticulum stress in acute kidney injury, highlighting its potential as a therapeutic target.",
+    "raw_response": "{\n  \"claims\": [\"Perturbations in kidney cells during acute kidney injury lead to accumulation of unfolded and misfolded proteins in the endoplasmic reticulum, triggering ER stress.\", \"The balance between adaptive and apoptotic pathways of UPR is crucial for cell fate determination under ER stress conditions.\", \"Regulation of ER stress may offer a therapeutic approach for treating acute kidney injury.\"],\n  \"genes\": [],\n  \"organs\": [\"kidney\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper reviews the role of endoplasmic reticulum stress in acute kidney injury, highlighting its potential as a therapeutic target.\"\n}"
+  },
+  {
+    "paper_id": "2fc8547fbc3e8918cabb08290a79e28034b1b571",
+    "title": "Mechanism-based drug safety testing using innovative in vitro liver models: from DILI prediction to idiosyncratic DILI liability assessment",
+    "year": 2025,
+    "claims": [
+      "Idiosyncratic drug-induced liver injury (iDILI) remains unpredictable and costly, necessitating early identification through in vitro models.",
+      "A tiered approach using simple fit-for-purpose models followed by more complex multicellular liver models can improve the accuracy of iDILI liability assessment."
+    ],
+    "genes": [],
+    "organs": [
+      "liver"
+    ],
+    "methods": [],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The paper proposes a tiered approach using in vitro liver models to improve the early identification of idiosyncratic drug-induced liver injury (iDILI) liabilities.",
+    "raw_response": "{\n  \"claims\": [\"Idiosyncratic drug-induced liver injury (iDILI) remains unpredictable and costly, necessitating early identification through in vitro models.\", \"A tiered approach using simple fit-for-purpose models followed by more complex multicellular liver models can improve the accuracy of iDILI liability assessment.\"],\n  \"genes\": [],\n  \"organs\": [\"liver\"],\n  \"methods\": [],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper proposes a tiered approach using in vitro liver models to improve the early identification of idiosyncratic drug-induced liver injury (iDILI) liabilities.\"\n}"
+  },
+  {
+    "paper_id": "cdc2fefbaf6fa1d26ee97e42a59e200b2b274190",
+    "title": "Toxic effects and molecular mechanism of doxorubicin on different organs \u2013 an update",
+    "year": 2021,
+    "claims": [
+      "Doxorubicin causes multiorgan toxicity primarily through free radical production leading to redox imbalance",
+      "The heart is the primary organ affected by doxorubicin-induced cardiotoxicity"
+    ],
+    "genes": [],
+    "organs": [
+      "heart",
+      "liver",
+      "kidney",
+      "reproductive organs",
+      "adipose tissue",
+      "brain"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.85,
+    "summary": "The review updates the understanding of doxorubicin-induced multiorgan toxicity, focusing on redox imbalance and free radical production as key mechanisms.",
+    "raw_response": "{\n  \"claims\": [\"Doxorubicin causes multiorgan toxicity primarily through free radical production leading to redox imbalance\", \"The heart is the primary organ affected by doxorubicin-induced cardiotoxicity\"],\n  \"genes\": [],\n  \"organs\": [\"heart\", \"liver\", \"kidney\", \"reproductive organs\", \"adipose tissue\", \"brain\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.85,\n  \"summary\": \"The review updates the understanding of doxorubicin-induced multiorgan toxicity, focusing on redox imbalance and free radical production as key mechanisms.\"\n}"
+  },
+  {
+    "paper_id": "9a38fda73df3a305ece20fee598328a5dad83933",
+    "title": "Heavy Metals Toxicity: Mechanism, Health Effects, and Therapeutic Interventions",
+    "year": 2025,
+    "claims": [
+      "Heavy metals interfere with intracellular biochemical processes leading to cellular dysfunction and death.",
+      "Heavy metals cause DNA damage and gene mutations affecting genetic transmission and expression.",
+      "Therapeutic strategies such as chelation therapy can mitigate the toxic effects of heavy metals."
+    ],
+    "genes": [],
+    "organs": [
+      "nervous system",
+      "kidneys",
+      "cardiovascular system"
+    ],
+    "methods": [],
+    "species": [],
+    "stance": "supports_consensus",
+    "confidence": 0.9,
+    "summary": "The paper reviews the toxic effects of heavy metals on human health, focusing on cellular and genetic impacts, and discusses therapeutic interventions to mitigate these effects.",
+    "raw_response": "{\n  \"claims\": [\"Heavy metals interfere with intracellular biochemical processes leading to cellular dysfunction and death.\", \"Heavy metals cause DNA damage and gene mutations affecting genetic transmission and expression.\", \"Therapeutic strategies such as chelation therapy can mitigate the toxic effects of heavy metals.\"],\n  \"genes\": [],\n  \"organs\": [\"nervous system\", \"kidneys\", \"cardiovascular system\"],\n  \"methods\": [],\n  \"species\": [],\n  \"stance\": \"supports_consensus\",\n  \"confidence\": 0.9,\n  \"summary\": \"The paper reviews the toxic effects of heavy metals on human health, focusing on cellular and genetic impacts, and discusses therapeutic interventions to mitigate these effects.\"\n}"
+  },
+  {
+    "paper_id": "d5519d1e5d3b214eeca44882c05062cf36a394ab",
+    "title": "An integrated co-expression network analysis reveals novel genetic biomarkers for immune cell infiltration in chronic kidney disease",
+    "year": 2023,
+    "claims": [
+      "TCF21 and DACH1 in kidney tissue and DDX17 in PBMC are identified as biomarkers for CKD progression",
+      "Immune cell infiltration analysis shows that TCF21 and DACH1 correlate with specific immune cells, while DDX17 correlates with neutrophils and type-1/2 T helper cells"
+    ],
+    "genes": [
+      "CDCP1",
+      "CORO1C",
+      "DACH1",
+      "GSTA4",
+      "MAFB",
+      "TCF21",
+      "TGFBR3",
+      "TGIF1",
+      "DDX17",
+      "KLF11",
+      "MAN1C1",
+      "POLR2K",
+      "ST14",
+      "TRIM66"
+    ],
+    "organs": [
+      "kidney",
+      "peripheral blood mononuclear cells (PBMC)"
+    ],
+    "methods": [
+      "weighted gene co-expression network analysis (WGCNA)",
+      "correlation analysis",
+      "validation cohort study",
+      "receiver operating characteristic curve (ROC) analysis",
+      "folic acid-induced nephropathy murine model",
+      "immunohistochemical staining"
+    ],
+    "species": [
+      "human",
+      "mouse"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies TCF21, DACH1 in kidney tissue and DDX17 in PBMC as potential biomarkers for chronic kidney disease progression through integrated co-expression network analysis.",
+    "raw_response": "{\n  \"claims\": [\"TCF21 and DACH1 in kidney tissue and DDX17 in PBMC are identified as biomarkers for CKD progression\", \"Immune cell infiltration analysis shows that TCF21 and DACH1 correlate with specific immune cells, while DDX17 correlates with neutrophils and type-1/2 T helper cells\"],\n  \"genes\": [\"CDCP1\", \"CORO1C\", \"DACH1\", \"GSTA4\", \"MAFB\", \"TCF21\", \"TGFBR3\", \"TGIF1\", \"DDX17\", \"KLF11\", \"MAN1C1\", \"POLR2K\", \"ST14\", \"TRIM66\"],\n  \"organs\": [\"kidney\", \"peripheral blood mononuclear cells (PBMC)\"],\n  \"methods\": [\"weighted gene co-expression network analysis (WGCNA)\", \"correlation analysis\", \"validation cohort study\", \"receiver operating characteristic curve (ROC) analysis\", \"folic acid-induced nephropathy murine model\", \"immunohistochemical staining\"],\n  \"species\": [\"human\", \"mouse\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies TCF21, DACH1 in kidney tissue and DDX17 in PBMC as potential biomarkers for chronic kidney disease progression through integrated co-expression network analysis.\"\n}"
+  },
+  {
+    "paper_id": "3836b733eb6918b6ed0370596eef2ff993b6838e",
+    "title": "Neuronal specific and non-specific responses to cadmium possibly involved in neurodegeneration: A toxicogenomics study in a human neuronal cell model.",
+    "year": 2019,
+    "claims": [
+      "Cadmium exposure in human neuronal cells (SH-SY5Y) leads to early deregulation of genes and processes, including activation of p53 signaling pathway, heat shock proteins, metallothioneins, and alterations in calcium regulation.",
+      "Cadmium-induced neurotoxicity may contribute to neurodegenerative diseases by disrupting essential metal homeostasis and neuronal functions."
+    ],
+    "genes": [
+      "P53",
+      "MTS",
+      "HMOX1",
+      "ZNT-1",
+      "FERRITIN",
+      "S100A2",
+      "NEK3",
+      "KIK15",
+      "GREM2"
+    ],
+    "organs": [
+      "brain"
+    ],
+    "methods": [
+      "toxicogenomics approach"
+    ],
+    "species": [
+      "human"
+    ],
+    "stance": "novel_finding",
+    "confidence": 0.9,
+    "summary": "The study identifies early gene and process deregulations in human neuronal cells exposed to cadmium, suggesting potential mechanisms for cadmium-induced neurodegeneration.",
+    "raw_response": "{\n  \"claims\": [\"Cadmium exposure in human neuronal cells (SH-SY5Y) leads to early deregulation of genes and processes, including activation of p53 signaling pathway, heat shock proteins, metallothioneins, and alterations in calcium regulation.\", \"Cadmium-induced neurotoxicity may contribute to neurodegenerative diseases by disrupting essential metal homeostasis and neuronal functions.\"],\n  \"genes\": [\"p53\", \"MTs\", \"HMOX1\", \"ZnT-1\", \"Ferritin\", \"S100A2\", \"NEK3\", \"KIK15\", \"GREM2\"],\n  \"organs\": [\"brain\"],\n  \"methods\": [\"toxicogenomics approach\"],\n  \"species\": [\"human\"],\n  \"stance\": \"novel_finding\",\n  \"confidence\": 0.9,\n  \"summary\": \"The study identifies early gene and process deregulations in human neuronal cells exposed to cadmium, suggesting potential mechanisms for cadmium-induced neurodegeneration.\"\n}"
+  },
+  {
+    "paper_id": "abc3ea89fa87d4afa0f0680a8e7bda4a54b40065",
+    "title": "Toxicogenomics discrimination of potential hepatocarcinogenicity of non\u2010genotoxic compounds in rat liver",
+    "year": 2012,
+    "claims": [],
+    "genes": [],
+    "organs": [],
+    "methods": [],
+    "species": [],
+    "stance": "",
+    "confidence": 0.0,
+    "summary": "",
+    "raw_response": ""
+  }
+]
