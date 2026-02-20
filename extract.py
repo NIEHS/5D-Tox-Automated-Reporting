@@ -105,8 +105,10 @@ class PaperExtraction:
     stance: str = ""          # "supports_consensus", "challenges", "neutral", "novel"
     confidence: float = 0.0   # how confident the LLM is in its extraction
     summary: str = ""
+    dose_response: list[str] = field(default_factory=list)
     raw_response: str = ""
     endpoint_used: str = ""
+    text_source: str = ""  # "abstract", "pmc", "arxiv", "s2_oa", "unpaywall", "doi_proxy"
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +136,104 @@ Respond with ONLY a JSON object (no markdown, no explanation) with these fields:
   "confidence": 0.0 to 1.0,
   "summary": "one-sentence summary of the paper's main contribution to toxicogenomics"
 }}"""
+
+FULLTEXT_EXTRACTION_PROMPT = """Analyze this scientific paper and extract structured information.
+
+Title: {title}
+Year: {year}
+
+Full text (may be truncated):
+{text}
+
+Respond with ONLY a JSON object (no markdown, no explanation) with these fields:
+{{
+  "claims": ["list of key scientific findings, each as a concise statement - extract MORE detail than an abstract would provide"],
+  "genes": ["list of ALL gene names/symbols mentioned (e.g. CYP1A1, NRF2, TP53) - check methods, results, and supplementary references"],
+  "organs": ["list of organs/tissues studied"],
+  "methods": ["list of methods used"],
+  "species": ["list of species"],
+  "dose_response": ["any dose-response relationships mentioned, including specific concentrations/doses"],
+  "stance": "one of: supports_consensus, challenges_consensus, neutral, novel_finding",
+  "confidence": 0.0 to 1.0,
+  "summary": "2-3 sentence summary of the paper's main contribution"
+}}"""
+
+
+# ---------------------------------------------------------------------------
+# Text chunking for long full texts
+# ---------------------------------------------------------------------------
+
+def _chunk_text_for_extraction(text: str, max_chunk_chars: int = 30_000) -> list[str]:
+    """
+    Split long text into overlapping chunks for extraction.
+
+    If text <= max_chunk_chars: return as single chunk.
+    Otherwise: return intro+methods (~first 40%) and results+discussion (~last 60%).
+    """
+    if len(text) <= max_chunk_chars:
+        return [text]
+
+    # Split into two chunks with some overlap
+    split_point = int(len(text) * 0.4)
+    overlap = 2000  # 2k char overlap to avoid missing context at boundaries
+    chunk1 = text[:split_point + overlap]
+    chunk2 = text[max(0, split_point - overlap):]
+
+    # Truncate each chunk to max size
+    chunk1 = chunk1[:max_chunk_chars]
+    chunk2 = chunk2[:max_chunk_chars]
+
+    return [chunk1, chunk2]
+
+
+def _merge_extractions(extractions: list[PaperExtraction]) -> PaperExtraction:
+    """Merge multiple chunk extractions into a single result (union of entities)."""
+    if len(extractions) == 1:
+        return extractions[0]
+
+    merged = PaperExtraction(
+        paper_id=extractions[0].paper_id,
+        title=extractions[0].title,
+        year=extractions[0].year,
+    )
+
+    # Union all entity lists (deduplicate)
+    all_claims: dict[str, None] = {}
+    all_genes: dict[str, None] = {}
+    all_organs: dict[str, None] = {}
+    all_methods: dict[str, None] = {}
+    all_species: dict[str, None] = {}
+    all_dose_response: dict[str, None] = {}
+
+    for ext in extractions:
+        for c in ext.claims:
+            all_claims[c] = None
+        for g in ext.genes:
+            all_genes[g] = None
+        for o in ext.organs:
+            all_organs[o] = None
+        for m in ext.methods:
+            all_methods[m] = None
+        for s in ext.species:
+            all_species[s] = None
+        for d in ext.dose_response:
+            all_dose_response[d] = None
+
+    merged.claims = list(all_claims)
+    merged.genes = list(all_genes)
+    merged.organs = list(all_organs)
+    merged.methods = list(all_methods)
+    merged.species = list(all_species)
+    merged.dose_response = list(all_dose_response)
+
+    # Take best metadata from first extraction
+    merged.stance = extractions[0].stance
+    merged.confidence = max(ext.confidence for ext in extractions)
+    merged.summary = extractions[0].summary
+    merged.endpoint_used = extractions[0].endpoint_used
+    merged.text_source = extractions[0].text_source
+
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -167,8 +267,14 @@ def parse_json_response(text: str) -> dict | None:
 # Single-paper extraction (stateless, used by workers)
 # ---------------------------------------------------------------------------
 
-def extract_one(paper: dict, endpoint: OllamaEndpoint) -> PaperExtraction:
-    """Extract structured info from one paper using a given endpoint."""
+def extract_one(paper: dict, endpoint: OllamaEndpoint,
+                full_text: str | None = None,
+                text_source: str = "") -> PaperExtraction:
+    """Extract structured info from one paper using a given endpoint.
+
+    If full_text is provided, uses the fulltext prompt and chunking.
+    Otherwise falls back to abstract extraction.
+    """
     pid = paper["paper_id"]
     title = paper.get("title", "")
     abstract = paper.get("abstract")
@@ -179,6 +285,45 @@ def extract_one(paper: dict, endpoint: OllamaEndpoint) -> PaperExtraction:
         title=title,
         year=year,
     )
+
+    # Full text path: chunk and extract from each chunk, then merge
+    if full_text and len(full_text.strip()) > 200:
+        extraction.text_source = text_source or "fulltext"
+        chunks = _chunk_text_for_extraction(full_text)
+
+        chunk_extractions = []
+        for chunk in chunks:
+            chunk_ext = PaperExtraction(paper_id=pid, title=title, year=year)
+            prompt = FULLTEXT_EXTRACTION_PROMPT.format(
+                title=title,
+                year=year or "unknown",
+                text=chunk,
+            )
+            response = endpoint.generate(prompt, system=SYSTEM_PROMPT)
+            if not response:
+                continue
+            chunk_ext.raw_response = response
+            chunk_ext.endpoint_used = endpoint.name
+            chunk_ext.text_source = text_source or "fulltext"
+            data = parse_json_response(response)
+            if data:
+                chunk_ext.claims = data.get("claims", [])
+                chunk_ext.genes = [g.upper() for g in data.get("genes", []) if g]
+                chunk_ext.organs = data.get("organs", [])
+                chunk_ext.methods = data.get("methods", [])
+                chunk_ext.species = data.get("species", [])
+                chunk_ext.dose_response = data.get("dose_response", [])
+                chunk_ext.stance = data.get("stance", "neutral")
+                chunk_ext.confidence = float(data.get("confidence", 0.0))
+                chunk_ext.summary = data.get("summary", "")
+            chunk_extractions.append(chunk_ext)
+
+        if chunk_extractions:
+            extraction = _merge_extractions(chunk_extractions)
+        return extraction
+
+    # Abstract fallback path
+    extraction.text_source = "abstract"
 
     if not abstract or len(abstract.strip()) < 50:
         return extraction
@@ -248,12 +393,15 @@ class ParallelExtractionEngine:
             self.stats[f"ep_{ep.name}"] = 0
 
     def _worker(self, paper: dict, endpoint: OllamaEndpoint,
-                index: int, total: int) -> PaperExtraction:
+                index: int, total: int,
+                full_text: str | None = None,
+                text_source: str = "") -> PaperExtraction:
         """Process one paper on one endpoint."""
         title = paper.get("title", "")
         relevance = paper.get("relevance_score", 0)
 
-        extraction = extract_one(paper, endpoint)
+        extraction = extract_one(paper, endpoint,
+                                 full_text=full_text, text_source=text_source)
 
         with self.print_lock:
             status = ""
@@ -266,7 +414,8 @@ class ParallelExtractionEngine:
             elif not paper.get("abstract") or len((paper.get("abstract") or "").strip()) < 50:
                 status = " [no abstract]"
 
-            print(f"[{index}/{total}] [{endpoint.name}] [{relevance:.2f}] "
+            ft_tag = f" [{extraction.text_source}]" if extraction.text_source else ""
+            print(f"[{index}/{total}] [{endpoint.name}]{ft_tag} [{relevance:.2f}] "
                   f"{title[:60]}...{status}")
 
         with self.stats_lock:
@@ -281,8 +430,18 @@ class ParallelExtractionEngine:
         return extraction
 
     def process_papers(self, papers_file: str,
-                       max_papers: int | None = None) -> list[PaperExtraction]:
-        """Process papers in parallel across all available endpoints."""
+                       max_papers: int | None = None,
+                       fulltext_results: dict | None = None,
+                       ) -> list[PaperExtraction]:
+        """Process papers in parallel across all available endpoints.
+
+        Args:
+            papers_file: Path to papers.json
+            max_papers: Limit number of papers to process
+            fulltext_results: Dict mapping paper_id -> FullTextResult
+                              (from fulltext.FullTextFetcher)
+        """
+        fulltext_results = fulltext_results or {}
         with open(papers_file) as f:
             papers = json.load(f)
 
@@ -295,7 +454,10 @@ class ParallelExtractionEngine:
         # Weighted distribution: assign papers proportional to endpoint weight
         total_weight = sum(ep.weight for ep in self.endpoints)
 
+        ft_count = sum(1 for p in papers if p.get("paper_id", "") in fulltext_results)
         print(f"\nProcessing {total} papers across {n_endpoints} GPU(s)...")
+        if ft_count:
+            print(f"  Full text available for {ft_count}/{total} papers")
         for ep in self.endpoints:
             share = round(total * ep.weight / total_weight)
             print(f"  {ep.name}: {ep.model} (weight={ep.weight}, ~{share} papers)")
@@ -325,8 +487,13 @@ class ParallelExtractionEngine:
         def run_endpoint_queue(endpoint: OllamaEndpoint,
                                queue: list[tuple[dict, int]]):
             for paper, idx in queue:
-                ext = self._worker(paper, endpoint, idx, total)
-                results[paper["paper_id"]] = ext
+                pid = paper["paper_id"]
+                ft_result = fulltext_results.get(pid)
+                ft_text = ft_result.text if ft_result else None
+                ft_source = ft_result.source if ft_result else ""
+                ext = self._worker(paper, endpoint, idx, total,
+                                   full_text=ft_text, text_source=ft_source)
+                results[pid] = ext
 
         start_time = time.time()
 
@@ -871,19 +1038,55 @@ if __name__ == "__main__":
             sys.exit(1)
         merge_gene_consensus(files)
     else:
-        # Usage: python extract.py [papers_dir] [max_papers]
-        # papers_dir should contain papers.json; extractions.json will be saved there
-        papers_dir = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].isdigit() else "citegraph_output_800"
+        # Usage: python extract.py [papers_dir] [max_papers] [--fulltext] [--email EMAIL] [--proxy URL]
+        args = sys.argv[1:]
+        use_fulltext = False
+        email = "user@example.com"
+        proxy = None
         max_papers = None
-        for arg in sys.argv[1:]:
-            if arg.isdigit():
-                max_papers = int(arg)
-                break
+        papers_dir = "citegraph_output_800"
+
+        i = 0
+        while i < len(args):
+            if args[i] == "--fulltext":
+                use_fulltext = True
+                i += 1
+            elif args[i] == "--email" and i + 1 < len(args):
+                email = args[i + 1]
+                i += 2
+            elif args[i] == "--proxy" and i + 1 < len(args):
+                proxy = args[i + 1]
+                i += 2
+            elif args[i] in ("analyze", "merge"):
+                break  # handled above
+            elif args[i].isdigit():
+                max_papers = int(args[i])
+                i += 1
+            else:
+                papers_dir = args[i]
+                i += 1
 
         papers_file = f"{papers_dir}/papers.json"
         output_file = f"{papers_dir}/extractions.json"
 
+        # Fetch full texts if requested
+        fulltext_results = None
+        if use_fulltext:
+            from fulltext import FullTextFetcher
+
+            with open(papers_file) as f:
+                papers_data = json.load(f)
+            if max_papers:
+                papers_data = papers_data[:max_papers]
+
+            print(f"Fetching full text for {len(papers_data)} papers...")
+            fetcher = FullTextFetcher(email=email, proxy_url=proxy)
+            fulltext_results = fetcher.fetch_batch(papers_data, max_workers=4)
+            fetcher.print_stats()
+            print()
+
         engine = ParallelExtractionEngine()
-        extractions = engine.process_papers(papers_file, max_papers=max_papers)
+        extractions = engine.process_papers(papers_file, max_papers=max_papers,
+                                            fulltext_results=fulltext_results)
         engine.save(extractions, output_file)
         print(f"\nRun 'python extract.py analyze {output_file}' for consensus analysis.")

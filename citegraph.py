@@ -115,6 +115,9 @@ class Paper:
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
     url: Optional[str] = None
+    pmid: Optional[str] = None
+    pmcid: Optional[str] = None
+    open_access_pdf: Optional[str] = None  # URL from S2 openAccessPdf
 
     # Computed fields
     relevance_score: float = 0.0
@@ -131,7 +134,7 @@ class Paper:
 # ---------------------------------------------------------------------------
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
-S2_FIELDS = "paperId,title,authors,year,abstract,venue,citationCount,referenceCount,externalIds,url,publicationTypes"
+S2_FIELDS = "paperId,title,authors,year,abstract,venue,citationCount,referenceCount,externalIds,url,publicationTypes,openAccessPdf"
 
 class S2Client:
     """Thin wrapper around Semantic Scholar API with rate limiting."""
@@ -382,6 +385,9 @@ class CitationGraphCrawler:
             doi=ext.get("DOI"),
             arxiv_id=ext.get("ArXiv"),
             url=data.get("url"),
+            pmid=ext.get("PubMed"),
+            pmcid=ext.get("PubMedCentral"),
+            open_access_pdf=(data.get("openAccessPdf") or {}).get("url"),
             is_review="Review" in pub_types,
             depth=depth,
         )
