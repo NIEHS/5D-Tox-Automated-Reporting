@@ -1,10 +1,12 @@
 # Concordance Analysis
 
-*Analyzed by claude-opus-4-6*
+*Analyzed by claude-sonnet-4-6*
 
+# Concordance Analysis: Toxicogenomics Interpretation Narratives
 
+## Preliminary Notes on Analytical Framework
 
-# Meta-Analytical Concordance Report: Toxicogenomics Interpretations
+This analysis compares 12 narratives from 4 models (claude-haiku-4-5, qwen2.5:14b, qwen2.5:7b, claude-opus-4-6), each run 3 times. I evaluate concordance both within and across model families, noting where inter-run consistency within a model reinforces or undermines cross-model agreement. Citations to specific model outputs use the format [Model, Run #].
 
 ---
 
@@ -12,55 +14,33 @@
 
 ### Agreement
 
-All 15 narratives converge on a core dose-dependent progression with remarkable consistency:
+All 12 narratives independently identify the same core dose-response architecture: an early adaptive antioxidant phase dominated by NRF2/KEAP1 signaling, followed by inflammatory escalation, and ultimately cell death pathways at the highest doses. This three-tier structure (adaptive → transitional → adverse) is the single most robustly reproduced finding in the entire dataset.
 
-**Universal Phase Structure (15/15 narratives):**
-1. **Early xenobiotic sensing/antioxidant defense** → 2. **Escalating oxidative stress response** → 3. **Inflammatory signaling** → 4. **Apoptotic commitment** → 5. **Tissue damage/remodeling**
+**Specific points of universal agreement:**
 
-**Specific consensus points:**
-
-- **AHR/CYP1A1/CYP1B1 as the earliest response**: All claude-haiku and claude-sonnet/opus runs identify AHR signaling as the molecular initiating event at the lowest BMDs (0.2–0.35). The qwen2.5 and gemma2 models describe this less precisely (referencing "xenobiotic sensing" or "Phase I metabolism") but agree on the concept. Claude-haiku Run 1 is most specific: "AHR (BMD 0.35): Aryl hydrocarbon receptor signaling pathway."
-
-- **NRF2/KEAP1 pathway as the primary early protective response**: All 15 narratives identify NFE2L2 (Nrf2) activation as a central early event. Every narrative lists NQO1, HMOX1, and GCLC as downstream targets. Qwen2.5 Run 1: "Mild oxidative stress response activation... Slight induction of NRF2 pathway." Claude-sonnet Run 1: "KEAP1–NFE2L2 pathway is activated (median BMD 0.55)."
-
-- **Antioxidant enzyme battery**: All narratives identify SOD1, SOD2, CAT, GPX1, and GCLC as part of the oxidative stress defense. This is the single most consistently reported gene set across all models and runs.
-
-- **TP53-mediated cell cycle arrest preceding apoptosis**: All 15 narratives describe TP53 activation leading to CDKN1A (p21) induction and cell cycle arrest, followed by BAX/CASP3-mediated apoptosis at higher doses. Claude-opus Run 3: "The concurrent upregulation of CDKN1A (a direct p53 transcriptional target) confirms functional p53 pathway engagement."
-
-- **NF-κB-driven inflammatory signaling with IL6, IL1B, TNF**: Universal agreement that inflammatory cytokines are upregulated at moderate-to-high doses, driven by NFKB1 activation.
-
-- **BAX/BCL2/CASP3 apoptotic cascade**: All narratives describe the intrinsic mitochondrial apoptotic pathway, with BAX as pro-apoptotic, BCL2 as anti-apoptotic, and CASP3 as the executioner caspase.
+- **NRF2/KEAP1 pathway activation** is identified as the earliest and most prominent adaptive response in all 12 narratives without exception. All models cite NFE2L2, KEAP1, HMOX1, NQO1, and GCLC as early-responding genes.
+- **AHR/CYP1A1 signaling** as the molecular initiating event (or earliest detectable response) is identified by all three claude-haiku-4-5 runs and all three claude-opus-4-6 runs, and implicitly referenced in qwen2.5 models through xenobiotic metabolism framing.
+- **Inflammatory pathway activation** (IL1B, TNF, NFKB1, NLRP3) at higher doses is universally identified.
+- **Apoptotic pathway engagement** (BAX, CASP3, TP53, CDKN1A) at intermediate-to-high doses is identified by all models.
+- **TGFB1-mediated fibrotic signaling** at high doses is noted by all claude models and qwen2.5:14b runs.
 
 ### Divergence
 
-**Granularity and phase resolution:**
-- The **claude-haiku** and **claude-sonnet/opus** models provide 6–8 distinct phases with specific BMD ranges (e.g., Phase 1: BMD 0.2–0.55; Phase 2: BMD 0.4–2.0), while **qwen2.5** and **gemma2** models use 3–4 broader dose categories (Low/Moderate/High). This is a structural difference in analytical depth rather than a substantive disagreement.
+**Dose-range specificity:** The claude models (both haiku and opus) provide explicit BMD-anchored phase descriptions (e.g., "Phase I: BMD 0.2–0.55"), while qwen2.5 models use qualitative dose labels ("low," "moderate," "high") without anchoring to specific BMD values. This is a structural difference that limits direct comparison of dose thresholds between model families. The qwen2.5 models appear to be working from the same dataset but either did not access or did not utilize the quantitative BMD information.
 
-**Ferroptosis pathway:**
-- **Claude-sonnet** Runs 1–3 and **claude-opus** Runs 1–3 all identify ferroptosis signaling (path:hsa04216) as an early event (BMD 0.6), interpreting GPX1 and GCLC upregulation as protective against iron-dependent lipid peroxidation. Claude-opus Run 3: "The ferroptosis pathway activation at BMD 0.6 is significant: the upregulation of GPX1 and GCLC at this stage likely represents a protective response against iron-dependent lipid peroxidation rather than active ferroptotic cell death."
-- **Qwen2.5** and **gemma2** models do not mention ferroptosis at all. This is a notable omission, likely reflecting the absence of BMD-level pathway data in their analyses.
+**Phase granularity:** Claude-haiku-4-5 (Run 1) identifies 8 distinct phases including a dedicated "Senescence-Associated Secretory Phenotype (SASP)" phase and a "Hypoxic Stress and Angiogenic Response" phase. Claude-opus-4-6 models identify 5–7 phases. Qwen2.5 models identify 3 phases (low/moderate/high). This is a significant structural divergence: the claude models are substantially more granular in their dose-response parsing.
 
-**Circadian clock disruption:**
-- **Claude-haiku** Runs 1–3, **claude-sonnet** Runs 1–3, and **claude-opus** Runs 1–3 (9/15 narratives) identify circadian clock gene downregulation at BMD 2.0–2.25 as a distinct biological event. Claude-haiku Run 1 calls this "a unique finding not typically associated with xenobiotic toxicity." Claude-sonnet Run 1 links it to "AHR directly competes with the ARNT/HIF1β complex for dimerization partners."
-- **Qwen2.5** (0/3) and **gemma2** (0/3) do not mention circadian disruption. This represents a clear model-class divergence.
+**Circadian disruption:** All three claude-haiku-4-5 runs and all three claude-opus-4-6 runs identify circadian clock gene downregulation as a distinct phase (BMD ~2.0–2.25). This finding is entirely absent from all six qwen2.5 narratives (both 14b and 7b), representing a consistent blind spot in the smaller models.
 
-**Senescence-Associated Secretory Phenotype (SASP):**
-- All **claude** models (9/9 runs) identify SASP as a late-stage event (BMD 8.5–10.25). Claude-haiku Run 3: "The SASP pathway indicates that cells are entering a state of permanent cell cycle arrest (senescence) while secreting pro-inflammatory factors."
-- **Qwen2.5** and **gemma2** (0/6 runs) do not mention SASP or cellular senescence.
+**Ferroptosis:** Claude-opus-4-6 (all three runs) specifically identifies ferroptosis pathway activation as an early distinct phase (BMD ~0.6). Claude-haiku-4-5 does not explicitly call out ferroptosis as a named phase. Qwen2.5 models do not mention ferroptosis at all. This is a model-family-specific finding.
 
-**Fibrosis signaling:**
-- **Qwen2.5 Run 2** uniquely identifies COL1A1 (collagen) upregulation as evidence of fibrosis: "Increased expression of collagen-related genes (e.g., COL1A1) suggests tissue remodeling and scarring." No other narrative mentions COL1A1 specifically.
-- All claude models reference TGFB1-driven fibrotic signaling but at higher doses (BMD 6–12.5).
+**Autophagy/mitophagy:** Claude-haiku-4-5 (Run 1) and all claude-opus-4-6 runs identify autophagy and mitophagy as distinct phases (BMD 3.5–4.5). Qwen2.5:14b (Run 3) mentions SIRT1-mediated autophagy briefly. Qwen2.5:7b models do not address autophagy systematically.
 
-**Unfolded Protein Response (UPR):**
-- **Qwen2.5 Run 3** mentions "UPR and DNA repair mechanisms" at low and medium doses, referencing SIRT1 as part of UPR. This is mechanistically imprecise—SIRT1 is not a canonical UPR gene.
-- **Claude-sonnet** Runs 1 and 3 identify ER stress/UPR (path:hsa04141) at BMD 5.5, which is more consistent with the pathway data.
+**Innate immune pattern recognition at high doses:** Claude-opus-4-6 (all runs) and claude-haiku-4-5 (Run 2) identify TLR, NOD-like receptor, and RIG-I-like receptor pathway activation at the highest doses. This is absent from qwen2.5 narratives.
 
-**Inflammasome activation:**
-- All **claude** models identify NLRP3 inflammasome activation as a distinct late event (BMD 3.5–12.0). Claude-haiku Run 2: "The activation of NLRP3 inflammasome is particularly significant. The NLRP3 inflammasome is a multi-protein complex that activates caspase-1."
-- **Gemma2** models mention NLRP3 only in passing or not at all. **Qwen2.5** does not mention NLRP3.
+### Concordance Rating: **Moderate-Strong**
 
-### Concordance Rating: **Strong agreement** on core pathway progression; **Moderate divergence** on secondary pathways (ferroptosis, circadian disruption, SASP, inflammasome) driven primarily by analytical depth differences between model classes.
+The core three-tier structure (adaptive → inflammatory → apoptotic) achieves strong agreement. Specific phase granularity, dose anchoring, and identification of secondary pathways (ferroptosis, circadian disruption, innate immune activation) show moderate-to-weak agreement, primarily driven by the structural gap between claude and qwen2.5 model families.
 
 ---
 
@@ -68,43 +48,29 @@ All 15 narratives converge on a core dose-dependent progression with remarkable 
 
 ### Agreement
 
-| Organ | Models Identifying | Confidence Consensus |
-|-------|-------------------|---------------------|
-| **Liver** | 15/15 (all narratives) | High across all models |
-| **Kidney** | 15/15 (all narratives) | High across all models |
-| **Heart** | 10/15 narratives | Moderate-High |
-| **Brain/CNS** | 8/15 narratives | Moderate |
-| **Lung** | 7/15 narratives | Moderate |
+**Liver** is identified as a primary target organ by all 12 narratives. This is the single organ prediction with universal agreement. The mechanistic rationale is also consistent: hepatic xenobiotic metabolism via CYP enzymes, NRF2-mediated antioxidant response, NLRP3 inflammasome activation in Kupffer cells, and progression to fibrosis via TGFB1.
 
-**Liver as primary target**: Universal agreement. Every narrative identifies the liver as the most likely or most comprehensively affected organ. Reasoning is consistent: CYP1A1/CYP1B1 metabolism, NRF2-mediated antioxidant defense, NF-κB inflammation, and TGFB1 fibrosis. Qwen2.5 Run 1: "The liver is a primary site for drug metabolism and detoxification." Claude-opus Run 2: "The liver emerges as the most probable primary target organ based on multiple converging lines of evidence."
+**Kidney** is identified as a primary target by all 12 narratives, making it the second organ with universal agreement. The mechanistic basis (oxidative stress in tubular epithelium, apoptosis, inflammatory infiltration) is consistent across models.
 
-**Kidney as secondary target**: Universal agreement. All narratives cite HMOX1 enrichment in renal tubular epithelium, VEGFA/AHR pathway involvement, and oxidative stress markers. Claude-haiku Run 2 provides the most specific enrichment data: "75.59× enrichment, 28 genes."
+**Brain/CNS** is identified by all three claude-haiku-4-5 runs, all three claude-opus-4-6 runs, qwen2.5:14b (all three runs), and qwen2.5:7b (Runs 2 and 3). This represents near-universal agreement (11/12 narratives).
 
-**Heart**: Identified by all qwen2.5 runs (3/3), all claude-opus runs (3/3), gemma2 Runs 1 and 3 (2/3), and claude-haiku Runs 1–3 (3/3 mention cardiac tissue). Claude-sonnet models mention heart less prominently, focusing on liver, kidney, and lung.
+**Heart** is identified by qwen2.5:14b (Runs 1 and 2), qwen2.5:7b (Runs 1, 2, and 3), and qwen2.5:14b (Run 3). It is not identified as a primary target by any claude model. This represents a model-family divergence.
 
 ### Divergence
 
-**Brain/CNS prediction:**
-- **Qwen2.5 Run 3** identifies brain as a target organ: "Genes like BAX, TP53 indicate neuronal apoptosis and neurodegeneration." Cites amyloid β peptide literature.
-- **Gemma2 Run 2** identifies brain: "Potentially affected, with upregulation of TP53 and BAX suggesting neuronal apoptosis. However, the expression levels are lower compared to liver and kidney."
-- All **claude-opus** runs (3/3) identify brain/CNS with detailed sub-regional analysis (substantia nigra, hippocampal CA1, cingulate cortex). Claude-opus Run 2: "Cingulate Cortex (671.56× for NFE2L2), Substantia Nigra (268.62× for BAX, TP53)."
-- **Claude-sonnet** runs mention brain through neurodegenerative pathway enrichment but are less emphatic.
-- **Qwen2.5 Runs 1–2** and **gemma2 Runs 1, 3** do not identify brain as a target.
+**Testis/male reproductive system:** All three claude-opus-4-6 runs and claude-haiku-4-5 (Run 1) identify testis as a high-confidence primary target. This organ is entirely absent from all qwen2.5 narratives. This is the most striking organ-prediction divergence in the dataset.
 
-**Lung prediction:**
-- **Claude-sonnet** Runs 1–3 and **claude-haiku** Run 2 identify lung (44.62× enrichment, 25 genes). Claude-haiku Run 2: "Curcumin protects against oxidative stress and lung damage caused by cadmium."
-- **Gemma2 Run 1** mentions lung: "Possible inflammation and fibrosis based on the upregulation of inflammatory markers."
-- **Qwen2.5** models do not identify lung. **Claude-opus** models mention lung as a secondary target.
+**Heart:** Identified by 5/6 qwen2.5 narratives but 0/6 claude narratives. The qwen2.5 models cite SIRT1, TP53, and NLRP3 as cardiac markers; the claude models do not prioritize cardiac tissue despite these same genes being present in their analyses.
 
-**Intestine prediction:**
-- Only **claude-opus** Runs 1–3 and **claude-sonnet** Runs 1–3 identify intestine/GI tract (enrichment 172.69–503.67×). Claude-opus Run 3: "The intestinal Nrf2-Keap1 axis activation is consistent with the oyster peptide intestinal protection literature."
-- No qwen2.5 or gemma2 model identifies intestine.
+**Lung:** Identified by qwen2.5:7b (Run 1) as a primary target. Not identified by any other model. This is a unique, low-confidence prediction.
 
-**Testis/Reproductive organs:**
-- Only **claude-opus** Runs 1–3 identify testis (enrichment 470.09×). Claude-opus Run 1: "The RuIII/Q complex studies demonstrating amelioration of reproductive toxicity through modulation of these same genes provide direct mechanistic support."
-- No other model class identifies reproductive organs.
+**Gastrointestinal tract:** Claude-haiku-4-5 (Run 2) mentions GI tract involvement. Not systematically addressed by other models.
 
-### Concordance Rating: **Strong agreement** on liver and kidney; **Moderate agreement** on heart; **Weak-to-moderate agreement** on brain, lung, intestine, and reproductive organs, with claude-opus providing the broadest organ coverage.
+**Enrichment specificity:** Claude models provide quantitative enrichment values (e.g., "30.36× enriched, 28 genes" for liver; "41.99× enriched" for kidney; "390.13× enriched" for microglia). Qwen2.5 models provide qualitative organ predictions without enrichment statistics. This difference in evidential grounding is substantial.
+
+**Organ ranking:** Claude-opus-4-6 consistently ranks liver > kidney > testis > brain > cardiovascular. Claude-haiku-4-5 ranks liver > kidney > brain. Qwen2.5:14b ranks liver > kidney > heart > brain. Qwen2.5:7b ranks liver > lung > kidney > heart > brain. The top two (liver, kidney) are universally agreed upon; rankings below that diverge.
+
+### Concordance Rating: **Strong for liver and kidney; Moderate for brain; Weak for heart, testis, and lung**
 
 ---
 
@@ -112,45 +78,31 @@ All 15 narratives converge on a core dose-dependent progression with remarkable 
 
 ### Agreement
 
-**All 15 narratives agree on the following mechanistic framework:**
+All models agree on the following mechanistic sequence:
 
-1. **Molecular Initiating Event (MIE)**: Xenobiotic exposure generates reactive oxygen species (ROS) and/or electrophilic stress, activating AHR and disrupting cellular redox balance. (15/15)
+1. **ROS generation** as the primary upstream driver of toxicity
+2. **KEAP1-NRF2 pathway** as the primary adaptive sensor-effector mechanism
+3. **NF-κB pathway** as the bridge between oxidative stress and inflammation
+4. **NLRP3 inflammasome** as the amplifier of inflammatory cell death
+5. **TP53/BAX/CASP3 axis** as the apoptotic execution mechanism
 
-2. **Key Event 1 — NRF2 antioxidant defense**: KEAP1-NFE2L2 pathway activation drives upregulation of antioxidant enzymes (NQO1, HMOX1, GCLC, GPX1, SOD1/2, CAT). (15/15)
-
-3. **Key Event 2 — DNA damage and TP53 activation**: Accumulated oxidative damage activates TP53, leading to CDKN1A-mediated cell cycle arrest. (15/15)
-
-4. **Key Event 3 — Inflammatory signaling**: NF-κB activation drives IL6, IL1B, TNF production. (15/15)
-
-5. **Key Event 4 — Apoptosis**: BAX/BCL2 ratio shifts toward pro-apoptotic signaling; CASP3 activation executes cell death. (15/15)
-
-**The AOP structure (MIE → oxidative stress → DNA damage → inflammation → apoptosis) is the single most consistent finding across all 15 narratives.**
+The concept of a **molecular initiating event (MIE)** is explicitly invoked by qwen2.5:14b (all runs), qwen2.5:7b (all runs), and claude-haiku-4-5 (Run 1). Claude-opus-4-6 uses equivalent language ("earliest transcriptional responses," "primary initiating event") without formally labeling it MIE.
 
 ### Divergence
 
-**Specificity of the MIE:**
-- **Claude-sonnet** and **claude-opus** models specify AHR ligand binding as the MIE, with Phase I metabolism generating reactive metabolites as the proximate cause of oxidative stress. Claude-sonnet Run 1: "The three genes initiating the AHR cluster (median BMD 0.35) include CYP1A1 and CYP1B1, canonical AHR target genes."
-- **Qwen2.5** models describe the MIE more generically as "exposure to a xenobiotic compound leads to increased production of reactive oxygen species." Qwen2.5 Run 1 does not distinguish between direct ROS generation and metabolism-mediated ROS.
-- **Gemma2** models are similarly generic: "The toxicant directly or indirectly interacts with cellular targets, disrupting normal metabolic pathways or inducing oxidative stress." (Gemma2 Run 1)
+**AHR as MIE:** Claude-haiku-4-5 (Run 1) and all claude-opus-4-6 runs explicitly identify AHR activation as the molecular initiating event, preceding and driving ROS generation through CYP1A1/CYP1B1 bioactivation. Qwen2.5 models identify ROS generation itself as the MIE, without specifying the upstream receptor event. This is a meaningful mechanistic divergence: the claude models propose a receptor-mediated mechanism (AHR ligand binding → CYP induction → reactive metabolite formation → ROS), while qwen2.5 models propose a direct oxidative stress mechanism (ROS → NRF2 activation).
 
-**Compound identity inference:**
-- **Claude-sonnet Run 1** uniquely attempts to infer the compound class: "The data are consistent with exposure to a polycyclic aromatic hydrocarbon (PAH), halogenated aromatic compound, or heavy metal capable of simultaneously activating AHR and generating reactive oxygen species."
-- **Claude-sonnet Run 2** similarly states: "characteristics overlapping those of heavy metals, polycyclic aromatic hydrocarbons (PAHs), or other electrophilic xenobiotics."
-- No qwen2.5 or gemma2 model attempts compound class identification.
+**Ferroptosis mechanism:** Claude-opus-4-6 (all runs) specifically identifies lipid peroxidation and ferroptosis as a mechanistically distinct early cell death pathway, separate from apoptosis and necroptosis. This mechanistic specificity is absent from all other models.
 
-**Pseudo-hypoxia vs. true hypoxia:**
-- **Claude-sonnet Run 2** provides a mechanistically nuanced interpretation of HIF1A activation: "consistent with pseudo-hypoxic signaling driven by ROS-mediated HIF1A stabilization rather than true oxygen deprivation." This distinction is not made by other model classes.
+**SQSTM1/p62 feedback loop:** Claude-opus-4-6 (Runs 1 and 2) specifically identifies the SQSTM1-KEAP1 positive feedback loop (SQSTM1 sequesters KEAP1, further stabilizing NRF2) as a mechanistic amplifier. This molecular detail is not mentioned by any other model.
 
-**KEAP1 directionality:**
-- **Claude-sonnet Run 1** notes KEAP1 downregulation alongside NFE2L2 upregulation as mechanistically coherent. Claude-sonnet Run 3 and claude-opus runs also note the mixed directionality.
-- **Qwen2.5** and **gemma2** models do not address KEAP1 directionality, treating the NRF2 pathway as uniformly upregulated.
+**Pyroptosis vs. apoptosis distinction:** Claude-haiku-4-5 (Runs 1 and 3) and claude-opus-4-6 (all runs) distinguish between apoptosis (CASP3-mediated), pyroptosis (NLRP3/gasdermin D-mediated), and necroptosis as distinct cell death modalities. Qwen2.5 models treat apoptosis as the primary cell death mechanism without distinguishing pyroptosis or necroptosis.
 
-**Paradoxical BCL2 upregulation:**
-- **Claude-haiku Run 3** provides the most detailed interpretation: "The upregulation of both BAX and BCL2 suggests a cellular conflict: the cell is attempting to survive (BCL2 upregulation) while simultaneously being driven toward apoptosis."
-- **Claude-opus Run 3** similarly notes: "The upregulation of BAX (pro-apoptotic) alongside BCL2 (anti-apoptotic) suggests a dynamic balance."
-- **Qwen2.5** and **gemma2** models do not address this paradox.
+**SIRT1 mechanism:** Qwen2.5:14b (Run 3) and qwen2.5:7b (all runs) emphasize SIRT1-mediated autophagy as a protective mechanism. Claude-haiku-4-5 (Run 1) mentions SIRT1 in the context of metabolic sensing. Claude-opus-4-6 mentions SIRT1 in organ signatures but does not develop it as a central mechanistic element. The mechanistic role of SIRT1 is thus more prominent in qwen2.5 narratives.
 
-### Concordance Rating: **Strong agreement** on the overall AOP framework; **Moderate divergence** on mechanistic specificity, with claude models providing substantially more detailed mechanistic reasoning.
+### Concordance Rating: **Moderate**
+
+Core pathway sequence (ROS → NRF2 → NF-κB → NLRP3 → apoptosis) achieves strong agreement. The identity of the MIE, the role of ferroptosis, and the distinction between cell death modalities show meaningful divergence.
 
 ---
 
@@ -158,45 +110,36 @@ All 15 narratives converge on a core dose-dependent progression with remarkable 
 
 ### Agreement
 
-**All 15 narratives agree on the following classification:**
+All models agree that:
+- Low-dose responses are predominantly **adaptive/protective**, centered on NRF2 activation
+- High-dose responses are predominantly **adverse**, involving inflammation and cell death
+- A **transition point** exists between these regimes
 
-| Response Type | Classification | Agreement |
-|--------------|---------------|-----------|
-| NRF2/antioxidant defense | Protective/Adaptive | 15/15 |
-| AHR/CYP-mediated metabolism | Protective/Adaptive | 15/15 |
-| TP53/CDKN1A cell cycle arrest | Protective (transitional) | 15/15 |
-| BAX/CASP3 apoptosis | Adverse/Damage | 15/15 |
-| IL6/TNF/IL1B inflammation | Adverse (at high doses) | 15/15 |
-| TGFB1 fibrosis | Adverse | 13/15 |
-
-**Transition point consensus**: All 15 narratives place the adaptive-to-adverse transition at approximately the **moderate dose level**. However, the precision of this estimate varies dramatically:
-
-- **Claude-haiku/sonnet/opus** models specify BMD ranges: "BMD 2.5–5.5" (claude-sonnet Run 3), "BMD 4.0–6.0" (claude-haiku Run 2), "BMD 2.5–4.0" (claude-haiku Run 3).
-- **Qwen2.5** models state "moderate dose" without BMD specification. Qwen2.5 Run 1: "The transition from adaptive/protective responses to adverse outcomes likely occurs at the moderate dose level."
-- **Gemma2** models similarly state "moderate dose." Gemma2 Run 2: "The transition from adaptive to adverse likely occurs at the moderate dose level."
+All models identify the NRF2 pathway as the primary protective mechanism and NLRP3/apoptosis as the primary adverse mechanisms.
 
 ### Divergence
 
-**Classification of inflammation:**
-- **Qwen2.5 Run 2** classifies low-level inflammation as protective: "Low-level inflammation is observed with increased expression of IL6 and TNF. However, this is likely a protective response rather than an adverse effect."
-- **Claude-haiku Run 2** provides a more nuanced view: "inflammation is necessary for clearing damaged cells and pathogens, but excessive inflammation contributes to tissue damage."
-- **Gemma2 Run 3** treats inflammation as uniformly adverse once it appears: "pro-inflammatory cytokines start to significantly outweigh the antioxidant response."
+**Transition dose estimate:** This is the most significant divergence in this section. Claude models provide BMD-anchored estimates:
+- Claude-haiku-4-5 (Run 3): Transition at BMD 2.5–5.5
+- Claude-haiku-4-5 (Run 2): Transition at BMD 2.0–2.25 (circadian disruption as marker)
+- Claude-opus-4-6 (Runs 1, 2, 3): Transition estimated at BMD 3–5
 
-**Classification of autophagy:**
-- **Claude-opus** Runs 1–3 explicitly classify autophagy (SQSTM1/p62, mitophagy) as an intermediate adaptive response: "cells are attempting to clear damaged organelles and protein aggregates" (Run 1).
-- **Claude-sonnet Run 3** similarly identifies autophagy as a "secondary protective mechanism."
-- **Qwen2.5** and **gemma2** models do not discuss autophagy as a distinct protective mechanism.
+Qwen2.5 models provide qualitative estimates:
+- Qwen2.5:14b (Run 1): Transition at "intermediate dose level (5 mg/kg)"
+- Qwen2.5:14b (Run 2): Transition at "moderate dose level"
+- Qwen2.5:7b (Run 2): Transition at "medium dose (1 mg/kg)"
 
-**Classification of SIRT1:**
-- **Claude-haiku Run 1** classifies SIRT1 as part of the adaptive response: "SIRT1 activation suggests metabolic reprogramming to support energy-intensive detoxification processes."
-- **Claude-haiku Run 3** provides more detail: "SIRT1 acts as a metabolic sensor, regulating both histone deacetylation and protein deacetylation in response to cellular stress."
-- **Qwen2.5 Run 3** mentions SIRT1 as part of UPR/DNA repair, which is mechanistically imprecise.
+The qwen2.5:7b (Run 2) estimate of 1 mg/kg is notably lower than all other estimates, suggesting this model may be applying a more conservative threshold or interpreting the dose scale differently.
 
-**Transition sharpness:**
-- **Claude-sonnet Run 3** describes the transition as a gradual process spanning multiple BMD ranges (Phases 2–4), with no single "tipping point."
-- **Qwen2.5 Run 1** implies a sharper transition: "the moderate dose level where DNA repair mechanisms become overwhelmed."
+**BCL2 classification:** Claude-haiku-4-5 (Run 1) and claude-opus-4-6 (Runs 1, 2) note that BCL2 upregulation alongside BAX represents a contested survival signal — cells are simultaneously activating pro- and anti-apoptotic programs. Qwen2.5 models classify BCL2 straightforwardly as an anti-apoptotic/protective gene without noting this tension.
 
-### Concordance Rating: **Strong agreement** on the general adaptive-to-adverse framework; **Moderate divergence** on the precise transition point and classification of intermediate responses (inflammation, autophagy).
+**KEAP1 upregulation paradox:** Claude-haiku-4-5 (Run 1) specifically flags the "paradoxical upregulation" of KEAP1 alongside NFE2L2 as evidence of active pathway cycling. Claude-opus-4-6 (Run 2) addresses this as "mixed directionality" consistent with canonical NRF2 activation. Qwen2.5 models do not address this apparent paradox.
+
+**Circadian disruption as transition marker:** Claude-haiku-4-5 (Run 2) and claude-opus-4-6 (Runs 2 and 3) specifically use circadian clock gene downregulation at BMD 2.0–2.25 as a marker of the adaptive-to-adverse transition. This specific marker is absent from all qwen2.5 narratives.
+
+### Concordance Rating: **Moderate**
+
+Qualitative agreement on the existence of an adaptive-to-adverse transition is strong. Quantitative agreement on the transition dose and the mechanistic markers of that transition is moderate-to-weak.
 
 ---
 
@@ -204,41 +147,37 @@ All 15 narratives converge on a core dose-dependent progression with remarkable 
 
 ### Agreement
 
-**Consistently cited papers/findings across models:**
+The following papers are cited consistently across multiple models:
 
-| Paper/Finding | Models Citing | Runs Citing |
-|--------------|--------------|-------------|
-| Hesperetin/PI3K-AKT-Nrf2-ARE pathway (2021, 331 citations) | All 5 models | 12/15 runs |
-| BCL2 selective inhibitor venetoclax/apoptosis (2016, 276 citations) | 4/5 models | 8/15 runs |
-| Heavy metals: toxicity and human health effects (2024) | 3/5 models | 7/15 runs |
-| p53 attenuation of hepatotoxicity (2018) | 3/5 models | 5/15 runs |
-| Quantitative Transcriptional Biomarkers of Xenobiotic Receptors (2020) | 3/5 models | 7/15 runs |
-| Doxorubicin-induced hepatotoxicity (2020, 215 citations) | 3/5 models | 6/15 runs |
-| KEAP1-NRF2 protein-protein interaction inhibitors (2022) | 3/5 models | 5/15 runs |
-| Cadmium-induced toxicity in hepatic macrophages (2026) | 3/5 models | 6/15 runs |
-| Selective cytotoxicity of amyloid β through p53 and Bax (2002, 452 citations) | 2/5 models | 4/15 runs |
-| Nucleocytoplasmic Shuttling of SIRT1 (2007, 760 citations) | 2/5 models | 4/15 runs |
+| Paper | Models Citing |
+|---|---|
+| "The KEAP1-NRF2 System: a Thiol-Based Sensor-Effector Apparatus for Maintaining Redox Homeostasis" (2018, cited 1544×) | All claude models (6/6 runs); qwen2.5:14b (2/3 runs); qwen2.5:7b (2/3 runs) |
+| "An Overview of Nrf2 Signaling Pathway and Its Role in Inflammation" (2020, cited 1094×) | Claude-haiku-4-5 (Runs 1, 3); claude-opus-4-6 (Run 3); qwen2.5:14b (Run 1); qwen2.5:7b (Run 2) |
+| "NLRP3 Inflammasome Activation in Liver Disorders" (2025) | Claude-haiku-4-5 (Runs 1, 3); claude-opus-4-6 (Runs 1, 2, 3) |
+| "Rutin Protects from Destruction by Interrupting the Pathways" (2021) | Claude-haiku-4-5 (Runs 1, 2); claude-opus-4-6 (Runs 1, 2, 3) |
+| "ROS Generation in Microglia: Understanding Oxidative Stress and Inflammation in Neurodegenerative Disease" (2020) | Claude-opus-4-6 (Run 1); qwen2.5:14b (Run 1); qwen2.5:7b (Runs 1, 2) |
 
-The **Hesperetin/Nrf2 paper** is the most universally cited reference, appearing in narratives from all five model classes. This reflects its direct relevance to the NRF2 pathway, which is the most consistently identified biological response.
+The KEAP1-NRF2 2018 paper is the single most consistently cited reference, appearing in 10 of 12 narratives.
 
 ### Divergence
 
-**Literature depth and specificity:**
-- **Claude-haiku** and **claude-opus** models cite the most papers with the greatest specificity, including direct quotes from abstracts and citation counts. Claude-haiku Run 2 quotes: "Intermittent hypoxia exacerbates NAFLD by promoting ferroptosis via IL6-induced MARCH3-mediated GPX4 ubiquitination."
-- **Claude-sonnet** models provide extensive literature integration with mechanistic context.
-- **Qwen2.5** models cite 3–5 papers per run with minimal contextual integration.
-- **Gemma2** models cite 3–4 papers per run, sometimes with incomplete bibliographic information.
+**Selective citation by claude models:** Claude-haiku-4-5 and claude-opus-4-6 cite several papers not referenced by qwen2.5 models:
+- "Microglial NLRP3-gasdermin D activation is essential for peripheral inflammation-induced BBB disruption" (2025) — cited only by claude models
+- "Potential Therapeutic Effects of New Ruthenium (III) Complex" (2021) — cited only by claude models
+- "Toxicogenomic module associations with pathogenesis" (2017) — cited only by claude-opus-4-6
+- "Lead Exposure Triggers Ferroptotic Hepatocellular Death" (2026) — cited only by claude-opus-4-6 (Run 1)
 
-**Unique literature contributions:**
-- **Claude-opus Run 1** uniquely cites the oyster peptide/KEAP1-NRF2 intestinal protection paper (2022) to support intestinal toxicity predictions.
-- **Claude-opus Run 2** uniquely cites the fenofibrate/PPARα organ-specific toxicity paper (2025) for kidney predictions.
-- **Claude-haiku Run 1** uniquely cites the nanocurcumin/nephrotoxicity paper (2026) with specific mechanistic detail about VEGF and AhR pathway modulation.
-- **Claude-sonnet Run 1** uniquely references Bechtold et al. (2010) for circadian disruption, though noting it is "not in knowledge base but well-established."
+**Qwen2.5-specific citations:**
+- "Nucleocytoplasmic Shuttling of the NAD+-dependent Histone Deacetylase SIRT1" (2007) — cited by qwen2.5:14b (Run 3) and qwen2.5:7b (Runs 2, 3), not by claude models
+- "Signaling pathways and targeted therapy for myocardial infarction" (2022) — cited by qwen2.5:14b (Run 2) and qwen2.5:7b (Run 3), not by claude models
 
-**Contradictory interpretations:**
-- No direct contradictions in literature interpretation were identified. All models use the same papers to support the same conclusions. The primary difference is in depth of engagement rather than conflicting interpretations.
+**Contradictory literature use:** No outright contradictory interpretations of the same paper were identified. However, qwen2.5 models cite the myocardial infarction paper to support cardiac toxicity predictions, while claude models do not use this paper and do not predict cardiac toxicity as a primary concern. This represents divergent literature deployment in service of divergent organ predictions.
 
-### Concordance Rating: **Strong agreement** on core literature support; **Moderate divergence** in breadth and depth of citation, with claude models providing substantially richer literature integration.
+**Citation accuracy concern:** Claude-opus-4-6 (Run 1) cites "Lead Exposure Triggers Ferroptotic Hepatocellular Death" with a 2026 publication date. This future date warrants scrutiny — it may represent a hallucinated or incorrectly dated reference, which is a reliability concern specific to this model run.
+
+### Concordance Rating: **Moderate-Strong**
+
+Core literature (KEAP1-NRF2 papers, NRF2 overview, NLRP3 liver paper, Rutin paper) is consistently cited. Model-specific literature selections reflect and reinforce model-specific mechanistic and organ-level divergences.
 
 ---
 
@@ -246,168 +185,166 @@ The **Hesperetin/Nrf2 paper** is the most universally cited reference, appearing
 
 ### Agreement
 
-**All models agree on the following confidence hierarchy:**
+All models express **high confidence** in:
+- NRF2/KEAP1 pathway activation as the primary adaptive response
+- The general dose-response progression from adaptive to adverse
+- Liver and kidney as primary target organs
 
-| Finding | Confidence Level | Agreement |
-|---------|-----------------|-----------|
-| NRF2 pathway activation as protective | High | 15/15 |
-| TP53-mediated DNA damage response | High | 15/15 |
-| BAX/CASP3 apoptosis at high doses | High | 15/15 |
-| Liver as primary target organ | High | 15/15 |
-| Kidney as secondary target organ | High | 15/15 |
-| Precise adaptive-to-adverse transition dose | Low-Moderate | 15/15 |
-| Organ-specific predictions beyond liver/kidney | Moderate | 12/15 |
+All models express **lower confidence** in:
+- Precise dose thresholds for the adaptive-to-adverse transition
+- Specific organ rankings beyond liver and kidney
+- Novel mechanistic findings not well-represented in existing literature
 
 ### Divergence
 
-**Inflammation confidence:**
-- **Qwen2.5 Run 1** rates NF-κB inflammation as "Moderate Confidence: Supported by cadmium-induced toxicity studies but less detailed at specific dose levels."
-- **Claude-haiku** models rate inflammatory pathway activation as high confidence based on extensive pathway enrichment data.
-- **Gemma2 Run 2** rates inflammation as "Limited Evidence: The precise dose at which the shift from adaptive to adverse occurs needs more experimental data."
+**Structural approach to confidence:** Claude models embed confidence assessments within their narrative (e.g., "High Confidence Target," "Highest Confidence," "Very High"), while qwen2.5 models provide explicit confidence sections with categorical ratings (High/Moderate/Low). This structural difference makes direct comparison difficult.
 
-**Brain/CNS predictions:**
-- **Claude-opus** models rate brain/CNS as "High Confidence" based on detailed sub-regional enrichment analysis.
-- **Gemma2 Run 2** rates brain as "Moderate Confidence: Predicting specific organ damage requires more detailed analysis."
-- **Qwen2.5 Run 3** identifies brain but provides no explicit confidence rating.
+**CASP3 confidence:** Qwen2.5:7b (Runs 1 and 3) explicitly rates CASP3-mediated apoptosis as a "novel finding" with "limited literature support" or "low confidence." Claude models treat CASP3 activation as a well-established, high-confidence finding. This is a meaningful divergence in confidence calibration for the same gene.
 
-**Novel findings confidence:**
-- **Qwen2.5 Run 2** identifies the NRF2-to-apoptosis transition as "a novel observation not fully covered in existing literature."
-- **Claude-sonnet Run 1** identifies circadian disruption as a potentially novel finding requiring further investigation.
-- **Claude-opus Run 1** identifies the SQSTM1/p62-KEAP1-NRF2 feedback loop as a mechanistically important but less well-characterized finding.
+**NLRP3 confidence:** Qwen2.5:14b (Run 3) rates NLRP3 inflammasome activation as "moderate confidence." Claude models treat NLRP3 as a high-confidence finding with strong literature support. This divergence may reflect the qwen2.5:14b model having less access to the 2025 NLRP3 liver paper that claude models cite extensively.
 
-**Self-awareness of limitations:**
-- **Gemma2** models consistently include disclaimers: "This is a theoretical exercise" (Run 2), "specific conclusions depend on the actual gene expression values" (Run 3).
-- **Claude** models acknowledge limitations more specifically: "The precise dose at which the shift from adaptive to adverse occurs needs more experimental data" (claude-sonnet Run 2, paraphrased).
-- **Qwen2.5** models provide the least explicit uncertainty quantification.
+**Testis prediction confidence:** Claude-opus-4-6 (all runs) rates testis as a "High Confidence" target. Qwen2.5 models do not mention testis at all, implying either low confidence or non-consideration. The absence of a confidence rating for an organ not mentioned is itself informative.
 
-### Concordance Rating: **Strong agreement** on high-confidence findings (NRF2, TP53, liver/kidney); **Moderate divergence** on confidence levels for secondary findings (inflammation timing, brain involvement, novel observations).
+**Intra-model consistency:** Claude-opus-4-6 shows the highest intra-model consistency across its three runs, with nearly identical confidence assessments. Qwen2.5:7b shows the most intra-run variability, with Run 1 expressing lower confidence in CASP3 and NLRP3 than Runs 2 and 3.
+
+### Concordance Rating: **Moderate**
+
+High-level confidence categories (NRF2 = high confidence; transition dose = moderate confidence) are broadly agreed upon. Gene-specific confidence ratings for CASP3 and NLRP3 diverge meaningfully between model families.
 
 ---
 
 ## High-Confidence Findings
 
-**The following claims are supported by ≥4 of 5 models (≥12 of 15 runs):**
+*Claims supported by all 4 model families (claude-haiku-4-5, qwen2.5:14b, qwen2.5:7b, claude-opus-4-6):*
 
-1. **The molecular initiating event involves xenobiotic sensing through AHR activation and/or generation of oxidative stress, triggering the KEAP1-NFE2L2 antioxidant defense pathway.** (15/15 runs)
+1. **NRF2/KEAP1 pathway activation is the primary early adaptive response.** All 12 narratives identify NFE2L2, KEAP1, HMOX1, NQO1, and GCLC as early-responding genes representing the organism's first-line defense against oxidative stress.
 
-2. **The dose-response follows a stereotyped progression: xenobiotic sensing → antioxidant defense → DNA damage/cell cycle arrest → inflammation → apoptosis → tissue remodeling.** (15/15 runs)
+2. **The dose-response follows an adaptive-to-adverse progression.** Low doses trigger cytoprotective responses; high doses trigger inflammatory and apoptotic responses. This three-tier structure is universally reproduced.
 
-3. **NRF2-mediated upregulation of NQO1, HMOX1, GCLC, GPX1, SOD1/2, and CAT represents the primary adaptive/protective response at low doses.** (15/15 runs)
+3. **Liver is the primary target organ.** All 12 narratives identify the liver as the most affected organ, with consistent mechanistic rationale (xenobiotic metabolism, NRF2 activation, NLRP3 inflammasome, fibrosis).
 
-4. **TP53 activation leads to CDKN1A-mediated cell cycle arrest as a transitional protective response, followed by BAX/CASP3-mediated apoptosis when damage exceeds repair capacity.** (15/15 runs)
+4. **Kidney is a co-primary target organ.** All 12 narratives identify the kidney, with consistent mechanistic rationale (tubular oxidative stress, apoptosis, inflammation).
 
-5. **NF-κB-driven inflammatory signaling (IL6, IL1B, TNF) represents an adverse response at moderate-to-high doses.** (15/15 runs)
+5. **NLRP3 inflammasome activation drives high-dose inflammatory toxicity.** All models identify NLRP3, IL1B, and TNF as high-dose adverse response markers.
 
-6. **The liver is the primary target organ**, based on CYP1A1/CYP1B1 metabolism, NRF2 antioxidant defense, and inflammatory/fibrotic signaling. (15/15 runs)
+6. **TP53/BAX/CASP3 apoptotic axis is engaged at intermediate-to-high doses.** All models identify this axis as the primary cell death mechanism.
 
-7. **The kidney is the secondary target organ**, based on HMOX1 enrichment in renal tubular epithelium, VEGFA signaling, and oxidative stress markers. (15/15 runs)
+7. **ROS generation is the central upstream driver of toxicity.** All models, regardless of whether they specify AHR as the MIE, agree that ROS is the proximate cause of the downstream cascade.
 
-8. **The adaptive-to-adverse transition occurs at approximately the moderate dose level** (variously specified as BMD 2.5–5.5 by claude models, or "moderate dose" by qwen2.5/gemma2). (15/15 runs)
-
-9. **TGFB1 upregulation at high doses indicates fibrotic tissue remodeling as a late adverse outcome.** (13/15 runs)
-
-10. **The heart is a likely target organ**, based on oxidative stress, inflammatory, and apoptotic gene signatures in cardiac tissue. (10/15 runs, 4/5 models)
+8. **TGFB1-mediated fibrotic signaling emerges at high doses.** All claude models and qwen2.5:14b identify this as a high-dose adverse response; qwen2.5:7b implies it through "fibrosis" language without always naming TGFB1 explicitly.
 
 ---
 
 ## Divergent Findings
 
-### Divergence 1: Ferroptosis as an Early Pathway Event
-- **Claude-sonnet** (3/3 runs) and **claude-opus** (3/3 runs) identify ferroptosis pathway activation at BMD 0.6 as a distinct early event, interpreting GPX1/GCLC upregulation as protective against iron-dependent lipid peroxidation.
-- **Claude-haiku** (3/3 runs) mentions ferroptosis pathway enrichment in the context of BMD data but with less emphasis.
-- **Qwen2.5** (0/3) and **gemma2** (0/3) do not mention ferroptosis.
-- **Nature of disagreement**: This likely reflects differential access to or utilization of pathway-level BMD data rather than a substantive biological disagreement. The claude models had access to specific pathway annotations with BMD values; the qwen2.5 and gemma2 models appear to have worked from gene-level data without detailed pathway BMD information.
+### Divergence 1: Identity of the Molecular Initiating Event
 
-### Divergence 2: Circadian Clock Disruption
-- **All claude models** (9/9 runs) identify circadian clock gene downregulation at BMD 2.0–2.25 as a biologically significant event.
-- **Qwen2.5** (0/3) and **gemma2** (0/3) do not mention circadian disruption.
-- **Nature of disagreement**: Same as above—likely reflects differential data access. Claude-haiku Run 1 calls this "a unique finding not typically associated with xenobiotic toxicity," suggesting it may be a genuinely novel observation from the dataset.
+**Nature of disagreement:** Claude models (haiku and opus, all 6 runs) identify AHR ligand binding and CYP1A1/CYP1B1 induction as the molecular initiating event, with ROS generation as a downstream consequence of bioactivation. Qwen2.5 models (all 6 runs) identify ROS generation itself as the MIE, without specifying an upstream receptor event.
 
-### Divergence 3: Cellular Senescence (SASP)
-- **All claude models** (9/9 runs) identify SASP as a late-stage event (BMD 8.5–10.25).
-- **Qwen2.5** (0/3) and **gemma2** (0/3) do not mention SASP or cellular senescence.
-- **Nature of disagreement**: Again likely reflects data access differences. SASP is a well-established biological concept that would be relevant to the high-dose response.
+**Significance:** This is a substantive mechanistic disagreement. If the claude models are correct, the compound is an AHR ligand (consistent with PAHs, dioxins, or similar planar aromatics), and the primary toxicological concern is bioactivation to reactive metabolites. If the qwen2.5 models are correct, the compound may be a direct oxidant or pro-oxidant without receptor-mediated specificity. These hypotheses have different implications for structure-activity relationships and risk assessment.
 
-### Divergence 4: Brain/CNS as a Target Organ
-- **Claude-opus** (3/3 runs) identifies brain/CNS with high confidence, providing detailed sub-regional enrichment data (substantia nigra, hippocampal CA1, cingulate cortex).
-- **Qwen2.5 Run 3** and **gemma2 Run 2** identify brain but with lower confidence.
-- **Qwen2.5 Runs 1–2**, **gemma2 Runs 1, 3**, and **claude-sonnet** models are less emphatic or do not identify brain.
-- **Nature of disagreement**: This reflects both data access (organ enrichment scores) and interpretive conservatism. The claude-opus models appear to have the most detailed organ signature data.
+**Assessment:** The claude models' interpretation is better supported by the dataset, as AHR, CYP1A1, and CYP1B1 are explicitly identified as the earliest-responding genes (BMD 0.2–0.35) in the pathway enrichment data. The qwen2.5 models appear to have either not accessed or not weighted this early-response information.
 
-### Divergence 5: Compound Class Identification
-- **Claude-sonnet** Runs 1–2 attempt to identify the compound class (PAH, halogenated aromatic, or heavy metal).
-- All other models (13/15 runs) do not attempt compound identification.
-- **Nature of disagreement**: This is an interpretive choice rather than a data-driven disagreement. Claude-sonnet's inference is reasonable given the AHR activation pattern but remains speculative.
+### Divergence 2: Testis as a Target Organ
 
-### Divergence 6: Collagen/COL1A1 in Fibrosis
-- **Qwen2.5 Run 2** uniquely identifies COL1A1 upregulation as evidence of fibrosis.
-- No other narrative mentions COL1A1.
-- **Nature of disagreement**: This may represent a hallucinated gene—COL1A1 is not listed among the 32 responsive genes in the dataset. If so, this is a factual error rather than an interpretive divergence.
+**Nature of disagreement:** All three claude-opus-4-6 runs and claude-haiku-4-5 (Run 1) identify testis/male reproductive system as a high-confidence primary target organ with detailed mechanistic rationale (AHR enrichment in testicular tissue, spermatocyte apoptosis via TP53, oxidative stress in cauda epididymis). All six qwen2.5 narratives do not mention testis.
+
+**Significance:** If the claude models are correct, this represents a reproductive toxicity concern that is entirely missed by the qwen2.5 models. The claude models cite specific organ enrichment statistics (19–21 genes annotated to testis) that appear to be drawn from the dataset's organ signature analysis. The qwen2.5 models' omission may reflect either failure to access this data layer or a different prioritization algorithm.
+
+**Assessment:** The testis prediction by claude models appears data-driven (based on organ enrichment statistics) rather than speculative. The qwen2.5 models' silence on this organ is a potential gap rather than a contradictory finding.
+
+### Divergence 3: Heart as a Target Organ
+
+**Nature of disagreement:** Five of six qwen2.5 narratives identify heart as a primary target organ, citing SIRT1, TP53, NLRP3, and IL1B as cardiac markers. Zero of six claude narratives identify heart as a primary target.
+
+**Significance:** This is a direct contradiction in organ prioritization. The qwen2.5 models cite the myocardial infarction signaling paper (2022) to support cardiac involvement. The claude models, despite analyzing the same genes, do not prioritize cardiac tissue.
+
+**Assessment:** The qwen2.5 models' cardiac prediction appears to be driven by the general expression of SIRT1, TP53, and NLRP3 — genes that are expressed in many tissues — rather than by organ-specific enrichment data. The claude models' organ predictions are anchored to quantitative enrichment statistics, which may explain why they do not prioritize heart (if cardiac enrichment is lower than liver, kidney, brain, or testis). The qwen2.5 cardiac prediction should be treated as lower confidence without enrichment data support.
+
+### Divergence 4: Ferroptosis as a Distinct Mechanistic Phase
+
+**Nature of disagreement:** All three claude-opus-4-6 runs identify ferroptosis pathway activation (path:hsa04216, median BMD 0.6) as a distinct early mechanistic phase. Claude-haiku-4-5 does not name ferroptosis as a distinct phase. Qwen2.5 models do not mention ferroptosis.
+
+**Significance:** Ferroptosis is mechanistically distinct from apoptosis and necroptosis, involving iron-dependent lipid peroxidation. If ferroptosis is genuinely activated at low doses (BMD 0.6), this has implications for the types of cellular damage occurring early in the dose-response and for potential therapeutic interventions (ferroptosis inhibitors vs. apoptosis inhibitors).
+
+**Assessment:** Claude-opus-4-6's consistent identification of ferroptosis across all three runs, anchored to a specific pathway (path:hsa04216) and BMD value (0.6), suggests this is a data-driven finding rather than a hallucination. The absence of this finding in other models represents a genuine gap.
+
+### Divergence 5: Circadian Disruption as a Transition Marker
+
+**Nature of disagreement:** All six claude narratives identify circadian clock gene downregulation at BMD 2.0–2.25 as a significant finding and use it as a marker of the adaptive-to-adverse transition. All six qwen2.5 narratives do not mention circadian disruption.
+
+**Significance:** Circadian disruption has functional consequences for xenobiotic metabolism (CYP enzymes are circadian-regulated), antioxidant defense, and inflammatory responses. Its identification as a transition marker provides a mechanistic explanation for why adaptive responses fail at this dose range.
+
+**Assessment:** This is another case where claude models appear to be accessing pathway-level data (circadian pathway enrichment with downregulation direction) that qwen2.5 models are not utilizing.
+
+### Divergence 6: CASP3 Confidence Rating
+
+**Nature of disagreement:** Qwen2.5:7b (Runs 1 and 3) explicitly rates CASP3-mediated apoptosis as a "novel finding" with "limited literature support" or "low confidence." All claude models treat CASP3 as a well-established, high-confidence apoptotic marker.
+
+**Significance:** CASP3 (caspase-3) is one of the most extensively characterized executioner caspases in the apoptosis literature. The qwen2.5:7b model's low-confidence rating for CASP3 appears to reflect a calibration error rather than a genuine uncertainty about the literature. This is a reliability concern specific to qwen2.5:7b.
 
 ---
 
 ## Model-Specific Observations
 
-### Qwen2.5 (14b)
-- **Unique insight**: Run 3 identifies "LKB1 and KEAP1/NRF2 interactions in lung adenocarcinoma" as providing "new insights into metabolic reprogramming." This cross-reference to cancer biology is not made by other models.
-- **Unique insight**: Run 2 mentions COL1A1 as a fibrosis marker—potentially a hallucination if not in the gene set, but conceptually relevant.
-- **Limitation**: Least granular dose-response analysis; uses broad "Low/Moderate/High" categories without BMD values. Does not engage with pathway-level BMD data.
+### Claude-haiku-4-5 (unique contributions)
 
-### Gemma2 (9b)
-- **Unique insight**: Run 1 identifies lung as a potential target with "genes involved in extracellular matrix remodeling" suggesting pulmonary fibrosis. This is a reasonable inference not emphasized by other models.
-- **Unique insight**: Run 2 provides the most explicit disclaimer about the theoretical nature of the analysis, demonstrating appropriate epistemic humility.
-- **Limitation**: Least detailed of all models; provides the fewest specific genes, pathways, and literature citations. Does not engage with BMD-level data.
+- **KEAP1 upregulation paradox** [Run 1]: Specifically flags the "paradoxical upregulation" of KEAP1 alongside NFE2L2 as evidence of active Keap1-Nrf2 cycling, a mechanistic nuance not addressed by other models.
+- **SASP as a distinct phase** [Runs 1, 2, 3]: All three runs identify Senescence-Associated Secretory Phenotype as a terminal phase at the highest doses, representing a transition from acute to chronic toxicity. While claude-opus-4-6 also mentions SASP, haiku develops it as a named phase more consistently.
+- **GDF15 as mitochondrial stress marker** [Run 1]: Identifies GDF15 (growth differentiation factor 15) upregulation as a marker of mitochondrial stress and metabolic dysfunction, a specific mechanistic annotation not made by other models.
+- **Gastrointestinal tract involvement** [Run 2]: Briefly mentions GI tract as a potential target organ, a prediction not made by any other model.
 
-### Claude-haiku (4-5)
-- **Unique insight**: Run 1 identifies circadian disruption as "a unique finding not typically associated with xenobiotic toxicity," flagging it as potentially novel.
-- **Unique insight**: Run 1 provides the most detailed phase structure (7 phases) with specific BMD ranges for each.
-- **Unique insight**: Run 2 describes the NLRP3 inflammasome mechanism in detail: "requires two signals: a priming signal (NF-κB activation) and an activation signal (typically ROS, ATP, or crystalline structures)."
-- **Unique insight**: Run 3 identifies GDF15 as "a stress-induced cytokine that signals systemic metabolic dysfunction and is associated with aging, inflammation, and tissue damage" and notes its early induction (BMD 2.0–3.0) as particularly significant.
+### Qwen2.5:14b (unique contributions)
 
-### Claude-sonnet (4-6)
-- **Unique insight**: Run 1 attempts compound class identification: "consistent with exposure to a polycyclic aromatic hydrocarbon (PAH), halogenated aromatic compound, or heavy metal."
-- **Unique insight**: Run 1 identifies the SQSTM1/p62-KEAP1-NRF2 positive feedback loop: "SQSTM1/p62 is a critical autophagy receptor and also a positive regulator of NFE2L2 through competitive binding to KEAP1, creating a feedback loop that sustains antioxidant gene expression under prolonged stress."
-- **Unique insight**: Run 2 distinguishes pseudo-hypoxia from true hypoxia: "consistent with pseudo-hypoxic signaling driven by ROS-mediated HIF1A stabilization rather than true oxygen deprivation."
-- **Unique insight**: Run 2 notes that the "response to ethanol" GO term enrichment "may reflect shared mechanistic pathways between the test compound and ethanol-type metabolic/oxidative stress"—a cross-referencing insight not made by other models.
-- **Unique insight**: Run 3 provides the most systematic phase-by-phase summary statements, making the narrative structure most accessible.
+- **Explicit confidence section structure**: All three runs provide a dedicated, structured confidence assessment section with categorical ratings (High/Moderate/Low) and explicit identification of "novel findings." This structured approach to uncertainty quantification is more systematic than the narrative-embedded confidence assessments of claude models.
+- **UPR (unfolded protein response) mention** [Run 2]: Briefly mentions UPR activation as an adaptive response at low doses, a mechanism not explicitly named by other models (though ER stress pathways are mentioned by claude-opus-4-6).
+- **Transition point framing** [all runs]: Consistently frames the adaptive-to-adverse transition as a "transition point" with explicit discussion of what drives the shift, providing a cleaner conceptual framework than the phase-based descriptions of claude models.
 
-### Claude-opus (4-6)
-- **Unique insight**: Runs 1–3 provide the most comprehensive organ-level analysis, identifying intestine (503.67× enrichment), testis (470.09× enrichment), and reproductive organs as target tissues—predictions not made by any other model class.
-- **Unique insight**: Run 1 identifies the substantia nigra enrichment (268.62× for BAX, TP53) as specifically suggesting "vulnerability of dopaminergic neurons, consistent with Parkinson's disease pathway activation."
-- **Unique insight**: Run 2 identifies HAVCR1 (KIM-1) as "a validated renal injury biomarker" among the responsive genes—a clinically relevant observation not made by other models.
-- **Unique insight**: Run 3 provides the most detailed mechanistic interpretation of ferroptosis: "the upregulation of GPX1 and GCLC at this stage likely represents a protective response against iron-dependent lipid peroxidation rather than active ferroptotic cell death."
+### Qwen2.5:7b (unique contributions)
+
+- **Lung as target organ** [Run 1]: Uniquely identifies lung as a primary target organ, citing NFKB1, IL1B, and SOD1. No other model makes this prediction. While unsupported by enrichment statistics, it is not implausible given the inflammatory gene signature.
+- **Most conservative transition dose** [Run 2]: Estimates the adaptive-to-adverse transition at 1 mg/kg, substantially lower than all other models. If correct, this would have significant implications for risk assessment.
+- **CASP3 as novel finding** [Runs 1, 3]: While likely a calibration error (see Divergence 6), this rating does highlight that qwen2.5:7b is applying a more conservative standard for what constitutes "established" vs. "novel" findings.
+
+### Claude-opus-4-6 (unique contributions)
+
+- **Ferroptosis as a distinct early phase** [all 3 runs]: The most consistent unique contribution of this model. All three runs independently identify ferroptosis pathway activation at BMD ~0.6 as a mechanistically distinct early response, with specific pathway identifiers (path:hsa04216/rno04216).
+- **SQSTM1/p62-KEAP1 positive feedback loop** [Runs 1, 2]: Specifically identifies the molecular mechanism by which SQSTM1 sequesters KEAP1 to amplify NRF2 signaling, a level of mechanistic detail not provided by any other model.
+- **Innate immune pattern recognition at high doses** [all 3 runs]: Consistently identifies TLR, NOD-like receptor, RIG-I-like receptor, and cytosolic DNA-sensing pathway activation at the highest doses as a DAMP-driven response. This represents a coherent mechanistic explanation for why infectious disease pathways are enriched in a non-infectious toxicology context.
+- **HAVCR1/KIM-1 as renal biomarker** [Runs 1, 2]: Specifically identifies KIM-1 (kidney injury molecule-1) as a responsive gene within the renal signature, providing a clinically translatable biomarker prediction.
+- **Future-dated citation concern** [Run 1]: Cites "Lead Exposure Triggers Ferroptotic Hepatocellular Death" with a 2026 date, which warrants verification as a potential hallucination.
 
 ---
 
 ## Overall Concordance Summary
 
-### Strongest Consensus Areas (Strong Agreement)
-1. **Core AOP framework**: All 15 narratives agree on the fundamental adverse outcome pathway: oxidative stress → NRF2 defense → DNA damage/TP53 → inflammation/NF-κB → apoptosis/BAX-CASP3. This is the most robust finding of the meta-analysis.
-2. **Primary target organs**: Liver and kidney are universally identified with high confidence.
-3. **Protective vs. adverse classification**: NRF2 activation is universally protective; apoptosis and chronic inflammation are universally adverse.
-4. **Key gene roles**: The functional roles of NFE2L2, TP53, BAX, BCL2, CASP3, IL6, TNF, HMOX1, NQO1, and CYP1A1 are consistently described across all models.
+### Aggregate Assessment
 
-### Moderate Consensus Areas
-1. **Heart as a target organ**: Identified by 4/5 models but with varying confidence.
-2. **Transition dose**: All agree on "moderate dose" but claude models provide BMD-level precision (2.5–5.5) while others remain qualitative.
-3. **Inflammatory signaling as initially protective vs. immediately adverse**: Minor disagreement on whether low-level inflammation is adaptive.
+The 12 narratives show **moderate-to-strong overall concordance** on the core toxicological story but **moderate-to-weak concordance** on mechanistic specifics, organ rankings beyond the top two, and dose-threshold quantification.
 
-### Weakest Consensus Areas (Requiring Further Investigation)
-1. **Secondary/tertiary organ targets**: Brain, lung, intestine, testis show model-dependent identification, largely driven by differential access to organ enrichment data.
-2. **Ferroptosis, circadian disruption, and SASP**: Identified only by claude models, likely reflecting data access differences rather than biological disagreement.
-3. **Compound class identification**: Attempted only by claude-sonnet; remains speculative.
-4. **Precise BMD transition points**: Quantitative precision varies dramatically between model classes.
+### Strongest Consensus Sections
 
-### Model Class Performance Summary
+**Section 3 (Mechanism of Action)** and **Section 2 (Organ-Level Prediction — liver and kidney)** show the strongest consensus. The core mechanistic sequence (ROS → NRF2 → NF-κB → NLRP3 → apoptosis) and the identification of liver and kidney as primary targets are robust findings supported by all model families.
 
-| Dimension | Qwen2.5 (14b) | Gemma2 (9b) | Claude-haiku (4-5) | Claude-sonnet (4-6) | Claude-opus (4-6) |
-|-----------|---------------|-------------|--------------------|--------------------|-------------------|
-| Biological depth | Moderate | Low-Moderate | High | Very High | Very High |
-| BMD precision | Low | Low | High | Very High | Very High |
-| Organ prediction breadth | Low (3 organs) | Low (3–4 organs) | Moderate (4–5 organs) | High (5–6 organs) | Very High (7+ organs) |
-| Literature integration | Low-Moderate | Low | High | Very High | Very High |
-| Mechanistic specificity | Moderate | Low-Moderate | High | Very High | Very High |
-| Internal consistency | High | High | High | High | High |
-| Epistemic humility | Low-Moderate | High | Moderate | Moderate | Moderate |
+**Section 5 (Literature Support)** shows strong consensus on the core reference set (KEAP1-NRF2 2018 paper, NRF2 overview 2020, NLRP3 liver 2025, Rutin 2021), providing a shared evidential foundation.
 
-The most striking finding of this meta-analysis is the **high internal consistency within model classes** (runs from the same model are highly concordant) combined with **systematic differences between model classes** that appear to be driven primarily by (a) access to and utilization of quantitative BMD and pathway enrichment data, and (b) model capacity for mechanistic reasoning. The core biological conclusions are robust across all models, while the depth and specificity of interpretation scale with model sophistication and data engagement.
+### Weakest Consensus Sections
+
+**Section 1 (Biological Response Narrative)** shows the greatest structural divergence, primarily because claude models provide BMD-anchored, multi-phase descriptions while qwen2.5 models provide qualitative three-tier descriptions. The content within each tier is broadly consistent, but the granularity gap is substantial.
+
+**Section 2 (Organ-Level Prediction — beyond liver/kidney)** shows weak consensus for testis, heart, and lung predictions, with model-family-specific divergences that likely reflect differential access to organ enrichment statistics.
+
+**Section 6 (Confidence Assessment)** shows moderate divergence, particularly for CASP3 and NLRP3 confidence ratings, and for the structural approach to uncertainty quantification.
+
+### Key Structural Finding
+
+The most important meta-level observation is that **the two claude model families (haiku and opus) show substantially higher intra-family consistency and greater mechanistic specificity than the two qwen2.5 model families**. The claude models consistently access and utilize quantitative pathway enrichment data (BMD values, enrichment fold-changes, gene counts per pathway), while qwen2.5 models appear to work primarily from qualitative gene-level information. This structural difference in data utilization — rather than fundamental disagreement about biology — accounts for most of the cross-model divergences observed.
+
+Within model families, **claude-opus-4-6 shows the highest intra-run consistency** (three runs produce nearly identical narratives), while **qwen2.5:7b shows the most intra-run variability** (confidence ratings and organ predictions shift between runs). This suggests claude-opus-4-6 is the most deterministic of the four models for this task, and qwen2.5:7b is the least.
+
+### Priority Areas for Further Investigation
+
+1. **Testis as a target organ**: The claude models' consistent, data-anchored prediction of reproductive toxicity warrants experimental validation, as it is entirely absent from qwen2.5 analyses.
+2. **Ferroptosis at low doses**: Claude-opus-4-6's consistent identification of ferroptosis pathway activation at BMD ~0.6 is a specific, testable prediction not reproduced by other models.
+3. **AHR as MIE vs. direct ROS generation**: The mechanistic divergence on the identity of the MIE has direct implications for compound characterization and should be resolved through receptor binding assays or AHR knockout experiments.
+4. **Transition dose quantification**: The range of transition dose estimates (BMD 1–5 across models) is wide enough to have practical risk assessment implications and warrants more precise characterization.

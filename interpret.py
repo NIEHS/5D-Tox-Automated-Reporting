@@ -1735,8 +1735,9 @@ if __name__ == "__main__":
     )
     sub = parser.add_subparsers(dest="command")
 
-    # Default: full pipeline (no subcommand, uses positional csv)
-    parser.add_argument("csv", nargs="?", help="Path to gene-level BMD results CSV")
+    # Default: full pipeline (no subcommand, uses --csv or positional)
+    parser.add_argument("csv", nargs="?", default=None, help="Path to gene-level BMD results CSV")
+    parser.add_argument("--csv", dest="csv_flag", default=None, help="Path to gene-level BMD results CSV (alternative to positional)")
     parser.add_argument("--db", default="bmdx.duckdb", help="Path to bmdx.duckdb")
     parser.add_argument("--output", default="output/interpretation.md", help="Output markdown path")
     parser.add_argument("--docx", default=None, help="Output Word document path (.docx)")
@@ -1781,10 +1782,11 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
         )
     else:
-        if not args.csv:
+        csv_path = args.csv_flag or args.csv
+        if not csv_path:
             parser.error("csv argument is required for the full pipeline")
         interpret(
-            args.csv,
+            csv_path,
             db_path=args.db,
             output_path=args.output,
             docx_path=args.docx,

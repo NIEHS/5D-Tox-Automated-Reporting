@@ -1,6 +1,6 @@
 # Narratives: claude-haiku-4-5
 
-## Run 1 (35.3s)
+## Run 1 (34.9s)
 
 # COMPREHENSIVE TOXICOGENOMICS INTERPRETATION REPORT
 
@@ -8,374 +8,95 @@
 
 ### Dose-Dependent Progression of Molecular Events
 
-The dose-response analysis reveals a highly organized temporal sequence of molecular responses, progressing from early xenobiotic sensing and adaptive stress responses at low doses (BMD 0.2–0.6) through sustained cytoprotective mechanisms at intermediate doses (BMD 0.5–5.0), and culminating in cell death and tissue-level adverse outcomes at higher doses (BMD 5.0–13.5).
+The dose-response analysis reveals a highly orchestrated, dose-dependent activation of stress response pathways with a clear temporal hierarchy of molecular events. The progression can be characterized as follows:
 
-#### **Phase 1: Xenobiotic Sensing and Initial Stress Response (BMD 0.2–0.6)**
+#### **Phase 1: Xenobiotic Recognition and Metabolic Activation (BMD 0.2–0.55)**
 
-The earliest and most sensitive responses involve activation of xenobiotic-sensing pathways, centered on the aryl hydrocarbon receptor (AhR) and nuclear factor erythroid 2-related factor 2 (NFE2L2/Nrf2) signaling axes.
+At the lowest observable doses (BMD 0.2–0.35), the response is dominated by **aryl hydrocarbon receptor (AhR) signaling** and **Phase I/II xenobiotic metabolism**. Three genes show the earliest response:
 
-**Key genes activated (median BMD 0.35–0.55):**
-- **AHR** (BMD 0.35): Aryl hydrocarbon receptor signaling pathway (path:hsa05208, median BMD 0.5)
-- **CYP1A1, CYP1B1** (BMD 0.2–0.5): Phase I xenobiotic metabolism
-- **NFE2L2, KEAP1** (BMD 0.3–0.55): Nuclear events mediated by NFE2L2 and GSK3B:BTRC:CUL1-mediated degradation
-- **NQO1** (BMD 0.2–0.55): NAD(P)H quinone oxidoreductase 1
+- **CYP1A1** (BMD ~0.35): Upregulation of this cytochrome P450 enzyme indicates active xenobiotic metabolism and potential bioactivation of the exposure agent. This is the molecular initiating event (MIE).
+- **AHR** (BMD ~0.35): Concurrent AhR activation suggests ligand-dependent transcriptional activation, consistent with exposure to an AhR agonist or metabolite thereof.
+- **CYP1B1** (BMD ~0.35): Secondary Phase I enzyme induction.
 
-This phase represents the **molecular initiating event (MIE)** for xenobiotic-induced toxicity. The GO term "response to xenobiotic stimulus" (GO:0009410, p=3.47e-28) is the most significantly enriched biological process, with 22 genes responding at this dose range. The rapid induction of CYP1A1 and CYP1B1 indicates activation of the AhR pathway, which is a canonical xenobiotic sensor. Simultaneously, NFE2L2 activation (through KEAP1 interaction) initiates the antioxidant response element (ARE)-driven transcription of cytoprotective genes.
+The pathway enrichment data (path:hsa05208, median BMD 0.5) confirms early activation of "Drug metabolism - cytochrome P450" pathways, with 9 genes responding in this dose range. This phase represents the organism's **initial recognition and detoxification attempt**.
 
-**Biological interpretation:** The organism is detecting and attempting to metabolize and detoxify a xenobiotic substance. This is an **adaptive response** aimed at preventing accumulation of toxic metabolites.
+#### **Phase 2: Antioxidant Defense Mobilization (BMD 0.3–0.87)**
 
-#### **Phase 2: Antioxidant and Cytoprotective Response (BMD 0.4–2.0)**
+Overlapping with Phase 1, but extending slightly higher, is robust activation of the **KEAP1-NFE2L2 (Nrf2) antioxidant response element (ARE) pathway**:
 
-As doses increase, the response broadens to include comprehensive antioxidant defense mechanisms and cellular stress adaptation.
+- **NFE2L2** (BMD ~0.55): The master regulator of antioxidant response is upregulated, indicating oxidative stress generation.
+- **KEAP1** (BMD ~0.3–0.55): Paradoxical upregulation alongside NFE2L2 suggests active Keap1-Nrf2 cycling and pathway engagement.
+- **NQO1** (BMD ~0.55): NAD(P)H quinone oxidoreductase 1 upregulation indicates quinone-like metabolite formation.
+- **GCLC** (BMD ~0.35–0.87): Glutamate-cysteine ligase catalytic subunit upregulation drives glutathione synthesis.
+- **HMOX1** (BMD ~0.4–0.55): Heme oxygenase-1 induction provides cytoprotection through heme catabolism and CO production.
 
-**Key genes activated (median BMD 0.5–2.0):**
-- **HMOX1** (heme oxygenase-1, BMD 0.4–2.0): Cytoprotection by HMOX1 pathway (median BMD 6.7)
-- **SOD1, SOD2** (superoxide dismutase, BMD 0.5–2.0): Antioxidant enzymes
-- **CAT** (catalase, BMD 0.5–2.0): Hydrogen peroxide metabolism
-- **GPX1** (glutathione peroxidase 1, BMD 0.5–2.0): Selenoprotein antioxidant
-- **GCLC** (glutamate-cysteine ligase catalytic subunit, BMD 0.5–2.0): Glutathione synthesis
-- **SIRT1** (sirtuin 1, BMD 0.4–5.27): NAD+-dependent deacetylase and metabolic regulator
+The enrichment of "Nuclear events mediated by NFE2L2" (median BMD 0.55) and "GSK3B and BTRC:CUL1-mediated degradation of NFE2L2" (median BMD 0.55) confirms active Nrf2 signaling. This phase represents **adaptive cytoprotection** against oxidative stress.
 
-The GO terms "response to oxidative stress" (GO:0006979, p=1.25e-16), "response to hydrogen peroxide" (GO:0042542, p=1.83e-13), and "response to hypoxia" (GO:0001666, p=9.11e-20) are highly enriched, indicating that oxidative stress is a primary consequence of xenobiotic metabolism.
+**Literature Support**: The KEAP1-NRF2 system is well-characterized as a thiol-based sensor responding to electrophilic and oxidative stress (Suzuki et al., 2018, cited 1544×). NFE2L2 upregulation at low doses is consistent with protective antioxidant responses, as documented in "An Overview of Nrf2 Signaling Pathway and Its Role in Inflammation" (2020, cited 1094×).
 
-**Biological interpretation:** Phase I metabolism of the xenobiotic generates reactive oxygen species (ROS) and reactive metabolites. The organism mounts a robust antioxidant defense response, including upregulation of superoxide dismutase, catalase, glutathione peroxidase, and heme oxygenase-1. SIRT1 activation suggests metabolic reprogramming to support energy-intensive detoxification processes. This phase represents **sustained adaptive/protective response**.
+#### **Phase 3: Inflammatory Priming (BMD 0.4–2.0)**
 
-**Literature support:** The literature on heavy metals (BAX, BCL2, NFE2L2) notes that "Heavy metals interfere with antioxidant defense mechanisms and signaling pathways" and that "Arsenic binds directly to thiols, affecting Nrf2 activity in response to oxidative stress" (Heavy metals: toxicity and human health effects, 2024). The NFE2L2 consensus gene literature emphasizes that "Network-based approaches using co-expression network analysis can predict drug toxicity mechanisms and phenotypes more effectively than traditional gene-level analysis" (Toxicogenomic module associations with pathogenesis, 2017).
+As doses increase, **innate immune and inflammatory pathways** become increasingly prominent:
 
-#### **Phase 3: Inflammatory and Immune Response (BMD 0.3–4.0)**
+- **IL1B** (BMD ~0.4–2.0): Interleukin-1β upregulation initiates pro-inflammatory signaling.
+- **TNF** (BMD ~0.4–2.0): Tumor necrosis factor upregulation amplifies inflammatory responses.
+- **NFKB1** (BMD ~0.4–2.0): NF-κB pathway activation drives expression of inflammatory mediators.
+- **NLRP3** (BMD ~0.4–2.0): NLRP3 inflammasome priming occurs, setting the stage for pyroptotic cell death.
 
-Concurrent with antioxidant activation, inflammatory mediators are upregulated, indicating that the xenobiotic or its metabolites trigger innate immune responses.
+The enrichment of "Cytokine-cytokine receptor interaction" (path:hsa04060, median BMD 11.0) and "NOD-like receptor signaling pathway" (path:hsa04217, median BMD 8.5) indicates coordinated inflammatory activation. Notably, **circadian clock genes** (BMAL1, CLOCK) show **downregulation** at BMD 2–2.25, suggesting circadian disruption—a marker of systemic stress.
 
-**Key genes activated (median BMD 0.3–4.0):**
-- **IL1B, IL6, TNF** (pro-inflammatory cytokines, BMD 0.3–4.0): Inflammatory response
-- **NLRP3** (NOD-like receptor family pyrin domain containing 3, BMD 0.3–4.0): Inflammasome activation
-- **NFKB1** (nuclear factor kappa-light-chain-enhancer of activated B cells, BMD 0.3–5.0): Master inflammatory transcription factor
-- **STAT3** (signal transducer and activator of transcription 3, BMD 0.3–5.0): JAK-STAT signaling
+**Literature Support**: NLRP3 inflammasome activation is documented as a critical mechanism in liver injury and disease progression (NLRP3 Inflammasome Activation in Liver Disorders, 2025). The coordinated upregulation of IL1B, TNF, and NLRP3 is consistent with pyroptotic pathways.
 
-The GO terms "positive regulation of transcription by RNA polymerase II" (GO:0045944, p=1.83e-10) and "positive regulation of angiogenesis" (GO:0045766, p=9.16e-11) indicate that inflammatory signaling is driving transcriptional reprogramming.
+#### **Phase 4: Cell Cycle Arrest and Apoptotic Priming (BMD 0.3–5.53)**
 
-The enriched KEGG pathways include:
-- **path:hsa05417** (Lipopolysaccharide and IL-17 signaling pathway, p=6.89e-32): 12/17 genes
-- **path:hsa05418** (Toll-like receptor signaling pathway, p=1.41e-28): 11/17 genes
-- **path:hsa04933** (Regulation of lipolysis in adipocytes, p=1.11e-26): 10/14 genes
+Spanning a broad dose range, **p53-dependent cell cycle control and apoptotic pathways** activate:
 
-**Biological interpretation:** The xenobiotic or its metabolites activate pattern recognition receptors (PRRs) and toll-like receptors (TLRs), triggering NF-κB and STAT3-mediated inflammatory responses. This is a **double-edged response**: inflammation is necessary for clearing damaged cells and pathogens, but excessive inflammation contributes to tissue damage. The simultaneous activation of antioxidant and inflammatory pathways suggests the organism is attempting to contain and resolve the xenobiotic insult while managing collateral damage.
+- **TP53** (BMD ~0.3–5.53): p53 upregulation indicates DNA damage sensing or stress-induced activation.
+- **CDKN1A** (BMD ~0.3–5.53): p21 upregulation enforces G1/S checkpoint arrest, preventing proliferation of damaged cells.
+- **BAX** (BMD ~0.3–5.53): Pro-apoptotic BCL2 family member upregulation primes mitochondrial apoptosis.
+- **BCL2** (BMD ~0.3–5.53): Anti-apoptotic BCL2 upregulation may represent an initial survival attempt, but is overwhelmed by BAX at higher doses.
+- **CASP3** (BMD ~0.3–5.53): Caspase-3 upregulation indicates apoptotic execution.
 
-**Literature support:** The TNF consensus gene literature notes that "Cardiac arrest in rats leads to a systemic and organ-specific TNFα and cytokine response, with increased biomarkers of injury" (Targeting TNFα-mediated cytotoxicity using thalidomide after, 2022). The IL6 consensus gene literature emphasizes that "Intermittent hypoxia exacerbates NAFLD by promoting ferroptosis via IL6-induced MARCH3-mediated GPX4 ubiquitination" (IL6 Derived from Macrophages under Intermittent Hypoxia Exac, 2024), indicating that IL6 can drive ferroptotic cell death under stress conditions.
+The enrichment of "p53 pathway" (path:hsa05200, median BMD 5.0, 15 genes) and "Apoptosis" (path:hsa05210, median BMD 5.75, 6 genes) confirms this phase. The pathway "TP53 Regulates Transcription of Cell Cycle Genes" (median BMD 5.25) and "TP53 Regulates Transcription of Cell Death Genes" (median BMD 5.75) show dose-dependent progression from cell cycle arrest to apoptosis.
 
-#### **Phase 4: Cell Cycle Arrest and DNA Damage Response (BMD 0.3–5.5)**
+**Literature Support**: p53 activation by xenobiotics is well-documented (p53 attenuates acetaminophen-induced hepatotoxicity, 2018). The RuIII/Q complex study demonstrates that antioxidant interventions reduce p53-mediated apoptosis in testicular and brain tissues (Potential Therapeutic Effects of New Ruthenium (III) Complex, 2021).
 
-As doses increase, evidence of cellular stress accumulates, triggering p53-mediated cell cycle arrest and DNA damage responses.
+#### **Phase 5: Hypoxic Stress and Angiogenic Response (BMD 0.3–7.2)**
 
-**Key genes activated (median BMD 0.3–5.5):**
-- **TP53** (tumor protein p53, BMD 0.3–5.53): Master regulator of cell cycle and apoptosis
-- **CDKN1A** (cyclin-dependent kinase inhibitor 1A/p21, BMD 0.3–5.53): p53-induced cell cycle arrest
-- **HIF1A** (hypoxia-inducible factor 1-alpha, BMD 0.3–6.72): Stress-responsive transcription factor
+Concurrent with apoptotic activation, **hypoxia-inducible factor (HIF1A) signaling** emerges:
 
-The GO terms "negative regulation of cell population proliferation" (GO:0008285, p=3.84e-12) and "TP53 Regulates Transcription of Cell Cycle Genes" (median BMD 5.25) indicate that p53 is driving cell cycle arrest in response to accumulated damage.
+- **HIF1A** (BMD ~0.3–7.2): Upregulation indicates tissue hypoxia or metabolic stress.
+- **VEGFA** (BMD ~0.3–7.2): Vascular endothelial growth factor upregulation represents an attempt to restore tissue perfusion.
 
-**Biological interpretation:** TP53 activation represents a critical **transition point** from adaptive to potentially adverse responses. p53 is activated in response to DNA damage, oxidative stress, and oncogenic signals. The induction of CDKN1A (p21) causes G1/S cell cycle arrest, allowing time for DNA repair. This is still a **protective response** at this dose range, as it prevents replication of damaged DNA. However, if damage is irreparable, p53 will shift toward pro-apoptotic signaling.
+The GO term "response to hypoxia" (p=5.66e-20, 15 genes) and pathway enrichment for "HIF-1 signaling pathway" (path:hsa04066, median BMD 5.0) confirm this response. This may reflect either direct hypoxic stress or secondary hypoxia from inflammatory vascular dysfunction.
 
-**Literature support:** The TP53 consensus gene literature notes that "The RuIII/Q complex has potent antioxidant and anti-inflammatory effects, reducing oxidative stress and apoptosis in testicular and brain tissues" (Potential Therapeutic Effects of New Ruthenium (III) Complex, 2021), and that "RuIII/Q administration ameliorates aging neurotoxicity and reproductive toxicity induced by D-galactose" (ibid.), indicating that TP53-mediated apoptosis is a key mechanism of toxicity in multiple tissues.
+#### **Phase 6: Tissue Remodeling and Fibrotic Signaling (BMD 2.5–7.2)**
 
-#### **Phase 5: Apoptosis and Cell Death (BMD 4.0–8.5)**
+At higher doses, **transforming growth factor-β (TGF-β) signaling** and tissue remodeling pathways activate:
 
-At higher doses, the response shifts decisively toward apoptosis and programmed cell death, indicating that adaptive mechanisms have been overwhelmed.
+- **TGFB1** (BMD ~0.3–7.2): TGF-β upregulation drives epithelial-mesenchymal transition (EMT) and fibrotic responses.
+- **STAT3** (BMD ~0.3–8.75): Signal transducer and activator of transcription 3 upregulation supports both inflammatory and fibrotic signaling.
 
-**Key genes activated (median BMD 4.0–8.5):**
-- **BAX** (BCL2-associated X-protein, BMD 0.3–7.39): Pro-apoptotic BCL2 family member
-- **BCL2** (B-cell lymphoma 2, BMD 0.3–5.53): Anti-apoptotic BCL2 family member (paradoxically upregulated)
-- **CASP3** (caspase-3, BMD 0.3–7.39): Executioner caspase
-- **TGFB1** (transforming growth factor beta 1, BMD 0.3–5.53): Pleiotropic cytokine with pro-apoptotic and pro-fibrotic roles
+The enrichment of "TGF-beta signaling pathway" (path:hsa04350, median BMD 12.5) at higher doses suggests that if exposure continues, fibrotic complications may develop.
 
-The GO terms "positive regulation of apoptotic process" (GO:0043065, p=7.04e-18) and "neuron apoptotic process" (GO:0051402, p=2.83e-11) are highly enriched. The KEGG pathway "Apoptosis" (path:hsa05210, median BMD 5.75) shows 6 genes with median BMD 5.75.
+#### **Phase 7: Metabolic Stress and Autophagy (BMD 4.5–10.5)**
 
-**Biological interpretation:** The upregulation of BAX and CASP3 indicates activation of the intrinsic (mitochondrial) apoptotic pathway. The paradoxical upregulation of BCL2 (an anti-apoptotic gene) alongside BAX suggests that the cell is in a state of apoptotic conflict—attempting to survive while simultaneously being driven toward death. This is characteristic of severe cellular stress where pro-apoptotic signals overwhelm anti-apoptotic defenses. The activation of CASP3 (the executioner caspase) indicates that apoptosis is proceeding to completion.
+At the highest doses, **metabolic stress pathways** become prominent:
 
-**Literature support:** The BCL2 consensus gene literature notes that "The BCL2 selective inhibitor venetoclax induces rapid onset apoptosis of CLL cells in patients via a TP53-independent mechanism" (The BCL2 selective inhibitor venetoclax induces rapid onset apoptosis of CLL cells in patients via a TP53-independent mechanism, 2016), and the BAX literature emphasizes that "Cadmium affects Bcl-2 family proteins, altering cell survival mechanisms" (Heavy metals: toxicity and human health effects, 2024). The CASP3 consensus gene literature notes that "Whey protein (WP) pre-treatment significantly alleviates thioacetamide (TAA)-induced cardiotoxicity in male albino rats by reducing oxidative stress, inflammatory response, and apoptotic markers" (The cardioprotective effect of whey protein against thioacet, 2025), indicating that CASP3 activation is a key mechanism of tissue damage.
+- **SIRT1** (BMD ~0.4–5.27): NAD+-dependent deacetylase upregulation indicates metabolic sensing and potential autophagy activation.
+- **SQSTM1** (BMD ~0.3–5.53): Sequestosome-1 (p62) upregulation indicates autophagic flux and selective autophagy.
+- **GDF15** (BMD ~0.3–10.5): Growth differentiation factor 15 upregulation is a marker of mitochondrial stress and metabolic dysfunction.
 
-#### **Phase 6: Tissue Remodeling and Fibrosis (BMD 5.0–13.5)**
+The enrichment of "Autophagy" pathways (path:hsa04140, median BMD 3.5) and "Mitophagy" (path:hsa04137, median BMD 3.5) confirms this response. SIRT1 upregulation is consistent with caloric restriction-like metabolic adaptation (Moderate calorie restriction attenuates age-associated alterations, 2018).
 
-At the highest doses, genes involved in tissue remodeling, fibrosis, and angiogenesis are activated, indicating chronic tissue damage and attempted repair.
+#### **Phase 8: Senescence-Associated Secretory Phenotype (SASP) (BMD 8.5–10.25)**
 
-**Key genes activated (median BMD 5.0–13.5):**
-- **VEGFA** (vascular endothelial growth factor A, BMD 0.3–7.39): Angiogenesis and vascular permeability
-- **TGFB1** (transforming growth factor beta 1, BMD 0.3–5.53): Pro-fibrotic cytokine
-- **GDF15** (growth differentiation factor 15, BMD 0.3–6.25): Stress-responsive growth factor
-- **SQSTM1** (sequestosome 1/p62, BMD 0.3–4.5): Autophagy adaptor and NRF2 regulator
+At the highest doses, markers of cellular senescence emerge:
 
-The GO terms "positive regulation of angiogenesis" (GO:0045766, p=9.16e-11) and "negative regulation of fat cell differentiation" (GO:0045599, p=2.04e-10) indicate that tissue remodeling is occurring.
+- **CDKN1A** (BMD ~0.3–5.53): p21 upregulation at very high doses may reflect senescence rather than apoptosis.
+- The pathway "Senescence-Associated Secretory Phenotype (SASP)" (median BMD 10.25) indicates that surviving cells adopt a senescent phenotype, characterized by chronic inflammatory secretion.
 
-**Biological interpretation:** The upregulation of VEGFA and TGFB1 indicates activation of tissue repair mechanisms, including angiogenesis (new blood vessel formation) and fibrosis (excessive collagen deposition). GDF15 is a stress-responsive cytokine that is upregulated in response to severe cellular damage and is associated with aging and disease. The activation of SQSTM1 (p62) indicates that autophagy is being mobilized to clear damaged organelles and proteins. This phase represents **maladaptive responses** where the tissue is attempting to repair damage but is instead accumulating fibrotic tissue and undergoing pathological remodeling.
-
-**Literature support:** The VEGFA consensus gene literature notes that "Nanocurcumin (CUR-NP) can mitigate doxorubicin-induced nephrotoxicity in rats by modulating VEGF and AhR pathways" (Aryl Hydrocarbon Receptor (AhR) and Vascular Endothelial Gro, 2026), indicating that VEGFA upregulation is a key mechanism of tissue damage in xenobiotic-induced nephrotoxicity.
-
-#### **Phase 7: Circadian Disruption (BMD 2.0–2.25)**
-
-Notably, genes involved in circadian clock regulation (CLOCK, BMAL1) are **downregulated** at BMD 2.0–2.25, indicating disruption of circadian rhythms. This is a unique finding not typically associated with xenobiotic toxicity.
-
-**Key genes downregulated:**
-- Circadian clock genes (path:hsa04922, median BMD 2.25, mostly DOWN)
-
-**Biological interpretation:** Circadian disruption is an emerging marker of systemic toxicity. Circadian rhythms regulate numerous physiological processes, including metabolism, immune function, and DNA repair. Disruption of circadian rhythms can impair the organism's ability to mount appropriate stress responses and repair damage. This suggests that the xenobiotic is affecting not only direct toxicity pathways but also fundamental regulatory mechanisms.
-
----
-
-## 2. ORGAN-LEVEL PREDICTION
-
-### Primary Target Organs
-
-Based on the gene expression patterns and organ-specific enrichment analysis, the following organs are predicted to be most severely affected:
-
-#### **1. LIVER (45.06x enriched, 32 genes)**
-
-**Enrichment signature:**
-- AHR, BAX, BCL2, CASP3, CAT, CDKN1A, CYP1A1, CYP1B1, GCLC, GPX1, HMOX1, IL1B, IL6, KEAP1, NFE
-
----
-
-## Run 2 (38.9s)
-
-# COMPREHENSIVE TOXICOGENOMICS INTERPRETATION REPORT
-
-## 1. BIOLOGICAL RESPONSE NARRATIVE
-
-### Dose-Ordered Progression of Molecular Events
-
-The dose-response analysis reveals a highly organized temporal sequence of molecular events spanning from BMD 0.2 to 20, with distinct phases of adaptive stress response transitioning to overt cellular damage.
-
-#### **Phase 1: Xenobiotic Recognition and Initial Defense (BMD 0.2–0.6)**
-
-At the lowest effective doses (BMD 0.2–0.35), the aryl hydrocarbon receptor (AhR) signaling pathway is activated, with upregulation of **AHR, CYP1A1, and CYP1B1**. This represents the primary xenobiotic sensing mechanism. The median BMD of 0.35 for AhR signaling indicates rapid recognition of the stressor.
-
-Concurrent with AhR activation, the **NFE2L2 (Nrf2) antioxidant response element (ARE) pathway** becomes engaged (BMD 0.3–0.55), with upregulation of **NFE2L2, KEAP1, NQO1, and HMOX1**. This phase represents the cell's attempt to mount protective antioxidant defenses. The upregulation of KEAP1 alongside NFE2L2 is noteworthy—while KEAP1 is classically described as a negative regulator of Nrf2, its coordinated upregulation suggests activation of the entire Nrf2-KEAP1 regulatory axis in response to oxidative stress (Hesperetin ameliorates hepatic oxidative stress, 2021).
-
-The metabolic detoxification pathway (path:hsa01100, median BMD 0.5) is activated early, indicating Phase I and Phase II enzyme induction. This includes upregulation of cytochrome P450 enzymes and conjugation enzymes, consistent with the xenobiotic metabolism response.
-
-**Biological interpretation**: At this dose range, the organism is mounting an adaptive response to xenobiotic exposure. The activation of AhR and Nrf2 pathways represents the molecular initiating event (MIE) and the first key event in the adverse outcome pathway.
-
-#### **Phase 2: Oxidative Stress Response and Cytoprotection (BMD 0.4–2.0)**
-
-As doses increase to BMD 0.4–2.0, the response broadens to include comprehensive antioxidant defense mechanisms:
-
-- **Oxidative stress response genes** (GO:0006979) including **CAT, GPX1, SOD1, SOD2, GCLC** show upregulation
-- **HMOX1 (heme oxygenase-1)** expression increases, a key cytoprotective enzyme
-- **SIRT1** (NAD+-dependent histone deacetylase) is upregulated, indicating activation of metabolic stress sensing and mitochondrial biogenesis pathways
-
-The upregulation of SIRT1 is particularly significant. Literature evidence indicates that SIRT1 functions in the **IRS2-AKT-TP53-SIRT1-DNMT1 pathway**, where it regulates mitochondrial function and biogenesis (Abstract P3198: Spermidine Ameliorates Aortic Valve Degeneration, 2023). This suggests that at moderate doses, the organism is attempting to preserve mitochondrial integrity and energy production.
-
-The **circadian clock pathway** shows downregulation at BMD 2–2.25, with decreased expression of circadian genes. This may reflect metabolic reprogramming in response to stress, as circadian disruption is often associated with cellular stress responses.
-
-**Biological interpretation**: This phase represents the peak of adaptive/protective responses. The organism is attempting to neutralize oxidative stress through multiple complementary mechanisms: direct antioxidant enzyme activity, metabolic reprogramming, and mitochondrial preservation.
-
-#### **Phase 3: Stress Signal Integration and Inflammatory Priming (BMD 2.0–4.0)**
-
-At BMD 2.0–4.0, a critical transition occurs. While antioxidant defenses remain active, inflammatory signaling begins to emerge:
-
-- **NF-κB signaling** (path:hsa04066, median BMD 5.0) shows upregulation of **NFKB1, TNF, IL1B, IL6**
-- **STAT3 signaling** is activated, indicating JAK-STAT pathway engagement
-- **Hypoxia response** (GO:0001666) genes including **HIF1A** show increased expression
-
-The upregulation of **TNF** and **IL1B** at this dose range is significant. Literature evidence demonstrates that TNF-α and IL-1β are key mediators of systemic inflammatory responses to cellular stress (Targeting TNFα-mediated cytotoxicity using thalidomide after cardiac arrest, 2022). The activation of these cytokines suggests that the adaptive phase is transitioning toward inflammatory signaling.
-
-**HIF1A** (hypoxia-inducible factor 1-alpha) upregulation indicates metabolic stress and potential mitochondrial dysfunction. HIF1A is a master regulator of hypoxic responses and is activated under conditions of reduced ATP availability and oxidative stress.
-
-**Biological interpretation**: This phase represents the transition from purely adaptive responses to stress signal amplification. The organism is now integrating multiple stress signals through NF-κB and STAT3, which serve as decision points between cell survival and cell death pathways.
-
-#### **Phase 4: Apoptotic Pathway Activation and Cell Death Commitment (BMD 4.0–6.0)**
-
-At BMD 4.0–6.0, genes associated with apoptosis and cell death become prominently upregulated:
-
-- **TP53** (tumor suppressor p53) shows upregulation across multiple pathways
-- **BAX** (pro-apoptotic BCL2 family member) is upregulated
-- **CASP3** (caspase-3, the executioner caspase) shows increased expression
-- **CDKN1A** (p21, a p53 target gene) is upregulated, indicating cell cycle arrest
-
-The upregulation of **TP53 Regulates Transcription of Cell Death Genes** (median BMD 5.25) and **TP53 Regulates Transcription of Cell Cycle Genes** (median BMD 5.25) indicates that p53-dependent apoptotic pathways are being activated.
-
-The **BCL2 family balance** shifts toward pro-apoptotic signaling: while **BCL2** (anti-apoptotic) remains upregulated, the upregulation of **BAX** (pro-apoptotic) suggests that the balance is tipping toward cell death. Literature evidence indicates that "The BCL2 selective inhibitor venetoclax induces rapid onset apoptosis of CLL cells in patients via a TP53-independent mechanism" (The BCL2 selective inhibitor venetoclax, 2016), suggesting that BAX/BCL2 balance is a critical determinant of cell fate.
-
-The **positive regulation of apoptotic process** (GO:0043065, p=7.04e-18) is highly enriched, with genes including **AHR, BAX, BCL2, CASP3, HIF1A, IL1B, IL6, SIRT1, TGFB1, TNF, TP53**.
-
-**Biological interpretation**: This phase represents the commitment to cell death. The upregulation of p53 and its target genes, combined with BAX upregulation and CASP3 activation, indicates that apoptotic pathways are being engaged. This is the critical transition point from adaptive to adverse effects.
-
-#### **Phase 5: Tissue Remodeling and Fibrotic Responses (BMD 6.0–10.0)**
-
-At higher doses (BMD 6.0–10.0), genes associated with tissue remodeling and fibrosis become prominent:
-
-- **TGFB1** (transforming growth factor-beta 1) shows sustained upregulation
-- **VEGFA** (vascular endothelial growth factor A) is upregulated
-- **Angiogenesis pathways** (GO:0045766) are activated
-- **Senescence-associated secretory phenotype (SASP)** genes are upregulated (median BMD 10.25)
-
-The upregulation of TGFB1 is particularly significant, as TGF-β is a master regulator of fibrotic responses. The concurrent upregulation of VEGFA suggests attempts at tissue repair and neovascularization, but in the context of sustained apoptosis and inflammation, these responses may contribute to pathological remodeling rather than tissue regeneration.
-
-The activation of **SASP** (senescence-associated secretory phenotype) at BMD 8.5–10.2 indicates that cells are entering senescence—a state of permanent cell cycle arrest accompanied by secretion of pro-inflammatory cytokines. This is consistent with the literature on aging and chronic toxicity.
-
-#### **Phase 6: Systemic Immune and Metabolic Dysfunction (BMD 8.0–20)**
-
-At the highest doses (BMD 8.0–20), the response becomes increasingly systemic:
-
-- **Inflammasome pathways** (CLEC7A/inflammasome pathway, Inflammasomes, median BMD 12.0) are activated, with upregulation of **NLRP3**
-- **Immune cell activation pathways** (multiple immune-related KEGG pathways) show upregulation
-- **Metabolic pathways** (lipid metabolism, amino acid metabolism) show dysregulation
-
-The activation of **NLRP3 inflammasome** is particularly significant. The NLRP3 inflammasome is a multi-protein complex that activates caspase-1, leading to the maturation and secretion of IL-1β and IL-18. This represents a shift from intrinsic apoptotic pathways (caspase-3) to innate immune activation (caspase-1).
-
-**Biological interpretation**: At the highest doses, the response transitions from organ-specific toxicity to systemic immune and metabolic dysfunction. The activation of inflammasomes suggests that the tissue damage has become extensive enough to trigger danger-associated molecular patterns (DAMPs) and activate innate immunity.
-
----
-
-## 2. ORGAN-LEVEL PREDICTION
-
-### Primary Target Organs
-
-Based on the integration of gene expression patterns, organ-specific gene annotations, and literature evidence, the following organs are predicted to be most severely affected:
-
-#### **LIVER (45.06x enrichment, 28 genes)**
-
-**Evidence:**
-- Highest enrichment score among major organs
-- Genes: AHR, BAX, BCL2, CASP3, CAT, CDKN1A, CYP1A1, CYP1B1, GCLC, GPX1, HIF1A, HMOX1, IL1B, IL6, KEAP1, NFE2L2, NFKB1, NQO1, PPARA, SOD1, SOD2, STAT3, TGFB1, TNF, TP53, VEGFA, and others
-
-**Mechanism:**
-The liver is the primary organ for xenobiotic metabolism and detoxification. The upregulation of **CYP1A1, CYP1B1, CYP3A4** (Phase I enzymes) and **GCLC, NQO1** (Phase II enzymes) indicates robust metabolic activation. However, the concurrent upregulation of oxidative stress response genes (**CAT, GPX1, SOD1, SOD2, HMOX1**) and apoptotic genes (**BAX, CASP3, TP53**) suggests that the liver is experiencing significant oxidative stress and hepatocellular injury.
-
-The upregulation of **PPARA** (peroxisome proliferator-activated receptor alpha) is particularly relevant to liver toxicity. Literature evidence indicates that "Fenofibrate differentially activates PPARα-mediated lipid metabolism in rat liver and kidney, leading to organ-specific toxicity mechanisms" (Fenofibrate differentially activates PPARα-mediated lipid metabolism, 2025). This suggests that the xenobiotic may be activating lipid metabolism pathways in the liver, potentially leading to hepatic steatosis or lipotoxicity.
-
-The upregulation of **TGFB1** and **VEGFA** at higher doses suggests potential progression toward hepatic fibrosis, a chronic consequence of repeated hepatocellular injury.
-
-**Literature Support:**
-- "New molecular and biochemical insights of doxorubicin-induced hepatotoxicity" (2020, cited 215x) identifies HMOX1, SOD1, CAT, and GPX1 as key markers of hepatic oxidative stress
-- "Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation in Rat Liver" (2020) demonstrates that AHR and PPARA activation can predict drug-induced liver injury (DILI) with high sensitivity and specificity
-- "Hesperetin ameliorates hepatic oxidative stress and inflammation via the PI3K/AKT-Nrf2-ARE pathway" (2021, cited 331x) identifies the NFE2L2-KEAP1-NQO1-HMOX1 axis as central to hepatic antioxidant defense
-
-**Confidence:** **HIGH** – The liver is a consensus target organ for xenobiotic toxicity, with strong literature support and comprehensive gene expression evidence.
-
----
-
-#### **KIDNEY (75.59x enrichment, 28 genes)**
-
-**Evidence:**
-- Second-highest enrichment score
-- Genes: AHR, BAX, BCL2, CASP3, CDKN1A, CYP1A1, CYP1B1, GCLC, GPX1, HIF1A, HMOX1, IL1B, IL6, KEAP1, NFE2L2, NFKB1, NQO1, SOD1, SOD2, STAT3, TGFB1, TNF, TP53, VEGFA, and others
-
-**Mechanism:**
-The kidney is a major site of xenobiotic filtration and reabsorption, making it vulnerable to both the parent compound and reactive metabolites. The upregulation of **CYP1A1, CYP1B1** in kidney tissue suggests local metabolic activation of the xenobiotic.
-
-The strong upregulation of **HMOX1** in kidney is particularly significant. Heme oxygenase-1 is a key cytoprotective enzyme in renal tubular epithelium (organ signature: 671.56x enriched for HMOX1). Literature evidence indicates that "Cadmium exposure in human neuronal cells (SH-SY5Y) leads to early deregulation of genes and processes, including activation of p53 signaling pathway, heat shock proteins, metallothioneins" (Neuronal specific and non-specific responses to cadmium, 2019), and similar mechanisms are likely operative in renal tissue.
-
-The upregulation of **VEGFA** in kidney is noteworthy, as it may reflect attempts at glomerular repair or, conversely, pathological angiogenesis in response to glomerular injury.
-
-Recent literature indicates that "Nanocurcumin (CUR-NP) can mitigate doxorubicin-induced nephrotoxicity in rats by modulating VEGF and AhR pathways" (Aryl Hydrocarbon Receptor (AhR) and Vascular Endothelial Growth Factor, 2026), suggesting that AhR and VEGF signaling are central to renal toxicity mechanisms.
-
-**Confidence:** **HIGH** – The kidney is a well-established target organ for xenobiotic toxicity, with strong evidence from both the gene expression data and literature.
-
----
-
-#### **LUNG (44.62x enrichment, 25 genes)**
-
-**Evidence:**
-- Genes: BAX, BCL2, CASP3, CAT, CDKN1A, CYP1A1, CYP3A4, GCLC, GPX1, HIF1A, HMOX1, IL1B, IL6, KEAP1, NFE2L2, NFKB1, NQO1, SOD1, SOD2, STAT3, TGFB1, TNF, TP53, VEGFA, and others
-
-**Mechanism:**
-The lung is a major site of xenobiotic exposure (if the exposure is via inhalation) and a critical organ for gas exchange. The upregulation of **CYP1A1** in lung epithelium (organ signature: 335.78x enriched) indicates local metabolic activation.
-
-The strong upregulation of **HMOX1, IL6, NFE2L2** in lung tissue (287.81x enriched) suggests significant oxidative stress and inflammatory responses. The concurrent upregulation of **TGFB1** and **VEGFA** at higher doses suggests potential progression toward pulmonary fibrosis.
-
-Literature evidence indicates that "Curcumin protects against oxidative stress and lung damage caused by cadmium (Cd) + arsenic (As)" (Curcu
-
----
-
-## Run 3 (35.2s)
-
-# COMPREHENSIVE TOXICOGENOMICS INTERPRETATION REPORT
-
-## 1. BIOLOGICAL RESPONSE NARRATIVE
-
-### Dose-Ordered Progression of Molecular Events
-
-The dose-response analysis reveals a highly organized temporal progression of biological responses, spanning from early xenobiotic sensing at BMD 0.2–0.5 through adaptive stress responses (BMD 0.5–4.0) to late-stage apoptotic and inflammatory signaling (BMD 4.0–20). This pattern is consistent with a classical toxicological cascade where initial molecular recognition triggers increasingly severe cellular dysfunction.
-
-#### **Phase 1: Xenobiotic Recognition and Aryl Hydrocarbon Signaling (BMD 0.2–0.35)**
-
-The earliest responsive genes (median BMD 0.35) cluster in aryl hydrocarbon receptor (AhR) signaling, with upregulation of **CYP1A1**, **CYP1B1**, and **AHR** itself. This represents the molecular initiating event (MIE) for xenobiotic exposure. The AhR is a ligand-activated transcription factor that responds to both exogenous chemicals (polycyclic aromatic hydrocarbons, dioxins, halogenated compounds) and endogenous metabolites. 
-
-The literature strongly supports AhR activation as an early biomarker of xenobiotic exposure. Specifically, Quantitative Transcriptional Biomarkers of Xenobiotic Receptor Activation (2020) demonstrates that "gene expression panels associated with key xenobiotic nuclear receptors, stress response mediators, and innate immune responses are proposed as quantitative mechanistic biomarkers for DILI assessment." The rapid induction of CYP1A1 (a prototypical AhR target) at BMD 0.2 indicates the organism is actively metabolizing the xenobiotic, likely generating reactive metabolites.
-
-#### **Phase 2: Oxidative Stress Sensing and NFE2L2 Activation (BMD 0.3–0.55)**
-
-Immediately following xenobiotic recognition, **NFE2L2** (Nrf2) and its regulatory partner **KEAP1** show dose-dependent upregulation (median BMD 0.55). This represents activation of the canonical antioxidant response element (ARE) pathway. Under basal conditions, KEAP1 sequesters Nrf2 in the cytoplasm; however, electrophilic xenobiotics and reactive oxygen species (ROS) cause KEAP1 to release Nrf2, allowing nuclear translocation and binding to ARE sequences in promoters of cytoprotective genes.
-
-Downstream Nrf2 targets appear at slightly higher doses:
-- **NQO1** (NAD(P)H quinone oxidoreductase 1, BMD ~0.5): catalyzes two-electron reduction of quinones, preventing one-electron reduction that generates ROS
-- **HMOX1** (heme oxygenase-1, BMD ~0.4–0.6): catalyzes heme degradation to biliverdin, carbon monoxide, and free iron; biliverdin is a potent antioxidant
-- **GCLC** (glutamate-cysteine ligase catalytic subunit, BMD ~0.5): rate-limiting enzyme in glutathione synthesis
-
-The literature on Nrf2 is extensive. Heavy metals: toxicity and human health effects (2024) notes that "Arsenic binds directly to thiols, affecting Nrf2 activity in response to oxidative stress," and LKB1 and KEAP1/NRF2 pathways cooperatively promote metabolic reprogramming (2019) demonstrates that KEAP1-Nrf2 interactions are central to metabolic adaptation under stress. The KEAP1‐NRF2 protein–protein interaction inhibitors review (2022) emphasizes the therapeutic potential of this pathway, suggesting that its activation at low doses represents a protective response.
-
-#### **Phase 3: Metabolic and Mitochondrial Adaptation (BMD 0.5–2.0)**
-
-At BMD 0.5–2.0, genes involved in metabolic reprogramming and mitochondrial function show coordinated upregulation:
-- **SIRT1** (sirtuin 1, BMD ~0.5–1.0): NAD+-dependent histone deacetylase and metabolic sensor
-- **PPARA** (peroxisome proliferator-activated receptor alpha, BMD ~1.0–2.0): nuclear receptor controlling lipid metabolism and mitochondrial biogenesis
-- **SOD1**, **SOD2**, **CAT**, **GPX1**: antioxidant enzymes
-
-This phase reflects metabolic reprogramming to support increased detoxification capacity. The Nucleocytoplasmic Shuttling of SIRT1 paper (2007, cited 760×) demonstrates that SIRT1 acts as a metabolic sensor, regulating both histone deacetylation and protein deacetylation in response to cellular stress. The upregulation of PPARA at BMD ~1.0–2.0 is consistent with activation of the peroxisomal and mitochondrial biogenesis program, which increases fatty acid oxidation and energy production—metabolic changes necessary to fuel the detoxification response.
-
-Notably, **circadian clock genes** (BMD 2.0–2.25) show **downregulation** at this dose range. This is a critical observation: disruption of circadian rhythmicity is an early sign of systemic stress and may impair the organism's ability to maintain homeostasis through time-dependent metabolic regulation.
-
-#### **Phase 4: p53-Mediated Stress Response and Cell Cycle Arrest (BMD 2.5–4.0)**
-
-At BMD 2.5–4.0, **TP53** and its transcriptional targets show robust upregulation:
-- **TP53** itself (BMD ~3.0–4.0)
-- **CDKN1A** (p21, cyclin-dependent kinase inhibitor 1A, BMD ~2.0–4.0): p53-induced cell cycle checkpoint inhibitor
-- **GDF15** (growth differentiation factor 15, BMD ~2.0–3.0): p53-induced stress cytokine
-
-This phase represents a transition from adaptive to potentially adverse responses. p53 is the "guardian of the genome," activated by DNA damage, oxidative stress, and other cellular insults. The Selective cytotoxicity of intracellular amyloid β peptide1–42 through p53 and Bax paper (2002, cited 452×) demonstrates that p53 activation can trigger apoptosis through BAX upregulation. The TP53 Regulates Transcription of Cell Cycle Genes pathway (median BMD 5.25) shows that p53 induces cell cycle arrest via CDKN1A, allowing time for DNA repair or triggering apoptosis if damage is irreparable.
-
-The upregulation of **GDF15** at BMD 2.0–3.0 is particularly significant. GDF15 is a stress-induced cytokine that signals systemic metabolic dysfunction and is associated with aging, inflammation, and tissue damage. Its early induction suggests that the organism is experiencing metabolic stress beyond what can be compensated by antioxidant defenses.
-
-#### **Phase 5: Apoptotic Signaling and Mitochondrial Dysfunction (BMD 4.0–6.0)**
-
-At BMD 4.0–6.0, pro-apoptotic genes show strong upregulation:
-- **BAX** (BCL2-associated X protein, BMD ~3.5–6.0): pro-apoptotic member of the BCL2 family
-- **CASP3** (caspase-3, BMD ~4.0–6.0): executioner caspase
-- **BCL2** (B-cell lymphoma 2, BMD ~3.5–6.0): anti-apoptotic protein (paradoxically upregulated, likely as a failed compensatory response)
-
-The Activation of BH3-only proteins pathway (median BMD 5.75) and TP53 Regulates Transcription of Cell Death Genes pathway (median BMD 5.75) indicate that p53 is now driving apoptotic gene expression. The upregulation of both BAX and BCL2 suggests a cellular conflict: the cell is attempting to survive (BCL2 upregulation) while simultaneously being driven toward apoptosis (BAX/CASP3 upregulation). This is consistent with a dose range where cellular damage exceeds repair capacity.
-
-The BCL2 selective inhibitor venetoclax paper (2016, cited 276×) demonstrates that BCL2 and BAX are in dynamic equilibrium; when BAX predominates, apoptosis proceeds. The ratio of BAX:BCL2 at these doses likely favors apoptosis.
-
-#### **Phase 6: Inflammatory and Innate Immune Activation (BMD 4.0–8.0)**
-
-Concurrent with apoptotic signaling, inflammatory cytokines and innate immune mediators show robust upregulation:
-- **IL1B**, **IL6**, **TNF** (tumor necrosis factor, BMD ~4.0–8.0): pro-inflammatory cytokines
-- **NLRP3** (NOD-like receptor family pyrin domain containing 3, BMD ~4.0–6.0): inflammasome component
-- **NFKB1** (nuclear factor kappa B subunit 1, BMD ~4.0–8.0): master inflammatory transcription factor
-
-The CLEC7A/inflammasome pathway and Inflammasomes pathways (median BMD 12.0) indicate activation of pattern recognition receptors and inflammasome assembly. This is consistent with damage-associated molecular patterns (DAMPs) being released from apoptotic cells, triggering innate immune responses.
-
-The literature strongly supports this cascade. IL6 Derived from Macrophages under Intermittent Hypoxia Exacerbates NAFLD (2024) demonstrates that "Intermittent hypoxia exacerbates NAFLD by promoting ferroptosis via IL6-induced MARCH3-mediated GPX4 ubiquitination," showing that IL6 can drive ferroptotic cell death. Cadmium-Induced Toxicity in Hepatic Macrophages (2026) notes that "Cadmium-induced toxicity in hepatic macrophages leads to oxidative stress, disruption of calcium homeostasis, and activation of transcription factors such as NF-κB and Nrf2," indicating that inflammatory activation is a hallmark of heavy metal toxicity.
-
-#### **Phase 7: Tissue Remodeling and Fibrotic Signaling (BMD 6.0–10.0)**
-
-At higher doses (BMD 6.0–10.0), genes involved in tissue remodeling and fibrosis show upregulation:
-- **TGFB1** (transforming growth factor beta 1, BMD ~4.0–8.0): master regulator of fibrosis
-- **VEGFA** (vascular endothelial growth factor A, BMD ~4.0–8.0): angiogenic factor (also involved in vascular permeability and inflammation)
-- **STAT3** (signal transducer and activator of transcription 3, BMD ~4.0–8.0): transcription factor driving IL6 signaling and fibrotic responses
-
-The positive regulation of angiogenesis pathway (GO:0045766, FDR=1.83e-09) includes VEGFA, HIF1A, and HMOX1, suggesting that the tissue is attempting to increase blood flow to damaged areas. However, VEGFA also increases vascular permeability, potentially exacerbating inflammation and edema.
-
-TGFB1 is a central mediator of fibrotic responses. Chronic upregulation of TGFB1 drives epithelial-to-mesenchymal transition (EMT) and accumulation of extracellular matrix, leading to organ fibrosis. The Cardiomyocyte gene programs encoding morphological and functional signatures paper (2018, cited 226×) demonstrates that TGFB1 upregulation is associated with cardiac hypertrophy and dysfunction.
-
-#### **Phase 8: Late-Stage Adaptive Failure and Senescence (BMD 8.0–20)**
-
-At the highest doses (BMD 8.0–20), genes associated with senescence and cellular aging show upregulation:
-- Senescence-Associated Secretory Phenotype (SASP) pathway (median BMD 10.25): includes IL6, TNF, and other pro-inflammatory mediators
-- Multiple cancer-related pathways (BMD 8.0–20): suggesting genomic instability and malignant transformation risk
-
-The Senescence-Associated Secretory Phenotype pathway indicates that cells are entering a state of permanent cell cycle arrest (senescence) while secreting pro-inflammatory factors. This is a terminal state where the cell can no longer divide but continues to drive inflammation and tissue damage.
+This represents a **transition from acute to chronic toxicity** if exposure persists.
 
 ---
 
@@ -385,31 +106,424 @@ The Senescence-Associated Secretory Phenotype pathway indicates that cells are e
 
 Based on the organ signature enrichment analysis and gene expression patterns, the following organs are predicted to be most severely affected:
 
-#### **Liver (45.06× enrichment, 26 genes)**
+#### **A. LIVER (30.36× enriched, 28 genes)**
 
-**Predicted Effects:** Hepatotoxicity with multi-phase progression from metabolic dysfunction to fibrosis and potential carcinogenesis.
+**Rationale:**
+- The liver is the primary organ of xenobiotic metabolism, and the early activation of CYP1A1, CYP1B1, and Phase II enzymes (GCLC, NQO1) indicates hepatic metabolism of the exposure agent.
+- **NFE2L2** (383 papers, consensus gene) is highly enriched in liver tissue and is critical for hepatoprotection against oxidative stress.
+- **KEAP1** (118 papers) is abundantly expressed in hepatocytes and regulates Nrf2-dependent antioxidant responses.
+- The enrichment of "Drug metabolism - cytochrome P450" pathways (path:hsa05208, median BMD 0.5) is a hallmark of hepatic xenobiotic metabolism.
+- **NLRP3 inflammasome activation** (111 papers, consensus gene) is documented as critical in liver injury: "NLRP3 inflammasome activation plays a critical role in liver injury and disease progression" (NLRP3 Inflammasome Activation in Liver Disorders, 2025).
+- **IL1B** and **TNF** upregulation at BMD 0.4–2.0 indicates hepatic inflammation, consistent with drug-induced liver injury (DILI).
 
-**Supporting Evidence:**
-- The liver is the primary organ of xenobiotic metabolism, and the early upregulation of CYP1A1, CYP1B1, and AHR (all enriched in liver) indicates active Phase I metabolism.
-- Liver-specific genes showing dose-dependent upregulation include: AHR, BAX, BCL2, CASP3, CAT, CDKN1A, CYP1A1, CYP1B1, GCLC, GPX1, HMOX1, IL1B, IL6, KEAP1, NFE2L2, NFKB1, NQO1, PPARA, SIRT1, SOD1, SOD2, STAT3, TGFB1, TNF, TP53, VEGFA.
-- The New molecular and biochemical insights of doxorubicin-induced hepatotoxicity paper (2020, cited 215×) demonstrates that hepatotoxins activate the same cascade: CYP-mediated metabolic activation → ROS generation → Nrf2 activation → p53-mediated apoptosis → hepatocellular necrosis and fibrosis.
-- The Hesperetin ameliorates hepatic oxidative stress paper (2021, cited 331×) shows that hepatotoxins activate the PI3K/AKT-Nrf2-ARE pathway, consistent with the observed NFE2L2 upregulation at BMD 0.3–0.55.
-- The p53 attenuates acetaminophen-induced hepatotoxicity paper (2018) demonstrates that p53 activation can be protective (via CDKN1A-mediated cell cycle arrest) or harmful (via BAX-mediated apoptosis), depending on the dose and timing.
+**Predicted Hepatic Effects:**
+- **Low dose (BMD 0.2–0.55):** Hepatic Phase I/II enzyme induction; Nrf2-dependent antioxidant response; minimal histological change.
+- **Intermediate dose (BMD 0.55–2.0):** Oxidative stress; hepatic inflammation (IL1B, TNF, NFKB1 upregulation); possible hepatocyte apoptosis (BAX, CASP3).
+- **High dose (BMD 2.0–5.53):** Hepatocellular apoptosis (TP53, CDKN1A, CASP3); potential hepatic necrosis; NLRP3-mediated pyroptosis.
+- **Very high dose (BMD >5.53):** Hepatic fibrosis (TGFB1); cirrhosis if exposure is chronic.
 
-**Predicted Progression:**
-- **BMD 0.2–0.5:** Metabolic activation via CYP1A1/1B1; mild oxidative stress
-- **BMD 0.5–2.0:** Nrf2-mediated antioxidant defense; metabolic adaptation via PPARA
-- **BMD 2.0–4.0:** p53 activation; hepatocyte apoptosis begins
-- **BMD 4.0–8.0:** Hepatocellular necrosis; inflammatory infiltration; stellate cell activation
-- **BMD 8.0–20:** Hepatic fibrosis via TGFB1; potential cirrhosis; hepatocellular carcinoma risk
+**Literature Support:** "Rutin (RUT) protects against liver and kidney damage caused by valproic acid (VLP) in rats" (Rutin Protects from Destruction by Interrupting the Pathways, 2021) demonstrates that antioxidant interventions (via NFE2L2 pathway) can prevent hepatotoxicity. The study shows that "RUT treatment decreases oxidative stress, ER stress, inflammation, apoptosis, and autophagy induced by VLP," directly supporting the predicted progression of hepatic injury.
 
-#### **Kidney (75.59× enrichment, 26 genes)**
+#### **B. KIDNEY (41.99× enriched, 28 genes)**
 
-**Predicted Effects:** Nephrotoxicity with glomerular and tubular damage, progressing to chronic kidney disease.
+**Rationale:**
+- The kidney is the second major organ of xenobiotic elimination and is highly susceptible to oxidative stress.
+- **NFE2L2** is enriched in renal tubular epithelium and glomerular mesangial cells (520.17× enriched in "Renal System").
+- **KEAP1** and **NQO1** upregulation indicates renal oxidative stress.
+- **IL1B** and **TNF** upregulation at BMD 0.4–2.0 suggests glomerular inflammation.
+- **NLRP3** inflammasome activation is documented in kidney disease: the pathway "NLRP3 inflammasome" (median BMD 12.0) indicates renal pyroptosis at high doses.
 
-**Supporting Evidence:**
-- The kidney is the second major organ of xenobiotic elimination and is highly susceptible to both direct toxicity (from reactive metabolites) and indirect toxicity (from inflammatory mediators).
-- Kidney-specific genes include: AHR, BAX, BCL2, CASP3, CDKN1A, CYP1A1, CYP1B1, GCLC, GPX1, HMOX1, IL1B, IL6, KEAP1, NFE2L2, NFKB1, NQO1, PPARA, SIRT1, SOD1, SOD2, STAT3, TGFB1, TNF, TP53, VEGFA.
-- The Aryl Hydrocarbon Receptor (AhR) and Vascular Endothelial Growth Factor (VEGF) paper (2026) demonstrates that "Nanocurcumin (CUR-NP) can mitigate doxorubicin-induced nephrotoxicity in rats by modulating VEGF and AhR pathways," showing that AhR and VEGFA are central to neph
+**Predicted Renal Effects:**
+- **Low dose (BMD 0.2–0.55):** Tubular antioxidant response; minimal proteinuria.
+- **Intermediate dose (BMD 0.55–2.0):** Glomerular inflammation; tubular oxidative stress; possible proteinuria.
+- **High dose (BMD 2.0–5.53):** Tubular epithelial cell apoptosis; glomerulonephritis; acute kidney injury (AKI).
+- **Very high dose (BMD >5.53):** Chronic kidney disease (CKD); glomerulosclerosis (TGFB1-mediated fibrosis).
+
+**Literature Support:** The Rutin study demonstrates renal protection via the same antioxidant mechanisms: "Rutin (RUT) protects against liver and kidney damage caused by valproic acid (VLP) in rats," with decreased oxidative stress and apoptosis in renal tissue.
+
+#### **C. BRAIN AND CENTRAL NERVOUS SYSTEM (33.03× enriched, 28 genes)**
+
+**Rationale:**
+- The brain is highly enriched for **NFE2L2** (693.56× enriched in "Cingulate Cortex," "Motor Neurons"), **HMOX1** (462.38× enriched in "Midbrain"), and **NLRP3** (111 papers, consensus gene).
+- **Microglial activation** is indicated by the enrichment of "Microglia" (390.13× enriched, 11 genes including NLRP3, IL1B, IL6, TNF).
+- The GO term "response to xenobiotic stimulus" (p=1.72e-28, 22 genes) includes neuronal genes, indicating direct CNS exposure.
+- **IL1B** and **TNF** upregulation at BMD 0.4–2.0 indicates neuroinflammation.
+- **NLRP3-gasdermin D activation** is documented as essential for BBB disruption: "Microglial NLRP3-gasdermin D activation is essential for peripheral inflammation-induced BBB disruption" (Microglial NLRP3-gasdermin D activation impairs blood-brain barrier, 2025).
+
+**Predicted Neurological Effects:**
+- **Low dose (BMD 0.2–0.55):** Microglial priming; minimal BBB disruption.
+- **Intermediate dose (BMD 0.55–2.0):** Neuroinflammation (IL1
+
+---
+
+## Run 2 (39.4s)
+
+# COMPREHENSIVE TOXICOGENOMICS INTERPRETATION REPORT
+
+## EXECUTIVE SUMMARY
+
+This dose-response analysis reveals a **xenobiotic-induced oxidative stress and inflammatory response** characterized by early activation of the NRF2 antioxidant defense pathway (BMD 0.2–0.55) followed by progressive engagement of apoptotic, inflammatory, and tissue remodeling pathways at higher doses (BMD 2–20). The response pattern is consistent with **exposure to an electrophilic xenobiotic or pro-oxidant agent** that triggers both adaptive cytoprotective mechanisms and, at higher doses, maladaptive inflammatory and cell death responses. The multi-organ involvement, particularly in tissues with high metabolic activity and immune function, suggests systemic toxicity with potential for organ-specific damage in the liver, kidney, nervous system, and gastrointestinal tract.
+
+---
+
+## 1. BIOLOGICAL RESPONSE NARRATIVE: DOSE-ORDERED PROGRESSION
+
+### **Phase 1: Early Adaptive Response (BMD 0.2–0.55) — Xenobiotic Sensing and Antioxidant Defense**
+
+At the lowest effective doses, the transcriptional response is dominated by **aryl hydrocarbon receptor (AhR) signaling and NRF2-KEAP1 pathway activation**, representing the organism's first-line defense against xenobiotic stress.
+
+**Key genes activated:**
+- **CYP1A1, AHR** (BMD 0.2–0.35): Xenobiotic metabolism and sensing
+- **NFE2L2, KEAP1, NQO1, HMOX1** (BMD 0.3–0.55): Antioxidant response element (ARE) pathway
+- **GCLC** (BMD 0.35–0.87): Glutathione synthesis
+
+**Biological interpretation:**
+The early upregulation of **CYP1A1** and **AHR** (median BMD 0.35) indicates recognition of an electrophilic or aryl-containing xenobiotic. This is the canonical response to polycyclic aromatic hydrocarbons (PAHs), dioxins, or similar compounds that activate the AhR ligand-binding domain. Simultaneously, the **NFE2L2-KEAP1 system** (median BMD 0.5–0.55) is engaged, suggesting the xenobiotic or its metabolites generate **reactive oxygen species (ROS)** that oxidize KEAP1 cysteine residues, liberating NFE2L2 for nuclear translocation.
+
+The upregulation of **HMOX1** (heme oxygenase-1), **NQO1** (NAD(P)H quinone oxidoreductase 1), and **GCLC** (glutamate-cysteine ligase catalytic subunit) represents the canonical antioxidant response. These genes encode:
+- **HMOX1**: Catalyzes heme degradation, producing bilirubin (antioxidant) and CO (vasodilator, anti-inflammatory)
+- **NQO1**: Detoxifies quinones and prevents semiquinone formation
+- **GCLC**: Rate-limiting enzyme for glutathione synthesis, the primary cellular antioxidant
+
+**Literature support:**
+The KEAP1-NRF2 system is the master regulator of cellular antioxidant defense (Suzuki & Yamamoto, 2015; cited 1544×). NFE2L2 activation occurs within minutes to hours of oxidative stress exposure and represents an **adaptive, protective response** (Kensler et al., 2007). The early, dose-dependent activation of this pathway at BMD 0.2–0.55 is consistent with **successful adaptive compensation** and is not itself indicative of toxicity.
+
+---
+
+### **Phase 2: Metabolic and Inflammatory Priming (BMD 0.5–2.0) — Sustained Antioxidant Activation with Emerging Inflammation**
+
+As dose increases, the antioxidant response is sustained and broadened, but **inflammatory signaling begins to emerge**.
+
+**Key genes activated:**
+- **Sustained**: NFE2L2, HMOX1, NQO1, GCLC, SOD1, SOD2, GPX1, CAT (antioxidant enzymes)
+- **Emerging**: IL1B, TNF, NFKB1, STAT3 (inflammatory mediators)
+- **Metabolic**: CYP1B1, CYP3A4 (Phase I metabolism)
+
+**Biological interpretation:**
+The persistence and expansion of antioxidant gene expression (median BMD 0.5–2.0) indicates **sustained ROS generation** that cannot be fully compensated by Phase 1 responses. The organism is mounting a **secondary antioxidant defense** through upregulation of superoxide dismutase (SOD1, SOD2), catalase (CAT), and glutathione peroxidase (GPX1).
+
+Concurrently, **inflammatory mediators** (IL1B, TNF, NFKB1, STAT3) begin to increase, suggesting:
+1. **Innate immune activation**: Likely triggered by damage-associated molecular patterns (DAMPs) from oxidatively stressed cells or by direct xenobiotic-immune cell interactions
+2. **NF-κB pathway engagement**: NFKB1 upregulation is consistent with both antioxidant gene regulation (NF-κB cooperates with NRF2 at ARE sites) and pro-inflammatory cytokine production
+3. **STAT3 activation**: Indicates IL-6/JAK-STAT signaling, a hallmark of systemic inflammation
+
+The upregulation of **CYP1B1** (a Phase I enzyme with lower substrate specificity than CYP1A1) suggests the xenobiotic is being metabolized via multiple pathways, potentially generating multiple reactive intermediates.
+
+**Literature support:**
+The KEAP1-NRF2 pathway is intimately linked to NF-κB signaling; NRF2 can suppress NF-κB-driven inflammation through ARE-mediated upregulation of anti-inflammatory genes (Cuadrado et al., 2019). However, when ROS generation exceeds antioxidant capacity, NF-κB becomes hyperactivated, driving pro-inflammatory cytokine production (IL1B, TNF, IL6). This transition from adaptive to maladaptive inflammation is a critical threshold in toxicity (Kensler et al., 2007).
+
+---
+
+### **Phase 3: Circadian Disruption and Metabolic Stress (BMD 2.0–2.25) — Early Tissue Dysfunction**
+
+At BMD 2.0–2.25, a notable **downregulation of circadian clock genes** (CLOCK, BMAL1) occurs, alongside continued inflammatory activation.
+
+**Key genes downregulated:**
+- **Circadian clock pathway** (median BMD 2.25): CLOCK, BMAL1
+
+**Biological interpretation:**
+The suppression of circadian rhythm genes is a **marker of systemic stress and metabolic dysfunction**. Circadian disruption is associated with:
+- Impaired hepatic detoxification (circadian regulation of CYP450 expression)
+- Increased oxidative stress (circadian regulation of antioxidant enzymes)
+- Enhanced inflammatory responses (circadian suppression of NF-κB)
+- Metabolic dysregulation (circadian control of glucose and lipid metabolism)
+
+This suggests the xenobiotic exposure is causing **systemic physiological disruption** beyond local detoxification, indicating that adaptive mechanisms are becoming overwhelmed.
+
+**Literature support:**
+Circadian disruption is a hallmark of systemic toxicity and is observed in response to endocrine disruptors, heavy metals, and persistent organic pollutants (Dominoni et al., 2016). The downregulation of clock genes at BMD 2.0–2.25 suggests the organism has transitioned from **local adaptive responses** to **systemic stress responses**.
+
+---
+
+### **Phase 4: Apoptotic Priming and Cell Cycle Arrest (BMD 2.5–5.5) — Transition to Adaptive Damage Response**
+
+At intermediate-to-higher doses (BMD 2.5–5.5), **p53-mediated apoptotic and cell cycle arrest pathways** become prominently activated.
+
+**Key genes activated:**
+- **TP53, CDKN1A (p21)** (BMD 4.5–5.25): Cell cycle arrest and apoptotic priming
+- **BAX, BCL2, CASP3** (BMD 4.5–5.75): Apoptotic machinery
+- **HIF1A** (BMD 3.5–6.0): Hypoxic stress response
+- **VEGFA** (BMD 4.5–7.2): Angiogenic response
+
+**Biological interpretation:**
+The upregulation of **TP53** and its target gene **CDKN1A** (p21) represents **p53-mediated cell cycle checkpoint activation**. This is a protective response to DNA damage or severe cellular stress, allowing time for repair or triggering apoptosis if damage is irreparable.
+
+The concurrent upregulation of **BAX** (pro-apoptotic) and **BCL2** (anti-apoptotic) suggests **apoptotic priming** — cells are poised for death but not yet committed. This is consistent with a **"point of no return"** in the dose-response, where adaptive mechanisms are insufficient and the organism is initiating controlled cell death to prevent propagation of damaged cells.
+
+The upregulation of **HIF1A** (hypoxia-inducible factor 1-alpha) at BMD 3.5–6.0 is notable because it occurs in the absence of hypoxia, indicating **metabolic stress and mitochondrial dysfunction**. HIF1A activation under normoxic conditions is driven by ROS and inflammatory cytokines and is associated with:
+- Metabolic reprogramming (shift to glycolysis)
+- Angiogenic responses (VEGFA upregulation)
+- Apoptotic sensitization
+
+**Literature support:**
+TP53 is the "guardian of the genome" and is activated in response to DNA damage, oxidative stress, and oncogenic signals (Lane, 1992; cited extensively). The upregulation of TP53 and CDKN1A at BMD 4.5–5.25 is consistent with **p53-mediated checkpoint activation** and represents a **protective response** to prevent propagation of damaged cells. However, the concurrent upregulation of pro-apoptotic genes (BAX, CASP3) suggests that if damage persists, apoptosis will be triggered.
+
+---
+
+### **Phase 5: Inflammatory Amplification and Tissue Remodeling (BMD 5.0–8.5) — Maladaptive Responses**
+
+At higher doses (BMD 5.0–8.5), **inflammatory pathways are fully engaged**, and **tissue remodeling and fibrotic responses** emerge.
+
+**Key genes activated:**
+- **Inflammatory mediators**: IL1B, IL6, TNF, NFKB1, STAT3 (BMD 5.0–8.5)
+- **Inflammasome components**: NLRP3 (BMD 11–12)
+- **Tissue remodeling**: TGFB1 (BMD 5.0–8.5), VEGFA (BMD 4.5–7.2)
+- **Apoptotic execution**: CASP3 (BMD 4.5–5.75)
+
+**Biological interpretation:**
+The sustained and amplified upregulation of **IL1B, IL6, TNF** at BMD 5.0–8.5 represents **systemic inflammatory activation**. These cytokines:
+- Activate endothelial cells and promote vascular permeability
+- Recruit immune cells (neutrophils, macrophages, lymphocytes)
+- Amplify inflammatory signaling through autocrine and paracrine mechanisms
+- Drive tissue remodeling and fibrosis (via TGFB1)
+
+The upregulation of **NLRP3** (at BMD 11–12, the highest dose range) indicates **inflammasome activation**, which is associated with:
+- Pyroptotic cell death (inflammatory form of apoptosis)
+- Amplified IL1B and IL18 production
+- Systemic inflammation and sepsis-like responses
+
+The upregulation of **TGFB1** (transforming growth factor-beta 1) at BMD 5.0–8.5 is particularly significant because TGF-β is a master regulator of:
+- Epithelial-to-mesenchymal transition (EMT)
+- Fibroblast activation and myofibroblast differentiation
+- Extracellular matrix deposition and fibrosis
+- Immunosuppression (paradoxically, despite the pro-inflammatory context)
+
+**Literature support:**
+The transition from adaptive antioxidant responses to maladaptive inflammatory responses is a critical threshold in toxicity. At BMD 5.0–8.5, the organism has exceeded its capacity to compensate, and inflammatory amplification is driving tissue damage. NLRP3 inflammasome activation is a hallmark of severe inflammation and is implicated in liver injury, kidney damage, and neuroinflammation (Guo et al., 2016; cited 2025).
+
+---
+
+### **Phase 6: Systemic Inflammation and Organ Dysfunction (BMD 8.5–13.5) — Overt Toxicity**
+
+At the highest doses (BMD 8.5–13.5), **systemic inflammatory responses are maximal**, and **organ-specific damage pathways** are fully engaged.
+
+**Key genes activated:**
+- **Inflammasome and pyroptosis**: NLRP3, IL1B, IL6, TNF, CASP1 (BMD 11–12)
+- **Apoptotic execution**: BAX, CASP3, TP53 (BMD 4.5–8.5)
+- **Tissue remodeling and fibrosis**: TGFB1, VEGFA, STAT3 (BMD 5.0–8.5)
+- **Senescence-associated secretory phenotype (SASP)**: IL6, TNF, IL1B (BMD 8.5–10.25)
+
+**Biological interpretation:**
+At the highest doses, the response is characterized by:
+1. **Maximal inflammasome activation**: NLRP3-mediated pyroptosis is driving inflammatory cell death and amplifying IL1B/IL18 production
+2. **Apoptotic execution**: Widespread activation of caspase-3 and BAX indicates commitment to apoptotic cell death
+3. **Tissue remodeling**: Sustained TGFB1 upregulation is driving fibrotic responses and EMT
+4. **Senescence**: The upregulation of SASP genes (IL6, TNF, IL1B) at BMD 8.5–10.25 suggests cellular senescence, a state of permanent cell cycle arrest associated with chronic inflammation
+
+This represents **overt organ toxicity** with widespread cell death, inflammation, and tissue remodeling.
+
+**Literature support:**
+At these dose levels, the response has transitioned from adaptive to maladaptive. The upregulation of NLRP3 inflammasome components and SASP genes indicates **chronic inflammation and cellular senescence**, which are hallmarks of tissue aging and degeneration (Franceschi et al., 2018).
+
+---
+
+## 2. ORGAN-LEVEL PREDICTION
+
+### **Primary Target Organs (Highest Enrichment and Lowest BMD)**
+
+#### **A. Liver (30.36× enriched, 26 genes)**
+
+**Evidence:**
+- **Highest gene enrichment**: 26 of 32 responsive genes are expressed in liver
+- **Lowest BMD genes**: CYP1A1, CYP1B1, NFE2L2, KEAP1, NQO1 (BMD 0.2–0.55)
+- **Organ-specific signature**: Liver microsomes (346.78× enriched for CYP1A1)
+
+**Mechanism:**
+The liver is the primary site of xenobiotic metabolism. The early upregulation of **CYP1A1 and CYP1B1** (BMD 0.2–0.35) indicates hepatic Phase I metabolism is activated. However, if the xenobiotic generates reactive intermediates (e.g., quinones, epoxides), these can:
+- Bind to hepatic proteins and trigger immune responses
+- Generate ROS and deplete hepatic glutathione
+- Activate hepatic stellate cells and drive fibrosis (via TGFB1)
+
+The sustained upregulation of antioxidant genes (NFE2L2, HMOX1, NQO1, GCLC) at BMD 0.3–0.55 indicates **hepatic oxidative stress**. The later upregulation of inflammatory genes (IL1B, TNF, NFKB1) and apoptotic genes (BAX, CASP3, TP53) at BMD 4.5–8.5 suggests **hepatocell
+
+---
+
+## Run 3 (36.5s)
+
+# COMPREHENSIVE TOXICOGENOMICS INTERPRETATION REPORT
+
+## 1. BIOLOGICAL RESPONSE NARRATIVE
+
+### Dose-Ordered Progression of Molecular Events
+
+The dose-response analysis reveals a clear temporal and dose-dependent activation of cellular stress response pathways, progressing from early adaptive defenses at low doses to widespread tissue damage and inflammatory responses at higher doses.
+
+#### **Phase 1: Early Xenobiotic Recognition and Antioxidant Priming (BMD 0.2–0.55)**
+
+At the lowest observable doses (BMD 0.2–0.35), the response is dominated by **aryl hydrocarbon receptor (AhR) signaling** and **Phase I/II xenobiotic metabolism**, with upregulation of:
+- **CYP1A1** (BMD ~0.35): Initiates xenobiotic metabolism
+- **AHR** (BMD ~0.35): Ligand-activated transcription factor for xenobiotic response
+- **NFE2L2/NRF2** (BMD 0.3–0.55): Master regulator of antioxidant response element (ARE)
+
+This initial phase represents the organism's **adaptive response** to chemical exposure. The rapid activation of the KEAP1-NRF2 system (median BMD 0.55) indicates recognition of oxidative stress. According to the literature, "The KEAP1-NRF2 system functions as a thiol-based sensor-effector apparatus for maintaining redox homeostasis" (KEAP1-NRF2 System, 2018, cited 1544×). At this dose range, NRF2 is released from KEAP1-mediated degradation and translocates to the nucleus to activate cytoprotective genes.
+
+**Concurrent antioxidant enzyme induction** (BMD 0.2–2.12):
+- **HMOX1** (heme oxygenase-1): Upregulated to catabolize heme and generate cytoprotective bilirubin
+- **NQO1** (NAD(P)H quinone oxidoreductase 1): Phase II detoxification enzyme
+- **GCLC** (glutamate-cysteine ligase catalytic subunit): Rate-limiting enzyme for glutathione synthesis
+
+These genes cluster in the **Cytoprotection by HMOX1** pathway (median BMD 6.7) and **Nuclear events mediated by NFE2L2** (BMD 0.3–0.55), representing the cell's attempt to neutralize reactive oxygen species (ROS) and restore redox balance.
+
+**Literature support**: "An Overview of Nrf2 Signaling Pathway and Its Role in Inflammation" (2020, cited 1094×) emphasizes that early NRF2 activation is protective, suppressing pro-inflammatory gene expression through direct inhibition of NFKB1 and STAT3. The consensus gene NFE2L2 appears in 383 papers with strong organ-specific enrichment across blood, blood-brain barrier, bone, brain, and cardiovascular tissues—all organs showing high enrichment in this dataset.
+
+---
+
+#### **Phase 2: Oxidative Stress Escalation and Inflammatory Priming (BMD 0.5–2.0)**
+
+As dose increases, the antioxidant response becomes insufficient to contain ROS accumulation. Between BMD 0.5–2.0, we observe:
+
+**Persistent antioxidant enzyme upregulation** (BMD 0.4–2.0):
+- **SOD1, SOD2** (superoxide dismutase): Upregulated to dismutate superoxide
+- **CAT** (catalase): Upregulated to degrade hydrogen peroxide
+- **GPX1** (glutathione peroxidase 1): Upregulated to reduce lipid peroxides
+
+These genes appear in GO terms "response to oxidative stress" (p=8.53e-17) and "response to hydrogen peroxide" (p=1.42e-13), indicating the cell is actively combating ROS.
+
+**Early inflammatory signaling activation** (BMD 0.3–2.35):
+- **NFKB1** (nuclear factor kappa-light-chain-enhancer of activated B cells): Begins upregulation
+- **IL1B, TNF**: Inflammatory cytokines show initial upregulation
+- **STAT3**: Signal transducer and activator of transcription 3 begins activation
+
+This represents a **critical transition point**. While NRF2 activation typically suppresses NFKB1, the persistent oxidative stress at these doses overwhelms the inhibitory capacity. The literature notes that "Disruption of Keap1-Nrf2 pathway enhances Nrf2 activity, which is crucial for preventing oxidative stress and inflammation" (Role of Nuclear Factor Erythroid 2, 2022), but this protective effect is dose-dependent.
+
+**Circadian rhythm disruption** (BMD 2.0–2.25, downregulation):
+- Downregulation of circadian clock genes (path:rno04922, path:hsa04922) suggests circadian desynchronization, a marker of systemic toxicity and metabolic dysfunction.
+
+---
+
+#### **Phase 3: Apoptotic Priming and Cell Cycle Arrest (BMD 2.5–5.5)**
+
+At intermediate doses (BMD 2.5–5.5), the response shifts toward **cell death pathways** and **growth inhibition**:
+
+**TP53-mediated cell cycle arrest and apoptosis** (BMD 4.5–5.25):
+- **TP53** (tumor suppressor p53): Upregulated to BMD ~5.0
+- **CDKN1A** (p21, cyclin-dependent kinase inhibitor 1A): Upregulated (BMD 0.3–5.53)
+- **BAX** (BCL2-associated X protein): Pro-apoptotic factor upregulated
+- **CASP3** (caspase-3): Executioner caspase upregulated
+
+The enriched pathway "TP53 Regulates Transcription of Cell Cycle Genes" (median BMD 5.25) and "TP53 Regulates Transcription of Cell Death Genes" (median BMD 5.75) indicate p53 activation. This is a **protective response at moderate doses**, as p53 prevents proliferation of damaged cells.
+
+**Anti-apoptotic gene upregulation** (BMD 0.3–5.53):
+- **BCL2** (B-cell lymphoma 2): Anti-apoptotic factor upregulated
+- **SIRT1** (sirtuin 1): NAD+-dependent deacetylase with cytoprotective functions
+
+The simultaneous upregulation of both pro-apoptotic (BAX, CASP3) and anti-apoptotic (BCL2, SIRT1) genes suggests the cell is at a **decision point**—attempting to repair damage while preparing for apoptosis if repair fails.
+
+**Hypoxia response activation** (BMD 0.3–4.06):
+- **HIF1A** (hypoxia-inducible factor 1-alpha): Upregulated
+- **VEGFA** (vascular endothelial growth factor A): Upregulated
+
+These genes appear in GO term "response to hypoxia" (p=5.66e-20) and pathway "Hypoxia and Disease" (path:rno05225, median BMD 2.65). HIF1A activation suggests either genuine hypoxia or metabolic dysfunction mimicking hypoxia—both indicators of cellular stress.
+
+---
+
+#### **Phase 4: Widespread Inflammatory and Fibrotic Responses (BMD 5.5–10.0)**
+
+At higher doses (BMD 5.5–10.0), the response becomes predominantly **pro-inflammatory and pro-fibrotic**, indicating transition from adaptive to adverse effects:
+
+**Inflammasome activation** (BMD 11–12):
+- **NLRP3** (NOD-like receptor family pyrin domain containing 3): Upregulated to BMD ~8.25
+- **IL1B, TNF**: Sustained high-level upregulation
+- Enriched pathways: "Inflammasomes" (median BMD 12.0) and "CLEC7A/inflammasome pathway" (median BMD 12.0)
+
+The literature emphasizes: "NLRP3 inflammasome activation plays a critical role in liver injury and disease progression" (NLRP3 Inflammasome Activation in Liver Disorders, 2025). The NLRP3 inflammasome mediates pyroptosis (inflammatory cell death) and amplifies IL1B and TNF production, creating a feed-forward inflammatory loop.
+
+**Fibrotic pathway activation** (BMD 4.5–7.2):
+- **TGFB1** (transforming growth factor beta 1): Upregulated
+- **IL6** (interleukin-6): Sustained upregulation
+- Enriched pathways: "TGF-beta signaling" (path:rno05230, median BMD 4.25) and multiple fibrosis-related pathways
+
+TGFB1 is a master regulator of fibrosis, promoting myofibroblast differentiation and extracellular matrix deposition. Combined with IL6, this creates a pro-fibrotic microenvironment.
+
+**Senescence-associated secretory phenotype (SASP)** (BMD 8.5–10.25):
+- Upregulation of genes associated with cellular senescence
+- Senescent cells secrete pro-inflammatory factors (IL6, TNF, IL1B) and matrix-degrading enzymes, perpetuating tissue damage
+
+---
+
+#### **Phase 5: Sustained Systemic Inflammation and Tissue Remodeling (BMD 10.0–13.5)**
+
+At the highest doses (BMD 10.0–13.5), the response is characterized by:
+
+**Sustained NFKB1 and STAT3 signaling** (BMD 8.75–13.5):
+- Multiple immune signaling pathways enriched (path:hsa04933, path:rno04933, median BMD 8.75)
+- Sustained IL6, TNF, IL1B upregulation
+- STAT3-mediated immune cell recruitment and differentiation
+
+**Apoptosis and necroptosis** (BMD 5.75–13.5):
+- Continued upregulation of pro-apoptotic genes (BAX, CASP3)
+- Activation of necroptotic pathways (RIPK1 involvement implied)
+- Tissue damage and cell death become predominant
+
+**Angiogenesis and vascular remodeling** (BMD 0.45–7.2):
+- **VEGFA** upregulation (BMD 0.3–5.53)
+- Enriched pathways: "positive regulation of angiogenesis" (p=7.11e-11)
+- Likely represents both compensatory angiogenesis and pathological neovascularization
+
+---
+
+### Summary of Dose-Response Progression
+
+| **Dose Phase** | **BMD Range** | **Primary Biological Process** | **Adaptive/Adverse** |
+|---|---|---|---|
+| 1 | 0.2–0.55 | Xenobiotic recognition, NRF2 activation, antioxidant priming | **Adaptive** |
+| 2 | 0.5–2.0 | Oxidative stress escalation, antioxidant enzyme induction, early inflammation | **Adaptive → Transitional** |
+| 3 | 2.5–5.5 | p53 activation, cell cycle arrest, apoptotic priming, hypoxia response | **Transitional** |
+| 4 | 5.5–10.0 | Inflammasome activation, fibrosis, senescence, sustained inflammation | **Adverse** |
+| 5 | 10.0–13.5 | Systemic inflammation, widespread apoptosis, tissue remodeling | **Adverse** |
+
+**Critical transition point**: BMD 2.5–5.5, where adaptive responses become insufficient and adverse effects predominate.
+
+---
+
+## 2. ORGAN-LEVEL PREDICTION
+
+### Primary Target Organs
+
+Based on organ-specific gene enrichment and pathway analysis, the following organs are predicted to be most severely affected:
+
+#### **1. LIVER (30.36× enriched, 27 genes)**
+
+**Enrichment rationale**: The liver is the primary organ for xenobiotic metabolism and detoxification. All Phase I (CYP1A1, CYP1B1) and Phase II (NQO1, GCLC) genes are highly expressed in hepatocytes.
+
+**Predicted effects**:
+- **Hepatotoxicity via oxidative stress**: NFE2L2, HMOX1, NQO1, GCLC upregulation indicates the liver is experiencing significant ROS burden
+- **Hepatic inflammation**: IL1B, IL6, TNF, NFKB1 upregulation suggests hepatic immune activation
+- **Hepatic fibrosis**: TGFB1 upregulation at BMD 4.5–7.2 predicts stellate cell activation and collagen deposition
+- **Hepatocyte apoptosis**: BAX, CASP3, TP53 upregulation at BMD 4.5–5.75 indicates hepatocyte death
+
+**Literature support**: "A novel mechanism of hepatotoxicity involving endoplasmic reticulum stress and Nrf2 activation is identified" (Toxicogenomic module associations with pathogenesis, 2017). The consensus gene NFE2L2 (383 papers) is extensively documented in liver toxicity. "Rutin (RUT) protects against liver and kidney damage caused by valproic acid (VLP) in rats" (Rutin Protects from Destruction, 2021) demonstrates that NFE2L2-mediated antioxidant defense is critical for hepatoprotection.
+
+**Organ signature**: Liver shows 30.36× enrichment with 27 genes including all major antioxidant and inflammatory genes.
+
+---
+
+#### **2. KIDNEY (41.99× enriched, 27 genes)**
+
+**Enrichment rationale**: The kidney is the second major detoxification organ, responsible for filtering and excreting xenobiotics and their metabolites. Renal tubular epithelium is particularly vulnerable to oxidative stress.
+
+**Predicted effects**:
+- **Renal oxidative stress**: NFE2L2, HMOX1, NQO1, GCLC, SOD1, SOD2 upregulation indicates significant ROS in renal tissue
+- **Glomerular and tubular inflammation**: IL1B, IL6, TNF, NFKB1 upregulation in glomerular mesangial cells and tubular epithelium
+- **Acute kidney injury (AKI)**: TP53-mediated apoptosis in tubular epithelium (BMD 4.5–5.75)
+- **Potential progression to chronic kidney disease**: TGFB1 upregulation suggests fibrosis risk
+
+**Literature support**: "Rutin (RUT) protects against liver and kidney damage caused by valproic acid (VLP) in rats" (Rutin Protects from Destruction, 2021) and "RUT treatment decreases oxidative stress, ER stress, inflammation, apoptosis, and autophagy induced by VLP" demonstrate the kidney's vulnerability to oxidative stress and the protective role of antioxidant pathways.
+
+**Organ signature**: Kidney shows 41.99× enrichment with 27 genes. Specific enrichment in renal tubular epithelium (HMOX1) and glomerular mesangial cells (NFKB1).
+
+---
+
+#### **3. BRAIN AND CENTRAL NERVOUS SYSTEM (198.16–462.38× enriched, 15–24 genes)**
+
+**Enrichment rationale**: Multiple brain regions show exceptionally high enrichment, including substantia nigra (416.14×), microglia (390.13×), and dorsal root ganglia (346.78×). The brain is particularly vulnerable to oxidative stress due to high metabolic rate and limited antioxidant capacity.
+
+**Predicted effects**:
+- **Neuroinflammation**: Microglial activation (NLRP3, IL1B, TNF, IL6 upregulation) is a hallmark of neurotoxicity
+- **Neuronal apoptosis**: BAX, CASP3, TP53 upregulation in neurons and substantia nigra predicts dopaminergic neuron loss
+- **Blood-brain barrier (BBB) disruption**: IL1B, IL6, NLRP3 upregulation in BBB endothelial cells and pericytes
+- **Neurodegeneration**: Substantia nigra enrichment (416.14×) with BAX, HMOX1, IL1B, IL6, NFE2L2, SOD1, SOD2, TNF suggests Parkinson's disease-like pathology
+
+**Literature support
 
 ---
