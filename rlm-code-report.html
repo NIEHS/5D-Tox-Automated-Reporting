@@ -1,0 +1,1917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codebase Report: rlm-bmdx</title>
+<style>
+:root {
+    --bg: #ffffff;
+    --fg: #1a1a2e;
+    --muted: #6c6c80;
+    --border: #e0e0e8;
+    --accent: #4361ee;
+    --accent-light: #eef0ff;
+    --fn-color: #2563eb;
+    --cls-color: #7c3aed;
+    --meth-color: #059669;
+    --warn-color: #dc2626;
+    --code-bg: #f5f5fa;
+    --row-hover: #f8f8fc;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1a1a2e;
+        --fg: #e0e0e8;
+        --muted: #9090a0;
+        --border: #2e2e42;
+        --accent: #6b8aff;
+        --accent-light: #252540;
+        --fn-color: #60a5fa;
+        --cls-color: #a78bfa;
+        --meth-color: #34d399;
+        --warn-color: #f87171;
+        --code-bg: #22223a;
+        --row-hover: #22223a;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+}
+h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+h2 {
+    font-size: 1.35rem;
+    margin-top: 2.5rem;
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 2px solid var(--accent);
+}
+h3 { font-size: 1.1rem; margin-top: 1.2rem; margin-bottom: 0.4rem; }
+p, li { margin-bottom: 0.4rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+}
+.subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+
+/* Table of contents */
+.toc { margin: 1.5rem 0; padding: 1rem 1.5rem; background: var(--accent-light);
+       border-radius: 6px; }
+.toc ol { padding-left: 1.4rem; }
+.toc li { margin-bottom: 0.25rem; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; }
+th, td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase;
+     letter-spacing: 0.03em; color: var(--muted); }
+tr:hover { background: var(--row-hover); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Collapsible sections */
+details { margin: 0.6rem 0; }
+details > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.4rem 0;
+    list-style: none;
+}
+details > summary::before { content: "▸ "; color: var(--accent); }
+details[open] > summary::before { content: "▾ "; }
+
+/* Symbol kind badges */
+.badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.1em 0.5em;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.badge-function  { background: #dbeafe; color: var(--fn-color); }
+.badge-class     { background: #ede9fe; color: var(--cls-color); }
+.badge-method    { background: #d1fae5; color: var(--meth-color); }
+.badge-other     { background: #f3f4f6; color: var(--muted); }
+@media (prefers-color-scheme: dark) {
+    .badge-function  { background: #1e3a5f; }
+    .badge-class     { background: #2e1f5e; }
+    .badge-method    { background: #1a3a2a; }
+    .badge-other     { background: #2a2a3e; }
+}
+
+/* Metric chips — small inline indicators shown next to symbol names */
+.chip {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-left: 0.5rem;
+}
+
+/* Summary text blocks — LLM-generated descriptions */
+.summary-text {
+    margin: 0.3rem 0 0.6rem 1rem;
+    padding: 0.5rem 0.8rem;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-light);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.92rem;
+}
+
+/* Warning / highlight callouts */
+.callout {
+    padding: 0.6rem 1rem;
+    border-radius: 5px;
+    margin: 0.6rem 0;
+    font-size: 0.93rem;
+}
+.callout-warn { background: #fef2f2; border-left: 4px solid var(--warn-color); }
+@media (prefers-color-scheme: dark) {
+    .callout-warn { background: #2a1a1a; }
+}
+
+/* Directory tree indentation — each nesting level gets a left margin */
+.dir-tree { margin-left: 0.8rem; padding-left: 0.8rem; border-left: 1px solid var(--border); }
+
+/* Print-friendly styles — strip backgrounds, force black text */
+@media print {
+    body { max-width: 100%; padding: 1rem; }
+    .toc, .callout, .summary-text, .badge { -webkit-print-color-adjust: exact;
+                                             print-color-adjust: exact; }
+    details { break-inside: avoid; }
+    h2 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<h1>Codebase Report: rlm-bmdx</h1>
+<p class="subtitle">Generated 2026-02-28 12:02 UTC · Indexed commit: <code>3c976da3dbea171140948d9d7fa4b3ee250a2c2a</code></p>
+
+<nav class="toc"><strong>Contents</strong>
+<ol>
+  <li><a href="#executive-summary">Executive Summary</a></li>
+  <li><a href="#language-breakdown">Language Breakdown</a></li>
+  <li><a href="#symbol-kind-distribution">Symbol Kind Distribution</a></li>
+  <li><a href="#top-symbols-by-importance">Top Symbols by Importance</a></li>
+  <li><a href="#architectural-patterns">Architectural Patterns</a></li>
+  <li><a href="#directory-structure">Directory Structure</a></li>
+  <li><a href="#file-inventory">File Inventory</a></li>
+  <li><a href="#full-symbol-reference">Full Symbol Reference</a></li>
+</ol></nav>
+
+<h2 id="executive-summary">Executive Summary</h2>
+<table>
+<tr><td>Total files</td><td class='num'><strong>14</strong></td></tr>
+<tr><td>Total symbols</td><td class='num'><strong>170</strong></td></tr>
+<tr><td>Total edges (call/import links)</td><td class='num'><strong>1324</strong></td></tr>
+<tr><td>LLM summaries</td><td class='num'><strong>185</strong></td></tr>
+<tr><td>Languages</td><td>python (14)</td></tr>
+<tr><td>Graph density</td><td class='num'>0.046084</td></tr>
+</table>
+<h3>Key Findings</h3><ul>
+<li><strong>10</strong> orphaned symbol(s) (zero callers and zero callees — potential dead code)</li>
+</ul>
+<h2 id="language-breakdown">Language Breakdown</h2>
+<table>
+<tr><th>Language</th><th>Files</th><th>% Files</th><th>Symbols</th><th>% Symbols</th></tr>
+<tr><td>python</td><td class='num'>14</td><td class='num'>100.0%</td><td class='num'>170</td><td class='num'>100.0%</td></tr>
+</table>
+
+<h2 id="symbol-kind-distribution">Symbol Kind Distribution</h2>
+<table>
+<tr><th>Kind</th><th>Count</th><th>%</th></tr>
+<tr><td><span class="badge badge-function">function</span> function</td><td class='num'>89</td><td class='num'>52.4%</td></tr>
+<tr><td><span class="badge badge-method">method</span> method</td><td class='num'>66</td><td class='num'>38.8%</td></tr>
+<tr><td><span class="badge badge-class">class</span> class</td><td class='num'>15</td><td class='num'>8.8%</td></tr>
+</table>
+
+<h2 id="top-symbols-by-importance">Top Symbols by Importance</h2>
+<p>Ranked by PageRank — a measure of how central a symbol is in the overall call graph. High-PageRank symbols are the key orchestrators and connectors of the codebase.</p>
+<details open><summary>1. <span class="badge badge-function">function</span> <strong>interpret</strong><span class="chip">PR 0.0149</span><span class="chip">in=0 out=15 btw=0.0000</span></summary>
+<p><code>def interpret(
+    csv_path: str,
+    db_path: str = &quot;bmdx.duckdb&quot;,
+    output_path: str = &quot;output/interpretation.md&quot;,
+    docx_path: str | None = None,
+    fdr_cutoff: float = 0.05,
+    models: list[str] | None = None,
+    n_runs: int = 3,
+    concordance_model: str = &quot;claude-sonnet-4-6&quot;,
+) -&gt; str</code></p>
+<p>File: <code>interpret.py:1503–1621</code></p>
+<div class="summary-text">Main pipeline that loads data, runs enrichment analysis, generates narratives, and produces markdown and Word outputs.</div>
+</details>
+<details open><summary>2. <span class="badge badge-function">function</span> <strong>analyze</strong><span class="chip">PR 0.0127</span><span class="chip">in=2 out=10 btw=0.0012</span></summary>
+<p><code>def analyze(
+    df: pd.DataFrame,
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; AnalysisResult</code></p>
+<p>File: <code>interpret.py:505–606</code></p>
+<div class="summary-text">Runs complete enrichment analysis (pathways, GO terms, organ signature, literature) on dose-response data and returns AnalysisResult.</div>
+</details>
+<details open><summary>3. <span class="badge badge-method">method</span> <strong>FullTextFetcher.fetch</strong><span class="chip">PR 0.0106</span><span class="chip">in=1 out=9 btw=0.0005</span></summary>
+<p><code>def fetch(self, paper: dict) -&gt; FullTextResult | None</code></p>
+<p>File: <code>fulltext.py:350–400</code></p>
+<div class="summary-text">Tries all available sources in priority order for a single paper, caches first success, and returns FullTextResult or None.</div>
+</details>
+<details open><summary>4. <span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_one</strong><span class="chip">PR 0.0099</span><span class="chip">in=0 out=1 btw=0.0000</span></summary>
+<p><code>def _fetch_one(paper: dict, index: int) -&gt; tuple[str, FullTextResult | None]</code></p>
+<p>File: <code>fulltext.py:411–417</code></p>
+<div class="summary-text">Internal helper that fetches one paper and prints progress status including source and character count.</div>
+</details>
+<details open><summary>5. <span class="badge badge-function">function</span> <strong>build</strong><span class="chip">PR 0.0080</span><span class="chip">in=0 out=8 btw=0.0000</span></summary>
+<p><code>def build(db_path: str) -&gt; None</code></p>
+<p>File: <code>build_db.py:352–400</code></p>
+<div class="summary-text">Main orchestration function that removes any existing database, creates schema, and sequentially calls all loaders while printing progress.</div>
+</details>
+<details><summary>6. <span class="badge badge-function">function</span> <strong>build_interpretation_context</strong><span class="chip">PR 0.0062</span><span class="chip">in=0 out=1 btw=0.0000</span></summary>
+<p><code>def build_interpretation_context(
+    df: pd.DataFrame,
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; str</code></p>
+<p>File: <code>interpret.py:711–719</code></p>
+<div class="summary-text">Convenience wrapper that runs analyze() and returns the formatted context text.</div>
+</details>
+<details><summary>7. <span class="badge badge-function">function</span> <strong>main</strong><span class="chip">PR 0.0062</span><span class="chip">in=0 out=2 btw=0.0000</span></summary>
+<p><code>def main()</code></p>
+<p>File: <code>crawl_phase2.py:429–465</code></p>
+<div class="summary-text">CLI entry point that parses command-line arguments to dispatch crawl execution: all tiers, specific tier (1/2/3), single named mechanism/organ crawl, or gene-tox deep dives.</div>
+</details>
+<details><summary>8. <span class="badge badge-function">function</span> <strong>run_genefunc_crawl</strong><span class="chip">PR 0.0061</span><span class="chip">in=0 out=9 btw=0.0000</span></summary>
+<p><code>def run_genefunc_crawl(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+    max_papers: int = 400,
+    max_api_calls: int = 200,
+    api_key: str | None = None,
+)</code></p>
+<p>File: <code>genefunc_crawl.py:513–576</code></p>
+<div class="summary-text">Main orchestrator that loads gene-organ pairs, searches for function papers, performs 1-hop expansion, and reports coverage statistics.</div>
+</details>
+<details><summary>9. <span class="badge badge-function">function</span> <strong>_run_model</strong><span class="chip">PR 0.0057</span><span class="chip">in=0 out=6 btw=0.0000</span></summary>
+<p><code>def _run_model(model: str) -&gt; list[NarrativeRun]</code></p>
+<p>File: <code>interpret.py:1082–1110</code></p>
+<div class="summary-text">Internal function that generates n narrative runs for a single model and writes output.</div>
+</details>
+<details><summary>10. <span class="badge badge-function">function</span> <strong>build_pathway_tsv</strong><span class="chip">PR 0.0054</span><span class="chip">in=0 out=3 btw=0.0000</span></summary>
+<p><code>def build_pathway_tsv(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+    output_path: str = &quot;pathway_enrichment.tsv&quot;,
+)</code></p>
+<p>File: <code>pathway_enrich.py:220–336</code></p>
+<div class="summary-text">Orchestrator function that fetches KEGG and Reactome pathways for all genes and writes a combined TSV with pathway annotations.</div>
+</details>
+<details><summary>11. <span class="badge badge-method">method</span> <strong>CitationGraphCrawler.expand</strong><span class="chip">PR 0.0049</span><span class="chip">in=3 out=6 btw=0.0010</span></summary>
+<p><code>def expand(self)</code></p>
+<p>File: <code>citegraph.py:497–568</code></p>
+<div class="summary-text">Main loop that expands the graph by processing papers from the priority queue and applying governor controls.</div>
+</details>
+<details><summary>12. <span class="badge badge-function">function</span> <strong>run_genetox_crawl</strong><span class="chip">PR 0.0047</span><span class="chip">in=2 out=14 btw=0.0014</span></summary>
+<p><code>def run_genetox_crawl(
+    max_papers_per_gene: int = 100,
+    api_key: str | None = None,
+) -&gt; &quot;GeneFuncCrawler&quot;</code></p>
+<p>File: <code>genefunc_crawl.py:436–510</code></p>
+<div class="summary-text">Tier 3 orchestrator for deep tox-focused searches on 8 interpretation-flagged genes with custom focus strings and templates.</div>
+</details>
+<details><summary>13. <span class="badge badge-function">function</span> <strong>run_all_phase2</strong><span class="chip">PR 0.0044</span><span class="chip">in=1 out=2 btw=0.0003</span></summary>
+<p><code>def run_all_phase2(
+    tiers: list[int] | None = None,
+    api_key: str | None = None,
+)</code></p>
+<p>File: <code>crawl_phase2.py:338–420</code></p>
+<div class="summary-text">Orchestrates execution of all Phase 2 crawls across selected tiers, tracks timing and paper/API metrics for each crawl, and prints a comprehensive summary of total papers collected, API calls used, and per-crawl performance.</div>
+</details>
+<details><summary>14. <span class="badge badge-method">method</span> <strong>ParallelExtractionEngine.run_endpoint_queue</strong><span class="chip">PR 0.0044</span><span class="chip">in=0 out=1 btw=0.0000</span></summary>
+<p><code>def run_endpoint_queue(endpoint: OllamaEndpoint,
+                               queue: list[tuple[dict, int]])</code></p>
+<p>File: <code>extract.py:487–496</code></p>
+<div class="summary-text">Runs the sequential work queue for a single endpoint, allowing GPUs to process papers one at a time.</div>
+</details>
+<details><summary>15. <span class="badge badge-function">function</span> <strong>run_organ_crawl</strong><span class="chip">PR 0.0042</span><span class="chip">in=0 out=8 btw=0.0000</span></summary>
+<p><code>def run_organ_crawl(
+    organ: str,
+    max_depth: int = 2,
+    max_papers: int = 400,
+    api_key: str | None = None,
+)</code></p>
+<p>File: <code>citegraph.py:821–868</code></p>
+<div class="summary-text">Runs an organ-specific toxicogenomics crawl for supported organs (heart, brain, lung).</div>
+</details>
+<details><summary>16. <span class="badge badge-function">function</span> <strong>run_toxicogenomics_crawl</strong><span class="chip">PR 0.0042</span><span class="chip">in=0 out=8 btw=0.0000</span></summary>
+<p><code>def run_toxicogenomics_crawl(
+    max_depth: int = 2,
+    max_papers: int = 200,
+    api_key: str | None = None,
+)</code></p>
+<p>File: <code>citegraph.py:673–724</code></p>
+<div class="summary-text">Convenience function running a targeted toxicogenomics crawl with predefined seed papers.</div>
+</details>
+<details><summary>17. <span class="badge badge-method">method</span> <strong>ParallelExtractionEngine._worker</strong><span class="chip">PR 0.0041</span><span class="chip">in=1 out=1 btw=0.0002</span></summary>
+<p><code>def _worker(self, paper: dict, endpoint: OllamaEndpoint,
+                index: int, total: int,
+                full_text: str | None = None,
+                text_source: str = &quot;&quot;) -&gt; PaperExtraction</code></p>
+<p>File: <code>extract.py:395–430</code></p>
+<div class="summary-text">Processes one paper on one endpoint and prints progress with extracted entities and metadata.</div>
+</details>
+<details><summary>18. <span class="badge badge-function">function</span> <strong>main</strong><span class="chip">PR 0.0040</span><span class="chip">in=0 out=1 btw=0.0000</span></summary>
+<p><code>def main()</code></p>
+<p>File: <code>export_sessions.py:203–231</code></p>
+<div class="summary-text">CLI entry point that processes session files from a directory and exports them as markdown to an output directory.</div>
+</details>
+<details><summary>19. <span class="badge badge-function">function</span> <strong>extract_one</strong><span class="chip">PR 0.0038</span><span class="chip">in=1 out=6 btw=0.0004</span></summary>
+<p><code>def extract_one(paper: dict, endpoint: OllamaEndpoint,
+                full_text: str | None = None,
+                text_source: str = &quot;&quot;) -&gt; PaperExtraction</code></p>
+<p>File: <code>extract.py:270–355</code></p>
+<div class="summary-text">Extracts structured information from one paper using a specified Ollama endpoint, supporting both full-text and abstract-based extraction with chunking.</div>
+</details>
+<details><summary>20. <span class="badge badge-function">function</span> <strong>build</strong><span class="chip">PR 0.0038</span><span class="chip">in=0 out=10 btw=0.0000</span></summary>
+<p><code>def build()</code></p>
+<p>File: <code>build_docx.py:139–959</code></p>
+<div class="summary-text">Constructs the complete bmdx.docx Word document covering the 11-phase toxicogenomics pipeline, database schema, methodology, outputs, and limitations.</div>
+</details>
+<details><summary>21. <span class="badge badge-function">function</span> <strong>run_mechanism_crawl</strong><span class="chip">PR 0.0037</span><span class="chip">in=2 out=8 btw=0.0010</span></summary>
+<p><code>def run_mechanism_crawl(
+    name: str,
+    config_dict: dict,
+    max_depth: int = 2,
+    api_key: str | None = None,
+) -&gt; tuple</code></p>
+<p>File: <code>crawl_phase2.py:267–331</code></p>
+<div class="summary-text">Executes a single mechanism or organ-gap crawl by configuring a CitationGraphCrawler with custom topic keywords and boost keywords, loading known genes for scoring, seeding via targeted searches, expanding the citation graph, and saving results to a named output directory.</div>
+</details>
+<details><summary>22. <span class="badge badge-function">function</span> <strong>session_to_markdown</strong><span class="chip">PR 0.0037</span><span class="chip">in=1 out=3 btw=0.0001</span></summary>
+<p><code>def session_to_markdown(jsonl_path: Path) -&gt; str</code></p>
+<p>File: <code>export_sessions.py:128–200</code></p>
+<div class="summary-text">Converts a single session JSONL file into formatted markdown with timestamped user and assistant messages.</div>
+</details>
+<details><summary>23. <span class="badge badge-function">function</span> <strong>fetch_kegg_pathways</strong><span class="chip">PR 0.0037</span><span class="chip">in=1 out=3 btw=0.0001</span></summary>
+<p><code>def fetch_kegg_pathways(
+    species: str = &quot;hsa&quot;,
+) -&gt; dict[str, list[tuple[str, str]]]</code></p>
+<p>File: <code>pathway_enrich.py:118–141</code></p>
+<div class="summary-text">Combines KEGG gene lists, pathway names, and gene-pathway links to create a mapping of gene symbols to pathways with names.</div>
+</details>
+<details><summary>24. <span class="badge badge-function">function</span> <strong>enrich_go_terms</strong><span class="chip">PR 0.0036</span><span class="chip">in=1 out=5 btw=0.0004</span></summary>
+<p><code>def enrich_go_terms(
+    responsive_genes: list[str],
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; list[dict]</code></p>
+<p>File: <code>interpret.py:314–381</code></p>
+<div class="summary-text">Performs Fisher&#x27;s exact test over-representation analysis to identify significantly enriched GO terms in a responsive gene set.</div>
+</details>
+<details><summary>26. <span class="badge badge-method">method</span> <strong>GeneFuncCrawler.search_gene</strong><span class="chip">PR 0.0030</span><span class="chip">in=1 out=9 btw=0.0002</span></summary>
+<p><code>def search_gene(self, gene: str, organs: list[str]) -&gt; list[str]</code></p>
+<p>File: <code>genefunc_crawl.py:299–331</code></p>
+<div class="summary-text">Searches S2 for gene-function papers using generated queries, filters by relevance threshold, and returns IDs of newly added papers.</div>
+</details>
+<details><summary>27. <span class="badge badge-function">function</span> <strong>concordance_only</strong><span class="chip">PR 0.0030</span><span class="chip">in=0 out=9 btw=0.0000</span></summary>
+<p><code>def concordance_only(
+    all_md_path: str = &quot;output/interpretation_all.md&quot;,
+    concordance_model: str = &quot;claude-sonnet-4-6&quot;,
+    output_dir: str | None = None,
+) -&gt; str</code></p>
+<p>File: <code>interpret.py:1628–1729</code></p>
+<div class="summary-text">Runs concordance analysis on existing narratives parsed from combined all-narratives markdown without regenerating them.</div>
+</details>
+<details><summary>28. <span class="badge badge-function">function</span> <strong>enrich_pathways</strong><span class="chip">PR 0.0029</span><span class="chip">in=1 out=4 btw=0.0003</span></summary>
+<p><code>def enrich_pathways(
+    responsive_genes: list[str],
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; list[dict]</code></p>
+<p>File: <code>interpret.py:234–307</code></p>
+<div class="summary-text">Performs Fisher&#x27;s exact test over-representation analysis to identify significantly enriched pathways in a responsive gene set.</div>
+</details>
+<details><summary>29. <span class="badge badge-function">function</span> <strong>_write_per_model_output</strong><span class="chip">PR 0.0029</span><span class="chip">in=1 out=2 btw=0.0003</span></summary>
+<p><code>def _write_per_model_output(
+    result: AnalysisResult,
+    runs: list[NarrativeRun],
+    model: str,
+    base_docx: str | None,
+    base_md: str,
+) -&gt; None</code></p>
+<p>File: <code>interpret.py:1005–1031</code></p>
+<div class="summary-text">Writes per-model markdown and Word document files as each model&#x27;s narrative runs complete.</div>
+</details>
+<details><summary>30. <span class="badge badge-method">method</span> <strong>GeneFuncCrawler.expand_one_hop</strong><span class="chip">PR 0.0026</span><span class="chip">in=2 out=8 btw=0.0002</span></summary>
+<p><code>def expand_one_hop(self, paper_ids: list[str], gene: str,
+                       organs: list[str], max_per_paper: int = 10)</code></p>
+<p>File: <code>genefunc_crawl.py:333–360</code></p>
+<div class="summary-text">Fetches references from top search results and adds relevant ones to graph based on gene-relevance scoring.</div>
+</details>
+
+<h2 id="architectural-patterns">Architectural Patterns</h2>
+<h3>God Objects (0)</h3>
+<p>Symbols with very high combined in-degree + out-degree (≥20). These are tightly coupled and may be candidates for refactoring.</p>
+<p><em>None detected.</em></p>
+<h3>Orphaned Symbols (10)</h3>
+<p>Symbols with zero callers and zero callees — potential dead code or entry points not yet wired into the graph.</p>
+<table><tr><th>Symbol</th><th>File</th><th>Line</th></tr>
+<tr><td><span class="badge badge-function">function</span> fmt</td><td><code>build_docx.py</code></td><td class='num'>10</td></tr>
+<tr><td><span class="badge badge-method">method</span> S2Client.__init__</td><td><code>citegraph.py</code></td><td class='num'>142</td></tr>
+<tr><td><span class="badge badge-method">method</span> SaturationTracker.__init__</td><td><code>citegraph.py</code></td><td class='num'>303</td></tr>
+<tr><td><span class="badge badge-method">method</span> SaturationTracker.is_saturated</td><td><code>citegraph.py</code></td><td class='num'>328</td></tr>
+<tr><td><span class="badge badge-method">method</span> FullTextResult.__post_init__</td><td><code>fulltext.py</code></td><td class='num'>51</td></tr>
+<tr><td><span class="badge badge-method">method</span> FullTextFetcher.__init__</td><td><code>fulltext.py</code></td><td class='num'>146</td></tr>
+<tr><td><span class="badge badge-method">method</span> FullTextFetcher.fetch_batch</td><td><code>fulltext.py</code></td><td class='num'>402</td></tr>
+<tr><td><span class="badge badge-method">method</span> FullTextFetcher.print_stats</td><td><code>fulltext.py</code></td><td class='num'>431</td></tr>
+<tr><td><span class="badge badge-method">method</span> ToxKBQuerier.__init__</td><td><code>interpret.py</code></td><td class='num'>80</td></tr>
+<tr><td><span class="badge badge-method">method</span> ToxKBQuerier.pathway_genes</td><td><code>interpret.py</code></td><td class='num'>143</td></tr>
+</table>
+<h3>Circular Dependency Clusters (0)</h3>
+<p>Groups of symbols that form strongly-connected components — each symbol in the cluster can reach every other via the call graph.</p>
+<p><em>None detected.</em></p>
+<h3>Hub Files (10)</h3>
+<p>Files with the highest total edge count — they are the most connected parts of the codebase.</p>
+<ol>
+<li><code>interpret.py</code></li>
+<li><code>citegraph.py</code></li>
+<li><code>genefunc_crawl.py</code></li>
+<li><code>extract.py</code></li>
+<li><code>fulltext.py</code></li>
+<li><code>build_docx.py</code></li>
+<li><code>build_db.py</code></li>
+<li><code>pathway_enrich.py</code></li>
+<li><code>crawl_phase2.py</code></li>
+<li><code>export_sessions.py</code></li>
+</ol>
+
+<h2 id="directory-structure">Directory Structure</h2>
+<p>Collapsible directory tree showing file and symbol counts. Directories with LLM summaries show them inline.</p>
+<div class="dir-tree"><details><summary><strong>output/</strong><span class="chip">1 files · 1 symbols</span></summary>
+<div class="summary-text">The output directory contains utilities for generating formatted documentation, specifically a Python script that creates Word documents (.docx files) explaining the interpretation pipeline. The script uses python-docx to structure content with headings, paragraphs, tables, and styled text for professional presentation of pipeline explanations.</div>
+</details></div>
+
+<h2 id="file-inventory">File Inventory</h2>
+<table>
+<tr><th>File</th><th>Language</th><th>Lines</th><th>Symbols</th></tr>
+<tr><td><code>build_db.py</code></td><td>python</td><td class='num'>408</td><td class='num'>10</td></tr>
+<tr><td colspan="4"><div class="summary-text">Builds bmdx.duckdb, a normalized DuckDB analytical database linking papers, genes, GO terms, pathways, and citation networks from toxicogenomics crawl data sources.</div></td></tr>
+<tr><td><code>build_docx.py</code></td><td>python</td><td class='num'>964</td><td class='num'>9</td></tr>
+<tr><td colspan="4"><div class="summary-text">Generates a comprehensive Word document (bmdx.docx) documenting the citation-graph-driven toxicogenomics gene discovery pipeline, including 11 project phases, analytical database schema with 9 interconnected tables, and usage instructions.</div></td></tr>
+<tr><td><code>citegraph.py</code></td><td>python</td><td class='num'>883</td><td class='num'>28</td></tr>
+<tr><td colspan="4"><div class="summary-text">Citation graph crawler using Semantic Scholar API to expand from seed papers with governor controls based on relevance scoring, depth limits, saturation detection, and API budgets. Supports both general toxicogenomics and organ-specific research crawls.</div></td></tr>
+<tr><td><code>crawl_phase2.py</code></td><td>python</td><td class='num'>470</td><td class='num'>3</td></tr>
+<tr><td colspan="4"><div class="summary-text">Phase 2 crawl orchestrator that executes targeted literature searches across three tiers (mechanism-specific, organ gap, gene-tox deep dives) to fill toxicogenomics knowledge base gaps identified by interpretation pipeline analysis. Provides CLI interface to run all crawls, specific tiers, or individual named mechanisms/organs.</div></td></tr>
+<tr><td><code>export_sessions.py</code></td><td>python</td><td class='num'>236</td><td class='num'>6</td></tr>
+<tr><td colspan="4"><div class="summary-text">Exports Claude Code session JSONL transcripts to readable Markdown format, parsing user/assistant messages and tool calls into structured markdown output.</div></td></tr>
+<tr><td><code>extract.py</code></td><td>python</td><td class='num'>1093</td><td class='num'>19</td></tr>
+<tr><td colspan="4"><div class="summary-text">LLM-based extraction pipeline that uses local Ollama instances to extract structured information (claims, genes, organs, methods, species, stance) from scientific paper abstracts and full texts in parallel across multiple GPUs.</div></td></tr>
+<tr><td><code>extract_phase2_runner.py</code></td><td>python</td><td class='num'>28</td><td class='num'>0</td></tr>
+<tr><td colspan="4"><div class="summary-text">Batch extraction runner that processes papers from 9 toxicogenomics crawl directories using ParallelExtractionEngine, extracting structured data and saving results to JSON files.</div></td></tr>
+<tr><td><code>fulltext.py</code></td><td>python</td><td class='num'>577</td><td class='num'>22</td></tr>
+<tr><td colspan="4"><div class="summary-text">Fetches full-text academic papers from multiple open-access and proxy sources (PMC, arXiv, S2, Unpaywall, DOI proxy) with disk caching, rate limiting, and parallel batch processing.</div></td></tr>
+<tr><td><code>genefunc_crawl.py</code></td><td>python</td><td class='num'>604</td><td class='num'>14</td></tr>
+<tr><td colspan="4"><div class="summary-text">Gene-function crawler that searches Semantic Scholar for papers explaining why genes matter in specific organs, with Tier 3 tox-focused deep dives for interpretation-flagged genes.</div></td></tr>
+<tr><td><code>go_gene_map.py</code></td><td>python</td><td class='num'>314</td><td class='num'>4</td></tr>
+<tr><td colspan="4"><div class="summary-text">Builds a GO term → gene member mapping by merging rat and human Gene Annotation Format (GAF) files, cross-referencing with toxicogenomics consensus data, and outputting a TSV file with species tagging and UMAP coordinates.</div></td></tr>
+<tr><td><code>interpret.py</code></td><td>python</td><td class='num'>1798</td><td class='num'>45</td></tr>
+<tr><td colspan="4"><div class="summary-text">Dose-response interpretation engine that queries a toxicogenomics knowledge base (bmdx) to analyze gene-level BMD results, performs enrichment analysis, and generates LLM-based scientific narratives with support for multi-model concordance analysis.</div></td></tr>
+<tr><td><code>main.py</code></td><td>python</td><td class='num'>7</td><td class='num'>1</td></tr>
+<tr><td colspan="4"><div class="summary-text">Entry point script for the bmdx project that defines a main function printing a greeting message. Executed when the script is run as the primary module.</div></td></tr>
+<tr><td><code>output/interpretation_pipeline_explanation.py</code></td><td>python</td><td class='num'>223</td><td class='num'>1</td></tr>
+<tr><td colspan="4"><div class="summary-text">Generates a formatted Word document (.docx) containing the interpretation pipeline explanation using python-docx, with headings, paragraphs, tables, and styled text.</div></td></tr>
+<tr><td><code>pathway_enrich.py</code></td><td>python</td><td class='num'>356</td><td class='num'>8</td></tr>
+<tr><td colspan="4"><div class="summary-text">Enriches consensus and moderate-evidence genes with pathway annotations from KEGG and Reactome databases via REST APIs, writing results to a TSV file.</div></td></tr>
+</table>
+
+<h2 id="full-symbol-reference">Full Symbol Reference</h2>
+<p>Every symbol in the codebase, grouped by file. Click to expand.</p>
+<details><summary><code>build_db.py</code><span class="chip">10 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>source_label</strong><span class="chip">L38–44</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def source_label(dirpath: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>load_papers</code></p>
+<div class="summary-text">Derives a short source identifier from citegraph_output directory names (e.g., &#x27;citegraph_output_800&#x27; → &#x27;800&#x27;).</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>strip_html</strong><span class="chip">L47–49</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def strip_html(text: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>load_pathways</code></p>
+<div class="summary-text">Removes HTML tags from text using regex substitution.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_go_terms</strong><span class="chip">L128–148</span><span class="chip">PR 0.0011 · in=1 out=1</span></summary>
+<p><code>def load_go_terms(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001100</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<p><strong>Callees (1):</strong> <code>parse_reference_umap</code></p>
+<div class="summary-text">Loads Gene Ontology terms and their UMAP cluster coordinates from the TypeScript reference data file.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_genes</strong><span class="chip">L151–205</span><span class="chip">PR 0.0011 · in=1 out=2</span></summary>
+<p><code>def load_genes(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001083</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<p><strong>Callees (2):</strong> <code>normalize_organ</code>, <code>normalize_gene</code></p>
+<div class="summary-text">Loads genes from consensus, moderate, and single-mention categories from merged JSON extractions and supplementary TSV, stratified by evidence level.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_papers</strong><span class="chip">L208–241</span><span class="chip">PR 0.0016 · in=1 out=1</span></summary>
+<p><code>def load_papers(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<p><strong>Callees (1):</strong> <code>source_label</code></p>
+<div class="summary-text">Loads papers from all citegraph_output*/papers.json files with deduplication, tracking source directory for each paper.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_gene_go_terms</strong><span class="chip">L244–260</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def load_gene_go_terms(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<div class="summary-text">Loads gene-to-GO-term mappings and species information from go_term_genes.tsv.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_paper_genes_organs_claims</strong><span class="chip">L263–299</span><span class="chip">PR 0.0011 · in=1 out=2</span></summary>
+<p><code>def load_paper_genes_organs_claims(con: duckdb.DuckDBPyConnection) -&gt; tuple[int, int, int]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001083</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<p><strong>Callees (2):</strong> <code>normalize_gene</code>, <code>normalize_organ</code></p>
+<div class="summary-text">Normalizes and deduplicates genes, organs, and claims extracted from papers, inserting into separate normalized tables.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_citation_edges</strong><span class="chip">L302–317</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def load_citation_edges(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<div class="summary-text">Loads citation network edges from all citegraph_output*/edges.json files with deduplication of source-target pairs.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_pathways</strong><span class="chip">L320–345</span><span class="chip">PR 0.0016 · in=1 out=1</span></summary>
+<p><code>def load_pathways(con: duckdb.DuckDBPyConnection) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<p><strong>Callees (1):</strong> <code>strip_html</code></p>
+<div class="summary-text">Loads pathway data from TSV, splitting KEGG and Reactome entries and removing HTML from pathway names.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build</strong><span class="chip">L352–400</span><span class="chip">PR 0.0080 · in=0 out=8</span></summary>
+<p><code>def build(db_path: str) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.008017</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>8</td></tr></table>
+<p><strong>Callees (8):</strong> <code>load_go_terms</code>, <code>load_genes</code>, <code>load_papers</code>, <code>load_gene_go_terms</code>, <code>load_paper_genes_organs_claims</code>, <code>load_citation_edges</code>, <code>load_pathways</code>, <code>ToxKBQuerier.close</code></p>
+<div class="summary-text">Main orchestration function that removes any existing database, creates schema, and sequentially calls all loaders while printing progress.</div>
+</details>
+</details>
+<details><summary><code>build_docx.py</code><span class="chip">9 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>fmt</strong><span class="chip">L10–24</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def fmt(paragraph, size=11, bold=False, italic=False, font=&quot;Calibri&quot;, color=None,
+        space_after=Pt(6), space_before=Pt(0), align=None)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Applies formatting to a paragraph including font size, bold/italic, color, spacing, and alignment.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_heading</strong><span class="chip">L27–29</span><span class="chip">PR 0.0010 · in=7 out=1</span></summary>
+<p><code>def add_heading(doc, text, level=1)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000976</td><td class='num'>0.000000</td><td class='num'>7</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (7):</strong> <code>add_heading</code>, <code>build</code>, <code>_build_per_model_docx</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code>, <code>build_document</code></p>
+<p><strong>Callees (1):</strong> <code>add_heading</code></p>
+<div class="summary-text">Adds a heading to the document at a specified level (1-0).</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_para</strong><span class="chip">L32–40</span><span class="chip">PR 0.0009 · in=5 out=0</span></summary>
+<p><code>def add_para(doc, text=&quot;&quot;, bold=False, italic=False, size=11)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>5</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (4):</strong> <code>build</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code></p>
+<div class="summary-text">Adds a paragraph with optional bold/italic formatting, font size, and calibri font.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_bold_lead</strong><span class="chip">L43–54</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def add_bold_lead(doc, lead, rest)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>build</code>, <code>build_interpretation_docx</code></p>
+<div class="summary-text">Adds a paragraph with bold lead text followed by normal text, both at 11pt.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_bullet</strong><span class="chip">L57–68</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def add_bullet(doc, text, bold_prefix=&quot;&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>build</code>, <code>build_interpretation_docx</code></p>
+<div class="summary-text">Adds a bullet point with optional bold prefix text.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_numbered</strong><span class="chip">L71–82</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def add_numbered(doc, text, bold_prefix=&quot;&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<div class="summary-text">Adds a numbered list item with optional bold prefix text.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_table</strong><span class="chip">L85–116</span><span class="chip">PR 0.0011 · in=4 out=1</span></summary>
+<p><code>def add_table(doc, headers, rows, col_widths=None)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001088</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (4):</strong> <code>add_table</code>, <code>build</code>, <code>build_interpretation_docx</code>, <code>build_document</code></p>
+<p><strong>Callees (1):</strong> <code>add_table</code></p>
+<div class="summary-text">Adds a formatted table with headers, data rows, and optional column widths in centimeters.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>add_code_block</strong><span class="chip">L119–136</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def add_code_block(doc, code)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build</code></p>
+<div class="summary-text">Adds a monospace code block with light gray background and dark gray text.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build</strong><span class="chip">L139–959</span><span class="chip">PR 0.0038 · in=0 out=10</span></summary>
+<p><code>def build()</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003757</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>10</td></tr></table>
+<p><strong>Callees (10):</strong> <code>add_heading</code>, <code>add_para</code>, <code>add_numbered</code>, <code>add_bold_lead</code>, <code>add_bullet</code>, <code>add_table</code>, <code>add_code_block</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Constructs the complete bmdx.docx Word document covering the 11-phase toxicogenomics pipeline, database schema, methodology, outputs, and limitations.</div>
+</details>
+</details>
+<details><summary><code>citegraph.py</code><span class="chip">28 symbols</span></summary>
+<details><summary><span class="badge badge-class">class</span> <strong>GovernorConfig</strong><span class="chip">L25–75</span><span class="chip">PR 0.0009 · in=6 out=0</span></summary>
+<p><code>class GovernorConfig</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>6</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (5):</strong> <code>CitationGraphCrawler.__init__</code>, <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code>, <code>GeneFuncCrawler.__init__</code></p>
+<div class="summary-text">Dataclass defining configuration parameters for controlling crawler stopping conditions based on depth, paper limits, API budgets, relevance thresholds, and saturation detection.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_known_genes</strong><span class="chip">L82–98</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def load_known_genes(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+) -&gt; set[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>run_mechanism_crawl</code></p>
+<div class="summary-text">Loads gene symbols and aliases from a consensus JSON file and returns them as uppercase strings for hybrid relevance scoring.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>Paper</strong><span class="chip">L106–129</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class Paper</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code></p>
+<div class="summary-text">Dataclass representing a paper with metadata (ID, title, authors, year, abstract, venue, citations) and computed fields (relevance score, organs, genes, depth, expanded status).</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>S2Client</strong><span class="chip">L139–210</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>class S2Client</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>CitationGraphCrawler.__init__</code>, <code>backfill_metadata</code>, <code>GeneFuncCrawler.__init__</code></p>
+<div class="summary-text">API client wrapper for Semantic Scholar that handles HTTP requests, rate limiting, retries, and provides methods to fetch papers, search, and retrieve references and citations.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client.__init__</strong><span class="chip">L142–147</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def __init__(self, api_key: Optional[str] = None, delay: float = 1.0)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Initializes the S2Client with an optional API key and rate-limit delay.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client._get</strong><span class="chip">L149–177</span><span class="chip">PR 0.0010 · in=5 out=1</span></summary>
+<p><code>def _get(self, url: str, params: dict | None = None,
+             _retries: int = 3) -&gt; dict | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001033</td><td class='num'>0.000000</td><td class='num'>5</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (5):</strong> <code>S2Client._get</code>, <code>S2Client.get_paper</code>, <code>S2Client.search</code>, <code>S2Client.get_references</code>, <code>S2Client.get_citations</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client._get</code></p>
+<div class="summary-text">Performs HTTP GET requests with rate limiting, retry logic, and error handling.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client.get_paper</strong><span class="chip">L179–182</span><span class="chip">PR 0.0010 · in=2 out=1</span></summary>
+<p><code>def get_paper(self, paper_id: str) -&gt; dict | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001033</td><td class='num'>0.000083</td><td class='num'>2</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (2):</strong> <code>CitationGraphCrawler.add_seed</code>, <code>backfill_metadata</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client._get</code></p>
+<div class="summary-text">Fetches a single paper by ID (S2, DOI, ArXiv, etc.) from the API.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client.search</strong><span class="chip">L184–190</span><span class="chip">PR 0.0010 · in=6 out=1</span></summary>
+<p><code>def search(self, query: str, limit: int = 20) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001033</td><td class='num'>0.000360</td><td class='num'>6</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (6):</strong> <code>score_relevance</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>gene_relevance</code>, <code>GeneFuncCrawler.search_gene</code>, <code>run_genetox_crawl</code>, <code>concordance_only</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client._get</code></p>
+<div class="summary-text">Searches for papers by query string and returns matching results.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client.get_references</strong><span class="chip">L192–200</span><span class="chip">PR 0.0010 · in=2 out=1</span></summary>
+<p><code>def get_references(self, paper_id: str, limit: int = 50) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001033</td><td class='num'>0.000102</td><td class='num'>2</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (2):</strong> <code>CitationGraphCrawler.expand</code>, <code>GeneFuncCrawler.expand_one_hop</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client._get</code></p>
+<div class="summary-text">Fetches papers referenced by a given paper.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>S2Client.get_citations</strong><span class="chip">L202–210</span><span class="chip">PR 0.0010 · in=1 out=1</span></summary>
+<p><code>def get_citations(self, paper_id: str, limit: int = 50) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001033</td><td class='num'>0.000053</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>CitationGraphCrawler.expand</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client._get</code></p>
+<div class="summary-text">Fetches papers that cite a given paper.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>score_relevance</strong><span class="chip">L217–283</span><span class="chip">PR 0.0010 · in=2 out=1</span></summary>
+<p><code>def score_relevance(paper: Paper, config: GovernorConfig) -&gt; float</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001003</td><td class='num'>0.000100</td><td class='num'>2</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (2):</strong> <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler._ingest_neighbor</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client.search</code></p>
+<div class="summary-text">Scores a paper&#x27;s relevance (0-1) based on keyword matching with bonuses for reviews, recency, organ specificity, and known gene presence.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>tag_organs</strong><span class="chip">L286–293</span><span class="chip">PR 0.0009 · in=6 out=0</span></summary>
+<p><code>def tag_organs(paper: Paper, config: GovernorConfig) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>6</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (6):</strong> <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler._ingest_neighbor</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code></p>
+<div class="summary-text">Tags which organs a paper is relevant to by matching organ-specific keywords.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>SaturationTracker</strong><span class="chip">L300–334</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class SaturationTracker</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>CitationGraphCrawler.__init__</code></p>
+<div class="summary-text">Tracks whether new papers contribute new concepts to detect when the graph saturates.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>SaturationTracker.__init__</strong><span class="chip">L303–306</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def __init__(self, config: GovernorConfig)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Initializes the saturation tracker with a config and empty concept tracking.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>SaturationTracker.assess</strong><span class="chip">L308–325</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def assess(self, paper: Paper) -&gt; float</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler._ingest_neighbor</code></p>
+<div class="summary-text">Assesses a paper&#x27;s novelty score based on new bigrams and gene tokens.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>SaturationTracker.is_saturated</strong><span class="chip">L328–334</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def is_saturated(self) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Property returning True if recent papers add few new concepts.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>CitationGraphCrawler</strong><span class="chip">L341–666</span><span class="chip">PR 0.0009 · in=4 out=0</span></summary>
+<p><code>class CitationGraphCrawler</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code></p>
+<div class="summary-text">Main class that builds a citation graph from seed papers with governor-controlled expansion.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler.__init__</strong><span class="chip">L347–364</span><span class="chip">PR 0.0019 · in=0 out=3</span></summary>
+<p><code>def __init__(self, config: GovernorConfig | None = None,
+                 api_key: str | None = None)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001950</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>3</td></tr></table>
+<p><strong>Callees (3):</strong> <code>GovernorConfig</code>, <code>S2Client</code>, <code>SaturationTracker</code></p>
+<div class="summary-text">Initializes the crawler with config, S2Client, networkx graph, and saturation tracking.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler._dict_to_paper</strong><span class="chip">L366–394</span><span class="chip">PR 0.0012 · in=6 out=1</span></summary>
+<p><code>def _dict_to_paper(self, data: dict, depth: int = 0) -&gt; Paper | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000233</td><td class='num'>6</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (6):</strong> <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler._ingest_neighbor</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code></p>
+<p><strong>Callees (1):</strong> <code>Paper</code></p>
+<div class="summary-text">Converts a Semantic Scholar API response to a Paper object.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler._should_stop</strong><span class="chip">L396–404</span><span class="chip">PR 0.0009 · in=5 out=0</span></summary>
+<p><code>def _should_stop(self) -&gt; tuple[bool, str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>5</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (5):</strong> <code>CitationGraphCrawler.expand</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code></p>
+<div class="summary-text">Checks all governor stopping conditions and returns whether to stop and the reason.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler.add_seed</strong><span class="chip">L406–432</span><span class="chip">PR 0.0020 · in=2 out=5</span></summary>
+<p><code>def add_seed(self, paper_id: str)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002006</td><td class='num'>0.000249</td><td class='num'>2</td><td class='num'>5</td></tr></table>
+<p><strong>Callers (2):</strong> <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code></p>
+<p><strong>Callees (5):</strong> <code>S2Client.get_paper</code>, <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>tag_organs</code>, <code>SaturationTracker.assess</code></p>
+<div class="summary-text">Adds a seed paper by ID and queues it for expansion.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler.add_seed_by_search</strong><span class="chip">L434–451</span><span class="chip">PR 0.0021 · in=3 out=6</span></summary>
+<p><code>def add_seed_by_search(self, query: str, max_results: int = 5)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002140</td><td class='num'>0.000783</td><td class='num'>3</td><td class='num'>6</td></tr></table>
+<p><strong>Callers (3):</strong> <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code></p>
+<p><strong>Callees (6):</strong> <code>S2Client.search</code>, <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>score_relevance</code>, <code>tag_organs</code>, <code>SaturationTracker.assess</code></p>
+<div class="summary-text">Searches for papers and adds high-relevance results as seeds.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler._ingest_neighbor</strong><span class="chip">L453–495</span><span class="chip">PR 0.0020 · in=1 out=5</span></summary>
+<p><code>def _ingest_neighbor(self, data: dict, source_id: str,
+                         depth: int, is_reference: bool) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001994</td><td class='num'>0.000233</td><td class='num'>1</td><td class='num'>5</td></tr></table>
+<p><strong>Callers (1):</strong> <code>CitationGraphCrawler.expand</code></p>
+<p><strong>Callees (5):</strong> <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>score_relevance</code>, <code>tag_organs</code>, <code>SaturationTracker.assess</code></p>
+<div class="summary-text">Processes a reference or citation, scoring and adding it to the graph if above threshold.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler.expand</strong><span class="chip">L497–568</span><span class="chip">PR 0.0049 · in=3 out=6</span></summary>
+<p><code>def expand(self)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004889</td><td class='num'>0.000952</td><td class='num'>3</td><td class='num'>6</td></tr></table>
+<p><strong>Callers (3):</strong> <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code></p>
+<p><strong>Callees (6):</strong> <code>CitationGraphCrawler._should_stop</code>, <code>GeneFuncCrawler._should_stop</code>, <code>S2Client.get_references</code>, <code>CitationGraphCrawler._report</code>, <code>CitationGraphCrawler._ingest_neighbor</code>, <code>S2Client.get_citations</code></p>
+<div class="summary-text">Main loop that expands the graph by processing papers from the priority queue and applying governor controls.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler._report</strong><span class="chip">L570–626</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _report(self) -&gt; dict</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>CitationGraphCrawler.expand</code></p>
+<div class="summary-text">Generates a summary report with statistics, distributions, and top papers.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>CitationGraphCrawler.save</strong><span class="chip">L628–666</span><span class="chip">PR 0.0009 · in=10 out=0</span></summary>
+<p><code>def save(self, path: str = &quot;citegraph_output&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>10</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (10):</strong> <code>build</code>, <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code>, <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code>, <code>_build_per_model_docx</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code></p>
+<div class="summary-text">Saves the graph and papers to JSON and GML files.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_toxicogenomics_crawl</strong><span class="chip">L673–724</span><span class="chip">PR 0.0042 · in=0 out=8</span></summary>
+<p><code>def run_toxicogenomics_crawl(
+    max_depth: int = 2,
+    max_papers: int = 200,
+    api_key: str | None = None,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004224</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>8</td></tr></table>
+<p><strong>Callees (8):</strong> <code>GovernorConfig</code>, <code>CitationGraphCrawler</code>, <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler.expand</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Convenience function running a targeted toxicogenomics crawl with predefined seed papers.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_organ_crawl</strong><span class="chip">L821–868</span><span class="chip">PR 0.0042 · in=0 out=8</span></summary>
+<p><code>def run_organ_crawl(
+    organ: str,
+    max_depth: int = 2,
+    max_papers: int = 400,
+    api_key: str | None = None,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004224</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>8</td></tr></table>
+<p><strong>Callees (8):</strong> <code>GovernorConfig</code>, <code>CitationGraphCrawler</code>, <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler.expand</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Runs an organ-specific toxicogenomics crawl for supported organs (heart, brain, lung).</div>
+</details>
+</details>
+<details><summary><code>crawl_phase2.py</code><span class="chip">3 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>run_mechanism_crawl</strong><span class="chip">L267–331</span><span class="chip">PR 0.0037 · in=2 out=8</span></summary>
+<p><code>def run_mechanism_crawl(
+    name: str,
+    config_dict: dict,
+    max_depth: int = 2,
+    api_key: str | None = None,
+) -&gt; tuple</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003735</td><td class='num'>0.001005</td><td class='num'>2</td><td class='num'>8</td></tr></table>
+<p><strong>Callers (2):</strong> <code>run_all_phase2</code>, <code>main</code></p>
+<p><strong>Callees (8):</strong> <code>load_known_genes</code>, <code>GovernorConfig</code>, <code>CitationGraphCrawler</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler.expand</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Executes a single mechanism or organ-gap crawl by configuring a CitationGraphCrawler with custom topic keywords and boost keywords, loading known genes for scoring, seeding via targeted searches, expanding the citation graph, and saving results to a named output directory.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_all_phase2</strong><span class="chip">L338–420</span><span class="chip">PR 0.0044 · in=1 out=2</span></summary>
+<p><code>def run_all_phase2(
+    tiers: list[int] | None = None,
+    api_key: str | None = None,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004441</td><td class='num'>0.000324</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>main</code></p>
+<p><strong>Callees (2):</strong> <code>run_mechanism_crawl</code>, <code>run_genetox_crawl</code></p>
+<div class="summary-text">Orchestrates execution of all Phase 2 crawls across selected tiers, tracks timing and paper/API metrics for each crawl, and prints a comprehensive summary of total papers collected, API calls used, and per-crawl performance.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>main</strong><span class="chip">L429–465</span><span class="chip">PR 0.0062 · in=0 out=2</span></summary>
+<p><code>def main()</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.006220</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>run_all_phase2</code>, <code>run_mechanism_crawl</code></p>
+<div class="summary-text">CLI entry point that parses command-line arguments to dispatch crawl execution: all tiers, specific tier (1/2/3), single named mechanism/organ crawl, or gene-tox deep dives.</div>
+</details>
+</details>
+<details><summary><code>export_sessions.py</code><span class="chip">6 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>classify_user_content</strong><span class="chip">L22–52</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def classify_user_content(content) -&gt; tuple[str, str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>session_to_markdown</code></p>
+<div class="summary-text">Separates user message content into human text and tool results by parsing content arrays.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>format_tool_result</strong><span class="chip">L55–64</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def format_tool_result(text: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>session_to_markdown</code></p>
+<div class="summary-text">Formats tool result text for markdown, collapsing long outputs into details elements.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>format_tool_use</strong><span class="chip">L67–104</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def format_tool_use(item: dict) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>format_assistant_content</code></p>
+<div class="summary-text">Converts tool_use blocks into readable summaries with special formatting for Read, Write, Edit, Bash, Glob, Grep, Task, and Skill tools.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>format_assistant_content</strong><span class="chip">L107–125</span><span class="chip">PR 0.0016 · in=1 out=1</span></summary>
+<p><code>def format_assistant_content(content) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000066</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>session_to_markdown</code></p>
+<p><strong>Callees (1):</strong> <code>format_tool_use</code></p>
+<div class="summary-text">Extracts readable text from assistant message content, combining text blocks and formatted tool_use blocks.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>session_to_markdown</strong><span class="chip">L128–200</span><span class="chip">PR 0.0037 · in=1 out=3</span></summary>
+<p><code>def session_to_markdown(jsonl_path: Path) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003662</td><td class='num'>0.000133</td><td class='num'>1</td><td class='num'>3</td></tr></table>
+<p><strong>Callers (1):</strong> <code>main</code></p>
+<p><strong>Callees (3):</strong> <code>classify_user_content</code>, <code>format_tool_result</code>, <code>format_assistant_content</code></p>
+<div class="summary-text">Converts a single session JSONL file into formatted markdown with timestamped user and assistant messages.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>main</strong><span class="chip">L203–231</span><span class="chip">PR 0.0040 · in=0 out=1</span></summary>
+<p><code>def main()</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003970</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>1</td></tr></table>
+<p><strong>Callees (1):</strong> <code>session_to_markdown</code></p>
+<div class="summary-text">CLI entry point that processes session files from a directory and exports them as markdown to an output directory.</div>
+</details>
+</details>
+<details><summary><code>extract.py</code><span class="chip">19 symbols</span></summary>
+<details><summary><span class="badge badge-class">class</span> <strong>OllamaEndpoint</strong><span class="chip">L29–69</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class OllamaEndpoint</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_resolve_endpoint</code></p>
+<div class="summary-text">Dataclass representing a connection to an Ollama LLM endpoint with methods to generate text and check availability.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>OllamaEndpoint.generate</strong><span class="chip">L36–61</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def generate(self, prompt: str, system: str = &quot;&quot;,
+                 temperature: float = 0.1) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>extract_one</code>, <code>generate_narrative</code>, <code>run_concordance_analysis</code></p>
+<div class="summary-text">Sends a prompt to Ollama and returns the generated response text with configurable temperature and prediction limits.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>OllamaEndpoint.is_available</strong><span class="chip">L63–69</span><span class="chip">PR 0.0009 · in=4 out=0</span></summary>
+<p><code>def is_available(self) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (4):</strong> <code>ParallelExtractionEngine.__init__</code>, <code>synthesize_interpretation</code>, <code>_run_model</code>, <code>run_concordance_analysis</code></p>
+<div class="summary-text">Checks if the Ollama endpoint is reachable by making a health check request.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>PaperExtraction</strong><span class="chip">L96–111</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class PaperExtraction</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>_merge_extractions</code>, <code>extract_one</code></p>
+<div class="summary-text">Dataclass storing extracted structured information from a paper including genes, organs, methods, claims, stance, and confidence scores.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_chunk_text_for_extraction</strong><span class="chip">L166–186</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _chunk_text_for_extraction(text: str, max_chunk_chars: int = 30_000) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>extract_one</code></p>
+<div class="summary-text">Splits long text into overlapping chunks for extraction, returning intro+methods and results+discussion sections when text exceeds 30KB.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_merge_extractions</strong><span class="chip">L189–236</span><span class="chip">PR 0.0012 · in=1 out=1</span></summary>
+<p><code>def _merge_extractions(extractions: list[PaperExtraction]) -&gt; PaperExtraction</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>extract_one</code></p>
+<p><strong>Callees (1):</strong> <code>PaperExtraction</code></p>
+<div class="summary-text">Merges multiple chunk extractions into a single result by deduplicating and unioning all entity lists (claims, genes, organs, methods, species, dose_response).</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>parse_json_response</strong><span class="chip">L243–263</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def parse_json_response(text: str) -&gt; dict | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>extract_one</code></p>
+<div class="summary-text">Extracts and parses JSON from LLM responses, handling markdown code fences and malformed output.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>extract_one</strong><span class="chip">L270–355</span><span class="chip">PR 0.0038 · in=1 out=6</span></summary>
+<p><code>def extract_one(paper: dict, endpoint: OllamaEndpoint,
+                full_text: str | None = None,
+                text_source: str = &quot;&quot;) -&gt; PaperExtraction</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003838</td><td class='num'>0.000399</td><td class='num'>1</td><td class='num'>6</td></tr></table>
+<p><strong>Callers (1):</strong> <code>ParallelExtractionEngine._worker</code></p>
+<p><strong>Callees (6):</strong> <code>PaperExtraction</code>, <code>_chunk_text_for_extraction</code>, <code>OllamaEndpoint.generate</code>, <code>AnthropicEndpoint.generate</code>, <code>parse_json_response</code>, <code>_merge_extractions</code></p>
+<div class="summary-text">Extracts structured information from one paper using a specified Ollama endpoint, supporting both full-text and abstract-based extraction with chunking.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>ParallelExtractionEngine</strong><span class="chip">L362–564</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class ParallelExtractionEngine</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Distributes paper extraction across multiple Ollama endpoints in parallel, with weighted work distribution based on endpoint speed.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine.__init__</strong><span class="chip">L368–393</span><span class="chip">PR 0.0012 · in=0 out=2</span></summary>
+<p><code>def __init__(self, endpoints: list[OllamaEndpoint] | None = None)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>OllamaEndpoint.is_available</code>, <code>AnthropicEndpoint.is_available</code></p>
+<div class="summary-text">Initializes the engine by checking endpoint availability and setting up thread-safe statistics tracking.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine._worker</strong><span class="chip">L395–430</span><span class="chip">PR 0.0041 · in=1 out=1</span></summary>
+<p><code>def _worker(self, paper: dict, endpoint: OllamaEndpoint,
+                index: int, total: int,
+                full_text: str | None = None,
+                text_source: str = &quot;&quot;) -&gt; PaperExtraction</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004120</td><td class='num'>0.000233</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>ParallelExtractionEngine.run_endpoint_queue</code></p>
+<p><strong>Callees (1):</strong> <code>extract_one</code></p>
+<div class="summary-text">Processes one paper on one endpoint and prints progress with extracted entities and metadata.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine.process_papers</strong><span class="chip">L432–520</span><span class="chip">PR 0.0016 · in=0 out=1</span></summary>
+<p><code>def process_papers(self, papers_file: str,
+                       max_papers: int | None = None,
+                       fulltext_results: dict | None = None,
+                       ) -&gt; list[PaperExtraction]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>1</td></tr></table>
+<p><strong>Callees (1):</strong> <code>ParallelExtractionEngine._print_summary</code></p>
+<div class="summary-text">Main method that distributes papers across endpoints using weighted round-robin assignment and processes them in parallel threads.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine.run_endpoint_queue</strong><span class="chip">L487–496</span><span class="chip">PR 0.0044 · in=0 out=1</span></summary>
+<p><code>def run_endpoint_queue(endpoint: OllamaEndpoint,
+                               queue: list[tuple[dict, int]])</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004359</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>1</td></tr></table>
+<p><strong>Callees (1):</strong> <code>ParallelExtractionEngine._worker</code></p>
+<div class="summary-text">Runs the sequential work queue for a single endpoint, allowing GPUs to process papers one at a time.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine._print_summary</strong><span class="chip">L522–556</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _print_summary(self, extractions: list[PaperExtraction],
+                       elapsed: float)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>ParallelExtractionEngine.process_papers</code></p>
+<div class="summary-text">Prints extraction statistics including processing time, gene/organ/method frequencies, and per-endpoint metrics.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ParallelExtractionEngine.save</strong><span class="chip">L558–564</span><span class="chip">PR 0.0009 · in=10 out=0</span></summary>
+<p><code>def save(self, extractions: list[PaperExtraction],
+             path: str = &quot;citegraph_output/extractions.json&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>10</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (10):</strong> <code>build</code>, <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code>, <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code>, <code>_build_per_model_docx</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code></p>
+<div class="summary-text">Saves all extractions to a JSON file.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>normalize_gene</strong><span class="chip">L692–725</span><span class="chip">PR 0.0009 · in=7 out=0</span></summary>
+<p><code>def normalize_gene(name: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>7</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (5):</strong> <code>load_genes</code>, <code>load_paper_genes_organs_claims</code>, <code>analyze_gene_consensus</code>, <code>merge_gene_consensus</code>, <code>build_tox_lookup</code></p>
+<div class="summary-text">Normalizes gene names to canonical HGNC symbols by applying alias mappings and removing metadata entries.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>normalize_organ</strong><span class="chip">L728–764</span><span class="chip">PR 0.0009 · in=6 out=0</span></summary>
+<p><code>def normalize_organ(name: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>6</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (5):</strong> <code>load_genes</code>, <code>load_paper_genes_organs_claims</code>, <code>analyze_gene_consensus</code>, <code>merge_gene_consensus</code>, <code>build_tox_lookup</code></p>
+<div class="summary-text">Normalizes organ and tissue names to canonical forms to reduce duplicates.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>analyze_gene_consensus</strong><span class="chip">L771–877</span><span class="chip">PR 0.0011 · in=0 out=2</span></summary>
+<p><code>def analyze_gene_consensus(extractions_file: str = &quot;citegraph_output/extractions.json&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001083</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>normalize_organ</code>, <code>normalize_gene</code></p>
+<div class="summary-text">Analyzes extracted genes to categorize them as consensus hallmarks (3+ papers), moderate evidence (2 papers), or single mentions, and builds organ-specific gene sets.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>merge_gene_consensus</strong><span class="chip">L884–1012</span><span class="chip">PR 0.0011 · in=0 out=2</span></summary>
+<p><code>def merge_gene_consensus(
+    extraction_files: list[str],
+    output_path: str = &quot;citegraph_output/gene_consensus_merged.json&quot;,
+) -&gt; dict</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001083</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>normalize_organ</code>, <code>normalize_gene</code></p>
+<div class="summary-text">Merges extractions from multiple crawl directories, deduplicates papers by ID, and re-runs consensus analysis on the combined dataset.</div>
+</details>
+</details>
+<details><summary><code>fulltext.py</code><span class="chip">22 symbols</span></summary>
+<details><summary><span class="badge badge-class">class</span> <strong>FullTextResult</strong><span class="chip">L44–53</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class FullTextResult</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>FullTextFetcher._get_cached</code>, <code>FullTextFetcher.fetch</code></p>
+<div class="summary-text">Dataclass storing the result of a full-text fetch with paper_id, source, text, character count, and truncation flag.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextResult.__post_init__</strong><span class="chip">L51–53</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def __post_init__(self)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Initializes char_count to the length of the text field if not explicitly provided.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_clean_text</strong><span class="chip">L67–87</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _clean_text(text: str, max_chars: int = 80_000) -&gt; tuple[str, bool]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<div class="summary-text">Strips HTML/XML tags, normalizes whitespace, removes reference sections, and truncates text to max_chars, returning cleaned text and truncation status.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_extract_text_from_xml</strong><span class="chip">L90–103</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _extract_text_from_xml(xml_str: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher._fetch_pmc</code></p>
+<div class="summary-text">Extracts plain text from PMC-style XML documents by locating and parsing the body element.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_extract_text_from_html</strong><span class="chip">L106–118</span><span class="chip">PR 0.0009 · in=4 out=0</span></summary>
+<p><code>def _extract_text_from_html(html: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (4):</strong> <code>FullTextFetcher._fetch_arxiv</code>, <code>FullTextFetcher._fetch_s2_oa</code>, <code>FullTextFetcher._fetch_unpaywall</code>, <code>FullTextFetcher._fetch_doi_proxy</code></p>
+<div class="summary-text">Converts HTML to plain text without external dependencies by removing scripts/styles and decoding HTML entities.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_extract_text_from_pdf</strong><span class="chip">L121–133</span><span class="chip">PR 0.0011 · in=3 out=1</span></summary>
+<p><code>def _extract_text_from_pdf(pdf_bytes: bytes) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001088</td><td class='num'>0.000166</td><td class='num'>3</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (3):</strong> <code>FullTextFetcher._fetch_s2_oa</code>, <code>FullTextFetcher._fetch_unpaywall</code>, <code>FullTextFetcher._fetch_doi_proxy</code></p>
+<p><strong>Callees (1):</strong> <code>ToxKBQuerier.close</code></p>
+<div class="summary-text">Extracts text from PDF bytes using pymupdf, concatenating text from all pages.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>FullTextFetcher</strong><span class="chip">L140–440</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class FullTextFetcher</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Main class that fetches and caches full paper text from multiple sources in priority order with rate limiting and statistics tracking.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher.__init__</strong><span class="chip">L146–173</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def __init__(
+        self,
+        email: str = &quot;user@example.com&quot;,
+        proxy_url: str | None = None,
+        max_chars: int = 80_000,
+        cache_dir: str = &quot;.fulltext_cache&quot;,
+        rate_limit: float = 1.0,
+    )</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Initializes fetcher with email, proxy URL, character limits, cache directory, rate limits, and HTTP session.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._cache_key</strong><span class="chip">L179–181</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def _cache_key(self, paper_id: str) -&gt; Path</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>FullTextFetcher._get_cached</code>, <code>FullTextFetcher._put_cache</code></p>
+<div class="summary-text">Generates a safe filesystem path for cached full-text file based on paper_id.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._cache_meta_key</strong><span class="chip">L183–185</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def _cache_meta_key(self, paper_id: str) -&gt; Path</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>FullTextFetcher._get_cached</code>, <code>FullTextFetcher._put_cache</code></p>
+<div class="summary-text">Generates a safe filesystem path for cached metadata JSON file based on paper_id.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._get_cached</strong><span class="chip">L187–200</span><span class="chip">PR 0.0019 · in=1 out=3</span></summary>
+<p><code>def _get_cached(self, paper_id: str) -&gt; FullTextResult | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001950</td><td class='num'>0.000066</td><td class='num'>1</td><td class='num'>3</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (3):</strong> <code>FullTextFetcher._cache_key</code>, <code>FullTextFetcher._cache_meta_key</code>, <code>FullTextResult</code></p>
+<div class="summary-text">Retrieves a previously cached FullTextResult from disk if both text and metadata files exist.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._put_cache</strong><span class="chip">L202–210</span><span class="chip">PR 0.0016 · in=1 out=2</span></summary>
+<p><code>def _put_cache(self, result: FullTextResult)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000066</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (2):</strong> <code>FullTextFetcher._cache_key</code>, <code>FullTextFetcher._cache_meta_key</code></p>
+<div class="summary-text">Saves a FullTextResult to disk as separate text and metadata JSON files.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_pmc</strong><span class="chip">L216–232</span><span class="chip">PR 0.0016 · in=1 out=1</span></summary>
+<p><code>def _fetch_pmc(self, pmcid: str) -&gt; str | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001586</td><td class='num'>0.000066</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (1):</strong> <code>_extract_text_from_xml</code></p>
+<div class="summary-text">Fetches full-text XML from Europe PMC REST API and extracts text.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_arxiv</strong><span class="chip">L234–247</span><span class="chip">PR 0.0010 · in=1 out=1</span></summary>
+<p><code>def _fetch_arxiv(self, arxiv_id: str) -&gt; str | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001039</td><td class='num'>0.000017</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (1):</strong> <code>_extract_text_from_html</code></p>
+<div class="summary-text">Fetches HTML from ar5iv mirror of arXiv and extracts plain text.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_s2_oa</strong><span class="chip">L249–269</span><span class="chip">PR 0.0013 · in=1 out=2</span></summary>
+<p><code>def _fetch_s2_oa(self, pdf_url: str) -&gt; str | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001348</td><td class='num'>0.000061</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (2):</strong> <code>_extract_text_from_html</code>, <code>_extract_text_from_pdf</code></p>
+<div class="summary-text">Downloads PDF from S2 openAccessPdf URL and extracts text using pymupdf.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_unpaywall</strong><span class="chip">L271–310</span><span class="chip">PR 0.0013 · in=1 out=2</span></summary>
+<p><code>def _fetch_unpaywall(self, doi: str) -&gt; str | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001348</td><td class='num'>0.000061</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (2):</strong> <code>_extract_text_from_pdf</code>, <code>_extract_text_from_html</code></p>
+<div class="summary-text">Queries Unpaywall API for OA copies and downloads the PDF or landing-page HTML.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_doi_proxy</strong><span class="chip">L312–344</span><span class="chip">PR 0.0013 · in=1 out=2</span></summary>
+<p><code>def _fetch_doi_proxy(self, doi: str) -&gt; str | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001348</td><td class='num'>0.000061</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<p><strong>Callees (2):</strong> <code>_extract_text_from_pdf</code>, <code>_extract_text_from_html</code></p>
+<div class="summary-text">Resolves DOI through institutional proxy and fetches content as PDF or HTML.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher.fetch</strong><span class="chip">L350–400</span><span class="chip">PR 0.0106 · in=1 out=9</span></summary>
+<p><code>def fetch(self, paper: dict) -&gt; FullTextResult | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.010623</td><td class='num'>0.000498</td><td class='num'>1</td><td class='num'>9</td></tr></table>
+<p><strong>Callers (1):</strong> <code>FullTextFetcher._fetch_one</code></p>
+<p><strong>Callees (9):</strong> <code>FullTextFetcher._get_cached</code>, <code>FullTextFetcher._fetch_pmc</code>, <code>FullTextFetcher._fetch_arxiv</code>, <code>FullTextFetcher._fetch_s2_oa</code>, <code>FullTextFetcher._fetch_unpaywall</code>, <code>FullTextFetcher._fetch_doi_proxy</code>, <code>_clean_text</code>, <code>FullTextResult</code>, <code>FullTextFetcher._put_cache</code></p>
+<div class="summary-text">Tries all available sources in priority order for a single paper, caches first success, and returns FullTextResult or None.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher.fetch_batch</strong><span class="chip">L402–429</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def fetch_batch(
+        self,
+        papers: list[dict],
+        max_workers: int = 4,
+    ) -&gt; dict[str, FullTextResult]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Fetches full text for multiple papers in parallel using ThreadPoolExecutor, printing progress and returning results dictionary.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher._fetch_one</strong><span class="chip">L411–417</span><span class="chip">PR 0.0099 · in=0 out=1</span></summary>
+<p><code>def _fetch_one(paper: dict, index: int) -&gt; tuple[str, FullTextResult | None]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.009887</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>1</td></tr></table>
+<p><strong>Callees (1):</strong> <code>FullTextFetcher.fetch</code></p>
+<div class="summary-text">Internal helper that fetches one paper and prints progress status including source and character count.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>FullTextFetcher.print_stats</strong><span class="chip">L431–440</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def print_stats(self)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Prints summary statistics of fetching results by source and failure rate.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>backfill_metadata</strong><span class="chip">L447–508</span><span class="chip">PR 0.0015 · in=0 out=2</span></summary>
+<p><code>def backfill_metadata(
+    papers_json_path: str,
+    s2_api_key: str | None = None,
+    rate_limit: float = 1.5,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001539</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>S2Client</code>, <code>S2Client.get_paper</code></p>
+<div class="summary-text">Re-fetches missing pmid/pmcid/open_access_pdf fields from S2 API for papers in a JSON file and saves updated results.</div>
+</details>
+</details>
+<details><summary><code>genefunc_crawl.py</code><span class="chip">14 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>load_gene_organ_pairs</strong><span class="chip">L76–104</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def load_gene_organ_pairs(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+) -&gt; list[tuple[str, list[str]]]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>run_genefunc_crawl</code></p>
+<div class="summary-text">Loads genes and their associated organs from consensus JSON, normalizes organ names to canonical forms, and returns (gene, organs) tuples with defaults to liver.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_search_queries</strong><span class="chip">L146–159</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def build_search_queries(gene: str, organs: list[str]) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>GeneFuncCrawler.search_gene</code></p>
+<div class="summary-text">Generates Semantic Scholar search queries for a gene-organ pair using predefined templates with primary organ terms.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>gene_relevance</strong><span class="chip">L166–229</span><span class="chip">PR 0.0010 · in=3 out=1</span></summary>
+<p><code>def gene_relevance(
+    paper: Paper,
+    target_gene: str,
+    target_organs: list[str],
+    config: GovernorConfig,
+) -&gt; float</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001003</td><td class='num'>0.000033</td><td class='num'>3</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (3):</strong> <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code></p>
+<p><strong>Callees (1):</strong> <code>S2Client.search</code></p>
+<div class="summary-text">Scores paper relevance based on gene name and organ keyword presence (not tox vocabulary), with bonuses for recency and review status.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>GeneFuncCrawler</strong><span class="chip">L236–418</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class GeneFuncCrawler</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code></p>
+<div class="summary-text">Main crawler class that searches Semantic Scholar for gene-function papers and performs 1-hop expansion from top results using budget constraints.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler.__init__</strong><span class="chip">L242–256</span><span class="chip">PR 0.0012 · in=0 out=2</span></summary>
+<p><code>def __init__(
+        self,
+        max_papers: int = 400,
+        max_api_calls: int = 200,
+        api_key: str | None = None,
+        rate_limit_delay: float = 1.5,
+    )</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>GovernorConfig</code>, <code>S2Client</code></p>
+<div class="summary-text">Initializes crawler with S2 API client, GovernorConfig, paper/gene tracking, and budget parameters for papers and API calls.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler._should_stop</strong><span class="chip">L258–265</span><span class="chip">PR 0.0009 · in=5 out=0</span></summary>
+<p><code>def _should_stop(self) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>5</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (5):</strong> <code>CitationGraphCrawler.expand</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code></p>
+<div class="summary-text">Checks if paper or API call budgets have been reached and prints budget status.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler._dict_to_paper</strong><span class="chip">L267–287</span><span class="chip">PR 0.0012 · in=6 out=1</span></summary>
+<p><code>def _dict_to_paper(self, data: dict) -&gt; Paper | None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000233</td><td class='num'>6</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (6):</strong> <code>CitationGraphCrawler.add_seed</code>, <code>CitationGraphCrawler.add_seed_by_search</code>, <code>CitationGraphCrawler._ingest_neighbor</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code></p>
+<p><strong>Callees (1):</strong> <code>Paper</code></p>
+<div class="summary-text">Converts S2 API response dictionary into a Paper object with metadata extraction.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler._add_paper</strong><span class="chip">L289–297</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def _add_paper(self, paper: Paper, gene: str) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>run_genetox_crawl</code></p>
+<div class="summary-text">Adds paper to graph and tracks associated gene; returns True if newly added.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler.search_gene</strong><span class="chip">L299–331</span><span class="chip">PR 0.0030 · in=1 out=9</span></summary>
+<p><code>def search_gene(self, gene: str, organs: list[str]) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003018</td><td class='num'>0.000183</td><td class='num'>1</td><td class='num'>9</td></tr></table>
+<p><strong>Callers (1):</strong> <code>run_genefunc_crawl</code></p>
+<p><strong>Callees (9):</strong> <code>build_search_queries</code>, <code>CitationGraphCrawler._should_stop</code>, <code>GeneFuncCrawler._should_stop</code>, <code>S2Client.search</code>, <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>gene_relevance</code>, <code>tag_organs</code>, <code>GeneFuncCrawler._add_paper</code></p>
+<div class="summary-text">Searches S2 for gene-function papers using generated queries, filters by relevance threshold, and returns IDs of newly added papers.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler.expand_one_hop</strong><span class="chip">L333–360</span><span class="chip">PR 0.0026 · in=2 out=8</span></summary>
+<p><code>def expand_one_hop(self, paper_ids: list[str], gene: str,
+                       organs: list[str], max_per_paper: int = 10)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002582</td><td class='num'>0.000233</td><td class='num'>2</td><td class='num'>8</td></tr></table>
+<p><strong>Callers (2):</strong> <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code></p>
+<p><strong>Callees (8):</strong> <code>CitationGraphCrawler._should_stop</code>, <code>GeneFuncCrawler._should_stop</code>, <code>S2Client.get_references</code>, <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>gene_relevance</code>, <code>tag_organs</code>, <code>GeneFuncCrawler._add_paper</code></p>
+<div class="summary-text">Fetches references from top search results and adds relevant ones to graph based on gene-relevance scoring.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>GeneFuncCrawler.save</strong><span class="chip">L362–418</span><span class="chip">PR 0.0009 · in=10 out=0</span></summary>
+<p><code>def save(self, path: str = &quot;citegraph_output_genefunc&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>10</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (10):</strong> <code>build</code>, <code>run_toxicogenomics_crawl</code>, <code>run_organ_crawl</code>, <code>run_mechanism_crawl</code>, <code>run_genetox_crawl</code>, <code>run_genefunc_crawl</code>, <code>_build_per_model_docx</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code></p>
+<div class="summary-text">Exports papers, edges, and annotated citation graph to JSON and GML files.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_tox_search_queries</strong><span class="chip">L421–433</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def build_tox_search_queries(gene: str, organs: list[str], focus: str) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>run_genetox_crawl</code></p>
+<div class="summary-text">Generates tox-focused search queries combining focus strings with toxicology templates and organ terms.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_genetox_crawl</strong><span class="chip">L436–510</span><span class="chip">PR 0.0047 · in=2 out=14</span></summary>
+<p><code>def run_genetox_crawl(
+    max_papers_per_gene: int = 100,
+    api_key: str | None = None,
+) -&gt; &quot;GeneFuncCrawler&quot;</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.004698</td><td class='num'>0.001354</td><td class='num'>2</td><td class='num'>14</td></tr></table>
+<p><strong>Callers (1):</strong> <code>run_all_phase2</code></p>
+<p><strong>Callees (14):</strong> <code>GeneFuncCrawler</code>, <code>CitationGraphCrawler._should_stop</code>, <code>GeneFuncCrawler._should_stop</code>, <code>build_tox_search_queries</code>, <code>S2Client.search</code>, <code>CitationGraphCrawler._dict_to_paper</code>, <code>GeneFuncCrawler._dict_to_paper</code>, <code>gene_relevance</code>, <code>tag_organs</code>, <code>GeneFuncCrawler._add_paper</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Tier 3 orchestrator for deep tox-focused searches on 8 interpretation-flagged genes with custom focus strings and templates.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_genefunc_crawl</strong><span class="chip">L513–576</span><span class="chip">PR 0.0061 · in=0 out=9</span></summary>
+<p><code>def run_genefunc_crawl(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+    max_papers: int = 400,
+    max_api_calls: int = 200,
+    api_key: str | None = None,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.006123</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>9</td></tr></table>
+<p><strong>Callees (9):</strong> <code>load_gene_organ_pairs</code>, <code>GeneFuncCrawler</code>, <code>CitationGraphCrawler._should_stop</code>, <code>GeneFuncCrawler._should_stop</code>, <code>GeneFuncCrawler.search_gene</code>, <code>GeneFuncCrawler.expand_one_hop</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Main orchestrator that loads gene-organ pairs, searches for function papers, performs 1-hop expansion, and reports coverage statistics.</div>
+</details>
+</details>
+<details><summary><code>go_gene_map.py</code><span class="chip">4 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>parse_reference_umap</strong><span class="chip">L21–46</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def parse_reference_umap(ts_path: str) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>load_go_terms</code>, <code>build_tsv</code></p>
+<div class="summary-text">Extracts GO term data (UMAP coordinates, cluster IDs, GO IDs and terms) from a TypeScript file using regex pattern matching.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>parse_gaf</strong><span class="chip">L49–76</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def parse_gaf(gaf_path: str, aspect: str = &quot;P&quot;) -&gt; dict[str, set[str]]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build_tsv</code></p>
+<div class="summary-text">Parses a GAF (Gene Annotation Format) file and returns a mapping of GO IDs to gene symbol sets, filtered by aspect (biological process) and excluding NOT-qualified annotations.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_tox_lookup</strong><span class="chip">L79–142</span><span class="chip">PR 0.0011 · in=0 out=2</span></summary>
+<p><code>def build_tox_lookup(
+    extractions_path: str,
+    consensus_path: str,
+) -&gt; dict[str, dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001083</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>normalize_organ</code>, <code>normalize_gene</code></p>
+<div class="summary-text">Constructs a lookup dictionary mapping uppercase gene symbols to toxicogenomics evidence data (evidence level, paper counts, affected organs) from consensus and extraction JSON sources.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_tsv</strong><span class="chip">L145–294</span><span class="chip">PR 0.0018 · in=0 out=2</span></summary>
+<p><code>def build_tsv(
+    ts_path: str,
+    rat_gaf_path: str,
+    human_gaf_path: str,
+    output_path: str,
+    tox_lookup: dict[str, dict] | None = None,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001829</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>parse_reference_umap</code>, <code>parse_gaf</code></p>
+<div class="summary-text">Performs an inner join of reference UMAP GO terms with rat and human GAF annotations, producing a TSV file with species tagging, rat symbol preservation, and toxicogenomics cross-reference data.</div>
+</details>
+</details>
+<details><summary><code>interpret.py</code><span class="chip">45 symbols</span></summary>
+<details><summary><span class="badge badge-class">class</span> <strong>AnthropicEndpoint</strong><span class="chip">L33–57</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class AnthropicEndpoint</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_resolve_endpoint</code></p>
+<div class="summary-text">Dataclass that wraps the Anthropic Claude API as an endpoint for generating interpretation narratives.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>AnthropicEndpoint.generate</strong><span class="chip">L39–54</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def generate(self, prompt: str, system: str = &quot;&quot;,
+                 temperature: float | None = None) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>extract_one</code>, <code>generate_narrative</code>, <code>run_concordance_analysis</code></p>
+<div class="summary-text">Sends a prompt to Claude API with optional system instructions and returns the generated text response.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>AnthropicEndpoint.is_available</strong><span class="chip">L56–57</span><span class="chip">PR 0.0009 · in=4 out=0</span></summary>
+<p><code>def is_available(self) -&gt; bool</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (4):</strong> <code>ParallelExtractionEngine.__init__</code>, <code>synthesize_interpretation</code>, <code>_run_model</code>, <code>run_concordance_analysis</code></p>
+<div class="summary-text">Checks if ANTHROPIC_API_KEY environment variable is set to determine if the endpoint can be used.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>NarrativeRun</strong><span class="chip">L65–70</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>class NarrativeRun</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>_run_model</code>, <code>concordance_only</code></p>
+<div class="summary-text">Dataclass holding results from a single LLM narrative generation including model, endpoint, run index, narrative text, and elapsed time.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>ToxKBQuerier</strong><span class="chip">L77–206</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class ToxKBQuerier</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>interpret</code></p>
+<div class="summary-text">Read-only wrapper around bmdx.duckdb database providing typed query methods for pathways, GO terms, organs, papers, and literature claims.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.__init__</strong><span class="chip">L80–81</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def __init__(self, db_path: str = &quot;bmdx.duckdb&quot;)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Initializes a read-only database connection to bmdx.duckdb.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.close</strong><span class="chip">L83–84</span><span class="chip">PR 0.0011 · in=4 out=1</span></summary>
+<p><code>def close(self)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001088</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (4):</strong> <code>build</code>, <code>_extract_text_from_pdf</code>, <code>ToxKBQuerier.close</code>, <code>interpret</code></p>
+<p><strong>Callees (1):</strong> <code>ToxKBQuerier.close</code></p>
+<div class="summary-text">Closes the database connection.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_pathways</strong><span class="chip">L86–96</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def gene_pathways(self, gene: str) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>enrich_pathways</code></p>
+<div class="summary-text">Queries pathway information (database, ID, name, species) for a given gene.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_go_terms</strong><span class="chip">L98–108</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def gene_go_terms(self, gene: str) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>enrich_go_terms</code></p>
+<div class="summary-text">Queries GO terms, IDs, and cluster information associated with a gene.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_organs</strong><span class="chip">L110–117</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def gene_organs(self, gene: str) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>compute_organ_signature</code>, <code>analyze</code></p>
+<div class="summary-text">Queries organ annotations for a gene.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_papers</strong><span class="chip">L119–130</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def gene_papers(self, gene: str) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Queries papers mentioning a gene with title, year, and citation count.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_claims</strong><span class="chip">L132–141</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def gene_claims(self, gene: str) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Queries literature claims about a gene extracted from papers.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.pathway_genes</strong><span class="chip">L143–148</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def pathway_genes(self, pathway_name: str) -&gt; list[str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Queries all genes associated with a given pathway name.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.all_pathway_gene_counts</strong><span class="chip">L150–155</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def all_pathway_gene_counts(self) -&gt; dict[str, int]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>enrich_pathways</code></p>
+<div class="summary-text">Returns a dictionary mapping pathway names to distinct gene counts.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.all_go_term_gene_counts</strong><span class="chip">L157–162</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def all_go_term_gene_counts(self) -&gt; dict[str, int]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>enrich_go_terms</code></p>
+<div class="summary-text">Returns a dictionary mapping GO IDs to distinct gene counts.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.total_gene_count</strong><span class="chip">L164–168</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def total_gene_count(self) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>enrich_pathways</code>, <code>enrich_go_terms</code>, <code>compute_organ_signature</code></p>
+<div class="summary-text">Returns the total count of distinct genes in the knowledge base.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.total_pathway_gene_count</strong><span class="chip">L170–174</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def total_pathway_gene_count(self) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Returns the total count of distinct genes with pathway annotations.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.total_go_gene_count</strong><span class="chip">L176–180</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def total_go_gene_count(self) -&gt; int</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Returns the total count of distinct genes with GO term annotations.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.gene_evidence</strong><span class="chip">L182–189</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def gene_evidence(self, gene: str) -&gt; dict</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>analyze</code>, <code>interpret</code></p>
+<div class="summary-text">Queries evidence level (consensus/moderate/single) and mention count for a gene.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.go_term_name</strong><span class="chip">L191–196</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def go_term_name(self, go_id: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>enrich_go_terms</code></p>
+<div class="summary-text">Queries the GO term name/description for a given GO ID.</div>
+</details>
+<details><summary><span class="badge badge-method">method</span> <strong>ToxKBQuerier.all_organ_counts</strong><span class="chip">L198–206</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def all_organ_counts(self) -&gt; dict[str, int]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>compute_organ_signature</code></p>
+<div class="summary-text">Returns a dictionary mapping organs to the count of genes annotated to each organ.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>benjamini_hochberg</strong><span class="chip">L213–227</span><span class="chip">PR 0.0009 · in=2 out=0</span></summary>
+<p><code>def benjamini_hochberg(pvalues: list[float]) -&gt; list[float]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>2</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (2):</strong> <code>enrich_pathways</code>, <code>enrich_go_terms</code></p>
+<div class="summary-text">Applies Benjamini-Hochberg FDR correction to p-values and returns adjusted p-values sorted by original index.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>enrich_pathways</strong><span class="chip">L234–307</span><span class="chip">PR 0.0029 · in=1 out=4</span></summary>
+<p><code>def enrich_pathways(
+    responsive_genes: list[str],
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002921</td><td class='num'>0.000282</td><td class='num'>1</td><td class='num'>4</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<p><strong>Callees (4):</strong> <code>ToxKBQuerier.all_pathway_gene_counts</code>, <code>ToxKBQuerier.total_gene_count</code>, <code>ToxKBQuerier.gene_pathways</code>, <code>benjamini_hochberg</code></p>
+<div class="summary-text">Performs Fisher&#x27;s exact test over-representation analysis to identify significantly enriched pathways in a responsive gene set.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>enrich_go_terms</strong><span class="chip">L314–381</span><span class="chip">PR 0.0036 · in=1 out=5</span></summary>
+<p><code>def enrich_go_terms(
+    responsive_genes: list[str],
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003650</td><td class='num'>0.000382</td><td class='num'>1</td><td class='num'>5</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<p><strong>Callees (5):</strong> <code>ToxKBQuerier.all_go_term_gene_counts</code>, <code>ToxKBQuerier.total_gene_count</code>, <code>ToxKBQuerier.gene_go_terms</code>, <code>ToxKBQuerier.go_term_name</code>, <code>benjamini_hochberg</code></p>
+<div class="summary-text">Performs Fisher&#x27;s exact test over-representation analysis to identify significantly enriched GO terms in a responsive gene set.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>compute_bmd_ordering</strong><span class="chip">L388–431</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def compute_bmd_ordering(
+    df: pd.DataFrame,
+    enriched_pathways: list[dict],
+) -&gt; list[dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Orders enriched pathways by median benchmark dose and summarizes expression direction for each pathway&#x27;s genes.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>compute_organ_signature</strong><span class="chip">L438–471</span><span class="chip">PR 0.0022 · in=1 out=3</span></summary>
+<p><code>def compute_organ_signature(
+    responsive_genes: list[str],
+    kb: ToxKBQuerier,
+) -&gt; dict[str, dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002193</td><td class='num'>0.000133</td><td class='num'>1</td><td class='num'>3</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<p><strong>Callees (3):</strong> <code>ToxKBQuerier.gene_organs</code>, <code>ToxKBQuerier.all_organ_counts</code>, <code>ToxKBQuerier.total_gene_count</code></p>
+<div class="summary-text">Scores and ranks organs by enrichment of responsive genes relative to knowledge base background frequencies.</div>
+</details>
+<details><summary><span class="badge badge-class">class</span> <strong>AnalysisResult</strong><span class="chip">L479–498</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>class AnalysisResult</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Dataclass holding all structured results from dose-response analysis including enrichment, literature, narratives, and concordance data.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>analyze</strong><span class="chip">L505–606</span><span class="chip">PR 0.0127 · in=2 out=10</span></summary>
+<p><code>def analyze(
+    df: pd.DataFrame,
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; AnalysisResult</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.012678</td><td class='num'>0.001163</td><td class='num'>2</td><td class='num'>10</td></tr></table>
+<p><strong>Callers (2):</strong> <code>build_interpretation_context</code>, <code>interpret</code></p>
+<p><strong>Callees (10):</strong> <code>enrich_pathways</code>, <code>enrich_go_terms</code>, <code>compute_bmd_ordering</code>, <code>compute_organ_signature</code>, <code>ToxKBQuerier.gene_evidence</code>, <code>ToxKBQuerier.gene_papers</code>, <code>ToxKBQuerier.gene_organs</code>, <code>ToxKBQuerier.gene_claims</code>, <code>AnalysisResult</code>, <code>format_context_text</code></p>
+<div class="summary-text">Runs complete enrichment analysis (pathways, GO terms, organ signature, literature) on dose-response data and returns AnalysisResult.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>format_context_text</strong><span class="chip">L609–704</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def format_context_text(result: AnalysisResult) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Formats structured analysis results into a readable text block for LLM input.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_interpretation_context</strong><span class="chip">L711–719</span><span class="chip">PR 0.0062 · in=0 out=1</span></summary>
+<p><code>def build_interpretation_context(
+    df: pd.DataFrame,
+    kb: ToxKBQuerier,
+    fdr_cutoff: float = 0.05,
+) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.006245</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>1</td></tr></table>
+<p><strong>Callees (1):</strong> <code>analyze</code></p>
+<div class="summary-text">Convenience wrapper that runs analyze() and returns the formatted context text.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>synthesize_interpretation</strong><span class="chip">L832–886</span><span class="chip">PR 0.0012 · in=1 out=2</span></summary>
+<p><code>def synthesize_interpretation(
+    context: str,
+    endpoint: OllamaEndpoint | None = None,
+) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001221</td><td class='num'>0.000033</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>interpret</code></p>
+<p><strong>Callees (2):</strong> <code>OllamaEndpoint.is_available</code>, <code>AnthropicEndpoint.is_available</code></p>
+<div class="summary-text">Sends assembled analysis context to an LLM endpoint to generate a narrative interpretation.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_resolve_endpoint</strong><span class="chip">L906–919</span><span class="chip">PR 0.0019 · in=3 out=2</span></summary>
+<p><code>def _resolve_endpoint(model: str) -&gt; OllamaEndpoint | AnthropicEndpoint</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001950</td><td class='num'>0.000332</td><td class='num'>3</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (3):</strong> <code>generate_all_narratives</code>, <code>_run_model</code>, <code>run_concordance_analysis</code></p>
+<p><strong>Callees (2):</strong> <code>AnthropicEndpoint</code>, <code>OllamaEndpoint</code></p>
+<div class="summary-text">Maps a model name to the appropriate endpoint (Ollama or Anthropic) for generation.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_ensure_model_pulled</strong><span class="chip">L922–947</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _ensure_model_pulled(endpoint: OllamaEndpoint) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>generate_all_narratives</code></p>
+<div class="summary-text">Checks if a model exists on an Ollama endpoint and pulls it if missing.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>generate_narrative</strong><span class="chip">L950–997</span><span class="chip">PR 0.0013 · in=1 out=2</span></summary>
+<p><code>def generate_narrative(
+    context: str,
+    endpoint: OllamaEndpoint | AnthropicEndpoint,
+    model_override: str | None = None,
+    temperature: float = 0.3,
+) -&gt; tuple[str, float]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001343</td><td class='num'>0.000066</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_run_model</code></p>
+<p><strong>Callees (2):</strong> <code>OllamaEndpoint.generate</code>, <code>AnthropicEndpoint.generate</code></p>
+<div class="summary-text">Generates a single interpretation narrative from an endpoint and returns text with elapsed time.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_sanitize_model_name</strong><span class="chip">L1000–1002</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def _sanitize_model_name(model: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_write_per_model_output</code></p>
+<div class="summary-text">Converts model names to safe filename components by replacing colons and slashes.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_write_per_model_output</strong><span class="chip">L1005–1031</span><span class="chip">PR 0.0029 · in=1 out=2</span></summary>
+<p><code>def _write_per_model_output(
+    result: AnalysisResult,
+    runs: list[NarrativeRun],
+    model: str,
+    base_docx: str | None,
+    base_md: str,
+) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002879</td><td class='num'>0.000266</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_run_model</code></p>
+<p><strong>Callees (2):</strong> <code>_sanitize_model_name</code>, <code>_build_per_model_docx</code></p>
+<div class="summary-text">Writes per-model markdown and Word document files as each model&#x27;s narrative runs complete.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_build_per_model_docx</strong><span class="chip">L1034–1057</span><span class="chip">PR 0.0015 · in=1 out=6</span></summary>
+<p><code>def _build_per_model_docx(
+    result: AnalysisResult,
+    runs: list[NarrativeRun],
+    model: str,
+    output_path: str,
+) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001522</td><td class='num'>0.000399</td><td class='num'>1</td><td class='num'>6</td></tr></table>
+<p><strong>Callers (1):</strong> <code>_write_per_model_output</code></p>
+<p><strong>Callees (5):</strong> <code>add_heading</code>, <code>_render_narrative</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Builds a per-model Word document containing all narrative runs for a single model.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>generate_all_narratives</strong><span class="chip">L1060–1122</span><span class="chip">PR 0.0021 · in=1 out=2</span></summary>
+<p><code>def generate_all_narratives(
+    context: str,
+    models: list[str],
+    n_runs: int = 3,
+    base_docx: str | None = None,
+    base_md: str = &quot;output/interpretation.md&quot;,
+    result: AnalysisResult | None = None,
+) -&gt; list[NarrativeRun]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002138</td><td class='num'>0.000083</td><td class='num'>1</td><td class='num'>2</td></tr></table>
+<p><strong>Callers (1):</strong> <code>interpret</code></p>
+<p><strong>Callees (2):</strong> <code>_resolve_endpoint</code>, <code>_ensure_model_pulled</code></p>
+<div class="summary-text">Generates narratives from multiple models in parallel with per-model sequential runs.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_run_model</strong><span class="chip">L1082–1110</span><span class="chip">PR 0.0057 · in=0 out=6</span></summary>
+<p><code>def _run_model(model: str) -&gt; list[NarrativeRun]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.005727</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>6</td></tr></table>
+<p><strong>Callees (6):</strong> <code>_resolve_endpoint</code>, <code>OllamaEndpoint.is_available</code>, <code>AnthropicEndpoint.is_available</code>, <code>generate_narrative</code>, <code>NarrativeRun</code>, <code>_write_per_model_output</code></p>
+<div class="summary-text">Internal function that generates n narrative runs for a single model and writes output.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>run_concordance_analysis</strong><span class="chip">L1129–1205</span><span class="chip">PR 0.0023 · in=2 out=5</span></summary>
+<p><code>def run_concordance_analysis(
+    narrative_runs: list[NarrativeRun],
+    concordance_model: str = &quot;claude-sonnet-4-6&quot;,
+) -&gt; tuple[str, str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002260</td><td class='num'>0.000382</td><td class='num'>2</td><td class='num'>5</td></tr></table>
+<p><strong>Callers (2):</strong> <code>interpret</code>, <code>concordance_only</code></p>
+<p><strong>Callees (5):</strong> <code>_resolve_endpoint</code>, <code>OllamaEndpoint.is_available</code>, <code>AnthropicEndpoint.is_available</code>, <code>OllamaEndpoint.generate</code>, <code>AnthropicEndpoint.generate</code></p>
+<div class="summary-text">Analyzes concordance/agreement across multiple narrative runs using an LLM concordance model.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>_render_narrative</strong><span class="chip">L1212–1260</span><span class="chip">PR 0.0009 · in=4 out=0</span></summary>
+<p><code>def _render_narrative(doc, text: str) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>4</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (4):</strong> <code>_build_per_model_docx</code>, <code>build_interpretation_docx</code>, <code>interpret</code>, <code>concordance_only</code></p>
+<div class="summary-text">Parses markdown-style LLM narrative text and renders it as Word document elements.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_interpretation_docx</strong><span class="chip">L1263–1472</span><span class="chip">PR 0.0025 · in=1 out=9</span></summary>
+<p><code>def build_interpretation_docx(result: AnalysisResult, output_path: str) -&gt; None</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002482</td><td class='num'>0.000100</td><td class='num'>1</td><td class='num'>9</td></tr></table>
+<p><strong>Callers (1):</strong> <code>interpret</code></p>
+<p><strong>Callees (9):</strong> <code>add_heading</code>, <code>add_bold_lead</code>, <code>_render_narrative</code>, <code>add_table</code>, <code>add_para</code>, <code>add_bullet</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Renders complete analysis results, enrichment tables, and narratives into a formatted Word document.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_dose_response</strong><span class="chip">L1479–1500</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def load_dose_response(csv_path: str) -&gt; pd.DataFrame</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>interpret</code></p>
+<div class="summary-text">Loads dose-response CSV, validates columns, normalizes gene symbols, and ensures BMD is numeric.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>interpret</strong><span class="chip">L1503–1621</span><span class="chip">PR 0.0149 · in=0 out=15</span></summary>
+<p><code>def interpret(
+    csv_path: str,
+    db_path: str = &quot;bmdx.duckdb&quot;,
+    output_path: str = &quot;output/interpretation.md&quot;,
+    docx_path: str | None = None,
+    fdr_cutoff: float = 0.05,
+    models: list[str] | None = None,
+    n_runs: int = 3,
+    concordance_model: str = &quot;claude-sonnet-4-6&quot;,
+) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.014889</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>15</td></tr></table>
+<p><strong>Callees (15):</strong> <code>load_dose_response</code>, <code>ToxKBQuerier</code>, <code>ToxKBQuerier.gene_evidence</code>, <code>analyze</code>, <code>generate_all_narratives</code>, <code>run_concordance_analysis</code>, <code>add_heading</code>, <code>add_para</code>, <code>_render_narrative</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code>, <code>build_interpretation_docx</code>, <code>ToxKBQuerier.close</code>, <code>synthesize_interpretation</code></p>
+<div class="summary-text">Main pipeline that loads data, runs enrichment analysis, generates narratives, and produces markdown and Word outputs.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>concordance_only</strong><span class="chip">L1628–1729</span><span class="chip">PR 0.0030 · in=0 out=9</span></summary>
+<p><code>def concordance_only(
+    all_md_path: str = &quot;output/interpretation_all.md&quot;,
+    concordance_model: str = &quot;claude-sonnet-4-6&quot;,
+    output_dir: str | None = None,
+) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.002993</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>9</td></tr></table>
+<p><strong>Callees (9):</strong> <code>S2Client.search</code>, <code>NarrativeRun</code>, <code>run_concordance_analysis</code>, <code>add_heading</code>, <code>add_para</code>, <code>_render_narrative</code>, <code>CitationGraphCrawler.save</code>, <code>ParallelExtractionEngine.save</code>, <code>GeneFuncCrawler.save</code></p>
+<div class="summary-text">Runs concordance analysis on existing narratives parsed from combined all-narratives markdown without regenerating them.</div>
+</details>
+</details>
+<details><summary><code>main.py</code><span class="chip">1 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>main</strong><span class="chip">L1–2</span><span class="chip">PR 0.0009 · in=0 out=0</span></summary>
+<p><code>def main()</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>0</td></tr></table>
+<div class="summary-text">Entry point function that prints &#x27;Hello from bmdx!&#x27; to the console.</div>
+</details>
+</details>
+<details><summary><code>output/interpretation_pipeline_explanation.py</code><span class="chip">1 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>build_document</strong><span class="chip">L15–215</span><span class="chip">PR 0.0012 · in=0 out=2</span></summary>
+<p><code>def build_document()</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001207</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>2</td></tr></table>
+<p><strong>Callees (2):</strong> <code>add_heading</code>, <code>add_table</code></p>
+<div class="summary-text">Builds and returns a python-docx Document containing the full interpretation pipeline explanation with sections on pipeline overview, knowledge base, design choices, and supporting scripts.</div>
+</details>
+</details>
+<details><summary><code>pathway_enrich.py</code><span class="chip">8 symbols</span></summary>
+<details><summary><span class="badge badge-function">function</span> <strong>_kegg_get</strong><span class="chip">L30–35</span><span class="chip">PR 0.0009 · in=3 out=0</span></summary>
+<p><code>def _kegg_get(path: str) -&gt; str</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>3</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (3):</strong> <code>fetch_kegg_gene_symbol_map</code>, <code>fetch_kegg_pathway_names</code>, <code>fetch_kegg_gene_pathway_links</code></p>
+<div class="summary-text">Helper function that makes HTTP requests to the KEGG REST API and returns raw text response.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>fetch_kegg_gene_symbol_map</strong><span class="chip">L38–64</span><span class="chip">PR 0.0011 · in=1 out=1</span></summary>
+<p><code>def fetch_kegg_gene_symbol_map(species: str = &quot;hsa&quot;) -&gt; dict[str, str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001100</td><td class='num'>0.000022</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>fetch_kegg_pathways</code></p>
+<p><strong>Callees (1):</strong> <code>_kegg_get</code></p>
+<div class="summary-text">Builds a mapping from KEGG gene IDs to gene symbols for a given species via REST API.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>fetch_kegg_pathway_names</strong><span class="chip">L67–90</span><span class="chip">PR 0.0011 · in=1 out=1</span></summary>
+<p><code>def fetch_kegg_pathway_names(species: str = &quot;hsa&quot;) -&gt; dict[str, str]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001100</td><td class='num'>0.000022</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>fetch_kegg_pathways</code></p>
+<p><strong>Callees (1):</strong> <code>_kegg_get</code></p>
+<div class="summary-text">Fetches a mapping of pathway IDs to pathway names from KEGG for a given species.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>fetch_kegg_gene_pathway_links</strong><span class="chip">L93–115</span><span class="chip">PR 0.0011 · in=1 out=1</span></summary>
+<p><code>def fetch_kegg_gene_pathway_links(species: str = &quot;hsa&quot;) -&gt; dict[str, list[str]]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.001100</td><td class='num'>0.000022</td><td class='num'>1</td><td class='num'>1</td></tr></table>
+<p><strong>Callers (1):</strong> <code>fetch_kegg_pathways</code></p>
+<p><strong>Callees (1):</strong> <code>_kegg_get</code></p>
+<div class="summary-text">Bulk downloads all gene-pathway associations from KEGG and returns a mapping of genes to their pathways.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>fetch_kegg_pathways</strong><span class="chip">L118–141</span><span class="chip">PR 0.0037 · in=1 out=3</span></summary>
+<p><code>def fetch_kegg_pathways(
+    species: str = &quot;hsa&quot;,
+) -&gt; dict[str, list[tuple[str, str]]]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.003662</td><td class='num'>0.000133</td><td class='num'>1</td><td class='num'>3</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build_pathway_tsv</code></p>
+<p><strong>Callees (3):</strong> <code>fetch_kegg_gene_symbol_map</code>, <code>fetch_kegg_pathway_names</code>, <code>fetch_kegg_gene_pathway_links</code></p>
+<div class="summary-text">Combines KEGG gene lists, pathway names, and gene-pathway links to create a mapping of gene symbols to pathways with names.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>fetch_reactome_pathways</strong><span class="chip">L151–183</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def fetch_reactome_pathways(
+    gene_symbol: str,
+    species: str = &quot;Homo sapiens&quot;,
+) -&gt; list[tuple[str, str]]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build_pathway_tsv</code></p>
+<div class="summary-text">Queries the Reactome API for pathways associated with a specific gene symbol.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>load_consensus_genes</strong><span class="chip">L190–213</span><span class="chip">PR 0.0009 · in=1 out=0</span></summary>
+<p><code>def load_consensus_genes(
+    consensus_path: str,
+) -&gt; dict[str, dict]</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.000857</td><td class='num'>0.000000</td><td class='num'>1</td><td class='num'>0</td></tr></table>
+<p><strong>Callers (1):</strong> <code>build_pathway_tsv</code></p>
+<div class="summary-text">Loads consensus and moderate-evidence genes from a JSON file with their evidence type, count, and associated organs.</div>
+</details>
+<details><summary><span class="badge badge-function">function</span> <strong>build_pathway_tsv</strong><span class="chip">L220–336</span><span class="chip">PR 0.0054 · in=0 out=3</span></summary>
+<p><code>def build_pathway_tsv(
+    consensus_path: str = &quot;citegraph_output/gene_consensus.json&quot;,
+    output_path: str = &quot;pathway_enrichment.tsv&quot;,
+)</code></p>
+<table><tr><th>PageRank</th><th>Betweenness</th><th>In-degree</th><th>Out-degree</th></tr>
+<tr><td class='num'>0.005427</td><td class='num'>0.000000</td><td class='num'>0</td><td class='num'>3</td></tr></table>
+<p><strong>Callees (3):</strong> <code>load_consensus_genes</code>, <code>fetch_kegg_pathways</code>, <code>fetch_reactome_pathways</code></p>
+<div class="summary-text">Orchestrator function that fetches KEGG and Reactome pathways for all genes and writes a combined TSV with pathway annotations.</div>
+</details>
+</details>
+
+</body>
+</html>
