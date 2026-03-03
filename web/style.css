@@ -1,0 +1,1488 @@
+/* -----------------------------------------------------------------
+ * style.css — 5dToxReport extracted and tokenized stylesheet
+ *
+ * All hardcoded colors, radii, and shadows are replaced with CSS
+ * custom properties defined in the :root block below.  This makes
+ * the palette easy to audit and change in one place.
+ * ----------------------------------------------------------------- */
+
+:root {
+  /* --- Colors: text --- */
+  --c-text:            #212529;
+  --c-text-secondary:  #495057;
+  --c-text-muted:      #6c757d;
+  --c-text-placeholder: #adb5bd;
+
+  /* --- Colors: backgrounds --- */
+  --c-bg:              #f8f9fa;
+  --c-bg-white:        #fff;
+  --c-bg-hover:        #f1f3f5;
+  --c-bg-neutral:      #f1f5f9;
+
+  /* --- Colors: borders --- */
+  --c-border:          #dee2e6;
+  --c-border-light:    #e2e8f0;
+  --c-border-input:    #ced4da;
+
+  /* --- Colors: accent --- */
+  --c-primary:         #1a365d;
+  --c-primary-hover:   #2c5282;
+  --c-blue:            #3182ce;
+  --c-blue-ring:       rgba(49, 130, 206, 0.15);
+
+  /* --- Colors: semantic --- */
+  --c-success:         #22c55e;
+  --c-success-bg:      #f0fdf4;
+  --c-error:           #991b1b;
+  --c-error-bg:        #fef2f2;
+  --c-error-border:    #fecaca;
+  --c-warn:            #92400e;
+  --c-warn-bg:         #fffbeb;
+  --c-warn-border:     #fde68a;
+
+  /* --- Colors: disabled --- */
+  --c-disabled:        #94a3b8;
+
+  /* --- Radius --- */
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --r-xl: 8px;
+
+  /* --- Shadows --- */
+  --shadow-focus:      0 0 0 3px var(--c-blue-ring);
+  --shadow-elevated:   0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-modal:      0 20px 60px rgba(0, 0, 0, 0.3);
+
+  /* --- Fonts --- */
+  --font-mono:  "SF Mono", "Fira Code", "Consolas", monospace;
+  --font-prose: "Aptos", "Calibri", "Segoe UI", sans-serif;
+}
+
+/* ----------------------------------------------------------------
+ * Base styles — clean, minimal, professional light theme
+ * ---------------------------------------------------------------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+    line-height: 1.6;
+}
+
+/* ----------------------------------------------------------------
+ * Layout — centered column with header, form, output
+ * ---------------------------------------------------------------- */
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--c-border);
+}
+
+header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--c-primary);
+    margin-bottom: 0.25rem;
+}
+
+header p {
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+}
+
+/* ----------------------------------------------------------------
+ * Chemical ID form — 5 fields in a responsive grid
+ * ---------------------------------------------------------------- */
+.form-section {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-section h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 1rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.form-group input, .form-group select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-size: 0.9rem;
+    color: var(--c-text);
+    background: var(--c-bg-white);
+    transition: border-color 0.15s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--c-blue);
+    box-shadow: var(--shadow-focus);
+}
+
+.form-group input.resolving {
+    background: #f0f4ff;
+    border-color: #93c5fd;
+}
+
+.form-group input.resolved {
+    background: var(--c-success-bg);
+    border-color: #86efac;
+}
+
+/* ----------------------------------------------------------------
+ * Options row — model selection and generate button
+ * ---------------------------------------------------------------- */
+.options-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.options-row label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text-muted);
+}
+
+.options-row select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-size: 0.85rem;
+    background: var(--c-bg-white);
+}
+
+.btn-generate {
+    margin-left: auto;
+    padding: 0.6rem 1.5rem;
+    background: var(--c-primary);
+    color: var(--c-bg-white);
+    border: none;
+    border-radius: var(--r-lg);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-generate:hover {
+    background: var(--c-primary-hover);
+}
+
+.btn-generate:disabled {
+    background: var(--c-disabled);
+    cursor: not-allowed;
+}
+
+/* ----------------------------------------------------------------
+ * Progress panel — shown during generation
+ * ---------------------------------------------------------------- */
+.progress-panel {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: none;
+}
+
+.progress-panel.visible {
+    display: block;
+}
+
+.progress-panel h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--c-border-light);
+    border-top-color: var(--c-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.progress-log {
+    font-size: 0.8rem;
+    color: var(--c-text-muted);
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+}
+
+.progress-log div {
+    padding: 0.15rem 0;
+}
+
+/* ----------------------------------------------------------------
+ * Output panel — editable prose + references
+ * ---------------------------------------------------------------- */
+.output-section {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: none;
+}
+
+.output-section.visible {
+    display: block;
+}
+
+.output-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.output-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+}
+
+.output-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-action {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--c-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-action:hover {
+    background: var(--c-bg);
+    border-color: var(--c-text-placeholder);
+}
+
+.btn-action.primary {
+    background: var(--c-primary);
+    color: var(--c-bg-white);
+    border-color: var(--c-primary);
+}
+
+.btn-action.primary:hover {
+    background: var(--c-primary-hover);
+}
+
+.btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Content-editable paragraphs for manual polish */
+.output-prose {
+    font-family: var(--font-prose);
+    font-size: 11pt;
+    line-height: 1.8;
+    color: #1a1a1a;
+}
+
+.output-prose .paragraph {
+    margin-bottom: 1em;
+    padding: 0.5rem;
+    border-radius: var(--r-md);
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+}
+
+.output-prose .paragraph:hover {
+    border-color: var(--c-border-light);
+}
+
+.output-prose .paragraph:focus {
+    outline: none;
+    border-color: #93c5fd;
+    background: #fafbff;
+}
+
+.output-prose .paragraph sup {
+    color: var(--c-blue);
+    font-size: 0.8em;
+}
+
+.references-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--c-border-light);
+}
+
+.references-section h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.references-list {
+    font-size: 0.85rem;
+    color: #4a5568;
+    line-height: 1.6;
+}
+
+.references-list div {
+    margin-bottom: 0.3rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--r-sm);
+}
+
+.references-list div:hover {
+    background: #f7fafc;
+}
+
+/* ----------------------------------------------------------------
+ * Metadata / model info
+ * ---------------------------------------------------------------- */
+.meta-info {
+    font-size: 0.75rem;
+    color: var(--c-disabled);
+    text-align: right;
+    margin-top: 0.5rem;
+}
+
+/* ----------------------------------------------------------------
+ * Error display
+ * ---------------------------------------------------------------- */
+.error-panel {
+    background: var(--c-error-bg);
+    border: 1px solid var(--c-error-border);
+    border-radius: var(--r-xl);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--c-error);
+    font-size: 0.9rem;
+    display: none;
+}
+
+.error-panel.visible {
+    display: block;
+}
+
+/* ----------------------------------------------------------------
+ * Notes/warnings panel
+ * ---------------------------------------------------------------- */
+.notes-panel {
+    background: var(--c-warn-bg);
+    border: 1px solid var(--c-warn-border);
+    border-radius: var(--r-xl);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+    color: var(--c-warn);
+    display: none;
+}
+
+.notes-panel.visible {
+    display: block;
+}
+
+.notes-panel ul {
+    margin: 0.25rem 0 0 1.25rem;
+}
+
+/* ----------------------------------------------------------------
+ * .bm2 upload section — drag-and-drop + file cards
+ * ---------------------------------------------------------------- */
+.bm2-section {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.bm2-section h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.bm2-section .section-desc {
+    font-size: 0.8rem;
+    color: var(--c-text-muted);
+    margin-bottom: 1rem;
+}
+
+/* ----------------------------------------------------------------
+ * File pool items — compact rows in the unified file pool list.
+ * Each item shows the filename, a type badge (.bm2 or .csv),
+ * row count info (for CSVs), and a remove button.
+ * ---------------------------------------------------------------- */
+.file-pool-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    background: var(--c-bg);
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-lg);
+    font-size: 0.85rem;
+    color: var(--c-text);
+}
+
+/* Greyed-out appearance for restored files (uploaded in a prior session) */
+.file-pool-item.restored {
+    opacity: 0.65;
+}
+
+.file-pool-item .file-name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-pool-item .file-info {
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+}
+
+/* Type badge — small colored pill indicating file type (.bm2 or .csv) */
+.file-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--r-sm);
+    flex-shrink: 0;
+}
+
+/* Blue badge for .bm2 (apical endpoint) files */
+.file-badge.bm2 {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+/* Green badge for .csv (transcriptomic / gene-level BMD) files */
+.file-badge.csv {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+/* Gray badge for .txt (text) files */
+.file-badge.txt {
+    background: var(--c-bg-hover);
+    color: var(--c-text-secondary);
+}
+
+/* Purple badge for .xlsx (Excel spreadsheet) files */
+.file-badge.xlsx {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.file-pool-item .btn-remove-file {
+    background: none;
+    border: none;
+    color: var(--c-text-placeholder);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0 0.25rem;
+    flex-shrink: 0;
+}
+
+.file-pool-item .btn-remove-file:hover {
+    color: #dc3545;
+}
+
+/* ----------------------------------------------------------------
+ * Section builder — form panel below the file pool where the user
+ * picks a section type, selects a file, configures options, and
+ * clicks "Add & Process" to create a report section.
+ * ---------------------------------------------------------------- */
+#section-builder {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: none;
+}
+
+#section-builder h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+/* Row layout for the section type + file picker + Add button */
+.builder-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.builder-row .form-group {
+    flex: 1;
+    min-width: 160px;
+}
+
+.builder-row select {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-size: 0.9rem;
+    color: var(--c-text);
+    background: var(--c-bg-white);
+}
+
+/* Config panels — shown/hidden depending on the selected section type */
+.builder-config {
+    display: none;
+}
+
+.builder-config.visible {
+    display: block;
+}
+
+/* Drag-and-drop zone for .bm2 file uploads */
+.drop-zone {
+    border: 2px dashed var(--c-border-input);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--c-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--c-blue);
+    background: #f0f7ff;
+    color: var(--c-blue);
+}
+
+.drop-zone input[type="file"] {
+    display: none;
+}
+
+/* Card for each uploaded .bm2 file showing config fields */
+.bm2-card {
+    background: var(--c-bg);
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-lg);
+    padding: 1rem;
+    margin-top: 0.75rem;
+    position: relative;
+}
+
+.bm2-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.bm2-card .card-header .filename {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--c-primary);
+}
+
+.bm2-card .card-header .card-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.bm2-card .card-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.5rem;
+}
+
+.bm2-card .card-fields label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.bm2-card .card-fields input {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-size: 0.8rem;
+}
+
+/* Small button used inside bm2 cards (Process, Remove) */
+.btn-small {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+    color: var(--c-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-small:hover {
+    background: var(--c-bg);
+    border-color: var(--c-text-placeholder);
+}
+
+.btn-small.primary {
+    background: var(--c-primary);
+    color: var(--c-bg-white);
+    border-color: var(--c-primary);
+}
+
+.btn-small.primary:hover {
+    background: var(--c-primary-hover);
+}
+
+.btn-small.danger {
+    color: var(--c-error);
+    border-color: var(--c-error-border);
+}
+
+.btn-small.danger:hover {
+    background: var(--c-error-bg);
+}
+
+.btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ----------------------------------------------------------------
+ * Narrative textarea — editable NTP-style prose for each .bm2 card.
+ * Auto-populated after processing, user can edit before export.
+ * ---------------------------------------------------------------- */
+.bm2-narrative {
+    width: 100%;
+    min-height: 60px;
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-family: "Calibri", "Georgia", serif;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--c-text);
+    background: var(--c-bg-white);
+    resize: vertical;
+    overflow: hidden;
+}
+
+.bm2-narrative:focus {
+    outline: none;
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.3);
+}
+
+.bm2-narrative::placeholder {
+    color: var(--c-text-placeholder);
+    font-style: italic;
+}
+
+.bm2-narrative-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+/* ----------------------------------------------------------------
+ * Table preview — NTP-style HTML tables rendered from .bm2 data
+ * ---------------------------------------------------------------- */
+.table-preview {
+    margin-top: 0.75rem;
+    overflow-x: auto;
+}
+
+.table-preview h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.4rem;
+}
+
+.table-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.table-preview th, .table-preview td {
+    border: 1px solid var(--c-border);
+    padding: 0.25rem 0.4rem;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.table-preview th {
+    background: var(--c-bg-neutral);
+    font-weight: 600;
+    color: #334155;
+}
+
+.table-preview td.endpoint-label {
+    font-weight: 600;
+}
+
+.table-preview .bmd-col {
+    background: #fefce8;
+}
+
+/* ----------------------------------------------------------------
+ * File preview modal — full-viewport overlay with centered dialog.
+ * This is the first (and currently only) modal in the app.
+ * ---------------------------------------------------------------- */
+
+/* Fixed overlay covering the entire viewport — clicking it closes
+   the modal.  z-index 1000 ensures it sits above all other UI. */
+#file-preview-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Semi-transparent dark backdrop behind the dialog */
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+/* The white dialog box — constrained to 90vw / 85vh so it
+   never overflows the screen, with rounded corners and shadow */
+.modal-dialog {
+    position: relative;
+    width: 90vw;
+    max-width: 1000px;
+    max-height: 85vh;
+    background: var(--c-bg-white);
+    border-radius: 12px;
+    box-shadow: var(--shadow-modal);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header row: badge + title + close button — stays pinned at top */
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--c-border-light);
+    flex-shrink: 0;
+}
+
+.modal-header h3 {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--c-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Large × close button in the top-right corner */
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--c-text-placeholder);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--r-md);
+    flex-shrink: 0;
+}
+
+.modal-close:hover {
+    color: var(--c-text-secondary);
+    background: var(--c-bg-hover);
+}
+
+/* Scrollable body area — fills remaining dialog space */
+.modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+/* ---- JSON tree viewer styles ---- */
+
+/* Base container for the recursive JSON tree — uses monospace
+   so keys/values align neatly across nesting levels */
+.json-tree {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+/* Each key-value pair or array element on its own line.
+   padding-left is set dynamically per depth level via inline style. */
+.json-line {
+    white-space: nowrap;
+}
+
+/* Object/array keys rendered in bold dark text */
+.json-key {
+    font-weight: 600;
+    color: #1a202c;
+}
+
+/* Type-specific value coloring for quick visual scanning */
+.json-string { color: #16a34a; }   /* green for strings */
+.json-number { color: #2563eb; }   /* blue for numbers */
+.json-bool   { color: #ea580c; }   /* orange for booleans */
+.json-null   { color: #9ca3af; }   /* gray for null */
+
+/* Clickable toggle for expandable objects/arrays — the bracket
+   ({, [) acts as a click target to expand/collapse children */
+.json-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: inline;
+}
+
+/* Chevron indicator before the opening bracket — points down
+   when expanded (▾) and right when collapsed (▸) */
+.json-toggle::before {
+    content: "▾ ";
+    display: inline;
+    font-size: 0.7rem;
+    color: #9ca3af;
+}
+
+.json-toggle.collapsed::before {
+    content: "▸ ";
+}
+
+/* Container for child nodes — hidden when parent is collapsed */
+.json-children {
+    /* visible by default — toggled via .collapsed on parent */
+}
+
+.json-children.collapsed {
+    display: none;
+}
+
+/* Dim bracket characters ({, }, [, ]) for reduced visual noise */
+.json-bracket {
+    color: #9ca3af;
+}
+
+/* Item/key count badge shown inline when a node is collapsed,
+   e.g. "{3 keys}" or "[12 items]" — helps users navigate
+   without expanding every level */
+.json-count {
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+/* ---- Table preview overrides inside the modal ---- */
+/* Reuses the existing .table-preview styles but adjusts max-height
+   so the table scrolls within the modal body, and makes the header
+   row sticky so column names stay visible while scrolling */
+.modal-body .table-preview {
+    max-height: none;
+    margin-top: 0;
+}
+
+.modal-body .table-preview table {
+    font-size: 0.78rem;
+}
+
+.modal-body .table-preview th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* First column (endpoint labels) sticks to the left edge when
+   scrolling horizontally through wide tables */
+.modal-body .table-preview td:first-child,
+.modal-body .table-preview th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--c-bg-neutral);
+}
+
+/* Row count footer below the table — tells users how many rows
+   are shown vs. the total (e.g. "Showing 50 of 120 rows") */
+.modal-table-footer {
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+    padding: 0.5rem 0;
+    text-align: center;
+}
+
+/* Info/message card shown for unprocessed .bm2 or .xlsx files */
+.modal-info-card {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--c-text-muted);
+}
+
+.modal-info-card .info-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.5;
+}
+
+.modal-info-card .info-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.modal-info-card .info-size {
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    color: var(--c-text-placeholder);
+}
+
+/* Loading spinner shown while fetching preview data */
+.modal-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 3rem 1rem;
+    color: var(--c-text-muted);
+    font-size: 0.9rem;
+}
+
+.modal-loading .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--c-border-light);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Make file-name spans in the pool clickable — underline on hover
+   to hint that clicking opens a preview */
+.file-pool-item .file-name.clickable {
+    cursor: pointer;
+}
+
+.file-pool-item .file-name.clickable:hover {
+    text-decoration: underline;
+    color: #2563eb;
+}
+
+/* ----------------------------------------------------------------
+ * Approval state — green border and badge for approved sections
+ * ---------------------------------------------------------------- */
+
+/* Green left border on approved sections — provides clear visual
+   feedback that a section has been locked in and saved to disk. */
+.bm2-card.approved, .output-section.approved {
+    border-left: 3px solid var(--c-success);
+}
+
+/* Small green badge that replaces the Approve button after approval */
+.approved-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-success);
+    padding: 0.3rem 0.6rem;
+}
+
+/* Approve button styling — green tint to distinguish from other actions */
+.btn-action.approve, .btn-small.approve {
+    color: #15803d;
+    border-color: #86efac;
+}
+
+.btn-action.approve:hover, .btn-small.approve:hover {
+    background: var(--c-success-bg);
+}
+
+/* Blue variant for "Approved (edited)" — indicates the user made
+   style changes that the system is learning from */
+.approved-badge.edited {
+    color: #2563eb;
+}
+
+/* ----------------------------------------------------------------
+ * Version history — dropdown for browsing/restoring past approved versions.
+ * Appears next to the approved badge after a section is approved.
+ * ---------------------------------------------------------------- */
+
+/* Wrapper — inline-block so it sits next to the badge in the actions row */
+.version-history {
+    position: relative;
+    display: inline-block;
+}
+
+/* The trigger button showing "v3 ▾" */
+.version-btn {
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    padding: 0.2rem 0.5rem;
+}
+.version-btn:hover {
+    background: var(--c-bg);
+    border-color: var(--c-text-placeholder);
+}
+
+/* Dropdown panel — absolutely positioned below the trigger button */
+.version-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-elevated);
+    min-width: 280px;
+    z-index: 100;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Individual version row — timestamp on the left, actions on the right */
+.version-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--c-bg-hover);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.version-item:last-child {
+    border-bottom: none;
+}
+.version-item:hover {
+    background: var(--c-bg);
+}
+/* Green tint for the current version row */
+.version-item.current {
+    background: var(--c-success-bg);
+    font-weight: 600;
+}
+
+/* Small "Restore" button inside each non-current version row */
+.version-restore-btn {
+    font-size: 0.7rem;
+    color: #2563eb;
+    background: none;
+    border: 1px solid #93c5fd;
+    border-radius: var(--r-sm);
+    padding: 0.1rem 0.4rem;
+    cursor: pointer;
+}
+.version-restore-btn:hover {
+    background: #eff6ff;
+}
+
+/* Banner shown when the user is previewing a non-current version */
+.version-preview-banner {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: var(--r-lg);
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.version-preview-banner button {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    border: 1px solid #d97706;
+    background: var(--c-bg-white);
+    color: var(--c-warn);
+}
+.version-preview-banner button:hover {
+    background: #fef3c7;
+}
+
+/* ----------------------------------------------------------------
+ * Style profile panel — shows learned writing preferences
+ * ---------------------------------------------------------------- */
+#style-panel {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+#style-panel .output-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+#style-panel h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin: 0;
+}
+
+#style-count {
+    font-weight: 400;
+    color: var(--c-text-muted);
+    font-size: 0.85rem;
+}
+
+.style-rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--c-bg-hover);
+}
+
+.style-rule:last-child {
+    border-bottom: none;
+}
+
+/* Category badge — small colored pill next to each rule */
+.style-category {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--r-sm);
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+}
+
+.style-category.terminology { background: #dbeafe; color: #1d4ed8; }
+.style-category.grammar     { background: #fef3c7; color: var(--c-warn); }
+.style-category.phrasing    { background: #e0e7ff; color: #3730a3; }
+.style-category.structure   { background: #d1fae5; color: #065f46; }
+.style-category.formatting  { background: #fce7f3; color: #9d174d; }
+.style-category.tone        { background: #ede9fe; color: #5b21b6; }
+
+.style-rule-text {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--c-text);
+    line-height: 1.4;
+}
+
+/* Small confidence indicator — shows how many times this rule has
+   been reinforced by repeated edits */
+.style-confidence {
+    font-size: 0.7rem;
+    color: var(--c-text-placeholder);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+}
+
+.style-delete {
+    background: none;
+    border: none;
+    color: var(--c-text-placeholder);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 0.2rem;
+    flex-shrink: 0;
+}
+
+.style-delete:hover {
+    color: #dc3545;
+}
+
+/* ----------------------------------------------------------------
+ * Toast for copy confirmation
+ * ---------------------------------------------------------------- */
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--c-primary);
+    color: var(--c-bg-white);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--r-lg);
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+/* ----------------------------------------------------------------
+ * Collapsible sections — any container with data-collapsible gets
+ * a clickable header that toggles a .collapsed class.  When
+ * collapsed, the .section-body is hidden and a chevron rotates.
+ *
+ * Three header patterns supported:
+ *   1) .section-toggle  — bare h2 (Chemical ID, Apical Results, etc.)
+ *   2) .output-header   — h2 + action buttons (Background, Methods, etc.)
+ *   3) .section-header-bar — h2 + extra controls (File Pool)
+ * All three get a chevron via ::before on the h2 and cursor:pointer.
+ * ---------------------------------------------------------------- */
+
+/* Shared: make all collapsible headers clickable */
+[data-collapsible] > .section-toggle,
+[data-collapsible] > .output-header,
+[data-collapsible] > .section-header-bar {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* section-header-bar layout — same as output-header but for
+   sections that have a non-action control (like Clear Files) */
+.section-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+/* Chevron on the h2 inside any collapsible header variant */
+[data-collapsible] > .section-toggle::before,
+[data-collapsible] > .output-header > h2::before,
+[data-collapsible] > .section-header-bar > h2::before {
+    content: "\25BE";           /* ▾ down-pointing triangle */
+    font-size: 0.7rem;
+    color: var(--c-text-placeholder);
+    margin-right: 0.5rem;
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+/* Rotate chevron when collapsed */
+[data-collapsible].collapsed > .section-toggle::before,
+[data-collapsible].collapsed > .output-header > h2::before,
+[data-collapsible].collapsed > .section-header-bar > h2::before {
+    transform: rotate(-90deg); /* ▸ right-pointing when collapsed */
+}
+
+/* Hide the section body when collapsed */
+[data-collapsible].collapsed > .section-body {
+    display: none;
+}
+
+/* ----------------------------------------------------------------
+ * View controls bar — sits above Chemical Identification, provides
+ * Collapse All / Expand All and a Tabbed View toggle.
+ * ---------------------------------------------------------------- */
+.view-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+}
+
+.view-controls button {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--c-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.view-controls button:hover {
+    background: var(--c-bg);
+    border-color: var(--c-text-placeholder);
+}
+
+/* Active state for the tabbed view toggle — pressed look */
+.view-controls button.active {
+    background: var(--c-primary);
+    color: var(--c-bg-white);
+    border-color: var(--c-primary);
+}
+
+.view-controls button.active:hover {
+    background: var(--c-primary-hover);
+}
+
+/* Separator between button groups */
+.view-controls .separator {
+    width: 1px;
+    height: 1.2rem;
+    background: var(--c-border);
+    margin: 0 0.25rem;
+}
+
+/* ----------------------------------------------------------------
+ * Tabbed view — when .container has .tabbed-view, sections become
+ * tab panels controlled by a tab bar.  Only the active tab's
+ * section is visible.
+ * ---------------------------------------------------------------- */
+
+/* Tab bar — horizontal strip of tab buttons */
+.tab-bar {
+    display: none;        /* hidden in normal (stacked) mode */
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    padding: 0.4rem;
+    background: var(--c-bg-hover);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+}
+
+/* Show tab bar when tabbed view is active */
+.tabbed-view .tab-bar {
+    display: flex;
+}
+
+.tab-bar button {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    background: transparent;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--c-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.tab-bar button:hover {
+    background: #e9ecef;
+    color: var(--c-text-secondary);
+}
+
+.tab-bar button.active {
+    background: var(--c-bg-white);
+    color: var(--c-primary);
+    border-color: var(--c-border);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* In tabbed mode, hide all tabbed sections by default and
+   show only the one matching the active tab */
+.tabbed-view [data-tab-section] {
+    display: none;
+}
+
+.tabbed-view [data-tab-section].tab-active {
+    display: block;
+}
+
+/* In tabbed mode, sections should not be collapsible — the
+   tab bar replaces collapse/expand entirely.  Force section
+   bodies visible and hide chevrons. */
+.tabbed-view [data-collapsible] > .section-body {
+    display: block !important;
+}
+
+.tabbed-view [data-collapsible] > .section-toggle::before,
+.tabbed-view [data-collapsible] > .output-header > h2::before,
+.tabbed-view [data-collapsible] > .section-header-bar > h2::before {
+    display: none;
+}
+
+/* In tabbed mode, hide view-controls collapse/expand buttons
+   since they don't apply */
+.tabbed-view .view-controls .collapse-btns {
+    display: none;
+}

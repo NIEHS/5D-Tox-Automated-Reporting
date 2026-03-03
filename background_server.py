@@ -67,6 +67,7 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse,
 )
+from starlette.staticfiles import StaticFiles
 
 import bm2_cache
 from chem_resolver import ChemicalIdentity, resolve_chemical
@@ -2668,6 +2669,16 @@ def _add_text_with_superscript_refs(paragraph, text: str) -> None:
                 run = paragraph.add_run(part)
                 run.font.size = Pt(11)
                 run.font.name = "Calibri"
+
+
+# ---------------------------------------------------------------------------
+# Static file serving — CSS, JS, and other assets under web/
+# ---------------------------------------------------------------------------
+# Mounted AFTER all explicit @app routes so that named endpoints (like GET /)
+# take priority.  The StaticFiles handler is a catch-all that serves anything
+# inside the web/ directory (style.css, js/state.js, js/utils.js, js/main.js,
+# images, etc.) with correct MIME types and caching headers.
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "web"), name="static")
 
 
 # ---------------------------------------------------------------------------
