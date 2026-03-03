@@ -42,7 +42,6 @@ import csv
 import json
 import math
 import os
-import pickle
 import re
 import subprocess
 import sys
@@ -50,6 +49,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import bm2_cache
 from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -142,82 +142,46 @@ def _build_classpath() -> str:
 
 
 # ---------------------------------------------------------------------------
-# .bm2 export functions — invoke the BMDExpress Java CLI
+# .bm2 export — single JVM launch via pre-compiled Java helper
 # ---------------------------------------------------------------------------
+# The old approach launched 3 JVMs:
+#   1. javac to compile an inline Java source file
+#   2. java to run the compiled class (JSON export)
+#   3. java to run BMDExpressCommandLine (category TSV export)
+#
+# The new approach uses a pre-compiled ExportBm2.class that does both
+# JSON + category TSV in a single JVM launch (~0.4s total vs ~15s before).
+# The .class file lives at java/ExportBm2.class (compiled from java/ExportBm2.java).
 
-def export_bm2_to_json(bm2_path: str, output_json: str) -> None:
+# Path to the directory containing ExportBm2.class
+JAVA_HELPER_DIR = Path(__file__).parent / "java"
+
+
+def export_bm2(bm2_path: str, output_json: str, output_tsv: str) -> None:
     """
-    Deserialize a .bm2 file to JSON using a small Java helper class.
+    Export a .bm2 file to JSON + category TSV in a single JVM launch.
 
-    The .bm2 format is Java serialized data (ObjectOutputStream).  We
-    compile and run a tiny Java program that reads the .bm2, deserializes
-    it to a BMDProject object, and writes it as JSON via Jackson.
+    Uses the pre-compiled ExportBm2.class which deserializes the .bm2 file
+    (Java ObjectInputStream → BMDProject), then:
+      1. Writes the full BMDProject as JSON via Jackson
+      2. Writes category analysis results as TSV via BMDExpress's own
+         DataCombinerService + ProjectNavigationService
+
+    This is ~30x faster than the old 3-JVM approach because JVM startup
+    is the bottleneck, not the actual work.
 
     Args:
         bm2_path:    Path to the input .bm2 file.
         output_json: Path where the JSON export will be written.
+        output_tsv:  Path for category TSV, or "NONE" to skip.
     """
     cp = _build_classpath()
+    helper_dir = str(JAVA_HELPER_DIR)
 
-    # Write the helper class to a temp file, compile, and run
-    java_src = """
-import java.io.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.sciome.bmdexpress2.mvp.model.BMDProject;
-
-public class ExportBm2Json {
-    public static void main(String[] args) throws Exception {
-        FileInputStream fileIn = new FileInputStream(new File(args[0]));
-        BufferedInputStream bIn = new BufferedInputStream(fileIn, 1024 * 2000);
-        ObjectInputStream in = new ObjectInputStream(bIn);
-        BMDProject project = (BMDProject) in.readObject();
-        in.close();
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        mapper.writeValue(new File(args[1]), project);
-    }
-}
-"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        src_path = os.path.join(tmpdir, "ExportBm2Json.java")
-        with open(src_path, "w") as f:
-            f.write(java_src)
-
-        # Compile
-        subprocess.run(
-            ["javac", "-cp", cp, src_path, "-d", tmpdir],
-            check=True, capture_output=True,
-        )
-
-        # Run
-        subprocess.run(
-            ["java", "-cp", f"{cp}:{tmpdir}", "ExportBm2Json", bm2_path, output_json],
-            check=True, capture_output=True,
-        )
-
-
-def export_bm2_categorical(bm2_path: str, output_tsv: str) -> None:
-    """
-    Export category analysis results from a .bm2 file using the BMDExpress
-    CLI's built-in export command.
-
-    The CLI writes a tab-separated file with columns for category ID/name,
-    BMD/BMDL/BMDU values, gene counts, fold changes, etc.
-
-    Args:
-        bm2_path:   Path to the input .bm2 file.
-        output_tsv: Path where the TSV export will be written.
-    """
-    cp = _build_classpath()
     subprocess.run(
         [
-            "java", "-cp", cp,
-            "com.sciome.bmdexpress2.commandline.BMDExpressCommandLine",
-            "export",
-            "--input-bm2", bm2_path,
-            "--analysis-group", "categorical",
-            "--output-file-name", output_tsv,
+            "java", "-cp", f"{cp}:{helper_dir}",
+            "ExportBm2", bm2_path, output_json, output_tsv,
         ],
         check=True, capture_output=True,
     )
@@ -1046,51 +1010,63 @@ def build_table_data_from_bm2(
     """
     print(f"Processing: {bm2_path}")
 
-    # Sidecar cache paths — pickle files stored next to the .bm2 so they
-    # persist across server restarts and are cleaned up with the source file.
-    # Pickle is used instead of JSON/TSV because:
-    #   - The full BMDProject dict is large (~5-10 MB JSON); pickle loads
-    #     ~10x faster than json.load for deeply nested Python dicts.
-    #   - The category_lookup dict avoids re-parsing the TSV on every call.
-    #   - Data is self-produced (our own Java export), so pickle is safe.
-    json_cache = bm2_path + ".pkl"
-    cat_cache = bm2_path + ".categories.pkl"
-
     # Step 1: Load or export the full BMDProject structure.
-    # On first call: run Java export → parse JSON → pickle the dict.
-    # On subsequent calls: load the pickle directly (no JVM, no JSON parse).
-    if os.path.exists(json_cache):
-        print("  Loading cached BMDProject (pickle)...")
-        with open(json_cache, "rb") as f:
-            bm2_json = pickle.load(f)
-    else:
-        print("  Exporting .bm2 → JSON (first time — launching JVM)...")
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-            tmp_json = tmp.name
-        export_bm2_to_json(bm2_path, tmp_json)
-        with open(tmp_json) as f:
-            bm2_json = json.load(f)
-        os.unlink(tmp_json)
-        # Persist as pickle for fast subsequent loads
-        with open(json_cache, "wb") as f:
-            pickle.dump(bm2_json, f, protocol=pickle.HIGHEST_PROTOCOL)
+    # The LMDB B-tree cache (bm2_cache module) stores deserialized dicts
+    # keyed by file path.  After first access the OS page cache keeps the
+    # LMDB pages hot, and orjson deserialization is ~10ms for a 5 MB dict.
+    # On first call: run Java export → parse JSON → store in LMDB.
+    # On subsequent calls: B-tree lookup + orjson.loads (no JVM, no file I/O).
+    # Step 1 + 2: Try LMDB cache for both BMDProject JSON and category lookup.
+    # If either is missing, we need to export — and with the unified Java
+    # helper (ExportBm2.class), both come from a single JVM launch (~0.4s).
+    bm2_json = bm2_cache.get_json(bm2_path)
+    category_lookup = bm2_cache.get_categories(bm2_path)
 
-    # Step 2: Load or export category analysis BMD values.
-    # Same strategy: Java CLI on first call, pickle on subsequent calls.
-    if os.path.exists(cat_cache):
-        print("  Loading cached category analysis (pickle)...")
-        with open(cat_cache, "rb") as f:
-            category_lookup = pickle.load(f)
+    if bm2_json is not None and category_lookup is not None:
+        print("  Loaded BMDProject + categories from LMDB cache")
     else:
-        print("  Exporting category analysis → TSV (first time — launching JVM)...")
-        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as tmp:
-            tmp_tsv = tmp.name
-        export_bm2_categorical(bm2_path, tmp_tsv)
-        category_lookup = build_category_lookup(tmp_tsv)
-        os.unlink(tmp_tsv)
-        # Persist the parsed dict as pickle
-        with open(cat_cache, "wb") as f:
-            pickle.dump(category_lookup, f, protocol=pickle.HIGHEST_PROTOCOL)
+        # Check for legacy pickle sidecars from before the LMDB migration.
+        # If found, import them into LMDB and delete the pickle files.
+        pkl_path = bm2_path + ".pkl"
+        cat_pkl_path = bm2_path + ".categories.pkl"
+
+        if bm2_json is None and os.path.exists(pkl_path):
+            print("  Migrating BMDProject from pickle → LMDB...")
+            import pickle
+            with open(pkl_path, "rb") as f:
+                bm2_json = pickle.load(f)
+            bm2_cache.put_json(bm2_path, bm2_json)
+            os.unlink(pkl_path)
+
+        if category_lookup is None and os.path.exists(cat_pkl_path):
+            print("  Migrating category analysis from pickle → LMDB...")
+            import pickle
+            with open(cat_pkl_path, "rb") as f:
+                category_lookup = pickle.load(f)
+            bm2_cache.put_categories(bm2_path, category_lookup)
+            os.unlink(cat_pkl_path)
+
+        # If either is still missing after migration, run the unified
+        # Java export — one JVM launch produces both JSON + category TSV.
+        if bm2_json is None or category_lookup is None:
+            print("  Exporting .bm2 (single JVM launch — JSON + categories)...")
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+                tmp_json = tmp.name
+            with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as tmp:
+                tmp_tsv = tmp.name
+
+            export_bm2(bm2_path, tmp_json, tmp_tsv)
+
+            if bm2_json is None:
+                with open(tmp_json) as f:
+                    bm2_json = json.load(f)
+                bm2_cache.put_json(bm2_path, bm2_json)
+            os.unlink(tmp_json)
+
+            if category_lookup is None:
+                category_lookup = build_category_lookup(tmp_tsv)
+                bm2_cache.put_categories(bm2_path, category_lookup)
+            os.unlink(tmp_tsv)
 
     print(f"  Category analysis: {len(category_lookup)} endpoints with BMD values")
 

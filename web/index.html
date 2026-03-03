@@ -2350,7 +2350,13 @@
                 for (const file of bm2List) formData.append('files', file);
 
                 try {
-                    const resp = await fetch('/api/upload-bm2', {
+                    // Pass the DTXSID so the server can persist the file
+                    // to sessions/{dtxsid}/files/ immediately (survives reload)
+                    const dtxsid = currentIdentity?.dtxsid || '';
+                    const uploadUrl = dtxsid
+                        ? `/api/upload-bm2?dtxsid=${encodeURIComponent(dtxsid)}`
+                        : '/api/upload-bm2';
+                    const resp = await fetch(uploadUrl, {
                         method: 'POST',
                         body: formData,
                     });
@@ -2412,7 +2418,12 @@
                 formData.append('file', zipFile);
 
                 try {
-                    const resp = await fetch('/api/upload-zip', {
+                    // Pass DTXSID so .bm2 files inside the zip are persisted
+                    const zipDtxsid = currentIdentity?.dtxsid || '';
+                    const zipUploadUrl = zipDtxsid
+                        ? `/api/upload-zip?dtxsid=${encodeURIComponent(zipDtxsid)}`
+                        : '/api/upload-zip';
+                    const resp = await fetch(zipUploadUrl, {
                         method: 'POST',
                         body: formData,
                     });
@@ -2481,8 +2492,10 @@
             const listEl = document.getElementById('file-pool-list');
 
             const item = document.createElement('div');
-            // Greyed-out for files loaded from a saved session (whether or not
-            // they have a server-side upload entry — they weren't uploaded now)
+            // Greyed-out for files loaded from a saved session that already
+            // have an approved section (they're shown for context, not action).
+            // Pending (unapproved) session files look normal so the user knows
+            // they still need processing.
             item.className = 'file-pool-item' + ((file.restored || file.fromSession) ? ' restored' : '');
             item.id = `file-pool-${fileId}`;
 
@@ -2515,7 +2528,7 @@
             removeBtn.textContent = '\u00d7';
             removeBtn.title = 'Remove file';
             removeBtn.onclick = () => removeFile(fileId);
-            if (file.restored || file.fromSession) removeBtn.style.display = 'none';
+            if (file.restored || file.fromSession || file.sessionPersisted) removeBtn.style.display = 'none';
 
             item.appendChild(badge);
             item.appendChild(nameSpan);
@@ -2546,7 +2559,7 @@
          */
         function clearAllFiles() {
             const removable = Object.keys(uploadedFiles).filter(
-                id => !uploadedFiles[id].restored && !uploadedFiles[id].fromSession
+                id => !uploadedFiles[id].restored && !uploadedFiles[id].fromSession && !uploadedFiles[id].sessionPersisted
             );
             for (const fileId of removable) {
                 delete uploadedFiles[fileId];
@@ -2564,7 +2577,7 @@
         function updateClearFilesButton() {
             const btn = document.getElementById('btn-clear-files');
             if (!btn) return;
-            const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession);
+            const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession && !f.sessionPersisted);
             btn.style.display = hasRemovable ? '' : 'none';
         }
 
@@ -4197,6 +4210,39 @@
                 }
             }
 
+            // --- Restore pending (unapproved) files from session directory ---
+            // The server scans sessions/{dtxsid}/files/ for .bm2 files that
+            // don't yet have an approved section and returns them as
+            // pending_files.  We add them to the file pool so the user can
+            // assign them to sections without re-uploading.
+            if (data.pending_files && data.pending_files.length > 0) {
+                // Make sure the file pool and section builder are visible
+                // so the user can assign pending files to report sections.
+                document.getElementById('file-pool-section').style.display = '';
+                document.getElementById('section-builder').style.display = '';
+
+                for (const pf of data.pending_files) {
+                    // Skip if this file was already registered by the
+                    // bm2_sections restore above (it would have been matched
+                    // by server_file_id).
+                    if (uploadedFiles[pf.id]) continue;
+
+                    // Register the file in the client-side file map.
+                    // sessionPersisted=true hides the remove button (the file
+                    // lives in the session directory, removing it from the
+                    // pool would be confusing — it'd reappear on next load).
+                    // Unlike fromSession, we do NOT grey it out — it's an
+                    // actionable file the user still needs to process.
+                    uploadedFiles[pf.id] = {
+                        id:          pf.id,
+                        filename:    pf.filename,
+                        type:        pf.type || 'bm2',
+                        sessionPersisted: true,
+                    };
+                    renderFilePoolItem(pf.id);
+                }
+            }
+
             // --- Restore Materials and Methods section ---
             if (data.methods) {
                 const methods = data.methods;
@@ -4455,7 +4501,7 @@
         }
 
         /** Restore saved form values from localStorage on page load */
-        function restoreChemId() {
+        async function restoreChemId() {
             try {
                 const raw = localStorage.getItem(CHEM_ID_STORAGE_KEY);
                 if (!raw) return;
@@ -4464,12 +4510,16 @@
                     const el = document.getElementById(id);
                     if (el && data[id]) el.value = data[id];
                 });
-                // If a DTXSID was restored, auto-resolve to load the session
+                // If a DTXSID was restored, auto-resolve to load the session.
+                // Await so errors propagate (previously fire-and-forget meant
+                // resolve failures were silently swallowed).
                 const dtxsid = data['dtxsid'];
                 if (dtxsid && dtxsid.startsWith('DTXSID')) {
-                    onFieldBlur('dtxsid');
+                    await onFieldBlur('dtxsid');
                 }
-            } catch (e) { /* corrupt or missing data — ignore */ }
+            } catch (e) {
+                console.error('restoreChemId failed:', e);
+            }
         }
 
         // Attach input listeners to persist every keystroke and selection change

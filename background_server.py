@@ -62,11 +62,13 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import orjson
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import (
-    FileResponse, HTMLResponse, JSONResponse, StreamingResponse,
+    FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse,
 )
 
+import bm2_cache
 from chem_resolver import ChemicalIdentity, resolve_chemical
 from data_gatherer import BackgroundData, gather_all
 from background_writer import generate_background
@@ -133,7 +135,7 @@ _bm2_uploads: dict[str, dict] = {}
 # and Gene BMD Analysis report sections).
 _csv_uploads: dict[str, dict] = {}
 
-# Maps file_id (UUID string) → dict with filename, temp_path, temp_dir, type.
+# Maps file_id (UUID string) → dict with filename, temp_path, type.
 # Used for raw dose-response experimental data (.csv, .txt, .xlsx) extracted
 # from zip archives.  These are BMDExpress-importable input data, not
 # gene-level BMD results.  The client references these by ID in the file pool.
@@ -669,37 +671,49 @@ def _js_dose_key(dose: float) -> str:
 # ---------------------------------------------------------------------------
 
 @app.post("/api/upload-bm2")
-async def api_upload_bm2(files: list[UploadFile] = File(...)):
+async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
     """
     Accept one or more .bm2 file uploads.
 
-    Saves each file to a temp directory and returns a JSON list of
-    metadata objects: {id, filename}.  The id is a UUID that other
-    endpoints use to reference the uploaded file.
-
-    The temp files are stored server-side in _bm2_uploads and cleaned
-    up when the server shuts down (or the OS cleans /tmp).
+    Saves each file to the session's files/ directory (if a dtxsid query
+    parameter is provided) so it persists across page reloads, or to a
+    temp directory as a fallback.  Returns a JSON list of metadata objects:
+    {id, filename}.  The id is a UUID that other endpoints use to
+    reference the uploaded file.
     """
+    # If the client provides a DTXSID, save directly to the session's
+    # files/ directory so the file survives page reloads and server
+    # restarts — no need to wait for approve to persist.
+    dtxsid = request.query_params.get("dtxsid", "")
+    persist_dir = None
+    if dtxsid:
+        persist_dir = _session_dir(dtxsid) / "files"
+        persist_dir.mkdir(exist_ok=True)
+
     results = []
 
     for upload in files:
         bm2_id = str(uuid.uuid4())
-
-        # Save the uploaded file to a temp directory so the Java CLI
-        # can read it later (it needs a real filesystem path)
-        tmp_dir = tempfile.mkdtemp(prefix="bm2_")
         safe_filename = os.path.basename(upload.filename or "upload.bm2")
-        tmp_path = os.path.join(tmp_dir, safe_filename)
+        content = await upload.read()
 
-        with open(tmp_path, "wb") as f:
-            content = await upload.read()
-            f.write(content)
+        if persist_dir:
+            # Save to the session's files/ directory for persistence
+            file_path = str(persist_dir / safe_filename)
+            with open(file_path, "wb") as f:
+                f.write(content)
+        else:
+            # Fallback: save to a temp directory (lost on restart)
+            tmp_dir = tempfile.mkdtemp(prefix="bm2_")
+            file_path = os.path.join(tmp_dir, safe_filename)
+            with open(file_path, "wb") as f:
+                f.write(content)
 
         _bm2_uploads[bm2_id] = {
             "filename": safe_filename,
-            "temp_path": tmp_path,
-            "temp_dir": tmp_dir,
-            "table_data": None,   # populated by /api/process-bm2
+            "temp_path": file_path,
+            "table_data": None,   # populated by /api/process-bm2 or preview
+            "bm2_json": None,     # populated on first preview/process
             "narrative": None,    # populated by /api/process-bm2
         }
 
@@ -912,7 +926,7 @@ _ZIP_VALID_EXTENSIONS = {".bm2", ".csv", ".txt", ".xlsx"}
 
 
 @app.post("/api/upload-zip")
-async def api_upload_zip(file: UploadFile = File(...)):
+async def api_upload_zip(request: Request, file: UploadFile = File(...)):
     """
     Accept a single .zip archive upload, extract its contents, and register
     each recognized file type as if it had been uploaded individually.
@@ -946,6 +960,14 @@ async def api_upload_zip(file: UploadFile = File(...)):
             status_code=400,
         )
 
+    # If the client provides a DTXSID, persist .bm2 files to the session's
+    # files/ directory immediately so they survive page reloads.
+    dtxsid = request.query_params.get("dtxsid", "")
+    persist_dir = None
+    if dtxsid:
+        persist_dir = _session_dir(dtxsid) / "files"
+        persist_dir.mkdir(exist_ok=True)
+
     bm2_results = []
     other_results = []  # csv, txt, xlsx — raw data files
     skipped = []
@@ -966,13 +988,22 @@ async def api_upload_zip(file: UploadFile = File(...)):
                 skipped.append(basename)
                 continue
 
-            # Extract to its own temp directory (same pattern as individual uploads)
-            tmp_dir = tempfile.mkdtemp(prefix=f"{ext.lstrip('.')}_")
             safe_filename = os.path.basename(basename)
-            tmp_path = os.path.join(tmp_dir, safe_filename)
 
-            with zf.open(member) as src, open(tmp_path, "wb") as dst:
-                shutil.copyfileobj(src, dst)
+            if persist_dir:
+                # Persist to session files/ directory so the file survives
+                # page reloads and server restarts — applies to ALL file
+                # types (.bm2, .csv, .txt, .xlsx), not just .bm2.
+                file_path = str(persist_dir / safe_filename)
+                with zf.open(member) as src, open(file_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                tmp_dir = None  # no temp dir needed — file is in session dir
+            else:
+                # No DTXSID provided — extract to a temp directory (lost on restart)
+                tmp_dir = tempfile.mkdtemp(prefix=f"{ext.lstrip('.')}_")
+                file_path = os.path.join(tmp_dir, safe_filename)
+                with zf.open(member) as src, open(file_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
 
             file_id = str(uuid.uuid4())
 
@@ -983,9 +1014,9 @@ async def api_upload_zip(file: UploadFile = File(...)):
                 # downstream endpoints (/api/process-bm2) reference them.
                 _bm2_uploads[file_id] = {
                     "filename": safe_filename,
-                    "temp_path": tmp_path,
-                    "temp_dir": tmp_dir,
+                    "temp_path": file_path,
                     "table_data": None,
+                    "bm2_json": None,     # populated on first preview/process
                     "narrative": None,
                 }
                 bm2_results.append({
@@ -1004,11 +1035,10 @@ async def api_upload_zip(file: UploadFile = File(...)):
                 file_type = ext.lstrip(".")  # "csv", "txt", or "xlsx"
 
                 # Store internally so downstream endpoints can access
-                # the extracted file by ID if needed
+                # the extracted file by ID if needed (e.g., /api/preview).
                 _data_uploads[file_id] = {
                     "filename": safe_filename,
-                    "temp_path": tmp_path,
-                    "temp_dir": tmp_dir,
+                    "temp_path": file_path,
                     "type": file_type,
                 }
 
@@ -1336,6 +1366,57 @@ async def api_session_load(dtxsid: str):
 
         bm2_sections[slug] = section
 
+    # Discover files in files/ that don't have a corresponding approved
+    # section yet (uploaded but not yet processed/approved).  Register them
+    # in the appropriate server-side store (_bm2_uploads or _data_uploads)
+    # and return them as "pending_files" so the client can add them to the
+    # file pool on restore.
+    pending_files = []
+    # Build a set of filenames that already have approved sections
+    approved_filenames = {
+        sec.get("filename", "") for sec in bm2_sections.values()
+    }
+    if files_dir.exists():
+        for data_file in sorted(files_dir.iterdir()):
+            if not data_file.is_file():
+                continue
+            ext = data_file.suffix.lower()
+
+            if ext == ".bm2":
+                if data_file.name in approved_filenames:
+                    continue  # already handled above as an approved section
+                # Unapproved .bm2 file — register in _bm2_uploads
+                file_id = str(uuid.uuid4())
+                _bm2_uploads[file_id] = {
+                    "filename": data_file.name,
+                    "temp_path": str(data_file),
+                    "table_data": None,
+                    "bm2_json": None,
+                }
+                pending_files.append({
+                    "id": file_id,
+                    "filename": data_file.name,
+                    "type": "bm2",
+                })
+
+            elif ext in (".csv", ".txt", ".xlsx"):
+                # Raw data file (dose-response experimental data or
+                # spreadsheet).  Register in _data_uploads so the
+                # preview endpoint can serve it.
+                file_type = ext.lstrip(".")
+                file_id = str(uuid.uuid4())
+                _data_uploads[file_id] = {
+                    "filename": data_file.name,
+                    "temp_path": str(data_file),
+                    "type": file_type,
+                }
+                pending_files.append({
+                    "id": file_id,
+                    "filename": data_file.name,
+                    "type": file_type,
+                })
+            # Skip other file types (e.g., leftover pickle sidecars)
+
     # Gather all genomics_*.json files into a dict keyed by organ_sex
     # (e.g., "liver_male", "kidney_female")
     genomics_sections = {}
@@ -1350,6 +1431,7 @@ async def api_session_load(dtxsid: str):
         "background": _read_json("background.json"),
         "methods": _read_json("methods.json"),
         "bm2_sections": bm2_sections,
+        "pending_files": pending_files,
         "bmd_summary": _read_json("bmd_summary.json"),
         "genomics_sections": genomics_sections,
         "summary": _read_json("summary.json"),
@@ -1450,10 +1532,9 @@ async def api_session_approve(request: Request):
         section_key = f"bm2_{slug}"
         _save_section(dtxsid, section_key, data)
 
-        # Copy the .bm2 file and its pickle sidecars from /tmp into the
-        # session's files/ directory so they persist across server restarts.
-        # The sidecars (.pkl, .categories.pkl) are the cached Java exports —
-        # copying them means a restored session never needs to launch Java again.
+        # Copy the .bm2 file from /tmp into the session's files/ directory
+        # so it persists across server restarts.  (Processed data is cached
+        # in LMDB via bm2_cache, so no sidecar files need copying.)
         bm2_id = data.get("bm2_id", "")
         upload = _bm2_uploads.get(bm2_id)
         if upload and os.path.exists(upload["temp_path"]):
@@ -1463,12 +1544,6 @@ async def api_session_approve(request: Request):
             dest = files_dir / filename
             if not dest.exists():
                 shutil.copy2(src, dest)
-            # Copy pickle sidecars if they exist (cached Java exports)
-            for suffix in (".pkl", ".categories.pkl"):
-                sidecar_src = src + suffix
-                sidecar_dest = str(dest) + suffix
-                if os.path.exists(sidecar_src) and not os.path.exists(sidecar_dest):
-                    shutil.copy2(sidecar_src, sidecar_dest)
 
     elif section_type == "methods":
         # Materials and Methods — single section, saved as methods.json
@@ -2193,41 +2268,54 @@ async def api_preview_file(file_id: str):
     bm2_entry = _bm2_uploads.get(file_id)
     if bm2_entry:
         filename = bm2_entry["filename"]
-        table_data = bm2_entry.get("table_data")
+        bm2_json = bm2_entry.get("bm2_json")
 
-        if table_data is None:
-            # Not yet processed — run the full export-and-analyze pipeline
-            # now so the data is cached for both this preview and any later
-            # /api/process-bm2 or /api/export-docx calls.  Uses default
-            # compound/dose values for the narrative; the section builder
-            # will regenerate the narrative with the real values later.
+        if bm2_json is None:
+            # In-memory cache is empty.  Try the LMDB B-tree cache first —
+            # the bm2_cache module stores deserialized BMDProject dicts via
+            # LMDB + orjson.  After first access, reads are memory-mapped
+            # (OS page cache) + orjson.loads (~10ms for 5 MB).  This is the
+            # fast path for previewing a file after page reload.
             bm2_path = bm2_entry["temp_path"]
             if not os.path.exists(bm2_path):
                 return JSONResponse(
                     {"error": f"Uploaded file no longer exists: {filename}"},
                     status_code=410,
                 )
-            try:
-                loop = asyncio.get_event_loop()
-                table_data, _cat_lookup, bm2_json = await loop.run_in_executor(
-                    None, build_table_data_from_bm2, bm2_path,
-                )
-                # Cache so subsequent previews and process-bm2 calls are instant
-                bm2_entry["table_data"] = table_data
+
+            # Fast path — LMDB B-tree lookup.  Only loads the BMDProject
+            # JSON (skips category analysis, stats, and narrative).
+            loop = asyncio.get_event_loop()
+            bm2_json = await loop.run_in_executor(
+                None, bm2_cache.get_json, bm2_path,
+            )
+            if bm2_json is not None:
                 bm2_entry["bm2_json"] = bm2_json
 
-                # Generate a default narrative (will be overwritten with real
-                # compound name / dose unit when the user processes via the
-                # section builder)
-                narrative = generate_results_narrative(
-                    table_data, "Test Compound", "mg/kg",
-                )
-                bm2_entry["narrative"] = narrative
-            except Exception as e:
-                return JSONResponse(
-                    {"error": f"Processing failed: {e}"},
-                    status_code=500,
-                )
+            if bm2_json is None:
+                # Not in LMDB — run the full export-and-analyze pipeline.
+                # This launches Java (slow) but also populates table_data
+                # and narrative, so later process-bm2 calls are instant.
+                # The pipeline stores the result in LMDB automatically.
+                try:
+                    table_data, _cat_lookup, bm2_json = await loop.run_in_executor(
+                        None, build_table_data_from_bm2, bm2_path,
+                    )
+                    bm2_entry["table_data"] = table_data
+                    bm2_entry["bm2_json"] = bm2_json
+
+                    # Generate a default narrative (will be overwritten with
+                    # real compound name / dose unit when the user processes
+                    # via the section builder)
+                    narrative = generate_results_narrative(
+                        table_data, "Test Compound", "mg/kg",
+                    )
+                    bm2_entry["narrative"] = narrative
+                except Exception as e:
+                    return JSONResponse(
+                        {"error": f"Processing failed: {e}"},
+                        status_code=500,
+                    )
 
         # Return the full BMDProject JSON — contains all 7 top-level lists:
         #   doseResponseExperiments, bMDResult, categoryAnalysisResults,
@@ -2236,11 +2324,14 @@ async def api_preview_file(file_id: str):
         # The JSON tree viewer in the modal lets users expand/collapse any
         # section, so they can inspect BMD model fits, category analysis
         # results, etc. — not just the dose-response tables.
-        return JSONResponse({
-            "type": "bm2_json",
-            "filename": filename,
-            "data": bm2_entry.get("bm2_json", {}),
-        })
+        # Use orjson directly instead of JSONResponse (stdlib json.dumps).
+        # For a 5-10 MB BMDProject dict, orjson.dumps is ~10x faster
+        # (~15ms vs ~200ms), making the second preview feel instant.
+        payload = {"type": "bm2_json", "filename": filename, "data": bm2_json or {}}
+        return Response(
+            content=orjson.dumps(payload),
+            media_type="application/json",
+        )
 
     # --- Check data uploads (.csv, .txt, .xlsx from zip extraction) ---
     data_entry = _data_uploads.get(file_id)
