@@ -470,6 +470,18 @@
             color: #065f46;
         }
 
+        /* Gray badge for .txt (text) files */
+        .file-badge.txt {
+            background: #f1f3f5;
+            color: #495057;
+        }
+
+        /* Purple badge for .xlsx (Excel spreadsheet) files */
+        .file-badge.xlsx {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
         .file-pool-item .btn-remove-file {
             background: none;
             border: none;
@@ -734,6 +746,259 @@
 
         .table-preview .bmd-col {
             background: #fefce8;
+        }
+
+        /* ----------------------------------------------------------------
+         * File preview modal — full-viewport overlay with centered dialog.
+         * This is the first (and currently only) modal in the app.
+         * ---------------------------------------------------------------- */
+
+        /* Fixed overlay covering the entire viewport — clicking it closes
+           the modal.  z-index 1000 ensures it sits above all other UI. */
+        #file-preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Semi-transparent dark backdrop behind the dialog */
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* The white dialog box — constrained to 90vw / 85vh so it
+           never overflows the screen, with rounded corners and shadow */
+        .modal-dialog {
+            position: relative;
+            width: 90vw;
+            max-width: 1000px;
+            max-height: 85vh;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header row: badge + title + close button — stays pinned at top */
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #e2e8f0;
+            flex-shrink: 0;
+        }
+
+        .modal-header h3 {
+            flex: 1;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1a365d;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Large × close button in the top-right corner */
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
+            color: #adb5bd;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .modal-close:hover {
+            color: #495057;
+            background: #f1f3f5;
+        }
+
+        /* Scrollable body area — fills remaining dialog space */
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.25rem;
+        }
+
+        /* ---- JSON tree viewer styles ---- */
+
+        /* Base container for the recursive JSON tree — uses monospace
+           so keys/values align neatly across nesting levels */
+        .json-tree {
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        /* Each key-value pair or array element on its own line.
+           padding-left is set dynamically per depth level via inline style. */
+        .json-line {
+            white-space: nowrap;
+        }
+
+        /* Object/array keys rendered in bold dark text */
+        .json-key {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        /* Type-specific value coloring for quick visual scanning */
+        .json-string { color: #16a34a; }   /* green for strings */
+        .json-number { color: #2563eb; }   /* blue for numbers */
+        .json-bool   { color: #ea580c; }   /* orange for booleans */
+        .json-null   { color: #9ca3af; }   /* gray for null */
+
+        /* Clickable toggle for expandable objects/arrays — the bracket
+           ({, [) acts as a click target to expand/collapse children */
+        .json-toggle {
+            cursor: pointer;
+            user-select: none;
+            display: inline;
+        }
+
+        /* Chevron indicator before the opening bracket — points down
+           when expanded (▾) and right when collapsed (▸) */
+        .json-toggle::before {
+            content: "▾ ";
+            display: inline;
+            font-size: 0.7rem;
+            color: #9ca3af;
+        }
+
+        .json-toggle.collapsed::before {
+            content: "▸ ";
+        }
+
+        /* Container for child nodes — hidden when parent is collapsed */
+        .json-children {
+            /* visible by default — toggled via .collapsed on parent */
+        }
+
+        .json-children.collapsed {
+            display: none;
+        }
+
+        /* Dim bracket characters ({, }, [, ]) for reduced visual noise */
+        .json-bracket {
+            color: #9ca3af;
+        }
+
+        /* Item/key count badge shown inline when a node is collapsed,
+           e.g. "{3 keys}" or "[12 items]" — helps users navigate
+           without expanding every level */
+        .json-count {
+            color: #9ca3af;
+            font-style: italic;
+            font-size: 0.75rem;
+            margin-left: 0.25rem;
+        }
+
+        /* ---- Table preview overrides inside the modal ---- */
+        /* Reuses the existing .table-preview styles but adjusts max-height
+           so the table scrolls within the modal body, and makes the header
+           row sticky so column names stay visible while scrolling */
+        .modal-body .table-preview {
+            max-height: none;
+            margin-top: 0;
+        }
+
+        .modal-body .table-preview table {
+            font-size: 0.78rem;
+        }
+
+        .modal-body .table-preview th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        /* First column (endpoint labels) sticks to the left edge when
+           scrolling horizontally through wide tables */
+        .modal-body .table-preview td:first-child,
+        .modal-body .table-preview th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: #f1f5f9;
+        }
+
+        /* Row count footer below the table — tells users how many rows
+           are shown vs. the total (e.g. "Showing 50 of 120 rows") */
+        .modal-table-footer {
+            font-size: 0.75rem;
+            color: #6c757d;
+            padding: 0.5rem 0;
+            text-align: center;
+        }
+
+        /* Info/message card shown for unprocessed .bm2 or .xlsx files */
+        .modal-info-card {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #6c757d;
+        }
+
+        .modal-info-card .info-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+            opacity: 0.5;
+        }
+
+        .modal-info-card .info-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .modal-info-card .info-size {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            color: #adb5bd;
+        }
+
+        /* Loading spinner shown while fetching preview data */
+        .modal-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 3rem 1rem;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .modal-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Make file-name spans in the pool clickable — underline on hover
+           to hint that clicking opens a preview */
+        .file-pool-item .file-name.clickable {
+            cursor: pointer;
+        }
+
+        .file-pool-item .file-name.clickable:hover {
+            text-decoration: underline;
+            color: #2563eb;
         }
 
         /* ----------------------------------------------------------------
@@ -1215,6 +1480,10 @@
                     <label for="ec">EC Number</label>
                     <input type="text" id="ec" placeholder="e.g., 202-425-9">
                 </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label for="iupac">IUPAC Name</label>
+                    <input type="text" id="iupac" placeholder="e.g., 2,2,3,3-tetrafluoro-3-(trifluoromethoxy)propanoic acid" readonly>
+                </div>
             </div>
 
             <!-- Options and Generate button -->
@@ -1265,10 +1534,10 @@
                 Then use the Section Builder below to create report sections from them.
             </p>
 
-            <!-- Unified drag-and-drop zone accepting both .bm2 and .csv -->
+            <!-- Unified drag-and-drop zone accepting .bm2, .csv, .txt, .xlsx, and .zip -->
             <div class="drop-zone" id="unified-drop-zone" onclick="document.getElementById('unified-file-input').click()">
-                Drop .bm2 or .csv files here or click to browse
-                <input type="file" id="unified-file-input" accept=".bm2,.csv" multiple>
+                Drop .bm2, .csv, .txt, .xlsx, or .zip files here or click to browse
+                <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.xlsx,.zip" multiple>
             </div>
 
             <!-- File pool list — compact items for each uploaded file -->
@@ -1475,6 +1744,25 @@
     <!-- Toast notification -->
     <div class="toast" id="toast"></div>
 
+    <!-- ================================================================
+         File preview modal — first modal in the codebase.
+         Hidden by default; opened when the user clicks a filename in
+         the file pool.  Contains a type badge, title, close button,
+         and a scrollable body that renders JSON trees, data tables,
+         or file metadata depending on the file type.
+         ================================================================ -->
+    <div id="file-preview-modal" style="display:none;">
+        <div class="modal-overlay" onclick="closePreviewModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <span class="file-badge" id="modal-badge"></span>
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" onclick="closePreviewModal()" title="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
     <script>
         /* ================================================================
          * Collapsible sections — toggles the .collapsed class on the
@@ -1603,7 +1891,8 @@
 
         let currentIdentity = null;   // ChemicalIdentity JSON from /api/resolve
         let currentResult = null;     // Generation result from /api/generate
-        let isResolving = false;      // Prevents concurrent resolves
+        let isResolving = false;      // True while a resolve is in-flight
+        let resolveGeneration = 0;    // Incremented on each resolve; stale resolves check this
         let isGenerating = false;     // Prevents concurrent generations
 
         // Approval state — tracks whether each section has been approved
@@ -1639,24 +1928,53 @@
          * resolve via /api/resolve and populate the other fields
          * ================================================================ */
 
-        const fields = ['name', 'casrn', 'dtxsid', 'cid', 'ec'];
+        const fields = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac'];
         const idTypeMap = {
             name: 'name',
             casrn: 'casrn',
             dtxsid: 'dtxsid',
             cid: 'cid',
             ec: 'name',  // EC number resolved through name lookup
+            iupac: 'name', // IUPAC name resolved through name lookup
         };
 
-        // Attach blur handlers to each input field
+        // Track the last value that was resolved so we can detect when
+        // the user has changed a field and needs a fresh resolve.
+        let lastResolvedValue = null;
+
+        // Attach blur, keydown, and input handlers to each ID field.
+        // - blur/Enter: trigger resolve
+        // - input: clear stale resolved values from other fields so the
+        //   user sees a clean form when typing a new chemical
         fields.forEach(fieldId => {
             const input = document.getElementById(fieldId);
             input.addEventListener('blur', () => onFieldBlur(fieldId));
-            // Also allow Enter key to trigger resolve
             input.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     onFieldBlur(fieldId);
+                }
+            });
+            // When the user starts typing in any field, clear the other
+            // fields' resolved values.  This prevents stale data from the
+            // previous chemical lingering while the user enters a new one.
+            input.addEventListener('input', () => {
+                // Only clear if the fields were previously resolved —
+                // avoid clearing during programmatic population.
+                if (!lastResolvedValue) return;
+                const currentValue = input.value.trim();
+                // If the user changed the value away from what was resolved,
+                // clear the other fields and reset the resolved state.
+                if (currentValue !== lastResolvedValue) {
+                    fields.forEach(f => {
+                        if (f !== fieldId) {
+                            document.getElementById(f).value = '';
+                        }
+                        document.getElementById(f).classList.remove('resolved');
+                    });
+                    lastResolvedValue = null;
+                    currentIdentity = null;
+                    document.getElementById('btn-generate').disabled = true;
                 }
             });
         });
@@ -1670,8 +1988,16 @@
             const input = document.getElementById(fieldId);
             const value = input.value.trim();
 
-            // Skip if empty, already resolving, or value hasn't changed
-            if (!value || isResolving) return;
+            // Skip if empty or if we already resolved this exact value
+            if (!value) return;
+            if (value === lastResolvedValue) return;
+
+            // Increment the generation counter so any in-flight resolve
+            // from a previous onFieldBlur call knows it's been superseded.
+            // For example: page loads → restoreChemId() triggers resolve
+            // for the old DTXSID → user types a new name and blurs →
+            // this new resolve supersedes the old one.
+            const thisGeneration = ++resolveGeneration;
 
             isResolving = true;
             hideError();
@@ -1689,6 +2015,10 @@
                     }),
                 });
 
+                // If a newer resolve was started while this one was
+                // in-flight, discard this result — the newer one wins.
+                if (thisGeneration !== resolveGeneration) return;
+
                 if (!resp.ok) {
                     const err = await resp.json();
                     showError(err.error || 'Resolution failed');
@@ -1703,6 +2033,11 @@
                 document.getElementById('dtxsid').value = currentIdentity.dtxsid || '';
                 document.getElementById('cid').value = currentIdentity.pubchem_cid || '';
                 document.getElementById('ec').value = currentIdentity.ec_number || '';
+                document.getElementById('iupac').value = currentIdentity.iupac_name || '';
+
+                // Track what we just resolved so the input listener can
+                // detect when the user changes it to something new
+                lastResolvedValue = value;
 
                 // Persist the resolved values to localStorage so they
                 // survive page reloads without re-resolving
@@ -1727,6 +2062,9 @@
                     try {
                         const sessionResp = await fetch(`/api/session/${currentIdentity.dtxsid}`);
                         const sessionData = await sessionResp.json();
+                        // Double-check we're still the active resolve — a new
+                        // resolve could have started during the session fetch.
+                        if (thisGeneration !== resolveGeneration) return;
                         if (sessionData.exists) {
                             await restoreSession(sessionData);
                         }
@@ -1736,10 +2074,16 @@
                 }
 
             } catch (err) {
-                showError('Network error during resolution: ' + err.message);
-                fields.forEach(f => document.getElementById(f).classList.remove('resolving'));
+                // Only show error if this is still the active resolve
+                if (thisGeneration === resolveGeneration) {
+                    showError('Network error during resolution: ' + err.message);
+                    fields.forEach(f => document.getElementById(f).classList.remove('resolving'));
+                }
             } finally {
-                isResolving = false;
+                // Only clear the flag if this is the latest resolve
+                if (thisGeneration === resolveGeneration) {
+                    isResolving = false;
+                }
             }
         }
 
@@ -1956,9 +2300,10 @@
         unifiedDropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             unifiedDropZone.classList.remove('dragover');
-            // Accept only .bm2 and .csv files, ignore anything else
+            // Accept .bm2, .csv, .txt, .xlsx, and .zip files
+            const validExts = ['.bm2', '.csv', '.txt', '.xlsx', '.zip'];
             const files = Array.from(e.dataTransfer.files).filter(
-                f => f.name.endsWith('.bm2') || f.name.endsWith('.csv')
+                f => validExts.some(ext => f.name.toLowerCase().endsWith(ext))
             );
             if (files.length > 0) uploadFiles(files);
         });
@@ -1981,12 +2326,20 @@
          * @param {File[]} fileList — array of File objects from drag-drop or input
          */
         async function uploadFiles(fileList) {
-            // Partition files by extension
+            // Partition files by extension — zip files are handled separately
+            // because the server extracts them and returns individual file entries.
             const bm2List = [];
             const csvList = [];
+            const zipList = [];
+            const lowerName = f => f.name.toLowerCase();
             for (const f of fileList) {
-                if (f.name.endsWith('.bm2')) bm2List.push(f);
-                else if (f.name.endsWith('.csv')) csvList.push(f);
+                const name = f.name.toLowerCase();
+                if (name.endsWith('.bm2')) bm2List.push(f);
+                else if (name.endsWith('.csv')) csvList.push(f);
+                else if (name.endsWith('.zip')) zipList.push(f);
+                // .txt and .xlsx are only supported inside zip archives —
+                // direct upload of loose .txt/.xlsx files isn't handled by
+                // the existing server endpoints, so we skip them here.
             }
 
             let totalUploaded = 0;
@@ -2053,6 +2406,57 @@
                 }
             }
 
+            // Upload .zip files — server extracts and returns individual entries
+            for (const zipFile of zipList) {
+                const formData = new FormData();
+                formData.append('file', zipFile);
+
+                try {
+                    const resp = await fetch('/api/upload-zip', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json();
+                        showError(err.error || 'ZIP upload failed');
+                        continue;
+                    }
+                    const result = await resp.json();
+
+                    // Register extracted .bm2 files (BMDExpress output)
+                    for (const item of (result.bm2_files || [])) {
+                        uploadedFiles[item.id] = {
+                            id: item.id,
+                            filename: item.filename,
+                            type: 'bm2',
+                        };
+                        renderFilePoolItem(item.id);
+                        totalUploaded++;
+                    }
+
+                    // Register extracted raw data files (.csv, .txt, .xlsx)
+                    // These are dose-response experimental data — animal IDs
+                    // across columns, concentrations in row 2, endpoints in
+                    // subsequent rows.  Suitable for import into BMDExpress.
+                    for (const item of (result.other_files || [])) {
+                        uploadedFiles[item.id] = {
+                            id: item.id,
+                            filename: item.filename,
+                            type: item.type,  // "csv", "txt", or "xlsx"
+                        };
+                        renderFilePoolItem(item.id);
+                        totalUploaded++;
+                    }
+
+                    // Report any skipped files
+                    if (result.skipped && result.skipped.length > 0) {
+                        showToast(`Skipped ${result.skipped.length} unsupported file(s) from zip`);
+                    }
+                } catch (err) {
+                    showError('ZIP upload error: ' + err.message);
+                }
+            }
+
             if (totalUploaded > 0) {
                 showToast(`Uploaded ${totalUploaded} file(s)`);
                 // Re-populate the section builder's file picker dropdown
@@ -2077,18 +2481,26 @@
             const listEl = document.getElementById('file-pool-list');
 
             const item = document.createElement('div');
-            item.className = 'file-pool-item' + (file.restored ? ' restored' : '');
+            // Greyed-out for files loaded from a saved session (whether or not
+            // they have a server-side upload entry — they weren't uploaded now)
+            item.className = 'file-pool-item' + ((file.restored || file.fromSession) ? ' restored' : '');
             item.id = `file-pool-${fileId}`;
 
-            // Type badge
+            // Type badge — color-coded by file type
             const badge = document.createElement('span');
             badge.className = `file-badge ${file.type}`;
-            badge.textContent = file.type === 'bm2' ? '.bm2' : '.csv';
+            const badgeLabels = { bm2: '.bm2', csv: '.csv', txt: '.txt', xlsx: '.xlsx' };
+            badge.textContent = badgeLabels[file.type] || `.${file.type}`;
 
-            // Filename
+            // Filename — clickable to open the file preview modal.
+            // The 'clickable' CSS class adds cursor:pointer and underline-on-hover.
             const nameSpan = document.createElement('span');
-            nameSpan.className = 'file-name';
+            nameSpan.className = 'file-name clickable';
             nameSpan.textContent = file.filename;
+            nameSpan.onclick = (e) => {
+                e.stopPropagation();
+                openPreviewModal(fileId);
+            };
 
             // Info — row count for CSVs
             const infoSpan = document.createElement('span');
@@ -2103,7 +2515,7 @@
             removeBtn.textContent = '\u00d7';
             removeBtn.title = 'Remove file';
             removeBtn.onclick = () => removeFile(fileId);
-            if (file.restored) removeBtn.style.display = 'none';
+            if (file.restored || file.fromSession) removeBtn.style.display = 'none';
 
             item.appendChild(badge);
             item.appendChild(nameSpan);
@@ -2134,7 +2546,7 @@
          */
         function clearAllFiles() {
             const removable = Object.keys(uploadedFiles).filter(
-                id => !uploadedFiles[id].restored
+                id => !uploadedFiles[id].restored && !uploadedFiles[id].fromSession
             );
             for (const fileId of removable) {
                 delete uploadedFiles[fileId];
@@ -2152,7 +2564,7 @@
         function updateClearFilesButton() {
             const btn = document.getElementById('btn-clear-files');
             if (!btn) return;
-            const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored);
+            const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession);
             btn.style.display = hasRemovable ? '' : 'none';
         }
 
@@ -3704,16 +4116,28 @@
                 document.getElementById('bm2-results-section').style.display = '';
 
                 for (const [slug, section] of Object.entries(data.bm2_sections)) {
-                    // Create a synthetic bm2 ID for the restored card
+                    // Create the section card ID
                     const sectionId = 'restored-' + slug;
-                    const fileId = 'file-restored-bm2-' + slug;
 
-                    // Create a synthetic uploadedFiles entry (greyed, no remove)
+                    // Use the server-assigned file_id if the .bm2 file was
+                    // found on disk (re-registered in _bm2_uploads by the
+                    // session load endpoint).  This makes the file fully
+                    // functional — preview, reprocess, export all work.
+                    // Falls back to a synthetic ID if the file is missing.
+                    const fileId = section.server_file_id || ('file-restored-bm2-' + slug);
+                    const isServerBacked = !!section.server_file_id;
+
+                    // Create the uploadedFiles entry.  If server-backed, the
+                    // file is NOT marked as "restored" since it has a real
+                    // server-side upload entry and can be previewed/processed
+                    // normally.  The remove button is still hidden (restored
+                    // appearance) since the user didn't upload it this session.
                     uploadedFiles[fileId] = {
                         id: fileId,
                         filename: section.filename || slug,
                         type: 'bm2',
-                        restored: true,
+                        restored: !isServerBacked,
+                        fromSession: true,
                     };
                     renderFilePoolItem(fileId);
 
@@ -4017,7 +4441,7 @@
          * '5dtox-chem-id' holds a JSON object with field values.
          * ================================================================ */
         const CHEM_ID_STORAGE_KEY = '5dtox-chem-id';
-        const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'model-select'];
+        const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac', 'model-select'];
 
         /** Save current form values to localStorage */
         function saveChemId() {
@@ -4649,6 +5073,541 @@
                 }
             } catch (e) {
                 showError('Approve failed: ' + e.message);
+            }
+        }
+
+        /* ----------------------------------------------------------------
+         * File preview modal — open/close + content renderers
+         * ----------------------------------------------------------------
+         * The modal lets users inspect uploaded files before assigning
+         * them to report sections.  Content rendering varies by file type:
+         *   - .bm2 (processed): collapsible JSON tree of tables_json
+         *   - .bm2 (unprocessed): info message prompting processing
+         *   - .csv/.txt: scrollable HTML table (first 50 rows)
+         *   - .xlsx: file metadata (name + size)
+         * ---------------------------------------------------------------- */
+
+        /**
+         * Reference to the Escape key handler so we can add/remove it
+         * when the modal opens/closes (avoids stale listeners).
+         */
+        let _previewEscapeHandler = null;
+
+        /**
+         * Open the file preview modal and fetch preview data from the server.
+         *
+         * Steps:
+         *   1. Look up the file in uploadedFiles for metadata (filename, type)
+         *   2. Set the modal header (badge + title)
+         *   3. Show a loading spinner in the body
+         *   4. Display the modal (flex layout)
+         *   5. Fetch GET /api/preview/{fileId}
+         *   6. Render the response based on its `type` field
+         *   7. Bind Escape key to close
+         *
+         * @param {string} fileId — key in the uploadedFiles object
+         */
+        function openPreviewModal(fileId) {
+            const file = uploadedFiles[fileId];
+            if (!file) return;
+
+            // Set header badge — reuse the same type-based badge classes
+            const badge = document.getElementById('modal-badge');
+            const badgeLabels = { bm2: '.bm2', csv: '.csv', txt: '.txt', xlsx: '.xlsx' };
+            badge.textContent = badgeLabels[file.type] || `.${file.type}`;
+            badge.className = `file-badge ${file.type}`;
+
+            // Set title to the filename
+            document.getElementById('modal-title').textContent = file.filename;
+
+            // Show loading spinner while we fetch
+            const body = document.getElementById('modal-body');
+            body.innerHTML = '<div class="modal-loading"><div class="spinner"></div>Loading preview\u2026</div>';
+
+            // Show the modal
+            document.getElementById('file-preview-modal').style.display = 'flex';
+
+            // Bind Escape key to close the modal
+            _previewEscapeHandler = (e) => {
+                if (e.key === 'Escape') closePreviewModal();
+            };
+            document.addEventListener('keydown', _previewEscapeHandler);
+
+            // Restored files don't exist on the server (their IDs are synthetic
+            // client-side keys like "file-restored-bm2-*").  Instead of hitting
+            // the server and getting a 404, render their data directly from the
+            // client-side section state (apicalSections / genomicsResults).
+            if (file.restored) {
+                _renderRestoredPreview(fileId, file, body);
+                return;
+            }
+
+            // Non-restored files: fetch preview data from the server
+            fetch(`/api/preview/${fileId}`)
+                .then(res => {
+                    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    _renderPreviewResponse(data, body);
+                })
+                .catch(err => {
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\u26a0\ufe0f</div>
+                            <div class="info-text">Failed to load preview: ${err.message}</div>
+                        </div>`;
+                });
+        }
+
+        /**
+         * Render the server response into the modal body.
+         *
+         * Shared by the server-fetch path (non-restored files) and could
+         * also be reused if we later add other preview sources.
+         *
+         * @param {Object}      data — the JSON response from /api/preview
+         * @param {HTMLElement}  body — the #modal-body element
+         */
+        function _renderPreviewResponse(data, body) {
+            body.innerHTML = '';
+
+            switch (data.type) {
+                case 'bm2_json':
+                    // Processed .bm2 — render a collapsible JSON tree
+                    renderJsonTree(data.data, body);
+                    break;
+
+                case 'bm2_raw':
+                    // Unprocessed .bm2 — show an info card
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\u2699\ufe0f</div>
+                            <div class="info-text">${data.message}</div>
+                        </div>`;
+                    break;
+
+                case 'table':
+                    // CSV/TXT — render as a scrollable HTML table
+                    renderModalTablePreview(data, body);
+                    break;
+
+                case 'info':
+                    // XLSX or fallback — show file metadata
+                    let sizeText = '';
+                    if (data.size_bytes != null) {
+                        const kb = (data.size_bytes / 1024).toFixed(1);
+                        sizeText = `<div class="info-size">${kb} KB</div>`;
+                    }
+                    const msg = data.message || `Binary file \u2014 preview not available.`;
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\ud83d\udcc4</div>
+                            <div class="info-text">${msg}</div>
+                            ${sizeText}
+                        </div>`;
+                    break;
+
+                default:
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-text">Unknown file type.</div>
+                        </div>`;
+            }
+        }
+
+        /**
+         * Render a preview for a restored file using client-side data.
+         *
+         * Restored files were loaded from a saved session — their temp files
+         * no longer exist on the server, so we can't fetch /api/preview.
+         * Instead, we pull the data from the client-side state objects:
+         *   - apicalSections: for .bm2 files (has tableData + narrative)
+         *   - genomicsResults: for .csv gene-level BMD files
+         *
+         * @param {string}      fileId — the synthetic file pool ID
+         * @param {Object}      file   — the uploadedFiles entry
+         * @param {HTMLElement}  body   — the #modal-body element
+         */
+        function _renderRestoredPreview(fileId, file, body) {
+            body.innerHTML = '';
+
+            if (file.type === 'bm2') {
+                // Find the apicalSections entry that references this fileId.
+                // The section was registered during session restore with
+                // { fileId, tableData, narrative, processed, approved }.
+                const section = Object.values(apicalSections).find(
+                    s => s.fileId === fileId
+                );
+
+                if (section && section.tableData && Object.keys(section.tableData).length > 0) {
+                    // Render the tables_json as a collapsible JSON tree —
+                    // same as the server's "bm2_json" response path
+                    renderJsonTree({
+                        tables_json: section.tableData,
+                        narrative: section.narrative || [],
+                    }, body);
+                } else {
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\u2699\ufe0f</div>
+                            <div class="info-text">
+                                This .bm2 file was loaded from a saved session.
+                                Table data is not available for preview.
+                            </div>
+                        </div>`;
+                }
+                return;
+            }
+
+            if (file.type === 'csv') {
+                // Find the genomicsResults entry that references this fileId.
+                // The section has gene_sets, genes, organ, sex, etc.
+                const result = Object.values(genomicsResults).find(
+                    r => r.fileId === fileId
+                );
+
+                if (result) {
+                    // Show the genomics result data as a JSON tree
+                    const previewData = {};
+                    if (result.organ) previewData.organ = result.organ;
+                    if (result.sex) previewData.sex = result.sex;
+                    if (result.gene_sets) previewData.gene_sets = result.gene_sets;
+                    if (result.genes) previewData.genes = result.genes;
+                    renderJsonTree(previewData, body);
+                } else {
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\ud83d\udcc4</div>
+                            <div class="info-text">
+                                This CSV file was loaded from a saved session.
+                                Raw data is not available for preview.
+                            </div>
+                        </div>`;
+                }
+                return;
+            }
+
+            // Fallback for other restored file types (.txt, .xlsx)
+            body.innerHTML = `
+                <div class="modal-info-card">
+                    <div class="info-icon">\ud83d\udcc4</div>
+                    <div class="info-text">
+                        This file was loaded from a saved session.
+                        Preview is not available.
+                    </div>
+                </div>`;
+        }
+
+        /**
+         * Close the file preview modal.
+         *
+         * Hides the modal, clears the body (to avoid stale content on
+         * next open), and removes the Escape key listener.
+         */
+        function closePreviewModal() {
+            document.getElementById('file-preview-modal').style.display = 'none';
+            document.getElementById('modal-body').innerHTML = '';
+
+            // Remove the Escape key listener to avoid accumulating handlers
+            if (_previewEscapeHandler) {
+                document.removeEventListener('keydown', _previewEscapeHandler);
+                _previewEscapeHandler = null;
+            }
+        }
+
+        /**
+         * Render a collapsible, navigable JSON tree inside a container element.
+         *
+         * Recursively walks the data structure (objects, arrays, primitives)
+         * and builds DOM nodes with expand/collapse toggles.  Objects and
+         * arrays expand to show their children; primitives render inline
+         * with type-specific color coding (green strings, blue numbers, etc.).
+         *
+         * Expand behavior:
+         *   - Nodes at depth < maxExpandDepth start expanded
+         *   - Large arrays (>20 items) start collapsed regardless of depth
+         *   - Collapsed nodes show a count badge: "{3 keys}" or "[5 items]"
+         *
+         * @param {*}           data            — the JSON data to render
+         * @param {HTMLElement} container       — DOM element to append the tree into
+         * @param {number}      [depth=0]       — current nesting depth (for indentation)
+         * @param {number}      [maxExpandDepth=2] — auto-expand nodes shallower than this
+         */
+        function renderJsonTree(data, container, depth, maxExpandDepth) {
+            if (depth == null) depth = 0;
+            if (maxExpandDepth == null) maxExpandDepth = 2;
+
+            // Wrap the entire tree in a .json-tree container at the root level
+            const wrapper = depth === 0
+                ? (() => { const d = document.createElement('div'); d.className = 'json-tree'; container.appendChild(d); return d; })()
+                : container;
+
+            // Indentation: 1.2rem per depth level
+            const indent = (depth * 1.2) + 'rem';
+
+            if (data === null || data === undefined) {
+                // Null / undefined — render as a gray "null" span
+                const line = document.createElement('div');
+                line.className = 'json-line';
+                line.style.paddingLeft = indent;
+                line.innerHTML = '<span class="json-null">null</span>';
+                wrapper.appendChild(line);
+
+            } else if (Array.isArray(data)) {
+                // Array — collapsible with indexed children
+                const count = data.length;
+                // Start collapsed if past max depth or if the array is large (>20 items)
+                const startCollapsed = depth >= maxExpandDepth || count > 20;
+
+                // Opening bracket line with toggle
+                const toggleLine = document.createElement('div');
+                toggleLine.className = 'json-line';
+                toggleLine.style.paddingLeft = indent;
+
+                const toggle = document.createElement('span');
+                toggle.className = 'json-toggle' + (startCollapsed ? ' collapsed' : '');
+                toggle.innerHTML = '<span class="json-bracket">[</span>';
+                toggleLine.appendChild(toggle);
+
+                // Count badge — visible when collapsed
+                const countBadge = document.createElement('span');
+                countBadge.className = 'json-count';
+                countBadge.textContent = `${count} item${count !== 1 ? 's' : ''}`;
+                countBadge.style.display = startCollapsed ? 'inline' : 'none';
+                toggleLine.appendChild(countBadge);
+
+                // Closing bracket inline when collapsed
+                const closingInline = document.createElement('span');
+                closingInline.className = 'json-bracket';
+                closingInline.textContent = ']';
+                closingInline.style.display = startCollapsed ? 'inline' : 'none';
+                toggleLine.appendChild(closingInline);
+
+                wrapper.appendChild(toggleLine);
+
+                // Children container
+                const children = document.createElement('div');
+                children.className = 'json-children' + (startCollapsed ? ' collapsed' : '');
+
+                // Render each array element recursively
+                for (let i = 0; i < count; i++) {
+                    const itemLine = document.createElement('div');
+                    itemLine.className = 'json-line';
+                    itemLine.style.paddingLeft = ((depth + 1) * 1.2) + 'rem';
+
+                    // Show index as a dim label, plus the object's name field
+                    // (if it has one) so users can identify array members at a
+                    // glance — e.g. "0: ClinChemFemale" instead of just "0:"
+                    const indexLabel = document.createElement('span');
+                    indexLabel.className = 'json-key';
+                    indexLabel.style.opacity = '0.5';
+                    const elem = data[i];
+                    const elemName = (elem && typeof elem === 'object' && !Array.isArray(elem))
+                        ? elem.name || elem.Name || ''
+                        : '';
+                    indexLabel.textContent = elemName
+                        ? i + ': ' + elemName + ' '
+                        : i + ': ';
+                    itemLine.appendChild(indexLabel);
+
+                    // Primitive values render inline; objects/arrays recurse
+                    if (data[i] !== null && typeof data[i] === 'object') {
+                        children.appendChild(itemLine);
+                        renderJsonTree(data[i], children, depth + 1, maxExpandDepth);
+                    } else {
+                        itemLine.appendChild(_jsonValueSpan(data[i]));
+                        children.appendChild(itemLine);
+                    }
+                }
+
+                wrapper.appendChild(children);
+
+                // Closing bracket on its own line (visible when expanded)
+                const closingLine = document.createElement('div');
+                closingLine.className = 'json-line';
+                closingLine.style.paddingLeft = indent;
+                closingLine.innerHTML = '<span class="json-bracket">]</span>';
+                closingLine.style.display = startCollapsed ? 'none' : '';
+                wrapper.appendChild(closingLine);
+
+                // Toggle click handler — expands/collapses children + swaps badges
+                toggle.onclick = () => {
+                    const isCollapsed = toggle.classList.toggle('collapsed');
+                    children.classList.toggle('collapsed', isCollapsed);
+                    countBadge.style.display = isCollapsed ? 'inline' : 'none';
+                    closingInline.style.display = isCollapsed ? 'inline' : 'none';
+                    closingLine.style.display = isCollapsed ? 'none' : '';
+                };
+
+            } else if (typeof data === 'object') {
+                // Object — collapsible with key-value children
+                const keys = Object.keys(data);
+                const count = keys.length;
+                const startCollapsed = depth >= maxExpandDepth;
+
+                // Opening brace with toggle
+                const toggleLine = document.createElement('div');
+                toggleLine.className = 'json-line';
+                toggleLine.style.paddingLeft = indent;
+
+                const toggle = document.createElement('span');
+                toggle.className = 'json-toggle' + (startCollapsed ? ' collapsed' : '');
+                toggle.innerHTML = '<span class="json-bracket">{</span>';
+                toggleLine.appendChild(toggle);
+
+                const countBadge = document.createElement('span');
+                countBadge.className = 'json-count';
+                countBadge.textContent = `${count} key${count !== 1 ? 's' : ''}`;
+                countBadge.style.display = startCollapsed ? 'inline' : 'none';
+                toggleLine.appendChild(countBadge);
+
+                const closingInline = document.createElement('span');
+                closingInline.className = 'json-bracket';
+                closingInline.textContent = '}';
+                closingInline.style.display = startCollapsed ? 'inline' : 'none';
+                toggleLine.appendChild(closingInline);
+
+                wrapper.appendChild(toggleLine);
+
+                // Children container
+                const children = document.createElement('div');
+                children.className = 'json-children' + (startCollapsed ? ' collapsed' : '');
+
+                for (const key of keys) {
+                    const val = data[key];
+                    const itemLine = document.createElement('div');
+                    itemLine.className = 'json-line';
+                    itemLine.style.paddingLeft = ((depth + 1) * 1.2) + 'rem';
+
+                    const keySpan = document.createElement('span');
+                    keySpan.className = 'json-key';
+                    keySpan.textContent = key + ': ';
+                    itemLine.appendChild(keySpan);
+
+                    // Primitive values render inline; objects/arrays recurse
+                    if (val !== null && typeof val === 'object') {
+                        children.appendChild(itemLine);
+                        renderJsonTree(val, children, depth + 1, maxExpandDepth);
+                    } else {
+                        itemLine.appendChild(_jsonValueSpan(val));
+                        children.appendChild(itemLine);
+                    }
+                }
+
+                wrapper.appendChild(children);
+
+                // Closing brace line
+                const closingLine = document.createElement('div');
+                closingLine.className = 'json-line';
+                closingLine.style.paddingLeft = indent;
+                closingLine.innerHTML = '<span class="json-bracket">}</span>';
+                closingLine.style.display = startCollapsed ? 'none' : '';
+                wrapper.appendChild(closingLine);
+
+                toggle.onclick = () => {
+                    const isCollapsed = toggle.classList.toggle('collapsed');
+                    children.classList.toggle('collapsed', isCollapsed);
+                    countBadge.style.display = isCollapsed ? 'inline' : 'none';
+                    closingInline.style.display = isCollapsed ? 'inline' : 'none';
+                    closingLine.style.display = isCollapsed ? 'none' : '';
+                };
+
+            } else {
+                // Primitive value (string, number, boolean) at the top level
+                const line = document.createElement('div');
+                line.className = 'json-line';
+                line.style.paddingLeft = indent;
+                line.appendChild(_jsonValueSpan(data));
+                wrapper.appendChild(line);
+            }
+        }
+
+        /**
+         * Create a colored <span> for a JSON primitive value.
+         *
+         * Applies type-specific CSS classes so strings appear green,
+         * numbers blue, booleans orange, and null gray.  String values
+         * are quoted to match standard JSON display.
+         *
+         * @param {*} val — a primitive JSON value (string, number, bool, null)
+         * @returns {HTMLSpanElement} — the styled span element
+         */
+        function _jsonValueSpan(val) {
+            const span = document.createElement('span');
+            if (typeof val === 'string') {
+                span.className = 'json-string';
+                // Truncate very long strings to keep the tree readable
+                const display = val.length > 120 ? val.slice(0, 120) + '\u2026' : val;
+                span.textContent = `"${display}"`;
+            } else if (typeof val === 'number') {
+                span.className = 'json-number';
+                span.textContent = String(val);
+            } else if (typeof val === 'boolean') {
+                span.className = 'json-bool';
+                span.textContent = String(val);
+            } else {
+                span.className = 'json-null';
+                span.textContent = 'null';
+            }
+            return span;
+        }
+
+        /**
+         * Render a tabular data preview inside the modal body.
+         *
+         * Builds an HTML table from headers + rows arrays returned by the
+         * /api/preview endpoint for .csv and .txt files.  The table reuses
+         * the existing .table-preview CSS class.  If only a subset of rows
+         * is shown (total_rows > rows.length), a footer note is appended.
+         *
+         * Named "renderModalTablePreview" to avoid colliding with the
+         * existing "renderTablePreview" function (which renders BM2
+         * apical endpoint tables in the section builder cards).
+         *
+         * @param {Object}      data      — { headers, rows, total_rows, filename }
+         * @param {HTMLElement}  container — the modal body element to render into
+         */
+        function renderModalTablePreview(data, container) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-preview';
+
+            const table = document.createElement('table');
+
+            // Header row — column names from the first line of the file
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            for (const h of data.headers) {
+                const th = document.createElement('th');
+                th.textContent = h;
+                headerRow.appendChild(th);
+            }
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Data rows — up to 50 rows from the server
+            const tbody = document.createElement('tbody');
+            for (const row of data.rows) {
+                const tr = document.createElement('tr');
+                for (let i = 0; i < row.length; i++) {
+                    const td = document.createElement('td');
+                    td.textContent = row[i];
+                    // First column is the endpoint/row label — make it sticky
+                    if (i === 0) td.className = 'endpoint-label';
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            wrapper.appendChild(table);
+            container.appendChild(wrapper);
+
+            // Footer showing row count if we're only showing a subset
+            if (data.total_rows > data.rows.length) {
+                const footer = document.createElement('div');
+                footer.className = 'modal-table-footer';
+                footer.textContent = `Showing ${data.rows.length} of ${data.total_rows} rows`;
+                container.appendChild(footer);
             }
         }
 

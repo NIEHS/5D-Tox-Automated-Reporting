@@ -42,6 +42,7 @@ import csv
 import json
 import math
 import os
+import pickle
 import re
 import subprocess
 import sys
@@ -1009,54 +1010,96 @@ def generate_table(
 
 def build_table_data_from_bm2(
     bm2_path: str,
-) -> tuple[dict[str, list[TableRow]], dict]:
+) -> tuple[dict[str, list[TableRow]], dict, dict]:
     """
     Convenience wrapper: export .bm2 → JSON + TSV, run stats, return
-    (table_data, category_lookup).
+    (table_data, category_lookup, bm2_json).
 
     Handles the full export-and-analyze pipeline so callers don't need
     to manage temp files or know about the BMDExpress CLI.  This is
     steps 1–5 of the generate_report() pipeline extracted into a
     reusable function for the web server.
 
+    Sidecar caching: the two expensive Java exports (full JSON + category
+    TSV) are cached as files next to the .bm2 source:
+      - {bm2_path}.json          — full BMDProject JSON
+      - {bm2_path}.categories.tsv — category analysis TSV
+    On subsequent calls for the same .bm2 file, the cached exports are
+    read directly — zero JVM launches.  This means processing only
+    happens once per .bm2 file per report project.
+
     Args:
         bm2_path: Path to the BMDExpress 3 .bm2 file.
 
     Returns:
-        A 2-tuple:
+        A 3-tuple:
           - table_data: Dict mapping sex label ("Male"/"Female") → list of
             TableRow, ready for generate_table() or add_apical_tables_to_doc().
           - category_lookup: Dict from build_category_lookup(), mapping
             (experiment_prefix, endpoint_name) → BMD info dict.
+          - bm2_json: The full deserialized BMDProject as a dict — contains
+            all 7 top-level lists (doseResponseExperiments, bMDResult,
+            categoryAnalysisResults, oneWayANOVAResults, williamsTrendResults,
+            curveFitPrefilterResults, oriogenResults) plus the project name.
+            Preserved for file preview so users can inspect the complete
+            .bm2 structure, not just the processed dose-response tables.
     """
     print(f"Processing: {bm2_path}")
 
-    # Step 1: Export .bm2 to JSON (full structure with dose-response data)
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
-        json_path = tmp.name
-    print("  Exporting .bm2 → JSON...")
-    export_bm2_to_json(bm2_path, json_path)
+    # Sidecar cache paths — pickle files stored next to the .bm2 so they
+    # persist across server restarts and are cleaned up with the source file.
+    # Pickle is used instead of JSON/TSV because:
+    #   - The full BMDProject dict is large (~5-10 MB JSON); pickle loads
+    #     ~10x faster than json.load for deeply nested Python dicts.
+    #   - The category_lookup dict avoids re-parsing the TSV on every call.
+    #   - Data is self-produced (our own Java export), so pickle is safe.
+    json_cache = bm2_path + ".pkl"
+    cat_cache = bm2_path + ".categories.pkl"
 
-    with open(json_path) as f:
-        bm2_json = json.load(f)
-    os.unlink(json_path)
+    # Step 1: Load or export the full BMDProject structure.
+    # On first call: run Java export → parse JSON → pickle the dict.
+    # On subsequent calls: load the pickle directly (no JVM, no JSON parse).
+    if os.path.exists(json_cache):
+        print("  Loading cached BMDProject (pickle)...")
+        with open(json_cache, "rb") as f:
+            bm2_json = pickle.load(f)
+    else:
+        print("  Exporting .bm2 → JSON (first time — launching JVM)...")
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_json = tmp.name
+        export_bm2_to_json(bm2_path, tmp_json)
+        with open(tmp_json) as f:
+            bm2_json = json.load(f)
+        os.unlink(tmp_json)
+        # Persist as pickle for fast subsequent loads
+        with open(json_cache, "wb") as f:
+            pickle.dump(bm2_json, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # Step 2: Export category analysis to TSV (BMD/BMDL values)
-    with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as tmp:
-        cat_tsv_path = tmp.name
-    print("  Exporting category analysis → TSV...")
-    export_bm2_categorical(bm2_path, cat_tsv_path)
-
-    category_lookup = build_category_lookup(cat_tsv_path)
-    os.unlink(cat_tsv_path)
+    # Step 2: Load or export category analysis BMD values.
+    # Same strategy: Java CLI on first call, pickle on subsequent calls.
+    if os.path.exists(cat_cache):
+        print("  Loading cached category analysis (pickle)...")
+        with open(cat_cache, "rb") as f:
+            category_lookup = pickle.load(f)
+    else:
+        print("  Exporting category analysis → TSV (first time — launching JVM)...")
+        with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as tmp:
+            tmp_tsv = tmp.name
+        export_bm2_categorical(bm2_path, tmp_tsv)
+        category_lookup = build_category_lookup(tmp_tsv)
+        os.unlink(tmp_tsv)
+        # Persist the parsed dict as pickle
+        with open(cat_cache, "wb") as f:
+            pickle.dump(category_lookup, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     print(f"  Category analysis: {len(category_lookup)} endpoints with BMD values")
 
-    # Steps 3-5: Build table data (runs stats + cross-references + business rules)
+    # Steps 3-5: Build table data (runs stats + cross-references + business rules).
+    # This is pure Python (no JVM) and fast, so we always re-run it.
     print("  Running NTP statistical tests (Jonckheere → Williams/Dunnett)...")
     table_data = build_table_data(bm2_json, category_lookup)
 
-    return table_data, category_lookup
+    return table_data, category_lookup, bm2_json
 
 
 def add_apical_tables_to_doc(
@@ -1546,7 +1589,7 @@ def generate_report(
         Path to the generated .docx file.
     """
     # Steps 1-5: export .bm2 and build table data
-    table_data, _category_lookup = build_table_data_from_bm2(bm2_path)
+    table_data, _category_lookup, _bm2_json = build_table_data_from_bm2(bm2_path)
 
     # Step 6: Generate .docx using the composable helper
     print("  Generating .docx...")
