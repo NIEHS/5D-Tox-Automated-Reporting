@@ -1,0 +1,39 @@
+{
+  "name": "377-73-1",
+  "casrn": "377-73-1",
+  "dtxsid": "DTXSID70191136",
+  "pubchem_cid": 120228,
+  "ec_number": "876-098-1",
+  "inchikey": "AGIMOOYNBDLMJV-UHFFFAOYSA-N",
+  "molecular_formula": "C4HF7O3",
+  "molecular_weight": 230.04,
+  "iupac_name": "2,2,3,3-tetrafluoro-3-(trifluoromethoxy)propanoic acid",
+  "smiles": "",
+  "chemical_class": "2,2,3,3-tetrafluoro-3-(trifluoromethoxy)propanoic acid is a monomer that exhibits reactivity with carboxylic groups, amines, and carbonyls.",
+  "functional_uses": [],
+  "synonyms": [
+    "377-73-1",
+    "Perfluoro-3-methoxypropanoic acid",
+    "2,2,3,3-tetrafluoro-3-(trifluoromethoxy)propanoic acid",
+    "perfluoromethoxypropionic acid",
+    "DTXSID70191136",
+    "RefChem:860221",
+    "DTXCID80113627",
+    "PFMOPrA perfluoro-3-methoxypropanoic acid",
+    "876-098-1",
+    "2,2,3,3-TETRAFLUORO-3-(TRIFLUOROMETHOXY)PROPIONIC ACID",
+    "Propionic acid, 2,2,3,3-tetrafluoro-3-(trifluoromethoxy)-",
+    "Perfluoro-3-methoxypropanoic acid (PFMOPrA)",
+    "MFCD00507228",
+    "Perfluoromethoxyperfluoropropionic acid",
+    "BRN 1795024",
+    "PFMPA; PFMOPrA; PF4OPeA; Propionic acid, tetrafluoro-3-(trifluoromethoxy)- (8CI); 2,2,3,3-Tetrafluoro-3-(trifluoromethoxy)propanoic acid; PFC",
+    "PFMPA",
+    "MOPFLCA n=4_ii",
+    "SCHEMBL4383207",
+    "Perfluoro-3-methoxypropanoicacid"
+  ],
+  "resolution_notes": [
+    "CTX API key not available \u2014 DTXSID and hazard data may be limited. Set CTX_API_KEY env var (free key from ccte_api@epa.gov)."
+  ]
+}

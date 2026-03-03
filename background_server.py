@@ -1,0 +1,2261 @@
+"""
+FastAPI server for 5dToxReport.
+
+Provides a web interface and REST API for generating structured toxicology
+reports for "5 Day Genomic Dose Response in Sprague-Dawley Rats" studies.
+The report follows the NIEHS Report 10 structure: Background, Materials and
+Methods, Results (apical endpoints, BMD summary, gene set BMD analysis, gene
+BMD analysis), and Summary.
+
+Session persistence: approved sections are saved as JSON files under
+sessions/{dtxsid}/, keyed by the chemical's DTXSID.  When a DTXSID is
+resolved, any previously-saved session is auto-restored in the UI.
+
+Version history: every Approve archives the previous version into
+sessions/{dtxsid}/history/{section_key}/ with a timestamped filename.
+Users can browse past versions and non-destructively restore any of them
+(restoring creates a new version with the old content).
+
+Endpoints:
+  GET  /                                            — Serve the web/index.html UI
+  POST /api/resolve                                 — Resolve a chemical identifier to all IDs
+  POST /api/generate                                — Gather data + generate 6-paragraph background
+  POST /api/upload-bm2                              — Upload .bm2 files for apical endpoint analysis
+  POST /api/process-bm2                             — Process a .bm2 file and return table data as JSON
+  POST /api/upload-csv                              — Upload gene-level BMD CSV for transcriptomic analysis
+  POST /api/process-genomics                        — Rank GO gene sets and genes by BMD from CSV data
+  GET  /api/session/{dtxsid}/bmd-summary            — Auto-derive BMD/BMDL/LOEL/NOEL summary from approved .bm2 sections
+  POST /api/generate-methods                        — LLM-generate Materials and Methods from study params
+  POST /api/generate-summary                        — LLM-generate Summary synthesizing all approved sections
+  POST /api/export-docx                             — Export full report in NIEHS section order
+  GET  /api/session/{dtxsid}                        — Load a previously-saved session (all section types)
+  POST /api/session/approve                         — Approve (save) a report section
+  POST /api/session/unapprove                       — Unapprove (delete) a report section
+  GET  /api/session/{dtxsid}/history/{section_key}  — Version history for a section
+  POST /api/session/{dtxsid}/restore                — Restore a past version as current
+  GET  /api/style-profile                           — Retrieve the global style profile
+  DELETE /api/style-profile/{idx}                   — Delete a style rule by index
+
+The server uses Server-Sent Events (SSE) during /api/generate to stream
+progress updates to the browser in real time (e.g., "Querying ATSDR...",
+"Generating with Claude...").
+
+Usage:
+    python background_server.py                   # start on port 8000
+    python background_server.py --port 8080       # custom port
+    python background_server.py --host 0.0.0.0    # listen on all interfaces
+"""
+
+import asyncio
+import json
+import logging
+import os
+import re
+import shutil
+import sys
+import tempfile
+import traceback
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, Request, UploadFile, File
+from fastapi.responses import (
+    FileResponse, HTMLResponse, JSONResponse, StreamingResponse,
+)
+
+from chem_resolver import ChemicalIdentity, resolve_chemical
+from data_gatherer import BackgroundData, gather_all
+from background_writer import generate_background
+
+# AnthropicEndpoint wraps the Claude API — used here for style rule extraction
+# (haiku model for speed/cost, ~$0.001 per extraction call).
+# rank_go_sets_by_bmd / rank_genes_by_bmd produce the data for the Gene Set
+# and Gene BMD Analysis report sections (NIEHS format).
+# ToxKBQuerier provides read-only access to the bmdx.duckdb knowledge base.
+# load_dose_response parses and validates gene-level BMD CSV files.
+from interpret import (
+    AnthropicEndpoint,
+    ToxKBQuerier,
+    load_dose_response,
+    rank_go_sets_by_bmd,
+    rank_genes_by_bmd,
+)
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# Import .docx building utilities from the existing codebase
+from docx import Document
+from docx.shared import Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from build_docx import add_heading, add_para, fmt
+
+# Import the composable helpers from apical_report for .bm2 processing
+# and the new NIEHS table builders for BMD summary + genomics sections
+from apical_report import (
+    build_table_data_from_bm2,
+    add_apical_tables_to_doc,
+    generate_results_narrative,
+    add_bmd_summary_table_to_doc,
+    add_gene_set_bmd_tables_to_doc,
+    add_gene_bmd_tables_to_doc,
+)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
+
+app = FastAPI(
+    title="5dToxReport",
+    description=(
+        "Generate toxicology reports for 5-day genomic dose-response studies. "
+        "Includes background sections and NTP-style apical endpoint tables."
+    ),
+    version="2.0.0",
+)
+
+# ---------------------------------------------------------------------------
+# Server-side session storage for uploaded .bm2 files
+# ---------------------------------------------------------------------------
+# Maps bm2_id (UUID string) → dict with filename, temp_path, and table_data
+# (table_data is populated after /api/process-bm2 is called).
+# This is an in-memory store; files live in a temp directory per upload.
+_bm2_uploads: dict[str, dict] = {}
+
+# Maps csv_id (UUID string) → dict with filename, temp_path, and parsed DataFrame.
+# Used for gene-level BMD CSV uploads (transcriptomic data for the Gene Set
+# and Gene BMD Analysis report sections).
+_csv_uploads: dict[str, dict] = {}
+
+
+# ---------------------------------------------------------------------------
+# Session persistence helpers
+# ---------------------------------------------------------------------------
+# Approved sections are persisted to disk as JSON files under sessions/{dtxsid}/.
+# This allows the user to close the browser, restart the server, and pick up
+# exactly where they left off — the UI auto-restores on DTXSID resolution.
+
+SESSIONS_DIR = Path(__file__).parent / "sessions"
+
+# Global style profile — stores learned writing style rules extracted from
+# user edits.  Lives at sessions/_style_profile.json (not per-chemical,
+# because writing style transcends individual chemicals).
+STYLE_PROFILE_PATH = SESSIONS_DIR / "_style_profile.json"
+
+# Maximum number of style rules to retain — when full, the lowest-confidence
+# rule is evicted to make room for new ones.
+MAX_STYLE_RULES = 30
+
+# Valid categories for style rules — used for validation when merging
+STYLE_CATEGORIES = {
+    "terminology", "grammar", "phrasing", "structure", "formatting", "tone",
+}
+
+
+def _load_style_profile() -> dict:
+    """
+    Load the global style profile from disk, returning an empty structure if
+    the file doesn't exist yet.
+
+    The profile has three top-level keys:
+      - version (int): schema version for future migrations
+      - updated_at (str): ISO 8601 timestamp of last modification
+      - rules (list[dict]): ordered list of learned style rules, each with:
+          rule (str), category (str), confidence (int), first_seen, last_seen
+    """
+    if STYLE_PROFILE_PATH.exists():
+        try:
+            return json.loads(STYLE_PROFILE_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            # Corrupted file — start fresh rather than crash
+            pass
+    return {"version": 1, "updated_at": _now_iso(), "rules": []}
+
+
+def _save_style_profile(profile: dict) -> None:
+    """
+    Write the style profile to disk.  Creates the sessions/ directory if
+    needed (same dir used for per-chemical session storage).
+    """
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    profile["updated_at"] = _now_iso()
+    STYLE_PROFILE_PATH.write_text(
+        json.dumps(profile, indent=2, default=str), encoding="utf-8",
+    )
+
+
+def _merge_rules(profile: dict, new_rules: list[dict]) -> dict:
+    """
+    Merge newly-extracted style rules into the existing profile.
+
+    For each new rule:
+      - If it matches an existing rule (exact string match on the 'rule' key),
+        increment the existing rule's confidence and update last_seen.
+      - If it's genuinely new, add it with confidence=1.
+      - If adding pushes the total past MAX_STYLE_RULES, evict the rule with
+        the lowest confidence (oldest last_seen breaks ties).
+
+    The LLM extraction prompt is given the existing rules to avoid semantic
+    duplicates, so exact-match dedup here is a safety net — most real dedup
+    happens at extraction time.
+
+    Returns the modified profile (also mutates in place for convenience).
+    """
+    existing_rules = profile.get("rules", [])
+    now = _now_iso()
+
+    for nr in new_rules:
+        rule_text = nr.get("rule", "").strip()
+        category = nr.get("category", "phrasing").strip().lower()
+        if not rule_text:
+            continue
+        # Default to "phrasing" if the LLM returns an unknown category
+        if category not in STYLE_CATEGORIES:
+            category = "phrasing"
+
+        # Check for exact duplicate by rule text
+        matched = False
+        for er in existing_rules:
+            if er["rule"].strip().lower() == rule_text.lower():
+                # Reinforce: bump confidence and update timestamp
+                er["confidence"] = er.get("confidence", 1) + 1
+                er["last_seen"] = now
+                matched = True
+                break
+
+        if not matched:
+            existing_rules.append({
+                "rule": rule_text,
+                "category": category,
+                "confidence": 1,
+                "first_seen": now,
+                "last_seen": now,
+            })
+
+    # Evict lowest-confidence rules if over the cap.
+    # Sort by confidence ascending, then by last_seen ascending (oldest first)
+    # so we drop the least-reinforced, least-recently-seen rules.
+    if len(existing_rules) > MAX_STYLE_RULES:
+        existing_rules.sort(
+            key=lambda r: (r.get("confidence", 1), r.get("last_seen", "")),
+        )
+        existing_rules = existing_rules[-MAX_STYLE_RULES:]
+
+    profile["rules"] = existing_rules
+    return profile
+
+
+def _extract_and_merge_style_rules(original: str, edited: str) -> int:
+    """
+    Extract writing style rules by comparing original LLM text to user edits,
+    then merge them into the global style profile.
+
+    This runs in a background thread (called via run_in_executor) so it
+    doesn't block the approve response.  Uses Claude Haiku for speed and
+    cost (~$0.001 per call).
+
+    Args:
+        original: The original text generated by the LLM
+        edited: The user's edited version of the same text
+
+    Returns:
+        Number of new rules extracted and merged (0 if none found or on error)
+    """
+    try:
+        profile = _load_style_profile()
+        existing_rule_strings = [r["rule"] for r in profile.get("rules", [])]
+
+        # Build the extraction prompt — tells the LLM to compare the two
+        # versions and find deliberate style preferences.  Existing rules are
+        # included so the LLM can avoid re-extracting duplicates.
+        existing_rules_json = json.dumps(existing_rule_strings, indent=2)
+        prompt = f"""Compare the ORIGINAL and EDITED versions of this scientific/toxicology text.
+The editor made deliberate style changes. Extract specific, reusable writing
+style rules that the editor is consistently applying.
+
+Focus on these categories:
+- terminology: preferred word choices and technical terms
+- grammar: comma usage, voice (active/passive), tense preferences
+- phrasing: preferred sentence constructions, transition patterns
+- structure: paragraph organization, how information is ordered
+- formatting: citation style, abbreviation conventions
+- tone: formality level, hedging language, precision
+
+EXISTING RULES (already learned — do NOT re-extract these):
+{existing_rules_json}
+
+ORIGINAL TEXT:
+{original}
+
+EDITED TEXT:
+{edited}
+
+Return ONLY a JSON array of new rules not already covered above:
+[{{"rule": "description of the style preference", "category": "terminology|grammar|phrasing|structure|formatting|tone"}}]
+
+If no new rules are evident, return an empty array: []"""
+
+        # Use Haiku for speed and cost — style rule extraction doesn't need
+        # the full reasoning power of Sonnet/Opus
+        endpoint = AnthropicEndpoint(
+            name="style-rule-extractor",
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            temperature=0.2,
+        )
+
+        response = endpoint.generate(
+            prompt,
+            system=(
+                "You are a writing style analyst. Compare original and edited text "
+                "to identify deliberate style preferences. Output ONLY valid JSON."
+            ),
+        )
+
+        if not response:
+            logger.warning("Style extraction returned empty response")
+            return 0
+
+        # Parse the JSON array from the response — the LLM sometimes wraps
+        # it in markdown code fences, so we strip those first.
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            # Remove markdown code fences (```json ... ```)
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+        new_rules = json.loads(cleaned)
+
+        if not isinstance(new_rules, list) or len(new_rules) == 0:
+            logger.info("Style extraction found no new rules")
+            return 0
+
+        # Merge extracted rules into the profile and save
+        count_before = len(profile.get("rules", []))
+        _merge_rules(profile, new_rules)
+        _save_style_profile(profile)
+        count_after = len(profile.get("rules", []))
+
+        new_count = count_after - count_before
+        logger.info(
+            "Style learning: extracted %d rules, %d new (total: %d)",
+            len(new_rules), max(new_count, 0), count_after,
+        )
+        return len(new_rules)
+
+    except Exception:
+        # Style learning is non-critical — log the error but don't crash
+        # the approve flow
+        logger.error("Style rule extraction failed:\n%s", traceback.format_exc())
+        return 0
+
+
+def _session_dir(dtxsid: str) -> Path:
+    """
+    Return the session directory for a given DTXSID, creating it if needed.
+
+    Each chemical gets its own directory under sessions/ (e.g.,
+    sessions/DTXSID6020430/).  The directory is created on first approve.
+    """
+    d = SESSIONS_DIR / dtxsid
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _bm2_slug(filename: str) -> str:
+    """
+    Slugify a .bm2 filename for use as a JSON key / filename stem.
+
+    Strips the compound prefix (everything before the first hyphen), lowercases,
+    replaces spaces/non-alphanum with hyphens, and strips the .bm2 extension.
+
+    Example:
+        'P3MP-Organ and Body Weights.bm2' → 'organ-and-body-weights'
+        'P3MP-Clinical Pathology.bm2'     → 'clinical-pathology'
+    """
+    # Remove .bm2 extension
+    stem = filename.rsplit(".bm2", 1)[0]
+    # Drop the compound prefix before the first hyphen (e.g. "P3MP-")
+    if "-" in stem:
+        stem = stem.split("-", 1)[1]
+    # Lowercase, replace non-alphanumeric runs with single hyphens, strip edges
+    slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")
+    return slug
+
+
+def _now_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _save_section(dtxsid: str, section_key: str, data: dict) -> None:
+    """
+    Write data as JSON to sessions/{dtxsid}/{section_key}.json, archiving the
+    previous version first so we keep full history.
+
+    Version history layout:
+        sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json
+    The current file ({section_key}.json) is always the latest version.
+    Before overwriting, the existing current is copied into history/ using
+    its approved_at timestamp as the filename.
+
+    Also stamps the data with an incrementing "version" number (v1, v2, ...)
+    and updates meta.json's updated_at timestamp.
+    """
+    d = _session_dir(dtxsid)
+    current_path = d / f"{section_key}.json"
+    history_dir = d / "history" / section_key
+
+    # --- Archive the current version before overwriting (if it exists) ---
+    # This preserves every previously-approved version as a timestamped file
+    # in the history/ subdirectory.  First-ever approve has no file to archive.
+    if current_path.exists():
+        existing = json.loads(current_path.read_text(encoding="utf-8"))
+        # Use the existing file's approved_at as the archive filename
+        # so timestamps reflect when that version was actually approved
+        ts = existing.get("approved_at", _now_iso())
+        # Replace colons with hyphens so the filename is filesystem-safe
+        # (ISO 8601 timestamps contain colons, e.g. "2026-03-02T19:23:59+00:00")
+        safe_ts = ts.replace(":", "-")
+        history_dir.mkdir(parents=True, exist_ok=True)
+        (history_dir / f"{safe_ts}.json").write_text(
+            json.dumps(existing, indent=2, default=str), encoding="utf-8",
+        )
+
+    # --- Compute the version number for this new save ---
+    # Count existing history files (previous versions) and add 1 for the
+    # new version.  First approve = 0 history files → version 1.
+    version_count = len(list(history_dir.glob("*.json"))) if history_dir.exists() else 0
+    data["version"] = version_count + 1
+
+    # --- Write the new version as the canonical current file ---
+    current_path.write_text(
+        json.dumps(data, indent=2, default=str), encoding="utf-8",
+    )
+
+    # Touch meta.json's updated_at
+    meta_path = d / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        meta = {"dtxsid": dtxsid, "created_at": _now_iso()}
+    meta["updated_at"] = _now_iso()
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
+def _delete_section(dtxsid: str, section_key: str) -> None:
+    """
+    Remove sessions/{dtxsid}/{section_key}.json if it exists.
+
+    Called when the user clicks "Try Again" to unapprove a section.
+    The .bm2 file in files/ is kept — it's still useful for reprocessing.
+    """
+    d = SESSIONS_DIR / dtxsid
+    section_path = d / f"{section_key}.json"
+    if section_path.exists():
+        section_path.unlink()
+
+
+# ---------------------------------------------------------------------------
+# GET / — serve the web UI
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_ui():
+    """
+    Serve the main web UI (web/index.html).
+
+    The HTML file contains the full single-page application with chemical
+    ID form, .bm2 upload area, output panels, and copy/export buttons.
+    """
+    html_path = Path(__file__).parent / "web" / "index.html"
+    if not html_path.exists():
+        return HTMLResponse(
+            "<h1>Error</h1><p>web/index.html not found</p>",
+            status_code=404,
+        )
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# POST /api/resolve — chemical identity resolution
+# ---------------------------------------------------------------------------
+
+@app.post("/api/resolve")
+async def api_resolve(request: Request):
+    """
+    Resolve a chemical identifier to all known identifiers.
+
+    Input JSON:
+      {"identifier": "95-50-1", "id_type": "auto"}
+
+    Returns the full ChemicalIdentity as JSON, with all resolved fields
+    (name, CASRN, DTXSID, CID, EC number, formula, etc.).
+    """
+    body = await request.json()
+    identifier = body.get("identifier", "").strip()
+    id_type = body.get("id_type", "auto")
+
+    if not identifier:
+        return JSONResponse(
+            {"error": "No identifier provided"},
+            status_code=400,
+        )
+
+    # Run resolution in a thread pool to avoid blocking the event loop
+    # (it makes multiple HTTP requests to PubChem and CTX)
+    loop = asyncio.get_event_loop()
+    identity = await loop.run_in_executor(
+        None, resolve_chemical, identifier, id_type, "",
+    )
+
+    return JSONResponse(identity.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# POST /api/generate — full pipeline: gather data + generate background
+# ---------------------------------------------------------------------------
+
+@app.post("/api/generate")
+async def api_generate(request: Request):
+    """
+    Run the full background generation pipeline.
+
+    Input JSON:
+      {"identity": {...ChemicalIdentity fields...}, "use_ollama": false, "model": ""}
+
+    Returns a streaming SSE response with progress updates, followed by
+    the final generated background as JSON.
+
+    SSE events:
+      event: progress   data: {"message": "Querying ATSDR ToxProfiles..."}
+      event: complete   data: {"paragraphs": [...], "references": [...], ...}
+      event: error      data: {"error": "..."}
+    """
+    body = await request.json()
+    identity_dict = body.get("identity", {})
+    use_ollama = body.get("use_ollama", False)
+    model = body.get("model", "")
+
+    if not identity_dict.get("name") and not identity_dict.get("casrn"):
+        return JSONResponse(
+            {"error": "Identity must include at least a name or CASRN"},
+            status_code=400,
+        )
+
+    # Reconstruct ChemicalIdentity from the JSON dict
+    identity = ChemicalIdentity(
+        name=identity_dict.get("name", ""),
+        casrn=identity_dict.get("casrn", ""),
+        dtxsid=identity_dict.get("dtxsid", ""),
+        pubchem_cid=int(identity_dict.get("pubchem_cid", 0) or 0),
+        ec_number=identity_dict.get("ec_number", ""),
+        inchikey=identity_dict.get("inchikey", ""),
+        molecular_formula=identity_dict.get("molecular_formula", ""),
+        molecular_weight=float(identity_dict.get("molecular_weight", 0) or 0),
+        iupac_name=identity_dict.get("iupac_name", ""),
+        smiles=identity_dict.get("smiles", ""),
+        chemical_class=identity_dict.get("chemical_class", ""),
+        functional_uses=identity_dict.get("functional_uses", []),
+        synonyms=identity_dict.get("synonyms", []),
+    )
+
+    # Use SSE to stream progress updates
+    async def event_stream():
+        progress_messages = []
+
+        def progress_callback(msg: str):
+            """Collect progress messages from the data gathering step."""
+            progress_messages.append(msg)
+
+        try:
+            # Step 1: Gather data (with progress callback)
+            loop = asyncio.get_event_loop()
+
+            # Yield initial progress
+            yield _sse_event("progress", {"message": "Starting data gathering..."})
+
+            # Run gather_all in a thread pool (it makes blocking HTTP calls)
+            bg_data = await loop.run_in_executor(
+                None, gather_all, identity, progress_callback,
+            )
+
+            # Yield all progress messages collected during gathering
+            for msg in progress_messages:
+                yield _sse_event("progress", {"message": msg})
+
+            # Step 2: Load learned style preferences (if any) and generate
+            # background with LLM.  Style rules are injected into the prompt
+            # so the LLM writes in the user's preferred style from the start.
+            style_rules = []
+            profile = _load_style_profile()
+            if profile.get("rules"):
+                style_rules = [r["rule"] for r in profile["rules"]]
+
+            if style_rules:
+                yield _sse_event("progress", {
+                    "message": f"Applying {len(style_rules)} learned style preference{'s' if len(style_rules) != 1 else ''}..."
+                })
+
+            yield _sse_event("progress", {
+                "message": f"Generating background with {'Ollama' if use_ollama else 'Claude'}..."
+            })
+
+            result = await loop.run_in_executor(
+                None, generate_background, bg_data, use_ollama, model,
+                style_rules or None,
+            )
+
+            # Step 3: Return the complete result
+            # Include the raw data for the export endpoint
+            result["raw_data"] = bg_data.to_dict()
+            result["notes"] = bg_data.notes
+
+            yield _sse_event("complete", result)
+
+        except Exception as e:
+            yield _sse_event("error", {"error": str(e)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # disable nginx buffering
+        },
+    )
+
+
+def _sse_event(event_type: str, data: dict) -> str:
+    """Format a Server-Sent Event message."""
+    json_str = json.dumps(data, default=str)
+    return f"event: {event_type}\ndata: {json_str}\n\n"
+
+
+def _js_dose_key(dose: float) -> str:
+    """
+    Convert a dose float to the same string JavaScript's String() produces.
+
+    Python's str(1.0) gives "1.0" but JavaScript's String(1) gives "1".
+    This mismatch causes dict key lookups to fail in the browser when the
+    JS code does row.values[String(dose)].  We fix it by dropping the
+    trailing ".0" for integer-valued floats, matching JS behavior.
+
+    Examples:
+        _js_dose_key(0.0)   → "0"
+        _js_dose_key(0.15)  → "0.15"
+        _js_dose_key(1.0)   → "1"
+        _js_dose_key(300.0) → "300"
+    """
+    if dose == int(dose):
+        return str(int(dose))
+    return str(dose)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/upload-bm2 — upload .bm2 files for apical endpoint analysis
+# ---------------------------------------------------------------------------
+
+@app.post("/api/upload-bm2")
+async def api_upload_bm2(files: list[UploadFile] = File(...)):
+    """
+    Accept one or more .bm2 file uploads.
+
+    Saves each file to a temp directory and returns a JSON list of
+    metadata objects: {id, filename}.  The id is a UUID that other
+    endpoints use to reference the uploaded file.
+
+    The temp files are stored server-side in _bm2_uploads and cleaned
+    up when the server shuts down (or the OS cleans /tmp).
+    """
+    results = []
+
+    for upload in files:
+        bm2_id = str(uuid.uuid4())
+
+        # Save the uploaded file to a temp directory so the Java CLI
+        # can read it later (it needs a real filesystem path)
+        tmp_dir = tempfile.mkdtemp(prefix="bm2_")
+        safe_filename = os.path.basename(upload.filename or "upload.bm2")
+        tmp_path = os.path.join(tmp_dir, safe_filename)
+
+        with open(tmp_path, "wb") as f:
+            content = await upload.read()
+            f.write(content)
+
+        _bm2_uploads[bm2_id] = {
+            "filename": safe_filename,
+            "temp_path": tmp_path,
+            "temp_dir": tmp_dir,
+            "table_data": None,   # populated by /api/process-bm2
+            "narrative": None,    # populated by /api/process-bm2
+        }
+
+        results.append({
+            "id": bm2_id,
+            "filename": safe_filename,
+        })
+
+    return JSONResponse(results)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/process-bm2 — analyze a .bm2 file and return table data as JSON
+# ---------------------------------------------------------------------------
+
+@app.post("/api/process-bm2")
+async def api_process_bm2(request: Request):
+    """
+    Process an uploaded .bm2 file through the NTP statistical pipeline.
+
+    Input JSON:
+      {
+        "bm2_id": "<uuid from upload>",
+        "section_title": "Animal Condition, Body Weights, and Organ Weights",
+        "table_caption_template": "Summary of ... {sex} ... {compound} ...",
+        "compound_name": "PFHxSAm",
+        "dose_unit": "mg/kg"
+      }
+
+    Calls build_table_data_from_bm2() from apical_report.py, which exports
+    the .bm2 via the BMDExpress Java CLI and runs Jonckheere → Williams/Dunnett
+    tests.
+
+    Returns JSON with the table data for HTML preview:
+      {
+        "bm2_id": "...",
+        "tables": {
+          "Male": [
+            {
+              "label": "Terminal Body Wt.",
+              "doses": [0.0, 0.15, 0.5, 1.5, 5.0],
+              "values": {"0.0": "330.2 ± 5.1", ...},
+              "n": {"0.0": 5, ...},
+              "bmd": "8.49", "bmdl": "4.23", "trend_marker": "**"
+            }, ...
+          ],
+          "Female": [...]
+        }
+      }
+    """
+    body = await request.json()
+    bm2_id = body.get("bm2_id", "")
+    compound_name = body.get("compound_name", "Test Compound")
+    dose_unit = body.get("dose_unit", "mg/kg")
+
+    upload = _bm2_uploads.get(bm2_id)
+    if not upload:
+        return JSONResponse(
+            {"error": f"Unknown bm2_id: {bm2_id}"},
+            status_code=404,
+        )
+
+    bm2_path = upload["temp_path"]
+    if not os.path.exists(bm2_path):
+        return JSONResponse(
+            {"error": f"Uploaded file no longer exists: {upload['filename']}"},
+            status_code=410,
+        )
+
+    try:
+        # Run the full export-and-analyze pipeline in a thread pool
+        # because it spawns Java subprocesses (blocking I/O)
+        loop = asyncio.get_event_loop()
+        table_data, _cat_lookup = await loop.run_in_executor(
+            None, build_table_data_from_bm2, bm2_path,
+        )
+
+        # Cache the table_data so /api/export-docx can reuse it
+        upload["table_data"] = table_data
+
+        # Generate the NTP-style results narrative from the table data.
+        # This produces paragraphs describing body weight and organ weight
+        # findings that the user can edit in the UI before export.
+        narrative = generate_results_narrative(
+            table_data, compound_name, dose_unit,
+        )
+        upload["narrative"] = narrative
+
+        # Serialize TableRow objects to JSON-friendly dicts.
+        # IMPORTANT: dose floats must be converted to strings that match
+        # JavaScript's String(number) behavior.  Python's str(1.0) gives
+        # "1.0" but JavaScript's String(1) gives "1" — so integer-valued
+        # floats need to drop the ".0" suffix to keep keys consistent
+        # between the JSON dict and the JS lookup.
+        tables_json = {}
+        for sex, rows in table_data.items():
+            tables_json[sex] = []
+            for row in rows:
+                sorted_doses = sorted(row.values_by_dose.keys())
+                tables_json[sex].append({
+                    "label": row.label,
+                    "doses": sorted_doses,
+                    "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
+                    "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
+                    "bmd": row.bmd_str,
+                    "bmdl": row.bmdl_str,
+                    "trend_marker": row.trend_marker,
+                })
+
+        return JSONResponse({
+            "bm2_id": bm2_id,
+            "tables": tables_json,
+            "narrative": narrative,  # list of auto-generated paragraph strings
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Processing failed: {e}"},
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/upload-csv — upload gene-level BMD CSV files for genomics analysis
+# ---------------------------------------------------------------------------
+
+@app.post("/api/upload-csv")
+async def api_upload_csv(files: list[UploadFile] = File(...)):
+    """
+    Accept one or more gene-level BMD CSV file uploads.
+
+    Each CSV represents one organ × sex combination (e.g., "Liver Male").
+    Required columns: gene_symbol, bmd.
+    Optional columns: bmdl, bmdu, direction, fold_change, best_model,
+                      full_name, gof_p.
+
+    The uploaded CSV is saved to a temp directory and parsed via
+    interpret.py's load_dose_response() to validate structure and
+    normalize gene symbols.
+
+    Returns a JSON list of metadata objects:
+      [{id, filename, row_count, columns_found}, ...]
+    """
+    results = []
+
+    for upload in files:
+        csv_id = str(uuid.uuid4())
+
+        # Save the uploaded file to a temp directory so we can parse it
+        tmp_dir = tempfile.mkdtemp(prefix="csv_")
+        safe_filename = os.path.basename(upload.filename or "upload.csv")
+        tmp_path = os.path.join(tmp_dir, safe_filename)
+
+        with open(tmp_path, "wb") as f:
+            content = await upload.read()
+            f.write(content)
+
+        try:
+            # Validate and parse the CSV using the existing dose-response loader.
+            # This normalizes gene symbols and ensures bmd is numeric.
+            df = load_dose_response(tmp_path)
+
+            _csv_uploads[csv_id] = {
+                "filename": safe_filename,
+                "temp_path": tmp_path,
+                "temp_dir": tmp_dir,
+                "df": df,  # parsed DataFrame for fast reuse
+            }
+
+            results.append({
+                "id": csv_id,
+                "filename": safe_filename,
+                "row_count": len(df),
+                "columns_found": list(df.columns),
+            })
+        except Exception as e:
+            # Clean up temp dir on parse failure
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return JSONResponse(
+                {"error": f"CSV validation failed for {safe_filename}: {e}"},
+                status_code=400,
+            )
+
+    return JSONResponse(results)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/process-genomics — run gene set and gene BMD ranking
+# ---------------------------------------------------------------------------
+
+@app.post("/api/process-genomics")
+async def api_process_genomics(request: Request):
+    """
+    Process an uploaded gene-level BMD CSV to produce the data for the
+    Gene Set BMD Analysis and Gene BMD Analysis report sections.
+
+    Takes a previously-uploaded CSV (via csv_id from /api/upload-csv)
+    and runs:
+      1. NIEHS quality filtering (fold change, goodness-of-fit, BMDU/BMDL)
+      2. GO Biological Process gene set ranking by median BMD
+      3. Individual gene ranking by BMD
+
+    Input JSON:
+      {
+        "csv_id": "uuid-from-upload",
+        "organ": "liver",
+        "sex": "male",
+        "compound_name": "PFHxSAm",
+        "dose_unit": "mg/kg"
+      }
+
+    Returns JSON:
+      {
+        "gene_sets": [{rank, go_id, go_term, bmd_median, bmdl_median,
+                       n_genes, genes, direction}, ...],
+        "top_genes": [{rank, gene_symbol, full_name, bmd, bmdl, bmdu,
+                       direction, fold_change}, ...],
+        "total_responsive_genes": N,
+        "organ": "liver",
+        "sex": "male"
+      }
+    """
+    body = await request.json()
+    csv_id = body.get("csv_id", "")
+    organ = body.get("organ", "")
+    sex = body.get("sex", "")
+
+    if not csv_id:
+        return JSONResponse(
+            {"error": "csv_id is required"},
+            status_code=400,
+        )
+
+    csv_upload = _csv_uploads.get(csv_id)
+    if not csv_upload:
+        return JSONResponse(
+            {"error": f"Unknown csv_id: {csv_id}"},
+            status_code=404,
+        )
+
+    df = csv_upload.get("df")
+    if df is None or df.empty:
+        return JSONResponse(
+            {"error": "No valid data in the uploaded CSV"},
+            status_code=400,
+        )
+
+    try:
+        # Run gene set and gene ranking in a thread pool because
+        # ToxKBQuerier makes DB queries that could be slow for large datasets
+        loop = asyncio.get_event_loop()
+
+        def _run_genomics():
+            # Open a read-only connection to the knowledge base for GO term
+            # lookups.  The KB is the bmdx.duckdb file in the project root.
+            db_path = str(Path(__file__).parent / "bmdx.duckdb")
+            kb = ToxKBQuerier(db_path)
+            try:
+                gene_sets = rank_go_sets_by_bmd(df, kb, top_n=10)
+                top_genes = rank_genes_by_bmd(df, top_n=10)
+                return gene_sets, top_genes
+            finally:
+                kb.close()
+
+        gene_sets, top_genes = await loop.run_in_executor(None, _run_genomics)
+
+        return JSONResponse({
+            "gene_sets": gene_sets,
+            "top_genes": top_genes,
+            "total_responsive_genes": len(df),
+            "organ": organ,
+            "sex": sex,
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Genomics processing failed: {e}"},
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/session/{dtxsid}/bmd-summary — auto-derive apical endpoint BMD summary
+# ---------------------------------------------------------------------------
+
+@app.get("/api/session/{dtxsid}/bmd-summary")
+async def api_bmd_summary(dtxsid: str):
+    """
+    Auto-derive an Apical Endpoint BMD Summary from all approved .bm2 sections.
+
+    Iterates all bm2_*.json files in the session directory, extracts every
+    endpoint where BMD ≠ "ND", and computes LOEL (lowest dose with a
+    significance marker) and NOEL (highest dose below LOEL without a marker).
+
+    This data is already present in the approved table JSON — we just need
+    to aggregate it across sections into one sorted summary.
+
+    Returns JSON:
+      {
+        "endpoints": [
+          {
+            "endpoint": "Liver Relative",
+            "bmd": "4.23",
+            "bmdl": "2.10",
+            "loel": "5.0",
+            "noel": "1.5",
+            "direction": "Increased",
+            "sex": "Male"
+          }, ...
+        ],
+        "sorted_by": "bmd_asc"
+      }
+    """
+    d = SESSIONS_DIR / dtxsid
+    if not d.exists():
+        return JSONResponse(
+            {"error": f"No session found for {dtxsid}"},
+            status_code=404,
+        )
+
+    # Gather all approved bm2_*.json files
+    endpoints = []
+    for f in sorted(d.glob("bm2_*.json")):
+        try:
+            section = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        tables_json = section.get("tables_json", {})
+
+        # Each table is keyed by sex ("Male", "Female")
+        for sex, rows in tables_json.items():
+            for row in rows:
+                bmd_str = row.get("bmd", "ND")
+                bmdl_str = row.get("bmdl", "ND")
+
+                # Skip endpoints without a valid BMD (not dose-responsive
+                # by the NTP dual-significance criterion)
+                if bmd_str == "ND":
+                    continue
+
+                label = row.get("label", "")
+                # Skip the "n" row (sample sizes, not an endpoint)
+                if label.lower() == "n":
+                    continue
+
+                # Derive LOEL and NOEL from significance markers in the
+                # values_by_dose dict.  Each value string may end with
+                # "*" or "**" if the dose group showed a significant
+                # pairwise difference vs. control.
+                values = row.get("values", {})
+                doses = row.get("doses", [])
+
+                # Sort doses numerically (they may be strings)
+                try:
+                    sorted_doses = sorted(
+                        [float(d) for d in doses if float(d) > 0],
+                    )
+                except (ValueError, TypeError):
+                    sorted_doses = []
+
+                # Find LOEL: lowest treatment dose with a significance marker
+                loel = None
+                for dose in sorted_doses:
+                    dose_key = _js_dose_key(dose)
+                    val = values.get(dose_key, "")
+                    if "*" in str(val):
+                        loel = dose
+                        break
+
+                # Find NOEL: highest dose below LOEL without a marker.
+                # If LOEL is the lowest dose, NOEL is None (below tested range).
+                noel = None
+                if loel is not None:
+                    for dose in sorted_doses:
+                        if dose >= loel:
+                            break
+                        dose_key = _js_dose_key(dose)
+                        val = values.get(dose_key, "")
+                        if "*" not in str(val):
+                            noel = dose
+
+                # Determine direction from the trend marker.
+                # The trend_marker field has "*" or "**" for significant
+                # Jonckheere trend.  To get direction, we check if the
+                # highest-dose mean is greater or less than control mean.
+                trend_marker = row.get("trend_marker", "")
+                direction = ""
+                if trend_marker:
+                    # Try to parse control and highest-dose values to
+                    # determine direction of change
+                    try:
+                        control_key = _js_dose_key(0.0)
+                        control_val = values.get(control_key, "")
+                        # Extract numeric part (before ±)
+                        control_num = float(control_val.split("±")[0].replace("*", "").strip())
+                        if sorted_doses:
+                            high_key = _js_dose_key(sorted_doses[-1])
+                            high_val = values.get(high_key, "")
+                            high_num = float(high_val.split("±")[0].replace("*", "").strip())
+                            direction = "Increased" if high_num > control_num else "Decreased"
+                    except (ValueError, IndexError, AttributeError):
+                        direction = ""
+
+                endpoints.append({
+                    "endpoint": label,
+                    "bmd": bmd_str,
+                    "bmdl": bmdl_str,
+                    "loel": loel,
+                    "noel": noel,
+                    "direction": direction,
+                    "sex": sex,
+                })
+
+    # Sort by BMD ascending (numeric sort; "ND" already filtered out)
+    endpoints.sort(
+        key=lambda e: float(e["bmd"]) if e["bmd"] != "ND" else 9999,
+    )
+
+    return JSONResponse({
+        "endpoints": endpoints,
+        "sorted_by": "bmd_asc",
+    })
+
+
+# ---------------------------------------------------------------------------
+# GET /api/session/{dtxsid} — load a previously saved session
+# ---------------------------------------------------------------------------
+
+@app.get("/api/session/{dtxsid}")
+async def api_session_load(dtxsid: str):
+    """
+    Load a previously-saved session for a given DTXSID.
+
+    Looks up sessions/{dtxsid}/ on disk and returns all saved section data
+    including the original sections (meta, identity, background, bm2) and
+    the new NIEHS sections (methods, bmd_summary, genomics, summary).
+
+    Returns JSON:
+      {
+        "exists": true/false,
+        "meta": {...} or null,
+        "identity": {...} or null,
+        "background": {...} or null,
+        "methods": {...} or null,
+        "bm2_sections": { "organ-and-body-weights": {...}, ... },
+        "bmd_summary": {...} or null,
+        "genomics_sections": { "liver_male": {...}, ... },
+        "summary": {...} or null
+      }
+    """
+    d = SESSIONS_DIR / dtxsid
+    if not d.exists():
+        return JSONResponse({"exists": False})
+
+    # Helper: read a JSON file if it exists, else return None
+    def _read_json(name: str):
+        p = d / name
+        if p.exists():
+            return json.loads(p.read_text(encoding="utf-8"))
+        return None
+
+    # Gather all bm2_*.json files into a dict keyed by slug
+    bm2_sections = {}
+    for f in sorted(d.glob("bm2_*.json")):
+        # Filename is e.g. "bm2_organ-and-body-weights.json"
+        slug = f.stem.removeprefix("bm2_")
+        bm2_sections[slug] = json.loads(f.read_text(encoding="utf-8"))
+
+    # Gather all genomics_*.json files into a dict keyed by organ_sex
+    # (e.g., "liver_male", "kidney_female")
+    genomics_sections = {}
+    for f in sorted(d.glob("genomics_*.json")):
+        slug = f.stem.removeprefix("genomics_")
+        genomics_sections[slug] = json.loads(f.read_text(encoding="utf-8"))
+
+    return JSONResponse({
+        "exists": True,
+        "meta": _read_json("meta.json"),
+        "identity": _read_json("identity.json"),
+        "background": _read_json("background.json"),
+        "methods": _read_json("methods.json"),
+        "bm2_sections": bm2_sections,
+        "bmd_summary": _read_json("bmd_summary.json"),
+        "genomics_sections": genomics_sections,
+        "summary": _read_json("summary.json"),
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/approve — approve (save) a report section
+# ---------------------------------------------------------------------------
+
+@app.post("/api/session/approve")
+async def api_session_approve(request: Request):
+    """
+    Approve a report section and persist it to disk.
+
+    Input JSON:
+      {
+        "dtxsid": "DTXSID6020430",
+        "identity": {ChemicalIdentity dict},   // saved on first approve
+        "section_type": "background" | "bm2" | "methods" | "bmd_summary"
+                        | "genomics" | "summary",
+        "data": {
+          // For background: paragraphs, references, model_used, notes,
+          //                 original_paragraphs, original_references
+          // For bm2: filename, section_title, table_caption, compound_name,
+          //          dose_unit, narrative, tables_json, original_narrative
+          // For methods/summary: paragraphs, original_paragraphs
+          // For bmd_summary: endpoints
+          // For genomics: organ, sex, gene_sets, top_genes
+        }
+      }
+
+    Saves the section data with an approved_at timestamp.  Also saves/updates
+    identity.json and meta.json on every approve call.
+
+    For bm2 sections, the .bm2 file is copied from /tmp to
+    sessions/{dtxsid}/files/ so it survives server restarts.
+
+    Style learning: if the user edited the generated text before approving,
+    the original and edited versions are compared to extract writing style
+    rules.  Extraction runs asynchronously in a background thread so the
+    approve response is immediate.
+    """
+    # Valid section types — the original two plus the new NIEHS sections
+    VALID_SECTION_TYPES = {
+        "background", "bm2", "methods", "bmd_summary", "genomics", "summary",
+    }
+
+    body = await request.json()
+    dtxsid = body.get("dtxsid", "")
+    identity = body.get("identity")
+    section_type = body.get("section_type", "")
+    data = body.get("data", {})
+
+    if not dtxsid:
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
+    if section_type not in VALID_SECTION_TYPES:
+        return JSONResponse(
+            {"error": f"section_type must be one of: {', '.join(sorted(VALID_SECTION_TYPES))}"},
+            status_code=400,
+        )
+
+    # Ensure the session directory exists
+    d = _session_dir(dtxsid)
+
+    # Save / update identity.json on every approve so it stays current
+    if identity:
+        (d / "identity.json").write_text(
+            json.dumps(identity, indent=2, default=str), encoding="utf-8",
+        )
+
+    # Save / update meta.json with chemical name and CASRN
+    meta_path = d / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        meta = {"dtxsid": dtxsid, "created_at": _now_iso()}
+    meta["updated_at"] = _now_iso()
+    if identity:
+        meta["name"] = identity.get("name", "")
+        meta["casrn"] = identity.get("casrn", "")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    # Stamp the data with the approval time
+    data["approved_at"] = _now_iso()
+
+    if section_type == "background":
+        _save_section(dtxsid, "background", data)
+    elif section_type == "bm2":
+        # Build the section key from the original .bm2 filename
+        filename = data.get("filename", "")
+        slug = _bm2_slug(filename) if filename else ""
+        if not slug:
+            return JSONResponse(
+                {"error": "bm2 data must include a filename"},
+                status_code=400,
+            )
+        section_key = f"bm2_{slug}"
+        _save_section(dtxsid, section_key, data)
+
+        # Copy the .bm2 file from /tmp into the session's files/ directory
+        # so it persists across server restarts and can be reprocessed later.
+        bm2_id = data.get("bm2_id", "")
+        upload = _bm2_uploads.get(bm2_id)
+        if upload and os.path.exists(upload["temp_path"]):
+            files_dir = d / "files"
+            files_dir.mkdir(exist_ok=True)
+            dest = files_dir / filename
+            if not dest.exists():
+                shutil.copy2(upload["temp_path"], dest)
+
+    elif section_type == "methods":
+        # Materials and Methods — single section, saved as methods.json
+        _save_section(dtxsid, "methods", data)
+
+    elif section_type == "bmd_summary":
+        # Apical Endpoint BMD Summary — auto-derived, saved as bmd_summary.json
+        _save_section(dtxsid, "bmd_summary", data)
+
+    elif section_type == "genomics":
+        # Genomics section — one file per organ × sex combination.
+        # The section_key is built from organ and sex (e.g., "genomics_liver_male").
+        organ = data.get("organ", "").lower().replace(" ", "_")
+        sex = data.get("sex", "").lower().replace(" ", "_")
+        if not organ or not sex:
+            return JSONResponse(
+                {"error": "genomics data must include organ and sex"},
+                status_code=400,
+            )
+        section_key = f"genomics_{organ}_{sex}"
+        _save_section(dtxsid, section_key, data)
+
+        # Copy uploaded CSV into files/ for future reprocessing
+        csv_id = data.get("csv_id", "")
+        csv_upload = _csv_uploads.get(csv_id)
+        if csv_upload and os.path.exists(csv_upload["temp_path"]):
+            files_dir = d / "files"
+            files_dir.mkdir(exist_ok=True)
+            dest = files_dir / csv_upload["filename"]
+            if not dest.exists():
+                shutil.copy2(csv_upload["temp_path"], dest)
+
+    elif section_type == "summary":
+        # Summary section — saved as summary.json
+        _save_section(dtxsid, "summary", data)
+
+    # --- Style learning: detect edits and extract rules ---
+    # The client sends the original LLM-generated text alongside the
+    # (possibly edited) approved text.  If they differ, the user made
+    # deliberate style changes — we extract rules from those changes
+    # in a background thread to avoid blocking the approve response.
+    user_edited = False
+
+    if section_type == "background":
+        original_paragraphs = data.get("original_paragraphs")
+        edited_paragraphs = data.get("paragraphs")
+        if original_paragraphs and edited_paragraphs:
+            user_edited = original_paragraphs != edited_paragraphs
+            if user_edited:
+                original_text = "\n\n".join(original_paragraphs)
+                edited_text = "\n\n".join(edited_paragraphs)
+
+    elif section_type == "bm2":
+        original_narrative = data.get("original_narrative", "")
+        edited_narrative = data.get("narrative", "")
+        if original_narrative and edited_narrative:
+            user_edited = original_narrative != edited_narrative
+            if user_edited:
+                original_text = original_narrative
+                edited_text = edited_narrative
+
+    elif section_type in ("methods", "summary"):
+        # Methods and summary sections use the same paragraph-based
+        # style learning as background — compare original vs. edited paragraphs
+        original_paragraphs = data.get("original_paragraphs")
+        edited_paragraphs = data.get("paragraphs")
+        if original_paragraphs and edited_paragraphs:
+            user_edited = original_paragraphs != edited_paragraphs
+            if user_edited:
+                original_text = "\n\n".join(original_paragraphs)
+                edited_text = "\n\n".join(edited_paragraphs)
+
+    if user_edited:
+        # Fire-and-forget: extract style rules in a background thread.
+        # We don't await the result — the user gets their approve response
+        # immediately, and the rules are saved asynchronously.
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            None, _extract_and_merge_style_rules, original_text, edited_text,
+        )
+        logger.info("Style learning triggered for %s/%s", dtxsid, section_type)
+
+    # Read back the saved version number so the UI can display "v1", "v2", etc.
+    # The version was stamped onto `data` by _save_section() before writing.
+    version = data.get("version", 1)
+
+    return JSONResponse({
+        "ok": True,
+        "section_type": section_type,
+        "user_edited": user_edited,
+        "version": version,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/unapprove — unapprove (delete) a report section
+# ---------------------------------------------------------------------------
+
+@app.post("/api/session/unapprove")
+async def api_session_unapprove(request: Request):
+    """
+    Unapprove a report section by deleting its JSON file from disk.
+
+    Input JSON:
+      {
+        "dtxsid": "DTXSID6020430",
+        "section_type": "background" | "bm2" | "methods" | "bmd_summary"
+                        | "genomics" | "summary",
+        "bm2_slug": "organ-and-body-weights",  // required for bm2 only
+        "organ": "liver",                       // required for genomics only
+        "sex": "male"                           // required for genomics only
+      }
+
+    The .bm2 file and CSV in files/ are NOT deleted — they're still useful
+    for reprocessing without re-uploading.
+    """
+    body = await request.json()
+    dtxsid = body.get("dtxsid", "")
+    section_type = body.get("section_type", "")
+    bm2_slug = body.get("bm2_slug", "")
+
+    if not dtxsid:
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
+
+    if section_type == "background":
+        _delete_section(dtxsid, "background")
+    elif section_type == "bm2":
+        if not bm2_slug:
+            return JSONResponse(
+                {"error": "bm2_slug is required for bm2 sections"},
+                status_code=400,
+            )
+        _delete_section(dtxsid, f"bm2_{bm2_slug}")
+    elif section_type == "methods":
+        _delete_section(dtxsid, "methods")
+    elif section_type == "bmd_summary":
+        _delete_section(dtxsid, "bmd_summary")
+    elif section_type == "genomics":
+        organ = body.get("organ", "").lower().replace(" ", "_")
+        sex = body.get("sex", "").lower().replace(" ", "_")
+        if not organ or not sex:
+            return JSONResponse(
+                {"error": "organ and sex are required for genomics sections"},
+                status_code=400,
+            )
+        _delete_section(dtxsid, f"genomics_{organ}_{sex}")
+    elif section_type == "summary":
+        _delete_section(dtxsid, "summary")
+    else:
+        return JSONResponse(
+            {"error": f"Unknown section_type: {section_type}"},
+            status_code=400,
+        )
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# GET /api/session/{dtxsid}/history/{section_key} — version history for a section
+# ---------------------------------------------------------------------------
+
+@app.get("/api/session/{dtxsid}/history/{section_key}")
+async def api_session_history(dtxsid: str, section_key: str, version: int = 0):
+    """
+    Return version history for an approved section.
+
+    Lists all past versions (from the history/ subdirectory) plus the current
+    version.  Each entry includes the version number, approved_at timestamp,
+    and whether it's the current version.
+
+    If the `version` query parameter is provided (e.g. ?version=1), returns
+    the full JSON content of that specific version instead of the list.
+
+    URL pattern:
+        GET /api/session/{dtxsid}/history/{section_key}         → version list
+        GET /api/session/{dtxsid}/history/{section_key}?version=1 → full content
+
+    Response (list mode):
+    {
+      "section_key": "background",
+      "current_version": 3,
+      "versions": [
+        {"version": 1, "approved_at": "2026-03-02T19:23:59...", "is_current": false},
+        {"version": 2, "approved_at": "2026-03-02T19:45:12...", "is_current": false},
+        {"version": 3, "approved_at": "2026-03-02T20:01:33...", "is_current": true}
+      ]
+    }
+    """
+    d = SESSIONS_DIR / dtxsid
+    current_path = d / f"{section_key}.json"
+    history_dir = d / "history" / section_key
+
+    # The current file must exist — otherwise there's no history to show
+    if not current_path.exists():
+        return JSONResponse(
+            {"error": f"No approved '{section_key}' section found"},
+            status_code=404,
+        )
+
+    current_data = json.loads(current_path.read_text(encoding="utf-8"))
+    current_version = current_data.get("version", 1)
+
+    # --- Collect archived versions from history/ ---
+    # Each file is named {safe_timestamp}.json where colons in the ISO
+    # timestamp have been replaced with hyphens.
+    archived_versions = []
+    if history_dir.exists():
+        for f in sorted(history_dir.glob("*.json")):
+            try:
+                v = json.loads(f.read_text(encoding="utf-8"))
+                archived_versions.append(v)
+            except (json.JSONDecodeError, OSError):
+                # Skip corrupt history files
+                continue
+
+    # --- If a specific version was requested, return its full content ---
+    if version > 0:
+        # Check archived versions first
+        for v in archived_versions:
+            if v.get("version") == version:
+                return JSONResponse(v)
+        # Check if it's the current version
+        if current_version == version:
+            return JSONResponse(current_data)
+        return JSONResponse(
+            {"error": f"Version {version} not found"}, status_code=404,
+        )
+
+    # --- List mode: return metadata for all versions ---
+    versions = []
+    for v in archived_versions:
+        versions.append({
+            "version": v.get("version", 0),
+            "approved_at": v.get("approved_at", ""),
+            "is_current": False,
+        })
+    # Add the current version as the last entry
+    versions.append({
+        "version": current_version,
+        "approved_at": current_data.get("approved_at", ""),
+        "is_current": True,
+    })
+
+    return JSONResponse({
+        "section_key": section_key,
+        "current_version": current_version,
+        "versions": versions,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/{dtxsid}/restore — restore a past version as current
+# ---------------------------------------------------------------------------
+
+@app.post("/api/session/{dtxsid}/restore")
+async def api_session_restore(dtxsid: str, request: Request):
+    """
+    Restore a past version of a section by re-saving it as the new current.
+
+    This is non-destructive: restoring v1 does NOT delete v2 or v3.  Instead
+    it creates a new version (v4) whose content matches v1.  The old current
+    is archived to history/ first, as usual.
+
+    Input JSON:
+      {"section_key": "background", "version": 1}
+
+    The restored data gets a fresh approved_at timestamp and an incremented
+    version number.
+    """
+    body = await request.json()
+    section_key = body.get("section_key", "")
+    target_version = body.get("version", 0)
+
+    if not section_key or not target_version:
+        return JSONResponse(
+            {"error": "section_key and version are required"}, status_code=400,
+        )
+
+    d = SESSIONS_DIR / dtxsid
+    current_path = d / f"{section_key}.json"
+    history_dir = d / "history" / section_key
+
+    if not current_path.exists():
+        return JSONResponse(
+            {"error": f"No approved '{section_key}' section found"},
+            status_code=404,
+        )
+
+    # Find the requested version in history files
+    target_data = None
+    if history_dir.exists():
+        for f in sorted(history_dir.glob("*.json")):
+            try:
+                v = json.loads(f.read_text(encoding="utf-8"))
+                if v.get("version") == target_version:
+                    target_data = v
+                    break
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    # Also check if they're restoring the current version (no-op but valid)
+    if target_data is None:
+        current_data = json.loads(current_path.read_text(encoding="utf-8"))
+        if current_data.get("version") == target_version:
+            return JSONResponse({
+                "ok": True,
+                "message": "Already the current version",
+                "version": target_version,
+            })
+        return JSONResponse(
+            {"error": f"Version {target_version} not found"}, status_code=404,
+        )
+
+    # Stamp the restored data with a fresh approval timestamp.
+    # _save_section() will archive the old current and assign a new version number.
+    target_data["approved_at"] = _now_iso()
+    # Remove the old version number — _save_section() will compute the new one
+    target_data.pop("version", None)
+
+    _save_section(dtxsid, section_key, target_data)
+
+    return JSONResponse({
+        "ok": True,
+        "version": target_data.get("version", 1),
+        "section_key": section_key,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/generate-methods — generate Materials and Methods section
+# ---------------------------------------------------------------------------
+
+@app.post("/api/generate-methods")
+async def api_generate_methods(request: Request):
+    """
+    Generate a Materials and Methods section for the 5dToxReport.
+
+    The M&M section is LLM-generated from study parameters (doses, species,
+    vehicle, route, duration, etc.).  Most content is boilerplate NTP methods
+    with the specific dose groups and compound name injected.
+
+    The generated text follows the NIEHS 5-day study protocol structure:
+      1. Study Design — species, doses, vehicle, route, duration, group sizes
+      2. Dose Selection Rationale — brief standard text
+      3. Clinical Examinations and Sample Collection — body/organ weights,
+         clinical pathology parameters
+      4. Data Analysis — Jonckheere → Williams/Dunnett pipeline, BMD modeling
+      5. Transcriptomics (if applicable) — TempO-Seq, BMDExpress
+
+    Input JSON:
+      {
+        "identity": {ChemicalIdentity dict},
+        "dose_groups": [0, 0.15, 0.5, 1.4, 4, 12, 37, 111, 333, 1000],
+        "dose_unit": "mg/kg",
+        "vehicle": "acetone:corn oil (1:99)",
+        "n_per_group": 5,
+        "n_control": 10,
+        "route": "gavage",
+        "duration_days": 5,
+        "species": "Sprague Dawley",
+        "organs_collected": ["heart", "liver", "kidneys"],
+        "has_transcriptomics": true
+      }
+
+    Returns JSON:
+      {
+        "paragraphs": ["Study design paragraph...", "Dose selection...", ...],
+        "section_key": "methods",
+        "model_used": "claude-..."
+      }
+    """
+    body = await request.json()
+    identity = body.get("identity", {})
+    dose_groups = body.get("dose_groups", [])
+    dose_unit = body.get("dose_unit", "mg/kg")
+    vehicle = body.get("vehicle", "corn oil")
+    n_per_group = body.get("n_per_group", 5)
+    n_control = body.get("n_control", 10)
+    route = body.get("route", "gavage")
+    duration_days = body.get("duration_days", 5)
+    species = body.get("species", "Sprague Dawley")
+    organs_collected = body.get("organs_collected", [])
+    has_transcriptomics = body.get("has_transcriptomics", False)
+
+    compound_name = identity.get("name", "the test chemical")
+    casrn = identity.get("casrn", "")
+
+    # Format dose groups for the prompt
+    dose_str = ", ".join(str(d) for d in dose_groups) if dose_groups else "not specified"
+    organs_str = ", ".join(organs_collected) if organs_collected else "standard organs"
+
+    # Build the LLM prompt for M&M generation.
+    # The prompt provides the study parameters and asks Claude to generate
+    # structured Materials and Methods text in NIEHS report style.
+    prompt = f"""Generate the Materials and Methods section for a 5-day genomic
+dose-response study report. Write in the formal style of an NIEHS/NTP technical report.
+
+Study Parameters:
+- Chemical: {compound_name} (CASRN: {casrn})
+- Species: {species} rats
+- Route of administration: oral {route}
+- Vehicle: {vehicle}
+- Duration: {duration_days} days
+- Dose groups ({dose_unit}): {dose_str}
+- Animals per treatment group: {n_per_group} males and {n_per_group} females
+- Animals in control group: {n_control} males and {n_control} females
+- Organs collected: {organs_str}
+- Transcriptomics: {"TempO-Seq assay performed" if has_transcriptomics else "not performed"}
+
+Generate 5 paragraphs covering these subsections:
+1. Study Design — describe the dosing regimen, group assignments, and animal model
+2. Dose Selection Rationale — briefly explain dose range selection (reference LD50 data if relevant)
+3. Clinical Examinations and Sample Collection — body weights, organ weights, clinical pathology parameters collected
+4. Data Analysis — statistical methods: Jonckheere trend test for dose-response, followed by Williams (monotonic) or Dunnett (non-monotonic) pairwise tests. BMD modeling using BMDS 2.7 with a benchmark response of 1 standard deviation from the control mean.
+5. {"Transcriptomics — describe TempO-Seq targeted RNA sequencing assay, BMDExpress 2 analysis pipeline, GO term filtering criteria (5%% populated, goodness-of-fit p > 0.1, BMDU/BMDL ratio ≤ 40)." if has_transcriptomics else ""}
+
+Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
+Do not include section headers in the paragraphs — they will be added by the report template."""
+
+    system = (
+        "You are a toxicology report writer specializing in NTP/NIEHS-style "
+        "technical reports. Write precise, formal scientific text. Return ONLY "
+        "valid JSON with no markdown formatting."
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            endpoint = AnthropicEndpoint(
+                name="methods-generator",
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                temperature=0.2,
+            )
+            return endpoint.generate(prompt, system=system)
+
+        response = await loop.run_in_executor(None, _generate)
+
+        # Parse the JSON array from the response
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        paragraphs = json.loads(cleaned)
+        if not isinstance(paragraphs, list):
+            paragraphs = [str(paragraphs)]
+
+        return JSONResponse({
+            "paragraphs": paragraphs,
+            "section_key": "methods",
+            "model_used": "claude-sonnet-4-6",
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Methods generation failed: {e}"},
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/generate-summary — generate report Summary section
+# ---------------------------------------------------------------------------
+
+@app.post("/api/generate-summary")
+async def api_generate_summary(request: Request):
+    """
+    Generate a Summary section that synthesizes all approved report sections.
+
+    Reads all approved sections from the session, builds a context block
+    describing the key findings, and sends it to Claude to produce a
+    NIEHS-style summary.
+
+    The summary references:
+      - Most sensitive apical endpoint (from BMD summary)
+      - Most sensitive gene set (from genomics)
+      - Most sensitive gene (from genomics)
+      - Comparison across hierarchy levels (gene < gene set < apical)
+
+    Input JSON:
+      {
+        "dtxsid": "DTXSID...",
+        "identity": {ChemicalIdentity dict}
+      }
+
+    Returns JSON:
+      {
+        "paragraphs": ["Summary paragraph 1...", "Summary paragraph 2...", ...],
+        "section_key": "summary",
+        "model_used": "claude-..."
+      }
+    """
+    body = await request.json()
+    dtxsid = body.get("dtxsid", "")
+    identity = body.get("identity", {})
+
+    if not dtxsid:
+        return JSONResponse(
+            {"error": "dtxsid is required"},
+            status_code=400,
+        )
+
+    compound_name = identity.get("name", "the test chemical")
+
+    # Gather context from all approved sections in the session
+    d = SESSIONS_DIR / dtxsid
+    context_parts = []
+
+    # Background — extract a brief summary
+    bg_path = d / "background.json"
+    if bg_path.exists():
+        try:
+            bg = json.loads(bg_path.read_text(encoding="utf-8"))
+            bg_paras = bg.get("paragraphs", [])
+            if bg_paras:
+                context_parts.append(
+                    "=== BACKGROUND (first paragraph) ===\n"
+                    + bg_paras[0][:500]
+                )
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Apical endpoint findings — summarize from bm2 sections
+    for f in sorted(d.glob("bm2_*.json")):
+        try:
+            section = json.loads(f.read_text(encoding="utf-8"))
+            narrative = section.get("narrative", "")
+            if isinstance(narrative, list):
+                narrative = " ".join(narrative)
+            if narrative:
+                section_name = f.stem.removeprefix("bm2_").replace("-", " ").title()
+                context_parts.append(
+                    f"=== APICAL RESULTS: {section_name} ===\n"
+                    + narrative[:800]
+                )
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    # BMD summary — if available
+    bmd_path = d / "bmd_summary.json"
+    if bmd_path.exists():
+        try:
+            bmd_data = json.loads(bmd_path.read_text(encoding="utf-8"))
+            eps = bmd_data.get("endpoints", [])
+            if eps:
+                lines = ["=== BMD SUMMARY (sorted by BMD) ==="]
+                for ep in eps[:10]:
+                    lines.append(
+                        f"  {ep.get('endpoint', '')}: BMD={ep.get('bmd', 'ND')}, "
+                        f"BMDL={ep.get('bmdl', 'ND')}, {ep.get('sex', '')}, "
+                        f"{ep.get('direction', '')}"
+                    )
+                context_parts.append("\n".join(lines))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Genomics findings — summarize from genomics_*.json files
+    for f in sorted(d.glob("genomics_*.json")):
+        try:
+            genomics = json.loads(f.read_text(encoding="utf-8"))
+            organ = genomics.get("organ", "")
+            sex = genomics.get("sex", "")
+            gene_sets = genomics.get("gene_sets", [])
+            top_genes = genomics.get("top_genes", [])
+
+            lines = [f"=== GENOMICS: {organ.title()} {sex.title()} ==="]
+            if gene_sets:
+                lines.append("Top gene sets by BMD:")
+                for gs in gene_sets[:5]:
+                    lines.append(
+                        f"  {gs.get('go_term', '')}: median BMD={gs.get('bmd_median', '')}, "
+                        f"{gs.get('n_genes', 0)} genes, {gs.get('direction', '')}"
+                    )
+            if top_genes:
+                lines.append("Top genes by BMD:")
+                for g in top_genes[:5]:
+                    lines.append(
+                        f"  {g.get('gene_symbol', '')}: BMD={g.get('bmd', '')}, "
+                        f"{g.get('direction', '')}"
+                    )
+            context_parts.append("\n".join(lines))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    if not context_parts:
+        return JSONResponse(
+            {"error": "No approved sections found to summarize"},
+            status_code=400,
+        )
+
+    context_block = "\n\n".join(context_parts)
+
+    prompt = f"""Based on the following approved report sections for {compound_name},
+generate a Summary section in the style of an NIEHS/NTP 5-day study technical report.
+
+{context_block}
+
+---
+
+Generate 3-4 summary paragraphs covering:
+1. Overview — briefly restate the study design and the chemical tested
+2. Key Apical Findings — which endpoints were most sensitive (lowest BMD), in which sex, and in what direction
+3. Key Genomic Findings (if available) — which gene sets and genes were most sensitive, what biological processes they represent
+4. Concordance — compare sensitivity across biological levels (gene < gene set < apical endpoint). Note whether transcriptomic changes occurred at lower doses than apical effects (as expected).
+
+Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]"""
+
+    system = (
+        "You are a toxicology report writer specializing in NTP/NIEHS-style "
+        "technical reports. Synthesize findings across biological levels "
+        "(molecular, pathway, organism) into a coherent summary. Return ONLY "
+        "valid JSON with no markdown formatting."
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            endpoint = AnthropicEndpoint(
+                name="summary-generator",
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                temperature=0.2,
+            )
+            return endpoint.generate(prompt, system=system)
+
+        response = await loop.run_in_executor(None, _generate)
+
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        paragraphs = json.loads(cleaned)
+        if not isinstance(paragraphs, list):
+            paragraphs = [str(paragraphs)]
+
+        return JSONResponse({
+            "paragraphs": paragraphs,
+            "section_key": "summary",
+            "model_used": "claude-sonnet-4-6",
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Summary generation failed: {e}"},
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/style-profile — retrieve the global style profile
+# ---------------------------------------------------------------------------
+
+@app.get("/api/style-profile")
+async def api_style_profile():
+    """
+    Return the global style profile (learned writing preferences).
+
+    Returns the full profile JSON including version, updated_at, and rules
+    array.  If no profile exists yet, returns an empty structure with zero
+    rules so the client can always expect the same shape.
+    """
+    profile = _load_style_profile()
+    return JSONResponse(profile)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/style-profile/{idx} — delete a specific style rule by index
+# ---------------------------------------------------------------------------
+
+@app.delete("/api/style-profile/{idx}")
+async def api_delete_style_rule(idx: int):
+    """
+    Delete a style rule at the given index from the global profile.
+
+    The index is 0-based and corresponds to the rule's position in the
+    rules array.  After deletion, the profile is rewritten to disk.
+
+    Returns the updated profile so the client can re-render immediately.
+    """
+    profile = _load_style_profile()
+    rules = profile.get("rules", [])
+
+    if idx < 0 or idx >= len(rules):
+        return JSONResponse(
+            {"error": f"Rule index {idx} out of range (0..{len(rules) - 1})"},
+            status_code=404,
+        )
+
+    removed = rules.pop(idx)
+    _save_style_profile(profile)
+    logger.info("Deleted style rule #%d: %s", idx, removed.get("rule", ""))
+
+    return JSONResponse(profile)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/export-docx — export full report to .docx
+# ---------------------------------------------------------------------------
+
+@app.post("/api/export-docx")
+async def api_export_docx(request: Request):
+    """
+    Export the full 5dToxReport to a .docx file.
+
+    Builds a document in NIEHS report order:
+      1. Title + subtitle
+      2. Background section (paragraphs + references)
+      3. Materials and Methods (if approved)
+      4. Results heading
+         4a. Apical endpoint tables (from .bm2 files)
+         4b. Apical Endpoint BMD Summary table (if approved)
+         4c. Gene Set BMD Analysis tables (if genomics approved)
+         4d. Gene BMD Analysis tables (if genomics approved)
+      5. Summary (if approved)
+      6. References
+
+    Input JSON:
+      {
+        "paragraphs": ["paragraph 1...", ...],
+        "references": ["[1] Ref text...", ...],
+        "chemical_name": "1,2-Dichlorobenzene",
+        "apical_sections": [...],
+        "methods_paragraphs": ["Methods paragraph 1...", ...],
+        "bmd_summary_endpoints": [{endpoint, bmd, ...}, ...],
+        "genomics_sections": [
+          {"organ": "liver", "sex": "male",
+           "gene_sets": [...], "top_genes": [...], "dose_unit": "mg/kg"},
+          ...
+        ],
+        "summary_paragraphs": ["Summary paragraph 1...", ...]
+      }
+
+    All new fields are optional — if omitted, those sections are skipped
+    (backwards-compatible with the original two-section report).
+
+    Returns the .docx file as a downloadable attachment.
+    """
+    body = await request.json()
+    paragraphs = body.get("paragraphs", [])
+    references = body.get("references", [])
+    chemical_name = body.get("chemical_name", "Chemical")
+    apical_sections = body.get("apical_sections", [])
+
+    # New NIEHS sections (all optional)
+    methods_paragraphs = body.get("methods_paragraphs", [])
+    bmd_summary_endpoints = body.get("bmd_summary_endpoints", [])
+    genomics_sections = body.get("genomics_sections", [])
+    summary_paragraphs = body.get("summary_paragraphs", [])
+
+    # At least the background or one results section must be present
+    if not paragraphs and not apical_sections:
+        return JSONResponse(
+            {"error": "No paragraphs or apical sections provided"},
+            status_code=400,
+        )
+
+    # Build the .docx document
+    doc = Document()
+
+    # ===== 1. Title + subtitle =====
+    doc.add_heading(
+        f"5 Day Genomic Dose Response: {chemical_name}",
+        level=1,
+    )
+    add_para(doc,
+        "5 Day Genomic Dose Response in Sprague-Dawley Rats",
+        italic=True, size=12,
+    )
+
+    # ===== 2. Background section =====
+    if paragraphs:
+        doc.add_heading("Background", level=2)
+        for para_text in paragraphs:
+            p = doc.add_paragraph()
+            _add_text_with_superscript_refs(p, para_text)
+            p.paragraph_format.space_after = Pt(6)
+
+    # ===== 3. Materials and Methods (NEW — if approved) =====
+    if methods_paragraphs:
+        doc.add_heading("Materials and Methods", level=2)
+        for para_text in methods_paragraphs:
+            p = doc.add_paragraph()
+            run = p.add_run(para_text)
+            run.font.size = Pt(11)
+            run.font.name = "Calibri"
+            p.paragraph_format.space_after = Pt(6)
+
+    # ===== 4. Results =====
+    # Add a "Results" heading if we have any results sections
+    has_results = bool(apical_sections or bmd_summary_endpoints or genomics_sections)
+    if has_results:
+        doc.add_heading("Results", level=2)
+
+    # Table numbers continue sequentially across all result sections
+    next_table_num = 1
+
+    # --- 4a. Apical endpoint tables (existing .bm2 tables) ---
+    for section in apical_sections:
+        bm2_id = section.get("bm2_id", "")
+        section_title = section.get(
+            "section_title",
+            "Animal Condition, Body Weights, and Organ Weights",
+        )
+        table_caption = section.get(
+            "table_caption_template",
+            "Summary of Body Weights and Organ Weights "
+            "of {sex} Rats Administered {compound} for Five Days",
+        )
+        compound = section.get("compound_name", chemical_name)
+        dose_unit = section.get("dose_unit", "mg/kg")
+
+        upload = _bm2_uploads.get(bm2_id)
+        if not upload:
+            continue
+
+        table_data = upload.get("table_data")
+        if table_data is None:
+            try:
+                loop = asyncio.get_event_loop()
+                table_data, _ = await loop.run_in_executor(
+                    None, build_table_data_from_bm2, upload["temp_path"],
+                )
+                upload["table_data"] = table_data
+            except Exception:
+                continue
+
+        narrative_paras = section.get("narrative_paragraphs")
+        if narrative_paras is None and upload:
+            narrative_paras = upload.get("narrative")
+
+        next_table_num = add_apical_tables_to_doc(
+            doc,
+            table_data,
+            section_title=section_title,
+            compound_name=compound,
+            dose_unit=dose_unit,
+            table_caption_template=table_caption,
+            start_table_num=next_table_num,
+            narrative_paragraphs=narrative_paras,
+        )
+
+    # --- 4b. Apical Endpoint BMD Summary table (NEW) ---
+    if bmd_summary_endpoints:
+        dose_unit = body.get("dose_unit", "mg/kg")
+        next_table_num = add_bmd_summary_table_to_doc(
+            doc,
+            bmd_summary_endpoints,
+            table_num=next_table_num,
+            dose_unit=dose_unit,
+        )
+
+    # --- 4c & 4d. Gene Set BMD and Gene BMD tables (NEW) ---
+    for gs_section in genomics_sections:
+        organ = gs_section.get("organ", "")
+        sex = gs_section.get("sex", "")
+        gene_sets = gs_section.get("gene_sets", [])
+        top_genes = gs_section.get("top_genes", [])
+        dose_unit = gs_section.get("dose_unit", "mg/kg")
+
+        # Gene Set BMD Analysis table (4c)
+        if gene_sets:
+            next_table_num = add_gene_set_bmd_tables_to_doc(
+                doc, gene_sets, organ, sex,
+                table_num=next_table_num,
+                dose_unit=dose_unit,
+            )
+
+        # Gene BMD Analysis table (4d)
+        if top_genes:
+            next_table_num = add_gene_bmd_tables_to_doc(
+                doc, top_genes, organ, sex,
+                table_num=next_table_num,
+                dose_unit=dose_unit,
+            )
+
+    # ===== 5. Summary (NEW — if approved) =====
+    if summary_paragraphs:
+        doc.add_heading("Summary", level=2)
+        for para_text in summary_paragraphs:
+            p = doc.add_paragraph()
+            run = p.add_run(para_text)
+            run.font.size = Pt(11)
+            run.font.name = "Calibri"
+            p.paragraph_format.space_after = Pt(6)
+
+    # ===== 6. References (moved to end for NIEHS ordering) =====
+    if references:
+        doc.add_heading("References", level=2)
+        for ref_line in references:
+            add_para(doc, ref_line, size=10)
+
+    # Save to a temporary file and return as download
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
+                        for c in chemical_name)
+    filename = f"5dToxReport_{safe_name}.docx"
+
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".docx", prefix="5dtox_",
+    )
+    doc.save(tmp.name)
+    tmp.close()
+
+    return FileResponse(
+        tmp.name,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _add_text_with_superscript_refs(paragraph, text: str) -> None:
+    """
+    Add text to a paragraph, converting [N] reference markers to superscript.
+
+    Splits the text on [N] patterns, adds normal text as regular runs and
+    reference numbers as superscript runs. Uses Calibri 11pt as the base font.
+    """
+    import re
+    from docx.oxml.ns import qn
+
+    # Split on reference markers like [1], [2,3], [1-3], etc.
+    parts = re.split(r'(\[\d+(?:[,\-–]\d+)*\])', text)
+
+    for part in parts:
+        if re.match(r'\[\d+(?:[,\-–]\d+)*\]', part):
+            # This is a reference marker — make it superscript
+            run = paragraph.add_run(part)
+            run.font.size = Pt(9)
+            run.font.name = "Calibri"
+            run.font.superscript = True
+        else:
+            # Normal text
+            if part:
+                run = paragraph.add_run(part)
+                run.font.size = Pt(11)
+                run.font.name = "Calibri"
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import uvicorn
+
+    host = "127.0.0.1"
+    port = 9000
+
+    # Parse CLI args
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--host" and i + 1 < len(args):
+            host = args[i + 1]
+            i += 2
+        elif args[i] == "--port" and i + 1 < len(args):
+            port = int(args[i + 1])
+            i += 2
+        else:
+            i += 1
+
+    import webbrowser
+
+    print(f"Starting 5dToxReport on http://{host}:{port}")
+
+    # Open the browser after a short delay so the server is ready
+    import threading
+    threading.Timer(1.0, webbrowser.open, args=[f"http://{host}:{port}"]).start()
+
+    uvicorn.run(app, host=host, port=port)

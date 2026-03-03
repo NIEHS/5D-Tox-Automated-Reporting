@@ -382,6 +382,267 @@ def enrich_go_terms(
 
 
 # ---------------------------------------------------------------------------
+# BMD-ranked GO gene sets and individual genes (NIEHS report tables)
+# ---------------------------------------------------------------------------
+# These two functions produce the data for the "Gene Set Benchmark Dose
+# Analysis" and "Gene Benchmark Dose Analysis" report sections, matching
+# the methodology described in NIEHS Report 10 (PFHxSAm, NBK589955).
+#
+# The NIEHS filtering criteria are:
+#   - Fold change magnitude > 2  (|log2FC| not used — raw fold change)
+#   - Goodness-of-fit p-value > 0.1  (model fits the data adequately)
+#   - BMDU/BMDL ratio ≤ 40  (BMD estimate is precise enough to be useful)
+#
+# For gene sets: a GO term is "active" if it has ≥ 3 genes passing all
+# filters.  The set's BMD is the median of its member genes' BMDs.
+# For individual genes with multiple probes: the median BMD is used.
+
+def _apply_niehs_gene_filters(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply the standard NIEHS quality filters to a gene-level BMD dataframe.
+
+    These filters remove low-quality or imprecise BMD estimates, keeping
+    only genes whose dose-response modeling meets minimum quality standards.
+    The same filter set is used for both gene-level and gene-set-level
+    ranking, ensuring consistency between the two report tables.
+
+    Filters applied (in order):
+      1. Fold change magnitude > 2  — genes must show a biologically
+         meaningful change, not just a statistically detectable one.
+      2. Goodness-of-fit p > 0.1   — the fitted dose-response model must
+         adequately describe the data (p ≤ 0.1 suggests poor fit).
+      3. BMDU/BMDL ratio ≤ 40      — the confidence interval around the
+         BMD must be reasonably narrow; ratios above 40 indicate the BMD
+         is too uncertain to rank on.
+
+    Args:
+        df: DataFrame with columns gene_symbol, bmd, and optionally
+            fold_change, gof_p (goodness-of-fit p-value), bmdu, bmdl.
+
+    Returns:
+        Filtered copy of df with only rows passing all applicable filters.
+        Filters are skipped if the corresponding column is absent (e.g.,
+        if no fold_change column exists, that filter is not applied).
+    """
+    filtered = df.copy()
+
+    # Filter 1: fold change magnitude > 2
+    # The NIEHS report uses absolute fold change (not log2), so a value
+    # of 2 means the gene is at least 2x up or 0.5x down vs. control.
+    if "fold_change" in filtered.columns:
+        fc = pd.to_numeric(filtered["fold_change"], errors="coerce")
+        filtered = filtered[fc.abs() > 2].copy()
+
+    # Filter 2: goodness-of-fit p-value > 0.1
+    # A low p-value means the model is a poor fit to the observed data.
+    # We keep only genes where the model fits well (p > 0.1).
+    if "gof_p" in filtered.columns:
+        gof = pd.to_numeric(filtered["gof_p"], errors="coerce")
+        filtered = filtered[gof > 0.1].copy()
+
+    # Filter 3: BMDU/BMDL ratio ≤ 40
+    # This measures the width of the BMD confidence interval.  Ratios
+    # above 40 mean the upper and lower bounds are so far apart that
+    # the point estimate is essentially meaningless.
+    if "bmdu" in filtered.columns and "bmdl" in filtered.columns:
+        bmdu = pd.to_numeric(filtered["bmdu"], errors="coerce")
+        bmdl = pd.to_numeric(filtered["bmdl"], errors="coerce")
+        # Avoid division by zero — if BMDL is 0, the ratio is infinite
+        ratio = bmdu / bmdl.replace(0, float("nan"))
+        filtered = filtered[ratio <= 40].copy()
+
+    return filtered
+
+
+def rank_go_sets_by_bmd(
+    df: pd.DataFrame,
+    kb: ToxKBQuerier,
+    top_n: int = 10,
+) -> list[dict]:
+    """
+    Rank GO Biological Process gene sets by the potency of perturbation.
+
+    This produces the data for the "Gene Set Benchmark Dose Analysis" table
+    in the NIEHS report.  For each GO term that has enough passing genes,
+    we compute the median BMD across its member genes — lower median BMD
+    means the gene set was perturbed at a lower dose, i.e., more potent.
+
+    The algorithm:
+      1. Apply NIEHS quality filters to the gene-level data.
+      2. For each GO term in the knowledge base, find which of the
+         filtered genes are annotated to it.
+      3. Keep only GO terms with ≥ 3 passing genes (the "active" threshold).
+      4. Compute median BMD and median BMDL for each active GO term.
+      5. Determine the predominant direction (up/down) of the member genes.
+      6. Sort by median BMD ascending and return the top N.
+
+    Args:
+        df:    Gene-level BMD DataFrame.  Required columns: gene_symbol, bmd.
+               Optional: bmdl, fold_change, direction, gof_p, bmdu.
+        kb:    ToxKBQuerier connected to bmdx.duckdb — used to look up
+               which genes belong to which GO terms.
+        top_n: How many top gene sets to return (default 10, matching NIEHS).
+
+    Returns:
+        List of dicts, each representing one GO gene set, sorted by
+        median BMD ascending:
+          [{rank, go_id, go_term, bmd_median, bmdl_median, n_genes,
+            genes, direction}, ...]
+    """
+    # Step 1: filter genes to only those passing NIEHS quality criteria
+    filtered = _apply_niehs_gene_filters(df)
+
+    if filtered.empty:
+        return []
+
+    # Build lookup dicts from the filtered data for fast access
+    gene_bmd = dict(zip(filtered["gene_symbol"], filtered["bmd"]))
+    gene_bmdl = {}
+    if "bmdl" in filtered.columns:
+        gene_bmdl = dict(zip(
+            filtered["gene_symbol"],
+            pd.to_numeric(filtered["bmdl"], errors="coerce"),
+        ))
+    gene_dir = {}
+    if "direction" in filtered.columns:
+        gene_dir = dict(zip(filtered["gene_symbol"], filtered["direction"]))
+
+    # Step 2: for each filtered gene, find its GO term annotations
+    # Build a reverse map: go_id → [list of passing genes]
+    go_to_genes: dict[str, list[str]] = {}
+    for gene in filtered["gene_symbol"].unique():
+        terms = kb.gene_go_terms(gene)
+        for t in terms:
+            go_to_genes.setdefault(t["go_id"], []).append(gene)
+
+    # Step 3 & 4: compute stats for each active GO term (≥ 3 genes)
+    results = []
+    for go_id, genes in go_to_genes.items():
+        if len(genes) < 3:
+            continue  # skip terms with too few passing genes
+
+        # Median BMD across member genes
+        bmds = [gene_bmd[g] for g in genes if g in gene_bmd]
+        if not bmds:
+            continue
+        bmd_median = float(pd.Series(bmds).median())
+
+        # Median BMDL (if available)
+        bmdls = [gene_bmdl[g] for g in genes if g in gene_bmdl and pd.notna(gene_bmdl[g])]
+        bmdl_median = float(pd.Series(bmdls).median()) if bmdls else None
+
+        # Step 5: predominant direction of member genes
+        dirs = [str(gene_dir.get(g, "")).lower() for g in genes]
+        up_count = sum(1 for d in dirs if d == "up")
+        down_count = sum(1 for d in dirs if d == "down")
+        if up_count > down_count:
+            direction = "Up"
+        elif down_count > up_count:
+            direction = "Down"
+        elif up_count == 0 and down_count == 0:
+            direction = "N/A"
+        else:
+            direction = "Mixed"
+
+        go_term_name = kb.go_term_name(go_id)
+
+        results.append({
+            "go_id": go_id,
+            "go_term": go_term_name,
+            "bmd_median": round(bmd_median, 3),
+            "bmdl_median": round(bmdl_median, 3) if bmdl_median is not None else None,
+            "n_genes": len(genes),
+            "genes": sorted(genes),
+            "direction": direction,
+        })
+
+    # Step 6: sort by median BMD ascending (most potent first) and rank
+    results.sort(key=lambda x: x["bmd_median"])
+    for i, r in enumerate(results[:top_n], 1):
+        r["rank"] = i
+
+    return results[:top_n]
+
+
+def rank_genes_by_bmd(
+    df: pd.DataFrame,
+    top_n: int = 10,
+) -> list[dict]:
+    """
+    Rank individual genes by the potency of perturbation (BMD).
+
+    This produces the data for the "Gene Benchmark Dose Analysis" table
+    in the NIEHS report.  Genes with the lowest BMD were perturbed at
+    the lowest dose, indicating they are the most sensitive responders.
+
+    For genes with multiple probes (multiple rows in the CSV), the median
+    BMD across probes is used — this matches the NIEHS methodology where
+    probe-level results are collapsed to gene-level by taking the median.
+
+    The algorithm:
+      1. Apply NIEHS quality filters.
+      2. Group by gene_symbol and take the median BMD (and median BMDL,
+         fold_change) across probes for the same gene.
+      3. Sort by median BMD ascending.
+      4. Return the top N with full metadata.
+
+    Args:
+        df:    Gene-level BMD DataFrame.  Required columns: gene_symbol, bmd.
+               Optional: bmdl, bmdu, fold_change, direction, best_model,
+               full_name, gof_p.
+        top_n: How many top genes to return (default 10, matching NIEHS).
+
+    Returns:
+        List of dicts, each representing one gene, sorted by BMD ascending:
+          [{rank, gene_symbol, full_name, bmd, bmdl, bmdu, direction,
+            fold_change}, ...]
+    """
+    # Step 1: apply NIEHS quality filters
+    filtered = _apply_niehs_gene_filters(df)
+
+    if filtered.empty:
+        return []
+
+    # Step 2: collapse multiple probes per gene to median values.
+    # We group by gene_symbol and aggregate numeric columns with median,
+    # and non-numeric columns (direction, full_name) by taking the first.
+    agg_spec = {"bmd": "median"}
+
+    # Add optional numeric columns to the aggregation
+    for col in ("bmdl", "bmdu", "fold_change"):
+        if col in filtered.columns:
+            filtered[col] = pd.to_numeric(filtered[col], errors="coerce")
+            agg_spec[col] = "median"
+
+    # Non-numeric columns: keep the first value per gene
+    for col in ("direction", "full_name", "best_model"):
+        if col in filtered.columns:
+            agg_spec[col] = "first"
+
+    grouped = filtered.groupby("gene_symbol", as_index=False).agg(agg_spec)
+
+    # Step 3: sort by BMD ascending (most sensitive gene first)
+    grouped = grouped.sort_values("bmd").reset_index(drop=True)
+
+    # Step 4: build result dicts with full metadata
+    results = []
+    for i, row in grouped.head(top_n).iterrows():
+        entry = {
+            "rank": len(results) + 1,
+            "gene_symbol": row["gene_symbol"],
+            "full_name": row.get("full_name", "") or "",
+            "bmd": round(float(row["bmd"]), 3),
+            "bmdl": round(float(row["bmdl"]), 3) if "bmdl" in row and pd.notna(row.get("bmdl")) else None,
+            "bmdu": round(float(row["bmdu"]), 3) if "bmdu" in row and pd.notna(row.get("bmdu")) else None,
+            "direction": row.get("direction", "N/A") or "N/A",
+            "fold_change": round(float(row["fold_change"]), 2) if "fold_change" in row and pd.notna(row.get("fold_change")) else None,
+        }
+        results.append(entry)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # BMD-ordered pathway narrative
 # ---------------------------------------------------------------------------
 
