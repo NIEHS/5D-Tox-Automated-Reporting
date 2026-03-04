@@ -81,6 +81,13 @@ const CHEM_ID_STORAGE_KEY = '5dtox-chem-id';
 const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac', 'model-select'];
 
 
+// --- Animal report ---
+// Whether the animal report has been approved (included in DOCX export).
+let animalReportApproved = false;
+// Cached animal report data from /api/generate-animal-report/{dtxsid}.
+let animalReportData = null;
+
+
 // --- Preview modal state ---
 // Holds the Escape-key handler so it can be removed when the modal closes.
 let _previewEscapeHandler = null;

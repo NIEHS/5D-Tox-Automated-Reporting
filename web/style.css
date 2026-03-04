@@ -996,6 +996,40 @@ header p {
     text-align: center;
 }
 
+/* Sheet tab bar for multi-sheet xlsx preview — horizontal row of
+   buttons matching the purple xlsx color scheme (#6d28d9 / #ede9fe). */
+.xlsx-sheet-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--c-border);
+    overflow-x: auto;
+}
+
+.xlsx-sheet-tabs button {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    background: none;
+    color: var(--c-text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+.xlsx-sheet-tabs button:hover {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.xlsx-sheet-tabs button.active {
+    background: #ede9fe;
+    color: #6d28d9;
+    border-color: #6d28d9;
+    font-weight: 600;
+}
+
 /* Info/message card shown for unprocessed .bm2 or .xlsx files */
 .modal-info-card {
     text-align: center;
@@ -1485,4 +1519,296 @@ header p {
    since they don't apply */
 .tabbed-view .view-controls .collapse-btns {
     display: none;
+}
+
+
+/* ----------------------------------------------------------------
+   Validation panel — coverage matrix, issues, and conflict resolution
+   ----------------------------------------------------------------
+   Sits below the file pool list inside the File Pool section.
+   Collapsible via a header bar with a chevron, summary badge,
+   and "Validate & Integrate" action button.
+   ---------------------------------------------------------------- */
+
+/* Status dots on file pool items — small colored circles indicating
+   validation state.  Inserted before the file badge in each pool item. */
+.file-pool-item .validation-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: -0.2rem;     /* tuck closer to the badge */
+}
+
+.validation-dot.green  { background: var(--c-success); }
+.validation-dot.yellow { background: #f59e0b; }
+.validation-dot.red    { background: #ef4444; }
+.validation-dot.gray   { background: #9ca3af; }
+
+/* Validation panel header — clickable bar with chevron toggle */
+#validation-panel {
+    margin-top: 1rem;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+}
+
+.validation-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--c-bg);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--c-text);
+    user-select: none;
+}
+
+.validation-chevron {
+    font-size: 0.7rem;
+    color: var(--c-text-muted);
+    transition: transform 0.15s;
+}
+
+.validation-header.expanded .validation-chevron {
+    transform: rotate(90deg);
+}
+
+.validation-summary {
+    flex: 1;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+}
+
+/* Validation panel body — contains coverage matrix and issue list */
+.validation-body {
+    padding: 0.75rem;
+    border-top: 1px solid var(--c-border-light);
+}
+
+/* Coverage matrix table — compact table showing domain × tier completeness */
+.coverage-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.coverage-matrix th,
+.coverage-matrix td {
+    padding: 0.3rem 0.5rem;
+    text-align: center;
+    border: 1px solid var(--c-border-light);
+}
+
+.coverage-matrix th {
+    background: var(--c-bg);
+    font-weight: 600;
+    color: var(--c-text-secondary);
+}
+
+.coverage-matrix td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+/* Check/dash/warning indicators in the coverage matrix */
+.coverage-check { color: var(--c-success); }
+.coverage-dash  { color: var(--c-text-placeholder); }
+.coverage-warn  { color: #f59e0b; }
+
+
+/* ----------------------------------------------------------------
+ * Animal Report — compact roster table and attrition groups
+ * ---------------------------------------------------------------- */
+
+/* Scrollable wrapper for the animal roster table, which can have
+   many columns (one per domain) and many rows (one per animal). */
+.animal-roster-wrapper {
+    max-height: 500px;
+    overflow: auto;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    margin-bottom: 0.75rem;
+}
+
+/* Compact table — 11px font, tight padding, sticky header so the
+   column labels stay visible when scrolling through hundreds of animals. */
+.animal-roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.69rem;
+    font-family: var(--font-mono);
+}
+
+.animal-roster-table th,
+.animal-roster-table td {
+    padding: 0.15rem 0.35rem;
+    text-align: center;
+    border: 1px solid var(--c-border-light);
+    white-space: nowrap;
+}
+
+.animal-roster-table th {
+    background: var(--c-bg-neutral);
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* First column (Animal ID) left-aligned and sticky for horizontal scroll */
+.animal-roster-table td:first-child,
+.animal-roster-table th:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+/* Tier presence indicators — full coverage in green, partial in amber, absent in gray */
+.tier-full    { color: var(--c-success); font-weight: 600; }
+.tier-partial { color: #f59e0b; }
+.tier-absent  { color: var(--c-text-placeholder); }
+
+/* Attrition analysis — grouped by domain with bullet lists per reason */
+.attrition-group {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--c-border-light);
+    font-size: 0.8rem;
+}
+
+.attrition-group:last-child {
+    border-bottom: none;
+}
+
+.attrition-group ul {
+    margin: 0.25rem 0 0 1.5rem;
+    padding: 0;
+}
+
+.attrition-group li {
+    margin-bottom: 0.15rem;
+}
+
+/* "No exclusions / No inconsistencies" message */
+.no-issues {
+    color: var(--c-text-secondary);
+    font-size: 0.8rem;
+    margin: 0.25rem 0;
+}
+
+/* Animal report subsection headers */
+#animal-report-content h3 {
+    font-size: 0.9rem;
+    margin: 1rem 0 0.4rem;
+    color: var(--c-text);
+}
+
+#animal-report-content h3:first-child {
+    margin-top: 0;
+}
+
+
+/* Validation issues list */
+.validation-issue {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    font-size: 0.8rem;
+    color: var(--c-text);
+    border-bottom: 1px solid var(--c-border-light);
+}
+
+.validation-issue:last-child {
+    border-bottom: none;
+}
+
+.validation-issue .issue-icon {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    margin-top: 0.05rem;
+}
+
+.validation-issue .issue-text {
+    flex: 1;
+}
+
+.validation-issue.severity-error .issue-icon  { color: #ef4444; }
+.validation-issue.severity-warning .issue-icon { color: #f59e0b; }
+.validation-issue.severity-info .issue-icon    { color: #3b82f6; }
+
+/* Conflict resolution panel — expanded when user clicks an error issue */
+.conflict-resolution {
+    margin-top: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--r-md);
+    font-size: 0.78rem;
+}
+
+.conflict-resolution h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.8rem;
+    color: #991b1b;
+}
+
+.conflict-detail {
+    font-family: var(--font-mono, "SF Mono", "Cascadia Code", "Fira Code", monospace);
+    font-size: 0.72rem;
+    color: var(--c-text-secondary);
+    margin: 0.25rem 0;
+    white-space: pre-wrap;
+}
+
+.conflict-timestamps {
+    font-size: 0.72rem;
+    color: var(--c-text-muted);
+    margin: 0.4rem 0;
+}
+
+.conflict-options {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.conflict-options label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+}
+
+.conflict-options label:hover {
+    border-color: var(--c-primary);
+}
+
+.conflict-options label.recommended {
+    border-color: var(--c-primary);
+    background: #eff6ff;
+}
+
+.conflict-options input[type="radio"] {
+    accent-color: var(--c-primary);
+}
+
+/* Issues header — "Issues (2 warnings, 0 errors)" summary line */
+.issues-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin: 0.5rem 0 0.25rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--c-border-light);
 }

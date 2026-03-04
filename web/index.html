@@ -114,6 +114,30 @@
 
             <!-- File pool list — compact items for each uploaded file -->
             <div id="file-pool-list"></div>
+
+            <!-- Pool Validation panel — collapsible panel below the file list
+                 showing a coverage matrix (domain × tier), validation issues,
+                 and conflict resolution controls.  Hidden until files are
+                 present and the user clicks "Validate & Integrate". -->
+            <div id="validation-panel" style="display:none;">
+                <div class="validation-header" onclick="toggleValidationPanel()">
+                    <span class="validation-chevron">▸</span>
+                    <span>Pool Validation</span>
+                    <span class="validation-summary" id="validation-summary"></span>
+                    <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()">
+                        Validate &amp; Integrate
+                    </button>
+                    <button class="btn-small approve" id="btn-approve-pool" onclick="event.stopPropagation(); approvePool()" style="display:none">
+                        Approve
+                    </button>
+                    <span class="approved-badge" id="badge-pool" style="display:none">Approved</span>
+                </div>
+                <div class="validation-body" id="validation-body" style="display:none;">
+                    <div id="coverage-matrix"></div>
+                    <div id="validation-issues"></div>
+                    <div id="animal-report-content"></div>
+                </div>
+            </div>
             </div><!-- /section-body -->
         </div>
 

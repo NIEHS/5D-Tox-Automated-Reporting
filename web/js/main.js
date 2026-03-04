@@ -457,8 +457,9 @@ function displayResult(result) {
     backgroundApproved = false;
     unlockSection(document.getElementById('output-section'));
 
-    // Show the file pool and section builder now that background is done
+    // Show the file pool, animal report, and section builder now that background is done
     show('file-pool-section');
+
     show('section-builder');
     if (tabbedViewActive) buildTabBar();
 
@@ -669,6 +670,8 @@ async function uploadFiles(fileList) {
         // so newly uploaded files appear immediately
         onSectionTypeChange();
         updateClearFilesButton();
+        // Show the validation panel so user knows validation is available
+        showValidationPanel();
     }
 }
 
@@ -775,6 +778,423 @@ function updateClearFilesButton() {
     const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession && !f.sessionPersisted);
     btn.style.display = hasRemovable ? '' : 'none';
 }
+
+
+// =========================================================================
+// Pool Validation — coverage matrix, issues, and conflict resolution
+// =========================================================================
+// The validation panel sits below the file pool list and provides:
+//   1. A "Validate & Integrate" button that triggers full pool validation
+//   2. A coverage matrix (domain × tier: xlsx, txt/csv, bm2)
+//   3. An issues list with severity icons (error, warning, info)
+//   4. Conflict resolution dialogs for error-severity issues
+//
+// Validation results are fetched from POST /api/pool/validate/{dtxsid}
+// and cached in lastValidationReport for UI rendering.
+
+/** Cached validation report from last full validation run */
+let lastValidationReport = null;
+
+/**
+ * Show the validation panel (visible once files exist in the pool).
+ * Called after file upload or session restore adds files.
+ */
+function showValidationPanel() {
+    const panel = document.getElementById('validation-panel');
+    if (panel) panel.style.display = '';
+}
+
+/**
+ * Toggle the validation panel body (expand/collapse).
+ * The chevron rotates to indicate state.
+ */
+function toggleValidationPanel() {
+    const header = document.querySelector('.validation-header');
+    const body = document.getElementById('validation-body');
+    if (!header || !body) return;
+    const isExpanded = header.classList.toggle('expanded');
+    body.style.display = isExpanded ? '' : 'none';
+}
+
+/**
+ * Run full pool validation by calling POST /api/pool/validate/{dtxsid}.
+ *
+ * Sends the request, receives a ValidationReport JSON, and renders
+ * the coverage matrix + issues list in the validation panel.
+ * Also updates status dots on each file pool item.
+ */
+async function runPoolValidation() {
+    // Need a DTXSID to validate against — it's stored in the chem ID form
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) {
+        showToast('Resolve a chemical identity first');
+        return;
+    }
+
+    const btn = document.getElementById('btn-validate');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Validating...';
+    }
+
+    try {
+        const resp = await fetch(`/api/pool/validate/${dtxsid}`, { method: 'POST' });
+        if (!resp.ok) {
+            const err = await resp.json();
+            showToast(err.error || 'Validation failed');
+            return;
+        }
+        const report = await resp.json();
+        lastValidationReport = report;
+
+        // Expand the panel to show results
+        const header = document.querySelector('.validation-header');
+        const body = document.getElementById('validation-body');
+        if (header && !header.classList.contains('expanded')) {
+            header.classList.add('expanded');
+        }
+        if (body) body.style.display = '';
+
+        renderCoverageMatrix(report);
+        renderValidationIssues(report);
+        updateValidationSummary(report);
+        updateFileStatusDots(report);
+
+        // Show the Approve button so the user can sign off on the pool
+        // and trigger the animal report generation.
+        show('btn-approve-pool');
+    } catch (e) {
+        showToast('Validation request failed: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Validate & Integrate';
+        }
+    }
+}
+
+/**
+ * Render the coverage matrix table.
+ *
+ * Shows a table with one row per domain and columns for xlsx, txt/csv, bm2.
+ * Each cell shows checkmarks (✓) for present files, dashes (—) for missing,
+ * and a warning icon (⚠) in the rightmost column if any tier is missing.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function renderCoverageMatrix(report) {
+    const container = document.getElementById('coverage-matrix');
+    if (!container) return;
+
+    const matrix = report.coverage_matrix || {};
+    const domains = Object.keys(matrix).sort();
+
+    if (domains.length === 0) {
+        container.innerHTML = '<p style="color:var(--c-text-muted);font-size:0.8rem;">No domains detected.</p>';
+        return;
+    }
+
+    // Human-readable domain labels
+    const domainLabels = {
+        body_weight: 'Body Weight',
+        organ_weights: 'Organ Weights',
+        clin_chem: 'Clinical Chemistry',
+        hematology: 'Hematology',
+        hormones: 'Hormones',
+        tissue_conc: 'Tissue Concentration',
+        clinical_obs: 'Clinical Observations',
+        gene_expression: 'Gene Expression',
+    };
+
+    let html = '<table class="coverage-matrix">';
+    html += '<thead><tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
+    html += '<tbody>';
+
+    for (const domain of domains) {
+        const tiers = matrix[domain];
+        const hasXlsx = !!tiers.xlsx;
+        const txtCsvCount = (tiers.txt_csv || []).length;
+        const hasBm2 = !!tiers.bm2;
+
+        // Gene expression typically has no xlsx — don't show missing as a gap
+        const xlsxExpected = domain !== 'gene_expression';
+
+        // Build tier cells — show ✓ count for txt_csv (may have multiple: one per sex)
+        const xlsxCell = hasXlsx
+            ? '<span class="coverage-check">✓</span>'
+            : (xlsxExpected ? '<span class="coverage-dash">—</span>' : '<span class="coverage-dash">n/a</span>');
+
+        let txtCell;
+        if (txtCsvCount === 0) {
+            txtCell = '<span class="coverage-dash">—</span>';
+        } else if (txtCsvCount === 1) {
+            txtCell = '<span class="coverage-check">✓</span>';
+        } else {
+            // Multiple txt/csv files (one per sex) — show count
+            txtCell = '<span class="coverage-check">' + '✓'.repeat(Math.min(txtCsvCount, 4)) + '</span>';
+        }
+
+        const bm2Cell = hasBm2
+            ? '<span class="coverage-check">✓</span>'
+            : '<span class="coverage-dash">—</span>';
+
+        // Warning indicator — show if any expected tier is missing
+        const hasMissingTier = (xlsxExpected && !hasXlsx) || txtCsvCount === 0 || !hasBm2;
+        const warnCell = hasMissingTier
+            ? '<span class="coverage-warn">⚠</span>'
+            : '';
+
+        const label = domainLabels[domain] || domain;
+        html += `<tr><td>${label}</td><td>${xlsxCell}</td><td>${txtCell}</td><td>${bm2Cell}</td><td>${warnCell}</td></tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+/**
+ * Render the validation issues list.
+ *
+ * Shows each issue with a severity icon and human-readable message.
+ * Error-severity issues are clickable to expand a conflict resolution
+ * dialog where the user can choose which file is authoritative.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function renderValidationIssues(report) {
+    const container = document.getElementById('validation-issues');
+    if (!container) return;
+
+    const issues = report.issues || [];
+    if (issues.length === 0) {
+        container.innerHTML = '<p style="color:var(--c-success);font-size:0.8rem;margin-top:0.5rem;">No issues found — all tiers are consistent.</p>';
+        return;
+    }
+
+    // Group by severity for the header count
+    const counts = { error: 0, warning: 0, info: 0 };
+    for (const issue of issues) {
+        counts[issue.severity] = (counts[issue.severity] || 0) + 1;
+    }
+
+    let html = '<div class="issues-header">Issues (';
+    const parts = [];
+    if (counts.error > 0) parts.push(`${counts.error} error${counts.error > 1 ? 's' : ''}`);
+    if (counts.warning > 0) parts.push(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`);
+    if (counts.info > 0) parts.push(`${counts.info} info`);
+    html += parts.join(', ') + ')</div>';
+
+    for (let i = 0; i < issues.length; i++) {
+        const issue = issues[i];
+        const icons = { error: '⛔', warning: '⚠', info: 'ℹ️' };
+        const icon = icons[issue.severity] || 'ℹ️';
+
+        html += `<div class="validation-issue severity-${issue.severity}" data-issue-index="${i}">`;
+        html += `<span class="issue-icon">${icon}</span>`;
+        html += `<span class="issue-text">${issue.message}`;
+
+        // For dose mismatch errors, add expandable conflict resolution
+        if (issue.severity === 'error' && issue.issue_type === 'dose_mismatch' && issue.details) {
+            html += renderConflictResolution(issue, i, report);
+        }
+
+        html += '</span></div>';
+    }
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render an inline conflict resolution panel for a dose mismatch error.
+ *
+ * Shows the dose groups from each file, timestamps, and radio buttons
+ * for the user to choose which file is authoritative.
+ *
+ * @param {Object} issue — the ValidationIssue dict
+ * @param {number} index — the issue index in the report
+ * @param {Object} report — the full ValidationReport (for fingerprint lookup)
+ * @returns {string} — HTML fragment for the conflict resolution panel
+ */
+function renderConflictResolution(issue, index, report) {
+    const d = issue.details || {};
+    const expectedDoses = (d.expected || []).join(', ');
+    const actualDoses = (d.actual || []).join(', ');
+    const expectedFile = d.expected_file || 'File 1';
+    const actualFile = d.actual_file || 'File 2';
+    const suggested = issue.suggested_precedence || '';
+
+    // Look up timestamps from fingerprints
+    const fps = report.fingerprints || {};
+    const files = issue.files_involved || [];
+    let tsHtml = '';
+    for (const fid of files) {
+        const fp = fps[fid];
+        if (fp) {
+            const added = fp.ts_added ? new Date(fp.ts_added).toLocaleString() : '?';
+            const internal = fp.ts_internal ? new Date(fp.ts_internal).toLocaleDateString() : 'none';
+            tsHtml += `<div>${fp.filename} — added: ${added}, internal date: ${internal}</div>`;
+        }
+    }
+
+    let html = '<div class="conflict-resolution">';
+    html += `<h4>Dose group conflict: ${issue.domain}</h4>`;
+    html += `<div class="conflict-detail">${expectedFile}: [${expectedDoses}]</div>`;
+    html += `<div class="conflict-detail">${actualFile}: [${actualDoses}]</div>`;
+
+    if (tsHtml) {
+        html += `<div class="conflict-timestamps">${tsHtml}</div>`;
+    }
+
+    html += '<div>Which file has the correct dose groups?</div>';
+    html += '<div class="conflict-options">';
+
+    for (const fid of files) {
+        const fp = fps[fid];
+        const label = fp ? `${fp.filename} (${fp.file_type})` : fid;
+        const isRec = fid === suggested;
+        html += `<label class="${isRec ? 'recommended' : ''}">`;
+        html += `<input type="radio" name="conflict-${index}" value="${fid}"`;
+        html += ` onchange="resolveConflict(${index}, '${fid}')"`;
+        html += `> ${label}${isRec ? ' (recommended)' : ''}`;
+        html += '</label>';
+    }
+
+    html += '<label><input type="radio" name="conflict-' + index + '" value="skip"';
+    html += ` onchange="resolveConflict(${index}, 'skip')"> Skip</label>`;
+    html += '</div></div>';
+
+    return html;
+}
+
+/**
+ * Record a precedence decision for a conflict via POST /api/pool/resolve.
+ *
+ * @param {number} issueIndex — index of the issue in the validation report
+ * @param {string} chosenFileId — file_id the user chose, or "skip"
+ */
+async function resolveConflict(issueIndex, chosenFileId) {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    try {
+        await fetch('/api/pool/resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dtxsid: dtxsid,
+                issue_index: issueIndex,
+                chosen_file_id: chosenFileId,
+            }),
+        });
+        showToast('Precedence recorded');
+    } catch (e) {
+        showToast('Failed to record precedence: ' + e.message);
+    }
+}
+
+/**
+ * Update the summary badge in the validation panel header.
+ * Shows counts like "4 errors, 2 warnings" or "No issues" in green.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function updateValidationSummary(report) {
+    const el = document.getElementById('validation-summary');
+    if (!el) return;
+
+    const issues = report.issues || [];
+    if (issues.length === 0) {
+        el.textContent = '— No issues';
+        el.style.color = 'var(--c-success)';
+        return;
+    }
+
+    const counts = { error: 0, warning: 0, info: 0 };
+    for (const issue of issues) {
+        counts[issue.severity] = (counts[issue.severity] || 0) + 1;
+    }
+
+    const parts = [];
+    if (counts.error > 0) parts.push(`${counts.error} error${counts.error > 1 ? 's' : ''}`);
+    if (counts.warning > 0) parts.push(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`);
+
+    el.textContent = '— ' + parts.join(', ');
+    el.style.color = counts.error > 0 ? '#ef4444' : '#f59e0b';
+}
+
+/**
+ * Update validation status dots on each file pool item.
+ *
+ * Each file gets a small colored dot before its type badge:
+ *   - Green:  fingerprinted, no issues involving this file
+ *   - Yellow: warnings involving this file
+ *   - Red:    errors involving this file
+ *   - Gray:   not fingerprinted (not in the report)
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function updateFileStatusDots(report) {
+    // Build a map of file_id → worst severity
+    const fileSeverity = {};
+    for (const issue of (report.issues || [])) {
+        for (const fid of (issue.files_involved || [])) {
+            const current = fileSeverity[fid] || 'none';
+            const incoming = issue.severity;
+            // Severity ranking: error > warning > info > none
+            if (incoming === 'error' || current === 'none' ||
+                (incoming === 'warning' && current !== 'error')) {
+                fileSeverity[fid] = incoming;
+            }
+        }
+    }
+
+    // Update or create dots on each file pool item
+    for (const fileId of Object.keys(uploadedFiles)) {
+        const itemEl = document.getElementById(`file-pool-${fileId}`);
+        if (!itemEl) continue;
+
+        // Remove any existing dot
+        const existingDot = itemEl.querySelector('.validation-dot');
+        if (existingDot) existingDot.remove();
+
+        // Determine dot color
+        const fp = (report.fingerprints || {})[fileId];
+        let dotClass;
+        if (!fp) {
+            dotClass = 'gray';
+        } else {
+            const sev = fileSeverity[fileId];
+            if (sev === 'error') dotClass = 'red';
+            else if (sev === 'warning') dotClass = 'yellow';
+            else dotClass = 'green';
+        }
+
+        // Insert dot as the first child (before the badge)
+        const dot = document.createElement('span');
+        dot.className = `validation-dot ${dotClass}`;
+        dot.title = dotClass === 'green' ? 'No issues' :
+                    dotClass === 'gray' ? 'Not validated' :
+                    dotClass === 'red' ? 'Has errors' : 'Has warnings';
+        itemEl.insertBefore(dot, itemEl.firstChild);
+    }
+}
+
+/**
+ * Restore a cached validation report from session data.
+ * Called during loadSession() if the server returned validation_report.
+ *
+ * @param {Object} report — the persisted validation report JSON
+ */
+function restoreValidationReport(report) {
+    if (!report) return;
+    lastValidationReport = report;
+    showValidationPanel();
+    renderCoverageMatrix(report);
+    renderValidationIssues(report);
+    updateValidationSummary(report);
+    updateFileStatusDots(report);
+}
+
 
 /**
  * Called when the section type dropdown changes.
@@ -1294,6 +1714,10 @@ async function exportDocx() {
     // Summary paragraphs (if approved)
     const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
 
+    // Animal report — include if approved and data is available
+    const animalReportPayload = (animalReportApproved && animalReportData)
+        ? animalReportData : null;
+
     try {
         const resp = await fetch('/api/export-docx', {
             method: 'POST',
@@ -1304,6 +1728,7 @@ async function exportDocx() {
                 chemical_name: chemicalName,
                 apical_sections: apicalPayload,
                 methods_paragraphs: methodsParas,
+                animal_report: animalReportPayload,
                 bmd_summary_endpoints: bmdSummaryEps,
                 genomics_sections: genomicsSecs,
                 summary_paragraphs: summaryParas,
@@ -2219,8 +2644,9 @@ async function restoreSession(data) {
     // (type='bm2', restored: true), render a greyed file pool item,
     // create an apicalSections entry, and create the result card.
     if (data.bm2_sections && Object.keys(data.bm2_sections).length > 0) {
-        // Show the file pool, section builder, and results section
+        // Show the file pool, animal report, section builder, and results section
         show('file-pool-section');
+    
         show('section-builder');
         show('bm2-results-section');
 
@@ -2310,9 +2736,10 @@ async function restoreSession(data) {
     // pending_files.  We add them to the file pool so the user can
     // assign them to sections without re-uploading.
     if (data.pending_files && data.pending_files.length > 0) {
-        // Make sure the file pool and section builder are visible
+        // Make sure the file pool, animal report, and section builder are visible
         // so the user can assign pending files to report sections.
         show('file-pool-section');
+    
         show('section-builder');
 
         for (const pf of data.pending_files) {
@@ -2335,6 +2762,18 @@ async function restoreSession(data) {
             };
             renderFilePoolItem(pf.id);
         }
+    }
+
+    // --- Restore validation report (if any) ---
+    // The server includes the last validation_report.json in the session
+    // response.  If present, render the coverage matrix and issues list
+    // so the user sees the validation state immediately on load.
+    if (data.validation_report) {
+        restoreValidationReport(data.validation_report);
+    } else if (Object.keys(uploadedFiles).length > 0) {
+        // Files exist but no validation report — show the panel with
+        // gray dots so the user knows validation is available.
+        showValidationPanel();
     }
 
     // --- Restore Materials and Methods section ---
@@ -2378,6 +2817,7 @@ async function restoreSession(data) {
     // create a genomicsResults entry, and create the results card.
     if (data.genomics_sections && Object.keys(data.genomics_sections).length > 0) {
         show('file-pool-section');
+    
         show('section-builder');
         show('genomics-results-section');
 
@@ -2433,6 +2873,18 @@ async function restoreSession(data) {
         show('badge-summary');
     } else if (backgroundApproved) {
         showSummarySection();
+    }
+
+    // --- Restore Animal Report (if previously generated) ---
+    // The animal report is persisted as animal_report.json in the session
+    // directory.  If present in the restore data, render it inside the
+    // validation panel and mark the pool as approved.
+    if (data.animal_report) {
+        animalReportData = data.animal_report;
+        animalReportApproved = true;
+        renderAnimalReport(animalReportData);
+        hide('btn-approve-pool');
+        show('badge-pool');
     }
 
     updateExportButton();
@@ -2826,6 +3278,276 @@ function retrySummary() {
     hide('badge-summary');
     updateExportButton();
 }
+
+/* ================================================================
+ * Animal Report — per-animal traceability across all domains/tiers
+ * ================================================================ */
+
+/**
+ * Approve the file pool — sign off on the validation and generate
+ * the per-animal traceability report.
+ *
+ * This is the single "Approve" action in the validation workflow:
+ *   1. Validate & Integrate → see issues, resolve conflicts
+ *   2. Approve → generates animal report, locks the pool
+ *
+ * The animal report reads all files in the pool, extracts per-animal
+ * data, and cross-references across tiers and domains.  The result
+ * is rendered inside the validation panel and included in DOCX export.
+ */
+async function approvePool() {
+    if (!currentIdentity?.dtxsid) {
+        showError('Resolve a chemical identity first');
+        return;
+    }
+
+    const btn = document.getElementById('btn-approve-pool');
+    btn.disabled = true;
+    btn.textContent = 'Generating report...';
+
+    try {
+        const resp = await fetch(
+            `/api/generate-animal-report/${currentIdentity.dtxsid}`,
+            { method: 'POST' },
+        );
+        const result = await resp.json();
+
+        if (result.error) {
+            showError(result.error);
+            return;
+        }
+
+        animalReportData = result;
+        animalReportApproved = true;
+        renderAnimalReport(result);
+
+        // Hide Approve button, show badge
+        hide('btn-approve-pool');
+        show('badge-pool');
+
+        showToast('Pool approved — animal report generated');
+        updateExportButton();
+
+    } catch (e) {
+        showError('Animal report generation failed: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Approve';
+    }
+}
+
+
+/**
+ * Render the animal report data as HTML tables in the UI.
+ *
+ * Builds five subsections:
+ *   A. Study design summary with dose × sex table
+ *   B. Scrollable animal roster with domain tier presence columns
+ *   C. Domain coverage matrix (reuses .coverage-matrix CSS)
+ *   D. Attrition lists grouped by exclusion reason
+ *   E. Consistency check results
+ *
+ * @param {Object} report — the AnimalReport dict from the API
+ */
+function renderAnimalReport(report) {
+    const container = document.getElementById('animal-report-content');
+    let html = '';
+
+    // --- A. Study Design Summary ---
+    const study = report.study_number || 'this study';
+    const selDetail = report.biosampling_count > 0
+        ? ` (${report.core_count} core, ${report.biosampling_count} biosampling)`
+        : '';
+    html += `<h3>Study Design</h3>`;
+    html += `<p>Study ${study} enrolled <strong>${report.total_animals}</strong> animals${selDetail} across ${report.dose_groups?.length || 0} dose groups.</p>`;
+
+    // Dose × Sex table
+    if (report.dose_design && Object.keys(report.dose_design).length > 0) {
+        // Collect all sexes
+        const allSexes = new Set();
+        for (const sexes of Object.values(report.dose_design)) {
+            for (const sex of Object.keys(sexes)) allSexes.add(sex);
+        }
+        const sexList = [...allSexes].sort();
+
+        html += `<table class="coverage-matrix">`;
+        html += `<tr><th>Dose (mg/kg)</th>`;
+        for (const sex of sexList) html += `<th>${sex}</th>`;
+        html += `<th>Total</th></tr>`;
+
+        for (const dose of report.dose_groups) {
+            const doseKey = String(dose);
+            const sexCounts = report.dose_design[doseKey] || {};
+            let total = 0;
+            html += `<tr><td>${Number(dose) === Math.floor(Number(dose)) ? Math.floor(Number(dose)) : dose}</td>`;
+            for (const sex of sexList) {
+                const count = sexCounts[sex] || 0;
+                total += count;
+                html += `<td>${count}</td>`;
+            }
+            html += `<td><strong>${total}</strong></td></tr>`;
+        }
+        html += `</table>`;
+    }
+
+    // --- B. Animal Roster ---
+    if (report.animals && Object.keys(report.animals).length > 0) {
+        // Domain column order (only include domains that have coverage data)
+        const domainOrder = [
+            'body_weight', 'organ_weights', 'clin_chem', 'hematology',
+            'hormones', 'tissue_conc', 'clinical_obs', 'gene_expression',
+        ];
+        const domainLabels = {
+            body_weight: 'BW', organ_weights: 'OW', clin_chem: 'CC',
+            hematology: 'Hem', hormones: 'Horm', tissue_conc: 'TC',
+            clinical_obs: 'CO', gene_expression: 'GE',
+        };
+        const activeDomains = domainOrder.filter(d => report.domain_coverage?.[d]);
+
+        html += `<h3>Animal Roster</h3>`;
+        html += `<div class="animal-roster-wrapper">`;
+        html += `<table class="animal-roster-table">`;
+        html += `<tr><th>ID</th><th>Sex</th><th>Dose</th><th>Selection</th>`;
+        for (const d of activeDomains) {
+            html += `<th title="${d}">${domainLabels[d] || d}</th>`;
+        }
+        html += `</tr>`;
+
+        // Sort animals numerically
+        const sortedIds = Object.keys(report.animals).sort((a, b) => {
+            const na = parseInt(a), nb = parseInt(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
+        });
+
+        for (const aid of sortedIds) {
+            const rec = report.animals[aid];
+            const dose = rec.dose != null
+                ? (Number(rec.dose) === Math.floor(Number(rec.dose)) ? Math.floor(Number(rec.dose)) : rec.dose)
+                : '';
+            html += `<tr>`;
+            html += `<td>${aid}</td>`;
+            html += `<td>${rec.sex || ''}</td>`;
+            html += `<td>${dose}</td>`;
+            html += `<td>${rec.selection || ''}</td>`;
+
+            for (const domain of activeDomains) {
+                const presence = rec.domain_presence?.[domain] || {};
+                const x = presence.xlsx ? 'X' : '-';
+                const t = presence.txt_csv ? 'T' : '-';
+                const b = presence.bm2 ? 'B' : '-';
+                const code = `${x}${t}${b}`;
+                // Highlight based on completeness
+                const cls = code === 'XTB' ? 'tier-full'
+                    : code === '---' ? 'tier-absent'
+                    : 'tier-partial';
+                html += `<td class="${cls}">${code}</td>`;
+            }
+            html += `</tr>`;
+        }
+        html += `</table></div>`;
+    }
+
+    // --- C. Domain Coverage Matrix ---
+    if (report.domain_coverage && Object.keys(report.domain_coverage).length > 0) {
+        const domainFullLabels = {
+            body_weight: 'Body Weight', organ_weights: 'Organ Weights',
+            clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
+            hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
+            clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
+        };
+
+        html += `<h3>Domain Coverage</h3>`;
+        html += `<table class="coverage-matrix">`;
+        html += `<tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th>Drop (X→T)</th><th>Drop (T→B)</th><th>Completeness</th></tr>`;
+
+        for (const domain of Object.keys(report.domain_coverage).sort()) {
+            const cov = report.domain_coverage[domain];
+            const att = report.attrition?.[domain] || {};
+            const dropXT = att.excluded_xlsx_to_txt?.length || 0;
+            const dropTB = att.excluded_txt_to_bm2?.length || 0;
+            const comp = report.completeness?.[domain];
+            const compPct = comp != null ? `${Math.round(comp * 100)}%` : '—';
+
+            html += `<tr>`;
+            html += `<td>${domainFullLabels[domain] || domain}</td>`;
+            html += `<td>${cov.xlsx || 0}</td>`;
+            html += `<td>${cov.txt_csv || 0}</td>`;
+            html += `<td>${cov.bm2 || 0}</td>`;
+            html += `<td>${dropXT || '—'}</td>`;
+            html += `<td>${dropTB || '—'}</td>`;
+            html += `<td>${compPct}</td>`;
+            html += `</tr>`;
+        }
+        html += `</table>`;
+    }
+
+    // --- D. Attrition Analysis ---
+    if (report.attrition && Object.keys(report.attrition).length > 0) {
+        const domainFullLabels = {
+            body_weight: 'Body Weight', organ_weights: 'Organ Weights',
+            clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
+            hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
+            clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
+        };
+
+        html += `<h3>Attrition Analysis</h3>`;
+
+        for (const domain of Object.keys(report.attrition).sort()) {
+            const att = report.attrition[domain];
+            const comp = report.completeness?.[domain];
+            const compPct = comp != null ? `${Math.round(comp * 100)}%` : '—';
+            const domainLabel = domainFullLabels[domain] || domain;
+
+            html += `<div class="attrition-group">`;
+            html += `<strong>${domainLabel}</strong> — completeness: ${compPct}`;
+
+            const reasons = att.exclusion_reasons || {};
+            if (Object.keys(reasons).length > 0) {
+                html += `<ul>`;
+                for (const [reasonKey, animalIds] of Object.entries(reasons)) {
+                    if (!animalIds || animalIds.length === 0) continue;
+                    // Parse reason label: "xlsx_to_txt_dose_exclusion" → "xlsx→txt Dose Exclusion"
+                    const transition = reasonKey.includes('xlsx_to_txt') ? 'xlsx→txt' : 'txt→bm2';
+                    const reason = reasonKey
+                        .replace('xlsx_to_txt_', '')
+                        .replace('txt_to_bm2_', '')
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, c => c.toUpperCase());
+                    const preview = animalIds.slice(0, 10).join(', ');
+                    const more = animalIds.length > 10 ? `, ... +${animalIds.length - 10} more` : '';
+                    html += `<li>${transition} ${reason}: <strong>${animalIds.length}</strong> animals (${preview}${more})</li>`;
+                }
+                html += `</ul>`;
+            } else {
+                html += `<p class="no-issues">No exclusions detected.</p>`;
+            }
+            html += `</div>`;
+        }
+    }
+
+    // --- E. Consistency Checks ---
+    html += `<h3>Consistency Checks</h3>`;
+    if (report.consistency_issues && report.consistency_issues.length > 0) {
+        html += `<ul>`;
+        for (const issue of report.consistency_issues) {
+            if (issue.type === 'sex_mismatch') {
+                html += `<li>Animal ${issue.animal_id}: sex mismatch — found ${issue.details?.sexes_found?.join(', ') || '?'} across domains</li>`;
+            } else if (issue.type === 'dose_mismatch') {
+                html += `<li>Animal ${issue.animal_id}: dose mismatch — found ${issue.details?.doses_found?.join(', ') || '?'} across domains</li>`;
+            } else {
+                html += `<li>Animal ${issue.animal_id}: ${issue.type}</li>`;
+            }
+        }
+        html += `</ul>`;
+    } else {
+        html += `<p class="no-issues">No inconsistencies detected.</p>`;
+    }
+
+    container.innerHTML = html;
+}
+
+
 
 /* ----------------------------------------------------------------
  * Genomics CSV upload and processing
@@ -3314,6 +4036,11 @@ function _renderPreviewResponse(data, body) {
             renderModalTablePreview(data, body);
             break;
 
+        case 'xlsx_table':
+            // XLSX — render sheet tabs (if multiple) + table preview
+            renderXlsxPreview(data, body);
+            break;
+
         case 'info':
             // XLSX or fallback — show file metadata
             let sizeText = '';
@@ -3731,6 +4458,68 @@ function renderModalTablePreview(data, container) {
         footer.textContent = `Showing ${data.rows.length} of ${data.total_rows} rows`;
         container.appendChild(footer);
     }
+}
+
+/**
+ * renderXlsxPreview — Renders an xlsx file preview with sheet tabs.
+ *
+ * If the workbook has a single sheet, it delegates directly to
+ * renderModalTablePreview.  For multi-sheet workbooks, a horizontal
+ * tab bar is rendered above the table so the user can switch sheets.
+ *
+ * @param {Object}      data      — { sheets: [{ name, headers, rows, total_rows }] }
+ * @param {HTMLElement}  container — the modal body element to render into
+ */
+function renderXlsxPreview(data, container) {
+    const sheets = data.sheets || [];
+    if (sheets.length === 0) {
+        container.innerHTML = `
+            <div class="modal-info-card">
+                <div class="info-text">No sheets found in this workbook.</div>
+            </div>`;
+        return;
+    }
+
+    // Single sheet — skip the tab bar entirely
+    if (sheets.length === 1) {
+        renderModalTablePreview(sheets[0], container);
+        return;
+    }
+
+    // Multi-sheet — create a tab bar and a content area
+    const tabBar = document.createElement('div');
+    tabBar.className = 'xlsx-sheet-tabs';
+
+    const contentArea = document.createElement('div');
+    contentArea.className = 'xlsx-sheet-content';
+
+    /**
+     * switchSheet — swaps the visible table to the sheet at `index`.
+     * Updates the active tab highlight and re-renders the table.
+     */
+    function switchSheet(index) {
+        // Update active tab styling
+        tabBar.querySelectorAll('button').forEach((btn, i) => {
+            btn.classList.toggle('active', i === index);
+        });
+        // Clear previous table and render the selected sheet
+        contentArea.innerHTML = '';
+        renderModalTablePreview(sheets[index], contentArea);
+    }
+
+    // Build one tab button per worksheet
+    sheets.forEach((sheet, i) => {
+        const btn = document.createElement('button');
+        btn.textContent = sheet.name;
+        btn.addEventListener('click', () => switchSheet(i));
+        tabBar.appendChild(btn);
+    });
+
+    container.appendChild(tabBar);
+    container.appendChild(contentArea);
+
+    // Show the first sheet by default
+    switchSheet(0);
 }
 
 /* (displayProse moved to utils.js)
