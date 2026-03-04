@@ -363,6 +363,84 @@ header p {
     font-size: 0.8em;
 }
 
+/* --- Methods subsection styles ---
+ * Structured M&M rendering: each subsection gets a heading + editable paragraphs.
+ * The .methods-subsection wrapper groups heading + prose for a single M&M subsection
+ * (e.g., "Study Design", "Clinical Pathology").
+ */
+.methods-subsection {
+    margin-bottom: 0.5rem;
+}
+
+/* H3 headings = major sections (Study Design, Chemistry, etc.) */
+.methods-subsection h3.methods-heading {
+    font-family: var(--font-prose);
+    font-size: 12pt;
+    font-weight: 600;
+    color: #111;
+    margin: 1.25rem 0 0.4rem 0;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--c-border-light);
+}
+
+/* H4 headings = sub-subsections (Clinical Observations, Body Weights, etc.) */
+.methods-subsection h4.methods-heading {
+    font-family: var(--font-prose);
+    font-size: 11pt;
+    font-weight: 600;
+    color: #333;
+    margin: 0.75rem 0 0.3rem 0.5rem;
+}
+
+/* Table 1 wrapper */
+.methods-table1-wrapper {
+    margin: 1.5rem 0;
+}
+
+/* Table 1 caption — italic, small, above the table */
+.methods-table-caption {
+    font-family: var(--font-prose);
+    font-size: 9pt;
+    font-style: italic;
+    color: #555;
+    margin-bottom: 0.4rem;
+}
+
+/* Table 1 — compact sample counts */
+.methods-table1 {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-prose);
+    font-size: 9pt;
+}
+.methods-table1 th {
+    background: var(--c-bg-soft);
+    border: 1px solid var(--c-border);
+    padding: 0.3rem 0.5rem;
+    font-weight: 600;
+    text-align: center;
+}
+.methods-table1 td {
+    border: 1px solid var(--c-border-light);
+    padding: 0.25rem 0.5rem;
+    text-align: center;
+}
+/* Sex header rows (Male, Female) — bold, left-aligned, subtle background */
+.methods-table1 .sex-header-row td {
+    background: var(--c-bg-soft);
+    font-weight: 600;
+    text-align: left;
+}
+
+/* Table footnotes */
+.methods-table-footnote {
+    font-family: var(--font-prose);
+    font-size: 8pt;
+    font-style: italic;
+    color: #666;
+    margin-top: 0.2rem;
+}
+
 .references-section {
     margin-top: 1.5rem;
     padding-top: 1rem;
@@ -1622,21 +1700,94 @@ header p {
 
 
 /* ----------------------------------------------------------------
- * Animal Report — compact roster table and attrition groups
+ * Animal Report — collapsible sections with brief summaries
  * ---------------------------------------------------------------- */
 
-/* Scrollable wrapper for the animal roster table, which can have
-   many columns (one per domain) and many rows (one per animal). */
+/* Top-level summary line — always visible, not collapsible */
+.ar-summary {
+    font-size: 0.8rem;
+    padding: 0.5rem 0;
+    color: var(--c-text);
+    border-bottom: 1px solid var(--c-border-light);
+    margin-bottom: 0.5rem;
+}
+
+/* "No issues" one-liner shown when consistency checks pass */
+.ar-summary-ok {
+    font-size: 0.8rem;
+    color: var(--c-success);
+    padding: 0.3rem 0;
+}
+
+/* Collapsible section — header is always visible, body hidden until .ar-open */
+.ar-collapse {
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    margin-bottom: 0.4rem;
+}
+
+.ar-collapse-header {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--c-text);
+    user-select: none;
+    background: var(--c-bg);
+    border-radius: var(--r-md);
+}
+
+.ar-collapse-header:hover {
+    background: var(--c-bg-neutral);
+}
+
+/* Chevron rotates when open */
+.ar-chevron {
+    display: inline-block;
+    transition: transform 0.15s;
+    font-size: 0.7rem;
+    margin-right: 0.15rem;
+}
+
+.ar-open > .ar-collapse-header .ar-chevron {
+    transform: rotate(90deg);
+}
+
+/* Body hidden by default, shown when parent has .ar-open */
+.ar-collapse-body {
+    display: none;
+    padding: 0.5rem 0.6rem;
+    border-top: 1px solid var(--c-border-light);
+    font-size: 0.8rem;
+}
+
+.ar-open > .ar-collapse-body {
+    display: block;
+}
+
+/* Severity-grouped issue collapses — subtle left border tint */
+.issue-group-error > .ar-collapse-header { border-left: 3px solid var(--c-danger); }
+.issue-group-warning > .ar-collapse-header { border-left: 3px solid var(--c-warning); }
+.issue-group-info > .ar-collapse-header { border-left: 3px solid var(--c-info, #5b9bd5); }
+
+/* File pool collapse — borderless since it sits inside the section body */
+#file-pool-collapse {
+    border: none;
+    margin-bottom: 0.5rem;
+}
+#file-pool-collapse > .ar-collapse-header {
+    padding-left: 0;
+    font-weight: 600;
+}
+
+/* Scrollable wrapper for the animal roster table */
 .animal-roster-wrapper {
-    max-height: 500px;
+    max-height: 400px;
     overflow: auto;
     border: 1px solid var(--c-border-light);
     border-radius: var(--r-md);
-    margin-bottom: 0.75rem;
 }
 
-/* Compact table — 11px font, tight padding, sticky header so the
-   column labels stay visible when scrolling through hundreds of animals. */
+/* Compact roster table — monospace, tight padding, sticky header */
 .animal-roster-table {
     width: 100%;
     border-collapse: collapse;
@@ -1661,55 +1812,30 @@ header p {
     z-index: 1;
 }
 
-/* First column (Animal ID) left-aligned and sticky for horizontal scroll */
 .animal-roster-table td:first-child,
 .animal-roster-table th:first-child {
     text-align: left;
     font-weight: 500;
 }
 
-/* Tier presence indicators — full coverage in green, partial in amber, absent in gray */
+/* Tier presence indicators */
 .tier-full    { color: var(--c-success); font-weight: 600; }
 .tier-partial { color: #f59e0b; }
 .tier-absent  { color: var(--c-text-placeholder); }
 
-/* Attrition analysis — grouped by domain with bullet lists per reason */
+/* Attrition groups inside the collapse body */
 .attrition-group {
-    margin-bottom: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--c-border-light);
+    margin-bottom: 0.5rem;
     font-size: 0.8rem;
 }
 
-.attrition-group:last-child {
-    border-bottom: none;
-}
-
 .attrition-group ul {
-    margin: 0.25rem 0 0 1.5rem;
+    margin: 0.2rem 0 0 1.2rem;
     padding: 0;
 }
 
 .attrition-group li {
-    margin-bottom: 0.15rem;
-}
-
-/* "No exclusions / No inconsistencies" message */
-.no-issues {
-    color: var(--c-text-secondary);
-    font-size: 0.8rem;
-    margin: 0.25rem 0;
-}
-
-/* Animal report subsection headers */
-#animal-report-content h3 {
-    font-size: 0.9rem;
-    margin: 1rem 0 0.4rem;
-    color: var(--c-text);
-}
-
-#animal-report-content h3:first-child {
-    margin-top: 0;
+    margin-bottom: 0.1rem;
 }
 
 

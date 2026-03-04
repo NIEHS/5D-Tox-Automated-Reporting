@@ -38,9 +38,12 @@ let summaryApproved     = false;
 
 
 // --- Section data ---
-// Cached LLM-generated paragraph arrays for each prose section.
-// These hold the original output so "Edit" can revert to them.
-let methodsParagraphs    = null;
+// methodsData holds the structured M&M output from /api/generate-methods:
+//   { sections: [{heading, level, key, paragraphs, table}, ...],
+//     context: {MethodsContext fields},
+//     table1: {caption, headers, rows, footnotes} }
+// Falls back to legacy format {paragraphs: [...]} for old sessions.
+let methodsData          = null;
 let bmdSummaryEndpoints  = [];     // derived from approved .bm2 data
 let summaryParagraphs    = null;
 

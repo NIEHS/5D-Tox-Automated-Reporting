@@ -1447,6 +1447,12 @@ async def api_session_load(dtxsid: str):
                     "filename": data_file.name,
                     "type": "bm2",
                 })
+                # Fingerprint the .bm2 file so _pool_fingerprints is
+                # populated for methods context extraction and validation.
+                # This is cheap (~10ms from LMDB cache, no Java export).
+                _fingerprint_and_store(
+                    file_id, data_file.name, str(data_file), "bm2", dtxsid,
+                )
 
             elif ext in (".csv", ".txt", ".xlsx"):
                 # Raw data file (dose-response experimental data or
@@ -1464,6 +1470,11 @@ async def api_session_load(dtxsid: str):
                     "filename": data_file.name,
                     "type": file_type,
                 })
+                # Fingerprint the data file so endpoints, sexes, and
+                # dose groups are available for methods context extraction.
+                _fingerprint_and_store(
+                    file_id, data_file.name, str(data_file), file_type, dtxsid,
+                )
             # Skip other file types (e.g., leftover pickle sidecars)
 
     # Gather all genomics_*.json files into a dict keyed by organ_sex
@@ -1938,95 +1949,105 @@ async def api_session_restore(dtxsid: str, request: Request):
 @app.post("/api/generate-methods")
 async def api_generate_methods(request: Request):
     """
-    Generate a Materials and Methods section for the 5dToxReport.
+    Generate a structured Materials and Methods section for the 5dToxReport.
 
-    The M&M section is LLM-generated from study parameters (doses, species,
-    vehicle, route, duration, etc.).  Most content is boilerplate NTP methods
-    with the specific dose groups and compound name injected.
+    Replicates the NIEHS Report 10 M&M structure with 6 major sections,
+    10+ conditional subsections, and Table 1 (genomics sample counts).
 
-    The generated text follows the NIEHS 5-day study protocol structure:
-      1. Study Design — species, doses, vehicle, route, duration, group sizes
-      2. Dose Selection Rationale — brief standard text
-      3. Clinical Examinations and Sample Collection — body/organ weights,
-         clinical pathology parameters
-      4. Data Analysis — Jonckheere → Williams/Dunnett pipeline, BMD modeling
-      5. Transcriptomics (if applicable) — TempO-Seq, BMDExpress
+    The approach is hybrid data + LLM:
+      1. Extract study metadata from fingerprints, animal report, and .bm2
+         analysisInfo.notes (doses, sample sizes, BMDExpress params, etc.)
+      2. Build a structured LLM prompt that asks for prose per subsection key
+      3. Parse the LLM's JSON response into a MethodsReport with heading hierarchy
+      4. Subsections are CONDITIONAL — only included when the relevant data domain
+         exists in the file pool (e.g., Transcriptomics only if gene_expression)
 
     Input JSON:
       {
         "identity": {ChemicalIdentity dict},
-        "dose_groups": [0, 0.15, 0.5, 1.4, 4, 12, 37, 111, 333, 1000],
-        "dose_unit": "mg/kg",
-        "vehicle": "acetone:corn oil (1:99)",
-        "n_per_group": 5,
-        "n_control": 10,
-        "route": "gavage",
-        "duration_days": 5,
-        "species": "Sprague Dawley",
-        "organs_collected": ["heart", "liver", "kidneys"],
-        "has_transcriptomics": true
+        "study_params": {"vehicle": "...", "route": "...", "duration_days": 5, "species": "..."},
+        "animal_report": {optional animal_report.json dict}
       }
+      All other study metadata (dose groups, sample sizes, endpoints, BMD params)
+      is extracted automatically from the file pool fingerprints and .bm2 caches.
 
     Returns JSON:
       {
-        "paragraphs": ["Study design paragraph...", "Dose selection...", ...],
+        "sections": [{heading, level, key, paragraphs, table}, ...],
+        "context": {MethodsContext fields},
         "section_key": "methods",
-        "model_used": "claude-..."
+        "model_used": "claude-sonnet-4-6"
       }
     """
+    from methods_report import (
+        MethodsReport,
+        MethodsSection,
+        build_methods_prompt,
+        build_subsection_skeleton,
+        build_table1_data,
+        extract_methods_context,
+    )
+
     body = await request.json()
     identity = body.get("identity", {})
-    dose_groups = body.get("dose_groups", [])
-    dose_unit = body.get("dose_unit", "mg/kg")
-    vehicle = body.get("vehicle", "corn oil")
-    n_per_group = body.get("n_per_group", 5)
-    n_control = body.get("n_control", 10)
-    route = body.get("route", "gavage")
-    duration_days = body.get("duration_days", 5)
-    species = body.get("species", "Sprague Dawley")
-    organs_collected = body.get("organs_collected", [])
-    has_transcriptomics = body.get("has_transcriptomics", False)
+    study_params = body.get("study_params", {})
+    animal_report_data = body.get("animal_report")
+    dtxsid = identity.get("dtxsid", "")
 
-    compound_name = identity.get("name", "the test chemical")
-    casrn = identity.get("casrn", "")
+    # --- Backwards compatibility: accept old flat fields too ---
+    # The old frontend sent vehicle, route, etc. as top-level fields.
+    # Merge them into study_params if present.
+    for key in ("vehicle", "route", "duration_days", "species"):
+        if key in body and key not in study_params:
+            study_params[key] = body[key]
 
-    # Format dose groups for the prompt
-    dose_str = ", ".join(str(d) for d in dose_groups) if dose_groups else "not specified"
-    organs_str = ", ".join(organs_collected) if organs_collected else "standard organs"
+    # --- Collect fingerprints from the server's pool cache ---
+    fingerprints = {}
+    if dtxsid and dtxsid in _pool_fingerprints:
+        for fid, fp in _pool_fingerprints[dtxsid].items():
+            # Convert FileFingerprint to dict for extract_methods_context
+            if hasattr(fp, "__dataclass_fields__"):
+                fingerprints[fid] = {
+                    k: getattr(fp, k) for k in fp.__dataclass_fields__
+                }
+            else:
+                fingerprints[fid] = fp
 
-    # Build the LLM prompt for M&M generation.
-    # The prompt provides the study parameters and asks Claude to generate
-    # structured Materials and Methods text in NIEHS report style.
-    prompt = f"""Generate the Materials and Methods section for a 5-day genomic
-dose-response study report. Write in the formal style of an NIEHS/NTP technical report.
+    # --- Collect .bm2 JSON caches for BMDExpress metadata extraction ---
+    # Each .bm2 file's analysisInfo.notes contains the BMDExpress version,
+    # BMDS version, models fit, BMR type, etc.
+    bm2_jsons = {}
+    if dtxsid:
+        session_files_dir = SESSIONS_DIR / dtxsid / "files"
+        if session_files_dir.exists():
+            for bm2_path in session_files_dir.glob("*.bm2"):
+                try:
+                    cached = bm2_cache.get_json(str(bm2_path))
+                    if cached:
+                        bm2_jsons[bm2_path.stem] = cached
+                except Exception:
+                    pass
 
-Study Parameters:
-- Chemical: {compound_name} (CASRN: {casrn})
-- Species: {species} rats
-- Route of administration: oral {route}
-- Vehicle: {vehicle}
-- Duration: {duration_days} days
-- Dose groups ({dose_unit}): {dose_str}
-- Animals per treatment group: {n_per_group} males and {n_per_group} females
-- Animals in control group: {n_control} males and {n_control} females
-- Organs collected: {organs_str}
-- Transcriptomics: {"TempO-Seq assay performed" if has_transcriptomics else "not performed"}
+    # --- Load animal report from session if not provided in request ---
+    if not animal_report_data and dtxsid:
+        ar_path = SESSIONS_DIR / dtxsid / "animal_report.json"
+        if ar_path.exists():
+            try:
+                animal_report_data = json.loads(ar_path.read_text())
+            except Exception:
+                pass
 
-Generate 5 paragraphs covering these subsections:
-1. Study Design — describe the dosing regimen, group assignments, and animal model
-2. Dose Selection Rationale — briefly explain dose range selection (reference LD50 data if relevant)
-3. Clinical Examinations and Sample Collection — body weights, organ weights, clinical pathology parameters collected
-4. Data Analysis — statistical methods: Jonckheere trend test for dose-response, followed by Williams (monotonic) or Dunnett (non-monotonic) pairwise tests. BMD modeling using BMDS 2.7 with a benchmark response of 1 standard deviation from the control mean.
-5. {"Transcriptomics — describe TempO-Seq targeted RNA sequencing assay, BMDExpress 2 analysis pipeline, GO term filtering criteria (5%% populated, goodness-of-fit p > 0.1, BMDU/BMDL ratio ≤ 40)." if has_transcriptomics else ""}
-
-Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
-Do not include section headers in the paragraphs — they will be added by the report template."""
-
-    system = (
-        "You are a toxicology report writer specializing in NTP/NIEHS-style "
-        "technical reports. Write precise, formal scientific text. Return ONLY "
-        "valid JSON with no markdown formatting."
+    # --- Extract structured context from all data sources ---
+    ctx = extract_methods_context(
+        identity=identity,
+        fingerprints=fingerprints,
+        animal_report=animal_report_data,
+        study_params=study_params,
+        bm2_jsons=bm2_jsons,
     )
+
+    # --- Build the structured LLM prompt ---
+    system, prompt = build_methods_prompt(ctx)
 
     try:
         loop = asyncio.get_event_loop()
@@ -2035,34 +2056,187 @@ Do not include section headers in the paragraphs — they will be added by the r
             endpoint = AnthropicEndpoint(
                 name="methods-generator",
                 model="claude-sonnet-4-6",
-                max_tokens=4096,
+                max_tokens=8192,
                 temperature=0.2,
             )
             return endpoint.generate(prompt, system=system)
 
         response = await loop.run_in_executor(None, _generate)
 
-        # Parse the JSON array from the response
+        # --- Parse the LLM's JSON response ---
+        # The response should be a JSON object keyed by subsection key,
+        # e.g. {"study_design": "paragraph text", "dose_selection": "..."}
         cleaned = response.strip()
         if cleaned.startswith("```"):
             cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
             cleaned = re.sub(r"\s*```$", "", cleaned)
 
-        paragraphs = json.loads(cleaned)
-        if not isinstance(paragraphs, list):
-            paragraphs = [str(paragraphs)]
+        subsection_texts = json.loads(cleaned)
 
-        return JSONResponse({
-            "paragraphs": paragraphs,
-            "section_key": "methods",
-            "model_used": "claude-sonnet-4-6",
-        })
+        # --- Assemble into MethodsReport ---
+        skeleton = build_subsection_skeleton(ctx)
+        sections = []
+        for key, heading, level in skeleton:
+            text = subsection_texts.get(key, "")
+            if not text:
+                continue
+            # Split multi-paragraph strings on double newlines
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            sections.append(MethodsSection(
+                heading=heading,
+                level=level,
+                key=key,
+                paragraphs=paragraphs,
+            ))
+
+        # --- Add Table 1 data to the report context ---
+        table1 = build_table1_data(ctx)
+
+        report = MethodsReport(sections=sections, context=ctx)
+        report_dict = report.to_dict()
+
+        # Include Table 1 data separately for the frontend to render
+        if table1:
+            report_dict["table1"] = table1
+
+        report_dict["section_key"] = "methods"
+        report_dict["model_used"] = "claude-sonnet-4-6"
+
+        return JSONResponse(report_dict)
+
+    except json.JSONDecodeError as e:
+        # If the LLM didn't return valid JSON, try to salvage as flat paragraphs
+        logger.warning("Methods LLM response was not valid JSON: %s", e)
+        # Fall back: treat the entire response as a single paragraph per line
+        paragraphs = [p.strip() for p in response.split("\n\n") if p.strip()]
+        sections = [MethodsSection(
+            heading="Materials and Methods",
+            level=3,
+            key="fallback",
+            paragraphs=paragraphs,
+        )]
+        report = MethodsReport(sections=sections, context=ctx)
+        report_dict = report.to_dict()
+        report_dict["section_key"] = "methods"
+        report_dict["model_used"] = "claude-sonnet-4-6"
+        report_dict["warning"] = "LLM response was not structured JSON; content placed in single section"
+        return JSONResponse(report_dict)
 
     except Exception as e:
+        logger.exception("Methods generation failed")
         return JSONResponse(
             {"error": f"Methods generation failed: {e}"},
             status_code=500,
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/methods-context/{dtxsid} — preview extracted M&M context data
+# ---------------------------------------------------------------------------
+
+@app.get("/api/methods-context/{dtxsid}")
+async def api_methods_context(dtxsid: str):
+    """
+    Return the extracted MethodsContext for a DTXSID without running the LLM.
+
+    This is a read-only inspection endpoint that lets the user verify what
+    data the system has extracted from the file pool (fingerprints, animal
+    report, .bm2 analysisInfo) before generating M&M prose.  The response
+    is a JSON object with all MethodsContext fields plus the subsection
+    skeleton (which headings will be included) and Table 1 data.
+
+    Used by the "Preview Data" button in the Methods section UI.
+    """
+    from methods_report import (
+        extract_methods_context,
+        build_subsection_skeleton,
+        build_table1_data,
+    )
+
+    # --- Collect fingerprints ---
+    fingerprints = {}
+    if dtxsid in _pool_fingerprints:
+        for fid, fp in _pool_fingerprints[dtxsid].items():
+            if hasattr(fp, "__dataclass_fields__"):
+                fingerprints[fid] = {
+                    k: getattr(fp, k) for k in fp.__dataclass_fields__
+                }
+            else:
+                fingerprints[fid] = fp
+
+    # --- Collect .bm2 JSON caches ---
+    bm2_jsons = {}
+    session_files_dir = SESSIONS_DIR / dtxsid / "files"
+    if session_files_dir.exists():
+        for bm2_path in session_files_dir.glob("*.bm2"):
+            try:
+                cached = bm2_cache.get_json(str(bm2_path))
+                if cached:
+                    bm2_jsons[bm2_path.stem] = cached
+            except Exception:
+                pass
+
+    # --- Load animal report ---
+    animal_report_data = None
+    ar_path = SESSIONS_DIR / dtxsid / "animal_report.json"
+    if ar_path.exists():
+        try:
+            animal_report_data = json.loads(ar_path.read_text())
+        except Exception:
+            pass
+
+    # --- Load identity ---
+    identity = {}
+    id_path = SESSIONS_DIR / dtxsid / "identity.json"
+    if id_path.exists():
+        try:
+            identity = json.loads(id_path.read_text())
+        except Exception:
+            pass
+
+    # --- Extract context ---
+    ctx = extract_methods_context(
+        identity=identity,
+        fingerprints=fingerprints,
+        animal_report=animal_report_data,
+        bm2_jsons=bm2_jsons,
+    )
+
+    # --- Build response ---
+    result = ctx.to_dict()
+
+    # Add the subsection skeleton so the user can see which headings
+    # will be generated (and which conditional ones are active/skipped)
+    skeleton = build_subsection_skeleton(ctx)
+    result["_subsection_skeleton"] = [
+        {"key": k, "heading": h, "level": lvl}
+        for k, h, lvl in skeleton
+    ]
+
+    # Add Table 1 data
+    table1 = build_table1_data(ctx)
+    if table1:
+        result["_table1"] = table1
+
+    # Add fingerprint summary so user can see what data sources fed the context
+    fp_summary = {}
+    for fid, fp in fingerprints.items():
+        _get = fp.get if isinstance(fp, dict) else lambda k, d=None: getattr(fp, k, d)
+        domain = _get("domain")
+        if domain:
+            if domain not in fp_summary:
+                fp_summary[domain] = []
+            fp_summary[domain].append({
+                "file_id": fid,
+                "filename": _get("filename", fid),
+                "tier": _get("tier"),
+                "sexes": _get("sexes", []),
+                "endpoint_count": len(_get("endpoint_names", [])),
+                "dose_groups": _get("dose_groups", []),
+            })
+    result["_fingerprint_summary"] = fp_summary
+
+    return JSONResponse(result)
 
 
 # ---------------------------------------------------------------------------
@@ -2565,6 +2739,10 @@ async def api_export_docx(request: Request):
     apical_sections = body.get("apical_sections", [])
 
     # New NIEHS sections (all optional)
+    # methods_data is the new structured format (dict with sections + context).
+    # methods_paragraphs is the legacy flat format (list of strings).
+    # We accept either for backwards compatibility.
+    methods_data = body.get("methods_data")
     methods_paragraphs = body.get("methods_paragraphs", [])
     animal_report_data = body.get("animal_report")
     bmd_summary_endpoints = body.get("bmd_summary_endpoints", [])
@@ -2599,8 +2777,21 @@ async def api_export_docx(request: Request):
             _add_text_with_superscript_refs(p, para_text)
             p.paragraph_format.space_after = Pt(6)
 
+    # Sequential table numbering across all report sections
+    next_table_num = 1
+
     # ===== 3. Materials and Methods (NEW — if approved) =====
-    if methods_paragraphs:
+    # Supports two formats:
+    #   - Structured (methods_data): dict with "sections" and "context" from
+    #     the new NIEHS-style generation.  Uses add_methods_to_doc() for full
+    #     heading hierarchy, conditional subsections, and Table 1.
+    #   - Legacy (methods_paragraphs): flat list of paragraph strings from the
+    #     old 5-paragraph generation.  Rendered as simple body text.
+    if methods_data and methods_data.get("sections"):
+        from methods_report import MethodsReport, add_methods_to_doc
+        report = MethodsReport.from_dict(methods_data)
+        next_table_num = add_methods_to_doc(doc, report, start_table_num=next_table_num)
+    elif methods_paragraphs:
         doc.add_heading("Materials and Methods", level=2)
         for para_text in methods_paragraphs:
             p = doc.add_paragraph()
@@ -2617,7 +2808,6 @@ async def api_export_docx(request: Request):
     # animal_report_data is a dict matching report_to_dict() output from
     # animal_report.py.  We reconstruct an AnimalReport object from it
     # to reuse the add_animal_report_to_doc() DOCX builder.
-    next_table_num = 1
     if animal_report_data:
         from animal_report import AnimalReport, AnimalRecord
         # Reconstruct AnimalReport from serialized dict

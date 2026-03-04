@@ -112,8 +112,17 @@
                 <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.xlsx,.zip" multiple>
             </div>
 
-            <!-- File pool list — compact items for each uploaded file -->
-            <div id="file-pool-list"></div>
+            <!-- File pool list — collapsible container for uploaded files.
+                 The summary line updates automatically with file type counts. -->
+            <div class="ar-collapse ar-open" id="file-pool-collapse">
+                <div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">
+                    <span class="ar-chevron">▸</span>
+                    <span id="file-pool-summary">Uploaded files</span>
+                </div>
+                <div class="ar-collapse-body">
+                    <div id="file-pool-list"></div>
+                </div>
+            </div>
 
             <!-- Pool Validation panel — collapsible panel below the file list
                  showing a coverage matrix (domain × tier), validation issues,
@@ -238,6 +247,7 @@
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Materials and Methods</h2>
                 <div class="output-actions">
+                    <button class="btn-action" id="btn-preview-methods-ctx" onclick="event.stopPropagation(); previewMethodsContext()">Preview Data</button>
                     <button class="btn-action primary" id="btn-generate-methods" onclick="event.stopPropagation(); generateMethods()">Generate</button>
                     <button class="btn-action" id="btn-edit-methods" onclick="event.stopPropagation(); editMethods()" style="display:none">Edit</button>
                     <button class="btn-action approve" id="btn-approve-methods" onclick="event.stopPropagation(); approveSection('methods')" style="display:none">Approve</button>

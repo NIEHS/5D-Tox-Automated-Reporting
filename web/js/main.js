@@ -733,6 +733,49 @@ function renderFilePoolItem(fileId) {
     item.appendChild(infoSpan);
     item.appendChild(removeBtn);
     listEl.appendChild(item);
+
+    // Keep the collapsible summary line in sync with current file counts
+    updateFilePoolSummary();
+}
+
+/**
+ * Update the file pool collapsible header with a brief count summary.
+ *
+ * Counts files by type (xlsx, txt, csv, bm2) from the uploadedFiles map
+ * and renders something like "28 files — 7 xlsx, 14 txt, 7 bm2".
+ * Called after every add/remove so the summary stays current.
+ */
+function updateFilePoolSummary() {
+    const el = document.getElementById('file-pool-summary');
+    if (!el) return;
+
+    const counts = {};
+    let total = 0;
+    for (const fid of Object.keys(uploadedFiles)) {
+        const f = uploadedFiles[fid];
+        if (!f) continue;
+        const t = f.type || 'unknown';
+        counts[t] = (counts[t] || 0) + 1;
+        total++;
+    }
+
+    if (total === 0) {
+        el.textContent = 'Uploaded files';
+        return;
+    }
+
+    // Build "7 xlsx, 14 txt, 7 bm2" with a consistent order
+    const order = ['xlsx', 'txt', 'csv', 'bm2'];
+    const parts = [];
+    for (const t of order) {
+        if (counts[t]) parts.push(`${counts[t]} ${t}`);
+    }
+    // Any types not in the predefined order
+    for (const t of Object.keys(counts)) {
+        if (!order.includes(t)) parts.push(`${counts[t]} ${t}`);
+    }
+
+    el.textContent = `${total} file${total !== 1 ? 's' : ''} — ${parts.join(', ')}`;
 }
 
 /**
@@ -748,6 +791,7 @@ function removeFile(fileId) {
     // Refresh the file picker dropdown in case the removed file was selected
     onSectionTypeChange();
     updateClearFilesButton();
+    updateFilePoolSummary();
 }
 
 /**
@@ -766,6 +810,7 @@ function clearAllFiles() {
     }
     onSectionTypeChange();
     updateClearFilesButton();
+    updateFilePoolSummary();
 }
 
 /**
@@ -971,34 +1016,56 @@ function renderValidationIssues(report) {
         return;
     }
 
-    // Group by severity for the header count
-    const counts = { error: 0, warning: 0, info: 0 };
-    for (const issue of issues) {
-        counts[issue.severity] = (counts[issue.severity] || 0) + 1;
+    // Group issues by severity so each level gets its own collapsible section
+    const grouped = { error: [], warning: [], info: [] };
+    for (let i = 0; i < issues.length; i++) {
+        const sev = issues[i].severity || 'info';
+        if (!grouped[sev]) grouped[sev] = [];
+        grouped[sev].push({ issue: issues[i], index: i });
     }
 
-    let html = '<div class="issues-header">Issues (';
-    const parts = [];
-    if (counts.error > 0) parts.push(`${counts.error} error${counts.error > 1 ? 's' : ''}`);
-    if (counts.warning > 0) parts.push(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`);
-    if (counts.info > 0) parts.push(`${counts.info} info`);
-    html += parts.join(', ') + ')</div>';
+    // Severity display config: icon, label, CSS class suffix
+    const sevConfig = {
+        error:   { icon: '⛔', label: 'Errors',   cls: 'error' },
+        warning: { icon: '⚠',  label: 'Warnings', cls: 'warning' },
+        info:    { icon: 'ℹ️',  label: 'Info',     cls: 'info' }
+    };
 
-    for (let i = 0; i < issues.length; i++) {
-        const issue = issues[i];
-        const icons = { error: '⛔', warning: '⚠', info: 'ℹ️' };
-        const icon = icons[issue.severity] || 'ℹ️';
+    let html = '';
 
-        html += `<div class="validation-issue severity-${issue.severity}" data-issue-index="${i}">`;
-        html += `<span class="issue-icon">${icon}</span>`;
-        html += `<span class="issue-text">${issue.message}`;
+    // One collapsible section per severity level that has issues
+    for (const sev of ['error', 'warning', 'info']) {
+        const items = grouped[sev];
+        if (!items || items.length === 0) continue;
 
-        // For dose mismatch errors, add expandable conflict resolution
-        if (issue.severity === 'error' && issue.issue_type === 'dose_mismatch' && issue.details) {
-            html += renderConflictResolution(issue, i, report);
+        const cfg = sevConfig[sev];
+        const n = items.length;
+        const summaryText = `${cfg.icon} ${n} ${cfg.label.toLowerCase()}`;
+
+        // Build the list of issues inside this severity group
+        let bodyHtml = '';
+        for (const { issue, index } of items) {
+            bodyHtml += `<div class="validation-issue severity-${sev}" data-issue-index="${index}">`;
+            bodyHtml += `<span class="issue-icon">${cfg.icon}</span>`;
+            bodyHtml += `<span class="issue-text">${issue.message}`;
+
+            // For dose mismatch errors, add expandable conflict resolution
+            if (sev === 'error' && issue.issue_type === 'dose_mismatch' && issue.details) {
+                bodyHtml += renderConflictResolution(issue, index, report);
+            }
+
+            bodyHtml += '</span></div>';
         }
 
-        html += '</span></div>';
+        // Errors default open (user needs to act on them), others collapsed
+        const openClass = sev === 'error' ? ' ar-open' : '';
+
+        html += `<div class="ar-collapse issue-group-${cfg.cls}${openClass}">`;
+        html += `<div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">`;
+        html += `<span class="ar-chevron">▸</span> ${summaryText}`;
+        html += `</div>`;
+        html += `<div class="ar-collapse-body">${bodyHtml}</div>`;
+        html += `</div>`;
     }
 
     container.innerHTML = html;
@@ -1691,8 +1758,21 @@ async function exportDocx() {
 
     // Collect new NIEHS section data for export
 
-    // Methods paragraphs (if approved or generated)
-    const methodsParas = methodsApproved ? extractProse('methods-prose') : [];
+    // Methods data — structured format if available, else legacy flat paragraphs.
+    // When structured, we extract the edited subsection prose from the DOM
+    // and merge it back into the original methodsData structure so the server
+    // gets both the heading hierarchy and the (possibly edited) prose.
+    let methodsPayload = {};
+    if (methodsApproved && methodsData && methodsData.sections) {
+        // Structured format — extract edited subsections from DOM
+        const editedSections = extractMethodsSections();
+        methodsPayload = {
+            sections: editedSections,
+            context: methodsData.context || {},
+        };
+    }
+    const methodsParas = (methodsApproved && !methodsPayload.sections)
+        ? extractProse('methods-prose') : [];
 
     // BMD summary endpoints (if loaded)
     const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
@@ -1727,6 +1807,7 @@ async function exportDocx() {
                 references,
                 chemical_name: chemicalName,
                 apical_sections: apicalPayload,
+                methods_data: methodsPayload.sections ? methodsPayload : null,
                 methods_paragraphs: methodsParas,
                 animal_report: animalReportPayload,
                 bmd_summary_endpoints: bmdSummaryEps,
@@ -2780,8 +2861,23 @@ async function restoreSession(data) {
     if (data.methods) {
         const methods = data.methods;
         showMethodsSection();
-        methodsParagraphs = methods.original_paragraphs || methods.paragraphs || [];
-        displayProse('methods-prose', methods.paragraphs || []);
+
+        // Detect structured vs legacy format.
+        // Structured: has "sections" array from the new NIEHS-style generation.
+        // Legacy: has "paragraphs" array from the old 5-paragraph generation.
+        if (methods.sections && methods.sections.length > 0) {
+            // Structured format — restore with headings and subsections
+            methodsData = methods.original_data || methods;
+            displayMethodsSections(
+                methods.sections,
+                methods.original_data?.table1 || methodsData?.table1 || null,
+            );
+        } else {
+            // Legacy flat format — fall back to simple prose display
+            methodsData = methods;
+            const paras = methods.paragraphs || [];
+            displayProse('methods-prose', paras);
+        }
 
         // Lock as approved (disable editing, add green border)
         methodsApproved = true;
@@ -3118,33 +3214,21 @@ async function generateMethods() {
     btn.textContent = 'Generating...';
 
     try {
-        // Extract dose groups from the first processed .bm2 file
-        let doseGroups = [];
-        let doseUnit = 'mg/kg';
-        for (const f of Object.values(apicalSections)) {
-            if (f.tableData) {
-                const firstSex = Object.keys(f.tableData)[0];
-                if (firstSex && f.tableData[firstSex].length > 0) {
-                    doseGroups = f.tableData[firstSex][0].doses || [];
-                }
-                break;
-            }
-        }
-
+        // Send identity and study params to the server.
+        // The server extracts dose groups, sample sizes, endpoints, and BMDExpress
+        // metadata from the file pool fingerprints and .bm2 caches automatically.
         const resp = await fetch('/api/generate-methods', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 identity: currentIdentity,
-                dose_groups: doseGroups,
-                dose_unit: doseUnit,
-                vehicle: 'corn oil',
-                n_per_group: 5,
-                n_control: 10,
-                route: 'gavage',
-                duration_days: 5,
-                species: 'Sprague Dawley',
-                has_transcriptomics: Object.values(uploadedFiles).some(f => f.type === 'csv'),
+                study_params: {
+                    vehicle: 'corn oil',
+                    route: 'gavage',
+                    duration_days: 5,
+                    species: 'Sprague Dawley',
+                },
+                animal_report: animalReportData,
             }),
         });
         const result = await resp.json();
@@ -3154,11 +3238,11 @@ async function generateMethods() {
             return;
         }
 
-        // Store original paragraphs for style learning
-        methodsParagraphs = result.paragraphs;
+        // Store structured methods data (sections + context + table1)
+        methodsData = result;
 
-        // Display paragraphs in editable divs
-        displayProse('methods-prose', result.paragraphs);
+        // Render structured subsections with headings
+        displayMethodsSections(result.sections, result.table1);
 
         // Show approve/edit buttons
         btn.style.display = 'none';
@@ -3171,6 +3255,189 @@ async function generateMethods() {
         btn.disabled = false;
         btn.textContent = 'Generate';
     }
+}
+
+
+/**
+ * Render structured M&M subsections into the methods-prose container.
+ *
+ * Each subsection gets:
+ *   - A styled heading (<h3> or <h4>) — not editable
+ *   - Editable prose paragraphs in contenteditable divs (reuses .paragraph class)
+ *   - Optional Table 1 as an HTML table (read-only, data-derived)
+ *
+ * The data-key attribute on each subsection div enables extractMethodsSections()
+ * to reassemble the edited text into the structured format for approval/export.
+ *
+ * @param {Array} sections - Array of {heading, level, key, paragraphs, table} objects
+ * @param {Object|null} table1 - Optional Table 1 data: {caption, headers, rows, footnotes}
+ */
+/**
+ * Preview the extracted MethodsContext data in the file preview modal.
+ *
+ * Fetches the context from /api/methods-context/{dtxsid} (no LLM call —
+ * just data extraction from fingerprints, animal report, and .bm2 caches)
+ * and renders it as a collapsible JSON tree in the existing preview modal.
+ *
+ * This lets the user verify what study parameters the system extracted
+ * before generating the M&M prose.
+ */
+async function previewMethodsContext() {
+    const dtxsid = currentIdentity?.dtxsid;
+    if (!dtxsid) {
+        showError('DTXSID required to preview methods context');
+        return;
+    }
+
+    // Reuse the file preview modal
+    const badge = document.getElementById('modal-badge');
+    badge.textContent = 'M&M';
+    badge.className = 'file-badge bm2';
+
+    document.getElementById('modal-title').textContent = 'Methods Context — Extracted Study Data';
+
+    const body = document.getElementById('modal-body');
+    body.innerHTML = '<div class="modal-loading"><div class="spinner"></div>Extracting context\u2026</div>';
+
+    document.getElementById('file-preview-modal').style.display = 'flex';
+
+    // Bind Escape to close
+    _previewEscapeHandler = (e) => {
+        if (e.key === 'Escape') closePreviewModal();
+    };
+    document.addEventListener('keydown', _previewEscapeHandler);
+
+    try {
+        const resp = await fetch(`/api/methods-context/${dtxsid}`);
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        const data = await resp.json();
+
+        body.innerHTML = '';
+        renderJsonTree(data, body, 0, 3);
+    } catch (err) {
+        body.innerHTML = `
+            <div class="modal-info-card">
+                <div class="info-icon">\u26a0\ufe0f</div>
+                <div class="info-text">Failed to load context: ${err.message}</div>
+            </div>`;
+    }
+}
+
+
+function displayMethodsSections(sections, table1) {
+    const container = document.getElementById('methods-prose');
+    container.innerHTML = '';
+
+    for (const section of sections) {
+        // Create a wrapper div for this subsection
+        const wrapper = document.createElement('div');
+        wrapper.className = 'methods-subsection';
+        wrapper.dataset.key = section.key;
+
+        // Add heading (h3 for level 3, h4 for level 4)
+        const headingTag = section.level <= 3 ? 'h3' : 'h4';
+        const heading = document.createElement(headingTag);
+        heading.className = 'methods-heading';
+        heading.textContent = section.heading;
+        wrapper.appendChild(heading);
+
+        // Add editable paragraphs
+        for (const para of (section.paragraphs || [])) {
+            const div = document.createElement('div');
+            div.className = 'paragraph';
+            div.contentEditable = 'true';
+            div.textContent = para;
+            wrapper.appendChild(div);
+        }
+
+        container.appendChild(wrapper);
+    }
+
+    // Append Table 1 at the end if present
+    if (table1 && table1.headers && table1.rows) {
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'methods-table1-wrapper';
+
+        // Caption
+        const caption = document.createElement('p');
+        caption.className = 'methods-table-caption';
+        caption.textContent = `Table 1. ${table1.caption || ''}`;
+        tableWrapper.appendChild(caption);
+
+        // Build HTML table
+        const tbl = document.createElement('table');
+        tbl.className = 'methods-table1';
+
+        // Header row
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        for (const h of table1.headers) {
+            const th = document.createElement('th');
+            th.textContent = h;
+            headerRow.appendChild(th);
+        }
+        thead.appendChild(headerRow);
+        tbl.appendChild(thead);
+
+        // Data rows
+        const tbody = document.createElement('tbody');
+        for (const row of table1.rows) {
+            const tr = document.createElement('tr');
+            for (let i = 0; i < row.length; i++) {
+                const td = document.createElement('td');
+                const val = row[i];
+                // Bold sex-header rows (marked with ** in the data)
+                const isBold = typeof val === 'string' && val.startsWith('**') && val.endsWith('**');
+                td.textContent = isBold ? val.replace(/\*\*/g, '').trim() : val;
+                if (isBold) {
+                    td.classList.add('sex-header');
+                    tr.classList.add('sex-header-row');
+                }
+                tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+        }
+        tbl.appendChild(tbody);
+        tableWrapper.appendChild(tbl);
+
+        // Footnotes
+        if (table1.footnotes && table1.footnotes.length > 0) {
+            for (const fn of table1.footnotes) {
+                const fnP = document.createElement('p');
+                fnP.className = 'methods-table-footnote';
+                fnP.textContent = fn;
+                tableWrapper.appendChild(fnP);
+            }
+        }
+
+        container.appendChild(tableWrapper);
+    }
+}
+
+
+/**
+ * Extract edited methods subsections from the DOM.
+ *
+ * Reads the contenteditable paragraphs from each .methods-subsection div
+ * and reassembles them into the structured format that matches the server's
+ * MethodsSection schema.
+ *
+ * @returns {Array} Array of {heading, level, key, paragraphs} objects
+ */
+function extractMethodsSections() {
+    const container = document.getElementById('methods-prose');
+    const sections = [];
+    for (const wrapper of container.querySelectorAll('.methods-subsection')) {
+        const key = wrapper.dataset.key;
+        const headingEl = wrapper.querySelector('.methods-heading');
+        const heading = headingEl ? headingEl.textContent.trim() : '';
+        const level = headingEl && headingEl.tagName === 'H4' ? 4 : 3;
+        const paragraphs = Array.from(wrapper.querySelectorAll('.paragraph'))
+            .map(p => p.textContent.trim())
+            .filter(Boolean);
+        sections.push({ heading, level, key, paragraphs });
+    }
+    return sections;
 }
 
 /**
@@ -3190,6 +3457,7 @@ function editMethods() {
  */
 function retryMethods() {
     methodsApproved = false;
+    methodsData = null;
     unlockSection(document.getElementById('methods-section'));
     document.getElementById('methods-prose').innerHTML = '';
     show('btn-generate-methods');
@@ -3351,69 +3619,170 @@ async function approvePool() {
  */
 function renderAnimalReport(report) {
     const container = document.getElementById('animal-report-content');
+
+    // Shared domain label lookup
+    const domainFullLabels = {
+        body_weight: 'Body Weight', organ_weights: 'Organ Weights',
+        clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
+        hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
+        clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
+    };
+
+    // Helper: build a collapsible section.  The summary line is always
+    // visible; clicking it toggles the body.  Starts collapsed.
+    function collapse(id, summary, bodyHtml) {
+        return `<div class="ar-collapse" id="ar-${id}">` +
+            `<div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">` +
+            `<span class="ar-chevron">▸</span> ${summary}</div>` +
+            `<div class="ar-collapse-body">${bodyHtml}</div></div>`;
+    }
+
     let html = '';
 
-    // --- A. Study Design Summary ---
-    const study = report.study_number || 'this study';
+    // --- Top-level summary line (always visible, not collapsible) ---
+    const study = report.study_number || 'Unknown study';
     const selDetail = report.biosampling_count > 0
         ? ` (${report.core_count} core, ${report.biosampling_count} biosampling)`
         : '';
-    html += `<h3>Study Design</h3>`;
-    html += `<p>Study ${study} enrolled <strong>${report.total_animals}</strong> animals${selDetail} across ${report.dose_groups?.length || 0} dose groups.</p>`;
+    const nDomains = Object.keys(report.domain_coverage || {}).length;
+    html += `<div class="ar-summary">`;
+    html += `<strong>${study}</strong> · ${report.total_animals} animals${selDetail} · `;
+    html += `${report.dose_groups?.length || 0} dose groups · ${nDomains} assay domains`;
+    html += `</div>`;
 
-    // Dose × Sex table
+    // --- A. Study Design (dose × sex table) ---
     if (report.dose_design && Object.keys(report.dose_design).length > 0) {
-        // Collect all sexes
         const allSexes = new Set();
         for (const sexes of Object.values(report.dose_design)) {
             for (const sex of Object.keys(sexes)) allSexes.add(sex);
         }
         const sexList = [...allSexes].sort();
 
-        html += `<table class="coverage-matrix">`;
-        html += `<tr><th>Dose (mg/kg)</th>`;
-        for (const sex of sexList) html += `<th>${sex}</th>`;
-        html += `<th>Total</th></tr>`;
-
+        let tbl = `<table class="coverage-matrix">`;
+        tbl += `<tr><th>Dose (mg/kg)</th>`;
+        for (const sex of sexList) tbl += `<th>${sex}</th>`;
+        tbl += `<th>Total</th></tr>`;
         for (const dose of report.dose_groups) {
             const doseKey = String(dose);
             const sexCounts = report.dose_design[doseKey] || {};
             let total = 0;
-            html += `<tr><td>${Number(dose) === Math.floor(Number(dose)) ? Math.floor(Number(dose)) : dose}</td>`;
+            const doseLabel = Number(dose) === Math.floor(Number(dose)) ? Math.floor(Number(dose)) : dose;
+            tbl += `<tr><td>${doseLabel}</td>`;
             for (const sex of sexList) {
                 const count = sexCounts[sex] || 0;
                 total += count;
-                html += `<td>${count}</td>`;
+                tbl += `<td>${count}</td>`;
             }
-            html += `<td><strong>${total}</strong></td></tr>`;
+            tbl += `<td><strong>${total}</strong></td></tr>`;
         }
-        html += `</table>`;
+        tbl += `</table>`;
+
+        const doseRange = report.dose_groups.length > 1
+            ? `${report.dose_groups[0]}–${report.dose_groups[report.dose_groups.length - 1]} mg/kg`
+            : `${report.dose_groups[0]} mg/kg`;
+        html += collapse('design',
+            `<strong>Study Design</strong> — ${sexList.join(' & ')}, ${report.dose_groups.length} groups (${doseRange})`,
+            tbl);
     }
 
-    // --- B. Animal Roster ---
+    // --- B. Domain Coverage (compact table with attrition columns) ---
+    if (report.domain_coverage && Object.keys(report.domain_coverage).length > 0) {
+        let tbl = `<table class="coverage-matrix">`;
+        tbl += `<tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th>Dropped</th><th>Completeness</th></tr>`;
+
+        for (const domain of Object.keys(report.domain_coverage).sort()) {
+            const cov = report.domain_coverage[domain];
+            const att = report.attrition?.[domain] || {};
+            const totalDropped = (att.excluded_xlsx_to_txt?.length || 0) + (att.excluded_txt_to_bm2?.length || 0);
+            const comp = report.completeness?.[domain];
+            const compPct = comp != null ? `${Math.round(comp * 100)}%` : '—';
+
+            tbl += `<tr>`;
+            tbl += `<td>${domainFullLabels[domain] || domain}</td>`;
+            tbl += `<td>${cov.xlsx || '—'}</td>`;
+            tbl += `<td>${cov.txt_csv || '—'}</td>`;
+            tbl += `<td>${cov.bm2 || '—'}</td>`;
+            tbl += `<td>${totalDropped || '—'}</td>`;
+            tbl += `<td>${compPct}</td>`;
+            tbl += `</tr>`;
+        }
+        tbl += `</table>`;
+
+        // Count domains at 100% vs those with attrition
+        const fullDomains = Object.values(report.completeness || {}).filter(c => c >= 1.0).length;
+        const partialDomains = nDomains - fullDomains;
+        const coverageSummary = partialDomains > 0
+            ? `${fullDomains} complete, ${partialDomains} with attrition`
+            : `all ${nDomains} domains complete`;
+
+        html += collapse('coverage',
+            `<strong>Domain Coverage</strong> — ${nDomains} domains, ${coverageSummary}`,
+            tbl);
+    }
+
+    // --- C. Attrition Detail (per-domain exclusion reasons) ---
+    if (report.attrition && Object.keys(report.attrition).length > 0) {
+        // Check if there's any attrition at all
+        let totalExclusions = 0;
+        for (const att of Object.values(report.attrition)) {
+            for (const ids of Object.values(att.exclusion_reasons || {})) {
+                totalExclusions += (ids?.length || 0);
+            }
+        }
+
+        if (totalExclusions > 0) {
+            let body = '';
+            for (const domain of Object.keys(report.attrition).sort()) {
+                const att = report.attrition[domain];
+                const reasons = att.exclusion_reasons || {};
+                if (Object.keys(reasons).length === 0) continue;
+
+                const domainLabel = domainFullLabels[domain] || domain;
+                body += `<div class="attrition-group">`;
+                body += `<strong>${domainLabel}</strong>`;
+                body += `<ul>`;
+                for (const [reasonKey, animalIds] of Object.entries(reasons)) {
+                    if (!animalIds || animalIds.length === 0) continue;
+                    const transition = reasonKey.includes('xlsx_to_txt') ? 'xlsx→txt' : 'txt→bm2';
+                    const reason = reasonKey
+                        .replace('xlsx_to_txt_', '')
+                        .replace('txt_to_bm2_', '')
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, c => c.toUpperCase());
+                    const preview = animalIds.slice(0, 8).join(', ');
+                    const more = animalIds.length > 8 ? `, +${animalIds.length - 8} more` : '';
+                    body += `<li>${transition} ${reason}: <strong>${animalIds.length}</strong> (${preview}${more})</li>`;
+                }
+                body += `</ul></div>`;
+            }
+
+            html += collapse('attrition',
+                `<strong>Attrition Detail</strong> — ${totalExclusions} animals excluded across domains`,
+                body);
+        }
+    }
+
+    // --- D. Animal Roster (full per-animal table, collapsed by default) ---
     if (report.animals && Object.keys(report.animals).length > 0) {
-        // Domain column order (only include domains that have coverage data)
         const domainOrder = [
             'body_weight', 'organ_weights', 'clin_chem', 'hematology',
             'hormones', 'tissue_conc', 'clinical_obs', 'gene_expression',
         ];
-        const domainLabels = {
+        const domainShort = {
             body_weight: 'BW', organ_weights: 'OW', clin_chem: 'CC',
             hematology: 'Hem', hormones: 'Horm', tissue_conc: 'TC',
             clinical_obs: 'CO', gene_expression: 'GE',
         };
         const activeDomains = domainOrder.filter(d => report.domain_coverage?.[d]);
 
-        html += `<h3>Animal Roster</h3>`;
-        html += `<div class="animal-roster-wrapper">`;
-        html += `<table class="animal-roster-table">`;
-        html += `<tr><th>ID</th><th>Sex</th><th>Dose</th><th>Selection</th>`;
+        let tbl = `<div class="animal-roster-wrapper">`;
+        tbl += `<table class="animal-roster-table">`;
+        tbl += `<tr><th>ID</th><th>Sex</th><th>Dose</th><th>Sel</th>`;
         for (const d of activeDomains) {
-            html += `<th title="${d}">${domainLabels[d] || d}</th>`;
+            tbl += `<th title="${domainFullLabels[d] || d}">${domainShort[d] || d}</th>`;
         }
-        html += `</tr>`;
+        tbl += `</tr>`;
 
-        // Sort animals numerically
         const sortedIds = Object.keys(report.animals).sort((a, b) => {
             const na = parseInt(a), nb = parseInt(b);
             if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -3425,123 +3794,51 @@ function renderAnimalReport(report) {
             const dose = rec.dose != null
                 ? (Number(rec.dose) === Math.floor(Number(rec.dose)) ? Math.floor(Number(rec.dose)) : rec.dose)
                 : '';
-            html += `<tr>`;
-            html += `<td>${aid}</td>`;
-            html += `<td>${rec.sex || ''}</td>`;
-            html += `<td>${dose}</td>`;
-            html += `<td>${rec.selection || ''}</td>`;
-
+            tbl += `<tr>`;
+            tbl += `<td>${aid}</td>`;
+            tbl += `<td>${rec.sex || ''}</td>`;
+            tbl += `<td>${dose}</td>`;
+            tbl += `<td>${rec.selection ? rec.selection.replace('Core Animals', 'Core').replace('Biosampling Animals', 'Bio') : ''}</td>`;
             for (const domain of activeDomains) {
                 const presence = rec.domain_presence?.[domain] || {};
                 const x = presence.xlsx ? 'X' : '-';
                 const t = presence.txt_csv ? 'T' : '-';
                 const b = presence.bm2 ? 'B' : '-';
                 const code = `${x}${t}${b}`;
-                // Highlight based on completeness
                 const cls = code === 'XTB' ? 'tier-full'
                     : code === '---' ? 'tier-absent'
                     : 'tier-partial';
-                html += `<td class="${cls}">${code}</td>`;
+                tbl += `<td class="${cls}">${code}</td>`;
             }
-            html += `</tr>`;
+            tbl += `</tr>`;
         }
-        html += `</table></div>`;
-    }
+        tbl += `</table></div>`;
 
-    // --- C. Domain Coverage Matrix ---
-    if (report.domain_coverage && Object.keys(report.domain_coverage).length > 0) {
-        const domainFullLabels = {
-            body_weight: 'Body Weight', organ_weights: 'Organ Weights',
-            clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
-            hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
-            clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
-        };
-
-        html += `<h3>Domain Coverage</h3>`;
-        html += `<table class="coverage-matrix">`;
-        html += `<tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th>Drop (X→T)</th><th>Drop (T→B)</th><th>Completeness</th></tr>`;
-
-        for (const domain of Object.keys(report.domain_coverage).sort()) {
-            const cov = report.domain_coverage[domain];
-            const att = report.attrition?.[domain] || {};
-            const dropXT = att.excluded_xlsx_to_txt?.length || 0;
-            const dropTB = att.excluded_txt_to_bm2?.length || 0;
-            const comp = report.completeness?.[domain];
-            const compPct = comp != null ? `${Math.round(comp * 100)}%` : '—';
-
-            html += `<tr>`;
-            html += `<td>${domainFullLabels[domain] || domain}</td>`;
-            html += `<td>${cov.xlsx || 0}</td>`;
-            html += `<td>${cov.txt_csv || 0}</td>`;
-            html += `<td>${cov.bm2 || 0}</td>`;
-            html += `<td>${dropXT || '—'}</td>`;
-            html += `<td>${dropTB || '—'}</td>`;
-            html += `<td>${compPct}</td>`;
-            html += `</tr>`;
-        }
-        html += `</table>`;
-    }
-
-    // --- D. Attrition Analysis ---
-    if (report.attrition && Object.keys(report.attrition).length > 0) {
-        const domainFullLabels = {
-            body_weight: 'Body Weight', organ_weights: 'Organ Weights',
-            clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
-            hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
-            clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
-        };
-
-        html += `<h3>Attrition Analysis</h3>`;
-
-        for (const domain of Object.keys(report.attrition).sort()) {
-            const att = report.attrition[domain];
-            const comp = report.completeness?.[domain];
-            const compPct = comp != null ? `${Math.round(comp * 100)}%` : '—';
-            const domainLabel = domainFullLabels[domain] || domain;
-
-            html += `<div class="attrition-group">`;
-            html += `<strong>${domainLabel}</strong> — completeness: ${compPct}`;
-
-            const reasons = att.exclusion_reasons || {};
-            if (Object.keys(reasons).length > 0) {
-                html += `<ul>`;
-                for (const [reasonKey, animalIds] of Object.entries(reasons)) {
-                    if (!animalIds || animalIds.length === 0) continue;
-                    // Parse reason label: "xlsx_to_txt_dose_exclusion" → "xlsx→txt Dose Exclusion"
-                    const transition = reasonKey.includes('xlsx_to_txt') ? 'xlsx→txt' : 'txt→bm2';
-                    const reason = reasonKey
-                        .replace('xlsx_to_txt_', '')
-                        .replace('txt_to_bm2_', '')
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, c => c.toUpperCase());
-                    const preview = animalIds.slice(0, 10).join(', ');
-                    const more = animalIds.length > 10 ? `, ... +${animalIds.length - 10} more` : '';
-                    html += `<li>${transition} ${reason}: <strong>${animalIds.length}</strong> animals (${preview}${more})</li>`;
-                }
-                html += `</ul>`;
-            } else {
-                html += `<p class="no-issues">No exclusions detected.</p>`;
-            }
-            html += `</div>`;
-        }
+        const nAnimals = Object.keys(report.animals).length;
+        html += collapse('roster',
+            `<strong>Animal Roster</strong> — ${nAnimals} animals, per-animal tier presence (X=xlsx T=txt B=bm2)`,
+            tbl);
     }
 
     // --- E. Consistency Checks ---
-    html += `<h3>Consistency Checks</h3>`;
-    if (report.consistency_issues && report.consistency_issues.length > 0) {
-        html += `<ul>`;
+    const nIssues = report.consistency_issues?.length || 0;
+    if (nIssues > 0) {
+        let body = '<ul>';
         for (const issue of report.consistency_issues) {
             if (issue.type === 'sex_mismatch') {
-                html += `<li>Animal ${issue.animal_id}: sex mismatch — found ${issue.details?.sexes_found?.join(', ') || '?'} across domains</li>`;
+                body += `<li>Animal ${issue.animal_id}: sex mismatch — ${issue.details?.sexes_found?.join(', ') || '?'}</li>`;
             } else if (issue.type === 'dose_mismatch') {
-                html += `<li>Animal ${issue.animal_id}: dose mismatch — found ${issue.details?.doses_found?.join(', ') || '?'} across domains</li>`;
+                body += `<li>Animal ${issue.animal_id}: dose mismatch — ${issue.details?.doses_found?.join(', ') || '?'}</li>`;
             } else {
-                html += `<li>Animal ${issue.animal_id}: ${issue.type}</li>`;
+                body += `<li>Animal ${issue.animal_id}: ${issue.type}</li>`;
             }
         }
-        html += `</ul>`;
+        body += '</ul>';
+        html += collapse('consistency',
+            `<strong>Consistency Checks</strong> — <span style="color:var(--c-error)">${nIssues} issue${nIssues > 1 ? 's' : ''} found</span>`,
+            body);
     } else {
-        html += `<p class="no-issues">No inconsistencies detected.</p>`;
+        html += `<div class="ar-summary-ok">Consistency: no issues detected</div>`;
     }
 
     container.innerHTML = html;
@@ -3860,9 +4157,20 @@ async function approveSection(sectionType) {
     let data = {};
 
     if (sectionType === 'methods') {
+        // Save in structured format if available, with legacy flat paragraphs
+        // as a fallback for the session restore path.
+        const editedSections = extractMethodsSections();
+        const flatParas = extractProse('methods-prose');
+        // Build original_paragraphs from the stored methodsData sections
+        // so the server-side style learning can detect user edits.
+        const originalParas = (methodsData?.sections || [])
+            .flatMap(s => s.paragraphs || []);
         data = {
-            paragraphs: extractProse('methods-prose'),
-            original_paragraphs: methodsParagraphs,
+            sections: editedSections.length > 0 ? editedSections : undefined,
+            context: methodsData?.context || undefined,
+            paragraphs: flatParas,
+            original_paragraphs: originalParas,
+            original_data: methodsData || undefined,
         };
     } else if (sectionType === 'bmd_summary') {
         data = { endpoints: bmdSummaryEndpoints };
