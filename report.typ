@@ -380,16 +380,27 @@
 }
 
 // --- Apical endpoint sections ---
+// NIEHS pattern: narrative on portrait page, then each wide dose-response
+// table gets its own landscape page.  Tables with many dose columns (≥5)
+// are too wide for portrait orientation.  The NIEHS PDF (NBK589955) uses
+// landscape for Tables 2-6 (body weights, liver weights, clinical chem,
+// hematology, hormones) and portrait for narrower tables (Table 7 plasma
+// concentrations, Table 8 BMD summary).
+//
+// We reproduce this by:
+//   1. Emitting narrative paragraphs in portrait mode
+//   2. For each sex's dose-response table: pagebreak → landscape → table → pagebreak → portrait
+//   3. The landscape threshold is ≥5 dose groups (matching NIEHS behavior)
 #for sec in data.at("apical_sections", default: ()) {
   heading(level: 2, sec.at("title", default: "Apical Endpoints"))
 
-  // Narrative paragraphs
+  // Narrative paragraphs — always portrait
   for para in sec.at("narrative", default: ()) {
     [#para]
     parbreak()
   }
 
-  // Data tables — one per sex
+  // Data tables — one per sex, potentially on landscape pages
   let dose-unit = sec.at("dose_unit", default: "mg/kg")
   for sex in ("Male", "Female") {
     let rows-data = sec.at("table_data", default: (:)).at(sex, default: ())
@@ -447,23 +458,51 @@
         tbl-rows += (row,)
       }
 
-      niehs-table(
-        headers,
-        tbl-rows,
-        caption: if caption-text != "" { caption-text },
-        numeric-cols: num-cols,
-      )
-      v(12pt)
+      // Wide tables (≥5 dose groups) get their own landscape page,
+      // matching the NIEHS pattern where Tables 2-6 are landscape.
+      // Narrow tables stay inline on the current portrait page.
+      //
+      // `set page(flipped: true/false)` implicitly triggers a page break
+      // in Typst, so no explicit pagebreak() is needed.  Using both would
+      // create an unwanted blank page.
+      if doses.len() >= 5 {
+        // --- Switch to landscape for this table ---
+        set page(flipped: true)
+        niehs-table(
+          headers,
+          tbl-rows,
+          caption: if caption-text != "" { caption-text },
+          numeric-cols: num-cols,
+        )
+        // --- Return to portrait after the table ---
+        // The next `set page(flipped: false)` (or any subsequent content
+        // that uses portrait) will trigger the page break back.
+        set page(flipped: false)
+      } else {
+        // Narrow table — stays inline on portrait page
+        niehs-table(
+          headers,
+          tbl-rows,
+          caption: if caption-text != "" { caption-text },
+          numeric-cols: num-cols,
+        )
+        v(12pt)
+      }
     }
   }
 }
 
 
 // --- BMD Summary ---
+// In the NIEHS PDF, the BMD summary (Table 8) appears on page 31 after
+// the Internal Dose Assessment text.  It's a 6-column portrait table.
+// We place it on its own page to match the NIEHS pattern of keeping
+// each major results subsection visually separated.
 #if data.at("bmd_summary", default: none) != none {
   let bmd = data.bmd_summary
   let endpoints = bmd.at("endpoints", default: ())
   if endpoints.len() > 0 {
+    pagebreak()
     heading(level: 2, "Apical Endpoint BMD Summary")
 
     let male-eps = endpoints.filter(e => e.at("sex", default: "") == "Male")
@@ -499,8 +538,14 @@
 
 
 // --- Genomics Results ---
+// In the NIEHS PDF, "Gene Set Benchmark Dose Analysis" (H2) starts on
+// page 31 after the BMD summary table.  "Gene Benchmark Dose Analysis"
+// (H2) starts on a new page (page 38).  Each organ's gene set table
+// (Tables 9-10) and gene table (Tables 11-12) flow continuously in
+// portrait orientation.
 #let genomics = data.at("genomics_sections", default: ())
 #if genomics.len() > 0 {
+  pagebreak()
   heading(level: 2, "Transcriptomic BMD Analysis")
 
   for gs-sec in genomics {
