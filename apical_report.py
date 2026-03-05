@@ -289,10 +289,13 @@ def build_table_data(
         treatments = exp.get("treatments", [])
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
 
-        # Determine sex from experiment name
-        if "Female" in exp_name:
+        # Determine sex from experiment name.
+        # Case-insensitive: handles both CamelCase ("BodyWeightFemale")
+        # and underscore-delimited ("female_body_weight") naming conventions.
+        exp_name_lower = exp_name.lower()
+        if "female" in exp_name_lower:
             sex = "Female"
-        elif "Male" in exp_name:
+        elif "male" in exp_name_lower:
             sex = "Male"
         else:
             sex = "Unknown"
@@ -309,6 +312,13 @@ def build_table_data(
             for i, val in enumerate(responses):
                 dose = treat_doses[i]
                 groups_by_dose.setdefault(dose, []).append(val)
+
+            # Skip endpoints without a control dose group (dose=0.0).
+            # This can happen with tissue concentration or other measurement
+            # data that only has treated groups and no vehicle control.
+            # The NTP statistical tests require a control group as baseline.
+            if 0.0 not in groups_by_dose:
+                continue
 
             # Run the NTP statistical analysis
             stats = analyze_endpoint(exp_name, probe_name, groups_by_dose)

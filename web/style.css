@@ -639,7 +639,10 @@ header p {
     border-radius: var(--r-xl);
     padding: 1.5rem;
     margin-bottom: 1.5rem;
-    display: none;
+    /* Initial visibility controlled by inline style="display:none" on the
+       HTML element.  show('section-builder') clears the inline style to
+       reveal the section.  A CSS `display:none` here would override the
+       cleared inline style and keep it permanently hidden. */
 }
 
 #section-builder h2 {
@@ -1700,6 +1703,87 @@ header p {
 
 
 /* ----------------------------------------------------------------
+ * Integrated Data Preview — shows merged BMDProject summary + JSON tree
+ * ---------------------------------------------------------------- */
+
+/* Container for the integration summary, rendered inline below validation */
+.integrated-preview {
+    margin-top: 0.75rem;
+    padding: 0.6rem;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    background: var(--c-bg);
+}
+
+.integration-summary h4 {
+    font-size: 0.85rem;
+    margin: 0 0 0.3rem 0;
+    color: var(--c-text);
+}
+
+.integration-summary p {
+    font-size: 0.75rem;
+    color: var(--c-text-secondary);
+    margin: 0 0 0.5rem 0;
+}
+
+/* Source files table — compact, mirrors coverage matrix style */
+.source-files-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.source-files-table th,
+.source-files-table td {
+    padding: 0.2rem 0.4rem;
+    border-bottom: 1px solid var(--c-border-light);
+    text-align: left;
+}
+
+.source-files-table th {
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.source-files-table code {
+    font-size: 0.7rem;
+    background: var(--c-bg-neutral);
+    padding: 0.05rem 0.2rem;
+    border-radius: 2px;
+}
+
+/* JSON tree toggle — collapsible <details> for the raw merged data */
+.integrated-json-tree {
+    margin-top: 0.5rem;
+}
+
+.integrated-json-tree summary {
+    font-size: 0.75rem;
+    color: var(--c-accent);
+    cursor: pointer;
+    user-select: none;
+}
+
+.integrated-json-tree summary:hover {
+    text-decoration: underline;
+}
+
+#integrated-json-container {
+    max-height: 400px;
+    overflow: auto;
+    margin-top: 0.3rem;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-sm);
+    padding: 0.3rem;
+    background: var(--c-bg-neutral);
+}
+
+
+/* ----------------------------------------------------------------
  * Animal Report — collapsible sections with brief summaries
  * ---------------------------------------------------------------- */
 
@@ -1938,3 +2022,77 @@ header p {
     padding-top: 0.5rem;
     border-top: 1px solid var(--c-border-light);
 }
+
+
+/* =================================================================
+ * Report view — NIEHS Report 10 styled print-ready document
+ *
+ * Scoped under .niehs-report so styles don't leak into the rest
+ * of the app.  Typography, colors, and table rules match the NIEHS
+ * Report 10 PDF (NBK589955) as closely as web fonts allow.
+ * ================================================================= */
+
+/* --- Report view wrapper — full-height container for the PDF viewer --- */
+/* Breaks out of .container max-width so the iframe can fill the
+   viewport, just like a native PDF viewer experience. */
+#report-view-section {
+    background: #525659;
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+}
+
+/* --- Report toolbar — button bar above the PDF viewer --- */
+.report-toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 0;
+    background: #3c3f41;
+    border-bottom: 1px solid #2a2d2f;
+    flex-shrink: 0;
+}
+.report-toolbar .btn-action {
+    background: #fff;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 5px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.report-toolbar .btn-action:hover { background: #f0f0f0; }
+.report-toolbar .btn-action.primary {
+    background: var(--c-primary);
+    color: #fff;
+    border-color: var(--c-primary);
+}
+.report-toolbar .btn-action.primary:hover {
+    background: var(--c-primary-hover);
+}
+
+/* --- Embedded PDF iframe — fills the remaining viewport height --- */
+.report-pdf-frame {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #525659;
+}
+
+/* --- Empty state — shown when no content has been generated yet --- */
+.report-empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+    font-size: 14px;
+    font-style: italic;
+}
+/* Hide iframe when showing empty state, hide empty state when PDF loaded */
+.report-empty-state.hidden { display: none; }
+.report-pdf-frame.hidden { display: none; }

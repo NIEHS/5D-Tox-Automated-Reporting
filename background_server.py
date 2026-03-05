@@ -29,6 +29,7 @@ Endpoints:
   POST /api/generate-methods                        — LLM-generate Materials and Methods from study params
   POST /api/generate-summary                        — LLM-generate Summary synthesizing all approved sections
   POST /api/export-docx                             — Export full report in NIEHS section order
+  POST /api/export-pdf                              — Export full report as tagged PDF/UA-1
   GET  /api/session/{dtxsid}                        — Load a previously-saved session (all section types)
   POST /api/session/approve                         — Approve (save) a report section
   POST /api/session/unapprove                       — Unapprove (delete) a report section
@@ -80,6 +81,7 @@ from file_integrator import (
     validate_pool,
     lightweight_validate,
 )
+from pool_integrator import integrate_pool
 from animal_report import (
     build_animal_report,
     report_to_dict,
@@ -158,6 +160,11 @@ _data_uploads: dict[str, dict] = {}
 # Populated when files are fingerprinted (on upload or validation request).
 # Persisted to disk as validation_report.json per session directory.
 _pool_fingerprints: dict[str, dict[str, FileFingerprint]] = {}
+
+# Maps dtxsid → merged BMDProject dict from pool integration.
+# Populated by /api/pool/integrate/{dtxsid} and persisted to
+# sessions/{dtxsid}/integrated.json for cross-session restore.
+_integrated_pool: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -2967,6 +2974,84 @@ async def api_export_docx(request: Request):
     )
 
 
+# ---------------------------------------------------------------------------
+# POST /api/export-pdf — export full report to tagged PDF/UA-1
+# ---------------------------------------------------------------------------
+
+@app.post("/api/export-pdf")
+async def api_export_pdf(request: Request):
+    """
+    Export the full 5dToxReport to a PDF/UA-1 compliant PDF file.
+
+    Accepts the same JSON payload as /api/export-docx for consistency.
+    Marshals the data into the Typst template schema and compiles it
+    using the Typst compiler (embedded Rust binary via typst-py).
+
+    The output PDF has:
+      - Full StructTreeRoot with H1-H3, P, Table/TH/TD/TR tags
+      - PDF/UA-1 identifier in XMP metadata
+      - /Lang set to "en" in the document catalog
+      - /MarkInfo << /Marked true >>
+      - Proper heading hierarchy matching NIEHS Report 10
+      - Running header and page numbers marked as Artifacts
+
+    Returns the PDF file as a downloadable attachment.
+    """
+    from report_pdf import build_report_pdf, marshal_export_data
+
+    body = await request.json()
+
+    # Resolve table_data for apical sections that reference uploaded .bm2 files.
+    # The web UI may send bm2_id references instead of inline table_data,
+    # so we need to look up the cached data from the upload store.
+    for sec in body.get("apical_sections", []):
+        if "table_data" not in sec or not sec["table_data"]:
+            bm2_id = sec.get("bm2_id", "")
+            upload = _bm2_uploads.get(bm2_id)
+            if upload and upload.get("table_data"):
+                sec["table_data"] = upload["table_data"]
+
+    # Also inject narrative from server cache if not provided inline
+    for sec in body.get("apical_sections", []):
+        if not sec.get("narrative_paragraphs"):
+            bm2_id = sec.get("bm2_id", "")
+            upload = _bm2_uploads.get(bm2_id)
+            if upload and upload.get("narrative"):
+                sec["narrative_paragraphs"] = upload["narrative"]
+
+    try:
+        # Marshal the DOCX-format payload into the Typst template schema
+        report_data = marshal_export_data(body)
+
+        # Compile to PDF/UA-1 — sub-second for typical report sizes
+        pdf_bytes = build_report_pdf(report_data)
+    except Exception as e:
+        logging.exception("PDF export failed")
+        return JSONResponse(
+            {"error": f"PDF generation failed: {e}"},
+            status_code=500,
+        )
+
+    # Write to a temp file for FileResponse
+    chemical_name = body.get("chemical_name", "Chemical")
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
+                        for c in chemical_name)
+    filename = f"5dToxReport_{safe_name}.pdf"
+
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".pdf", prefix="5dtox_",
+    )
+    tmp.write(pdf_bytes)
+    tmp.close()
+
+    return FileResponse(
+        tmp.name,
+        filename=filename,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _add_text_with_superscript_refs(paragraph, text: str) -> None:
     """
     Add text to a paragraph, converting [N] reference markers to superscript.
@@ -3208,6 +3293,327 @@ async def api_pool_resolve(request: Request):
     )
 
     return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/pool/integrate/{dtxsid} — merge files into unified BMDProject
+# ---------------------------------------------------------------------------
+# After validation + conflict resolution, this endpoint calls integrate_pool()
+# to select the best file per domain and merge all dose-response data into a
+# single BMDProject JSON.  The integrated structure is the unified source of
+# truth that drives all downstream section generation (tables + narratives).
+
+
+@app.post("/api/pool/integrate/{dtxsid}")
+async def api_pool_integrate(dtxsid: str):
+    """
+    Merge all pool files into a unified BMDProject JSON.
+
+    Reads fingerprints from _pool_fingerprints, coverage_matrix from the
+    persisted validation_report.json, and precedence decisions from
+    precedence.json.  Calls integrate_pool() to select the best file per
+    domain and produce the merged structure.
+
+    The result is stored both in-memory (_integrated_pool) and on disk
+    (sessions/{dtxsid}/integrated.json) for session restore.
+
+    Returns the full integrated BMDProject JSON, including a _meta block
+    with provenance: which file was chosen for each domain and why.
+    """
+    session_dir = _session_dir(dtxsid)
+    files_dir = session_dir / "files"
+    if not files_dir.exists():
+        return JSONResponse(
+            {"error": "No files directory found for this session"},
+            status_code=404,
+        )
+
+    # Load fingerprints — prefer in-memory, fall back to validation_report.json
+    fps = _pool_fingerprints.get(dtxsid, {})
+    if not fps:
+        report_path = session_dir / "validation_report.json"
+        if report_path.exists():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                fps = report.get("fingerprints", {})
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if not fps:
+        return JSONResponse(
+            {"error": "No fingerprints found — run validation first"},
+            status_code=400,
+        )
+
+    # Load the coverage matrix from the validation report
+    report_path = session_dir / "validation_report.json"
+    coverage_matrix: dict = {}
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            coverage_matrix = report.get("coverage_matrix", {})
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    if not coverage_matrix:
+        return JSONResponse(
+            {"error": "No coverage matrix found — run validation first"},
+            status_code=400,
+        )
+
+    # Load user precedence decisions (may be empty if no conflicts resolved)
+    precedence_path = session_dir / "precedence.json"
+    precedence: list[dict] = []
+    if precedence_path.exists():
+        try:
+            precedence = json.loads(precedence_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    # Run integration in a thread pool — xlsx parsing uses openpyxl (blocking I/O)
+    loop = asyncio.get_event_loop()
+    try:
+        integrated = await loop.run_in_executor(
+            None,
+            integrate_pool,
+            dtxsid,
+            str(session_dir),
+            fps,
+            coverage_matrix,
+            precedence,
+        )
+    except Exception as e:
+        logger.exception("Pool integration failed for %s", dtxsid)
+        return JSONResponse(
+            {"error": f"Integration failed: {e}"},
+            status_code=500,
+        )
+
+    # Cache in memory for the process-integrated endpoint
+    _integrated_pool[dtxsid] = integrated
+
+    return Response(
+        content=orjson.dumps(integrated),
+        media_type="application/json",
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/process-integrated/{dtxsid} — generate sections from integrated data
+# ---------------------------------------------------------------------------
+# Replaces per-file process-bm2 calls for the auto-processing flow.
+# Takes the unified BMDProject JSON and produces section cards (tables +
+# narratives) for every domain, ready for the UI to display.
+
+
+@app.post("/api/process-integrated/{dtxsid}")
+async def api_process_integrated(dtxsid: str, request: Request):
+    """
+    Process the integrated BMDProject JSON into section cards with tables
+    and narratives for each apical endpoint domain.
+
+    Input JSON:
+      {
+        "compound_name": "PFHxSAm",
+        "dose_unit": "mg/kg"
+      }
+
+    Loads the integrated JSON from _integrated_pool (in-memory) or from
+    sessions/{dtxsid}/integrated.json (disk fallback).  Calls
+    build_table_data() to run NTP stats on all experiments, then partitions
+    the results by domain for the UI's section cards.
+
+    Returns:
+      {
+        "sections": [
+          {
+            "domain": "body_weight",
+            "title": "Body Weight",
+            "tables_json": {"Male": [...], "Female": [...]},
+            "narrative": ["paragraph1", "paragraph2", ...]
+          },
+          ...
+        ]
+      }
+    """
+    body = await request.json()
+    compound_name = body.get("compound_name", "Test Compound")
+    dose_unit = body.get("dose_unit", "mg/kg")
+
+    # Load integrated data — prefer in-memory, fall back to disk
+    integrated = _integrated_pool.get(dtxsid)
+    if integrated is None:
+        integrated_path = _session_dir(dtxsid) / "integrated.json"
+        if integrated_path.exists():
+            try:
+                integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
+                _integrated_pool[dtxsid] = integrated
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if not integrated:
+        return JSONResponse(
+            {"error": "No integrated data found — run integration first"},
+            status_code=400,
+        )
+
+    try:
+        # Restore category lookup from the serialized pipe-separated keys.
+        # integrate_pool() stored this as _category_lookup with "prefix|endpoint"
+        # string keys; we restore them to (prefix, endpoint) tuple keys that
+        # build_table_data() expects.
+        from apical_report import build_table_data
+
+        flat_cat = integrated.get("_category_lookup", {})
+        cat_lookup: dict[tuple[str, str], dict] = {
+            tuple(k.split("|", 1)): v
+            for k, v in flat_cat.items()
+        }
+
+        loop = asyncio.get_event_loop()
+
+        # Run the NTP stats pipeline on all experiments in the integrated data.
+        # This is pure Python (no JVM) and typically takes <1s.
+        table_data = await loop.run_in_executor(
+            None, build_table_data, integrated, cat_lookup,
+        )
+
+        # --- Partition table rows by domain ---
+        # build_table_data() returns {"Male": [TableRow, ...], "Female": [...]}.
+        # We need to split these into per-domain sections so the UI can create
+        # separate section cards for body weight, organ weights, etc.
+        #
+        # Strategy: look at the experiment names in the integrated data to build
+        # a mapping of endpoint_name → domain, then partition the table rows.
+        from file_integrator import _BM2_DOMAIN_MAP, detect_domain
+
+        # Build experiment_name → domain mapping.
+        # Strategy: use _meta.source_files to know which experiment names
+        # belong to which domain.  Each source file contributed experiments
+        # whose names we can map back.  Also use detect_domain() on the
+        # experiment name itself as fallback.
+        exp_name_to_domain: dict[str, str] = {}
+
+        # First pass: use source_files metadata to build domain → filenames
+        meta = integrated.get("_meta", {})
+        source_files = meta.get("source_files", {})
+
+        for exp in integrated.get("doseResponseExperiments", []):
+            exp_name = exp.get("name", "")
+            exp_lower = exp_name.lower()
+
+            # Strip sex suffix/prefix for matching.
+            # IMPORTANT: strip "female" BEFORE "male" — "female" contains
+            # "male" as a substring, so stripping "male" first leaves "fe".
+            stripped = exp_lower.replace("female", "").replace("male", "").replace("_", "").strip()
+
+            domain_for_exp = None
+            for prefix, dom in _BM2_DOMAIN_MAP.items():
+                if stripped.startswith(prefix) or prefix.startswith(stripped):
+                    domain_for_exp = dom
+                    break
+
+            # Fallback: try detect_domain() which uses regex patterns.
+            # This handles abbreviated names like "clin_chem" that don't
+            # match the full BM2 prefix "clinicalchemistry".
+            if not domain_for_exp:
+                domain_for_exp = detect_domain(exp_name, "bm2", 0)
+
+            # Last resort: check if experiment name overlaps with source domain keys
+            if not domain_for_exp:
+                for dom in source_files:
+                    dom_key = dom.replace("_", "")
+                    if dom_key in exp_lower.replace("_", ""):
+                        domain_for_exp = dom
+                        break
+
+            if domain_for_exp:
+                exp_name_to_domain[exp_name] = domain_for_exp
+
+        # Build endpoint → domain map using the experiment mapping.
+        # Each probe/endpoint in an experiment inherits that experiment's domain.
+        endpoint_domain_map: dict[str, str] = {}
+        for exp in integrated.get("doseResponseExperiments", []):
+            exp_name = exp.get("name", "")
+            dom = exp_name_to_domain.get(exp_name)
+            if dom:
+                for pr in exp.get("probeResponses", []):
+                    probe_id = pr.get("probe", {}).get("id", "")
+                    if probe_id:
+                        # Key by (sex, probe_id) to avoid collisions when
+                        # the same endpoint name appears in different domains
+                        # (unlikely but possible for generic names like "Day")
+                        endpoint_domain_map[(exp_name, probe_id)] = dom
+
+        # Partition TableRows by domain, preserving sex grouping.
+        # build_table_data() groups by sex and uses probe_name as the label.
+        # We need to match back to the (exp_name, probe_id) key.
+        #
+        # Since build_table_data doesn't preserve the experiment name on
+        # TableRow, we build a secondary map: (sex, probe_name) → domain.
+        sex_probe_domain: dict[tuple[str, str], str] = {}
+        for (exp_name, probe_id), dom in endpoint_domain_map.items():
+            sex = "Female" if "female" in exp_name.lower() else \
+                  "Male" if "male" in exp_name.lower() else "Unknown"
+            sex_probe_domain[(sex, probe_id)] = dom
+
+        # Structure: {domain: {sex: [TableRow, ...]}}
+        domain_tables: dict[str, dict[str, list]] = {}
+        for sex, rows in table_data.items():
+            for row in rows:
+                dom = sex_probe_domain.get((sex, row.label), "unknown")
+                domain_tables.setdefault(dom, {}).setdefault(sex, []).append(row)
+
+        # Human-readable domain titles for section headers
+        _DOMAIN_TITLES = {
+            "body_weight":    "Body Weight",
+            "organ_weights":  "Organ Weights",
+            "clin_chem":      "Clinical Chemistry",
+            "hematology":     "Hematology",
+            "hormones":       "Hormones",
+            "tissue_conc":    "Tissue Concentration",
+            "clinical_obs":   "Clinical Observations",
+        }
+
+        # Build sections array: one per domain that has data
+        sections = []
+        for dom, sex_rows in sorted(domain_tables.items()):
+            # Serialize TableRow objects to JSON-friendly dicts
+            tables_json = {}
+            for sex, rows in sex_rows.items():
+                tables_json[sex] = []
+                for row in rows:
+                    sorted_doses = sorted(row.values_by_dose.keys())
+                    tables_json[sex].append({
+                        "label": row.label,
+                        "doses": sorted_doses,
+                        "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
+                        "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
+                        "bmd": row.bmd_str,
+                        "bmdl": row.bmdl_str,
+                        "trend_marker": row.trend_marker,
+                    })
+
+            # Generate narrative for this domain's data only
+            narrative = generate_results_narrative(
+                sex_rows, compound_name, dose_unit,
+            )
+
+            sections.append({
+                "domain": dom,
+                "title": _DOMAIN_TITLES.get(dom, dom.replace("_", " ").title()),
+                "tables_json": tables_json,
+                "narrative": narrative,
+            })
+
+        return JSONResponse({"sections": sections})
+
+    except Exception as e:
+        logger.exception("Processing integrated data failed for %s", dtxsid)
+        return JSONResponse(
+            {"error": f"Processing failed: {e}"},
+            status_code=500,
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -58,6 +58,8 @@ function toggleTabbedView() {
     if (tabbedViewActive) {
         container.classList.add('tabbed-view');
         btn.classList.add('active');
+        // Label tells the user what they'll switch TO on click
+        btn.textContent = 'Stacked View';
         // Expand all sections so content is visible inside tabs
         document.querySelectorAll('[data-collapsible]').forEach(
             s => s.classList.remove('collapsed')
@@ -66,6 +68,7 @@ function toggleTabbedView() {
     } else {
         container.classList.remove('tabbed-view');
         btn.classList.remove('active');
+        btn.textContent = 'Tabbed View';
         // Remove tab-active from all sections so normal display
         // rules (style="display:none" etc.) take over again
         document.querySelectorAll('[data-tab-section]').forEach(
@@ -113,7 +116,10 @@ function buildTabBar() {
     }
 }
 
-/* Switch to a specific tab — show that section, hide all others */
+/* Switch to a specific tab — show that section, hide all others.
+   When the Report tab is activated, lazily render the NIEHS-styled
+   document from current approval state (avoids re-rendering on every
+   approval change when the user isn't looking at the Report tab). */
 function activateTab(label) {
     document.querySelectorAll('[data-tab-section]').forEach(section => {
         if (section.getAttribute('data-tab-section') === label) {
@@ -128,6 +134,9 @@ function activateTab(label) {
     bar.querySelectorAll('button').forEach(btn => {
         btn.classList.toggle('active', btn.textContent === label);
     });
+
+    // Lazy-render the Report tab when the user switches to it
+    if (label === 'Report') renderReportTab();
 }
 
 
@@ -365,6 +374,7 @@ async function generateBackground() {
                     currentResult = JSON.parse(eventData);
                     displayResult(currentResult);
                     hideProgress();
+                    markReportDirty();
                 } else if (eventType === 'error') {
                     const data = JSON.parse(eventData);
                     showError(data.error);
@@ -905,6 +915,23 @@ async function runPoolValidation() {
         updateValidationSummary(report);
         updateFileStatusDots(report);
 
+        // --- Integration step: merge files into unified BMDProject ---
+        // After validation succeeds, automatically call the integrate endpoint
+        // to produce the merged BMDProject JSON.  This runs the file selection
+        // logic (bm2 > txt/csv > xlsx per domain, respecting user conflict
+        // resolutions) and merges all dose-response data into a single structure.
+        if (btn) btn.textContent = 'Integrating...';
+
+        const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, { method: 'POST' });
+        if (intResp.ok) {
+            integratedPoolData = await intResp.json();
+            renderIntegratedDataPreview(integratedPoolData);
+            showToast('Pool validated and integrated');
+        } else {
+            const intErr = await intResp.json().catch(() => ({}));
+            showToast(intErr.error || 'Integration failed — validation OK');
+        }
+
         // Show the Approve button so the user can sign off on the pool
         // and trigger the animal report generation.
         show('btn-approve-pool');
@@ -916,6 +943,74 @@ async function runPoolValidation() {
             btn.textContent = 'Validate & Integrate';
         }
     }
+}
+
+
+/**
+ * Render a collapsible preview of the integrated BMDProject data.
+ *
+ * Shows a summary of source files and experiment counts, plus a JSON tree
+ * browser so the user can inspect the merged data before approving.
+ * Rendered inline below the validation panel.
+ *
+ * @param {Object} data — the integrated BMDProject JSON from the server
+ */
+function renderIntegratedDataPreview(data) {
+    // Find or create the container
+    let container = document.getElementById('integrated-preview');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'integrated-preview';
+        container.className = 'integrated-preview';
+
+        // Insert after the validation body
+        const valBody = document.getElementById('validation-body');
+        if (valBody) valBody.appendChild(container);
+    }
+
+    const meta = data._meta || {};
+    const sources = meta.source_files || {};
+    const expCount = (data.doseResponseExperiments || []).length;
+    const bmdCount = (data.bMDResult || []).length;
+
+    // Build source files summary
+    const sourceRows = Object.entries(sources).map(([domain, info]) => {
+        const tierBadge = info.tier === 'bm2' ? '🔬 bm2' :
+                          info.tier === 'xlsx' ? '📊 xlsx' : '📄 ' + info.tier;
+        return `<tr>
+            <td>${domain.replace(/_/g, ' ')}</td>
+            <td><code>${info.filename}</code></td>
+            <td>${tierBadge}</td>
+            <td>${info.experiment_count || 0}</td>
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="integration-summary">
+            <h4>Integrated Data</h4>
+            <p>${expCount} experiments, ${bmdCount} BMD results from ${Object.keys(sources).length} domains</p>
+            <table class="source-files-table">
+                <thead><tr><th>Domain</th><th>Source file</th><th>Tier</th><th>Experiments</th></tr></thead>
+                <tbody>${sourceRows}</tbody>
+            </table>
+            <details class="integrated-json-tree">
+                <summary>Browse merged data (JSON tree)</summary>
+                <div id="integrated-json-container"></div>
+            </details>
+        </div>
+    `;
+
+    // Render the JSON tree on expand (lazy — avoids rendering thousands of nodes
+    // for large BMDProject structures until the user actually opens it)
+    const details = container.querySelector('details.integrated-json-tree');
+    details.addEventListener('toggle', function handler() {
+        if (details.open) {
+            const jsonContainer = document.getElementById('integrated-json-container');
+            if (jsonContainer && jsonContainer.children.length === 0) {
+                renderJsonTree(data, jsonContainer, 0, 1);
+            }
+        }
+    }, { once: false });
 }
 
 /**
@@ -1567,6 +1662,7 @@ async function processBm2(bm2Id) {
         show(`btn-retry-${bm2Id}`);
 
         showToast('Tables generated');
+        markReportDirty();
         updateExportButton();
 
     } catch (err) {
@@ -1658,6 +1754,42 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
         previewEl.innerHTML = '<p style="color:#6c757d;font-size:0.8rem;">No endpoint data found in this .bm2 file.</p>';
     }
 }
+
+/**
+ * Render pre-computed table data and narrative into a BM2 section card.
+ *
+ * This is the "already processed" counterpart of processBm2() — instead
+ * of hitting the server, it takes pre-computed results (from the integrated
+ * process-integrated endpoint) and populates the card's preview and
+ * narrative textarea directly.
+ *
+ * @param {string} sectionId   — the section ID (e.g., "integrated-body_weight")
+ * @param {Object} tablesJson  — {Male: [...], Female: [...]} table data
+ * @param {string[]} narrative — array of auto-generated paragraph strings
+ */
+function renderBm2Results(sectionId, tablesJson, narrative) {
+    // Populate the narrative textarea
+    const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
+    if (narrativeEl && narrative && narrative.length > 0) {
+        narrativeEl.value = narrative.join('\n\n');
+        autoResizeTextarea(narrativeEl);
+    }
+
+    // Determine dose unit from the card's input field
+    const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
+    const doseUnit = unitEl ? unitEl.value : 'mg/kg';
+
+    // Render the table preview
+    renderTablePreview(sectionId, tablesJson, doseUnit);
+
+    // Hide Process button, show Edit / Approve / Try Again buttons
+    const btn = document.getElementById(`btn-process-${sectionId}`);
+    if (btn) btn.style.display = 'none';
+    show(`btn-edit-${sectionId}`);
+    show(`btn-approve-${sectionId}`);
+    show(`btn-retry-${sectionId}`);
+}
+
 
 /**
  * Remove an uploaded .bm2 file card from the UI and delete it
@@ -1839,6 +1971,144 @@ async function exportDocx() {
     }
 }
 
+/**
+ * Export the report as a tagged PDF/UA-1 file via /api/export-pdf.
+ *
+ * Builds the same payload as exportDocx() (same JSON schema) and
+ * also includes table_data from apicalSections so the server can
+ * render the tables without needing to re-export .bm2 files.
+ * The server-side marshal_export_data() reshapes this into the
+ * Typst template schema and compiles it to PDF/UA-1.
+ */
+async function exportPdf() {
+    // Collect the same payload as DOCX export — identical data,
+    // different output format (the server handles the conversion).
+    const paragraphs = backgroundApproved ? extractProse('output-prose') : [];
+    const refsEl = document.getElementById('references-list');
+    const references = backgroundApproved
+        ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
+        : [];
+    const chemicalName = currentIdentity?.name || 'Chemical';
+
+    // Build apical sections — include table_data inline so the
+    // Typst template can render tables directly from the JSON.
+    const apicalPayload = [];
+    for (const [sectionId, info] of Object.entries(apicalSections)) {
+        if (!info.approved) continue;
+
+        const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
+        const narrativeText = narrativeEl?.value?.trim() || '';
+        const narrativeParagraphs = narrativeText
+            ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+            : [];
+
+        const serverFileId = info.fileId
+            ? (uploadedFiles[info.fileId]?.id || info.fileId)
+            : sectionId;
+
+        apicalPayload.push({
+            bm2_id: serverFileId,
+            section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
+                || 'Apical Endpoints',
+            table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
+                || '',
+            compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
+                || chemicalName,
+            dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
+                || 'mg/kg',
+            narrative_paragraphs: narrativeParagraphs,
+            // Include table_data inline — the PDF endpoint uses this
+            // directly instead of looking up cached .bm2 exports
+            table_data: info.tableData || {},
+        });
+    }
+
+    // Methods
+    let methodsPayload = {};
+    if (methodsApproved && methodsData && methodsData.sections) {
+        const editedSections = extractMethodsSections();
+        methodsPayload = {
+            sections: editedSections,
+            context: methodsData.context || {},
+        };
+    }
+    const methodsParas = (methodsApproved && !methodsPayload.sections)
+        ? extractProse('methods-prose') : [];
+
+    // BMD Summary
+    const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
+
+    // Genomics
+    const genomicsSecs = [];
+    for (const [key, gData] of Object.entries(genomicsResults)) {
+        if (gData.approved) {
+            genomicsSecs.push({
+                organ: gData.organ,
+                sex: gData.sex,
+                gene_sets: gData.gene_sets,
+                top_genes: gData.top_genes,
+                dose_unit: 'mg/kg',
+            });
+        }
+    }
+
+    // Summary
+    const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
+
+    // Also pass CASRN and DTXSID for the title block
+    const casrn = currentIdentity?.casrn || '';
+    const dtxsid = currentIdentity?.dtxsid || '';
+
+    const btn = document.getElementById('btn-export-pdf');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    try {
+        const resp = await fetch('/api/export-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paragraphs,
+                references,
+                chemical_name: chemicalName,
+                casrn,
+                dtxsid,
+                apical_sections: apicalPayload,
+                methods_data: methodsPayload.sections ? methodsPayload : null,
+                methods_paragraphs: methodsParas,
+                bmd_summary_endpoints: bmdSummaryEps,
+                genomics_sections: genomicsSecs,
+                summary_paragraphs: summaryParas,
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            showError(err.error || 'PDF export failed');
+            return;
+        }
+
+        // Download the PDF file
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `5dToxReport_${chemicalName.replace(/[^a-zA-Z0-9 _-]/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Downloaded tagged PDF (PDF/UA-1)');
+    } catch (err) {
+        showError('PDF export error: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Export PDF';
+    }
+}
+
+
 /* ================================================================
  * UI helper functions
  * ================================================================ */
@@ -1934,6 +2204,8 @@ async function approveBackground() {
         // Lock the section — make paragraphs and references non-editable,
         // add green "approved" border
         backgroundApproved = true;
+        markReportDirty();
+
         lockSection(document.getElementById('output-section'));
         hide('btn-approve-bg');
         show('btn-edit-bg');
@@ -1997,6 +2269,7 @@ async function retryBackground() {
 
     // Reset approval state and unlock the section for editing
     backgroundApproved = false;
+    markReportDirty();
     unlockSection(document.getElementById('output-section'));
     show('btn-approve-bg');
     hide('badge-bg');
@@ -2022,6 +2295,7 @@ async function retryBackground() {
 function editBackground() {
     // Unlock the section — re-enable editing on paragraphs and references
     backgroundApproved = false;
+    markReportDirty();
     unlockSection(document.getElementById('output-section'));
 
     // Show Approve button again, hide badge
@@ -2095,6 +2369,8 @@ async function approveBm2(bm2Id) {
 
         // Lock the card — make fields and narrative readonly, add green border
         info.approved = true;
+        markReportDirty();
+
         const card = document.getElementById(`bm2-card-${bm2Id}`);
         lockSection(card);
         hide(`btn-approve-${bm2Id}`);
@@ -2159,6 +2435,7 @@ async function retryBm2(bm2Id) {
 
     // Reset card state
     info.approved = false;
+    markReportDirty();
     info.processed = false;
     info.tableData = null;
     info.narrative = null;
@@ -2200,6 +2477,7 @@ function editBm2(bm2Id) {
 
     // Unlock narrative textarea, config fields, and remove green border
     info.approved = false;
+    markReportDirty();
     const card = document.getElementById(`bm2-card-${bm2Id}`);
     unlockSection(card);
 
@@ -2983,6 +3261,19 @@ async function restoreSession(data) {
         show('badge-pool');
     }
 
+    // --- Auto-process pending files if pool was approved but no sections exist ---
+    // This handles the case where a session was saved after pool approval
+    // but before the user processed individual files (e.g. browser closed).
+    // We only trigger if: (a) the pool is approved, (b) there are pending
+    // files, and (c) no bm2_sections or genomics_sections were already
+    // restored (meaning processing hasn't happened yet).
+    const hasBm2Sections = data.bm2_sections && Object.keys(data.bm2_sections).length > 0;
+    const hasGenomicsSections = data.genomics_sections && Object.keys(data.genomics_sections).length > 0;
+    if (animalReportApproved && data.pending_files?.length > 0
+        && !hasBm2Sections && !hasGenomicsSections) {
+        await autoProcessPool();
+    }
+
     updateExportButton();
 
     // Rebuild the tab bar so any newly-revealed sections get tabs
@@ -3169,6 +3460,22 @@ CHEM_ID_FIELDS.forEach(id => {
 // Restore saved values on page load
 restoreChemId();
 
+// Apply the default tabbed layout on page load.
+// tabbedViewActive is true by default in state.js, so we need to
+// set up the DOM to match: add the .tabbed-view class, mark the
+// toggle button as active, expand all sections, and build the tab bar.
+{
+    const container = document.querySelector('.container');
+    container.classList.add('tabbed-view');
+    const btn = document.getElementById('btn-tabbed-view');
+    btn.classList.add('active');
+    btn.textContent = 'Stacked View';
+    document.querySelectorAll('[data-collapsible]').forEach(
+        s => s.classList.remove('collapsed')
+    );
+    buildTabBar();
+}
+
 // Load the style profile on page init so existing rules are
 // visible immediately (e.g., after a page refresh)
 loadStyleProfile();
@@ -3243,6 +3550,7 @@ async function generateMethods() {
 
         // Render structured subsections with headings
         displayMethodsSections(result.sections, result.table1);
+        markReportDirty();
 
         // Show approve/edit buttons
         btn.style.display = 'none';
@@ -3445,6 +3753,7 @@ function extractMethodsSections() {
  */
 function editMethods() {
     methodsApproved = false;
+    markReportDirty();
     unlockSection(document.getElementById('methods-section'));
     hide('btn-edit-methods');
     show('btn-approve-methods');
@@ -3457,6 +3766,7 @@ function editMethods() {
  */
 function retryMethods() {
     methodsApproved = false;
+    markReportDirty();
     methodsData = null;
     unlockSection(document.getElementById('methods-section'));
     document.getElementById('methods-prose').innerHTML = '';
@@ -3513,6 +3823,7 @@ async function generateSummary() {
 
         summaryParagraphs = result.paragraphs;
         displayProse('summary-prose', result.paragraphs);
+        markReportDirty();
 
         btn.style.display = 'none';
         show('btn-approve-summary');
@@ -3528,6 +3839,7 @@ async function generateSummary() {
 
 function editSummary() {
     summaryApproved = false;
+    markReportDirty();
     unlockSection(document.getElementById('summary-section'));
     hide('btn-edit-summary');
     show('btn-approve-summary');
@@ -3537,6 +3849,7 @@ function editSummary() {
 
 function retrySummary() {
     summaryApproved = false;
+    markReportDirty();
     unlockSection(document.getElementById('summary-section'));
     document.getElementById('summary-prose').innerHTML = '';
     show('btn-generate-summary');
@@ -3596,12 +3909,152 @@ async function approvePool() {
         showToast('Pool approved — animal report generated');
         updateExportButton();
 
+        // Auto-create and process all sections from fingerprint data
+        // so the user doesn't have to manually use the Section Builder.
+        await autoProcessPool();
+
     } catch (e) {
         showError('Animal report generation failed: ' + e.message);
     } finally {
         btn.disabled = false;
         btn.textContent = 'Approve';
     }
+}
+
+
+/**
+ * Auto-process all files in the upload pool after pool approval.
+ *
+ * Why this exists: after the user validates and approves the file pool,
+ * the fingerprint data already tells us everything we need (file type,
+ * domain, organ, sex, dose unit) to create and process every section
+ * automatically.  This removes the tedious step of manually using the
+ * Section Builder for each file.
+ *
+ * For each file in `uploadedFiles`:
+ *   - BM2 files with non-gene-expression domain → create an apical card
+ *     (createBm2Card) with config pre-filled from fingerprint, then call
+ *     processBm2() to hit the server and generate tables + narrative.
+ *   - CSV/TXT files with domain "gene_expression" → call processCsv()
+ *     once per sex found in the fingerprint's sexes array.
+ *
+ * Processing is sequential to avoid UI race conditions (each processBm2
+ * and processCsv is async and manipulates shared DOM / state).
+ *
+ * Data sources (all available at approval time):
+ *   - uploadedFiles        — file IDs, filenames, types
+ *   - lastValidationReport — fingerprints per file (domain, organ, sexes, dose_unit)
+ *   - currentIdentity      — chemical name for compound field
+ */
+async function autoProcessPool() {
+    // Fingerprint map from the last validation run — keyed by file ID.
+    // Without fingerprints we can't determine section types, so bail out.
+    const fingerprints = lastValidationReport?.fingerprints || {};
+    if (Object.keys(fingerprints).length === 0) return;
+
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    // Show the results sections so cards have a container to land in
+    show('bm2-results-section');
+    show('section-builder');
+    if (tabbedViewActive) buildTabBar();
+
+    // --- Apical endpoint processing: single integrated call ---
+    // Instead of processing each .bm2 file individually, call the
+    // process-integrated endpoint which runs NTP stats on the unified
+    // BMDProject and returns pre-computed sections for every domain.
+    const compoundName = currentIdentity?.name || 'Test Compound';
+
+    // Determine dose unit from fingerprints — pick the first one available
+    let doseUnit = 'mg/kg';
+    for (const fp of Object.values(fingerprints)) {
+        if (fp.dose_unit) { doseUnit = fp.dose_unit; break; }
+    }
+
+    try {
+        const resp = await fetch(`/api/process-integrated/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                compound_name: compoundName,
+                dose_unit: doseUnit,
+            }),
+        });
+
+        if (resp.ok) {
+            const result = await resp.json();
+            const sections = result.sections || [];
+
+            // Create a section card for each domain returned by the server
+            for (const section of sections) {
+                const sectionId = 'integrated-' + section.domain;
+
+                // Skip if already created (idempotent)
+                if (apicalSections[sectionId]) continue;
+
+                // Register in state
+                apicalSections[sectionId] = {
+                    fileId:            null,   // not tied to a single file
+                    filename:          section.title,
+                    processed:         true,
+                    approved:          false,
+                    tableData:         section.tables_json,
+                    narrative:         section.narrative,
+                    originalNarrative: (section.narrative || []).join('\n\n'),
+                    domain:            section.domain,
+                };
+
+                // Create the visual card and populate it
+                createBm2Card(sectionId, section.title);
+
+                // Pre-fill the dose unit and compound fields
+                const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
+                if (unitEl) unitEl.value = doseUnit;
+                const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
+                if (compoundEl) compoundEl.value = compoundName;
+
+                // Render the table data and narrative directly (no processBm2 call)
+                renderBm2Results(sectionId, section.tables_json, section.narrative);
+            }
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Integrated processing failed');
+        }
+    } catch (e) {
+        showToast('Integrated processing failed: ' + e.message);
+    }
+
+    // --- Gene expression: still processed per-file ---
+    // Gene expression files aren't part of the apical integration because
+    // they use a completely different analysis pipeline (gene set enrichment).
+    for (const [fileId, file] of Object.entries(uploadedFiles)) {
+        if (file.restored || file.fromSession) continue;
+
+        const fp = fingerprints[fileId];
+        if (!fp || fp.domain !== 'gene_expression') continue;
+
+        const organ = fp.organ || '';
+        const sexes = fp.sexes || [];
+
+        for (const sex of sexes) {
+            const key = `${organ}_${sex}`;
+            if (genomicsResults[key]) continue;
+            await processCsv(fileId, organ, sex);
+        }
+    }
+
+    // Show the genomics section if any genomics results were created
+    if (Object.keys(genomicsResults).length > 0) {
+        show('genomics-results-section');
+    }
+
+    // Show the summary section now that sections exist
+    showSummarySection();
+
+    // Rebuild tabs to include any newly-created sections
+    if (tabbedViewActive) buildTabBar();
+    updateExportButton();
 }
 
 
@@ -3869,10 +4322,13 @@ async function processCsv(fileId, organ, sex) {
     const file = uploadedFiles[fileId];
     const serverCsvId = file?.id || fileId;
 
-    // Disable the Add & Process button while processing
+    // Disable the Add & Process button while processing (may be null
+    // if called from autoProcessPool before Section Builder is rendered)
     const addBtn = document.getElementById('btn-add-section');
-    addBtn.disabled = true;
-    addBtn.textContent = 'Processing...';
+    if (addBtn) {
+        addBtn.disabled = true;
+        addBtn.textContent = 'Processing...';
+    }
 
     try {
         const compound = currentIdentity?.name || 'Test Compound';
@@ -3908,6 +4364,7 @@ async function processCsv(fileId, organ, sex) {
         // Show genomics results section
         show('genomics-results-section');
         if (tabbedViewActive) buildTabBar();
+        markReportDirty();
 
         // Also show the summary section now that we have genomics
         showSummarySection();
@@ -3915,8 +4372,10 @@ async function processCsv(fileId, organ, sex) {
     } catch (e) {
         showError('Genomics processing failed: ' + e.message);
     } finally {
-        addBtn.disabled = false;
-        addBtn.textContent = 'Add & Process';
+        if (addBtn) {
+            addBtn.disabled = false;
+            addBtn.textContent = 'Add & Process';
+        }
     }
 }
 
@@ -4041,6 +4500,8 @@ async function approveGenomics(key) {
         const result = await resp.json();
         if (result.ok) {
             genomicsResults[key].approved = true;
+            markReportDirty();
+    
             const card = document.getElementById(`genomics-card-${key}`);
             lockSection(card);
             hide(`btn-approve-genomics-${key}`);
@@ -4056,6 +4517,7 @@ async function approveGenomics(key) {
 
 function editGenomics(key) {
     genomicsResults[key].approved = false;
+    markReportDirty();
     const card = document.getElementById(`genomics-card-${key}`);
     unlockSection(card);
     show(`btn-approve-genomics-${key}`);
@@ -4066,6 +4528,7 @@ function editGenomics(key) {
 
 function retryGenomics(key) {
     // Remove the card — user needs to re-process the CSV
+    markReportDirty();
     const card = document.getElementById(`genomics-card-${key}`);
     if (card) card.remove();
     delete genomicsResults[key];
@@ -4093,6 +4556,7 @@ async function loadBmdSummary() {
             show('bmd-summary-section');
             document.getElementById('bmd-summary-section').classList.add('visible');
             if (tabbedViewActive) buildTabBar();
+            markReportDirty();
         }
     } catch (e) {
         // BMD summary is optional — don't show error
@@ -4216,6 +4680,10 @@ async function approveSection(sectionType) {
                 show('btn-retry-summary');
                 show('badge-summary');
             }
+
+            // Update the Report tab — mark dirty and ensure it's visible
+            markReportDirty();
+    
 
             if (result.user_edited) {
                 showToast('Approved (style learning triggered)');
@@ -4834,4 +5302,241 @@ function renderXlsxPreview(data, container) {
    (Old MutationObserver that showed #genomics-upload-section deleted —
    the unified file pool + section builder are shown directly by
    displayResult() when background generation completes.) */
+
+
+/* =================================================================
+ * Report tab — NIEHS-styled read-only aggregation view
+ *
+ * Assembles all approved report sections into a single flowing HTML
+ * document styled to match the NIEHS Report 10 PDF (NBK589955).
+ * Designed for window.print() / "Save as PDF" output.
+ *
+ * renderReportTab() is called lazily when the Report tab is activated,
+ * and re-called whenever approval state changes while the tab is visible.
+ * ================================================================= */
+
+/* --- Dirty flag: set true when any approval changes so the Report
+       tab re-renders on next activation.  Prevents unnecessary DOM
+       thrashing when the user is on other tabs. --- */
+let reportDirty = true;
+
+/* showReportTab() removed — the Report tab is always visible in the
+   tab bar.  renderReportTab() handles the empty state with a
+   placeholder message when no sections are approved yet. */
+
+/**
+ * Mark the report as needing a re-render.  Called from every
+ * approve/unapprove action so the next tab switch picks up changes.
+ */
+function markReportDirty() {
+    reportDirty = true;
+    // Don't auto-refresh the PDF preview on every change — it requires
+    // a server round-trip to compile.  The user clicks "Refresh" to update.
+}
+
+/**
+ * Render the Report tab by compiling a real PDF on the server and
+ * displaying it in the browser's native PDF viewer via an iframe.
+ *
+ * Collects all generated section data (same payload as exportPdf),
+ * POSTs to /api/export-pdf, receives the compiled PDF/UA-1 bytes,
+ * and sets the iframe src to a blob URL.  The browser's built-in
+ * PDF renderer handles pages, zoom, scrolling, and text selection.
+ */
+/**
+ * Track the current PDF blob URL so we can revoke it when a new
+ * PDF is loaded (prevents memory leaks from accumulating blob URLs).
+ */
+let currentPdfBlobUrl = null;
+
+async function renderReportTab() {
+    // Skip re-render if nothing changed since last render
+    if (!reportDirty) return;
+    reportDirty = false;
+
+    const emptyEl = document.getElementById('report-empty');
+    const iframe = document.getElementById('report-pdf-frame');
+
+    // --- Check if any section has generated content ---
+    const bgProseEl = document.getElementById('output-prose');
+    const hasBg = bgProseEl && bgProseEl.textContent.trim().length > 0;
+    const hasMethods = methodsData && methodsData.sections && methodsData.sections.length > 0;
+    const methodsProseEl = document.getElementById('methods-prose');
+    const hasMethodsProse = methodsProseEl && methodsProseEl.textContent.trim().length > 0;
+    const hasApical = Object.values(apicalSections).some(s => s.tableData);
+    const hasBmd = bmdSummaryEndpoints.length > 0;
+    const hasGenomics = Object.values(genomicsResults).some(g => g.gene_sets || g.top_genes);
+    const summaryProseEl = document.getElementById('summary-prose');
+    const hasSummary = summaryProseEl && summaryProseEl.textContent.trim().length > 0;
+
+    const hasAnyContent = hasBg || hasMethods || hasMethodsProse ||
+        hasApical || hasBmd || hasGenomics || hasSummary;
+
+    if (!hasAnyContent) {
+        emptyEl.classList.remove('hidden');
+        iframe.classList.add('hidden');
+        return;
+    }
+
+    // --- Compile the real PDF on the server and display it ---
+    await compilePdfPreview();
+}
+
+
+/**
+ * Compile the PDF via /api/export-pdf and display it in the iframe.
+ *
+ * Collects all generated section data (same payload as exportPdf but
+ * includes non-approved content too), POSTs to the server, receives
+ * the compiled PDF/UA-1 bytes, creates a blob URL, and sets the
+ * iframe src.  The browser's native PDF renderer handles everything:
+ * pages, zoom, scrolling, text selection, accessibility.
+ */
+async function compilePdfPreview() {
+    const emptyEl = document.getElementById('report-empty');
+    const iframe = document.getElementById('report-pdf-frame');
+    const refreshBtn = document.getElementById('btn-refresh-report');
+
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = 'Compiling...';
+    }
+
+    try {
+        // --- Collect all generated content (not just approved) ---
+        const chemicalName = currentIdentity?.name || 'Chemical';
+        const casrn = currentIdentity?.casrn || '';
+        const dtxsid = currentIdentity?.dtxsid || '';
+
+        // Background paragraphs
+        const paragraphs = extractProse('output-prose');
+
+        // References
+        const refsEl = document.getElementById('references-list');
+        const references = refsEl
+            ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
+            : [];
+
+        // Apical sections — include all with table data, not just approved
+        const apicalPayload = [];
+        for (const [sectionId, info] of Object.entries(apicalSections)) {
+            if (!info.tableData) continue;
+
+            const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
+            const narrativeText = narrativeEl?.value?.trim() || '';
+            const narrativeParagraphs = narrativeText
+                ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+                : [];
+
+            const serverFileId = info.fileId
+                ? (uploadedFiles[info.fileId]?.id || info.fileId)
+                : sectionId;
+
+            apicalPayload.push({
+                bm2_id: serverFileId,
+                section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
+                    || 'Apical Endpoints',
+                table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
+                    || '',
+                compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
+                    || chemicalName,
+                dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
+                    || 'mg/kg',
+                narrative_paragraphs: narrativeParagraphs,
+                table_data: info.tableData || {},
+            });
+        }
+
+        // Methods — include if generated (structured or flat)
+        let methodsPayload = null;
+        const methodsParas = [];
+        if (methodsData && methodsData.sections && methodsData.sections.length > 0) {
+            const editedSections = typeof extractMethodsSections === 'function'
+                ? extractMethodsSections() : methodsData.sections;
+            methodsPayload = {
+                sections: editedSections,
+                context: methodsData.context || {},
+            };
+        } else {
+            const mp = extractProse('methods-prose');
+            if (mp.length > 0) methodsParas.push(...mp);
+        }
+
+        // BMD Summary
+        const bmdSummaryEps = bmdSummaryEndpoints;
+
+        // Genomics — include all with data, not just approved
+        const genomicsSecs = [];
+        for (const [key, gData] of Object.entries(genomicsResults)) {
+            if (gData.gene_sets || gData.top_genes) {
+                genomicsSecs.push({
+                    organ: gData.organ,
+                    sex: gData.sex,
+                    gene_sets: gData.gene_sets,
+                    top_genes: gData.top_genes,
+                    dose_unit: 'mg/kg',
+                });
+            }
+        }
+
+        // Summary
+        const summaryParas = extractProse('summary-prose');
+
+        // --- POST to server for Typst compilation ---
+        const resp = await fetch('/api/export-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paragraphs,
+                references,
+                chemical_name: chemicalName,
+                casrn,
+                dtxsid,
+                apical_sections: apicalPayload,
+                methods_data: methodsPayload,
+                methods_paragraphs: methodsParas,
+                bmd_summary_endpoints: bmdSummaryEps,
+                genomics_sections: genomicsSecs,
+                summary_paragraphs: summaryParas,
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: 'PDF compilation failed' }));
+            showError(err.error || 'PDF compilation failed');
+            return;
+        }
+
+        // --- Display the PDF in the iframe ---
+        const blob = await resp.blob();
+
+        // Revoke the previous blob URL to free memory
+        if (currentPdfBlobUrl) {
+            URL.revokeObjectURL(currentPdfBlobUrl);
+        }
+        currentPdfBlobUrl = URL.createObjectURL(blob);
+
+        iframe.src = currentPdfBlobUrl;
+        iframe.classList.remove('hidden');
+        emptyEl.classList.add('hidden');
+
+    } catch (err) {
+        showError('PDF preview error: ' + err.message);
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = 'Refresh';
+        }
+    }
+}
+
+
+/**
+ * Manual refresh button handler — forces a re-compile of the PDF
+ * preview from the current state of all generated sections.
+ */
+async function refreshReportPreview() {
+    reportDirty = true;
+    await renderReportTab();
+}
 

@@ -13,8 +13,9 @@
 
 // --- UI mode ---
 // Whether the tabbed (vs. stacked) layout is active.
-// Toggled by toggleTabbedView() in main.js.
-let tabbedViewActive = false;
+// Defaults to true — tabs are the primary layout.  The user can
+// toggle back to the stacked (scrollable) view via the toolbar button.
+let tabbedViewActive = true;
 
 
 // --- Chemical identity ---
@@ -89,6 +90,13 @@ const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac', 'model-
 let animalReportApproved = false;
 // Cached animal report data from /api/generate-animal-report/{dtxsid}.
 let animalReportData = null;
+
+
+// --- Integrated pool data ---
+// Holds the merged BMDProject JSON from /api/pool/integrate/{dtxsid}.
+// Set after validation + integration, consumed by autoProcessPool() to
+// generate section cards from the unified data.
+let integratedPoolData = null;
 
 
 // --- Preview modal state ---

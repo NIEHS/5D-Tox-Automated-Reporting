@@ -299,6 +299,25 @@
             </div><!-- /section-body -->
         </div>
 
+        <!-- Report view — NIEHS-styled read-only aggregation of all approved
+             sections into a single print-ready document.  Hidden until at least
+             one section is approved; shown as a tab in the tab bar.  Content is
+             lazily rendered by renderReportTab() in main.js when the tab is
+             activated, and re-rendered when approval state changes. -->
+        <section data-tab-section="Report" id="report-view-section">
+            <div class="report-toolbar">
+                <button onclick="exportPdf()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
+                <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
+            </div>
+            <!-- Embedded PDF viewer — displays the real compiled PDF/UA-1
+                 from the Typst pipeline.  The iframe uses the browser's
+                 native PDF renderer (Chrome/Edge/Firefox all have one). -->
+            <div id="report-empty" class="report-empty-state">
+                <p>No sections generated yet. Generate sections to build the report.</p>
+            </div>
+            <iframe id="report-pdf-frame" class="report-pdf-frame"></iframe>
+        </section>
+
         <!-- Error panel -->
         <div class="error-panel" id="error-panel"></div>
 
