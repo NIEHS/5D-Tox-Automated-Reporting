@@ -463,11 +463,7 @@ function displayResult(result) {
     currentResult.originalReferences = [...(result.references || [])];
 
     // Show action buttons (they're hidden until generation).
-    // Edit is always visible so the user can modify text at any time.
-    show('btn-edit-bg');
-    show('btn-approve-bg');
-    show('btn-retry-bg');
-    hide('badge-bg');
+    setButtons('bg', 'result');
 
     // Reset approval state — new generation means unapproved
     backgroundApproved = false;
@@ -2157,88 +2153,54 @@ function onIdentityResolved() {
  * and show the green "Approved" visual state.
  */
 async function approveBackground() {
-    if (!currentIdentity?.dtxsid) {
-        showError('Resolve a chemical identity (with DTXSID) before approving.');
-        return;
-    }
-
     // Collect current editable text (user may have polished it)
     const refsEl = document.getElementById('references-list');
     const paragraphs = extractProse('output-prose');
     const references = Array.from(refsEl.querySelectorAll('div'))
         .map(div => div.textContent.trim());
 
-    try {
-        const resp = await fetch('/api/session/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dtxsid: currentIdentity.dtxsid,
-                identity: currentIdentity,
-                section_type: 'background',
-                data: {
-                    paragraphs,
-                    references,
-                    // Include originals so the server can detect edits
-                    // and extract writing style rules from the diff
-                    original_paragraphs: currentResult?.originalParagraphs || [],
-                    original_references: currentResult?.originalReferences || [],
-                    model_used: currentResult?.model_used || '',
-                    notes: currentResult?.notes || [],
-                },
-            }),
-        });
+    const result = await postApproveToServer(
+        'background',
+        document.getElementById('output-section'),
+        'bg',
+        {
+            paragraphs,
+            references,
+            // Include originals so the server can detect edits
+            // and extract writing style rules from the diff
+            original_paragraphs: currentResult?.originalParagraphs || [],
+            original_references: currentResult?.originalReferences || [],
+            model_used: currentResult?.model_used || '',
+            notes: currentResult?.notes || [],
+        },
+    );
+    if (!result) return;
 
-        if (!resp.ok) {
-            const err = await resp.json();
-            showError(err.error || 'Approve failed');
-            return;
-        }
+    backgroundApproved = true;
 
-        const result = await resp.json();
-
-        // Lock the section — make paragraphs and references non-editable,
-        // add green "approved" border
-        backgroundApproved = true;
-        markReportDirty();
-
-        lockSection(document.getElementById('output-section'));
-        hide('btn-approve-bg');
-        show('btn-edit-bg');
-
-        const badge = document.getElementById('badge-bg');
-        badge.style.display = '';
-
-        // If the user edited the text, show a blue "Approved (edited)"
-        // badge and a toast indicating style learning is in progress
-        if (result.user_edited) {
-            badge.textContent = 'Approved (edited)';
-            badge.classList.add('edited');
-            showToast('Approved — learning from your edits...');
-            // Reload style profile after a short delay (extraction
-            // runs asynchronously on the server)
-            setTimeout(() => loadStyleProfile(), 3000);
-        } else {
-            badge.textContent = 'Approved';
-            badge.classList.remove('edited');
-            showToast('Background approved');
-        }
-
-        updateExportButton();
-
-        // Show version history button with the server-assigned version number
-        showVersionHistory('background', result.version);
-
-        // Show the Materials and Methods section now that background
-        // is approved — it appears between Background and Results
-        showMethodsSection();
-
-        // Also show the Summary section — it synthesizes all sections
-        showSummarySection();
-
-    } catch (err) {
-        showError('Approve error: ' + err.message);
+    // If the user edited the text, show a blue "Approved (edited)"
+    // badge and a toast indicating style learning is in progress
+    const badge = document.getElementById('badge-bg');
+    if (result.user_edited) {
+        badge.textContent = 'Approved (edited)';
+        badge.classList.add('edited');
+        // Reload style profile after a short delay (extraction
+        // runs asynchronously on the server)
+        setTimeout(() => loadStyleProfile(), 3000);
+    } else {
+        badge.textContent = 'Approved';
+        badge.classList.remove('edited');
     }
+
+    // Show version history button with the server-assigned version number
+    showVersionHistory('background', result.version);
+
+    // Show the Materials and Methods section now that background
+    // is approved — it appears between Background and Results
+    showMethodsSection();
+
+    // Also show the Summary section — it synthesizes all sections
+    showSummarySection();
 }
 
 /**
@@ -2267,8 +2229,7 @@ async function retryBackground() {
     backgroundApproved = false;
     markReportDirty();
     unlockSection(document.getElementById('output-section'));
-    show('btn-approve-bg');
-    hide('badge-bg');
+    setButtons('bg', 'editing');
 
     // Hide version history — regenerating from scratch
     hideVersionHistory('background');
@@ -2293,11 +2254,7 @@ function editBackground() {
     backgroundApproved = false;
     markReportDirty();
     unlockSection(document.getElementById('output-section'));
-
-    // Show Approve button again, hide badge
-    show('btn-approve-bg');
-    hide('badge-bg');
-
+    setButtons('bg', 'editing');
     updateExportButton();
     showToast('Editing enabled — click Approve when done');
 }
@@ -2343,63 +2300,34 @@ async function approveBm2(bm2Id) {
         original_narrative: info.originalNarrative || '',
     };
 
-    try {
-        const resp = await fetch('/api/session/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                dtxsid: currentIdentity.dtxsid,
-                identity: currentIdentity,
-                section_type: 'bm2',
-                data,
-            }),
-        });
+    const result = await postApproveToServer(
+        'bm2',
+        document.getElementById(`bm2-card-${bm2Id}`),
+        bm2Id,
+        data,
+    );
+    if (!result) return;
 
-        if (!resp.ok) {
-            const err = await resp.json();
-            showError(err.error || 'Approve failed');
-            return;
-        }
+    info.approved = true;
 
-        const result = await resp.json();
-
-        // Lock the card — make fields and narrative readonly, add green border
-        info.approved = true;
-        markReportDirty();
-
-        const card = document.getElementById(`bm2-card-${bm2Id}`);
-        lockSection(card);
-        hide(`btn-approve-${bm2Id}`);
-        show(`btn-edit-${bm2Id}`);
-
-        const badge = document.getElementById(`badge-${bm2Id}`);
-        badge.style.display = '';
-
-        // If the user edited the narrative, show blue "Approved (edited)"
-        // badge and trigger style profile reload after extraction completes
-        if (result.user_edited) {
-            badge.textContent = 'Approved (edited)';
-            badge.classList.add('edited');
-            showToast(`${info.filename} approved — learning from your edits...`);
-            setTimeout(() => loadStyleProfile(), 3000);
-        } else {
-            badge.textContent = 'Approved';
-            badge.classList.remove('edited');
-            showToast(`${info.filename} approved`);
-        }
-
-        updateExportButton();
-
-        // Show version history button with the server-assigned version number
-        showVersionHistory('bm2', result.version, bm2Id);
-
-        // After approving a .bm2 section, load the BMD summary table.
-        // This auto-derives LOEL/NOEL from all approved apical sections.
-        loadBmdSummary();
-
-    } catch (err) {
-        showError('Approve error: ' + err.message);
+    // If the user edited the narrative, show blue "Approved (edited)"
+    // badge and trigger style profile reload after extraction completes
+    const badge = document.getElementById(`badge-${bm2Id}`);
+    if (result.user_edited) {
+        badge.textContent = 'Approved (edited)';
+        badge.classList.add('edited');
+        setTimeout(() => loadStyleProfile(), 3000);
+    } else {
+        badge.textContent = 'Approved';
+        badge.classList.remove('edited');
     }
+
+    // Show version history button with the server-assigned version number
+    showVersionHistory('bm2', result.version, bm2Id);
+
+    // After approving a .bm2 section, load the BMD summary table.
+    // This auto-derives LOEL/NOEL from all approved apical sections.
+    loadBmdSummary();
 }
 
 /**
@@ -2448,14 +2376,11 @@ async function retryBm2(bm2Id) {
     const previewEl = document.getElementById(`bm2-preview-${bm2Id}`);
     if (previewEl) previewEl.innerHTML = '';
 
-    // Show Process button, hide Approve / Try Again / badge
+    // Show Process button, hide all approve/edit/retry/badge buttons
     show(`btn-process-${bm2Id}`);
     document.getElementById(`btn-process-${bm2Id}`).disabled = false;
     document.getElementById(`btn-process-${bm2Id}`).textContent = 'Process';
-    hide(`btn-edit-${bm2Id}`);
-    hide(`btn-approve-${bm2Id}`);
-    hide(`btn-retry-${bm2Id}`);
-    hide(`badge-${bm2Id}`);
+    setButtons(bm2Id, 'hidden');
 
     updateExportButton();
     showToast(`${info.filename} — ready to reprocess`);
@@ -2476,11 +2401,7 @@ function editBm2(bm2Id) {
     markReportDirty();
     const card = document.getElementById(`bm2-card-${bm2Id}`);
     unlockSection(card);
-
-    // Show Approve button again, hide badge
-    show(`btn-approve-${bm2Id}`);
-    hide(`badge-${bm2Id}`);
-
+    setButtons(bm2Id, 'editing');
     updateExportButton();
     showToast('Editing enabled — click Approve when done');
 }
@@ -2985,10 +2906,7 @@ async function restoreSession(data) {
         // Now lock it as approved — disable editing and add green border
         backgroundApproved = true;
         lockSection(document.getElementById('output-section'));
-        hide('btn-approve-bg');
-        show('btn-edit-bg');
-        show('btn-retry-bg');
-        show('badge-bg');
+        setButtons('bg', 'approved');
 
         // Show version history with the version from the saved data
         showVersionHistory('background', bg.version || 1);
@@ -3073,12 +2991,9 @@ async function restoreSession(data) {
             const card = document.getElementById(`bm2-card-${sectionId}`);
             lockSection(card);
 
-            // Hide Process button, show badge + Edit + Try Again
+            // Hide Process button, show approved state (Edit + Try Again + badge)
             hide(`btn-process-${sectionId}`);
-            hide(`btn-approve-${sectionId}`);
-            show(`btn-edit-${sectionId}`);
-            show(`btn-retry-${sectionId}`);
-            show(`badge-${sectionId}`);
+            setButtons(sectionId, 'approved');
 
             // Show version history with the version from the saved data
             showVersionHistory('bm2', section.version || 1, sectionId);
@@ -3157,10 +3072,7 @@ async function restoreSession(data) {
         methodsApproved = true;
         lockSection(document.getElementById('methods-section'));
         hide('btn-generate-methods');
-        hide('btn-approve-methods');
-        show('btn-edit-methods');
-        show('btn-retry-methods');
-        show('badge-methods');
+        setButtons('methods', 'approved');
     } else if (backgroundApproved) {
         // Show methods section even if not yet generated
         showMethodsSection();
@@ -3176,8 +3088,7 @@ async function restoreSession(data) {
             document.getElementById('bmd-summary-section').classList.add('visible');
             bmdSummaryApproved = true;
             lockSection(document.getElementById('bmd-summary-section'));
-            hide('btn-approve-bmd-summary');
-            show('badge-bmd-summary');
+            setButtons('bmd-summary', 'approved');
         }
     }
 
@@ -3219,10 +3130,7 @@ async function restoreSession(data) {
             const card = document.getElementById(`genomics-card-${key}`);
             if (card) {
                 lockSection(card);
-                hide(`btn-approve-genomics-${key}`);
-                show(`btn-edit-genomics-${key}`);
-                show(`btn-retry-genomics-${key}`);
-                show(`badge-genomics-${key}`);
+                setButtons(`genomics-${key}`, 'approved');
             }
         }
     }
@@ -3237,10 +3145,7 @@ async function restoreSession(data) {
         summaryApproved = true;
         lockSection(document.getElementById('summary-section'));
         hide('btn-generate-summary');
-        hide('btn-approve-summary');
-        show('btn-edit-summary');
-        show('btn-retry-summary');
-        show('badge-summary');
+        setButtons('summary', 'approved');
     } else if (backgroundApproved) {
         showSummarySection();
     }
@@ -3253,8 +3158,7 @@ async function restoreSession(data) {
         animalReportData = data.animal_report;
         animalReportApproved = true;
         renderAnimalReport(animalReportData);
-        hide('btn-approve-pool');
-        show('badge-pool');
+        setButtons('pool', 'approved');
     }
 
     // --- Auto-process pending files if pool was approved but no sections exist ---
@@ -3548,10 +3452,9 @@ async function generateMethods() {
         displayMethodsSections(result.sections, result.table1);
         markReportDirty();
 
-        // Show approve/edit buttons
+        // Show approve/retry buttons (hide Generate)
         btn.style.display = 'none';
-        show('btn-approve-methods');
-        show('btn-retry-methods');
+        setButtons('methods', 'result');
 
     } catch (e) {
         showError('Methods generation failed: ' + e.message);
@@ -3668,40 +3571,20 @@ function displayMethodsSections(sections, table1) {
         caption.textContent = `Table 1. ${table1.caption || ''}`;
         tableWrapper.appendChild(caption);
 
-        // Build HTML table
-        const tbl = document.createElement('table');
-        tbl.className = 'methods-table1';
-
-        // Header row
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        for (const h of table1.headers) {
-            const th = document.createElement('th');
-            th.textContent = h;
-            headerRow.appendChild(th);
-        }
-        thead.appendChild(headerRow);
-        tbl.appendChild(thead);
-
-        // Data rows
-        const tbody = document.createElement('tbody');
-        for (const row of table1.rows) {
-            const tr = document.createElement('tr');
-            for (let i = 0; i < row.length; i++) {
-                const td = document.createElement('td');
-                const val = row[i];
-                // Bold sex-header rows (marked with ** in the data)
+        // Build HTML table — uses buildTable() with a custom cell renderer
+        // to detect **bold** sex-header rows in the data.
+        const tbl = buildTable(table1.headers, table1.rows, {
+            className: 'methods-table1',
+            cellRenderer(val, _r, _c, td, tr) {
+                // Sex-header rows are marked with ** delimiters in the data
                 const isBold = typeof val === 'string' && val.startsWith('**') && val.endsWith('**');
                 td.textContent = isBold ? val.replace(/\*\*/g, '').trim() : val;
                 if (isBold) {
                     td.classList.add('sex-header');
                     tr.classList.add('sex-header-row');
                 }
-                tr.appendChild(td);
-            }
-            tbody.appendChild(tr);
-        }
-        tbl.appendChild(tbody);
+            },
+        });
         tableWrapper.appendChild(tbl);
 
         // Footnotes
@@ -3751,9 +3634,7 @@ function editMethods() {
     methodsApproved = false;
     markReportDirty();
     unlockSection(document.getElementById('methods-section'));
-    hide('btn-edit-methods');
-    show('btn-approve-methods');
-    hide('badge-methods');
+    setButtons('methods', 'editing');
     updateExportButton();
 }
 
@@ -3767,10 +3648,7 @@ function retryMethods() {
     unlockSection(document.getElementById('methods-section'));
     document.getElementById('methods-prose').innerHTML = '';
     show('btn-generate-methods');
-    hide('btn-approve-methods');
-    hide('btn-retry-methods');
-    hide('btn-edit-methods');
-    hide('badge-methods');
+    setButtons('methods', 'hidden');
     updateExportButton();
 }
 
@@ -3822,8 +3700,7 @@ async function generateSummary() {
         markReportDirty();
 
         btn.style.display = 'none';
-        show('btn-approve-summary');
-        show('btn-retry-summary');
+        setButtons('summary', 'result');
 
     } catch (e) {
         showError('Summary generation failed: ' + e.message);
@@ -3837,9 +3714,7 @@ function editSummary() {
     summaryApproved = false;
     markReportDirty();
     unlockSection(document.getElementById('summary-section'));
-    hide('btn-edit-summary');
-    show('btn-approve-summary');
-    hide('badge-summary');
+    setButtons('summary', 'editing');
     updateExportButton();
 }
 
@@ -3849,10 +3724,7 @@ function retrySummary() {
     unlockSection(document.getElementById('summary-section'));
     document.getElementById('summary-prose').innerHTML = '';
     show('btn-generate-summary');
-    hide('btn-approve-summary');
-    hide('btn-retry-summary');
-    hide('btn-edit-summary');
-    hide('badge-summary');
+    setButtons('summary', 'hidden');
     updateExportButton();
 }
 
@@ -3898,9 +3770,7 @@ async function approvePool() {
         animalReportApproved = true;
         renderAnimalReport(result);
 
-        // Hide Approve button, show badge
-        hide('btn-approve-pool');
-        show('badge-pool');
+        setButtons('pool', 'approved');
 
         showToast('Pool approved — animal report generated');
         updateExportButton();
@@ -4463,47 +4333,25 @@ function createGenomicsCard(key, data, organ, sex) {
  * Approve a genomics card — sends data to the server.
  */
 async function approveGenomics(key) {
-    if (!currentIdentity?.dtxsid) {
-        showError('DTXSID required to approve');
-        return;
-    }
     const data = genomicsResults[key];
     if (!data) return;
 
-    try {
-        const resp = await fetch('/api/session/approve', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                dtxsid: currentIdentity.dtxsid,
-                identity: currentIdentity,
-                section_type: 'genomics',
-                data: {
-                    organ: data.organ,
-                    sex: data.sex,
-                    gene_sets: data.gene_sets,
-                    top_genes: data.top_genes,
-                    total_responsive_genes: data.total_responsive_genes,
-                    csv_id: data.fileId ? (uploadedFiles[data.fileId]?.id || data.fileId) : data.csv_id,
-                },
-            }),
-        });
-        const result = await resp.json();
-        if (result.ok) {
-            genomicsResults[key].approved = true;
-            markReportDirty();
-    
-            const card = document.getElementById(`genomics-card-${key}`);
-            lockSection(card);
-            hide(`btn-approve-genomics-${key}`);
-            show(`btn-edit-genomics-${key}`);
-            show(`btn-retry-genomics-${key}`);
-            show(`badge-genomics-${key}`);
-            updateExportButton();
-        }
-    } catch (e) {
-        showError('Approve failed: ' + e.message);
-    }
+    const result = await postApproveToServer(
+        'genomics',
+        document.getElementById(`genomics-card-${key}`),
+        `genomics-${key}`,
+        {
+            organ: data.organ,
+            sex: data.sex,
+            gene_sets: data.gene_sets,
+            top_genes: data.top_genes,
+            total_responsive_genes: data.total_responsive_genes,
+            csv_id: data.fileId ? (uploadedFiles[data.fileId]?.id || data.fileId) : data.csv_id,
+        },
+    );
+    if (!result) return;
+
+    genomicsResults[key].approved = true;
 }
 
 function editGenomics(key) {
@@ -4511,9 +4359,7 @@ function editGenomics(key) {
     markReportDirty();
     const card = document.getElementById(`genomics-card-${key}`);
     unlockSection(card);
-    show(`btn-approve-genomics-${key}`);
-    hide(`btn-edit-genomics-${key}`);
-    hide(`badge-genomics-${key}`);
+    setButtons(`genomics-${key}`, 'editing');
     updateExportButton();
 }
 
@@ -4604,12 +4450,10 @@ function renderBmdSummaryTable(endpoints) {
  * section in the UI.
  */
 async function approveSection(sectionType) {
-    if (!currentIdentity?.dtxsid) {
-        showError('DTXSID required to approve');
-        return;
-    }
-
+    // Build the section-specific data payload and identify the DOM
+    // element + button prefix for the postApproveToServer helper.
     let data = {};
+    let sectionEl, buttonPrefix;
 
     if (sectionType === 'methods') {
         // Save in structured format if available, with legacy flat paragraphs
@@ -4627,65 +4471,28 @@ async function approveSection(sectionType) {
             original_paragraphs: originalParas,
             original_data: methodsData || undefined,
         };
+        sectionEl = document.getElementById('methods-section');
+        buttonPrefix = 'methods';
     } else if (sectionType === 'bmd_summary') {
         data = { endpoints: bmdSummaryEndpoints };
+        sectionEl = document.getElementById('bmd-summary-section');
+        buttonPrefix = 'bmd-summary';
     } else if (sectionType === 'summary') {
         data = {
             paragraphs: extractProse('summary-prose'),
             original_paragraphs: summaryParagraphs,
         };
+        sectionEl = document.getElementById('summary-section');
+        buttonPrefix = 'summary';
     }
 
-    try {
-        const resp = await fetch('/api/session/approve', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                dtxsid: currentIdentity.dtxsid,
-                identity: currentIdentity,
-                section_type: sectionType,
-                data: data,
-            }),
-        });
-        const result = await resp.json();
+    const result = await postApproveToServer(sectionType, sectionEl, buttonPrefix, data);
+    if (!result) return;
 
-        if (result.ok) {
-            // Lock the section UI — disable editing and add green border
-            if (sectionType === 'methods') {
-                methodsApproved = true;
-                lockSection(document.getElementById('methods-section'));
-                hide('btn-approve-methods');
-                show('btn-edit-methods');
-                show('btn-retry-methods');
-                show('badge-methods');
-            } else if (sectionType === 'bmd_summary') {
-                bmdSummaryApproved = true;
-                lockSection(document.getElementById('bmd-summary-section'));
-                hide('btn-approve-bmd-summary');
-                show('badge-bmd-summary');
-            } else if (sectionType === 'summary') {
-                summaryApproved = true;
-                lockSection(document.getElementById('summary-section'));
-                hide('btn-approve-summary');
-                show('btn-edit-summary');
-                show('btn-retry-summary');
-                show('badge-summary');
-            }
-
-            // Update the Report tab — mark dirty and ensure it's visible
-            markReportDirty();
-    
-
-            if (result.user_edited) {
-                showToast('Approved (style learning triggered)');
-            } else {
-                showToast('Section approved');
-            }
-            updateExportButton();
-        }
-    } catch (e) {
-        showError('Approve failed: ' + e.message);
-    }
+    // Set the section-specific approved flag
+    if (sectionType === 'methods')          methodsApproved = true;
+    else if (sectionType === 'bmd_summary') bmdSummaryApproved = true;
+    else if (sectionType === 'summary')     summaryApproved = true;
 }
 
 /* ----------------------------------------------------------------
@@ -5188,33 +4995,13 @@ function renderModalTablePreview(data, container) {
     const wrapper = document.createElement('div');
     wrapper.className = 'table-preview';
 
-    const table = document.createElement('table');
-
-    // Header row — column names from the first line of the file
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    for (const h of data.headers) {
-        const th = document.createElement('th');
-        th.textContent = h;
-        headerRow.appendChild(th);
-    }
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    // Data rows — up to 50 rows from the server
-    const tbody = document.createElement('tbody');
-    for (const row of data.rows) {
-        const tr = document.createElement('tr');
-        for (let i = 0; i < row.length; i++) {
-            const td = document.createElement('td');
-            td.textContent = row[i];
-            // First column is the endpoint/row label — make it sticky
-            if (i === 0) td.className = 'endpoint-label';
-            tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
+    // Build the table — first column gets 'endpoint-label' class for sticky positioning
+    const table = buildTable(data.headers, data.rows, {
+        cellRenderer(val, _r, c, td) {
+            td.textContent = val;
+            if (c === 0) td.className = 'endpoint-label';
+        },
+    });
     wrapper.appendChild(table);
     container.appendChild(wrapper);
 

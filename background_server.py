@@ -62,6 +62,7 @@ import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import orjson
 from fastapi import FastAPI, Request, UploadFile, File
@@ -335,30 +336,19 @@ Return ONLY a JSON array of new rules not already covered above:
 If no new rules are evident, return an empty array: []"""
 
         # Use Haiku for speed and cost — style rule extraction doesn't need
-        # the full reasoning power of Sonnet/Opus
-        endpoint = AnthropicEndpoint(
-            name="style-rule-extractor",
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
-            temperature=0.2,
-        )
-
-        response = endpoint.generate(
+        # the full reasoning power of Sonnet/Opus.
+        # _llm_generate_json handles endpoint creation, fence stripping,
+        # and JSON parsing in one call.
+        new_rules = _llm_generate_json(
+            "style-rule-extractor",
             prompt,
             system=(
                 "You are a writing style analyst. Compare original and edited text "
                 "to identify deliberate style preferences. Output ONLY valid JSON."
             ),
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
         )
-
-        if not response:
-            logger.warning("Style extraction returned empty response")
-            return 0
-
-        # Parse the JSON array from the response — strip markdown fences
-        # that the LLM sometimes adds despite being told to return raw JSON.
-        cleaned = _strip_markdown_fences(response)
-        new_rules = json.loads(cleaned)
 
         if not isinstance(new_rules, list) or len(new_rules) == 0:
             logger.info("Style extraction found no new rules")
@@ -727,6 +717,73 @@ def _strip_markdown_fences(text: str) -> str:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     return cleaned
+
+
+def _llm_generate_json(
+    name: str,
+    prompt: str,
+    system: str,
+    *,
+    model: str = "claude-sonnet-4-6",
+    max_tokens: int = 8192,
+    temperature: float = 0.2,
+) -> Any:
+    """
+    Synchronous helper: call Claude → strip markdown fences → parse JSON.
+
+    Centralizes the repeated pattern of creating an AnthropicEndpoint,
+    generating text, stripping markdown code fences, and JSON-parsing the
+    result.  Can be called directly in sync code (e.g. inside a thread-pool
+    worker) or wrapped in run_in_executor for async endpoints.
+
+    Args:
+        name:        Logical name for the endpoint (appears in logs / billing).
+        prompt:      The user-turn prompt to send.
+        system:      The system prompt.
+        model:       Claude model ID (default: claude-sonnet-4-6).
+        max_tokens:  Max tokens for the response.
+        temperature: Sampling temperature.
+
+    Returns:
+        Parsed JSON (dict or list) from the LLM response.
+
+    Raises:
+        ValueError:  If the LLM returns an empty response.
+        json.JSONDecodeError: If the response isn't valid JSON after fence stripping.
+    """
+    endpoint = AnthropicEndpoint(
+        name=name,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    response = endpoint.generate(prompt, system=system)
+    if not response:
+        raise ValueError(f"LLM '{name}' returned empty response")
+    return json.loads(_strip_markdown_fences(response))
+
+
+async def _llm_generate_json_async(
+    name: str,
+    prompt: str,
+    system: str,
+    **kwargs,
+) -> Any:
+    """
+    Async wrapper around _llm_generate_json — runs the blocking LLM call
+    in a thread-pool executor so it doesn't block the event loop.
+
+    Accepts the same keyword arguments as _llm_generate_json (model,
+    max_tokens, temperature).
+
+    Returns:
+        Parsed JSON (dict or list) from the LLM response.
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: _llm_generate_json(name, prompt, system, **kwargs),
+    )
 
 
 def _safe_filename(name: str) -> str:
@@ -2154,24 +2211,11 @@ async def api_generate_methods(request: Request):
     system, prompt = build_methods_prompt(ctx)
 
     try:
-        loop = asyncio.get_running_loop()
-
-        def _generate():
-            endpoint = AnthropicEndpoint(
-                name="methods-generator",
-                model="claude-sonnet-4-6",
-                max_tokens=8192,
-                temperature=0.2,
-            )
-            return endpoint.generate(prompt, system=system)
-
-        response = await loop.run_in_executor(None, _generate)
-
-        # --- Parse the LLM's JSON response ---
-        # The response should be a JSON object keyed by subsection key,
+        # Call Claude and parse the JSON response — keyed by subsection key,
         # e.g. {"study_design": "paragraph text", "dose_selection": "..."}
-        cleaned = _strip_markdown_fences(response)
-        subsection_texts = json.loads(cleaned)
+        subsection_texts = await _llm_generate_json_async(
+            "methods-generator", prompt, system,
+        )
 
         # --- Assemble into MethodsReport ---
         skeleton = build_subsection_skeleton(ctx)
@@ -2494,21 +2538,10 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
     )
 
     try:
-        loop = asyncio.get_running_loop()
-
-        def _generate():
-            endpoint = AnthropicEndpoint(
-                name="summary-generator",
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                temperature=0.2,
-            )
-            return endpoint.generate(prompt, system=system)
-
-        response = await loop.run_in_executor(None, _generate)
-
-        cleaned = _strip_markdown_fences(response)
-        paragraphs = json.loads(cleaned)
+        paragraphs = await _llm_generate_json_async(
+            "summary-generator", prompt, system,
+            max_tokens=4096,
+        )
         if not isinstance(paragraphs, list):
             paragraphs = [str(paragraphs)]
 

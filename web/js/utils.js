@@ -364,3 +364,142 @@ function displayProse(containerId, paragraphs) {
         container.appendChild(div);
     }
 }
+
+
+/* ==================================================================
+ * buildTable — create a DOM <table> from headers + rows arrays
+ *
+ * Replaces 3+ near-identical createElement('table') / createElement('thead')
+ * / createElement('tbody') blocks scattered across main.js.  Returns
+ * a bare <table> element that callers can append to any container.
+ *
+ * Options allow per-cell customization (CSS classes, bold rows) without
+ * the caller needing to manually iterate rows/cells.
+ * ================================================================== */
+
+/**
+ * Build a DOM <table> element from parallel arrays of headers and rows.
+ *
+ * @param {string[]}   headers — Column header strings
+ * @param {Array[]}    rows    — Array of row arrays (each row is an array of cell values)
+ * @param {object}     [opts]  — Optional configuration:
+ *   @param {string}   [opts.className]     — CSS class for the <table> element
+ *   @param {Function} [opts.cellRenderer]  — (value, rowIdx, colIdx, td) => void
+ *                                            Custom renderer called for each <td>.
+ *                                            Receives the cell value, indices, and the
+ *                                            <td> element.  Default: sets textContent.
+ *   @param {Function} [opts.headerRenderer] — (value, colIdx, th) => void
+ *                                            Custom renderer for <th> cells.
+ *                                            Default: sets textContent.
+ * @returns {HTMLTableElement} — The constructed table element (not yet in the DOM)
+ */
+function buildTable(headers, rows, opts = {}) {
+    const table = document.createElement('table');
+    if (opts.className) table.className = opts.className;
+
+    // --- <thead> ---
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    for (let i = 0; i < headers.length; i++) {
+        const th = document.createElement('th');
+        if (opts.headerRenderer) {
+            opts.headerRenderer(headers[i], i, th);
+        } else {
+            th.textContent = headers[i];
+        }
+        headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // --- <tbody> ---
+    const tbody = document.createElement('tbody');
+    for (let r = 0; r < rows.length; r++) {
+        const tr = document.createElement('tr');
+        const row = rows[r];
+        for (let c = 0; c < row.length; c++) {
+            const td = document.createElement('td');
+            if (opts.cellRenderer) {
+                opts.cellRenderer(row[c], r, c, td, tr);
+            } else {
+                td.textContent = row[c];
+            }
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    return table;
+}
+
+
+/* ==================================================================
+ * postApproveToServer — centralized POST to /api/session/approve
+ *
+ * Every section type (background, bm2, methods, genomics, summary,
+ * bmd_summary) follows the same core pattern when the user clicks
+ * "Approve":
+ *   1. POST the section data to the server
+ *   2. Lock the section UI (contentEditable=false, readOnly, green border)
+ *   3. Update button visibility via setButtons()
+ *   4. Mark the report tab dirty and update the export button
+ *   5. Show a toast notification
+ *
+ * Section-specific logic (e.g., style learning badge, triggering
+ * downstream sections) runs *after* this helper returns.
+ *
+ * Returns the server response JSON so callers can inspect result.ok,
+ * result.user_edited, result.version, etc.  Returns null on error
+ * (after showing an error toast).
+ * ================================================================== */
+
+/**
+ * POST section data to /api/session/approve and apply common post-approve
+ * UI updates (lock, buttons, dirty flag, export check, toast).
+ *
+ * @param {string} sectionType   — Server section_type key ('background', 'bm2', etc.)
+ * @param {HTMLElement} sectionEl — The DOM element to lock after approval
+ * @param {string} buttonPrefix  — Prefix for setButtons() (e.g., 'bg', 'methods', bm2Id)
+ * @param {object} data          — Section-specific payload for the server
+ * @param {string} [toastMsg]    — Optional custom toast message (default: "{sectionType} approved")
+ * @returns {Promise<object|null>} — Server response JSON, or null on error
+ */
+async function postApproveToServer(sectionType, sectionEl, buttonPrefix, data, toastMsg) {
+    if (!currentIdentity?.dtxsid) {
+        showError('Resolve a chemical identity (with DTXSID) before approving.');
+        return null;
+    }
+
+    try {
+        const result = await apiFetch('/api/session/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dtxsid: currentIdentity.dtxsid,
+                identity: currentIdentity,
+                section_type: sectionType,
+                data,
+            }),
+        });
+
+        // Common post-approve UI: lock section, update buttons, mark dirty
+        lockSection(sectionEl);
+        setButtons(buttonPrefix, 'approved');
+        markReportDirty();
+        updateExportButton();
+
+        if (!toastMsg) {
+            toastMsg = result.user_edited
+                ? 'Approved — learning from your edits...'
+                : `${sectionType} approved`;
+        }
+        showToast(toastMsg);
+
+        return result;
+
+    } catch (err) {
+        showError('Approve failed: ' + err.message);
+        return null;
+    }
+}
