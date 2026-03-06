@@ -355,13 +355,9 @@ If no new rules are evident, return an empty array: []"""
             logger.warning("Style extraction returned empty response")
             return 0
 
-        # Parse the JSON array from the response — the LLM sometimes wraps
-        # it in markdown code fences, so we strip those first.
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            # Remove markdown code fences (```json ... ```)
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        # Parse the JSON array from the response — strip markdown fences
+        # that the LLM sometimes adds despite being told to return raw JSON.
+        cleaned = _strip_markdown_fences(response)
         new_rules = json.loads(cleaned)
 
         if not isinstance(new_rules, list) or len(new_rules) == 0:
@@ -542,7 +538,7 @@ async def api_resolve(request: Request):
 
     # Run resolution in a thread pool to avoid blocking the event loop
     # (it makes multiple HTTP requests to PubChem and CTX)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     identity = await loop.run_in_executor(
         None, resolve_chemical, identifier, id_type, "",
     )
@@ -582,21 +578,7 @@ async def api_generate(request: Request):
         )
 
     # Reconstruct ChemicalIdentity from the JSON dict
-    identity = ChemicalIdentity(
-        name=identity_dict.get("name", ""),
-        casrn=identity_dict.get("casrn", ""),
-        dtxsid=identity_dict.get("dtxsid", ""),
-        pubchem_cid=int(identity_dict.get("pubchem_cid", 0) or 0),
-        ec_number=identity_dict.get("ec_number", ""),
-        inchikey=identity_dict.get("inchikey", ""),
-        molecular_formula=identity_dict.get("molecular_formula", ""),
-        molecular_weight=float(identity_dict.get("molecular_weight", 0) or 0),
-        iupac_name=identity_dict.get("iupac_name", ""),
-        smiles=identity_dict.get("smiles", ""),
-        chemical_class=identity_dict.get("chemical_class", ""),
-        functional_uses=identity_dict.get("functional_uses", []),
-        synonyms=identity_dict.get("synonyms", []),
-    )
+    identity = ChemicalIdentity.from_dict(identity_dict)
 
     # Use SSE to stream progress updates
     async def event_stream():
@@ -608,7 +590,7 @@ async def api_generate(request: Request):
 
         try:
             # Step 1: Gather data (with progress callback)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # Yield initial progress
             yield _sse_event("progress", {"message": "Starting data gathering..."})
@@ -689,6 +671,139 @@ def _js_dose_key(dose: float) -> str:
     if dose == int(dose):
         return str(int(dose))
     return str(dose)
+
+
+def _serialize_table_rows(table_data: dict) -> dict:
+    """
+    Convert a {sex: [TableRow, ...]} dict to JSON-friendly nested dicts.
+
+    Each TableRow has values_by_dose, n_by_dose, bmd_str, bmdl_str, and
+    trend_marker attributes.  Dose float keys are converted via _js_dose_key()
+    to match JavaScript's String(number) behavior.
+
+    Used by /api/process-bm2 and /api/process-integrated to serialize
+    the NTP stats pipeline output for the browser.
+
+    Args:
+        table_data: Dict mapping sex label ("Male", "Female") to lists of
+                    TableRow objects from apical_report.build_table_data().
+
+    Returns:
+        Dict mapping sex label to lists of JSON-serializable row dicts.
+    """
+    tables_json = {}
+    for sex, rows in table_data.items():
+        tables_json[sex] = []
+        for row in rows:
+            sorted_doses = sorted(row.values_by_dose.keys())
+            tables_json[sex].append({
+                "label": row.label,
+                "doses": sorted_doses,
+                "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
+                "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
+                "bmd": row.bmd_str,
+                "bmdl": row.bmdl_str,
+                "trend_marker": row.trend_marker,
+            })
+    return tables_json
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """
+    Remove markdown code fences (```json ... ```) from LLM responses.
+
+    Claude sometimes wraps JSON output in markdown code blocks even when
+    instructed to return raw JSON.  This strips those fences so the
+    response can be parsed as JSON.
+
+    Args:
+        text: Raw LLM response text, possibly wrapped in code fences.
+
+    Returns:
+        The text with leading ```json and trailing ``` removed, if present.
+    """
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned
+
+
+def _safe_filename(name: str) -> str:
+    """
+    Sanitize a chemical name for use as a filename.
+
+    Replaces non-alphanumeric characters (except spaces, hyphens, and
+    underscores) with underscores.  Used when building download filenames
+    for exported .docx and .pdf reports.
+
+    Args:
+        name: The chemical name (e.g., "1,2-Dichlorobenzene").
+
+    Returns:
+        A filesystem-safe string (e.g., "1_2-Dichlorobenzene").
+    """
+    return "".join(c if c.isalnum() or c in " -_" else "_" for c in name)
+
+
+def _ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
+    """
+    Ensure fingerprints are populated for a session's file pool.
+
+    Checks the in-memory _pool_fingerprints cache first.  If empty (e.g.,
+    after a server restart), re-fingerprints all files from the session's
+    files/ directory by scanning _bm2_uploads, _data_uploads, and the
+    filesystem.
+
+    This logic was previously duplicated in api_pool_validate() and
+    api_generate_animal_report().
+
+    Args:
+        dtxsid: The DTXSID identifying the session.
+        force:  If True, clear existing fingerprints and re-scan from disk.
+                Used by the validation endpoint which always wants a fresh scan.
+
+    Returns:
+        The fingerprint dict {file_id: FileFingerprint} for this session.
+    """
+    fps = _pool_fingerprints.get(dtxsid, {})
+    if fps and not force:
+        return fps
+
+    # Re-fingerprint all files from disk
+    files_dir = _session_dir(dtxsid) / "files"
+    if not files_dir.exists():
+        return {}
+
+    _pool_fingerprints[dtxsid] = {}
+    fingerprinted: set[str] = set()
+
+    # 1. Fingerprint files registered in _bm2_uploads
+    for fid, entry in _bm2_uploads.items():
+        path = entry.get("temp_path", "")
+        if path and os.path.exists(path) and str(files_dir) in path:
+            bm2_json = entry.get("bm2_json")
+            _fingerprint_and_store(fid, entry["filename"], path, "bm2", dtxsid, bm2_json)
+            fingerprinted.add(entry["filename"])
+
+    # 2. Fingerprint files registered in _data_uploads
+    for fid, entry in _data_uploads.items():
+        path = entry.get("temp_path", "")
+        if path and os.path.exists(path) and str(files_dir) in path:
+            _fingerprint_and_store(fid, entry["filename"], path, entry["type"], dtxsid)
+            fingerprinted.add(entry["filename"])
+
+    # 3. Scan files/ directory for anything not yet registered
+    for data_file in sorted(files_dir.iterdir()):
+        if not data_file.is_file() or data_file.name in fingerprinted:
+            continue
+        ext = data_file.suffix.lower().lstrip(".")
+        if ext not in ("xlsx", "txt", "csv", "bm2"):
+            continue
+        fid = f"scan-{data_file.name}"
+        _fingerprint_and_store(fid, data_file.name, str(data_file), ext, dtxsid)
+
+    return _pool_fingerprints.get(dtxsid, {})
 
 
 # ---------------------------------------------------------------------------
@@ -821,7 +936,7 @@ async def api_process_bm2(request: Request):
     try:
         # Run the full export-and-analyze pipeline in a thread pool
         # because it spawns Java subprocesses (blocking I/O)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         table_data, _cat_lookup, bm2_json = await loop.run_in_executor(
             None, build_table_data_from_bm2, bm2_path,
         )
@@ -839,26 +954,8 @@ async def api_process_bm2(request: Request):
         )
         upload["narrative"] = narrative
 
-        # Serialize TableRow objects to JSON-friendly dicts.
-        # IMPORTANT: dose floats must be converted to strings that match
-        # JavaScript's String(number) behavior.  Python's str(1.0) gives
-        # "1.0" but JavaScript's String(1) gives "1" — so integer-valued
-        # floats need to drop the ".0" suffix to keep keys consistent
-        # between the JSON dict and the JS lookup.
-        tables_json = {}
-        for sex, rows in table_data.items():
-            tables_json[sex] = []
-            for row in rows:
-                sorted_doses = sorted(row.values_by_dose.keys())
-                tables_json[sex].append({
-                    "label": row.label,
-                    "doses": sorted_doses,
-                    "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
-                    "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
-                    "bmd": row.bmd_str,
-                    "bmdl": row.bmdl_str,
-                    "trend_marker": row.trend_marker,
-                })
+        # Serialize TableRow objects to JSON-friendly dicts
+        tables_json = _serialize_table_rows(table_data)
 
         return JSONResponse({
             "bm2_id": bm2_id,
@@ -1180,7 +1277,7 @@ async def api_process_genomics(request: Request):
     try:
         # Run gene set and gene ranking in a thread pool because
         # ToxKBQuerier makes DB queries that could be slow for large datasets
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _run_genomics():
             # Open a read-only connection to the knowledge base for GO term
@@ -1697,7 +1794,7 @@ async def api_session_approve(request: Request):
         # Fire-and-forget: extract style rules in a background thread.
         # We don't await the result — the user gets their approve response
         # immediately, and the rules are saved asynchronously.
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(
             None, _extract_and_merge_style_rules, original_text, edited_text,
         )
@@ -2057,7 +2154,7 @@ async def api_generate_methods(request: Request):
     system, prompt = build_methods_prompt(ctx)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _generate():
             endpoint = AnthropicEndpoint(
@@ -2073,11 +2170,7 @@ async def api_generate_methods(request: Request):
         # --- Parse the LLM's JSON response ---
         # The response should be a JSON object keyed by subsection key,
         # e.g. {"study_design": "paragraph text", "dose_selection": "..."}
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
-
+        cleaned = _strip_markdown_fences(response)
         subsection_texts = json.loads(cleaned)
 
         # --- Assemble into MethodsReport ---
@@ -2401,7 +2494,7 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
     )
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _generate():
             endpoint = AnthropicEndpoint(
@@ -2414,11 +2507,7 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
 
         response = await loop.run_in_executor(None, _generate)
 
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
-
+        cleaned = _strip_markdown_fences(response)
         paragraphs = json.loads(cleaned)
         if not isinstance(paragraphs, list):
             paragraphs = [str(paragraphs)]
@@ -2525,7 +2614,7 @@ async def api_preview_file(file_id: str):
 
             # Fast path — LMDB B-tree lookup.  Only loads the BMDProject
             # JSON (skips category analysis, stats, and narrative).
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             bm2_json = await loop.run_in_executor(
                 None, bm2_cache.get_json, bm2_path,
             )
@@ -2881,7 +2970,7 @@ async def api_export_docx(request: Request):
         table_data = upload.get("table_data")
         if table_data is None:
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 table_data, _, bm2_json = await loop.run_in_executor(
                     None, build_table_data_from_bm2, upload["temp_path"],
                 )
@@ -2956,8 +3045,7 @@ async def api_export_docx(request: Request):
             add_para(doc, ref_line, size=10)
 
     # Save to a temporary file and return as download
-    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
-                        for c in chemical_name)
+    safe_name = _safe_filename(chemical_name)
     filename = f"5dToxReport_{safe_name}.docx"
 
     tmp = tempfile.NamedTemporaryFile(
@@ -3034,8 +3122,7 @@ async def api_export_pdf(request: Request):
 
     # Write to a temp file for FileResponse
     chemical_name = body.get("chemical_name", "Chemical")
-    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
-                        for c in chemical_name)
+    safe_name = _safe_filename(chemical_name)
     filename = f"5dToxReport_{safe_name}.pdf"
 
     tmp = tempfile.NamedTemporaryFile(
@@ -3100,8 +3187,7 @@ async def api_export_pdf_scaffold(
         )
 
     # Clean filename from chemical name
-    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
-                        for c in chemical_name)
+    safe_name = _safe_filename(chemical_name)
     filename = f"5dToxReport_Scaffold_{safe_name}.pdf"
 
     tmp = tempfile.NamedTemporaryFile(
@@ -3246,42 +3332,8 @@ async def api_pool_validate(dtxsid: str):
             "error": "No files directory found for this session",
         }, status_code=404)
 
-    # Clear existing fingerprints for this session — full re-scan
-    _pool_fingerprints[dtxsid] = {}
-
-    # Re-fingerprint all registered files.  We check both the in-memory
-    # stores (_bm2_uploads, _data_uploads) and the files/ directory on disk
-    # to ensure we catch everything.
-    fingerprinted: set[str] = set()  # track filenames already done
-
-    # 1. Fingerprint files registered in _bm2_uploads
-    for fid, entry in _bm2_uploads.items():
-        path = entry.get("temp_path", "")
-        if path and os.path.exists(path) and str(files_dir) in path:
-            bm2_json = entry.get("bm2_json")
-            _fingerprint_and_store(fid, entry["filename"], path, "bm2", dtxsid, bm2_json)
-            fingerprinted.add(entry["filename"])
-
-    # 2. Fingerprint files registered in _data_uploads
-    for fid, entry in _data_uploads.items():
-        path = entry.get("temp_path", "")
-        if path and os.path.exists(path) and str(files_dir) in path:
-            _fingerprint_and_store(fid, entry["filename"], path, entry["type"], dtxsid)
-            fingerprinted.add(entry["filename"])
-
-    # 3. Scan files/ directory for anything not yet registered
-    # (e.g., files from a previous session that weren't re-registered)
-    for data_file in sorted(files_dir.iterdir()):
-        if not data_file.is_file() or data_file.name in fingerprinted:
-            continue
-        ext = data_file.suffix.lower().lstrip(".")
-        if ext not in ("xlsx", "txt", "csv", "bm2"):
-            continue
-        fid = f"scan-{data_file.name}"
-        _fingerprint_and_store(fid, data_file.name, str(data_file), ext, dtxsid)
-
-    # Run full validation
-    fps = _pool_fingerprints.get(dtxsid, {})
+    # Force a full re-scan of all files in the session
+    fps = _ensure_fingerprints(dtxsid, force=True)
     report = validate_pool(dtxsid, fps)
 
     # Persist the report to disk
@@ -3437,7 +3489,7 @@ async def api_pool_integrate(dtxsid: str):
             pass
 
     # Run integration in a thread pool — xlsx parsing uses openpyxl (blocking I/O)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         integrated = await loop.run_in_executor(
             None,
@@ -3536,7 +3588,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             for k, v in flat_cat.items()
         }
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # Run the NTP stats pipeline on all experiments in the integrated data.
         # This is pure Python (no JVM) and typically takes <1s.
@@ -3645,20 +3697,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         sections = []
         for dom, sex_rows in sorted(domain_tables.items()):
             # Serialize TableRow objects to JSON-friendly dicts
-            tables_json = {}
-            for sex, rows in sex_rows.items():
-                tables_json[sex] = []
-                for row in rows:
-                    sorted_doses = sorted(row.values_by_dose.keys())
-                    tables_json[sex].append({
-                        "label": row.label,
-                        "doses": sorted_doses,
-                        "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
-                        "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
-                        "bmd": row.bmd_str,
-                        "bmdl": row.bmdl_str,
-                        "trend_marker": row.trend_marker,
-                    })
+            tables_json = _serialize_table_rows(sex_rows)
 
             # Generate narrative for this domain's data only
             narrative = generate_results_narrative(
@@ -3721,35 +3760,7 @@ async def api_generate_animal_report(dtxsid: str):
 
     # Ensure we have fingerprints — re-fingerprint if the pool is empty.
     # This can happen if the server restarted since the last validation.
-    fps = _pool_fingerprints.get(dtxsid, {})
-    if not fps:
-        # Re-fingerprint all files from disk (same logic as validate endpoint)
-        _pool_fingerprints[dtxsid] = {}
-        fingerprinted: set[str] = set()
-
-        for fid, entry in _bm2_uploads.items():
-            path = entry.get("temp_path", "")
-            if path and os.path.exists(path) and str(files_dir) in path:
-                bm2_json = entry.get("bm2_json")
-                _fingerprint_and_store(fid, entry["filename"], path, "bm2", dtxsid, bm2_json)
-                fingerprinted.add(entry["filename"])
-
-        for fid, entry in _data_uploads.items():
-            path = entry.get("temp_path", "")
-            if path and os.path.exists(path) and str(files_dir) in path:
-                _fingerprint_and_store(fid, entry["filename"], path, entry["type"], dtxsid)
-                fingerprinted.add(entry["filename"])
-
-        for data_file in sorted(files_dir.iterdir()):
-            if not data_file.is_file() or data_file.name in fingerprinted:
-                continue
-            ext = data_file.suffix.lower().lstrip(".")
-            if ext not in ("xlsx", "txt", "csv", "bm2"):
-                continue
-            fid = f"scan-{data_file.name}"
-            _fingerprint_and_store(fid, data_file.name, str(data_file), ext, dtxsid)
-
-        fps = _pool_fingerprints.get(dtxsid, {})
+    fps = _ensure_fingerprints(dtxsid)
 
     if not fps:
         return JSONResponse(
@@ -3759,7 +3770,7 @@ async def api_generate_animal_report(dtxsid: str):
 
     # Build the animal report in a thread executor to avoid blocking
     # the event loop (xlsx/bm2 parsing can take a few seconds).
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         report = await loop.run_in_executor(
             None,

@@ -15,6 +15,36 @@
 
 
 /* ==================================================================
+ * escapeHtml — prevent XSS when interpolating user data into innerHTML
+ *
+ * Any user-supplied string (filenames, chemical names, identifiers)
+ * must pass through this function before being inserted into HTML
+ * template literals.  Replaces the 5 dangerous characters with their
+ * HTML entity equivalents.
+ * ================================================================== */
+
+/**
+ * Escape a string for safe insertion into innerHTML / template literals.
+ *
+ * Replaces &, <, >, ", and ' with their HTML entity equivalents to
+ * prevent script injection from user-supplied data (filenames,
+ * chemical names, form values, etc.).
+ *
+ * @param {string} str — The untrusted string to escape
+ * @returns {string} — HTML-safe string
+ */
+function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+
+/* ==================================================================
  * show / hide — replace 100+ bare `style.display` toggles
  *
  * These accept either a string element ID or an HTMLElement.

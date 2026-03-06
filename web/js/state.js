@@ -102,3 +102,20 @@ let integratedPoolData = null;
 // --- Preview modal state ---
 // Holds the Escape-key handler so it can be removed when the modal closes.
 let _previewEscapeHandler = null;
+
+
+// --- Domain label constants ---
+// Human-readable labels for experimental domains.  Used in coverage matrix
+// rendering, animal report display, and integrated pool sections.
+// Defined once here to avoid duplicated mappings in main.js.
+const DOMAIN_LABELS = {
+    body_weight:    'Body Weight',
+    organ_weights:  'Organ Weights',
+    clin_chem:      'Clinical Chemistry',
+    hematology:     'Hematology',
+    hormones:       'Hormones',
+    tissue_conc:    'Tissue Concentration',
+    clinical_obs:   'Clinical Observations',
+    gene_expression: 'Gene Expression',
+    unknown:        'Unknown',
+};

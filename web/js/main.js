@@ -367,18 +367,24 @@ async function generateBackground() {
                     }
                 }
 
-                if (eventType === 'progress') {
-                    const data = JSON.parse(eventData);
-                    addProgressLog(data.message);
-                } else if (eventType === 'complete') {
-                    currentResult = JSON.parse(eventData);
-                    displayResult(currentResult);
-                    hideProgress();
-                    markReportDirty();
-                } else if (eventType === 'error') {
-                    const data = JSON.parse(eventData);
-                    showError(data.error);
-                    hideProgress();
+                // Wrap each JSON.parse in try-catch so one malformed SSE
+                // event doesn't crash the entire stream parser.
+                try {
+                    if (eventType === 'progress') {
+                        const data = JSON.parse(eventData);
+                        addProgressLog(data.message);
+                    } else if (eventType === 'complete') {
+                        currentResult = JSON.parse(eventData);
+                        displayResult(currentResult);
+                        hideProgress();
+                        markReportDirty();
+                    } else if (eventType === 'error') {
+                        const data = JSON.parse(eventData);
+                        showError(data.error);
+                        hideProgress();
+                    }
+                } catch (parseErr) {
+                    console.error('SSE parse error:', parseErr, 'raw:', eventData);
                 }
             }
         }
@@ -537,7 +543,6 @@ async function uploadFiles(fileList) {
     const bm2List = [];
     const csvList = [];
     const zipList = [];
-    const lowerName = f => f.name.toLowerCase();
     for (const f of fileList) {
         const name = f.name.toLowerCase();
         if (name.endsWith('.bm2')) bm2List.push(f);
@@ -928,7 +933,7 @@ async function runPoolValidation() {
             renderIntegratedDataPreview(integratedPoolData);
             showToast('Pool validated and integrated');
         } else {
-            const intErr = await intResp.json().catch(() => ({}));
+            const intErr = await intResp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
             showToast(intErr.error || 'Integration failed — validation OK');
         }
 
@@ -978,8 +983,8 @@ function renderIntegratedDataPreview(data) {
         const tierBadge = info.tier === 'bm2' ? '🔬 bm2' :
                           info.tier === 'xlsx' ? '📊 xlsx' : '📄 ' + info.tier;
         return `<tr>
-            <td>${domain.replace(/_/g, ' ')}</td>
-            <td><code>${info.filename}</code></td>
+            <td>${escapeHtml(domain.replace(/_/g, ' '))}</td>
+            <td><code>${escapeHtml(info.filename)}</code></td>
             <td>${tierBadge}</td>
             <td>${info.experiment_count || 0}</td>
         </tr>`;
@@ -1034,17 +1039,8 @@ function renderCoverageMatrix(report) {
         return;
     }
 
-    // Human-readable domain labels
-    const domainLabels = {
-        body_weight: 'Body Weight',
-        organ_weights: 'Organ Weights',
-        clin_chem: 'Clinical Chemistry',
-        hematology: 'Hematology',
-        hormones: 'Hormones',
-        tissue_conc: 'Tissue Concentration',
-        clinical_obs: 'Clinical Observations',
-        gene_expression: 'Gene Expression',
-    };
+    // Human-readable domain labels (shared constant from state.js)
+    const domainLabels = DOMAIN_LABELS;
 
     let html = '<table class="coverage-matrix">';
     html += '<thead><tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
@@ -1194,7 +1190,7 @@ function renderConflictResolution(issue, index, report) {
         if (fp) {
             const added = fp.ts_added ? new Date(fp.ts_added).toLocaleString() : '?';
             const internal = fp.ts_internal ? new Date(fp.ts_internal).toLocaleDateString() : 'none';
-            tsHtml += `<div>${fp.filename} — added: ${added}, internal date: ${internal}</div>`;
+            tsHtml += `<div>${escapeHtml(fp.filename)} — added: ${added}, internal date: ${internal}</div>`;
         }
     }
 
@@ -1212,11 +1208,11 @@ function renderConflictResolution(issue, index, report) {
 
     for (const fid of files) {
         const fp = fps[fid];
-        const label = fp ? `${fp.filename} (${fp.file_type})` : fid;
+        const label = fp ? `${escapeHtml(fp.filename)} (${escapeHtml(fp.file_type)})` : escapeHtml(fid);
         const isRec = fid === suggested;
         html += `<label class="${isRec ? 'recommended' : ''}">`;
-        html += `<input type="radio" name="conflict-${index}" value="${fid}"`;
-        html += ` onchange="resolveConflict(${index}, '${fid}')"`;
+        html += `<input type="radio" name="conflict-${index}" value="${escapeHtml(fid)}"`;
+        html += ` onchange="resolveConflict(${index}, '${escapeHtml(fid)}')"`;
         html += `> ${label}${isRec ? ' (recommended)' : ''}`;
         html += '</label>';
     }
@@ -1534,7 +1530,7 @@ function createBm2Card(bm2Id, filename) {
     card.id = `bm2-card-${bm2Id}`;
     card.innerHTML = `
         <div class="card-header">
-            <span class="filename">${filename}</span>
+            <span class="filename">${escapeHtml(filename)}</span>
             <div class="card-actions">
                 <button class="btn-small" id="btn-edit-${bm2Id}" onclick="editBm2('${bm2Id}')" style="display:none">
                     Edit
@@ -1564,18 +1560,18 @@ function createBm2Card(bm2Id, filename) {
             <div class="form-group">
                 <label>Section Title</label>
                 <input type="text" id="bm2-title-${bm2Id}"
-                    value="${defaultTitle}">
+                    value="${escapeHtml(defaultTitle)}">
             </div>
             <div class="form-group">
                 <label>Table Caption</label>
                 <input type="text" id="bm2-caption-${bm2Id}"
-                    value="${defaultCaption}">
+                    value="${escapeHtml(defaultCaption)}">
             </div>
             <div class="form-group">
                 <label>Compound Name</label>
                 <input type="text" id="bm2-compound-${bm2Id}"
                     placeholder="e.g., PFHxSAm"
-                    value="${currentIdentity?.name || ''}">
+                    value="${escapeHtml(currentIdentity?.name || '')}">
             </div>
             <div class="form-group">
                 <label>Dose Unit</label>
@@ -4018,7 +4014,7 @@ async function autoProcessPool() {
                 renderBm2Results(sectionId, section.tables_json, section.narrative);
             }
         } else {
-            const err = await resp.json().catch(() => ({}));
+            const err = await resp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
             showToast(err.error || 'Integrated processing failed');
         }
     } catch (e) {
@@ -4073,13 +4069,8 @@ async function autoProcessPool() {
 function renderAnimalReport(report) {
     const container = document.getElementById('animal-report-content');
 
-    // Shared domain label lookup
-    const domainFullLabels = {
-        body_weight: 'Body Weight', organ_weights: 'Organ Weights',
-        clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
-        hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
-        clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
-    };
+    // Shared domain label lookup (from state.js constant)
+    const domainFullLabels = DOMAIN_LABELS;
 
     // Helper: build a collapsible section.  The summary line is always
     // visible; clicking it toggles the body.  Starts collapsed.
@@ -4408,12 +4399,12 @@ function createGenomicsCard(key, data, organ, sex) {
                     <th>BMDL Median</th><th># Genes</th><th>Direction</th></tr>
                 ${data.gene_sets.map(gs => `
                     <tr>
-                        <td>${gs.go_term}</td>
-                        <td>${gs.go_id}</td>
+                        <td>${escapeHtml(gs.go_term)}</td>
+                        <td>${escapeHtml(gs.go_id)}</td>
                         <td class="bmd-col">${gs.bmd_median?.toFixed(3) || '—'}</td>
                         <td class="bmd-col">${gs.bmdl_median?.toFixed(3) || '—'}</td>
                         <td>${gs.n_genes}</td>
-                        <td>${gs.direction}</td>
+                        <td>${escapeHtml(gs.direction)}</td>
                     </tr>
                 `).join('')}
             </table>
@@ -4432,11 +4423,11 @@ function createGenomicsCard(key, data, organ, sex) {
                     <th>Fold Change</th><th>Direction</th></tr>
                 ${data.top_genes.map(g => `
                     <tr>
-                        <td class="endpoint-label">${g.gene_symbol}</td>
+                        <td class="endpoint-label">${escapeHtml(g.gene_symbol)}</td>
                         <td class="bmd-col">${g.bmd?.toFixed(3) || '—'}</td>
                         <td class="bmd-col">${g.bmdl?.toFixed(3) || '—'}</td>
                         <td>${g.fold_change?.toFixed(2) || '—'}</td>
-                        <td>${g.direction}</td>
+                        <td>${escapeHtml(g.direction)}</td>
                     </tr>
                 `).join('')}
             </table>
@@ -4447,7 +4438,7 @@ function createGenomicsCard(key, data, organ, sex) {
 
     card.innerHTML = `
         <div class="card-header">
-            <span class="filename">${organTitle} — ${sexTitle}
+            <span class="filename">${escapeHtml(organTitle)} — ${escapeHtml(sexTitle)}
                 (${data.total_responsive_genes || 0} responsive genes)</span>
             <div class="card-actions">
                 <button class="btn-small approve" id="btn-approve-genomics-${key}"
