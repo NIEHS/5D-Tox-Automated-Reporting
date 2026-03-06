@@ -15,17 +15,32 @@ Usage:
     from report_pdf import build_report_pdf
     pdf_bytes = build_report_pdf(report_data_dict)
 
-    # report_data_dict matches the JSON schema consumed by report.typ:
-    # {
-    #   "title": str,
-    #   "chemical_name": str,
-    #   "background": {"paragraphs": [...], "references": [...]},
-    #   "methods": {"sections": [...]},
-    #   "apical_sections": [...],
-    #   "bmd_summary": {"endpoints": [...]},
-    #   "genomics_sections": [...],
-    #   "summary": {"paragraphs": [...]},
-    # }
+    # report_data_dict matches the JSON schema consumed by report.typ.
+    # All top-level keys are optional — missing sections are simply
+    # omitted from the output.  See the full schema below.
+    #
+    # Front matter:
+    #   "foreword":            {"paragraphs": [...]}
+    #   "about_report":        {"authors": {"paragraphs": [...]}, "contributors": {"paragraphs": [...]}}
+    #   "peer_review":         {"paragraphs": [...]}
+    #   "publication_details": {"paragraphs": [...]}
+    #   "acknowledgments":     {"paragraphs": [...]}
+    #   "abstract":            {"sections": [{"label": str, "text": str}, ...]}
+    #
+    # Body:
+    #   "background":          {"paragraphs": [...]}
+    #   "methods":             {"sections": [...]}
+    #   "apical_sections":     [...]
+    #   "internal_dose":       {"paragraphs": [...], "table": {...}}
+    #   "bmd_summary":         {"paragraphs": [...], "endpoints": [...]}
+    #   "genomics_sections":   [...]
+    #   "summary":             {"paragraphs": [...]}
+    #   "references":          [str, ...]
+    #
+    # Metadata:
+    #   "title", "author", "running_header", "chemical_name", "casrn",
+    #   "dtxsid", "report_number", "report_date", "issn", "strain",
+    #   "report_series"
 """
 
 import json
@@ -87,6 +102,10 @@ def marshal_export_data(body: dict) -> dict:
     The web UI sends the same payload to both endpoints for consistency.
     This function reshapes it into the structure the Typst template expects.
 
+    The template accepts all sections optionally — any missing section is
+    simply skipped in the output.  This allows incremental report building
+    where sections appear as they are approved.
+
     Args:
         body: The request JSON body from the web UI export call.
 
@@ -109,14 +128,61 @@ def marshal_export_data(body: dict) -> dict:
         "dtxsid": body.get("dtxsid", ""),
     }
 
+    # --- Report metadata ---
+    # These populate the inner title page and publication details.
+    for key in ("report_number", "report_date", "issn", "strain", "report_series"):
+        val = body.get(key, "")
+        if val:
+            data[key] = val
+
+    # --- Front matter ---
+    # Each front matter section is optional.  When present, the Typst
+    # template renders it in the correct position with roman numeral
+    # pagination.
+
+    # Foreword — boilerplate about the NIEHS mission
+    foreword = body.get("foreword")
+    if foreword:
+        data["foreword"] = _ensure_paragraphs(foreword)
+
+    # About This Report — authors and contributors
+    about = body.get("about_report")
+    if about:
+        data["about_report"] = about
+
+    # Peer Review
+    peer_review = body.get("peer_review")
+    if peer_review:
+        data["peer_review"] = _ensure_paragraphs(peer_review)
+
+    # Publication Details
+    pub_details = body.get("publication_details")
+    if pub_details:
+        data["publication_details"] = _ensure_paragraphs(pub_details)
+
+    # Acknowledgments
+    ack = body.get("acknowledgments")
+    if ack:
+        data["acknowledgments"] = _ensure_paragraphs(ack)
+
+    # Abstract — structured with labeled subsections
+    abstract = body.get("abstract")
+    if abstract:
+        data["abstract"] = abstract
+
     # --- Background ---
     paragraphs = body.get("paragraphs", [])
-    references = body.get("references", [])
     if paragraphs:
         data["background"] = {
             "paragraphs": paragraphs,
-            "references": references,
         }
+
+    # --- References ---
+    # Top-level references array (preferred) or legacy background.references.
+    # The template checks both locations.
+    references = body.get("references", [])
+    if references:
+        data["references"] = references
 
     # --- Materials and Methods ---
     # Accept either structured format (methods_data with sections array)
@@ -146,17 +212,41 @@ def marshal_export_data(body: dict) -> dict:
                 "dose_unit": sec.get("dose_unit", "mg/kg"),
                 "narrative": _split_narrative(sec.get("narrative_paragraphs")),
                 "table_data": sec.get("table_data", {}),
+                "footnotes": sec.get("footnotes", []),
             })
 
+    # --- Internal Dose Assessment ---
+    # Narrative + narrow Table 7 (plasma concentrations).
+    internal_dose = body.get("internal_dose")
+    if internal_dose:
+        data["internal_dose"] = internal_dose
+
     # --- BMD Summary ---
+    # Can arrive as bmd_summary_endpoints (legacy) or bmd_summary (full).
+    bmd_summary = body.get("bmd_summary")
     bmd_endpoints = body.get("bmd_summary_endpoints", [])
-    if bmd_endpoints:
+    if bmd_summary:
+        data["bmd_summary"] = bmd_summary
+    elif bmd_endpoints:
         data["bmd_summary"] = {"endpoints": bmd_endpoints}
 
     # --- Genomics ---
+    # The template supports two modes:
+    #   1. Typed sections (type: "gene_set" or "gene") — split into
+    #      separate H2 headings matching the NIEHS structure
+    #   2. Untyped sections — fallback single "Transcriptomic BMD Analysis"
     genomics = body.get("genomics_sections", [])
     if genomics:
         data["genomics_sections"] = genomics
+
+    # Gene set / gene narrative paragraphs (shared across organs)
+    gene_set_narrative = body.get("gene_set_narrative")
+    if gene_set_narrative:
+        data["gene_set_narrative"] = _ensure_paragraphs(gene_set_narrative)
+
+    gene_narrative = body.get("gene_narrative")
+    if gene_narrative:
+        data["gene_narrative"] = _ensure_paragraphs(gene_narrative)
 
     # --- Summary ---
     summary_paragraphs = body.get("summary_paragraphs", [])
@@ -182,3 +272,23 @@ def _split_narrative(narrative) -> list[str]:
     if isinstance(narrative, str):
         return [p.strip() for p in narrative.split("\n\n") if p.strip()]
     return []
+
+
+def _ensure_paragraphs(obj) -> dict:
+    """
+    Normalize a section object to always have a 'paragraphs' key.
+
+    Accepts:
+      - A dict with 'paragraphs' key — return as-is
+      - A list of strings — wrap in {'paragraphs': [...]}
+      - A single string — wrap in {'paragraphs': [str]}
+
+    This lets callers pass either the full dict or just the paragraphs.
+    """
+    if isinstance(obj, dict):
+        return obj
+    if isinstance(obj, list):
+        return {"paragraphs": obj}
+    if isinstance(obj, str):
+        return {"paragraphs": [obj]}
+    return {"paragraphs": []}

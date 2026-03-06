@@ -9,11 +9,36 @@
 // export function (report_pdf.py) serializes the report state into
 // this JSON and invokes typst.compile() with pdf_standards=["ua-1"].
 //
+// The template reproduces the complete structure of the NIEHS Report 10
+// PDF (NBK589955), page for page:
+//
+//   Front matter (roman numerals):
+//     - Inner title page (no header/footer)
+//     - Foreword
+//     - Table of Contents (auto-generated)
+//     - Tables list (auto-generated)
+//     - About This Report (authors, contributors)
+//     - Peer Review
+//     - Publication Details + Acknowledgments
+//     - Abstract (Background/Methods/Results/Summary labeled sections)
+//
+//   Body (arabic numerals, restarted at 1):
+//     - Background (H1)
+//     - Materials and Methods (H1) with H2/H3 subsections
+//     - Results (H1):
+//         * Apical endpoint subsections (H2) with narrative + landscape tables
+//         * Internal Dose Assessment (H2) with narrow portrait Table 7
+//         * Apical Endpoint BMD Summary (H2) with Table 8
+//         * Gene Set BMD Analysis (H2) with Tables 9-10 + GO descriptions
+//         * Gene BMD Analysis (H2) with Tables 11-12 + gene descriptions
+//     - Summary (H1)
+//     - References (H1, numbered list, 10pt)
+//
 // Typography matches the NIEHS Report 10 PDF (NBK589955):
 //   Body:     12pt Times New Roman (Liberation Serif as metric equiv)
 //   Headings: Arial Bold (Liberation Sans as metric equiv)
 //   Tables:   10pt body, horizontal-rule-only borders
-//   Title:    24pt Myriad Pro / Liberation Sans fallback
+//   Title:    20pt Liberation Sans Bold (inner title page)
 // =====================================================================
 
 
@@ -61,8 +86,11 @@
   // at y=47.2pt and y=61.0pt.  NOT italic, NOT bold.
   // Typst marks page headers/footers as Artifacts automatically,
   // so screen readers skip them (correct PDF/UA behavior).
+  //
+  // The header is suppressed on the very first page (inner title page)
+  // by checking the absolute page counter.  Front matter and body pages
+  // all show the running header.
   header: context {
-    // Skip header on the first page (title page)
     if counter(page).get().first() > 1 {
       set text(size: 12pt, font: "Liberation Serif")
       // Constrain header text to ~270pt wide box, centered on page.
@@ -72,17 +100,23 @@
     }
   },
   // Page number in footer — 12pt, centered, matching NIEHS PDF (y=753.4pt)
-  // Also automatically artifacted by Typst for PDF/UA
+  // Also automatically artifacted by Typst for PDF/UA.
+  //
+  // Front matter pages use roman numerals (ii, iii, iv, ...);
+  // body pages use arabic numerals (1, 2, 3, ...).
+  // The first page (title) has no footer.
   footer: context {
-    set text(size: 12pt, font: "Liberation Serif")
-    align(center, counter(page).display())
+    if counter(page).get().first() > 1 {
+      set text(size: 12pt, font: "Liberation Serif")
+      align(center, counter(page).display())
+    }
   },
 )
 
 
 // --- Body text ---
 // 12pt Times New Roman (Liberation Serif is metrically identical).
-// 1.5x line spacing matches the NIEHS report.
+// Leading and spacing measured from the NIEHS PDF.
 #set text(
   font: "Liberation Serif",
   size: 12pt,
@@ -267,69 +301,287 @@
 
 
 // =====================================================================
-// DOCUMENT BODY — assembled from the JSON data
+// Convenience: extract chemical identity fields used throughout
+// =====================================================================
+
+#let chem = data.at("chemical_name", default: "Test Article")
+#let casrn = data.at("casrn", default: "")
+#let dtxsid = data.at("dtxsid", default: "")
+#let report-number = data.at("report_number", default: "")
+#let report-date = data.at("report_date", default: "")
+#let report-series = data.at("report_series", default: "NIEHS Report Series")
+
+
+// =====================================================================
+// FRONT MATTER — roman numeral pages
+//
+// The NIEHS PDF uses roman numerals (ii through xi) for front matter,
+// with arabic numerals starting at "Background" (page 1).  The inner
+// title page (page 1 absolute) has no header or footer.
+//
+// Typst's counter(page).display("i") produces lowercase roman numerals.
+// We set the footer format to roman here and switch to arabic at the
+// body content transition.
 // =====================================================================
 
 
-// --- Title block ---
-// Matches the NIEHS inner title page (page 2):
-//   20pt bold, centered, full study title including chemical name,
-//   CASRN in parentheses, strain, and species.
+// =====================================================================
+// PAGE 1: Inner title page
+//
+// NIEHS page 2: centered bold title, report number, date, publisher.
+// No running header, no page number.
+// =====================================================================
+
 #align(center)[
-  #block(below: 18pt, above: 0pt)[
+  #block(below: 18pt, above: 72pt)[
     #set text(font: "Liberation Sans", size: 20pt, weight: "bold")
 
-    // Full title: "In Vivo Repeat Dose Biological Potency Study of
-    //              <Chemical> (CASRN <casrn>) in Sprague Dawley Rats"
-    #let chem = data.at("chemical_name", default: "Test Article")
-    #let casrn = data.at("casrn", default: "")
+    // Full title: "NIEHS Report on the In Vivo Repeat Dose Biological
+    // Potency Study of <Chemical> (CASRN <casrn>) in Sprague Dawley
+    // (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)"
     #let casrn-part = if casrn != "" { " (CASRN " + casrn + ")" } else { "" }
+    #let strain = data.at("strain", default: "(Hsd:Sprague Dawley® SD®)")
 
-    In Vivo Repeat Dose Biological Potency Study of
-    #chem#casrn-part
-    in Sprague Dawley Rats
+    NIEHS Report on the \
+    In Vivo Repeat Dose Biological Potency Study of \
+    #chem#casrn-part \
+    in Sprague Dawley #strain Rats \
+    (Gavage Studies)
 
-    // Report number and date, matching NIEHS format
-    #v(12pt)
+    // Report number (e.g., "NIEHS Report 10")
+    #if report-number != "" {
+      v(12pt)
+      set text(size: 12pt, weight: "regular")
+      report-number
+    }
+
+    // Date
+    #if report-date != "" {
+      v(8pt)
+      set text(size: 12pt, weight: "regular")
+      report-date
+    }
+
+    // Publisher block — centered, below the title
+    #v(72pt)
     #set text(size: 12pt, weight: "regular")
-    #data.at("author", default: "5dToxReport")
+    National Institute of Environmental Health Sciences \
+    Public Health Service \
+    U.S. Department of Health and Human Services \
+    #if data.at("issn", default: "") != "" {
+      [ISSN: #data.at("issn", default: "")]
+      linebreak()
+    }
+    Research Triangle Park, North Carolina, USA
   ]
 ]
 
 
-// --- Background ---
-// Each major section (H1) starts on a new page, matching the NIEHS PDF
-// where Background (pg13), M&M (pg14), Results (pg23), and Summary (pg47)
-// all begin at the top of a fresh page.
-#if data.at("background", default: none) != none {
+// =====================================================================
+// FRONT MATTER PAGES: Foreword, TOC, About, Peer Review, etc.
+//
+// All front matter pages use roman numeral pagination.  We set the
+// page counter display to roman numerals and start at "ii" (the inner
+// title page was "i" implicitly but had no visible footer).
+// =====================================================================
+
+// Start roman numbering at ii (title page was conceptually "i")
+#set page(
+  footer: context {
+    set text(size: 12pt, font: "Liberation Serif")
+    align(center, counter(page).display("i"))
+  },
+)
+#counter(page).update(2)
+
+
+// --- Foreword ---
+// NIEHS page 3 (ii): boilerplate about the NIEHS mission and report series.
+// Provided as data.foreword (paragraphs array) or omitted.
+#if data.at("foreword", default: none) != none {
   pagebreak()
-  let bg = data.background
-  heading(level: 1, "Background")
-  for para in bg.at("paragraphs", default: ()) {
+  heading(level: 1, "Foreword")
+  for para in data.foreword.at("paragraphs", default: ()) {
     [#para]
     parbreak()
   }
+}
 
-  // References
-  let refs = bg.at("references", default: ())
-  if refs.len() > 0 {
-    heading(level: 2, "References")
-    set text(size: 10pt)
-    for (i, ref) in refs.enumerate() {
-      [#(i + 1). #ref]
+
+// --- Table of Contents ---
+// NIEHS pages 4-5 (iii-iv): auto-generated from heading hierarchy.
+// The outline() function generates a linked TOC from all headings.
+#pagebreak()
+#heading(level: 1, outlined: false, "Table of Contents")
+#outline(
+  title: none,    // We already placed the heading above
+  indent: 1.5em,  // Indent sub-sections
+  depth: 3,       // Show H1, H2, H3
+)
+
+// --- Tables list ---
+// NIEHS page 5 (iv): list of all tables by number.
+// We use Typst's built-in figure outline for tables.
+// Tables are wrapped in figure() calls with kind: "table" for this to work.
+// For now, we emit a "Tables" heading; the list will populate automatically
+// if/when tables are converted to figure() wrappers in a future iteration.
+#v(24pt)
+#heading(level: 1, outlined: false, "Tables")
+#context {
+  // Show outline of table figures if any exist
+  let table-figs = query(figure.where(kind: table))
+  if table-figs.len() > 0 {
+    outline(title: none, target: figure.where(kind: table))
+  } else {
+    // Placeholder — table numbering is currently inline in captions
+    text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+  }
+}
+
+
+// --- About This Report ---
+// NIEHS pages 6-8 (v-vii): authors list with affiliations, then
+// contributor roles organized by institution.  Data arrives as
+// data.about_report with "authors" and "contributors" arrays.
+#if data.at("about_report", default: none) != none {
+  pagebreak()
+  let about = data.about_report
+  heading(level: 1, "About This Report")
+
+  // Authors section
+  let authors = about.at("authors", default: none)
+  if authors != none {
+    heading(level: 2, "Authors")
+    for para in authors.at("paragraphs", default: ()) {
+      [#para]
+      parbreak()
+    }
+  }
+
+  // Contributors section
+  let contributors = about.at("contributors", default: none)
+  if contributors != none {
+    heading(level: 2, "Contributors")
+    for para in contributors.at("paragraphs", default: ()) {
+      [#para]
       parbreak()
     }
   }
 }
 
 
+// --- Peer Review ---
+// NIEHS page 9 (viii): brief statement about the peer review process.
+#if data.at("peer_review", default: none) != none {
+  pagebreak()
+  heading(level: 1, "Peer Review")
+  for para in data.peer_review.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+}
+
+
+// --- Publication Details ---
+// NIEHS page 10 (ix): publisher, ISSN, DOI, official citation.
+#if data.at("publication_details", default: none) != none {
+  pagebreak()
+  let pub = data.publication_details
+  heading(level: 1, "Publication Details")
+  for para in pub.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+}
+
+
+// --- Acknowledgments ---
+// NIEHS page 10 (ix): funding acknowledgment, appears on same page
+// as publication details in the NIEHS PDF.
+#if data.at("acknowledgments", default: none) != none {
+  heading(level: 1, "Acknowledgments")
+  for para in data.acknowledgments.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+}
+
+
+// --- Abstract ---
+// NIEHS pages 11-12 (x-xi): structured abstract with bold inline labels
+// (Background:, Methods:, Results:, Summary:).  Each label starts a
+// paragraph.  The Abstract is the last front-matter section before the
+// page counter resets to arabic.
+#if data.at("abstract", default: none) != none {
+  pagebreak()
+  heading(level: 1, "Abstract")
+
+  let abs = data.abstract
+  // Each subsection has a bold label followed by body text
+  for sub in abs.at("sections", default: ()) {
+    let lbl = sub.at("label", default: "")
+    let txt = sub.at("text", default: "")
+    if lbl != "" {
+      [*#lbl:* #txt]
+    } else {
+      [#txt]
+    }
+    parbreak()
+  }
+
+  // Flat paragraphs fallback (if not using labeled sections)
+  for para in abs.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+}
+
+
+// =====================================================================
+// BODY — arabic numeral pages, counter reset to 1
+//
+// The NIEHS PDF resets page numbering to "1" at the Background section.
+// We switch the footer display format to arabic and reset the counter.
+// =====================================================================
+
+// Reset to arabic numbering starting at page 1
+#set page(
+  footer: context {
+    set text(size: 12pt, font: "Liberation Serif")
+    align(center, counter(page).display("1"))
+  },
+)
+#counter(page).update(1)
+
+
+// --- Background ---
+// NIEHS page 13 (body page 1): Background H1 with body paragraphs
+// containing superscript reference numbers.
+// Each major section (H1) starts on a new page, matching the NIEHS PDF
+// where Background (pg13), M&M (pg14), Results (pg23), and Summary (pg47)
+// all begin at the top of a fresh page.
+#if data.at("background", default: none) != none {
+  pagebreak(weak: true)
+  let bg = data.background
+  heading(level: 1, "Background")
+  for para in bg.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+}
+
+
 // --- Materials and Methods ---
+// NIEHS pages 14-22 (body 2-10): structured hierarchy of H2/H3 subsections.
+// Table 1 (Final Sample Counts) appears inline within the Transcriptomics
+// subsection on page 17.
 #if data.at("methods", default: none) != none {
   pagebreak()
   let methods = data.methods
   heading(level: 1, "Materials and Methods")
 
-  // Structured sections
+  // Structured sections — each has a heading level, paragraphs, and
+  // optionally an inline table (e.g., Table 1 — Study Design).
   for sec in methods.at("sections", default: ()) {
     let lvl = sec.at("level", default: 3)
     if lvl <= 3 {
@@ -343,7 +595,7 @@
       parbreak()
     }
 
-    // Inline table (e.g., Table 1 — Study Design)
+    // Inline table (e.g., Table 1 — Study Design sample counts)
     let tbl = sec.at("table", default: none)
     if tbl != none {
       niehs-table(
@@ -355,7 +607,8 @@
     }
   }
 
-  // Legacy flat paragraphs fallback
+  // Legacy flat paragraphs fallback — for methods data that hasn't
+  // been structured into headed sections yet.
   if methods.at("sections", default: ()).len() == 0 {
     for para in methods.at("paragraphs", default: ()) {
       [#para]
@@ -365,11 +618,45 @@
 }
 
 
-// --- Results ---
+// =====================================================================
+// RESULTS
+//
+// NIEHS pages 23-46 (body 11-34): the largest section of the report.
+// Structure:
+//   Results (H1)
+//   ├── Animal Condition, Body Weights, and Organ Weights (H2)
+//   │   ├── narrative paragraphs (portrait)
+//   │   ├── Table 2: Body Weights (LANDSCAPE)
+//   │   └── Table 3: Liver Weights (LANDSCAPE)
+//   ├── Clinical Pathology (H2)
+//   │   ├── narrative paragraphs (portrait)
+//   │   ├── Table 4: Clinical Chemistry (LANDSCAPE)
+//   │   ├── Table 5: Hematology (LANDSCAPE)
+//   │   └── Table 6: Hormones (LANDSCAPE)
+//   ├── Internal Dose Assessment (H2)
+//   │   ├── narrative paragraphs
+//   │   └── Table 7: Plasma Concentrations (portrait, narrow)
+//   ├── Apical Endpoint BMD Summary (H2)
+//   │   └── Table 8: BMD Summary (portrait, 6-col)
+//   ├── Gene Set Benchmark Dose Analysis (H2)
+//   │   ├── narrative paragraphs
+//   │   ├── Table 9: Liver Gene Sets (portrait, multi-page)
+//   │   │   └── GO process descriptions
+//   │   └── Table 10: Kidney Gene Sets (portrait, multi-page)
+//   │       └── GO process descriptions
+//   └── Gene Benchmark Dose Analysis (H2)
+//       ├── narrative paragraphs
+//       ├── Table 11: Liver Genes (portrait, multi-page)
+//       │   └── Gene descriptions (UniProt/Entrez)
+//       └── Table 12: Kidney Genes (portrait, multi-page)
+//           └── Gene descriptions (UniProt/Entrez)
+// =====================================================================
+
 // Compute whether we have any results content.  This variable is
 // used below to conditionally emit the "Results" H1 heading.
 #let has-results = (
   data.at("apical_sections", default: ()).len() > 0 or
+  data.at("internal_dose", default: none) != none or
   data.at("bmd_summary", default: none) != none or
   data.at("genomics_sections", default: ()).len() > 0
 )
@@ -378,6 +665,7 @@
   pagebreak()
   heading(level: 1, "Results")
 }
+
 
 // --- Apical endpoint sections ---
 // NIEHS pattern: narrative on portrait page, then each wide dose-response
@@ -389,7 +677,7 @@
 //
 // We reproduce this by:
 //   1. Emitting narrative paragraphs in portrait mode
-//   2. For each sex's dose-response table: pagebreak → landscape → table → pagebreak → portrait
+//   2. For each sex's dose-response table: landscape → table → portrait
 //   3. The landscape threshold is ≥5 dose groups (matching NIEHS behavior)
 #for sec in data.at("apical_sections", default: ()) {
   heading(level: 2, sec.at("title", default: "Apical Endpoints"))
@@ -473,6 +761,7 @@
           tbl-rows,
           caption: if caption-text != "" { caption-text },
           numeric-cols: num-cols,
+          footnotes: sec.at("footnotes", default: ()),
         )
         // --- Return to portrait after the table ---
         // The next `set page(flipped: false)` (or any subsequent content
@@ -485,6 +774,7 @@
           tbl-rows,
           caption: if caption-text != "" { caption-text },
           numeric-cols: num-cols,
+          footnotes: sec.at("footnotes", default: ()),
         )
         v(12pt)
       }
@@ -493,17 +783,50 @@
 }
 
 
-// --- BMD Summary ---
-// In the NIEHS PDF, the BMD summary (Table 8) appears on page 31 after
-// the Internal Dose Assessment text.  It's a 6-column portrait table.
-// We place it on its own page to match the NIEHS pattern of keeping
-// each major results subsection visually separated.
+// --- Internal Dose Assessment ---
+// NIEHS page 30 (body 18): narrative about plasma concentrations and
+// half-lives, followed by Table 7 (narrow, 3-column portrait table with
+// 2-hour and 24-hour postdose concentrations for 4 and 37 mg/kg groups).
+#if data.at("internal_dose", default: none) != none {
+  let idose = data.internal_dose
+  heading(level: 2, "Internal Dose Assessment")
+
+  // Narrative paragraphs
+  for para in idose.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
+  }
+
+  // Table 7 — narrow portrait table
+  let tbl = idose.at("table", default: none)
+  if tbl != none {
+    niehs-table(
+      tbl.at("headers", default: ()),
+      tbl.at("rows", default: ()),
+      caption: tbl.at("caption", default: none),
+      footnotes: tbl.at("footnotes", default: ()),
+    )
+    v(12pt)
+  }
+}
+
+
+// --- Apical Endpoint BMD Summary ---
+// NIEHS page 31 (body 19): Table 8 — sex-grouped 6-column portrait table
+// showing BMD, BMDL, LOEL, NOEL, and direction for each endpoint.
+// Preceded by a brief narrative paragraph.
 #if data.at("bmd_summary", default: none) != none {
   let bmd = data.bmd_summary
   let endpoints = bmd.at("endpoints", default: ())
   if endpoints.len() > 0 {
     pagebreak()
-    heading(level: 2, "Apical Endpoint BMD Summary")
+    heading(level: 2, "Apical Endpoint Benchmark Dose Summary")
+
+    // Optional narrative before the table
+    for para in bmd.at("paragraphs", default: ()) {
+      [#para]
+      parbreak()
+    }
 
     let male-eps = endpoints.filter(e => e.at("sex", default: "") == "Male")
     let female-eps = endpoints.filter(e => e.at("sex", default: "") == "Female")
@@ -530,82 +853,285 @@
       ("Endpoint", "BMD₁Std", "BMDL₁Std", "LOEL", "NOEL", "Direction"),
       male-rows,
       female-rows,
-      caption: "Apical Endpoint BMD Summary",
+      caption: bmd.at("caption", default: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"),
       numeric-cols: (1, 2, 3, 4),
+      footnotes: bmd.at("footnotes", default: ()),
     )
   }
 }
 
 
 // --- Genomics Results ---
-// In the NIEHS PDF, "Gene Set Benchmark Dose Analysis" (H2) starts on
-// page 31 after the BMD summary table.  "Gene Benchmark Dose Analysis"
-// (H2) starts on a new page (page 38).  Each organ's gene set table
-// (Tables 9-10) and gene table (Tables 11-12) flow continuously in
-// portrait orientation.
+// NIEHS pages 31-46 (body 19-34): two major H2 subsections:
+//   1. Gene Set Benchmark Dose Analysis — narrative + Tables 9-10 + GO descriptions
+//   2. Gene Benchmark Dose Analysis — narrative + Tables 11-12 + gene descriptions
+//
+// Each organ (liver, kidney) has its own table.  Gene set tables use an
+// 8-column layout; gene tables use a 6-column layout.  Both are portrait.
+// GO descriptions and gene descriptions (UniProt/Entrez text) follow their
+// respective tables as dense 9pt text blocks.
 #let genomics = data.at("genomics_sections", default: ())
 #if genomics.len() > 0 {
-  pagebreak()
-  heading(level: 2, "Transcriptomic BMD Analysis")
 
-  for gs-sec in genomics {
-    let organ = gs-sec.at("organ", default: "")
-    let sex = gs-sec.at("sex", default: "")
-    let label = upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
+  // --- Gene Set Benchmark Dose Analysis ---
+  // NIEHS page 31 (body 19): H2 heading + narrative, then Tables 9-10
+  let gene-set-sections = genomics.filter(gs => gs.at("type", default: "gene_set") == "gene_set")
+  let gene-sections = genomics.filter(gs => gs.at("type", default: "") == "gene")
 
-    heading(level: 3, label)
+  // If we have gene_set type sections, emit them under the Gene Set heading.
+  // If the data doesn't use the "type" field, fall back to the original
+  // behavior of rendering everything under a single "Transcriptomic BMD Analysis" heading.
+  let has-typed-sections = gene-set-sections.len() > 0 or gene-sections.len() > 0
 
-    // Gene sets table
-    let gene-sets = gs-sec.at("gene_sets", default: ())
-    if gene-sets.len() > 0 {
-      let gs-rows = gene-sets.map(gs => (
-        gs.at("go_term", default: ""),
-        gs.at("go_id", default: ""),
-        fmt-val3(gs.at("bmd_median", default: none)),
-        fmt-val3(gs.at("bmdl_median", default: none)),
-        str(gs.at("n_genes", default: "")),
-        gs.at("direction", default: ""),
-      ))
+  if has-typed-sections {
+    // --- Gene Set BMD Analysis (H2) ---
+    if gene-set-sections.len() > 0 {
+      pagebreak()
+      heading(level: 2, "Gene Set Benchmark Dose Analysis")
 
-      niehs-table(
-        ("GO Term", "GO ID", "BMD Median", "BMDL Median", "# Genes", "Direction"),
-        gs-rows,
-        caption: "Gene Set BMD Analysis — " + label,
-        numeric-cols: (2, 3, 4),
-      )
-      v(8pt)
+      // Shared narrative for gene set analysis
+      let gs-narrative = data.at("gene_set_narrative", default: none)
+      if gs-narrative != none {
+        for para in gs-narrative.at("paragraphs", default: ()) {
+          [#para]
+          parbreak()
+        }
+      }
+
+      for gs-sec in gene-set-sections {
+        let organ = gs-sec.at("organ", default: "")
+        let sex = gs-sec.at("sex", default: "")
+        let label = if organ != "" and sex != "" {
+          upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
+        } else if organ != "" {
+          upper(organ.first()) + organ.slice(1)
+        } else { "" }
+
+        if label != "" { heading(level: 3, label) }
+
+        // Gene sets table
+        let gene-sets = gs-sec.at("gene_sets", default: ())
+        if gene-sets.len() > 0 {
+          let gs-rows = gene-sets.map(gs => (
+            gs.at("go_term", default: ""),
+            gs.at("go_id", default: ""),
+            fmt-val3(gs.at("bmd_median", default: none)),
+            fmt-val3(gs.at("bmdl_median", default: none)),
+            str(gs.at("n_genes", default: "")),
+            gs.at("direction", default: ""),
+          ))
+
+          niehs-table(
+            ("GO Term", "GO ID", "BMD Median", "BMDL Median", "# Genes", "Direction"),
+            gs-rows,
+            caption: gs-sec.at("caption", default: "Gene Set BMD Analysis — " + label),
+            numeric-cols: (2, 3, 4),
+            footnotes: gs-sec.at("footnotes", default: ()),
+          )
+          v(8pt)
+        }
+
+        // GO process descriptions — dense 9pt text block following the table
+        // In the NIEHS PDF, these appear as compact paragraphs with bold
+        // GO IDs followed by their definitions.
+        let go-descriptions = gs-sec.at("go_descriptions", default: ())
+        if go-descriptions.len() > 0 {
+          set text(size: 9pt)
+          set par(leading: 0.3em, spacing: 3pt)
+          for desc in go-descriptions {
+            let go-id = desc.at("go_id", default: "")
+            let go-name = desc.at("name", default: "")
+            let definition = desc.at("definition", default: "")
+            [*#go-id #go-name:* #definition]
+            parbreak()
+          }
+        }
+      }
     }
 
-    // Top genes table
-    let top-genes = gs-sec.at("top_genes", default: ())
-    if top-genes.len() > 0 {
-      let gene-rows = top-genes.map(g => (
-        // Gene symbols are conventionally italicized in biology
-        emph(g.at("gene_symbol", default: "")),
-        fmt-val3(g.at("bmd", default: none)),
-        fmt-val3(g.at("bmdl", default: none)),
-        fmt-val(g.at("fold_change", default: none)),
-        g.at("direction", default: ""),
-      ))
+    // --- Gene BMD Analysis (H2) ---
+    // NIEHS page 38 (body 26): starts on a new page
+    if gene-sections.len() > 0 {
+      pagebreak()
+      heading(level: 2, "Gene Benchmark Dose Analysis")
 
-      niehs-table(
-        ("Gene", "BMD", "BMDL", "Fold Change", "Direction"),
-        gene-rows,
-        caption: "Gene BMD Analysis — " + label,
-        numeric-cols: (1, 2, 3),
-      )
-      v(8pt)
+      // Shared narrative for gene analysis
+      let gene-narrative = data.at("gene_narrative", default: none)
+      if gene-narrative != none {
+        for para in gene-narrative.at("paragraphs", default: ()) {
+          [#para]
+          parbreak()
+        }
+      }
+
+      for g-sec in gene-sections {
+        let organ = g-sec.at("organ", default: "")
+        let sex = g-sec.at("sex", default: "")
+        let label = if organ != "" and sex != "" {
+          upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
+        } else if organ != "" {
+          upper(organ.first()) + organ.slice(1)
+        } else { "" }
+
+        if label != "" { heading(level: 3, label) }
+
+        // Top genes table
+        let top-genes = g-sec.at("top_genes", default: ())
+        if top-genes.len() > 0 {
+          let gene-rows = top-genes.map(g => (
+            // Gene symbols are conventionally italicized in biology
+            emph(g.at("gene_symbol", default: "")),
+            fmt-val3(g.at("bmd", default: none)),
+            fmt-val3(g.at("bmdl", default: none)),
+            fmt-val(g.at("fold_change", default: none)),
+            g.at("direction", default: ""),
+          ))
+
+          niehs-table(
+            ("Gene", "BMD", "BMDL", "Fold Change", "Direction"),
+            gene-rows,
+            caption: g-sec.at("caption", default: "Gene BMD Analysis — " + label),
+            numeric-cols: (1, 2, 3),
+            footnotes: g-sec.at("footnotes", default: ()),
+          )
+          v(8pt)
+        }
+
+        // Gene descriptions — dense text block with UniProt/Entrez annotations
+        // In the NIEHS PDF (pages 41-46, 44-46), each gene symbol is bold
+        // followed by its functional description from public databases.
+        let gene-descriptions = g-sec.at("gene_descriptions", default: ())
+        if gene-descriptions.len() > 0 {
+          set text(size: 9pt)
+          set par(leading: 0.3em, spacing: 3pt)
+          for desc in gene-descriptions {
+            let symbol = desc.at("gene_symbol", default: "")
+            let description = desc.at("description", default: "")
+            [*#emph(symbol):* #description]
+            parbreak()
+          }
+        }
+      }
+    }
+
+  } else {
+    // --- Fallback: untyped genomics sections ---
+    // Original behavior — all genomics data under a single heading.
+    // Used when the data doesn't distinguish gene_set vs gene types.
+    pagebreak()
+    heading(level: 2, "Transcriptomic BMD Analysis")
+
+    for gs-sec in genomics {
+      let organ = gs-sec.at("organ", default: "")
+      let sex = gs-sec.at("sex", default: "")
+      let label = upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
+
+      heading(level: 3, label)
+
+      // Gene sets table
+      let gene-sets = gs-sec.at("gene_sets", default: ())
+      if gene-sets.len() > 0 {
+        let gs-rows = gene-sets.map(gs => (
+          gs.at("go_term", default: ""),
+          gs.at("go_id", default: ""),
+          fmt-val3(gs.at("bmd_median", default: none)),
+          fmt-val3(gs.at("bmdl_median", default: none)),
+          str(gs.at("n_genes", default: "")),
+          gs.at("direction", default: ""),
+        ))
+
+        niehs-table(
+          ("GO Term", "GO ID", "BMD Median", "BMDL Median", "# Genes", "Direction"),
+          gs-rows,
+          caption: "Gene Set BMD Analysis — " + label,
+          numeric-cols: (2, 3, 4),
+        )
+        v(8pt)
+      }
+
+      // GO descriptions (if provided)
+      let go-descriptions = gs-sec.at("go_descriptions", default: ())
+      if go-descriptions.len() > 0 {
+        set text(size: 9pt)
+        set par(leading: 0.3em, spacing: 3pt)
+        for desc in go-descriptions {
+          let go-id = desc.at("go_id", default: "")
+          let go-name = desc.at("name", default: "")
+          let definition = desc.at("definition", default: "")
+          [*#go-id #go-name:* #definition]
+          parbreak()
+        }
+      }
+
+      // Top genes table
+      let top-genes = gs-sec.at("top_genes", default: ())
+      if top-genes.len() > 0 {
+        let gene-rows = top-genes.map(g => (
+          emph(g.at("gene_symbol", default: "")),
+          fmt-val3(g.at("bmd", default: none)),
+          fmt-val3(g.at("bmdl", default: none)),
+          fmt-val(g.at("fold_change", default: none)),
+          g.at("direction", default: ""),
+        ))
+
+        niehs-table(
+          ("Gene", "BMD", "BMDL", "Fold Change", "Direction"),
+          gene-rows,
+          caption: "Gene BMD Analysis — " + label,
+          numeric-cols: (1, 2, 3),
+        )
+        v(8pt)
+      }
+
+      // Gene descriptions (if provided)
+      let gene-descriptions = gs-sec.at("gene_descriptions", default: ())
+      if gene-descriptions.len() > 0 {
+        set text(size: 9pt)
+        set par(leading: 0.3em, spacing: 3pt)
+        for desc in gene-descriptions {
+          let symbol = desc.at("gene_symbol", default: "")
+          let description = desc.at("description", default: "")
+          [*#emph(symbol):* #description]
+          parbreak()
+        }
+      }
     }
   }
 }
 
 
 // --- Summary ---
+// NIEHS page 47 (body 35): concluding paragraphs synthesizing all results.
 #if data.at("summary", default: none) != none {
   pagebreak()
   heading(level: 1, "Summary")
   for para in data.summary.at("paragraphs", default: ()) {
     [#para]
+    parbreak()
+  }
+}
+
+
+// --- References ---
+// NIEHS pages 48-50 (body 36-38): numbered reference list in 10pt text
+// with hanging indent.  In the NIEHS PDF, references are a standalone H1
+// section (not nested under Background).  URLs appear as blue links.
+//
+// References can be provided as:
+//   1. data.references (top-level array) — preferred, standalone section
+//   2. data.background.references — legacy location, backward compatible
+#let refs = data.at("references", default: ())
+// Fall back to background.references if no top-level references
+#if refs.len() == 0 {
+  refs = data.at("background", default: (:)).at("references", default: ())
+}
+#if refs.len() > 0 {
+  pagebreak()
+  heading(level: 1, "References")
+  set text(size: 10pt)
+  set par(hanging-indent: 2em)  // Hanging indent for reference entries
+  for (i, ref) in refs.enumerate() {
+    [#(i + 1). #ref]
     parbreak()
   }
 }
