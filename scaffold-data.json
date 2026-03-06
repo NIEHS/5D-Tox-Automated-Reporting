@@ -1,0 +1,318 @@
+{
+  "title": "In Vivo Repeat Dose Biological Potency Study of Perfluorohexanesulfonamide in Sprague Dawley Rats",
+  "author": "5dToxReport",
+  "running_header": "In Vivo Repeat Dose Biological Potency Study of Perfluorohexanesulfonamide in Sprague Dawley Rats",
+  "chemical_name": "Perfluorohexanesulfonamide",
+  "casrn": "41997-13-1",
+  "dtxsid": "DTXSID50469320",
+  "report_number": "\u00abNIEHS Report XX\u00bb",
+  "report_date": "\u00abMonth Year\u00bb",
+  "issn": "2768-5632",
+  "strain": "(Hsd:Sprague Dawley\u00ae SD\u00ae)",
+  "report_series": "NIEHS Report Series",
+  "test_article": {
+    "name": "Perfluorohexanesulfonamide",
+    "abbreviation": "PFHxSAm",
+    "casrn": "41997-13-1",
+    "dtxsid": "DTXSID50469320",
+    "pubchem_cid": "11603678",
+    "ec_number": "816-398-1",
+    "forms": {
+      "title": {
+        "text": "Perfluorohexanesulfonamide (CASRN 41997-13-1)",
+        "placement": [
+          "cover_page",
+          "inner_title_page"
+        ]
+      },
+      "running_header": {
+        "text": "Perfluorohexanesulfonamide",
+        "placement": [
+          "page_header"
+        ]
+      },
+      "section_intro": {
+        "text": "Perfluorohexanesulfonamide (PFHxSAm)",
+        "placement": [
+          "abstract_first_sentence",
+          "methods_first_mention",
+          "results_first_mention",
+          "summary_first_sentence"
+        ]
+      },
+      "background_intro": {
+        "text": "Perfluorohexanesulfonamide (PFHxSAm) (CASRN: 41997-13-1, U.S. Environmental Protection Agency [EPA] Chemical Dashboard: DTXSID50469320, PubChem CID: 11603678, European Committee Number: 816-398-1)",
+        "placement": [
+          "background_first_sentence"
+        ]
+      },
+      "prose": {
+        "text": "PFHxSAm",
+        "placement": [
+          "body_after_intro"
+        ]
+      },
+      "table_caption": {
+        "text": "Perfluorohexanesulfonamide",
+        "placement": [
+          "all_table_captions"
+        ]
+      },
+      "procedural": {
+        "text": "test article",
+        "placement": [
+          "methods_procedural_context"
+        ]
+      },
+      "reference": {
+        "text": "Perfluorohexanesulfonamide",
+        "placement": [
+          "reference_list_entries"
+        ]
+      }
+    }
+  },
+  "foreword": {
+    "paragraphs": [
+      "The National Institute of Environmental Health Sciences (NIEHS) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.",
+      "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the Division of Translational Toxicology (DTT) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.",
+      "NIEHS reports are available free of charge on the NIEHS/DTT website and cataloged in PubMed, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+    ]
+  },
+  "about_report": {
+    "authors": {
+      "paragraphs": []
+    },
+    "contributors": {
+      "paragraphs": []
+    }
+  },
+  "peer_review": {
+    "paragraphs": [
+      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley\u00ae SD\u00ae) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Perfluorohexanesulfonamide in Sprague Dawley Rats was not subjected to further external peer review."
+    ]
+  },
+  "publication_details": {
+    "paragraphs": [
+      "Publisher: National Institute of Environmental Health Sciences",
+      "Publishing Location: Research Triangle Park, NC",
+      "ISSN: 2768-5632",
+      "\u00abDOI: https://doi.org/10.22427/NIEHS-XX\u00bb",
+      "Report Series: NIEHS Report Series",
+      "\u00abReport Series Number: XX\u00bb"
+    ]
+  },
+  "acknowledgments": {
+    "paragraphs": [
+      "This work was supported by the Intramural Research Program at the National Institute of Environmental Health Sciences (NIEHS), National Institutes of Health and performed for NIEHS under contract."
+    ]
+  },
+  "abstract": {
+    "sections": [
+      {
+        "label": "Background",
+        "text": ""
+      },
+      {
+        "label": "Methods",
+        "text": ""
+      },
+      {
+        "label": "Results",
+        "text": ""
+      },
+      {
+        "label": "Summary",
+        "text": ""
+      }
+    ]
+  },
+  "background": {
+    "paragraphs": []
+  },
+  "methods": {
+    "sections": [
+      {
+        "level": 2,
+        "heading": "Study Design",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Dose Selection Rationale",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Chemistry",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Clinical Examinations and Sample Collection",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Clinical Observations",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Body and Organ Weights",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Clinical Pathology",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Internal Dose Assessment",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Transcriptomics",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Sample Collection for Transcriptomics",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "RNA Isolation, Library Creation, and Sequencing",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Sequence Data Processing",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Sequencing Quality Checks and Outlier Removal",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Data Normalization",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Data Analysis",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Benchmark Dose Analysis of Transcriptomics Data",
+        "paragraphs": []
+      },
+      {
+        "level": 3,
+        "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+        "paragraphs": []
+      },
+      {
+        "level": 2,
+        "heading": "Data Accessibility",
+        "paragraphs": []
+      }
+    ]
+  },
+  "apical_sections": [
+    {
+      "title": "Animal Condition, Body Weights, and Organ Weights",
+      "caption": "",
+      "compound": "Perfluorohexanesulfonamide",
+      "dose_unit": "mg/kg",
+      "narrative": [],
+      "table_data": {},
+      "footnotes": []
+    },
+    {
+      "title": "Clinical Pathology",
+      "caption": "",
+      "compound": "Perfluorohexanesulfonamide",
+      "dose_unit": "mg/kg",
+      "narrative": [],
+      "table_data": {},
+      "footnotes": []
+    }
+  ],
+  "internal_dose": {
+    "paragraphs": []
+  },
+  "bmd_summary": {
+    "paragraphs": [],
+    "endpoints": [
+      {
+        "sex": "Male",
+        "endpoint": "\u2014",
+        "bmd": null,
+        "bmdl": null,
+        "loel": null,
+        "noel": null,
+        "direction": "\u2014"
+      }
+    ]
+  },
+  "genomics_sections": [
+    {
+      "type": "gene_set",
+      "organ": "liver",
+      "sex": "male",
+      "caption": "",
+      "gene_sets": [],
+      "go_descriptions": []
+    },
+    {
+      "type": "gene_set",
+      "organ": "kidney",
+      "sex": "male",
+      "caption": "",
+      "gene_sets": [],
+      "go_descriptions": []
+    },
+    {
+      "type": "gene",
+      "organ": "liver",
+      "sex": "male",
+      "caption": "",
+      "top_genes": [],
+      "gene_descriptions": []
+    },
+    {
+      "type": "gene",
+      "organ": "kidney",
+      "sex": "male",
+      "caption": "",
+      "top_genes": [],
+      "gene_descriptions": []
+    }
+  ],
+  "gene_set_narrative": {
+    "paragraphs": []
+  },
+  "gene_narrative": {
+    "paragraphs": []
+  },
+  "summary": {
+    "paragraphs": []
+  },
+  "references": []
+}

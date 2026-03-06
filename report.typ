@@ -43,9 +43,32 @@
 
 
 // --- Parse the incoming JSON data ---
-// sys.inputs is a dictionary of string key-value pairs passed from
-// the Python caller.  "data" contains the full report as a JSON string.
-#let data = json.decode(sys.inputs.data)
+//
+// Two modes of operation:
+//
+//   1. Production mode (from Python):
+//      typst.compile() passes data via sys.inputs.data as a JSON string.
+//      This is how the web app and API call the template.
+//
+//   2. Preview/dev mode (from typst watch / typst.app / VS Code + Tinymist):
+//      When sys.inputs has no "data" key, the template loads scaffold data
+//      from scaffold-data.json in the same directory.  This enables live
+//      preview editing — change the .typ file, see the result instantly.
+//
+//      To regenerate scaffold-data.json after changing the data schema:
+//        uv run python -c "
+//          from report_pdf import scaffold_report_data; import json
+//          data = scaffold_report_data(chemical_name='Perfluorohexanesulfonamide',
+//            casrn='41997-13-1', dtxsid='DTXSID50469320')
+//          open('scaffold-data.json','w').write(json.dumps(data, indent=2, default=str))
+//        "
+#let data = if "data" in sys.inputs {
+  // Production: data injected by Python typst.compile() call
+  json.decode(sys.inputs.data)
+} else {
+  // Dev/preview: load scaffold JSON from file for live editing
+  json("scaffold-data.json")
+}
 
 
 // --- Document metadata ---
@@ -91,11 +114,19 @@
   // by checking the absolute page counter.  Front matter and body pages
   // all show the running header.
   header: context {
-    if counter(page).get().first() > 1 {
+    // Suppress header on the first two physical pages (cover + inner title).
+    // counter(page) tracks the logical page number, but the cover page uses
+    // page() which creates its own scope.  We use the physical page counter
+    // (here.page()) which counts from 1 regardless of counter resets.
+    // Page 1 = cover (has its own header: none), page 2 = inner title.
+    if here().page() > 2 {
       set text(size: 12pt, font: "Liberation Serif")
       // Constrain header text to ~270pt wide box, centered on page.
       // The NIEHS PDF header wraps at ~261pt text width (line 1: 242.6pt,
       // line 2: 260.9pt), so a 270pt box reproduces the same line breaks.
+      //
+      // Uses data.running_header (which is built from ta.forms.running_header
+      // — the full name, never abbreviated).
       align(center, box(width: 270pt, align(center, data.at("running_header", default: ""))))
     }
   },
@@ -106,7 +137,9 @@
   // body pages use arabic numerals (1, 2, 3, ...).
   // The first page (title) has no footer.
   footer: context {
-    if counter(page).get().first() > 1 {
+    // Suppress footer on cover (page 1) and inner title (page 2).
+    // Same physical page check as the header.
+    if here().page() > 2 {
       set text(size: 12pt, font: "Liberation Serif")
       align(center, counter(page).display())
     }
@@ -307,6 +340,41 @@
 #let chem = data.at("chemical_name", default: "Test Article")
 #let casrn = data.at("casrn", default: "")
 #let dtxsid = data.at("dtxsid", default: "")
+
+
+// =====================================================================
+// Test article name forms
+//
+// The NIEHS Report 10 follows strict conventions for how the test
+// article is named at each structural position in the document:
+//
+//   title:            Full name (CASRN xxx)     — title pages
+//   running_header:   Full name                 — page headers
+//   section_intro:    Full name (Abbreviation)  — first sentence of each H1
+//   background_intro: Full name (Abbrev) (all IDs) — Background first sentence
+//   prose:            Abbreviation              — body text after introduction
+//   table_caption:    Full name                 — all table captions
+//   procedural:       "test article"            — methods procedural context
+//   reference:        Full name                 — reference list entries
+//
+// These forms are pre-computed by the Python build_test_article_forms()
+// function and passed in as data.test_article.forms.  The template pulls
+// the .text field from the appropriate form at each position.
+//
+// If no test_article object is provided (backward compatibility), the
+// template falls back to data.chemical_name for all positions.
+// =====================================================================
+
+#let ta = data.at("test_article", default: none)
+#let ta-forms = if ta != none { ta.at("forms", default: (:)) } else { (:) }
+
+// Helper: resolve a name form by key, with fallback to chemical_name.
+// This is the single access point for all chemical name references in
+// the template — ensures consistent form usage and easy auditing.
+#let ta-form(key) = {
+  let form = ta-forms.at(key, default: none)
+  if form != none { form.at("text", default: chem) } else { chem }
+}
 #let report-number = data.at("report_number", default: "")
 #let report-date = data.at("report_date", default: "")
 #let report-series = data.at("report_series", default: "NIEHS Report Series")
@@ -326,11 +394,130 @@
 
 
 // =====================================================================
-// PAGE 1: Inner title page
+// COVER PAGE: Green gradient background with geometric hexagon overlay
+//
+// NIEHS page 1: full-bleed cover with:
+//   - White header band (top ~100pt) with institution name
+//   - Bicolor accent bar: dark gray (#525457) left, green (#78a12e) right
+//   - Sage green (#cedbb5) background with hexagonal pattern overlay
+//   - Title in 30pt Liberation Sans Bold, #535557
+//   - Report number and date in 12pt, #231f20
+//   - No page number, no running header
+//
+// This page uses a completely custom layout (full-bleed background,
+// zero margins, no header/footer) and is excluded from the page
+// counter.  The inner title page follows on the next page.
+// =====================================================================
+
+// Cover page colors extracted from NIEHS Report 10 (NBK589955) page 1
+// using PyMuPDF drawing analysis.
+#let cover-dark-gray = rgb("#525457")
+#let cover-green-accent = rgb("#78a12e")
+#let cover-bg-sage = rgb("#cedbb5")
+#let cover-title-color = rgb("#535557")
+#let cover-meta-color = rgb("#231f20")
+
+// Use page() function to create a single custom page without affecting
+// subsequent pages' settings.  The zero margins give a full-bleed effect.
+#page(margin: 0pt, header: none, footer: none)[
+
+  // --- White header band ---
+  // Contains the institution name (no NIH logo — we use text only).
+  // Occupies the top ~100pt of the page.
+  #place(top + left, box(
+    width: 100%,
+    height: 102pt,
+    fill: white,
+    // Institution name positioned like the NIEHS PDF: left-aligned,
+    // ~40pt from left edge, vertically centered in the white band.
+    pad(left: 40pt, top: 30pt,
+      text(
+        font: "Liberation Sans",
+        size: 12.7pt,
+        weight: "bold",
+        fill: cover-title-color,
+        [National Institute of \ Environmental Health Sciences]
+      )
+    )
+  ))
+
+  // --- Bicolor accent bar ---
+  // Dark gray left portion (0 to ~72pt), green for the remainder.
+  // Sits at y=102pt, height ~17pt.
+  #place(top + left, dy: 102pt, box(
+    width: 72pt,
+    height: 17pt,
+    fill: cover-dark-gray,
+  ))
+  #place(top + left, dx: 65pt, dy: 102pt, box(
+    width: 100% - 65pt,
+    height: 17pt,
+    fill: cover-green-accent,
+  ))
+
+  // --- Green background area ---
+  // Sage green fill covering from below the accent bar to the page bottom.
+  #place(top + left, dy: 119pt, box(
+    width: 100%,
+    height: 100% - 119pt,
+    fill: cover-bg-sage,
+  ))
+
+  // --- Hexagonal geometric overlay ---
+  // Semi-transparent pattern image extracted from the NIEHS PDF.
+  // Positioned to fill the green area below the accent bar.
+  #place(top + left, dy: 119pt,
+    image("cover-bg.jpg", width: 100%, height: 100% - 119pt, fit: "cover", alt: "Decorative green geometric hexagonal pattern background")
+  )
+
+  // --- Title block ---
+  // NIEHS uses Myriad Pro Bold 30pt; we use Liberation Sans (metrically
+  // similar sans-serif available in all Typst environments).  Color is
+  // #535557 (dark gray, not black — gives a softer look against green).
+  #place(top + left, dx: 72pt, dy: 190pt, box(width: 75%)[
+    #set text(font: "Liberation Sans", size: 30pt, weight: "bold", fill: cover-title-color)
+    #set par(leading: 8pt)
+    NIEHS Report on the \
+    In Vivo Repeat Dose \
+    Biological Potency Study of \
+    #ta-form("title") \
+    in Sprague Dawley \
+    #data.at("strain", default: "(Hsd:Sprague Dawley® SD®)") \
+    Rats (Gavage Studies)
+  ])
+
+  // --- Report number ---
+  // Smaller text below the title, left-aligned with it.
+  #place(top + left, dx: 72pt, dy: 530pt, box[
+    #set text(font: "Liberation Sans", size: 12pt, fill: cover-meta-color)
+    #data.at("report_number", default: "")
+  ])
+
+  // --- Date ---
+  // Near the bottom of the page, left-aligned.
+  #place(top + left, dx: 72pt, dy: 660pt, box[
+    #set text(font: "Liberation Sans", size: 12pt, fill: cover-meta-color)
+    #data.at("report_date", default: "")
+  ])
+]
+
+
+// =====================================================================
+// PAGE 2: Inner title page
 //
 // NIEHS page 2: centered bold title, report number, date, publisher.
 // No running header, no page number.
+//
+// Restore normal page margins and suppress header/footer on this page
+// (they start on the Foreword page).  The cover page's `set page` with
+// zero margins was scoped inside a block, so Typst's page settings
+// revert to the defaults declared at the top of the document.
 // =====================================================================
+
+// The global header checks counter(page) > 1 to suppress on page 1.
+// Since the cover added a page, we reset the counter so the inner
+// title page is page 1 again (matching the original header suppression).
+#counter(page).update(1)
 
 #align(center)[
   #block(below: 18pt, above: 72pt)[
@@ -339,12 +526,16 @@
     // Full title: "NIEHS Report on the In Vivo Repeat Dose Biological
     // Potency Study of <Chemical> (CASRN <casrn>) in Sprague Dawley
     // (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)"
-    #let casrn-part = if casrn != "" { " (CASRN " + casrn + ")" } else { "" }
+    //
+    // Uses the "title" name form which includes "(CASRN xxx)" when
+    // a CASRN is available.  This is the most formal identification
+    // of the test article in the entire document.
+    #let title-name = ta-form("title")
     #let strain = data.at("strain", default: "(Hsd:Sprague Dawley® SD®)")
 
     NIEHS Report on the \
     In Vivo Repeat Dose Biological Potency Study of \
-    #chem#casrn-part \
+    #title-name \
     in Sprague Dawley #strain Rats \
     (Gavage Studies)
 
@@ -583,8 +774,12 @@
   // Structured sections — each has a heading level, paragraphs, and
   // optionally an inline table (e.g., Table 1 — Study Design).
   for sec in methods.at("sections", default: ()) {
-    let lvl = sec.at("level", default: 3)
-    if lvl <= 3 {
+    // Data level 2 → Typst H2, data level 3 → Typst H3.
+    // These map directly: the scaffold uses level 2 for top-level M&M
+    // subsections (Study Design, Chemistry, etc.) and level 3 for
+    // nested sub-subsections (Clinical Observations, RNA Isolation, etc.)
+    let lvl = sec.at("level", default: 2)
+    if lvl <= 2 {
       heading(level: 2, sec.at("heading", default: ""))
     } else {
       heading(level: 3, sec.at("heading", default: ""))
@@ -693,9 +888,13 @@
   for sex in ("Male", "Female") {
     let rows-data = sec.at("table_data", default: (:)).at(sex, default: ())
     if rows-data.len() > 0 {
+      // Caption template supports {sex} and {compound} placeholders.
+      // {compound} uses the table_caption name form (full name, never abbreviated)
+      // if a test_article object is available; otherwise falls back to the
+      // section's compound field.
       let caption-text = sec.at("caption", default: "")
         .replace("{sex}", sex)
-        .replace("{compound}", sec.at("compound", default: "Test Compound"))
+        .replace("{compound}", ta-form("table_caption"))
 
       let doses = rows-data.at(0).at("doses", default: ())
 

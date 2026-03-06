@@ -3052,6 +3052,72 @@ async def api_export_pdf(request: Request):
     )
 
 
+# ---------------------------------------------------------------------------
+# GET /api/export-pdf-scaffold — generate a scaffold PDF showing all sections
+# ---------------------------------------------------------------------------
+
+@app.get("/api/export-pdf-scaffold")
+async def api_export_pdf_scaffold(
+    chemical_name: str = "Test Article",
+    casrn: str = "000-00-0",
+    dtxsid: str = "DTXSID0000000",
+):
+    """
+    Generate a complete scaffold PDF with placeholder content in every section.
+
+    This endpoint produces a full NIEHS Report 10-structured PDF with all
+    sections populated by clearly-marked placeholder text (wrapped in angle
+    quotes).  The purpose is to show the exact page flow, typography, table
+    layout, landscape pages, and pagination that the final report will have.
+
+    Every template code path is exercised: title page, roman-numeral front
+    matter (foreword, TOC, tables list, about, peer review, pub details,
+    acknowledgments, abstract), arabic body pages (background, M&M with
+    Table 1, results with landscape dose-response tables, internal dose
+    portrait table, BMD summary sex-grouped table, genomics gene set
+    and gene tables with GO/gene descriptions), summary, and references.
+
+    Query parameters allow customizing the chemical identity on the
+    title page and throughout the document:
+      ?chemical_name=Perfluorohexanesulfonamide&casrn=41997-13-1&dtxsid=DTXSID50469320
+
+    Returns the PDF as a downloadable attachment.
+    """
+    from report_pdf import build_report_pdf, scaffold_report_data
+
+    try:
+        data = scaffold_report_data(
+            chemical_name=chemical_name,
+            casrn=casrn,
+            dtxsid=dtxsid,
+        )
+        pdf_bytes = build_report_pdf(data)
+    except Exception as e:
+        logging.exception("Scaffold PDF generation failed")
+        return JSONResponse(
+            {"error": f"Scaffold PDF generation failed: {e}"},
+            status_code=500,
+        )
+
+    # Clean filename from chemical name
+    safe_name = "".join(c if c.isalnum() or c in " -_" else "_"
+                        for c in chemical_name)
+    filename = f"5dToxReport_Scaffold_{safe_name}.pdf"
+
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".pdf", prefix="5dtox_scaffold_",
+    )
+    tmp.write(pdf_bytes)
+    tmp.close()
+
+    return FileResponse(
+        tmp.name,
+        filename=filename,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _add_text_with_superscript_refs(paragraph, text: str) -> None:
     """
     Add text to a paragraph, converting [N] reference markers to superscript.
