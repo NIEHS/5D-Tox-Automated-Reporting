@@ -3713,6 +3713,89 @@ async def api_pool_integrate(dtxsid: str):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/integrated/{dtxsid} — stream the full cached integrated.json
+# ---------------------------------------------------------------------------
+# Serves the integrated.json directly from disk via FileResponse (streaming).
+# Does NOT re-run integration — just reads the cached file.  Used by the
+# "Preview Data" modal which streams it via Oboe.js for progressive rendering.
+
+
+@app.get("/api/integrated/{dtxsid}")
+async def api_integrated_full(dtxsid: str):
+    """
+    Stream the full integrated BMDProject JSON from disk.
+
+    Returns the cached integrated.json via FileResponse (chunked streaming)
+    so the browser can parse it progressively with Oboe.js.  If no cached
+    file exists, returns 404 — the caller should trigger integration first.
+    """
+    integrated_path = _session_dir(dtxsid) / "integrated.json"
+    if not integrated_path.exists():
+        return JSONResponse(
+            {"error": "No integrated data found — run integration first"},
+            status_code=404,
+        )
+    return FileResponse(
+        path=str(integrated_path),
+        media_type="application/json",
+        filename="integrated.json",
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/integrated-summary/{dtxsid} — lightweight summary of integrated data
+# ---------------------------------------------------------------------------
+# Returns metadata, experiment list, and probe counts without the full 60MB+
+# experiment response arrays.  Used by the Data tab previewer on session restore.
+
+
+@app.get("/api/integrated-summary/{dtxsid}")
+async def api_integrated_summary(dtxsid: str):
+    """
+    Return a lightweight summary of the integrated BMDProject.
+
+    Loads from in-memory cache or disk, then extracts only the metadata
+    and per-experiment names/probe counts — NOT the full response arrays.
+    """
+    integrated = _integrated_pool.get(dtxsid)
+    if integrated is None:
+        integrated_path = _session_dir(dtxsid) / "integrated.json"
+        if integrated_path.exists():
+            try:
+                integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
+                _integrated_pool[dtxsid] = integrated
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    if not integrated:
+        return JSONResponse(
+            {"error": "No integrated data found"},
+            status_code=404,
+        )
+
+    meta = integrated.get("_meta", {})
+    experiments = integrated.get("doseResponseExperiments", [])
+    bmd_results = integrated.get("bMDResult", [])
+    cat_results = integrated.get("categoryAnalysisResults", [])
+
+    # Build experiment summaries (name + probe count only — no response data)
+    exp_summaries = []
+    for exp in experiments:
+        exp_summaries.append({
+            "name": exp.get("name", ""),
+            "probe_count": len(exp.get("probeResponses", [])),
+        })
+
+    return JSONResponse({
+        "_meta": meta,
+        "experiment_count": len(experiments),
+        "experiments": exp_summaries,
+        "bmd_result_count": len(bmd_results),
+        "category_analysis_count": len(cat_results),
+    })
+
+
+# ---------------------------------------------------------------------------
 # POST /api/process-integrated/{dtxsid} — generate sections from integrated data
 # ---------------------------------------------------------------------------
 # Replaces per-file process-bm2 calls for the auto-processing flow.

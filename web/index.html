@@ -89,65 +89,81 @@
             </div><!-- /section-body -->
         </div>
 
-        <!-- Unified File Pool — single drop zone for both .bm2 and .csv files.
+        <!-- Data tab — integrated data previewer + collapsible data pool.
              Hidden until background section is generated so the user completes
              chemical identity first. -->
-        <div class="bm2-section" id="file-pool-section" style="display:none;" data-collapsible data-tab-section="Files">
-            <div class="section-header-bar" onclick="toggleSection(this)">
-                <h2>File Pool</h2>
-                <button class="btn-small danger" id="btn-clear-files" onclick="event.stopPropagation(); clearAllFiles()" style="display:none">
-                    Clear Files
-                </button>
-            </div>
-            <div class="section-body">
-            <p class="section-desc">
-                Upload BMDExpress 3 .bm2 files (apical endpoints) and/or
-                gene-level BMD CSV files (transcriptomic data) into a shared pool.
-                Then use the Section Builder below to create report sections from them.
-            </p>
+        <div id="data-tab-section" style="display:none;" data-tab-section="Data">
 
-            <!-- Unified drag-and-drop zone accepting .bm2, .csv, .txt, .xlsx, and .zip -->
-            <div class="drop-zone" id="unified-drop-zone" onclick="document.getElementById('unified-file-input').click()">
-                Drop .bm2, .csv, .txt, .xlsx, or .zip files here or click to browse
-                <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.xlsx,.zip" multiple>
-            </div>
-
-            <!-- File pool list — collapsible container for uploaded files.
-                 The summary line updates automatically with file type counts. -->
-            <div class="ar-collapse ar-open" id="file-pool-collapse">
-                <div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">
-                    <span class="ar-chevron">▸</span>
-                    <span id="file-pool-summary">Uploaded files</span>
+            <!-- Integrated Data Previewer — shows the fully integrated dataset
+                 at a glance: experiments, domains, probe counts, gene expression
+                 coverage.  Populated by renderIntegratedPreview() after pool
+                 approval or session restore. -->
+            <div id="integrated-preview" class="integrated-preview" style="display:none;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+                    <h2 style="margin:0;">Integrated Dataset</h2>
+                    <button class="btn-action" id="btn-preview-integrated" onclick="previewIntegratedData()">Preview Data</button>
                 </div>
-                <div class="ar-collapse-body">
-                    <div id="file-pool-list"></div>
-                </div>
+                <div id="integrated-preview-content"></div>
             </div>
 
-            <!-- Pool Validation panel — collapsible panel below the file list
-                 showing a coverage matrix (domain × tier), validation issues,
-                 and conflict resolution controls.  Hidden until files are
-                 present and the user clicks "Validate & Integrate". -->
-            <div id="validation-panel" style="display:none;">
-                <div class="validation-header" onclick="toggleValidationPanel()">
-                    <span class="validation-chevron">▸</span>
-                    <span>Pool Validation</span>
-                    <span class="validation-summary" id="validation-summary"></span>
-                    <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()">
-                        Validate &amp; Integrate
+            <!-- Data Pool — upload, validate, integrate. -->
+            <div class="bm2-section" id="file-pool-section" data-collapsible>
+                <div class="section-header-bar" onclick="toggleSection(this)">
+                    <h2>Data Pool</h2>
+                    <button class="btn-small danger" id="btn-clear-files" onclick="event.stopPropagation(); clearAllFiles()" style="display:none">
+                        Clear Files
                     </button>
-                    <button class="btn-small approve" id="btn-approve-pool" onclick="event.stopPropagation(); approvePool()" style="display:none">
-                        Approve
-                    </button>
-                    <span class="approved-badge" id="badge-pool" style="display:none">Approved</span>
                 </div>
-                <div class="validation-body" id="validation-body" style="display:none;">
-                    <div id="coverage-matrix"></div>
-                    <div id="validation-issues"></div>
-                    <div id="animal-report-content"></div>
+                <div class="section-body">
+                <p class="section-desc">
+                    Upload BMDExpress 3 .bm2 files (apical endpoints) and/or
+                    gene-level BMD CSV files (transcriptomic data) into a shared pool.
+                    Then use the Section Builder below to create report sections from them.
+                </p>
+
+                <!-- Unified drag-and-drop zone accepting .bm2, .csv, .txt, .xlsx, and .zip -->
+                <div class="drop-zone" id="unified-drop-zone" onclick="document.getElementById('unified-file-input').click()">
+                    Drop .bm2, .csv, .txt, .xlsx, or .zip files here or click to browse
+                    <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.xlsx,.zip" multiple>
                 </div>
+
+                <!-- File pool list — collapsible container for uploaded files.
+                     The summary line updates automatically with file type counts. -->
+                <div class="ar-collapse" id="file-pool-collapse">
+                    <div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">
+                        <span class="ar-chevron">▸</span>
+                        <span id="file-pool-summary">Uploaded files</span>
+                    </div>
+                    <div class="ar-collapse-body">
+                        <div id="file-pool-list"></div>
+                    </div>
+                </div>
+
+                <!-- Pool Validation panel — collapsible panel below the file list
+                     showing a coverage matrix (domain × tier), validation issues,
+                     and conflict resolution controls.  Hidden until files are
+                     present and the user clicks "Validate & Integrate". -->
+                <div id="validation-panel" style="display:none;">
+                    <div class="validation-header" onclick="toggleValidationPanel()">
+                        <span class="validation-chevron">▸</span>
+                        <span>Pool Validation</span>
+                        <span class="validation-summary" id="validation-summary"></span>
+                        <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()">
+                            Validate &amp; Integrate
+                        </button>
+                        <button class="btn-small approve" id="btn-approve-pool" onclick="event.stopPropagation(); approvePool()" style="display:none">
+                            Approve
+                        </button>
+                        <span class="approved-badge" id="badge-pool" style="display:none">Approved</span>
+                    </div>
+                    <div class="validation-body" id="validation-body" style="display:none;">
+                        <div id="coverage-matrix"></div>
+                        <div id="validation-issues"></div>
+                        <div id="animal-report-content"></div>
+                    </div>
+                </div>
+                </div><!-- /section-body -->
             </div>
-            </div><!-- /section-body -->
         </div>
 
         <!-- Section Builder — form for creating report sections from pooled files.
@@ -399,6 +415,11 @@
          1. state.js  — global variables and constants (no DOM access)
          2. utils.js  — shared UI helpers (show/hide, lock/unlock, apiFetch, etc.)
          3. main.js   — all application logic (chemistry, sections, approval, etc.) -->
+    <!-- Oboe.js — streaming JSON parser for progressive rendering of large
+         datasets (e.g. the ~68 MB integrated BMDProject).  Parses the HTTP
+         response incrementally so we can build the JSON tree in the Preview
+         Data modal without holding the entire string in memory at once. -->
+    <script src="https://unpkg.com/oboe@2.1.5/dist/oboe-browser.min.js"></script>
     <script src="/js/state.js"></script>
     <script src="/js/utils.js"></script>
     <script src="/js/main.js"></script>

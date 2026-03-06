@@ -1487,7 +1487,7 @@ header p {
  * Three header patterns supported:
  *   1) .section-toggle  — bare h2 (Chemical ID, Apical Results, etc.)
  *   2) .output-header   — h2 + action buttons (Background, Methods, etc.)
- *   3) .section-header-bar — h2 + extra controls (File Pool)
+ *   3) .section-header-bar — h2 + extra controls (Data Pool)
  * All three get a chevron via ::before on the h2 and cursor:pointer.
  * ---------------------------------------------------------------- */
 
@@ -1665,7 +1665,7 @@ header p {
 /* ----------------------------------------------------------------
    Validation panel — coverage matrix, issues, and conflict resolution
    ----------------------------------------------------------------
-   Sits below the file pool list inside the File Pool section.
+   Sits below the file pool list inside the Data Pool section.
    Collapsible via a header bar with a chevron, summary badge,
    and "Validate & Integrate" action button.
    ---------------------------------------------------------------- */
@@ -1766,24 +1766,86 @@ header p {
  * ---------------------------------------------------------------- */
 
 /* Container for the integration summary, rendered inline below validation */
+/* Integrated data previewer — top of the Data tab, shows dataset at a glance */
 .integrated-preview {
-    margin-top: 0.75rem;
-    padding: 0.6rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
     border: 1px solid var(--c-border-light);
     border-radius: var(--r-md);
     background: var(--c-bg);
 }
 
-.integration-summary h4 {
-    font-size: 0.85rem;
-    margin: 0 0 0.3rem 0;
+.integrated-preview h2 {
+    font-size: 0.95rem;
+    margin: 0 0 0.6rem 0;
     color: var(--c-text);
 }
 
-.integration-summary p {
-    font-size: 0.75rem;
+/* Stat cards row — compact key metrics */
+.preview-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.stat-card {
+    flex: 1 1 auto;
+    min-width: 5rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-sm);
+    background: var(--c-bg-neutral);
+    text-align: center;
+}
+
+.stat-card .stat-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--c-accent);
+    line-height: 1.2;
+}
+
+.stat-card .stat-label {
+    display: block;
+    font-size: 0.65rem;
     color: var(--c-text-secondary);
-    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Tier badges — colored pills in the source files table */
+.tier-badge {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tier-bm2 { background: #e8f5e9; color: #2e7d32; }
+.tier-xlsx { background: #e3f2fd; color: #1565c0; }
+.tier-csv { background: #fff3e0; color: #e65100; }
+
+/* Genomic row highlight in source files table */
+.source-files-table .genomic-row {
+    background: #f3e5f5;
+}
+
+.source-files-table .filename {
+    max-width: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.source-files-table .num {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Source files table — compact, mirrors coverage matrix style */

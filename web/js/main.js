@@ -80,7 +80,7 @@ function toggleTabbedView() {
 /* Build (or rebuild) the tab bar buttons from visible sections.
    Only sections that are not hidden via style="display:none" get
    a tab.  This should be called whenever a section becomes visible
-   (e.g., after background generation reveals the File Pool). */
+   (e.g., after background generation reveals the Data tab). */
 function buildTabBar() {
     const bar = document.getElementById('tab-bar');
     bar.innerHTML = '';
@@ -470,7 +470,7 @@ function displayResult(result) {
     unlockSection(document.getElementById('output-section'));
 
     // Show the file pool, animal report, and section builder now that background is done
-    show('file-pool-section');
+    show('data-tab-section');
 
     show('section-builder');
     if (tabbedViewActive) buildTabBar();
@@ -956,62 +956,104 @@ async function runPoolValidation() {
  *
  * @param {Object} data — the integrated BMDProject JSON from the server
  */
+/**
+ * Render the integrated dataset previewer in the Data tab.
+ *
+ * Accepts either the full integrated BMDProject JSON (from validate flow)
+ * or the lightweight summary (from GET /api/integrated-summary, used on
+ * session restore to avoid loading 60MB+ into the browser).
+ *
+ * Full format has: doseResponseExperiments[], bMDResult[], categoryAnalysisResults[]
+ * Summary format has: experiment_count, experiments[{name, probe_count}],
+ *                     bmd_result_count, category_analysis_count
+ *
+ * @param {Object} data — full integrated JSON or summary response
+ */
 function renderIntegratedDataPreview(data) {
-    // Find or create the container
-    let container = document.getElementById('integrated-preview');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'integrated-preview';
-        container.className = 'integrated-preview';
+    renderIntegratedPreview(data);
+}
 
-        // Insert after the validation body
-        const valBody = document.getElementById('validation-body');
-        if (valBody) valBody.appendChild(container);
-    }
+function renderIntegratedPreview(data) {
+    // Target the pre-existing preview content area in the Data tab.
+    const wrapper = document.getElementById('integrated-preview');
+    const container = document.getElementById('integrated-preview-content');
+    if (!container) return;
+    if (wrapper) wrapper.style.display = '';
 
     const meta = data._meta || {};
     const sources = meta.source_files || {};
-    const expCount = (data.doseResponseExperiments || []).length;
-    const bmdCount = (data.bMDResult || []).length;
 
-    // Build source files summary
+    // Handle both full and summary formats
+    const isSummary = 'experiment_count' in data;
+    const expCount = isSummary ? data.experiment_count : (data.doseResponseExperiments || []).length;
+    const bmdCount = isSummary ? (data.bmd_result_count || 0) : (data.bMDResult || []).length;
+    const catCount = isSummary ? (data.category_analysis_count || 0) : (data.categoryAnalysisResults || []).length;
+
+    // Count total endpoints (probes) across all experiments
+    let totalProbes = 0;
+    if (isSummary) {
+        for (const exp of (data.experiments || [])) {
+            totalProbes += exp.probe_count || 0;
+        }
+    } else {
+        for (const exp of (data.doseResponseExperiments || [])) {
+            totalProbes += (exp.probeResponses || []).length;
+        }
+    }
+
+    // Domain labels for the source files table
+    const domainLabels = {
+        body_weight: 'Body Weight', organ_weights: 'Organ Weights',
+        clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
+        hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
+        clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
+    };
+
+    // Build source file rows — one per domain
     const sourceRows = Object.entries(sources).map(([domain, info]) => {
-        const tierBadge = info.tier === 'bm2' ? '🔬 bm2' :
-                          info.tier === 'xlsx' ? '📊 xlsx' : '📄 ' + info.tier;
-        return `<tr>
-            <td>${escapeHtml(domain.replace(/_/g, ' '))}</td>
-            <td><code>${escapeHtml(info.filename)}</code></td>
-            <td>${tierBadge}</td>
-            <td>${info.experiment_count || 0}</td>
+        const tierClass = info.tier === 'bm2' ? 'tier-bm2' :
+                          info.tier === 'xlsx' ? 'tier-xlsx' : 'tier-csv';
+        const label = domainLabels[domain] || domain.replace(/_/g, ' ');
+        const isGenomic = domain === 'gene_expression';
+
+        return `<tr class="${isGenomic ? 'genomic-row' : ''}">
+            <td><strong>${escapeHtml(label)}</strong></td>
+            <td><code class="filename">${escapeHtml(info.filename || '—')}</code></td>
+            <td><span class="tier-badge ${tierClass}">${info.tier || '?'}</span></td>
+            <td class="num">${info.experiment_count || 0}</td>
         </tr>`;
     }).join('');
 
-    container.innerHTML = `
-        <div class="integration-summary">
-            <h4>Integrated Data</h4>
-            <p>${expCount} experiments, ${bmdCount} BMD results from ${Object.keys(sources).length} domains</p>
-            <table class="source-files-table">
-                <thead><tr><th>Domain</th><th>Source file</th><th>Tier</th><th>Experiments</th></tr></thead>
-                <tbody>${sourceRows}</tbody>
-            </table>
-            <details class="integrated-json-tree">
-                <summary>Browse merged data (JSON tree)</summary>
-                <div id="integrated-json-container"></div>
-            </details>
-        </div>
-    `;
+    const domainCount = Object.keys(sources).length;
 
-    // Render the JSON tree on expand (lazy — avoids rendering thousands of nodes
-    // for large BMDProject structures until the user actually opens it)
-    const details = container.querySelector('details.integrated-json-tree');
-    details.addEventListener('toggle', function handler() {
-        if (details.open) {
-            const jsonContainer = document.getElementById('integrated-json-container');
-            if (jsonContainer && jsonContainer.children.length === 0) {
-                renderJsonTree(data, jsonContainer, 0, 1);
-            }
-        }
-    }, { once: false });
+    container.innerHTML = `
+        <div class="preview-stats">
+            <div class="stat-card">
+                <span class="stat-value">${domainCount}</span>
+                <span class="stat-label">Domains</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${expCount}</span>
+                <span class="stat-label">Experiments</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${totalProbes.toLocaleString()}</span>
+                <span class="stat-label">Endpoints</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${bmdCount}</span>
+                <span class="stat-label">BMD Results</span>
+            </div>
+            ${catCount > 0 ? `<div class="stat-card">
+                <span class="stat-value">${catCount}</span>
+                <span class="stat-label">Category Analyses</span>
+            </div>` : ''}
+        </div>
+        <table class="source-files-table">
+            <thead><tr><th>Domain</th><th>Source File</th><th>Tier</th><th>Experiments</th></tr></thead>
+            <tbody>${sourceRows}</tbody>
+        </table>
+    `;
 }
 
 /**
@@ -2949,7 +2991,7 @@ async function restoreSession(data) {
     // create an apicalSections entry, and create the result card.
     if (data.bm2_sections && Object.keys(data.bm2_sections).length > 0) {
         // Show the file pool, animal report, section builder, and results section
-        show('file-pool-section');
+        show('data-tab-section');
     
         show('section-builder');
         show('bm2-results-section');
@@ -3039,7 +3081,7 @@ async function restoreSession(data) {
     if (data.pending_files && data.pending_files.length > 0) {
         // Make sure the file pool, animal report, and section builder are visible
         // so the user can assign pending files to report sections.
-        show('file-pool-section');
+        show('data-tab-section');
     
         show('section-builder');
 
@@ -3128,7 +3170,7 @@ async function restoreSession(data) {
     // entry (type='csv', restored: true), render a greyed file pool item,
     // create a genomicsResults entry, and create the results card.
     if (data.genomics_sections && Object.keys(data.genomics_sections).length > 0) {
-        show('file-pool-section');
+        show('data-tab-section');
     
         show('section-builder');
         show('genomics-results-section');
@@ -3190,6 +3232,16 @@ async function restoreSession(data) {
         animalReportApproved = true;
         renderAnimalReport(animalReportData);
         setButtons('pool', 'approved');
+
+        // Fetch the lightweight integrated data summary for the previewer.
+        // This avoids loading the full 60MB+ integrated.json into the browser.
+        try {
+            const summaryResp = await fetch(`/api/integrated-summary/${currentIdentity.dtxsid}`);
+            if (summaryResp.ok) {
+                const summaryData = await summaryResp.json();
+                renderIntegratedPreview(summaryData);
+            }
+        } catch (_) { /* non-critical — previewer just stays hidden */ }
     }
 
     // --- Auto-process pending files if pool was approved but sections are missing ---
@@ -3557,6 +3609,150 @@ async function previewMethodsContext() {
             <div class="modal-info-card">
                 <div class="info-icon">\u26a0\ufe0f</div>
                 <div class="info-text">Failed to load context: ${err.message}</div>
+            </div>`;
+    }
+}
+
+
+/**
+ * Preview the full integrated BMDProject in the file preview modal.
+ *
+ * Streams the integrated JSON from GET /api/integrated/{dtxsid} using
+ * Oboe.js for progressive parsing.  Each top-level key is rendered as
+ * a collapsible sub-tree as soon as it arrives, so the user sees
+ * progress instead of waiting for the full ~68 MB payload.
+ * Falls back to standard fetch if Oboe.js is not loaded.
+ */
+async function previewIntegratedData() {
+    const dtxsid = currentIdentity?.dtxsid;
+    if (!dtxsid) {
+        showError('DTXSID required to preview integrated data');
+        return;
+    }
+
+    const badge = document.getElementById('modal-badge');
+    badge.textContent = 'DATA';
+    badge.className = 'file-badge bm2';
+
+    document.getElementById('modal-title').textContent = 'Integrated BMDProject — Full Data Tree';
+
+    const body = document.getElementById('modal-body');
+    body.innerHTML = '<div class="modal-loading"><div class="spinner"></div>Streaming integrated data\u2026</div>';
+
+    document.getElementById('file-preview-modal').style.display = 'flex';
+
+    _previewEscapeHandler = (e) => {
+        if (e.key === 'Escape') closePreviewModal();
+    };
+    document.addEventListener('keydown', _previewEscapeHandler);
+
+    const url = `/api/integrated/${dtxsid}`;
+
+    // -- Oboe streaming path --
+    // Uses Oboe.js to incrementally parse the JSON response.  For each
+    // top-level key we append a labeled sub-tree to the modal body as
+    // soon as its value is fully parsed — gives the user progressive
+    // feedback instead of a single long wait.
+    if (typeof oboe === 'function') {
+        // Wrapper div that will receive the .json-tree class
+        const treeRoot = document.createElement('div');
+        treeRoot.className = 'json-tree';
+
+        // Opening brace line — mirrors renderJsonTree's object rendering
+        const openLine = document.createElement('div');
+        openLine.className = 'json-line';
+        openLine.innerHTML = '<span class="json-bracket">{</span>';
+        treeRoot.appendChild(openLine);
+
+        // Container for the key-value children (always expanded at root)
+        const childrenDiv = document.createElement('div');
+        childrenDiv.className = 'json-children';
+        treeRoot.appendChild(childrenDiv);
+
+        // Closing brace — appended when the stream finishes
+        const closeLine = document.createElement('div');
+        closeLine.className = 'json-line';
+        closeLine.innerHTML = '<span class="json-bracket">}</span>';
+
+        // Track how many keys we've received
+        let keyCount = 0;
+
+        oboe(url)
+            .node('!.*', function (value, path) {
+                // path is an array — for top-level keys it's a single string
+                // e.g. ["doseResponseExperiments"], ["_meta"], etc.
+                if (path.length !== 1) return oboe.drop;
+
+                const key = path[0];
+                keyCount++;
+
+                // On first key, replace the spinner with the tree root
+                if (keyCount === 1) {
+                    body.innerHTML = '';
+                    body.appendChild(treeRoot);
+                }
+
+                // Build the key label line at depth 1
+                const itemLine = document.createElement('div');
+                itemLine.className = 'json-line';
+                itemLine.style.paddingLeft = '1.2rem';
+
+                const keySpan = document.createElement('span');
+                keySpan.className = 'json-key';
+                keySpan.textContent = key + ': ';
+                itemLine.appendChild(keySpan);
+
+                // Primitives render inline; objects/arrays recurse
+                if (value !== null && typeof value === 'object') {
+                    childrenDiv.appendChild(itemLine);
+                    renderJsonTree(value, childrenDiv, 1, 2);
+                } else {
+                    itemLine.appendChild(_jsonValueSpan(value));
+                    childrenDiv.appendChild(itemLine);
+                }
+
+                // Tell Oboe to drop this node from memory — avoids
+                // accumulating the entire 68 MB structure in RAM
+                return oboe.drop;
+            })
+            .done(function () {
+                // Stream complete — append the closing brace
+                treeRoot.appendChild(closeLine);
+            })
+            .fail(function (err) {
+                if (keyCount === 0) {
+                    body.innerHTML = `
+                        <div class="modal-info-card">
+                            <div class="info-icon">\u26a0\ufe0f</div>
+                            <div class="info-text">Failed to load integrated data: ${err.statusCode || err.thrown || 'unknown error'}</div>
+                        </div>`;
+                } else {
+                    // Partial render — append error notice below
+                    const notice = document.createElement('div');
+                    notice.className = 'modal-info-card';
+                    notice.innerHTML = `
+                        <div class="info-icon">\u26a0\ufe0f</div>
+                        <div class="info-text">Stream interrupted: ${err.statusCode || err.thrown || 'unknown error'}</div>`;
+                    body.appendChild(notice);
+                }
+            });
+
+        return; // Oboe handles everything asynchronously
+    }
+
+    // -- Fallback: standard fetch (no Oboe available) --
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        const data = await resp.json();
+
+        body.innerHTML = '';
+        renderJsonTree(data, body, 0, 2);
+    } catch (err) {
+        body.innerHTML = `
+            <div class="modal-info-card">
+                <div class="info-icon">\u26a0\ufe0f</div>
+                <div class="info-text">Failed to load integrated data: ${err.message}</div>
             </div>`;
     }
 }
