@@ -187,6 +187,53 @@ def export_bm2(bm2_path: str, output_json: str, output_tsv: str) -> None:
     )
 
 
+def export_genomics(bm2_path: str, output_json: str) -> dict:
+    """
+    Extract genomics results (gene-level BMD + GO BP categories) from a .bm2 file.
+
+    Uses the pre-compiled ExportGenomics.class which deserializes the .bm2 via
+    BMDExpress 3's native Java API, then extracts:
+      1. Per-probe BMD/BMDL/BMDU, direction, rSquared, fold change
+      2. GO Biological Process category analysis with aggregated BMD stats
+
+    Results are grouped by organ × sex experiment.  This is the authoritative
+    source — BMDExpress's own prefilter → curve fit → BMD pipeline ran on the
+    data, and we're reading its results directly.
+
+    Args:
+        bm2_path:    Path to the gene expression .bm2 file.
+        output_json: Path where the genomics JSON will be written.
+
+    Returns:
+        The parsed JSON dict with structure:
+        {
+            "experiments": [
+                {
+                    "name": str, "organ": str, "sex": str,
+                    "total_probes": int,
+                    "genes": [{ "probe_id", "gene_symbol", "bmd", "bmdl",
+                                "bmdu", "direction", "r_squared", ... }],
+                    "go_bp": [{ "go_id", "go_term", "bmd_median", "bmdl_median",
+                                "n_genes", "n_passed", "direction", ... }]
+                }
+            ]
+        }
+    """
+    cp = _build_classpath()
+    helper_dir = str(JAVA_HELPER_DIR)
+
+    subprocess.run(
+        [
+            "java", "-cp", f"{cp}:{helper_dir}",
+            "ExportGenomics", bm2_path, output_json,
+        ],
+        check=True, capture_output=True,
+    )
+
+    with open(output_json, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 # ---------------------------------------------------------------------------
 # Category analysis BMD lookup — parse the TSV export
 # ---------------------------------------------------------------------------

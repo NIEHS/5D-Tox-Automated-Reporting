@@ -838,7 +838,66 @@ header p {
     letter-spacing: 0.04em;
     margin-top: 0.75rem;
     margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
+
+/* "Generate Narrative" button inline with the narrative label */
+.bm2-narrative-label .btn-small {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.75rem;
+}
+
+
+/* ----------------------------------------------------------------
+ * Descriptions blocks — collapsible GO/gene descriptions
+ * ----------------------------------------------------------------
+ * Matches the NIEHS Report 10 dense 9pt description blocks that
+ * appear after each gene set and gene table in the Results section.
+ * Uses <details>/<summary> for click-to-expand since these blocks
+ * can be long and would otherwise dominate the card visually.
+ * ---------------------------------------------------------------- */
+.descriptions-block {
+    margin-top: 0.5rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+}
+
+.descriptions-block summary {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    background: var(--c-bg-light);
+    cursor: pointer;
+    user-select: none;
+}
+
+.descriptions-block summary:hover {
+    background: var(--c-bg-hover, #e2e8f0);
+}
+
+/* Dense 9pt text matching the NIEHS report description blocks */
+.descriptions-content {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.65rem;
+    line-height: 1.45;
+    color: var(--c-text-primary);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.descriptions-content p {
+    margin: 0 0 0.4rem;
+}
+
+.descriptions-content p:last-child {
+    margin-bottom: 0;
+}
+
 
 /* ----------------------------------------------------------------
  * Table preview — NTP-style HTML tables rendered from .bm2 data

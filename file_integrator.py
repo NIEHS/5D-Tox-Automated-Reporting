@@ -1,0 +1,1759 @@
+"""
+file_integrator — File fingerprinting and cross-validation for pool files.
+
+Every file uploaded to a DTXSID session's pool represents experimental data
+at one of three processing tiers:
+
+    xlsx (NTP study team raw)  →  txt/csv (BMDExpress-importable pivot)  →  .bm2 (BMDExpress output)
+
+These tiers describe the *same underlying experimental data* at different
+processing stages.  This module fingerprints each file on addition and
+cross-validates the pool to detect:
+
+  - Coverage gaps (xlsx exists for Tissue Concentration, but no .bm2 analysis)
+  - Structural contradictions (different dose groups or animal counts between tiers)
+  - Redundant files (male_body_weight.csv and male_body_weight.txt identical)
+
+Data precedence (default, user-overridable):
+    xlsx files from the study team are authoritative.  The chain is:
+      1. xlsx  — ground truth (direct from study team)
+      2. txt/csv — derived from xlsx (reformatted for BMDExpress import)
+      3. bm2   — derived from txt/csv (BMDExpress analysis output)
+
+Primary identifiers:
+  - DTXSID is the primary test article identifier
+  - IUPAC name is the source of truth for chemical structure
+
+Usage:
+    from file_integrator import fingerprint_file, validate_pool, lightweight_validate
+
+    # Fingerprint a single file
+    fp = fingerprint_file(file_id, filename, path, "xlsx", ts_added)
+
+    # Full pool validation
+    report = validate_pool(dtxsid, fingerprints)
+
+    # Lightweight check on file addition
+    issues = lightweight_validate(new_fingerprint, existing_fingerprints)
+"""
+
+# ---------------------------------------------------------------------------
+# Imports
+# ---------------------------------------------------------------------------
+
+import json
+import logging
+import os
+import re
+from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
+
+# Tier numbers encode data precedence: lower = more authoritative.
+# xlsx is direct from study teams, txt/csv are reformatted for BMDExpress,
+# bm2 is BMDExpress output (most derived, least authoritative by default).
+TIER_XLSX = 1
+TIER_TXT_CSV = 2
+TIER_BM2 = 3
+
+# Domain detection patterns — maps filename substrings (case-insensitive)
+# to canonical domain names.  The order matters: more specific patterns
+# are checked first so "tissue_conc" doesn't accidentally match "clinical".
+#
+# NTP naming conventions use both snake_case (in txt/csv filenames) and
+# Title_Case (in xlsx filenames).  Each pattern is a tuple of
+# (compiled_regex, domain_name) checked against the filename.
+_DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Gene expression — matches both "Gene_Expression" (bm2) and
+    # organ-prefixed transcriptomics data like "Liver_PFHxSAm_Male_No0.txt".
+    # The organ-prefixed pattern must be VERY large (>100KB) to avoid
+    # false positives from small organ weight files.
+    (re.compile(r"gene.?expression", re.IGNORECASE), "gene_expression"),
+
+    # Tissue concentration — check before generic "clinical" to avoid
+    # "tissue_conc" matching a broader "clin" pattern.
+    (re.compile(r"tissue.?conc", re.IGNORECASE), "tissue_conc"),
+
+    # Clinical observations — "clinical_obs" or "Clinical_Observations"
+    (re.compile(r"clinical.?obs", re.IGNORECASE), "clinical_obs"),
+
+    # Clinical chemistry — "clin_chem" or "Clinical_Chemistry" or "Clinical Chemistry"
+    # The .* bridge handles both short forms ("clin_chem") and full words
+    # ("Clinical_Chemistry") where "ical_" separates "Clin" and "Chem".
+    (re.compile(r"clin.*chem", re.IGNORECASE), "clin_chem"),
+
+    # Hematology — "hematol" or "Hematology"
+    (re.compile(r"hematol", re.IGNORECASE), "hematology"),
+
+    # Hormones — "hormone" or "Hormone"
+    (re.compile(r"hormone", re.IGNORECASE), "hormones"),
+
+    # Organ weights — "organ_weight" or "Organ_Weight"
+    (re.compile(r"organ.?weight", re.IGNORECASE), "organ_weights"),
+
+    # Body weight — "body_weight" or "Body_Weight" or "Body weight"
+    (re.compile(r"body.?weight", re.IGNORECASE), "body_weight"),
+]
+
+# Gene expression txt files are organ-prefixed (e.g., "Liver_PFHxSAm_Male_No0.txt").
+# They're distinguished from other small txt files by having >500 data rows
+# (probes/genes) and organ-prefixed filenames.
+_GENE_EXPR_ORGAN_PATTERN = re.compile(
+    r"^(Liver|Kidney|Lung|Heart|Brain|Thymus|Spleen|Adrenal|Testis|Ovary|Thyroid)",
+    re.IGNORECASE,
+)
+
+# Sex detection patterns for txt/csv filenames (e.g., "male_body_weight.txt").
+# Uses word boundary (\b) but also matches at start-of-string — filenames
+# like "male_body_weight.txt" start with "male" directly, and \b treats
+# the underscore as a word character.  So we also match at string boundaries.
+_SEX_PATTERN = re.compile(r"(?:^|[\b_\-\s])(male|female)(?:[\b_\-\s]|$)", re.IGNORECASE)
+
+# BM2 experiment name patterns for sex detection (e.g., "BodyWeightMale")
+_BM2_SEX_PATTERN = re.compile(r"(Male|Female)", re.IGNORECASE)
+
+# BM2 experiment name → domain mapping.  These are the experiment name
+# prefixes used by BMDExpress 3 when exporting apical endpoint data.
+_BM2_DOMAIN_MAP: dict[str, str] = {
+    "bodyweight": "body_weight",
+    "organweight": "organ_weights",
+    "clinicalchemistry": "clin_chem",
+    "hematology": "hematology",
+    "hormone": "hormones",
+    "tissueconcentration": "tissue_conc",
+    "clinicalobservation": "clinical_obs",
+}
+
+
+# ---------------------------------------------------------------------------
+# LLM-based metadata deduction for .bm2 experiment names
+# ---------------------------------------------------------------------------
+# The BMDExpress data model stores clinical endpoints identically to gene
+# expression probes — "Alanine aminotransferase" is a "probe", "SD0" (study
+# day 0) is a "probe".  Experiment names like "female_clin_chem" or
+# "Kidney_PFHxSAm_Male_No0" encode metadata that regex alone can't reliably
+# extract (especially test article names and strain information).
+#
+# We use a cheap, fast LLM call (Haiku) to parse experiment names into
+# structured metadata: sex, organ, species, strain, domain, and test article.
+# This mirrors BMDExpress-3's own LlmMetadataService (Java-side) and uses
+# the same controlled vocabulary from vocabulary.yml.
+
+# Controlled vocabulary — mirrors BMDExpress-3's vocabulary.yml so the LLM
+# targets canonical values that match the augmented ExperimentDescription schema.
+_VOCAB = {
+    "species": [
+        "rat", "mouse", "human", "rabbit", "dog",
+        "monkey", "zebrafish", "guinea pig", "hamster", "pig",
+    ],
+    "strains": {
+        "rat": ["Sprague-Dawley", "Wistar", "Long-Evans", "Fischer 344", "Brown Norway"],
+        "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID"],
+    },
+    "sexes": ["male", "female", "both", "mixed", "NA"],
+    "organs": [
+        "adrenal", "blood", "bone", "brain", "colon", "heart", "intestine",
+        "kidney", "liver", "lung", "muscle", "ovary", "pancreas", "prostate",
+        "skin", "spleen", "stomach", "testes", "thymus", "thyroid", "uterus",
+    ],
+    "domains": [
+        "body_weight", "organ_weights", "clin_chem", "hematology",
+        "hormones", "tissue_conc", "clinical_obs", "gene_expression",
+    ],
+}
+
+# Cache for LLM deduction results — keyed by experiment name string.
+# Avoids redundant API calls when the same experiment names appear in
+# multiple validation runs.  Persists for the process lifetime only.
+_llm_cache: dict[str, dict] = {}
+
+
+def _deduce_metadata_from_experiments(
+    experiment_names: list[str],
+    probe_ids_sample: list[str] | None = None,
+    chip_info: dict | None = None,
+) -> dict:
+    """
+    Use a fast LLM (Haiku) to extract structured metadata from experiment names.
+
+    Given experiment names like ["female_clin_chem", "male_clin_chem"] or
+    ["Kidney_PFHxSAm_Female_No0", "Liver_PFHxSAm_Male_No0"], the LLM
+    returns structured JSON with:
+      - sexes: list of sexes found across all experiments
+      - organs: list of organs (for gene expression)
+      - species: inferred species (from strain, chip, or naming conventions)
+      - strain: inferred strain
+      - domain: the clinical endpoint domain or "gene_expression"
+      - test_article: the chemical compound name if embedded in experiment names
+
+    Falls back to regex-based detection if the LLM is unavailable or fails.
+
+    Args:
+        experiment_names:  List of experiment.name values from BMDProject JSON.
+        probe_ids_sample:  Optional sample of probe/endpoint IDs (first 10) to
+                           help the LLM distinguish clinical endpoints from genes.
+        chip_info:         Optional chip metadata dict with provider, species, name.
+
+    Returns:
+        Dict with keys: sexes, organs, species, strain, domain, test_article.
+        All values are strings or lists of strings; None if not detected.
+    """
+    if not experiment_names:
+        return {}
+
+    # Build a cache key from the experiment names
+    cache_key = "|".join(sorted(experiment_names))
+    if cache_key in _llm_cache:
+        return _llm_cache[cache_key]
+
+    # Build the prompt — modeled after BMDExpress-3's LlmMetadataService
+    prompt = (
+        "You extract experimental metadata from BMDExpress experiment names.\n"
+        "Given the experiment names and optional context below, return ONLY a "
+        "JSON object with these fields (use null if not determinable):\n\n"
+        "  sexes       — list of sexes found (from vocabulary)\n"
+        "  organs      — list of organs found (from vocabulary), or null\n"
+        "  species     — single species string, or null\n"
+        "  strain      — single strain string, or null\n"
+        "  domain      — one of the domain values, or null\n"
+        "  test_article — chemical/compound name if present, or null\n\n"
+        "Valid values:\n"
+        f"  species: {_VOCAB['species']}\n"
+        f"  sexes: {_VOCAB['sexes']}\n"
+        f"  organs: {_VOCAB['organs']}\n"
+        f"  domains: {_VOCAB['domains']}\n"
+        f"  strains by species: {_VOCAB['strains']}\n\n"
+        "Rules:\n"
+        "- Use vocabulary values above when there is a close match.\n"
+        "- For test_article, extract the chemical/compound name; replace "
+        "underscores with spaces.\n"
+        "- If probe IDs are human-readable endpoint names (like 'Albumin', "
+        "'Hematocrit', 'Heart'), this is a clinical/apical endpoint file, "
+        "NOT gene expression.\n"
+        "- If probe IDs look like gene symbols with numeric suffixes "
+        "(like 'AADAC_7934', 'CYP1A1_12345'), this is gene expression.\n"
+        "- 'SD0', 'SD5' are Study Day body weight measurements → domain = body_weight.\n"
+        "- Return ONLY valid JSON. No markdown, no explanation.\n\n"
+        f"Experiment names: {experiment_names}\n"
+    )
+
+    if probe_ids_sample:
+        prompt += f"Sample probe/endpoint IDs: {probe_ids_sample}\n"
+    if chip_info and isinstance(chip_info, dict):
+        # Include chip provider and species if available — helps distinguish
+        # gene expression (BioSpyder, Affymetrix) from clinical endpoints.
+        chip_summary = {
+            k: v for k, v in chip_info.items()
+            if k in ("provider", "species", "name") and v
+        }
+        if chip_summary:
+            prompt += f"Chip/platform info: {chip_summary}\n"
+
+    # Call Haiku via the Anthropic API — fast (~200ms) and cheap (~$0.0003)
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip() if response.content else ""
+
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            first_nl = raw.index("\n") if "\n" in raw else 3
+            raw = raw[first_nl + 1:]
+            if raw.endswith("```"):
+                raw = raw[:-3].strip()
+
+        result = json.loads(raw)
+        # Haiku sometimes returns a list of objects when there are multiple
+        # experiments (e.g., gene expression with 4 organ×sex combos).
+        # We expect a single dict — if we get a list, merge them.
+        if isinstance(result, list):
+            merged: dict = {}
+            for item in result:
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        if k not in merged or merged[k] is None:
+                            merged[k] = v
+                        elif isinstance(merged[k], list) and isinstance(v, list):
+                            # Merge list values (e.g., sexes, organs)
+                            merged[k] = sorted(set(merged[k] + v))
+            result = merged
+        if not isinstance(result, dict):
+            logger.warning("LLM returned non-dict: %s", type(result))
+            return {}
+        _llm_cache[cache_key] = result
+        logger.debug("LLM metadata for %s: %s", experiment_names[0], result)
+        return result
+
+    except Exception as e:
+        logger.warning(
+            "LLM metadata deduction failed for experiments %s: %s",
+            experiment_names[:2], e,
+        )
+        # Fall back to empty dict — caller uses regex-based detection
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FileFingerprint:
+    """
+    Extracted metadata from a single pool file, used for cross-validation.
+
+    Every file in the pool — regardless of type (xlsx, txt, csv, bm2) —
+    gets fingerprinted on addition.  The fingerprint captures enough
+    structural information to detect overlaps and conflicts between files
+    without re-reading the file contents.
+
+    Fields:
+      file_id       — UUID from upload (links back to _bm2_uploads/_data_uploads)
+      filename      — original filename as uploaded
+      file_type     — "xlsx", "txt", "csv", or "bm2"
+      tier          — precedence rank: 1=xlsx, 2=txt/csv, 3=bm2
+
+      ts_added      — ISO 8601 timestamp when file entered the pool
+      ts_filesystem — ISO 8601 file mtime from the OS (None if unavailable)
+      ts_internal   — ISO 8601 date found inside file content:
+                        xlsx: from "Key to Column Labels" metadata (column D)
+                        bm2:  from BMDProject creation date field (if present)
+                        txt/csv: None (no internal dates)
+
+      study_number  — e.g., "C20022-01" (from xlsx data or bm2 metadata)
+      species       — e.g., "Sprague Dawley" (from bm2 experiment names)
+      sexes         — ["Male", "Female"] or ["Male"] etc.
+      dose_groups   — sorted unique doses, e.g., [0, 0.15, 0.5, 1.4, 4, 12, 37, 111]
+      dose_unit     — "mg/kg" if detectable
+
+      domain        — canonical domain name (body_weight, organ_weights, etc.)
+      endpoint_names — e.g., ["SD0", "SD5"] or ["Liver Weight Absolute", ...]
+      animal_ids    — e.g., ["101", "102", ...] — for cross-tier count comparison
+      n_animals_by_dose — {0.0: 10, 4.0: 8, ...} — animals per dose group
+
+      organ         — e.g., "Liver", "Kidney" (for gene expression files)
+      gene_count    — number of probes/genes (for gene expression .txt and .bm2)
+    """
+
+    file_id: str
+    filename: str
+    file_type: str
+    tier: int
+
+    # Timestamps — for evaluating data truth precedence
+    ts_added: str
+    ts_filesystem: str | None = None
+    ts_internal: str | None = None
+
+    # Study structural fingerprint
+    study_number: str | None = None
+    species: str | None = None
+    sexes: list[str] = field(default_factory=list)
+    dose_groups: list[float] = field(default_factory=list)
+    dose_unit: str | None = None
+
+    # Endpoint coverage
+    domain: str | None = None
+    endpoint_names: list[str] = field(default_factory=list)
+    animal_ids: list[str] = field(default_factory=list)
+    n_animals_by_dose: dict[float, int] = field(default_factory=dict)
+
+    # Transcriptomics-specific
+    organ: str | None = None
+    gene_count: int | None = None
+
+
+@dataclass
+class ValidationIssue:
+    """
+    A single discrepancy or coverage gap found during cross-validation.
+
+    severity levels:
+      "error"   — structural conflict requiring user resolution
+                  (e.g., dose groups differ between xlsx and txt)
+      "warning" — coverage gap or potential issue
+                  (e.g., no bm2 analysis for a domain that has txt data)
+      "info"    — informational note, no action needed
+                  (e.g., xlsx exists but not all domains have txt/csv)
+
+    issue_type values:
+      "dose_mismatch"         — dose_groups differ across tiers in the same domain
+      "animal_count_mismatch" — n_animals_by_dose differ (animals added or removed)
+      "missing_tier"          — a domain is missing one or more expected tiers
+      "redundant_files"       — two files have identical structural fingerprints
+      "endpoint_mismatch"     — endpoint names don't match across tiers
+      "sex_mismatch"          — sex coverage differs between tiers
+    """
+
+    severity: str
+    domain: str
+    issue_type: str
+    message: str
+    files_involved: list[str]
+    suggested_precedence: str | None = None
+    details: dict = field(default_factory=dict)
+
+
+@dataclass
+class ValidationReport:
+    """
+    Full cross-validation report for a session's file pool.
+
+    coverage_matrix maps domain → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }.
+    The txt_csv tier can have multiple files because apical data is split by sex
+    (e.g., male_body_weight.txt + female_body_weight.txt).
+
+    is_complete is True only if every domain that has any tier also has all
+    applicable tiers.  Gene expression typically has no xlsx.
+    """
+
+    dtxsid: str
+    run_at: str
+    file_count: int
+    fingerprints: dict[str, dict]         # file_id → fingerprint as dict
+    issues: list[dict]                     # list of ValidationIssue as dicts
+    coverage_matrix: dict[str, dict]       # domain → tier → file_id(s)
+    is_complete: bool
+
+
+# ---------------------------------------------------------------------------
+# Domain detection
+# ---------------------------------------------------------------------------
+
+
+def detect_domain(filename: str, file_type: str, file_size: int = 0,
+                  endpoint_names: list[str] | None = None) -> str | None:
+    """
+    Infer the endpoint domain from a filename using NTP naming conventions.
+
+    Checks filename against a prioritized list of regex patterns.  More
+    specific patterns (tissue_conc, clinical_obs) are checked before
+    generic ones (body_weight) to avoid false matches.
+
+    For large txt files (>100KB) with organ-prefixed names (e.g.,
+    "Liver_PFHxSAm_Male_No0.txt"), returns "gene_expression" — these are
+    transcriptomic microarray data, not apical endpoint tables.
+
+    Args:
+        filename:       Original filename as uploaded.
+        file_type:      "xlsx", "txt", "csv", or "bm2".
+        file_size:      File size in bytes (used for gene expression heuristic).
+        endpoint_names: Parsed endpoint/row labels (not used currently, reserved
+                        for future content-based domain detection).
+
+    Returns:
+        Canonical domain string (e.g., "body_weight") or None if unrecognized.
+    """
+    # Check named patterns first — covers most NTP file naming conventions
+    for pattern, domain in _DOMAIN_PATTERNS:
+        if pattern.search(filename):
+            return domain
+
+    # Gene expression heuristic for organ-prefixed txt files.
+    # NTP transcriptomics data is named like "Liver_PFHxSAm_Male_No0.txt"
+    # and is typically 500KB-1MB (thousands of probes × dozens of animals).
+    # We require >100KB to avoid matching small organ weight txt files.
+    if file_type in ("txt", "csv") and file_size > 100_000:
+        if _GENE_EXPR_ORGAN_PATTERN.match(filename):
+            return "gene_expression"
+
+    return None
+
+
+def detect_domain_from_bm2(experiment_names: list[str]) -> str | None:
+    """
+    Infer the endpoint domain from BMDExpress experiment names.
+
+    BMDExpress 3 names experiments like "BodyWeightMale", "OrganWeightFemale",
+    "HematologyMale", etc.  We normalize to lowercase and strip sex suffixes
+    to match against _BM2_DOMAIN_MAP.
+
+    For gene expression .bm2 files, the experiment names reference individual
+    probes/genes rather than named endpoints — these have thousands of
+    experiments, which is the distinguishing heuristic.
+
+    Args:
+        experiment_names: List of experiment.name values from the BMDProject JSON.
+
+    Returns:
+        Canonical domain string or None if unrecognized.
+    """
+    if not experiment_names:
+        return None
+
+    # Gene expression bm2 files have thousands of "experiments" (one per probe).
+    # Apical bm2 files have at most ~50 (endpoints × sexes).
+    if len(experiment_names) > 200:
+        return "gene_expression"
+
+    # Normalize the first experiment name: lowercase, strip sex suffix
+    name = experiment_names[0].lower()
+    # Remove trailing "male" or "female"
+    name = re.sub(r"(male|female)$", "", name).strip()
+    # Remove underscores, spaces, hyphens for fuzzy matching
+    name_normalized = re.sub(r"[_\s\-]", "", name)
+
+    for prefix, domain in _BM2_DOMAIN_MAP.items():
+        if name_normalized.startswith(prefix):
+            return domain
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Sex detection helpers
+# ---------------------------------------------------------------------------
+
+
+def _detect_sex_from_filename(filename: str) -> list[str]:
+    """
+    Extract sex indicators from a filename.
+
+    NTP txt/csv files encode sex in the filename: "male_body_weight.txt",
+    "female_clin_chem.txt".  Returns the list of sexes found (["Male"],
+    ["Female"], or [] if neither is detected).
+
+    Args:
+        filename: The original filename.
+
+    Returns:
+        List of sex strings with title case (e.g., ["Male"]).
+    """
+    matches = _SEX_PATTERN.findall(filename)
+    return sorted(set(m.title() for m in matches))
+
+
+def _detect_sexes_from_bm2_experiments(experiment_names: list[str]) -> list[str]:
+    """
+    Extract sex indicators from BMDExpress experiment names.
+
+    Experiment names encode sex as a suffix: "BodyWeightMale",
+    "HematologyFemale".  Returns the unique sexes found.
+
+    Args:
+        experiment_names: List of experiment.name values from BMDProject JSON.
+
+    Returns:
+        Sorted list of sex strings (e.g., ["Female", "Male"]).
+    """
+    sexes = set()
+    for name in experiment_names:
+        matches = _BM2_SEX_PATTERN.findall(name)
+        for m in matches:
+            sexes.add(m.title())
+    return sorted(sexes)
+
+
+# ---------------------------------------------------------------------------
+# Timestamp helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_filesystem_timestamp(path: str) -> str | None:
+    """
+    Get the file's modification time as an ISO 8601 string.
+
+    Returns None if the file doesn't exist or stat fails.
+
+    Args:
+        path: Absolute path to the file on disk.
+
+    Returns:
+        ISO 8601 timestamp string or None.
+    """
+    try:
+        mtime = os.path.getmtime(path)
+        return datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+    except OSError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint extractors — one per file type
+# ---------------------------------------------------------------------------
+
+
+def fingerprint_xlsx(
+    file_id: str,
+    filename: str,
+    path: str,
+    ts_added: str,
+) -> FileFingerprint:
+    """
+    Parse both sheets of an NTP xlsx to extract study metadata + animal/dose structure.
+
+    NTP xlsx files have two sheets:
+      1. "Key to Column Labels" — metadata describing each column's meaning.
+         Row 1 has column labels in col A and human descriptions in col B.
+         Column D sometimes has study-level metadata:
+           Row 2: study type (e.g., "TOX")
+           Row 3: study number (e.g., "C20022-01")
+           Row 4: date (e.g., "12/08/2020")
+
+      2. "Data" — individual animal measurements in long format.
+         Each row is one animal × one observation.  Columns vary by domain:
+           Col A: NTP Study Number (e.g., "C20022-01")
+           Col B: Concentration (dose as string, e.g., "0", "4", "111")
+           Col C: Animal ID (e.g., "101", "102")
+           Col D: Sex ("Male" or "Female")
+           Remaining columns: domain-specific (body weight, endpoints, etc.)
+
+    Args:
+        file_id:   UUID from upload.
+        filename:  Original filename as uploaded.
+        path:      Absolute path to the xlsx file on disk.
+        ts_added:  ISO 8601 timestamp when the file entered the pool.
+
+    Returns:
+        FileFingerprint with extracted study metadata, doses, animals, endpoints.
+    """
+    import openpyxl
+
+    fp = FileFingerprint(
+        file_id=file_id,
+        filename=filename,
+        file_type="xlsx",
+        tier=TIER_XLSX,
+        ts_added=ts_added,
+        ts_filesystem=_get_filesystem_timestamp(path),
+    )
+
+    file_size = os.path.getsize(path) if os.path.exists(path) else 0
+    fp.domain = detect_domain(filename, "xlsx", file_size)
+
+    try:
+        # read_only=False because NTP xlsx files sometimes lack dimension
+        # metadata, causing read-only mode to see only 1 row per sheet.
+        wb = openpyxl.load_workbook(path, data_only=True)
+    except Exception as e:
+        logger.warning("Could not open xlsx %s: %s", filename, e)
+        return fp
+
+    # --- Parse "Key to Column Labels" sheet for study metadata ---
+    # Column D of this sheet sometimes has: study type (row 2), study number
+    # (row 3), and date (row 4).
+    try:
+        key_sheet = wb[wb.sheetnames[0]]
+        for row in key_sheet.iter_rows(values_only=True):
+            vals = [v for v in row if v is not None]
+            if not vals:
+                continue
+            # Column D (index 3) in key sheet has study-level metadata
+            if len(row) >= 4 and row[3] is not None:
+                val = str(row[3]).strip()
+                # Study number pattern: letter + digits + hyphen + digits
+                if re.match(r"^[A-Z]\d+-\d+$", val):
+                    fp.study_number = val
+                # Date pattern: MM/DD/YYYY
+                elif re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", val):
+                    try:
+                        dt = datetime.strptime(val, "%m/%d/%Y")
+                        fp.ts_internal = dt.isoformat()
+                    except ValueError:
+                        pass
+    except Exception as e:
+        logger.debug("Key sheet parse failed for %s: %s", filename, e)
+
+    # --- Parse "Data" sheet for animal/dose structure ---
+    # Columns: A=StudyNumber, B=Concentration, C=AnimalID, D=Sex, E+=endpoints
+    try:
+        data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
+        headers = None
+        doses_set: set[float] = set()
+        sexes_set: set[str] = set()
+        animal_ids_set: set[str] = set()
+        # Track animal IDs per dose for n_animals_by_dose
+        animals_per_dose: dict[float, set[str]] = {}
+        endpoint_names_set: set[str] = set()
+
+        for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
+            if row_idx == 0:
+                # First row is column headers — capture endpoint column names.
+                # Standard NTP columns are StudyNumber, Concentration, AnimalID,
+                # Sex, Selection; anything after that is domain-specific.
+                headers = [str(c) if c is not None else "" for c in row]
+                if len(headers) > 5:
+                    endpoint_names_set.update(headers[5:])
+                elif len(headers) > 4:
+                    endpoint_names_set.update(headers[4:])
+                continue
+
+            # Data rows — extract dose, animal ID, and sex
+            if row[1] is not None:
+                try:
+                    dose = float(row[1])
+                    doses_set.add(dose)
+                    # Track animal IDs per dose
+                    aid = str(row[2]) if row[2] is not None else ""
+                    if aid:
+                        if dose not in animals_per_dose:
+                            animals_per_dose[dose] = set()
+                        animals_per_dose[dose].add(aid)
+                except (ValueError, TypeError):
+                    pass
+            if row[2] is not None:
+                animal_ids_set.add(str(row[2]))
+            if row[3] is not None:
+                sexes_set.add(str(row[3]).strip().title())
+            # Study number from data rows (fallback if key sheet didn't have it)
+            if fp.study_number is None and row[0] is not None:
+                val = str(row[0]).strip()
+                if re.match(r"^[A-Z]\d+-\d+$", val):
+                    fp.study_number = val
+
+        fp.dose_groups = sorted(doses_set)
+        fp.sexes = sorted(sexes_set)
+        fp.animal_ids = sorted(animal_ids_set)
+        # Deduplicate animal counts — xlsx has multiple rows per animal (one per
+        # observation day), so we count *unique* animal IDs per dose.
+        fp.n_animals_by_dose = {
+            dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
+        }
+        # Endpoint names — filter out standard NTP columns
+        standard_cols = {
+            "NTP Study Number", "Concentration", "Animal ID", "Sex",
+            "Selection", "Terminal Flag", "",
+        }
+        fp.endpoint_names = sorted(
+            endpoint_names_set - standard_cols
+        )
+        # Dose unit — NTP xlsx "Key to Column Labels" always says "mg/kg"
+        if any("mg/kg" in str(row) for row in key_sheet.iter_rows(values_only=True)):
+            fp.dose_unit = "mg/kg"
+
+    except Exception as e:
+        logger.debug("Data sheet parse failed for %s: %s", filename, e)
+
+    wb.close()
+    return fp
+
+
+def fingerprint_txt_csv(
+    file_id: str,
+    filename: str,
+    path: str,
+    file_type: str,
+    ts_added: str,
+) -> FileFingerprint:
+    """
+    Parse the BMDExpress-importable pivot-table format.
+
+    NTP txt/csv files are transposed tables where:
+      Row 1: Animal IDs (tab- or comma-separated), first cell blank or label
+      Row 2: Dose concentrations per animal (same column order as row 1)
+      Row 3+: Endpoint measurements — first cell is the endpoint name,
+              remaining cells are values per animal
+
+    For gene expression files (Liver_PFHxSAm_Male_No0.txt), row 1 has
+    "Something" then plate-prefixed sample IDs, row 2 has "Doses" then
+    concentrations, and rows 3+ are probe/gene expression values.
+
+    Args:
+        file_id:    UUID from upload.
+        filename:   Original filename as uploaded.
+        path:       Absolute path to the txt/csv file on disk.
+        file_type:  "txt" or "csv" (determines separator character).
+        ts_added:   ISO 8601 timestamp when the file entered the pool.
+
+    Returns:
+        FileFingerprint with doses, animal IDs, endpoints, sex, and domain.
+    """
+    fp = FileFingerprint(
+        file_id=file_id,
+        filename=filename,
+        file_type=file_type,
+        tier=TIER_TXT_CSV,
+        ts_added=ts_added,
+        ts_filesystem=_get_filesystem_timestamp(path),
+    )
+
+    # Detect sex from filename — NTP convention: "male_body_weight.txt"
+    fp.sexes = _detect_sex_from_filename(filename)
+
+    file_size = os.path.getsize(path) if os.path.exists(path) else 0
+    fp.domain = detect_domain(filename, file_type, file_size)
+
+    separator = "," if file_type == "csv" else "\t"
+
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as e:
+        logger.warning("Could not read %s: %s", filename, e)
+        return fp
+
+    # Strip trailing whitespace and skip empty lines
+    lines = [ln.rstrip("\n\r") for ln in lines if ln.strip()]
+    if len(lines) < 2:
+        return fp
+
+    # Row 1: animal IDs (first cell is blank or a label like "Something")
+    row1_cells = lines[0].split(separator)
+    # Skip the first cell (it's a label column), rest are animal IDs
+    animal_ids = [c.strip() for c in row1_cells[1:] if c.strip()]
+    fp.animal_ids = sorted(set(animal_ids))
+
+    # Row 2: dose concentrations per animal
+    row2_cells = lines[1].split(separator)
+    doses_raw = row2_cells[1:]  # skip label cell
+    doses_set: set[float] = set()
+    # Map dose → set of animal IDs for n_animals_by_dose
+    dose_animal_map: dict[float, set[str]] = {}
+    for i, d in enumerate(doses_raw):
+        try:
+            dose_val = float(d.strip())
+            doses_set.add(dose_val)
+            if i < len(animal_ids):
+                if dose_val not in dose_animal_map:
+                    dose_animal_map[dose_val] = set()
+                dose_animal_map[dose_val].add(animal_ids[i])
+        except (ValueError, TypeError):
+            pass
+
+    fp.dose_groups = sorted(doses_set)
+    fp.n_animals_by_dose = {
+        dose: len(aids) for dose, aids in sorted(dose_animal_map.items())
+    }
+
+    # Row 3+: endpoint names (first cell of each row)
+    endpoint_names = []
+    for line in lines[2:]:
+        cells = line.split(separator)
+        if cells and cells[0].strip():
+            endpoint_names.append(cells[0].strip())
+    fp.endpoint_names = endpoint_names
+
+    # Gene expression detection — large files with many rows are probes/genes
+    if len(endpoint_names) > 200:
+        fp.domain = "gene_expression"
+        fp.gene_count = len(endpoint_names)
+        # Extract organ from filename for gene expression files
+        organ_match = _GENE_EXPR_ORGAN_PATTERN.match(filename)
+        if organ_match:
+            fp.organ = organ_match.group(1).title()
+
+    return fp
+
+
+def _extract_probe_ids(experiment: dict) -> list[str]:
+    """
+    Extract probe/endpoint IDs from a BMDExpress experiment.
+
+    In the BMDProject JSON, probeResponses live on the experiment (not on
+    each treatment).  Each probeResponse has a 'probe' field that is either:
+      - A dict with an 'id' key (e.g., {"@type": "Probe", "id": "SD0"})
+      - A stringified dict (Jackson serialization artifact)
+      - An integer @ref (forward reference to another object)
+
+    For apical endpoints, probe IDs are human-readable names like
+    "Alanine aminotransferase", "SD0", "Heart", "Hematocrit".
+    For gene expression, they're gene symbols like "AADAC_7934".
+
+    Args:
+        experiment: A doseResponseExperiment dict from the BMDProject JSON.
+
+    Returns:
+        List of probe ID strings.
+    """
+    probe_ids = []
+    for pr in experiment.get("probeResponses", []):
+        probe = pr.get("probe")
+        if isinstance(probe, dict):
+            probe_ids.append(str(probe.get("id", "")))
+        elif isinstance(probe, str):
+            # Jackson sometimes serializes nested objects as strings
+            try:
+                import ast
+                probe_dict = ast.literal_eval(probe)
+                if isinstance(probe_dict, dict):
+                    probe_ids.append(str(probe_dict.get("id", "")))
+                else:
+                    probe_ids.append(probe)
+            except (ValueError, SyntaxError):
+                probe_ids.append(probe)
+        elif isinstance(probe, int):
+            # @ref — can't resolve without the full object graph
+            probe_ids.append(f"@ref:{probe}")
+    return probe_ids
+
+
+def _extract_chip_info(experiment: dict) -> dict | None:
+    """
+    Extract chip/platform metadata from a BMDExpress experiment.
+
+    The 'chip' field on doseResponseExperiment is either:
+      - A dict with provider, species, name, geoName fields
+        (e.g., {"provider": "BioSpyder", "species": "Rattus norvegicus",
+                "name": "S1500_Plus_Rat"})
+      - An integer @ref (when the same chip is shared across experiments)
+      - None / null (for shoehorned clinical endpoint data)
+
+    Returns None if chip info is unavailable or is just an @ref.
+
+    Args:
+        experiment: A doseResponseExperiment dict from the BMDProject JSON.
+
+    Returns:
+        Dict with provider, species, name keys, or None.
+    """
+    chip = experiment.get("chip")
+    if isinstance(chip, dict):
+        return {
+            "provider": chip.get("provider"),
+            "species": chip.get("species"),
+            "name": chip.get("name") or chip.get("geoName"),
+        }
+    return None
+
+
+def fingerprint_bm2(
+    file_id: str,
+    filename: str,
+    path: str,
+    ts_added: str,
+    bm2_json: dict | None = None,
+) -> FileFingerprint:
+    """
+    Extract metadata from a BMDExpress 3 .bm2 file's JSON representation.
+
+    The BMDProject JSON (from Java export or LMDB cache) stores all data in
+    a uniform schema regardless of data type.  The structure is:
+
+      BMDProject
+        doseResponseExperiments[]       — one per sex×domain (apical) or
+                                          one per organ×sex (gene expression)
+          name: str                     — e.g., "female_clin_chem", "Kidney_PFHxSAm_Male_No0"
+          chip: dict|int|null           — platform info (BioSpyder, Affymetrix, or null)
+          experimentDescription: dict|null — augmented metadata (null in current files)
+          treatments[]                  — ONE PER ANIMAL (not per dose group)
+            name: str                   — animal ID ("101", "Plate5-116")
+            dose: float                 — dose assigned to this animal
+          probeResponses[]              — the endpoints or genes
+            probe: {id: str}            — endpoint name or gene probe ID
+            responses: [float]          — one value per animal (same order as treatments)
+
+    Clinical endpoints are "shoehorned" into this gene-expression schema:
+      - "Alanine aminotransferase" is a "probe"
+      - "SD0" (study day 0 body weight) is a "probe"
+      - The category analysis uses "DEFINED-Category File-Non-genomic 5 day end points"
+        where GO terms would normally go
+
+    This function extracts the actual structural data (doses, animal IDs,
+    endpoint names from probe.id) and uses an LLM call (Haiku) to infer
+    semantic metadata (sex, organ, species, strain, domain) from the
+    experiment names — the same approach BMDExpress-3's own
+    LlmMetadataService uses on the Java side.
+
+    If bm2_json is not provided, attempts to load from LMDB cache.
+    Does NOT trigger Java export (expensive) — returns a partial
+    fingerprint if the JSON is unavailable.
+
+    Args:
+        file_id:    UUID from upload.
+        filename:   Original filename as uploaded.
+        path:       Absolute path to the .bm2 file on disk.
+        ts_added:   ISO 8601 timestamp when the file entered the pool.
+        bm2_json:   Pre-loaded BMDProject dict (optional — avoids cache lookup).
+
+    Returns:
+        FileFingerprint with domain, sexes, doses, endpoints, animal IDs, and
+        species/strain metadata inferred by LLM.
+    """
+    fp = FileFingerprint(
+        file_id=file_id,
+        filename=filename,
+        file_type="bm2",
+        tier=TIER_BM2,
+        ts_added=ts_added,
+        ts_filesystem=_get_filesystem_timestamp(path),
+    )
+
+    # Filename-based domain detection as a fallback
+    fp.domain = detect_domain(filename, "bm2")
+
+    # Try loading from LMDB cache if not provided — this is fast (~10ms)
+    # and avoids the expensive Java export on fingerprinting.
+    if bm2_json is None:
+        try:
+            import bm2_cache
+            bm2_json = bm2_cache.get_json(path)
+        except Exception:
+            pass
+
+    if bm2_json is None:
+        # No JSON available — return partial fingerprint.  The domain was
+        # already detected from filename; we just can't extract dose groups
+        # or experiment names without the JSON.
+        logger.debug("No cached JSON for %s — partial fingerprint only", filename)
+        return fp
+
+    # --- Extract structural data from doseResponseExperiments ---
+    experiments = bm2_json.get("doseResponseExperiments", [])
+    if not experiments:
+        return fp
+
+    experiment_names = [exp.get("name", "") for exp in experiments]
+
+    # --- Extract probe/endpoint IDs from all experiments ---
+    # For apical files, these are the actual clinical endpoint names
+    # (e.g., "Alanine aminotransferase", "SD0", "Heart").
+    # For gene expression, these are gene probe IDs (e.g., "AADAC_7934").
+    all_probe_ids: list[str] = []
+    for exp in experiments:
+        all_probe_ids.extend(_extract_probe_ids(exp))
+    # Deduplicate while preserving order (probes are shared across experiments)
+    seen_probes: set[str] = set()
+    unique_probes: list[str] = []
+    for pid in all_probe_ids:
+        if pid not in seen_probes:
+            seen_probes.add(pid)
+            unique_probes.append(pid)
+
+    # --- Extract treatments (animal IDs and doses) from first experiment ---
+    # Treatments are per-animal, not per-dose-group.  Each treatment has a
+    # 'name' (animal ID like "101") and a 'dose' (concentration assigned).
+    first_exp = experiments[0]
+    treatments = first_exp.get("treatments", [])
+
+    doses_set: set[float] = set()
+    animal_ids: list[str] = []
+    animals_per_dose: dict[float, set[str]] = {}
+
+    for treatment in treatments:
+        dose = treatment.get("dose")
+        animal_name = treatment.get("name", "")
+        if dose is not None:
+            try:
+                dose_val = float(dose)
+                doses_set.add(dose_val)
+                if animal_name:
+                    if dose_val not in animals_per_dose:
+                        animals_per_dose[dose_val] = set()
+                    animals_per_dose[dose_val].add(animal_name)
+            except (ValueError, TypeError):
+                pass
+        if animal_name:
+            animal_ids.append(animal_name)
+
+    fp.dose_groups = sorted(doses_set)
+    fp.animal_ids = sorted(set(animal_ids))
+    fp.n_animals_by_dose = {
+        dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
+    }
+
+    # --- Extract chip/platform info ---
+    chip_info = _extract_chip_info(first_exp)
+    if chip_info and chip_info.get("species"):
+        fp.species = chip_info["species"]
+
+    # --- Check for augmented ExperimentDescription (future bm2 files) ---
+    # When present, this provides authoritative metadata that supersedes
+    # LLM deduction.  Current files have experimentDescription: null.
+    exp_desc = first_exp.get("experimentDescription")
+    if isinstance(exp_desc, dict) and exp_desc:
+        # Future augmented schema — extract directly
+        if exp_desc.get("sex"):
+            fp.sexes = [exp_desc["sex"].title()]
+        if exp_desc.get("organ"):
+            fp.organ = exp_desc["organ"].title()
+        if exp_desc.get("species"):
+            fp.species = exp_desc["species"]
+        # Map platform to domain for augmented files
+        platform = exp_desc.get("platform", "")
+        if platform:
+            platform_domain_map = {
+                "Clinical Chemistry": "clin_chem",
+                "Hematology": "hematology",
+                "Organ Weight": "organ_weights",
+            }
+            if platform in platform_domain_map:
+                fp.domain = platform_domain_map[platform]
+        provider = exp_desc.get("provider", "")
+        if provider == "Clinical Endpoint" and not fp.domain:
+            fp.domain = "clinical_obs"  # fallback for clinical endpoints
+        logger.debug("Using augmented ExperimentDescription for %s", filename)
+    else:
+        # --- LLM-based metadata deduction ---
+        # Current .bm2 files lack ExperimentDescription, so we ask an LLM
+        # to infer sex, organ, species, strain, and domain from the
+        # experiment names and probe ID samples.  This mirrors the approach
+        # in BMDExpress-3's LlmMetadataService.
+        probe_sample = unique_probes[:15]
+        llm_meta = _deduce_metadata_from_experiments(
+            experiment_names, probe_sample, chip_info,
+        )
+
+        if llm_meta:
+            # Apply LLM-inferred metadata, falling back to regex on miss
+            if llm_meta.get("sexes"):
+                fp.sexes = sorted(
+                    s.title() for s in llm_meta["sexes"]
+                    if isinstance(s, str)
+                )
+            if llm_meta.get("domain"):
+                fp.domain = llm_meta["domain"]
+            if llm_meta.get("species") and not fp.species:
+                # Ignore placeholder values like "generic" that Haiku returns
+                # when species can't be determined from experiment names alone
+                if llm_meta["species"].lower() not in ("generic", "unknown", "na", "null"):
+                    fp.species = llm_meta["species"]
+            if llm_meta.get("strain"):
+                fp.species = (
+                    f"{llm_meta['strain']} "
+                    f"({llm_meta.get('species', '')})"
+                ).strip(" ()")
+                # Store strain info in species field since we don't have
+                # a separate strain field on FileFingerprint
+                if llm_meta.get("species"):
+                    fp.species = f"{llm_meta['strain']} {llm_meta['species']}"
+            if llm_meta.get("organs"):
+                organs = [o.title() for o in llm_meta["organs"] if isinstance(o, str)]
+                # Only set organ for gene expression — apical domains like
+                # organ_weights and hematology measure *across* organs, so
+                # organ is semantically wrong there.
+                if organs and fp.domain == "gene_expression":
+                    fp.organ = organs[0]  # primary organ for transcriptomics
+
+        # Regex fallback if LLM didn't return a domain
+        if not fp.domain:
+            fp.domain = detect_domain_from_bm2(experiment_names)
+        # Regex fallback for sex detection
+        if not fp.sexes:
+            fp.sexes = _detect_sexes_from_bm2_experiments(experiment_names)
+
+    # --- Set endpoint names and gene count ---
+    if fp.domain == "gene_expression":
+        # For gene expression, probeResponses are genes — count them per
+        # experiment (each experiment = one organ×sex combination).
+        # The total gene count is from the first experiment.
+        fp.gene_count = len(first_exp.get("probeResponses", []))
+        fp.endpoint_names = experiment_names  # organ×sex experiments
+    else:
+        # For apical endpoints, the probe IDs are the actual endpoint names
+        # (e.g., "Albumin", "SD0", "Heart").  These are what appear as
+        # row labels in the NTP tables.
+        fp.endpoint_names = unique_probes
+
+    # --- Study metadata from project-level fields ---
+    for key in ("name", "projectName", "studyName"):
+        val = bm2_json.get(key, "")
+        if val and re.match(r"^[A-Z]\d+-\d+$", str(val)):
+            fp.study_number = str(val)
+            break
+
+    return fp
+
+
+def fingerprint_file(
+    file_id: str,
+    filename: str,
+    path: str,
+    file_type: str,
+    ts_added: str,
+    bm2_json: dict | None = None,
+) -> FileFingerprint:
+    """
+    Router — dispatches to the appropriate fingerprint extractor by file_type.
+
+    This is the main entry point for fingerprinting.  Call this instead of
+    the type-specific functions to ensure consistent handling.
+
+    Args:
+        file_id:    UUID from upload.
+        filename:   Original filename as uploaded.
+        path:       Absolute path to the file on disk.
+        file_type:  "xlsx", "txt", "csv", or "bm2".
+        ts_added:   ISO 8601 timestamp when the file entered the pool.
+        bm2_json:   Pre-loaded BMDProject dict (only used for bm2 files).
+
+    Returns:
+        FileFingerprint with as much metadata as could be extracted.
+    """
+    if file_type == "xlsx":
+        return fingerprint_xlsx(file_id, filename, path, ts_added)
+    elif file_type in ("txt", "csv"):
+        return fingerprint_txt_csv(file_id, filename, path, file_type, ts_added)
+    elif file_type == "bm2":
+        return fingerprint_bm2(file_id, filename, path, ts_added, bm2_json)
+    else:
+        # Unknown file type — return a minimal fingerprint
+        logger.warning("Unknown file type '%s' for %s", file_type, filename)
+        return FileFingerprint(
+            file_id=file_id,
+            filename=filename,
+            file_type=file_type,
+            tier=99,
+            ts_added=ts_added,
+            ts_filesystem=_get_filesystem_timestamp(path),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Cross-validation engine
+# ---------------------------------------------------------------------------
+
+
+def _build_coverage_matrix(
+    fingerprints: dict[str, FileFingerprint],
+) -> dict[str, dict[str, list[str] | str | None]]:
+    """
+    Build a coverage matrix mapping domain → tier → file_id(s).
+
+    Groups fingerprints by domain and tier.  xlsx and bm2 tiers expect a
+    single file per domain (stored as str | None), while txt_csv can have
+    multiple files per domain (one per sex), stored as a list of file_ids.
+
+    Args:
+        fingerprints: All fingerprints in the pool (file_id → FileFingerprint).
+
+    Returns:
+        Dict of domain → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }
+    """
+    matrix: dict[str, dict] = {}
+
+    for fid, fp in fingerprints.items():
+        if fp.domain is None:
+            continue
+
+        if fp.domain not in matrix:
+            matrix[fp.domain] = {"xlsx": None, "txt_csv": [], "bm2": None}
+
+        entry = matrix[fp.domain]
+        if fp.tier == TIER_XLSX:
+            entry["xlsx"] = fid
+        elif fp.tier == TIER_TXT_CSV:
+            entry["txt_csv"].append(fid)
+        elif fp.tier == TIER_BM2:
+            entry["bm2"] = fid
+
+    return matrix
+
+
+def _check_coverage(
+    domain: str,
+    tiers: dict,
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Check tier coverage for a single domain.
+
+    Reports missing tiers as warnings or info depending on the domain.
+    Gene expression typically has no xlsx (transcriptomics data comes as
+    txt from the microarray platform, not from NTP study team xlsx).
+
+    Args:
+        domain:       The endpoint domain (e.g., "body_weight").
+        tiers:        The coverage entry { "xlsx": ..., "txt_csv": [...], "bm2": ... }
+        fingerprints: All fingerprints in the pool.
+
+    Returns:
+        List of ValidationIssue objects for missing tiers.
+    """
+    issues = []
+
+    has_xlsx = tiers["xlsx"] is not None
+    has_txt_csv = len(tiers["txt_csv"]) > 0
+    has_bm2 = tiers["bm2"] is not None
+
+    # Gene expression: xlsx is not expected (data comes as txt from microarray)
+    if domain == "gene_expression":
+        if not has_txt_csv:
+            issues.append(ValidationIssue(
+                severity="warning",
+                domain=domain,
+                issue_type="missing_tier",
+                message=f"{domain}: no txt/csv gene expression input data found",
+                files_involved=[tiers["bm2"]] if has_bm2 else [],
+            ))
+        if not has_bm2 and has_txt_csv:
+            issues.append(ValidationIssue(
+                severity="warning",
+                domain=domain,
+                issue_type="missing_tier",
+                message=f"{domain}: txt/csv exists but no .bm2 analysis found",
+                files_involved=tiers["txt_csv"],
+            ))
+        return issues
+
+    # Apical domains: all three tiers are expected (xlsx → txt/csv → bm2)
+    if not has_xlsx:
+        issues.append(ValidationIssue(
+            severity="info",
+            domain=domain,
+            issue_type="missing_tier",
+            message=f"{domain}: no xlsx (study team raw data) found",
+            files_involved=tiers["txt_csv"] + ([tiers["bm2"]] if has_bm2 else []),
+        ))
+
+    if not has_txt_csv:
+        # Missing txt/csv means can't re-run BMDExpress — significant gap
+        issues.append(ValidationIssue(
+            severity="warning",
+            domain=domain,
+            issue_type="missing_tier",
+            message=f"{domain}: no txt/csv (BMDExpress input) found",
+            files_involved=([tiers["xlsx"]] if has_xlsx else [])
+                         + ([tiers["bm2"]] if has_bm2 else []),
+        ))
+
+    if not has_bm2:
+        # Missing bm2 means analysis not yet done for this domain
+        sev = "warning" if (has_xlsx or has_txt_csv) else "info"
+        issues.append(ValidationIssue(
+            severity=sev,
+            domain=domain,
+            issue_type="missing_tier",
+            message=f"{domain}: no .bm2 (BMDExpress analysis) found",
+            files_involved=([tiers["xlsx"]] if has_xlsx else [])
+                         + tiers["txt_csv"],
+        ))
+
+    return issues
+
+
+def _check_dose_consistency(
+    domain: str,
+    tiers: dict,
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Compare dose_groups across all files in the same domain.
+
+    Dose groups must match exactly between xlsx and txt/csv (txt/csv is
+    derived from xlsx), and between txt/csv and bm2 (bm2 is derived from
+    txt/csv).  Any mismatch is an error requiring user resolution.
+
+    Args:
+        domain:       The endpoint domain.
+        tiers:        The coverage entry from the coverage matrix.
+        fingerprints: All fingerprints in the pool.
+
+    Returns:
+        List of ValidationIssue objects for dose group mismatches.
+    """
+    issues = []
+
+    # Collect all dose group sets in this domain, tagged by file
+    dose_sets: list[tuple[str, list[float]]] = []
+
+    if tiers["xlsx"]:
+        fp = fingerprints[tiers["xlsx"]]
+        if fp.dose_groups:
+            dose_sets.append((fp.file_id, fp.dose_groups))
+
+    for txt_id in tiers["txt_csv"]:
+        fp = fingerprints[txt_id]
+        if fp.dose_groups:
+            dose_sets.append((fp.file_id, fp.dose_groups))
+
+    if tiers["bm2"]:
+        fp = fingerprints[tiers["bm2"]]
+        if fp.dose_groups:
+            dose_sets.append((fp.file_id, fp.dose_groups))
+
+    if len(dose_sets) < 2:
+        return issues  # Can't compare with fewer than 2
+
+    # Compare all pairs — O(n²) but n is tiny (at most ~4 files per domain)
+    reference_id, reference_doses = dose_sets[0]
+    for other_id, other_doses in dose_sets[1:]:
+        if reference_doses != other_doses:
+            ref_fp = fingerprints[reference_id]
+            other_fp = fingerprints[other_id]
+            # Determine default precedence: lower tier number = more authoritative
+            suggested = reference_id if ref_fp.tier <= other_fp.tier else other_id
+            issues.append(ValidationIssue(
+                severity="error",
+                domain=domain,
+                issue_type="dose_mismatch",
+                message=(
+                    f"{domain}: dose groups differ between "
+                    f"{ref_fp.filename} ({ref_fp.file_type}) and "
+                    f"{other_fp.filename} ({other_fp.file_type})"
+                ),
+                files_involved=[reference_id, other_id],
+                suggested_precedence=suggested,
+                details={
+                    "expected": reference_doses,
+                    "actual": other_doses,
+                    "expected_file": ref_fp.filename,
+                    "actual_file": other_fp.filename,
+                },
+            ))
+
+    return issues
+
+
+def _check_animal_counts(
+    domain: str,
+    tiers: dict,
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Compare animal counts per dose group across tiers.
+
+    txt/csv files are split by sex (e.g., male_body_weight.txt has only male
+    animals), while xlsx has both sexes.  So we compare the *sum* of txt/csv
+    animal counts against the xlsx per-sex counts.
+
+    For now, we just compare total unique animal counts between xlsx and
+    the union of all txt/csv files in the same domain.
+
+    Args:
+        domain:       The endpoint domain.
+        tiers:        The coverage entry from the coverage matrix.
+        fingerprints: All fingerprints in the pool.
+
+    Returns:
+        List of ValidationIssue objects for animal count mismatches.
+    """
+    issues = []
+
+    xlsx_id = tiers["xlsx"]
+    txt_csv_ids = tiers["txt_csv"]
+
+    if not xlsx_id or not txt_csv_ids:
+        return issues  # Need both tiers to compare
+
+    xlsx_fp = fingerprints[xlsx_id]
+    xlsx_animal_count = len(xlsx_fp.animal_ids)
+
+    # Union of all txt/csv animal IDs in this domain
+    txt_csv_animals: set[str] = set()
+    for tid in txt_csv_ids:
+        tfp = fingerprints[tid]
+        txt_csv_animals.update(tfp.animal_ids)
+    txt_csv_count = len(txt_csv_animals)
+
+    if xlsx_animal_count > 0 and txt_csv_count > 0:
+        if txt_csv_count > xlsx_animal_count:
+            # Extra animals in txt/csv — something is wrong
+            issues.append(ValidationIssue(
+                severity="error",
+                domain=domain,
+                issue_type="animal_count_mismatch",
+                message=(
+                    f"{domain}: txt/csv files have {txt_csv_count} unique animals "
+                    f"but xlsx has only {xlsx_animal_count} "
+                    f"({txt_csv_count - xlsx_animal_count} extra)"
+                ),
+                files_involved=[xlsx_id] + txt_csv_ids,
+                suggested_precedence=xlsx_id,
+                details={
+                    "xlsx_count": xlsx_animal_count,
+                    "txt_csv_count": txt_csv_count,
+                },
+            ))
+        elif txt_csv_count < xlsx_animal_count:
+            # Fewer animals in txt/csv — some may have been excluded (common)
+            issues.append(ValidationIssue(
+                severity="warning",
+                domain=domain,
+                issue_type="animal_count_mismatch",
+                message=(
+                    f"{domain}: txt/csv files have {txt_csv_count} unique animals "
+                    f"vs {xlsx_animal_count} in xlsx "
+                    f"({xlsx_animal_count - txt_csv_count} excluded)"
+                ),
+                files_involved=[xlsx_id] + txt_csv_ids,
+                suggested_precedence=xlsx_id,
+                details={
+                    "xlsx_count": xlsx_animal_count,
+                    "txt_csv_count": txt_csv_count,
+                },
+            ))
+
+    return issues
+
+
+def _check_sex_coverage(
+    domain: str,
+    tiers: dict,
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Ensure male/female split is consistent across tiers.
+
+    xlsx files have both sexes in one file; txt/csv files are split by sex
+    (one file per sex per domain).  bm2 experiments encode sex in the name.
+
+    Checks that the set of sexes in txt/csv matches the xlsx and bm2.
+
+    Args:
+        domain:       The endpoint domain.
+        tiers:        The coverage entry from the coverage matrix.
+        fingerprints: All fingerprints in the pool.
+
+    Returns:
+        List of ValidationIssue objects for sex coverage mismatches.
+    """
+    issues = []
+
+    # Collect sexes from each tier
+    xlsx_sexes: set[str] = set()
+    txt_csv_sexes: set[str] = set()
+    bm2_sexes: set[str] = set()
+
+    if tiers["xlsx"]:
+        xlsx_sexes = set(fingerprints[tiers["xlsx"]].sexes)
+    for tid in tiers["txt_csv"]:
+        txt_csv_sexes.update(fingerprints[tid].sexes)
+    if tiers["bm2"]:
+        bm2_sexes = set(fingerprints[tiers["bm2"]].sexes)
+
+    # Compare xlsx vs txt_csv
+    if xlsx_sexes and txt_csv_sexes and xlsx_sexes != txt_csv_sexes:
+        missing_in_txt = xlsx_sexes - txt_csv_sexes
+        if missing_in_txt:
+            issues.append(ValidationIssue(
+                severity="warning",
+                domain=domain,
+                issue_type="sex_mismatch",
+                message=(
+                    f"{domain}: xlsx has {sorted(xlsx_sexes)} but txt/csv "
+                    f"only covers {sorted(txt_csv_sexes)} "
+                    f"(missing: {sorted(missing_in_txt)})"
+                ),
+                files_involved=[tiers["xlsx"]] + tiers["txt_csv"],
+            ))
+
+    # Compare txt_csv vs bm2
+    if txt_csv_sexes and bm2_sexes and txt_csv_sexes != bm2_sexes:
+        missing_in_bm2 = txt_csv_sexes - bm2_sexes
+        if missing_in_bm2:
+            issues.append(ValidationIssue(
+                severity="warning",
+                domain=domain,
+                issue_type="sex_mismatch",
+                message=(
+                    f"{domain}: txt/csv covers {sorted(txt_csv_sexes)} but "
+                    f".bm2 only has {sorted(bm2_sexes)} "
+                    f"(missing: {sorted(missing_in_bm2)})"
+                ),
+                files_involved=tiers["txt_csv"] + ([tiers["bm2"]] if tiers["bm2"] else []),
+            ))
+
+    return issues
+
+
+def _check_redundancy(
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Detect files with identical structural fingerprints (same data, different formats).
+
+    Two files are considered redundant if they share the same domain, sexes,
+    dose_groups, and endpoint_names — meaning they contain the same data in
+    different file formats (e.g., male_body_weight.csv and male_body_weight.txt).
+
+    Args:
+        fingerprints: All fingerprints in the pool.
+
+    Returns:
+        List of ValidationIssue objects for redundant file pairs.
+    """
+    issues = []
+    seen: dict[tuple, str] = {}  # signature → first file_id
+
+    for fid, fp in fingerprints.items():
+        # Build a structural signature: (domain, sorted_sexes, sorted_doses,
+        # sorted_endpoints, animal_id_count).  Including animal_ids prevents
+        # false positives for sex-split files (male and female txt files share
+        # the same domain/endpoints but have different animal cohorts).
+        sig = (
+            fp.domain,
+            tuple(fp.sexes),
+            tuple(fp.dose_groups),
+            tuple(fp.endpoint_names[:20]),  # truncate for efficiency
+            tuple(sorted(fp.animal_ids)[:10]),  # sample of animal IDs
+        )
+        if sig in seen:
+            other_fid = seen[sig]
+            other_fp = fingerprints[other_fid]
+            # Only flag as redundant if they're the same tier (different tiers
+            # are expected to have the same data at different processing stages)
+            if fp.tier == other_fp.tier:
+                issues.append(ValidationIssue(
+                    severity="info",
+                    domain=fp.domain or "unknown",
+                    issue_type="redundant_files",
+                    message=(
+                        f"{fp.filename} and {other_fp.filename} appear to "
+                        f"contain the same data (same domain, sexes, doses, endpoints)"
+                    ),
+                    files_involved=[fid, other_fid],
+                ))
+        else:
+            seen[sig] = fid
+
+    return issues
+
+
+def validate_pool(
+    dtxsid: str,
+    fingerprints: dict[str, FileFingerprint],
+) -> ValidationReport:
+    """
+    Run full cross-validation on a session's file pool.
+
+    Performs all validation checks across all domains:
+      1. Coverage check — which tiers exist for each domain?
+      2. Dose group consistency — do doses match across tiers?
+      3. Animal count consistency — do animal counts match?
+      4. Sex coverage — is the male/female split consistent?
+      5. Redundancy detection — are there duplicate files?
+
+    Builds a coverage matrix showing the tier completeness per domain.
+
+    Args:
+        dtxsid:       The DTXSID identifier for this session.
+        fingerprints: Dict of file_id → FileFingerprint for all pool files.
+
+    Returns:
+        ValidationReport with issues, coverage matrix, and completeness flag.
+    """
+    now = datetime.now(tz=timezone.utc).isoformat()
+    matrix = _build_coverage_matrix(fingerprints)
+    all_issues: list[ValidationIssue] = []
+
+    # Per-domain checks
+    for domain, tiers in matrix.items():
+        all_issues.extend(_check_coverage(domain, tiers, fingerprints))
+        all_issues.extend(_check_dose_consistency(domain, tiers, fingerprints))
+        all_issues.extend(_check_animal_counts(domain, tiers, fingerprints))
+        all_issues.extend(_check_sex_coverage(domain, tiers, fingerprints))
+
+    # Cross-domain checks
+    all_issues.extend(_check_redundancy(fingerprints))
+
+    # Compute completeness — every domain with any file should have all
+    # applicable tiers.  Gene expression doesn't need xlsx.
+    is_complete = True
+    for domain, tiers in matrix.items():
+        if domain == "gene_expression":
+            if not tiers["txt_csv"] or tiers["bm2"] is None:
+                is_complete = False
+        else:
+            if tiers["xlsx"] is None or not tiers["txt_csv"] or tiers["bm2"] is None:
+                is_complete = False
+
+    # Serialize coverage matrix for JSON output — convert lists to
+    # JSON-friendly format
+    coverage_json = {}
+    for domain, tiers in matrix.items():
+        coverage_json[domain] = {
+            "xlsx": tiers["xlsx"],
+            "txt_csv": tiers["txt_csv"],
+            "bm2": tiers["bm2"],
+        }
+
+    # Serialize fingerprints with JSON-safe keys — n_animals_by_dose has
+    # float keys which orjson rejects (dict keys must be str).  Convert
+    # them to strings here for safe serialization.
+    fp_dicts = {}
+    for fid, fp in fingerprints.items():
+        d = asdict(fp)
+        if d.get("n_animals_by_dose"):
+            d["n_animals_by_dose"] = {
+                str(k): v for k, v in d["n_animals_by_dose"].items()
+            }
+        fp_dicts[fid] = d
+
+    return ValidationReport(
+        dtxsid=dtxsid,
+        run_at=now,
+        file_count=len(fingerprints),
+        fingerprints=fp_dicts,
+        issues=[asdict(issue) for issue in all_issues],
+        coverage_matrix=coverage_json,
+        is_complete=is_complete,
+    )
+
+
+def lightweight_validate(
+    new_fp: FileFingerprint,
+    existing_fps: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Quick validation of a single new file against the existing pool.
+
+    Called on file addition (upload or zip extraction) to provide immediate
+    feedback without running full pool validation.  Checks:
+      1. Dose group match against existing files in the same domain
+      2. Obvious redundancy (same domain + tier + endpoints)
+
+    Much faster than full validation (~10ms) because it only examines
+    files in the same domain as the new file.
+
+    Args:
+        new_fp:       Fingerprint of the newly added file.
+        existing_fps: Existing fingerprints in the pool (file_id → fingerprint).
+
+    Returns:
+        List of ValidationIssue objects (may be empty if no issues).
+    """
+    issues: list[ValidationIssue] = []
+
+    if new_fp.domain is None:
+        return issues
+
+    # Find existing files in the same domain
+    same_domain = {
+        fid: fp for fid, fp in existing_fps.items()
+        if fp.domain == new_fp.domain
+    }
+
+    if not same_domain:
+        return issues
+
+    # Check dose group consistency
+    if new_fp.dose_groups:
+        for fid, fp in same_domain.items():
+            if fp.dose_groups and fp.dose_groups != new_fp.dose_groups:
+                suggested = fid if fp.tier < new_fp.tier else new_fp.file_id
+                issues.append(ValidationIssue(
+                    severity="error",
+                    domain=new_fp.domain,
+                    issue_type="dose_mismatch",
+                    message=(
+                        f"Dose groups in {new_fp.filename} differ from "
+                        f"{fp.filename} ({fp.file_type})"
+                    ),
+                    files_involved=[new_fp.file_id, fid],
+                    suggested_precedence=suggested,
+                    details={
+                        "new_doses": new_fp.dose_groups,
+                        "existing_doses": fp.dose_groups,
+                    },
+                ))
+
+    # Check for redundancy (same tier + similar structure)
+    new_sig = (new_fp.domain, tuple(new_fp.sexes), tuple(new_fp.dose_groups))
+    for fid, fp in same_domain.items():
+        if fp.tier == new_fp.tier:
+            existing_sig = (fp.domain, tuple(fp.sexes), tuple(fp.dose_groups))
+            if new_sig == existing_sig and new_fp.endpoint_names[:10] == fp.endpoint_names[:10]:
+                issues.append(ValidationIssue(
+                    severity="info",
+                    domain=new_fp.domain,
+                    issue_type="redundant_files",
+                    message=(
+                        f"{new_fp.filename} appears redundant with "
+                        f"{fp.filename} (same domain, sexes, doses)"
+                    ),
+                    files_involved=[new_fp.file_id, fid],
+                ))
+
+    return issues

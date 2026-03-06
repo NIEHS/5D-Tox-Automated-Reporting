@@ -3,8 +3,8 @@ pool_integrator — Merge validated pool files into a unified BMDProject JSON.
 
 After file upload, fingerprinting, and cross-validation, the pool contains
 multiple files (xlsx, txt/csv, bm2) covering different endpoint domains
-(body_weight, organ_weights, clin_chem, hematology, hormones, etc.) at
-different processing tiers.
+(body_weight, organ_weights, clin_chem, hematology, hormones, gene_expression,
+etc.) at different processing tiers.
 
 This module's job is *integration*: select the best file for each domain
 (respecting user conflict resolutions), parse raw data into the BMDProject
@@ -155,7 +155,11 @@ def txt_csv_to_experiments(
     file_size = os.path.getsize(path) if os.path.exists(path) else 0
     domain = detect_domain(filename, file_type, file_size)
 
-    # Skip gene expression files — they're processed separately via processCsv()
+    # Gene expression txt/csv files are raw probe-level expression matrices
+    # (thousands of rows), not clinical endpoint pivot tables.  They can't be
+    # parsed into meaningful dose-response experiments here.  Gene expression
+    # is instead handled via the .bm2 tier in integrate_pool(), which extracts
+    # genomics results using the BMDExpress 3 Java API (ExportGenomics.java).
     if domain == "gene_expression":
         return []
 
@@ -463,9 +467,12 @@ def integrate_pool(
     source_files: dict[str, dict] = {}
 
     for domain, tiers in coverage_matrix.items():
-        # Skip gene expression — it's processed separately via processCsv()
-        if domain == "gene_expression":
-            continue
+        # Gene expression is now integrated alongside clinical endpoints.
+        # The .bm2 file contains the full BMDExpress pipeline output:
+        #   raw data → prefilter → curve fit → bMDResult (per-probe BMD)
+        #   → categoryAnalysisResults (GO_BP, GENE, Adversity Signatures)
+        # For gene expression, only the .bm2 tier is meaningful — the .txt
+        # files are raw expression matrices that BMDExpress already consumed.
 
         # --- Select the best file for this domain ---
         chosen_fid = None

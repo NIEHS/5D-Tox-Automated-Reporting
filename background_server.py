@@ -98,6 +98,8 @@ from animal_report import (
 from interpret import (
     AnthropicEndpoint,
     ToxKBQuerier,
+    fetch_gene_descriptions,
+    fetch_go_descriptions,
     load_dose_response,
     rank_go_sets_by_bmd,
     rank_genes_by_bmd,
@@ -1344,15 +1346,29 @@ async def api_process_genomics(request: Request):
             try:
                 gene_sets = rank_go_sets_by_bmd(df, kb, top_n=10)
                 top_genes = rank_genes_by_bmd(df, top_n=10)
-                return gene_sets, top_genes
+
+                # Fetch descriptions for the NIEHS dense 9pt blocks.
+                # GO definitions from EBI QuickGO, gene summaries from
+                # MyGene.info (human orthologs for full descriptions).
+                go_ids = [gs["go_id"] for gs in gene_sets]
+                go_descs = fetch_go_descriptions(go_ids, kb=kb)
+
+                gene_syms = [g["gene_symbol"] for g in top_genes]
+                gene_descs = fetch_gene_descriptions(gene_syms)
+
+                return gene_sets, top_genes, go_descs, gene_descs
             finally:
                 kb.close()
 
-        gene_sets, top_genes = await loop.run_in_executor(None, _run_genomics)
+        gene_sets, top_genes, go_descs, gene_descs = await loop.run_in_executor(
+            None, _run_genomics,
+        )
 
         return JSONResponse({
             "gene_sets": gene_sets,
             "top_genes": top_genes,
+            "go_descriptions": go_descs,
+            "gene_descriptions": gene_descs,
             "total_responsive_genes": len(df),
             "organ": organ,
             "sex": sex,
@@ -2559,6 +2575,153 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
 
 
 # ---------------------------------------------------------------------------
+# POST /api/generate-genomics-narrative — LLM-generate narrative for genomics
+# ---------------------------------------------------------------------------
+#
+# Generates 1–2 paragraphs each for:
+#   - Gene Set BMD Analysis (which biological processes were most sensitive)
+#   - Gene BMD Analysis (which individual genes were most sensitive)
+#
+# These narratives appear above the data tables in the NIEHS report.
+# The endpoint is called separately from /api/process-genomics because
+# the LLM call is slower than the table computation, and the user may
+# want to review the tables before generating narrative.
+# ---------------------------------------------------------------------------
+
+@app.post("/api/generate-genomics-narrative")
+async def api_generate_genomics_narrative(request: Request):
+    """
+    Generate narrative paragraphs for the genomics Results section.
+
+    Takes gene set and gene ranking data (from /api/process-genomics)
+    and produces LLM-generated narrative for each subsection.
+
+    Input JSON:
+      {
+        "identity": {ChemicalIdentity fields},
+        "organ": "liver",
+        "sex": "male",
+        "gene_sets": [{go_id, go_term, bmd_median, n_genes, direction}, ...],
+        "top_genes": [{gene_symbol, bmd, bmdl, fold_change, direction}, ...],
+        "total_responsive_genes": 150,
+        "dose_unit": "mg/kg"
+      }
+
+    Returns JSON:
+      {
+        "gene_set_narrative": ["paragraph1", "paragraph2"],
+        "gene_narrative": ["paragraph1", "paragraph2"],
+        "model_used": "claude-sonnet-4-6"
+      }
+    """
+    body = await request.json()
+    identity = body.get("identity", {})
+    organ = body.get("organ", "")
+    sex = body.get("sex", "")
+    gene_sets = body.get("gene_sets", [])
+    top_genes = body.get("top_genes", [])
+    total_responsive = body.get("total_responsive_genes", 0)
+    dose_unit = body.get("dose_unit", "mg/kg")
+
+    compound = identity.get("name", "the test article")
+
+    # --- Build gene set table as text for the prompt ---
+    gs_lines = []
+    for gs in gene_sets[:10]:
+        gs_lines.append(
+            f"  {gs.get('go_term', '')} (GO:{gs.get('go_id', '')}): "
+            f"median BMD = {gs.get('bmd_median', 'N/A')} {dose_unit}, "
+            f"{gs.get('n_genes', 0)} genes, direction = {gs.get('direction', 'N/A')}"
+        )
+    gs_table = "\n".join(gs_lines) if gs_lines else "(no gene sets)"
+
+    # --- Build gene table as text for the prompt ---
+    gene_lines = []
+    for g in top_genes[:10]:
+        gene_lines.append(
+            f"  {g.get('gene_symbol', '')}: "
+            f"BMD = {g.get('bmd', 'N/A')} {dose_unit}, "
+            f"BMDL = {g.get('bmdl', 'N/A')} {dose_unit}, "
+            f"fold change = {g.get('fold_change', 'N/A')}, "
+            f"direction = {g.get('direction', 'N/A')}"
+        )
+    gene_table = "\n".join(gene_lines) if gene_lines else "(no genes)"
+
+    # --- Load style rules for consistent voice ---
+    style_rules = ""
+    try:
+        profile = _load_style_profile()
+        rules = profile.get("rules", [])
+        if rules:
+            style_rules = "\n\nApply these writing style preferences:\n" + "\n".join(
+                f"- {r['rule']}" for r in rules[:10]
+            )
+    except Exception:
+        pass  # Style learning is optional
+
+    prompt = f"""Generate narrative paragraphs for the genomics Results section of an
+NIEHS/NTP 5-day study technical report on {compound}.
+
+The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
+A total of {total_responsive} genes had significant dose-responsive changes.
+
+=== GENE SET BENCHMARK DOSE ANALYSIS ===
+Top gene sets ranked by median BMD (most sensitive first):
+{gs_table}
+
+=== GENE BENCHMARK DOSE ANALYSIS ===
+Top individual genes ranked by BMD (most sensitive first):
+{gene_table}
+
+Return a JSON object with two keys:
+1. "gene_set_narrative": An array of 1–2 paragraphs summarizing the gene set BMD analysis.
+   Note which biological processes were perturbed at the lowest doses, the predominant
+   direction of perturbation, and the number of responsive gene sets.
+
+2. "gene_narrative": An array of 1–2 paragraphs summarizing the individual gene BMD analysis.
+   Note which genes were most sensitive, the direction and magnitude of their response,
+   and any notable patterns in the top genes.
+
+Use the passive voice and formal scientific register matching NIEHS report style.
+Do NOT include table data in the narrative — the tables are presented separately.
+{style_rules}
+
+Return ONLY valid JSON, no markdown formatting."""
+
+    system = (
+        "You are a toxicology report writer specializing in NTP/NIEHS-style "
+        "technical reports. Write concise, data-driven narrative for the genomics "
+        "Results section. Return ONLY valid JSON with no markdown formatting."
+    )
+
+    try:
+        result = await _llm_generate_json_async(
+            "genomics-narrative-generator", prompt, system,
+            max_tokens=4096,
+        )
+
+        # Normalize: ensure both keys are arrays of strings
+        gs_narr = result.get("gene_set_narrative", [])
+        gene_narr = result.get("gene_narrative", [])
+        if isinstance(gs_narr, str):
+            gs_narr = [gs_narr]
+        if isinstance(gene_narr, str):
+            gene_narr = [gene_narr]
+
+        return JSONResponse({
+            "gene_set_narrative": gs_narr,
+            "gene_narrative": gene_narr,
+            "model_used": "claude-sonnet-4-6",
+        })
+
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Genomics narrative generation failed: {e}"},
+            status_code=500,
+        )
+
+
+# ---------------------------------------------------------------------------
 # GET /api/style-profile — retrieve the global style profile
 # ---------------------------------------------------------------------------
 
@@ -3623,10 +3786,52 @@ async def api_process_integrated(dtxsid: str, request: Request):
 
         loop = asyncio.get_running_loop()
 
-        # Run the NTP stats pipeline on all experiments in the integrated data.
+        # Filter out gene expression experiments before running NTP stats.
+        # Gene expression .bm2 data has thousands of probes — running Dunnett's
+        # test on each would be extremely slow and isn't meaningful for clinical
+        # endpoints.  Genomics is handled separately by export_genomics().
+        from file_integrator import _BM2_DOMAIN_MAP, detect_domain
+
+        meta = integrated.get("_meta", {})
+        source_files = meta.get("source_files", {})
+        ge_source = source_files.get("gene_expression")
+        ge_exp_names = set()
+        if ge_source:
+            # Gene expression experiments have names starting with the organ
+            # (e.g., "Liver_PFHxSAm_Male_No0") — identify them by checking
+            # which experiments DON'T match any clinical domain prefix.
+            for exp in integrated.get("doseResponseExperiments", []):
+                exp_name = exp.get("name", "")
+                exp_lower = exp_name.lower().replace("_", "")
+                matched = False
+                for prefix in _BM2_DOMAIN_MAP:
+                    clean = exp_lower.replace("female", "").replace("male", "").strip()
+                    if clean.startswith(prefix) or prefix.startswith(clean):
+                        matched = True
+                        break
+                if not matched:
+                    ge_exp_names.add(exp_name)
+
+        # Build a filtered copy without gene expression experiments for NTP stats
+        if ge_exp_names:
+            apical_integrated = {
+                **integrated,
+                "doseResponseExperiments": [
+                    exp for exp in integrated.get("doseResponseExperiments", [])
+                    if exp.get("name", "") not in ge_exp_names
+                ],
+            }
+            logger.info(
+                "Filtered %d gene expression experiments from NTP stats pipeline",
+                len(ge_exp_names),
+            )
+        else:
+            apical_integrated = integrated
+
+        # Run the NTP stats pipeline on clinical endpoint experiments only.
         # This is pure Python (no JVM) and typically takes <1s.
         table_data = await loop.run_in_executor(
-            None, build_table_data, integrated, cat_lookup,
+            None, build_table_data, apical_integrated, cat_lookup,
         )
 
         # --- Partition table rows by domain ---
@@ -3636,7 +3841,6 @@ async def api_process_integrated(dtxsid: str, request: Request):
         #
         # Strategy: look at the experiment names in the integrated data to build
         # a mapping of endpoint_name → domain, then partition the table rows.
-        from file_integrator import _BM2_DOMAIN_MAP, detect_domain
 
         # Build experiment_name → domain mapping.
         # Strategy: use _meta.source_files to know which experiment names
@@ -3645,11 +3849,9 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # experiment name itself as fallback.
         exp_name_to_domain: dict[str, str] = {}
 
-        # First pass: use source_files metadata to build domain → filenames
-        meta = integrated.get("_meta", {})
-        source_files = meta.get("source_files", {})
-
-        for exp in integrated.get("doseResponseExperiments", []):
+        # Use the filtered (apical-only) experiments for domain mapping —
+        # gene expression experiments were already excluded above.
+        for exp in apical_integrated.get("doseResponseExperiments", []):
             exp_name = exp.get("name", "")
             exp_lower = exp_name.lower()
 
@@ -3684,7 +3886,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # Build endpoint → domain map using the experiment mapping.
         # Each probe/endpoint in an experiment inherits that experiment's domain.
         endpoint_domain_map: dict[str, str] = {}
-        for exp in integrated.get("doseResponseExperiments", []):
+        for exp in apical_integrated.get("doseResponseExperiments", []):
             exp_name = exp.get("name", "")
             dom = exp_name_to_domain.get(exp_name)
             if dom:
@@ -3744,7 +3946,101 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 "narrative": narrative,
             })
 
-        return JSONResponse({"sections": sections})
+        # --- Gene expression genomics (from integrated .bm2) ---
+        # If the integration included gene_expression, extract per-gene BMD
+        # and GO BP category results directly from the .bm2 using the
+        # BMDExpress 3 Java API.  This replaces the old CSV-based workflow.
+        genomics_sections = {}
+        meta = integrated.get("_meta", {})
+        ge_source = meta.get("source_files", {}).get("gene_expression")
+        if ge_source and ge_source.get("tier") == "bm2":
+            ge_filename = ge_source.get("filename", "")
+            ge_path = str(_session_dir(dtxsid) / "files" / ge_filename)
+
+            if os.path.exists(ge_path):
+                from apical_report import export_genomics
+                import tempfile
+
+                # Run the Java export in a thread pool (JVM startup ~0.5s)
+                tmp_json = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".json", prefix="genomics_",
+                )
+                tmp_json.close()
+
+                try:
+                    ge_result = await loop.run_in_executor(
+                        None, export_genomics, ge_path, tmp_json.name,
+                    )
+
+                    # Reshape into the format the UI expects: keyed by organ_sex
+                    for exp in ge_result.get("experiments", []):
+                        organ = exp.get("organ", "unknown").lower()
+                        sex = exp.get("sex", "unknown").lower()
+                        key = f"{organ}_{sex}"
+
+                        # Sort genes by BMD ascending (lowest = most sensitive).
+                        # Java serializes NaN/Infinity as strings — coerce to float.
+                        def _safe_float(val, default=float("inf")):
+                            if val is None:
+                                return default
+                            try:
+                                v = float(val)
+                                # NaN sorts inconsistently — treat as infinity
+                                return default if v != v else v
+                            except (TypeError, ValueError):
+                                return default
+
+                        genes = sorted(
+                            exp.get("genes", []),
+                            key=lambda g: _safe_float(g.get("bmd")),
+                        )
+
+                        # Sort GO terms by bmd_median ascending
+                        go_bp = sorted(
+                            exp.get("go_bp", []),
+                            key=lambda g: _safe_float(g.get("bmd_median")),
+                        )
+
+                        genomics_sections[key] = {
+                            "organ": organ,
+                            "sex": sex,
+                            "total_probes": exp.get("total_probes", 0),
+                            "total_responsive_genes": len(genes),
+                            "gene_sets": [
+                                {
+                                    "rank": i + 1,
+                                    "go_id": g["go_id"],
+                                    "go_term": g["go_term"],
+                                    "bmd_median": g.get("bmd_median"),
+                                    "bmdl_median": g.get("bmdl_median"),
+                                    "n_genes": g.get("n_passed", 0),
+                                    "direction": g.get("direction", ""),
+                                    "fishers_p": g.get("fishers_two_tail"),
+                                    "genes": g.get("gene_symbols", ""),
+                                }
+                                for i, g in enumerate(go_bp[:20])
+                            ],
+                            "top_genes": [
+                                {
+                                    "rank": i + 1,
+                                    "gene_symbol": g["gene_symbol"],
+                                    "bmd": g.get("bmd"),
+                                    "bmdl": g.get("bmdl"),
+                                    "bmdu": g.get("bmdu"),
+                                    "direction": g.get("direction", ""),
+                                    "fold_change": g.get("fold_change"),
+                                    "r_squared": g.get("r_squared"),
+                                }
+                                for i, g in enumerate(genes[:20])
+                            ],
+                        }
+                finally:
+                    os.unlink(tmp_json.name)
+
+        return JSONResponse({
+            "sections": sections,
+            "genomics_sections": genomics_sections,
+        })
 
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)

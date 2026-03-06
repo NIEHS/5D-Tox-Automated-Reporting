@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import logging
 import os
 import sys
 import time
@@ -640,6 +641,247 @@ def rank_genes_by_bmd(
         results.append(entry)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# GO term definition fetcher — EBI QuickGO API
+# ---------------------------------------------------------------------------
+#
+# The NIEHS Report 10 includes dense 9pt blocks of GO term descriptions
+# after each gene set table.  Each entry shows the bold GO ID + term name,
+# followed by the Gene Ontology biological process definition.
+#
+# We fetch definitions from the EBI QuickGO REST API (no API key needed,
+# supports batch queries up to 200 IDs).  A module-level cache avoids
+# re-fetching the same terms when processing multiple organ×sex CSVs.
+# ---------------------------------------------------------------------------
+
+# Module-level caches — persist for the lifetime of the server process.
+# Keys are GO IDs (str) and gene symbols (str), respectively.
+_go_description_cache: dict[str, dict] = {}
+_gene_description_cache: dict[str, dict] = {}
+
+logger = logging.getLogger(__name__)
+
+
+def fetch_go_descriptions(
+    go_ids: list[str],
+    kb: ToxKBQuerier | None = None,
+) -> list[dict]:
+    """
+    Fetch GO term definitions from the EBI QuickGO REST API.
+
+    For each GO ID, returns a dict with go_id, name, and definition.
+    Results are cached in a module-level dict so repeated calls for the
+    same term (e.g., across liver_male and liver_female) are free.
+
+    The QuickGO endpoint accepts up to 200 comma-separated IDs in a single
+    GET request.  We typically only need 10 (top gene sets), so one call
+    suffices.
+
+    Args:
+        go_ids: List of GO IDs to fetch (e.g., ["GO:0006355", "GO:0007165"]).
+        kb:     Optional ToxKBQuerier — used as fallback if the API fails.
+                Provides the GO term name from the local DuckDB, even though
+                it doesn't have the full definition text.
+
+    Returns:
+        List of dicts in the same order as go_ids:
+          [{"go_id": "GO:0006355",
+            "name": "regulation of DNA-templated transcription",
+            "definition": "Any process that modulates the frequency..."}, ...]
+        If the API fails for a term, definition will be empty string.
+    """
+    if not go_ids:
+        return []
+
+    # Separate cached vs. uncached IDs
+    uncached = [gid for gid in go_ids if gid not in _go_description_cache]
+
+    if uncached:
+        try:
+            # QuickGO REST API — batch query for term definitions
+            # Docs: https://www.ebi.ac.uk/QuickGO/api/index.html
+            ids_param = ",".join(uncached)
+            url = f"https://www.ebi.ac.uk/QuickGO/services/ontology/go/terms/{ids_param}"
+            resp = requests.get(
+                url,
+                headers={"Accept": "application/json"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Parse the response — each result has id, name, definition.text
+            for result in data.get("results", []):
+                gid = result.get("id", "")
+                name = result.get("name", "")
+                defn = ""
+                if result.get("definition"):
+                    defn = result["definition"].get("text", "")
+                _go_description_cache[gid] = {
+                    "go_id": gid,
+                    "name": name,
+                    "definition": defn,
+                }
+
+        except Exception as e:
+            # API failure is non-fatal — we'll fall back to local names
+            logger.warning("QuickGO API failed: %s", e)
+
+    # Build the result list, using cache hits and local fallback for misses
+    results = []
+    for gid in go_ids:
+        if gid in _go_description_cache:
+            results.append(_go_description_cache[gid])
+        else:
+            # Fallback: use the GO term name from local DuckDB if available
+            name = ""
+            if kb:
+                name = kb.go_term_name(gid)
+            entry = {"go_id": gid, "name": name, "definition": ""}
+            _go_description_cache[gid] = entry
+            results.append(entry)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Gene description fetcher — MyGene.info API
+# ---------------------------------------------------------------------------
+#
+# The NIEHS Report 10 includes dense 9pt blocks of gene descriptions
+# after each gene table.  Each entry shows the bold italicized gene symbol,
+# followed by a functional description (typically from NCBI Gene / UniProt).
+#
+# We use the MyGene.info API (https://mygene.info/) which:
+#   - Requires no API key
+#   - Supports batch POST queries (up to 1000 genes at once)
+#   - Returns name (short) and summary (full functional description)
+#   - Has generous rate limits (1000 req/s)
+# ---------------------------------------------------------------------------
+
+def fetch_gene_descriptions(
+    gene_symbols: list[str],
+    species: str = "rat",
+) -> list[dict]:
+    """
+    Fetch gene functional descriptions from the MyGene.info API.
+
+    For each gene symbol, returns a dict with gene_symbol, name (short),
+    and description (full functional summary).  Results are cached in a
+    module-level dict.
+
+    Strategy: gene summaries (the full paragraph-length descriptions used
+    in NIEHS Report 10's dense 9pt blocks) are only available for human
+    genes in NCBI Gene.  Since rat gene symbols map to human orthologs
+    with the same symbol (case-insensitive), we:
+      1. Query rat genes → get the short `name` field
+      2. Query human orthologs (uppercased symbol) → get the `summary` field
+      3. Merge: rat name + human summary per gene
+
+    Uses the MyGene.info batch POST /query endpoint (up to 1000 genes/request).
+
+    Args:
+        gene_symbols: List of gene symbols (e.g., ["Nfe2l2", "Cyp1a1"]).
+        species:      Species name for the rat query (default "rat").
+
+    Returns:
+        List of dicts in the same order as gene_symbols:
+          [{"gene_symbol": "Nfe2l2",
+            "name": "NFE2 like bZIP transcription factor 2",
+            "description": "This gene encodes a transcription factor..."}, ...]
+        If the API fails for a gene, name and description will be empty.
+    """
+    if not gene_symbols:
+        return []
+
+    # Separate cached vs. uncached symbols
+    uncached = [g for g in gene_symbols if g not in _gene_description_cache]
+
+    if uncached:
+        # Step 1: fetch rat gene names (short description)
+        rat_names = _mygene_batch_query(uncached, species, "symbol,name")
+
+        # Step 2: fetch human orthologs for full summaries.
+        # Rat symbols like "Nfe2l2" map to human "NFE2L2" (uppercased).
+        human_symbols = [g.upper() for g in uncached]
+        human_data = _mygene_batch_query(human_symbols, "human", "symbol,name,summary")
+
+        # Step 3: merge rat name + human summary per gene
+        for i, symbol in enumerate(uncached):
+            rat_info = rat_names.get(symbol, {})
+            human_info = human_data.get(symbol.upper(), {})
+
+            _gene_description_cache[symbol] = {
+                "gene_symbol": symbol,
+                # Prefer rat name (species-specific); fall back to human
+                "name": rat_info.get("name", "") or human_info.get("name", ""),
+                # Summary only available from human orthologs
+                "description": human_info.get("summary", ""),
+            }
+
+    # Build the result list, using cache hits and empty fallback for misses
+    results = []
+    for symbol in gene_symbols:
+        if symbol in _gene_description_cache:
+            results.append(_gene_description_cache[symbol])
+        else:
+            entry = {"gene_symbol": symbol, "name": "", "description": ""}
+            _gene_description_cache[symbol] = entry
+            results.append(entry)
+
+    return results
+
+
+def _mygene_batch_query(
+    symbols: list[str],
+    species: str,
+    fields: str,
+) -> dict[str, dict]:
+    """
+    Batch query MyGene.info for gene metadata.
+
+    Uses the POST /v3/query endpoint which accepts multiple gene symbols
+    and returns results in a single request.
+
+    Args:
+        symbols: List of gene symbols to query.
+        species: Species name ("rat", "human", etc.).
+        fields:  Comma-separated field list (e.g., "symbol,name,summary").
+
+    Returns:
+        Dict mapping query symbol → {name, summary, symbol, ...}.
+        Symbols that weren't found are omitted from the result.
+    """
+    if not symbols:
+        return {}
+
+    try:
+        resp = requests.post(
+            "https://mygene.info/v3/query",
+            json={
+                "q": symbols,
+                "scopes": "symbol",
+                "species": species,
+                "fields": fields,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        results_raw = resp.json()
+
+        # Map query string → result dict (skip "notfound" entries)
+        out = {}
+        for item in results_raw:
+            if isinstance(item, dict) and not item.get("notfound"):
+                query = item.get("query", "")
+                out[query] = item
+        return out
+
+    except Exception as e:
+        logger.warning("MyGene.info API failed for %s: %s", species, e)
+        return {}
 
 
 # ---------------------------------------------------------------------------

@@ -1832,6 +1832,46 @@ function copyToClipboard() {
 }
 
 /* ================================================================
+ * Genomics export helper — split each organ×sex result into typed
+ * sections for the Typst template, which filters by "type" field:
+ *   type: "gene_set" → Gene Set BMD Analysis tables + GO descriptions
+ *   type: "gene"     → Gene BMD Analysis tables + gene descriptions
+ * ================================================================ */
+function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
+    const secs = [];
+    for (const [, gData] of Object.entries(entries)) {
+        if (onlyApproved && !gData.approved) continue;
+        if (!gData.gene_sets && !gData.top_genes) continue;
+
+        // Gene set section (with GO descriptions)
+        if (gData.gene_sets && gData.gene_sets.length > 0) {
+            secs.push({
+                type: 'gene_set',
+                organ: gData.organ,
+                sex: gData.sex,
+                gene_sets: gData.gene_sets,
+                go_descriptions: gData.go_descriptions || [],
+                gene_set_narrative: gData.gene_set_narrative || [],
+                dose_unit: 'mg/kg',
+            });
+        }
+        // Gene section (with gene descriptions)
+        if (gData.top_genes && gData.top_genes.length > 0) {
+            secs.push({
+                type: 'gene',
+                organ: gData.organ,
+                sex: gData.sex,
+                top_genes: gData.top_genes,
+                gene_descriptions: gData.gene_descriptions || [],
+                gene_narrative: gData.gene_narrative || [],
+                dose_unit: 'mg/kg',
+            });
+        }
+    }
+    return secs;
+}
+
+/* ================================================================
  * Export .docx — sends background + apical sections to server
  * ================================================================ */
 
@@ -1901,22 +1941,16 @@ async function exportDocx() {
     // BMD summary endpoints (if loaded)
     const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
 
-    // Genomics sections (all approved ones)
-    const genomicsSecs = [];
-    for (const [key, data] of Object.entries(genomicsResults)) {
-        if (data.approved) {
-            genomicsSecs.push({
-                organ: data.organ,
-                sex: data.sex,
-                gene_sets: data.gene_sets,
-                top_genes: data.top_genes,
-                dose_unit: 'mg/kg',
-            });
-        }
-    }
+    // Genomics sections — split into typed entries for the Typst template
+    const genomicsSecs = buildGenomicsExportSections(genomicsResults, { onlyApproved: true });
 
     // Summary paragraphs (if approved)
     const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
+
+    // Aggregate genomics narratives across all organ×sex sections for the
+    // top-level keys expected by the Typst template.
+    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
+    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
     // Animal report — include if approved and data is available
     const animalReportPayload = (animalReportApproved && animalReportData)
@@ -1936,6 +1970,8 @@ async function exportDocx() {
                 animal_report: animalReportPayload,
                 bmd_summary_endpoints: bmdSummaryEps,
                 genomics_sections: genomicsSecs,
+                gene_set_narrative: { paragraphs: allGsNarr },
+                gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
             }),
         });
@@ -2030,22 +2066,15 @@ async function exportPdf() {
     // BMD Summary
     const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
 
-    // Genomics
-    const genomicsSecs = [];
-    for (const [key, gData] of Object.entries(genomicsResults)) {
-        if (gData.approved) {
-            genomicsSecs.push({
-                organ: gData.organ,
-                sex: gData.sex,
-                gene_sets: gData.gene_sets,
-                top_genes: gData.top_genes,
-                dose_unit: 'mg/kg',
-            });
-        }
-    }
+    // Genomics — split into typed entries for the Typst template
+    const genomicsSecs = buildGenomicsExportSections(genomicsResults, { onlyApproved: true });
 
     // Summary
     const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
+
+    // Aggregate genomics narratives for top-level Typst template keys
+    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
+    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
     // Also pass CASRN and DTXSID for the title block
     const casrn = currentIdentity?.casrn || '';
@@ -2070,6 +2099,8 @@ async function exportPdf() {
                 methods_paragraphs: methodsParas,
                 bmd_summary_endpoints: bmdSummaryEps,
                 genomics_sections: genomicsSecs,
+                gene_set_narrative: { paragraphs: allGsNarr },
+                gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
             }),
         });
@@ -3161,16 +3192,16 @@ async function restoreSession(data) {
         setButtons('pool', 'approved');
     }
 
-    // --- Auto-process pending files if pool was approved but no sections exist ---
-    // This handles the case where a session was saved after pool approval
-    // but before the user processed individual files (e.g. browser closed).
-    // We only trigger if: (a) the pool is approved, (b) there are pending
-    // files, and (c) no bm2_sections or genomics_sections were already
-    // restored (meaning processing hasn't happened yet).
+    // --- Auto-process pending files if pool was approved but sections are missing ---
+    // This handles two cases:
+    //   1. Session saved after pool approval but before processing (no sections at all)
+    //   2. Session saved before genomics integration was added — apical sections
+    //      exist but genomics sections are missing.  Re-running autoProcessPool
+    //      is safe because it skips already-created apical sections (idempotent).
     const hasBm2Sections = data.bm2_sections && Object.keys(data.bm2_sections).length > 0;
     const hasGenomicsSections = data.genomics_sections && Object.keys(data.genomics_sections).length > 0;
-    if (animalReportApproved && data.pending_files?.length > 0
-        && !hasBm2Sections && !hasGenomicsSections) {
+    const needsProcessing = !hasBm2Sections || !hasGenomicsSections;
+    if (animalReportApproved && data.pending_files?.length > 0 && needsProcessing) {
         await autoProcessPool();
     }
 
@@ -3839,7 +3870,11 @@ async function autoProcessPool() {
     }
 
     try {
-        const resp = await fetch(`/api/process-integrated/${dtxsid}`, {
+        // First attempt: call process-integrated directly (uses in-memory or
+        // on-disk integrated.json).  If it returns 400 (no integrated data),
+        // re-run integration first, then retry.  This handles the case where
+        // integrated.json was deleted or never included gene expression data.
+        let resp = await fetch(`/api/process-integrated/${dtxsid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3847,6 +3882,23 @@ async function autoProcessPool() {
                 dose_unit: doseUnit,
             }),
         });
+
+        if (resp.status === 400) {
+            // Re-integrate the pool (regenerates integrated.json with all
+            // domains including gene expression)
+            const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, { method: 'POST' });
+            if (intResp.ok) {
+                // Retry process-integrated now that data exists
+                resp = await fetch(`/api/process-integrated/${dtxsid}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        compound_name: compoundName,
+                        dose_unit: doseUnit,
+                    }),
+                });
+            }
+        }
 
         if (resp.ok) {
             const result = await resp.json();
@@ -3883,31 +3935,30 @@ async function autoProcessPool() {
                 // Render the table data and narrative directly (no processBm2 call)
                 renderBm2Results(sectionId, section.tables_json, section.narrative);
             }
+
+            // --- Gene expression: extracted from the integrated .bm2 ---
+            // The process-integrated endpoint also returns genomics_sections
+            // if a gene expression .bm2 was included in the integration.
+            // BMDExpress's own prefilter → curve fit → BMD pipeline already
+            // ran, and we read its results directly (no CSV re-analysis).
+            if (result.genomics_sections) {
+                for (const [key, gData] of Object.entries(result.genomics_sections)) {
+                    if (genomicsResults[key]) continue;
+
+                    genomicsResults[key] = {
+                        ...gData,
+                        approved: false,
+                    };
+
+                    createGenomicsCard(key, gData, gData.organ, gData.sex);
+                }
+            }
         } else {
             const err = await resp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
             showToast(err.error || 'Integrated processing failed');
         }
     } catch (e) {
         showToast('Integrated processing failed: ' + e.message);
-    }
-
-    // --- Gene expression: still processed per-file ---
-    // Gene expression files aren't part of the apical integration because
-    // they use a completely different analysis pipeline (gene set enrichment).
-    for (const [fileId, file] of Object.entries(uploadedFiles)) {
-        if (file.restored || file.fromSession) continue;
-
-        const fp = fingerprints[fileId];
-        if (!fp || fp.domain !== 'gene_expression') continue;
-
-        const organ = fp.organ || '';
-        const sexes = fp.sexes || [];
-
-        for (const sex of sexes) {
-            const key = `${organ}_${sex}`;
-            if (genomicsResults[key]) continue;
-            await processCsv(fileId, organ, sex);
-        }
     }
 
     // Show the genomics section if any genomics results were created
@@ -4271,8 +4322,8 @@ function createGenomicsCard(key, data, organ, sex) {
                     <tr>
                         <td>${escapeHtml(gs.go_term)}</td>
                         <td>${escapeHtml(gs.go_id)}</td>
-                        <td class="bmd-col">${gs.bmd_median?.toFixed(3) || '—'}</td>
-                        <td class="bmd-col">${gs.bmdl_median?.toFixed(3) || '—'}</td>
+                        <td class="bmd-col">${gs.bmd_median?.toFixed(3) || '\u2013'}</td>
+                        <td class="bmd-col">${gs.bmdl_median?.toFixed(3) || '\u2013'}</td>
                         <td>${gs.n_genes}</td>
                         <td>${escapeHtml(gs.direction)}</td>
                     </tr>
@@ -4281,6 +4332,22 @@ function createGenomicsCard(key, data, organ, sex) {
         `;
     } else {
         geneSetHtml = '<p style="color:#6c757d; font-size:0.85rem">No qualifying gene sets found.</p>';
+    }
+
+    // Build GO term descriptions collapsible block (dense 9pt, matching NIEHS)
+    let goDescHtml = '';
+    if (data.go_descriptions && data.go_descriptions.length > 0) {
+        const entries = data.go_descriptions
+            .filter(d => d.definition)
+            .map(d => `<p><b>${escapeHtml(d.go_id)} ${escapeHtml(d.name)}</b>: ${escapeHtml(d.definition)}</p>`)
+            .join('');
+        if (entries) {
+            goDescHtml = `
+                <details class="descriptions-block">
+                    <summary>GO Term Descriptions (${data.go_descriptions.filter(d => d.definition).length})</summary>
+                    <div class="descriptions-content">${entries}</div>
+                </details>`;
+        }
     }
 
     // Build genes table HTML
@@ -4294,9 +4361,9 @@ function createGenomicsCard(key, data, organ, sex) {
                 ${data.top_genes.map(g => `
                     <tr>
                         <td class="endpoint-label">${escapeHtml(g.gene_symbol)}</td>
-                        <td class="bmd-col">${g.bmd?.toFixed(3) || '—'}</td>
-                        <td class="bmd-col">${g.bmdl?.toFixed(3) || '—'}</td>
-                        <td>${g.fold_change?.toFixed(2) || '—'}</td>
+                        <td class="bmd-col">${g.bmd?.toFixed(3) || '\u2013'}</td>
+                        <td class="bmd-col">${g.bmdl?.toFixed(3) || '\u2013'}</td>
+                        <td>${g.fold_change?.toFixed(2) || '\u2013'}</td>
                         <td>${escapeHtml(g.direction)}</td>
                     </tr>
                 `).join('')}
@@ -4306,9 +4373,31 @@ function createGenomicsCard(key, data, organ, sex) {
         genesHtml = '<p style="color:#6c757d; font-size:0.85rem">No qualifying genes found.</p>';
     }
 
+    // Build gene descriptions collapsible block
+    let geneDescHtml = '';
+    if (data.gene_descriptions && data.gene_descriptions.length > 0) {
+        const entries = data.gene_descriptions
+            .filter(d => d.description || d.name)
+            .map(d => {
+                const desc = d.description || d.name || '';
+                return `<p><b><i>${escapeHtml(d.gene_symbol)}</i></b>: ${escapeHtml(desc)}</p>`;
+            })
+            .join('');
+        if (entries) {
+            geneDescHtml = `
+                <details class="descriptions-block">
+                    <summary>Gene Descriptions (${data.gene_descriptions.filter(d => d.description || d.name).length})</summary>
+                    <div class="descriptions-content">${entries}</div>
+                </details>`;
+        }
+    }
+
+    // Pre-populate narrative if already generated (e.g., from session restore)
+    const existingNarrative = _buildGenomicsNarrativeText(data);
+
     card.innerHTML = `
         <div class="card-header">
-            <span class="filename">${escapeHtml(organTitle)} — ${escapeHtml(sexTitle)}
+            <span class="filename">${escapeHtml(organTitle)} \u2014 ${escapeHtml(sexTitle)}
                 (${data.total_responsive_genes || 0} responsive genes)</span>
             <div class="card-actions">
                 <button class="btn-small approve" id="btn-approve-genomics-${key}"
@@ -4321,12 +4410,96 @@ function createGenomicsCard(key, data, organ, sex) {
                       style="display:none">Approved</span>
             </div>
         </div>
+        <div class="bm2-narrative-label">
+            Results Narrative
+            <button class="btn-small primary" id="btn-gen-narrative-${key}"
+                    onclick="generateGenomicsNarrative('${key}')">Generate Narrative</button>
+        </div>
+        <textarea class="bm2-narrative" id="genomics-narrative-${key}" rows="4"
+            placeholder="Click 'Generate Narrative' to create narrative paragraphs for this section.">${escapeHtml(existingNarrative)}</textarea>
         <div class="table-preview">
             ${geneSetHtml}
+            ${goDescHtml}
             ${genesHtml}
+            ${geneDescHtml}
         </div>
     `;
     cardsDiv.appendChild(card);
+
+    // Auto-resize the narrative textarea if it has content
+    const narrativeEl = document.getElementById(`genomics-narrative-${key}`);
+    if (narrativeEl && existingNarrative) autoResizeTextarea(narrativeEl);
+}
+
+
+/**
+ * Combine gene_set_narrative and gene_narrative arrays into a single
+ * text block for the narrative textarea.  Used both when creating the
+ * card and when restoring from session.
+ */
+function _buildGenomicsNarrativeText(data) {
+    const parts = [];
+    if (data.gene_set_narrative && data.gene_set_narrative.length > 0) {
+        parts.push(data.gene_set_narrative.join('\n\n'));
+    }
+    if (data.gene_narrative && data.gene_narrative.length > 0) {
+        parts.push(data.gene_narrative.join('\n\n'));
+    }
+    return parts.join('\n\n');
+}
+
+
+/**
+ * Call the LLM to generate narrative paragraphs for a genomics card.
+ * Populates the narrative textarea and stores the result in genomicsResults.
+ */
+async function generateGenomicsNarrative(key) {
+    const data = genomicsResults[key];
+    if (!data) return;
+
+    const btn = document.getElementById(`btn-gen-narrative-${key}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+    }
+
+    try {
+        const result = await apiFetch('/api/generate-genomics-narrative', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                identity: currentIdentity,
+                organ: data.organ,
+                sex: data.sex,
+                gene_sets: data.gene_sets,
+                top_genes: data.top_genes,
+                total_responsive_genes: data.total_responsive_genes,
+                dose_unit: 'mg/kg',
+            }),
+        });
+
+        // Store narrative arrays in the genomics result
+        genomicsResults[key].gene_set_narrative = result.gene_set_narrative || [];
+        genomicsResults[key].gene_narrative = result.gene_narrative || [];
+
+        // Populate the textarea
+        const text = _buildGenomicsNarrativeText(genomicsResults[key]);
+        const textarea = document.getElementById(`genomics-narrative-${key}`);
+        if (textarea) {
+            textarea.value = text;
+            autoResizeTextarea(textarea);
+        }
+        markReportDirty();
+        showToast('Narrative generated');
+
+    } catch (e) {
+        showError('Narrative generation failed: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Generate Narrative';
+        }
+    }
 }
 
 /**
@@ -4335,6 +4508,11 @@ function createGenomicsCard(key, data, organ, sex) {
 async function approveGenomics(key) {
     const data = genomicsResults[key];
     if (!data) return;
+
+    // Capture the current narrative text from the textarea — the user may
+    // have edited it after generation.
+    const narrativeEl = document.getElementById(`genomics-narrative-${key}`);
+    const narrativeText = narrativeEl ? narrativeEl.value.trim() : '';
 
     const result = await postApproveToServer(
         'genomics',
@@ -4345,6 +4523,11 @@ async function approveGenomics(key) {
             sex: data.sex,
             gene_sets: data.gene_sets,
             top_genes: data.top_genes,
+            go_descriptions: data.go_descriptions || [],
+            gene_descriptions: data.gene_descriptions || [],
+            gene_set_narrative: data.gene_set_narrative || [],
+            gene_narrative: data.gene_narrative || [],
+            narrative_text: narrativeText,
             total_responsive_genes: data.total_responsive_genes,
             csv_id: data.fileId ? (uploadedFiles[data.fileId]?.id || data.fileId) : data.csv_id,
         },
@@ -5252,22 +5435,16 @@ async function compilePdfPreview() {
         // BMD Summary
         const bmdSummaryEps = bmdSummaryEndpoints;
 
-        // Genomics — include all with data, not just approved
-        const genomicsSecs = [];
-        for (const [key, gData] of Object.entries(genomicsResults)) {
-            if (gData.gene_sets || gData.top_genes) {
-                genomicsSecs.push({
-                    organ: gData.organ,
-                    sex: gData.sex,
-                    gene_sets: gData.gene_sets,
-                    top_genes: gData.top_genes,
-                    dose_unit: 'mg/kg',
-                });
-            }
-        }
+        // Genomics — split into typed entries for the Typst template (include all, not just approved)
+        const genomicsSecs = buildGenomicsExportSections(genomicsResults);
 
         // Summary
         const summaryParas = extractProse('summary-prose');
+
+        // Aggregate top-level narrative arrays across all genomics sections
+        // (Typst template reads gene_set_narrative / gene_narrative from root, not per-section)
+        const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
+        const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
         // --- POST to server for Typst compilation ---
         const resp = await fetch('/api/export-pdf', {
@@ -5284,6 +5461,8 @@ async function compilePdfPreview() {
                 methods_paragraphs: methodsParas,
                 bmd_summary_endpoints: bmdSummaryEps,
                 genomics_sections: genomicsSecs,
+                gene_set_narrative: { paragraphs: allGsNarr },
+                gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
             }),
         });
