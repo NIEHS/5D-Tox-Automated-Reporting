@@ -774,16 +774,11 @@
   // Structured sections — each has a heading level, paragraphs, and
   // optionally an inline table (e.g., Table 1 — Study Design).
   for sec in methods.at("sections", default: ()) {
-    // Data level 2 → Typst H2, data level 3 → Typst H3.
-    // These map directly: the scaffold uses level 2 for top-level M&M
-    // subsections (Study Design, Chemistry, etc.) and level 3 for
-    // nested sub-subsections (Clinical Observations, RNA Isolation, etc.)
-    let lvl = sec.at("level", default: 2)
-    if lvl <= 2 {
-      heading(level: 2, sec.at("heading", default: ""))
-    } else {
-      heading(level: 3, sec.at("heading", default: ""))
-    }
+    // All M&M subsections render as H2 under the H1 "Materials and Methods".
+    // PDF/UA-1 forbids skipping heading levels (H1 → H3), and the data
+    // may not guarantee H2 entries precede H3 entries.  Using H2 for all
+    // sections is robust and the TOC still shows the full structure.
+    heading(level: 2, sec.at("heading", default: ""))
 
     for para in sec.at("paragraphs", default: ()) {
       [#para]

@@ -2035,14 +2035,19 @@ header p {
 /* --- Report view wrapper — full-height container for the PDF viewer --- */
 /* Breaks out of .container max-width so the iframe can fill the
    viewport, just like a native PDF viewer experience. */
+/* The Report tab uses block layout (compatible with the tab system's
+   display:none/block toggling) but needs a fixed viewport height so
+   the PDF container can fill it with calc(). */
+/* The report section is positioned at the bottom of the viewport.
+   It can grow taller than its natural height when the user drags
+   the resize handle upward — overflow is visible so the container
+   can extend above the section boundary. */
 #report-view-section {
     background: #525659;
     margin-left: calc(-50vw + 50%);
     margin-right: calc(-50vw + 50%);
     width: 100vw;
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 60px);
+    position: relative;
 }
 
 /* --- Report toolbar — button bar above the PDF viewer --- */
@@ -2073,13 +2078,84 @@ header p {
 .report-toolbar .btn-action.primary:hover {
     background: var(--c-primary-hover);
 }
+/* Collapse/expand toggle button in the toolbar */
+.report-toolbar #btn-toggle-pdf {
+    font-size: 11px;
+    padding: 5px 10px;
+    min-width: 32px;
+}
 
-/* --- Embedded PDF iframe — fills the remaining viewport height --- */
+/* --- PDF viewer container — wraps iframe + resize handle --- */
+/* Fixed to the bottom of the viewport so it grows UPWARD when the
+   user drags the top-edge resize handle.  Default height fills below
+   the toolbar (~102px from top).  Dragging up can fill the full viewport. */
+.report-pdf-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 102px);
+    min-height: 80px;
+    z-index: 100;
+    transition: height 0.2s ease;
+}
+/* Collapsed state — hides the PDF viewer with smooth animation */
+.report-pdf-container.collapsed {
+    height: 0 !important;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* --- Embedded PDF iframe — fills the container --- */
 .report-pdf-frame {
     flex: 1;
     width: 100%;
     border: none;
     background: #525659;
+}
+
+/* --- Resize handle — draggable bar at the bottom edge of the viewer --- */
+/* 12px tall hit target with a visible groove indicator.  Background is
+   slightly lighter than the surrounding dark chrome so it stands out.
+   Sits at the bottom of the PDF container, full width. */
+.report-resize-handle {
+    height: 12px;
+    cursor: ns-resize;
+    background: #4a4d50;
+    border-bottom: 1px solid #666;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* Visual groove — three short horizontal lines centered in the handle,
+   mimicking the classic drag-handle pattern used in splitters/panels. */
+.report-resize-handle::after {
+    content: '';
+    width: 48px;
+    height: 6px;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 1px,
+        #888 1px,
+        #888 2px
+    );
+    border-radius: 1px;
+}
+/* Highlight on hover to confirm it's interactive */
+.report-resize-handle:hover {
+    background: #5a5d60;
+    border-bottom-color: #888;
+}
+/* While actively dragging, brighten further */
+.report-resize-handle.dragging {
+    background: #666;
+    border-bottom-color: #999;
 }
 
 /* --- Empty state — shown when no content has been generated yet --- */

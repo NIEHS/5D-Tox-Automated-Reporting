@@ -5373,8 +5373,17 @@ async function renderReportTab() {
         hasApical || hasBmd || hasGenomics || hasSummary;
 
     if (!hasAnyContent) {
-        emptyEl.classList.remove('hidden');
-        iframe.classList.add('hidden');
+        // No generated content yet — show the scaffold PDF instead.
+        // The scaffold has every section populated with placeholder text
+        // (wrapped in «angle quotes»), showing the full NIEHS report
+        // structure: title page, TOC, front matter, all body sections,
+        // landscape tables, genomics, references.  This gives the user
+        // a preview of what the final report will look like before any
+        // content has been generated.
+        //
+        // The scaffold uses the current test article identity (if set)
+        // so the title page, running header, and name forms are correct.
+        await compileScaffoldPreview();
         return;
     }
 
@@ -5532,6 +5541,69 @@ async function compilePdfPreview() {
 
 
 /**
+ * Compile a scaffold PDF — full NIEHS report structure with placeholder
+ * content — and display it in the Report tab iframe.
+ *
+ * Called when no sections have been generated yet.  Uses the current
+ * test article identity (if set) so the title page, running header,
+ * and name forms show the real chemical name rather than defaults.
+ *
+ * The scaffold endpoint is a simple GET request with query parameters
+ * for the chemical identity fields.
+ */
+async function compileScaffoldPreview() {
+    const emptyEl = document.getElementById('report-empty');
+    const iframe = document.getElementById('report-pdf-frame');
+    const refreshBtn = document.getElementById('btn-refresh-report');
+
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = 'Loading scaffold...';
+    }
+
+    try {
+        // Build query string from current test article identity
+        const chemicalName = currentIdentity?.name || 'Test Article';
+        const casrn = currentIdentity?.casrn || '';
+        const dtxsid = currentIdentity?.dtxsid || '';
+
+        const params = new URLSearchParams({
+            chemical_name: chemicalName,
+            casrn: casrn,
+            dtxsid: dtxsid,
+        });
+
+        const resp = await fetch(`/api/export-pdf-scaffold?${params}`);
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: resp.statusText }));
+            showError('Scaffold preview error: ' + (err.error || resp.statusText));
+            return;
+        }
+
+        const blob = await resp.blob();
+
+        // Revoke previous blob URL to prevent memory leaks
+        if (currentPdfBlobUrl) {
+            URL.revokeObjectURL(currentPdfBlobUrl);
+        }
+        currentPdfBlobUrl = URL.createObjectURL(blob);
+
+        iframe.src = currentPdfBlobUrl;
+        iframe.classList.remove('hidden');
+        emptyEl.classList.add('hidden');
+
+    } catch (err) {
+        showError('Scaffold preview error: ' + err.message);
+    } finally {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = 'Refresh';
+        }
+    }
+}
+
+
+/**
  * Manual refresh button handler — forces a re-compile of the PDF
  * preview from the current state of all generated sections.
  */
@@ -5539,4 +5611,107 @@ async function refreshReportPreview() {
     reportDirty = true;
     await renderReportTab();
 }
+
+
+/* ================================================================
+ * PDF viewer collapse/expand toggle
+ *
+ * Toggles the .collapsed class on the PDF container, which CSS
+ * animates to height: 0.  The toggle button arrow rotates to
+ * indicate the current state.
+ * ================================================================ */
+function togglePdfViewer() {
+    const container = document.getElementById('report-pdf-container');
+    const btn = document.getElementById('btn-toggle-pdf');
+    if (!container) return;
+
+    container.classList.toggle('collapsed');
+    // Rotate the arrow: ▼ when expanded, ▶ when collapsed
+    const isCollapsed = container.classList.contains('collapsed');
+    btn.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25BC;';
+    btn.title = isCollapsed ? 'Expand PDF viewer' : 'Collapse PDF viewer';
+}
+
+
+/* ================================================================
+ * PDF viewer resize handle
+ *
+ * Allows the user to drag the bottom edge of the PDF container to
+ * change its height.  Uses pointer events for smooth cross-browser
+ * dragging (works with mouse and touch).
+ *
+ * During drag:
+ *   - pointer is captured on the handle element
+ *   - pointermove updates the container height
+ *   - pointerup releases capture and cleans up
+ *   - an overlay covers the iframe to prevent it from stealing events
+ * ================================================================ */
+(function initPdfResize() {
+    // Wait for DOM — this IIFE runs when main.js is parsed, but the
+    // elements may not exist yet.  Use DOMContentLoaded if needed.
+    function setup() {
+        const handle = document.getElementById('report-resize-handle');
+        const container = document.getElementById('report-pdf-container');
+        if (!handle || !container) return;
+
+        let startY = 0;
+        let startHeight = 0;
+
+        handle.addEventListener('pointerdown', (e) => {
+            // Only respond to primary button (left click / touch)
+            if (e.button !== 0) return;
+
+            e.preventDefault();
+            handle.setPointerCapture(e.pointerId);
+            handle.classList.add('dragging');
+
+            // Disable the CSS transition during drag for instant feedback
+            container.style.transition = 'none';
+
+            startY = e.clientY;
+            startHeight = container.getBoundingClientRect().height;
+
+            // Create a transparent overlay to prevent the iframe from
+            // capturing pointer events during the drag operation.
+            // Without this, moving the cursor over the iframe would
+            // cause pointermove events to stop firing on the handle.
+            const overlay = document.createElement('div');
+            overlay.id = 'pdf-resize-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:ns-resize;';
+            document.body.appendChild(overlay);
+
+            function onMove(ev) {
+                // Handle is at the top — dragging UP (negative delta)
+                // should GROW the viewer, dragging DOWN should shrink it.
+                // Max height is the full viewport.
+                const delta = startY - ev.clientY;
+                const maxHeight = window.innerHeight - 12; // leave room for handle
+                const newHeight = Math.min(maxHeight, Math.max(80, startHeight + delta));
+                container.style.height = newHeight + 'px';
+            }
+
+            function onUp(ev) {
+                handle.releasePointerCapture(ev.pointerId);
+                handle.classList.remove('dragging');
+                // Restore the CSS transition for collapse animation
+                container.style.transition = '';
+                handle.removeEventListener('pointermove', onMove);
+                handle.removeEventListener('pointerup', onUp);
+                // Remove the overlay
+                const ov = document.getElementById('pdf-resize-overlay');
+                if (ov) ov.remove();
+            }
+
+            handle.addEventListener('pointermove', onMove);
+            handle.addEventListener('pointerup', onUp);
+        });
+    }
+
+    // Run setup after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setup();
+    }
+})();
 

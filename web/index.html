@@ -308,14 +308,21 @@
             <div class="report-toolbar">
                 <button onclick="exportPdf()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
                 <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
+                <button onclick="togglePdfViewer()" class="btn-action" id="btn-toggle-pdf" title="Collapse/expand PDF viewer">&#x25BC;</button>
             </div>
             <!-- Embedded PDF viewer — displays the real compiled PDF/UA-1
                  from the Typst pipeline.  The iframe uses the browser's
-                 native PDF renderer (Chrome/Edge/Firefox all have one). -->
-            <div id="report-empty" class="report-empty-state">
-                <p>No sections generated yet. Generate sections to build the report.</p>
+                 native PDF renderer (Chrome/Edge/Firefox all have one).
+                 The viewer container is collapsible and resizable via the
+                 drag handle on its bottom edge. -->
+            <div id="report-pdf-container" class="report-pdf-container">
+                <!-- Resize handle — drag to change viewer height -->
+                <div id="report-resize-handle" class="report-resize-handle" title="Drag to resize"></div>
+                <div id="report-empty" class="report-empty-state">
+                    <p>No sections generated yet. Generate sections to build the report.</p>
+                </div>
+                <iframe id="report-pdf-frame" class="report-pdf-frame"></iframe>
             </div>
-            <iframe id="report-pdf-frame" class="report-pdf-frame"></iframe>
         </section>
 
         <!-- Error panel -->
