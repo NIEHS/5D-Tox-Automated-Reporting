@@ -469,10 +469,8 @@ function displayResult(result) {
     backgroundApproved = false;
     unlockSection(document.getElementById('output-section'));
 
-    // Show the file pool, animal report, and section builder now that background is done
+    // Show the data tab now that background is done
     show('data-tab-section');
-
-    show('section-builder');
     if (tabbedViewActive) buildTabBar();
 
     // Generating background also confirms identity — enable
@@ -487,8 +485,8 @@ function displayResult(result) {
  * Unified file pool — drag-and-drop + file input handling.
  *
  * A single drop zone accepts both .bm2 and .csv files.  Uploaded
- * files appear in a compact list (the "file pool").  The user then
- * uses the Section Builder to create report sections from them.
+ * files appear in a compact list (the "file pool").  After validation,
+ * autoProcessPool() creates report sections from them automatically.
  * ================================================================ */
 
 const unifiedDropZone = document.getElementById('unified-drop-zone');
@@ -677,9 +675,6 @@ async function uploadFiles(fileList) {
 
     if (totalUploaded > 0) {
         showToast(`Uploaded ${totalUploaded} file(s)`);
-        // Re-populate the section builder's file picker dropdown
-        // so newly uploaded files appear immediately
-        onSectionTypeChange();
         updateClearFilesButton();
         // Show the validation panel so user knows validation is available
         showValidationPanel();
@@ -791,7 +786,7 @@ function updateFilePoolSummary() {
 
 /**
  * Remove a file from the upload pool and from the DOM.
- * Also removes it from the section builder's file picker.
+ * Also removes it from the file pool list.
  *
  * @param {string} fileId — the ID of the file to remove
  */
@@ -799,8 +794,6 @@ function removeFile(fileId) {
     delete uploadedFiles[fileId];
     const el = document.getElementById(`file-pool-${fileId}`);
     if (el) el.remove();
-    // Refresh the file picker dropdown in case the removed file was selected
-    onSectionTypeChange();
     updateClearFilesButton();
     updateFilePoolSummary();
 }
@@ -819,7 +812,6 @@ function clearAllFiles() {
         const el = document.getElementById(`file-pool-${fileId}`);
         if (el) el.remove();
     }
-    onSectionTypeChange();
     updateClearFilesButton();
     updateFilePoolSummary();
 }
@@ -1391,151 +1383,6 @@ function restoreValidationReport(report) {
     updateFileStatusDots(report);
 }
 
-
-/**
- * Called when the section type dropdown changes.
- * Shows/hides the appropriate config panel (apical vs genomics)
- * and repopulates the file picker with compatible files.
- */
-function onSectionTypeChange() {
-    const sectionType = document.getElementById('section-type-select').value;
-
-    // Show/hide config panels
-    document.getElementById('apical-config').classList.toggle('visible', sectionType === 'apical');
-    document.getElementById('genomics-config').classList.toggle('visible', sectionType === 'genomics');
-
-    // Populate file picker with files matching the selected type
-    if (sectionType === 'apical') {
-        populateFilePicker('bm2');
-    } else if (sectionType === 'genomics') {
-        populateFilePicker('csv');
-    } else {
-        // No type selected — clear the picker
-        const select = document.getElementById('section-file-select');
-        select.innerHTML = '<option value="">— select file —</option>';
-    }
-
-    updateAddButton();
-}
-
-/**
- * Fill the #section-file-select dropdown with files from the pool
- * that match the given type ('bm2' or 'csv').
- *
- * @param {string} fileType — 'bm2' or 'csv'
- */
-function populateFilePicker(fileType) {
-    const select = document.getElementById('section-file-select');
-    select.innerHTML = '<option value="">— select file —</option>';
-
-    for (const [fileId, file] of Object.entries(uploadedFiles)) {
-        if (file.type !== fileType) continue;
-        const opt = document.createElement('option');
-        opt.value = fileId;
-        opt.textContent = file.filename;
-        select.appendChild(opt);
-    }
-
-    // Listen for selection changes to enable/disable the Add button
-    // and to auto-detect section defaults from the filename
-    select.onchange = () => {
-        updateAddButton();
-        // Auto-detect clinical pathology from filename when type is apical
-        if (fileType === 'bm2' && select.value) {
-            const file = uploadedFiles[select.value];
-            if (file) {
-                const lowerName = file.filename.toLowerCase();
-                const isClinical = lowerName.includes('clinical') || lowerName.includes('pathology');
-                document.getElementById('builder-title').value = isClinical
-                    ? 'Clinical Pathology'
-                    : 'Animal Condition, Body Weights, and Organ Weights';
-                document.getElementById('builder-caption').value = isClinical
-                    ? 'Summary of Clinical Pathology Findings of {sex} Rats Administered {compound} for Five Days'
-                    : 'Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days';
-            }
-        }
-    };
-}
-
-/**
- * Enable the "Add & Process" button only when both a section type
- * and a file have been selected.
- */
-function updateAddButton() {
-    const sectionType = document.getElementById('section-type-select').value;
-    const fileId = document.getElementById('section-file-select').value;
-    const btn = document.getElementById('btn-add-section');
-    btn.disabled = !(sectionType && fileId);
-}
-
-/**
- * "Add & Process" — reads the section builder form, creates a new
- * report section (apical or genomics), creates the result card in
- * the UI, and triggers processing on the server.
- *
- * For apical: creates an entry in apicalSections, calls createBm2Card()
- * and then processBm2() automatically.
- *
- * For genomics: calls processCsv() which creates a genomicsResults entry.
- */
-async function addAndProcessSection() {
-    const sectionType = document.getElementById('section-type-select').value;
-    const fileId = document.getElementById('section-file-select').value;
-    const file = uploadedFiles[fileId];
-
-    if (!sectionType || !fileId || !file) return;
-
-    if (sectionType === 'apical') {
-        // --- Create an apical endpoint section from a .bm2 file ---
-        const sectionId = 'apical-' + (++apicalSectionCounter);
-
-        // Read config from builder form
-        const sectionTitle = document.getElementById('builder-title').value.trim();
-        const tableCaption = document.getElementById('builder-caption').value.trim();
-        const compound = document.getElementById('builder-compound').value.trim()
-            || currentIdentity?.name || '';
-        const doseUnit = document.getElementById('builder-unit').value.trim() || 'mg/kg';
-
-        // Register in apicalSections state
-        apicalSections[sectionId] = {
-            fileId: fileId,
-            filename: file.filename,
-            processed: false,
-            approved: false,
-            tableData: null,
-            narrative: null,
-            originalNarrative: '',
-        };
-
-        // Create the .bm2 result card
-        createBm2Card(sectionId, file.filename);
-
-        // Override defaults in the card with builder config values
-        const titleEl = document.getElementById(`bm2-title-${sectionId}`);
-        if (titleEl) titleEl.value = sectionTitle;
-        const captionEl = document.getElementById(`bm2-caption-${sectionId}`);
-        if (captionEl) captionEl.value = tableCaption;
-        const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
-        if (compoundEl) compoundEl.value = compound;
-        const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
-        if (unitEl) unitEl.value = doseUnit;
-
-        // Show the results section
-        show('bm2-results-section');
-        if (tabbedViewActive) buildTabBar();
-
-        // Automatically trigger processing
-        processBm2(sectionId);
-
-    } else if (sectionType === 'genomics') {
-        // --- Create a transcriptomic analysis section from a .csv file ---
-        const organ = document.getElementById('builder-organ').value;
-        const sex = document.getElementById('builder-sex').value;
-
-        // Process using the file's server-side ID (from upload response)
-        await processCsv(fileId, organ, sex);
-    }
-}
 
 /**
  * Create a card UI element for an uploaded .bm2 file.
@@ -2198,12 +2045,6 @@ function onIdentityResolved() {
         if (compoundEl && !compoundEl.value.trim()) {
             compoundEl.value = name;
         }
-    }
-
-    // Backfill the section builder's compound name field too
-    const builderCompound = document.getElementById('builder-compound');
-    if (builderCompound && !builderCompound.value.trim()) {
-        builderCompound.value = name;
     }
 
     // Enable Generate Background button (Export is gated on approvals)
@@ -2973,7 +2814,7 @@ async function restoreSession(data) {
         currentResult = fakeResult;
 
         // Display the content (this also shows the output section,
-        // file pool, and section builder via displayResult)
+        // file pool via displayResult)
         displayResult(fakeResult);
 
         // Now lock it as approved — disable editing and add green border
@@ -2990,10 +2831,10 @@ async function restoreSession(data) {
     // (type='bm2', restored: true), render a greyed file pool item,
     // create an apicalSections entry, and create the result card.
     if (data.bm2_sections && Object.keys(data.bm2_sections).length > 0) {
-        // Show the file pool, animal report, section builder, and results section
+        // Show the file pool, animal report, and results section
         show('data-tab-section');
     
-        show('section-builder');
+
         show('bm2-results-section');
 
         for (const [slug, section] of Object.entries(data.bm2_sections)) {
@@ -3079,11 +2920,11 @@ async function restoreSession(data) {
     // pending_files.  We add them to the file pool so the user can
     // assign them to sections without re-uploading.
     if (data.pending_files && data.pending_files.length > 0) {
-        // Make sure the file pool, animal report, and section builder are visible
+        // Make sure the file pool and animal report are visible
         // so the user can assign pending files to report sections.
         show('data-tab-section');
     
-        show('section-builder');
+
 
         for (const pf of data.pending_files) {
             // Skip if this file was already registered by the
@@ -3172,7 +3013,7 @@ async function restoreSession(data) {
     if (data.genomics_sections && Object.keys(data.genomics_sections).length > 0) {
         show('data-tab-section');
     
-        show('section-builder');
+
         show('genomics-results-section');
 
         for (const [slug, section] of Object.entries(data.genomics_sections)) {
@@ -4002,8 +3843,7 @@ async function approvePool() {
         showToast('Pool approved — animal report generated');
         updateExportButton();
 
-        // Auto-create and process all sections from fingerprint data
-        // so the user doesn't have to manually use the Section Builder.
+        // Auto-create and process all sections from fingerprint data.
         await autoProcessPool();
 
     } catch (e) {
@@ -4021,8 +3861,7 @@ async function approvePool() {
  * Why this exists: after the user validates and approves the file pool,
  * the fingerprint data already tells us everything we need (file type,
  * domain, organ, sex, dose unit) to create and process every section
- * automatically.  This removes the tedious step of manually using the
- * Section Builder for each file.
+ * automatically.
  *
  * For each file in `uploadedFiles`:
  *   - BM2 files with non-gene-expression domain → create an apical card
@@ -4050,7 +3889,6 @@ async function autoProcessPool() {
 
     // Show the results sections so cards have a container to land in
     show('bm2-results-section');
-    show('section-builder');
     if (tabbedViewActive) buildTabBar();
 
     // --- Apical endpoint processing: single integrated call ---
@@ -4417,26 +4255,18 @@ function renderAnimalReport(report) {
 /**
  * Process a CSV file through the genomics pipeline.
  *
- * Called from addAndProcessSection() with organ and sex from the
- * section builder form.  Uses the file's server-side ID from the
+ * Called from autoProcessPool() with organ and sex derived from
+ * fingerprint data.  Uses the file's server-side ID from the
  * uploadedFiles pool.  Creates gene set and gene ranking tables.
  *
  * @param {string} fileId — the file pool ID (key in uploadedFiles)
- * @param {string} organ  — organ name from the section builder
- * @param {string} sex    — sex from the section builder
+ * @param {string} organ  — organ name (e.g. "liver", "kidney")
+ * @param {string} sex    — "male" or "female"
  */
 async function processCsv(fileId, organ, sex) {
     // Look up the server-side CSV ID from the upload pool
     const file = uploadedFiles[fileId];
     const serverCsvId = file?.id || fileId;
-
-    // Disable the Add & Process button while processing (may be null
-    // if called from autoProcessPool before Section Builder is rendered)
-    const addBtn = document.getElementById('btn-add-section');
-    if (addBtn) {
-        addBtn.disabled = true;
-        addBtn.textContent = 'Processing...';
-    }
 
     try {
         const compound = currentIdentity?.name || 'Test Compound';
@@ -4479,11 +4309,6 @@ async function processCsv(fileId, organ, sex) {
 
     } catch (e) {
         showError('Genomics processing failed: ' + e.message);
-    } finally {
-        if (addBtn) {
-            addBtn.disabled = false;
-            addBtn.textContent = 'Add & Process';
-        }
     }
 }
 
@@ -5365,7 +5190,7 @@ function _jsonValueSpan(val) {
  *
  * Named "renderModalTablePreview" to avoid colliding with the
  * existing "renderTablePreview" function (which renders BM2
- * apical endpoint tables in the section builder cards).
+ * apical endpoint tables in the result cards).
  *
  * @param {Object}      data      — { headers, rows, total_rows, filename }
  * @param {HTMLElement}  container — the modal body element to render into
@@ -5457,8 +5282,8 @@ function renderXlsxPreview(data, container) {
 
 /* (displayProse moved to utils.js)
    (Old MutationObserver that showed #genomics-upload-section deleted —
-   the unified file pool + section builder are shown directly by
-   displayResult() when background generation completes.) */
+   the unified file pool is shown directly by displayResult() when
+   background generation completes.) */
 
 
 /* =================================================================

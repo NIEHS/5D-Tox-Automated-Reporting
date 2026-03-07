@@ -72,6 +72,38 @@
             </div><!-- /section-body -->
         </div>
 
+        <!-- Output panel — background paragraphs + references -->
+        <div class="output-section" id="output-section" data-collapsible data-tab-section="Background">
+            <div class="output-header" onclick="toggleSection(this)">
+                <h2>Generated Background</h2>
+                <div class="output-actions">
+                    <button class="btn-action" id="btn-edit-bg" onclick="event.stopPropagation(); editBackground()" style="display:none">Edit</button>
+                    <button class="btn-action approve" id="btn-approve-bg" onclick="event.stopPropagation(); approveBackground()" style="display:none">Approve</button>
+                    <button class="btn-action" id="btn-retry-bg" onclick="event.stopPropagation(); retryBackground()" style="display:none">Try Again</button>
+                    <span class="approved-badge" id="badge-bg" style="display:none">Approved</span>
+                    <span class="version-history" id="version-history-bg" style="display:none">
+                        <button class="version-btn" onclick="event.stopPropagation(); toggleVersionHistory('background')">
+                            v<span id="version-num-bg">1</span> &#x25BE;
+                        </button>
+                        <div class="version-dropdown" id="version-dropdown-bg" style="display:none"></div>
+                    </span>
+                    <button class="btn-action" onclick="event.stopPropagation(); copyToClipboard()">Copy</button>
+                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocx()" disabled>Export .docx</button>
+                </div>
+            </div>
+
+            <div class="section-body">
+            <div class="output-prose" id="output-prose"></div>
+
+            <div class="references-section">
+                <h3>References</h3>
+                <div class="references-list" id="references-list"></div>
+            </div>
+
+            <div class="meta-info" id="meta-info"></div>
+            </div><!-- /section-body -->
+        </div>
+
         <!-- Style Preferences panel — shows learned writing style rules from
              user edits.  Hidden when no rules exist; auto-shown after the
              first style learning event. -->
@@ -118,7 +150,6 @@
                 <p class="section-desc">
                     Upload BMDExpress 3 .bm2 files (apical endpoints) and/or
                     gene-level BMD CSV files (transcriptomic data) into a shared pool.
-                    Then use the Section Builder below to create report sections from them.
                 </p>
 
                 <!-- Unified drag-and-drop zone accepting .bm2, .csv, .txt, .xlsx, and .zip -->
@@ -140,7 +171,7 @@
                 </div>
 
                 <!-- Pool Validation panel — collapsible panel below the file list
-                     showing a coverage matrix (domain × tier), validation issues,
+                     showing a coverage matrix (domain x tier), validation issues,
                      and conflict resolution controls.  Hidden until files are
                      present and the user clicks "Validate & Integrate". -->
                 <div id="validation-panel" style="display:none;">
@@ -166,83 +197,11 @@
             </div>
         </div>
 
-        <!-- Section Builder — form for creating report sections from pooled files.
-             The user picks a section type (Apical Endpoints or Transcriptomic
-             Analysis), selects a file from the pool, fills config fields, and
-             clicks "Add & Process" to create a result card. -->
-        <div id="section-builder" style="display:none;" data-collapsible data-tab-section="Builder">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Section Builder</h2>
+        <!-- Genomics Results Cards (hidden until genomics processed) -->
+        <div class="bm2-section" id="genomics-results-section" style="display:none;" data-collapsible data-tab-section="Genomics">
+            <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Analysis</h2>
             <div class="section-body">
-            <div class="builder-row">
-                <div class="form-group">
-                    <label for="section-type-select">Section Type</label>
-                    <select id="section-type-select" onchange="onSectionTypeChange()">
-                        <option value="">— choose —</option>
-                        <option value="apical">Apical Endpoints (.bm2)</option>
-                        <option value="genomics">Transcriptomic Analysis (.csv)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="section-file-select">File</label>
-                    <select id="section-file-select">
-                        <option value="">— select file —</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Apical config — shown when section type is "apical" -->
-            <div class="builder-config" id="apical-config">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="builder-title">Section Title</label>
-                        <input type="text" id="builder-title"
-                               value="Animal Condition, Body Weights, and Organ Weights">
-                    </div>
-                    <div class="form-group">
-                        <label for="builder-caption">Table Caption</label>
-                        <input type="text" id="builder-caption"
-                               value="Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days">
-                    </div>
-                    <div class="form-group">
-                        <label for="builder-compound">Compound Name</label>
-                        <input type="text" id="builder-compound" placeholder="e.g., PFHxSAm">
-                    </div>
-                    <div class="form-group">
-                        <label for="builder-unit">Dose Unit</label>
-                        <input type="text" id="builder-unit" value="mg/kg">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Genomics config — shown when section type is "genomics" -->
-            <div class="builder-config" id="genomics-config">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="builder-organ">Organ</label>
-                        <select id="builder-organ">
-                            <option value="liver">Liver</option>
-                            <option value="kidney">Kidney</option>
-                            <option value="heart">Heart</option>
-                            <option value="brain">Brain</option>
-                            <option value="lung">Lung</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="builder-sex">Sex</label>
-                        <select id="builder-sex">
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add & Process button — creates the section and kicks off processing -->
-            <div class="options-row" style="margin-top:0.75rem;">
-                <button class="btn-generate" id="btn-add-section" onclick="addAndProcessSection()" disabled>
-                    Add &amp; Process
-                </button>
-            </div>
+            <div id="genomics-cards"></div>
             </div><!-- /section-body -->
         </div>
 
@@ -254,9 +213,19 @@
             </div><!-- /section-body -->
         </div>
 
-        <!-- ================================================================
-             NEW NIEHS SECTIONS — Materials & Methods, Genomics, BMD Summary, Summary
-             ================================================================ -->
+        <!-- BMD Summary Table (auto-generated once any .bm2 approved, hidden initially) -->
+        <div class="output-section" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary">
+            <div class="output-header" onclick="toggleSection(this)">
+                <h2>Apical Endpoint BMD Summary</h2>
+                <div class="output-actions">
+                    <button class="btn-action approve" id="btn-approve-bmd-summary" onclick="event.stopPropagation(); approveSection('bmd_summary')">Approve</button>
+                    <span class="approved-badge" id="badge-bmd-summary" style="display:none">Approved</span>
+                </div>
+            </div>
+            <div class="section-body">
+            <div class="table-preview" id="bmd-summary-table"></div>
+            </div><!-- /section-body -->
+        </div>
 
         <!-- Materials and Methods section (hidden until background approved) -->
         <div class="output-section" id="methods-section" style="display:none;" data-collapsible data-tab-section="Methods">
@@ -273,28 +242,6 @@
             </div>
             <div class="section-body">
             <div class="output-prose" id="methods-prose"></div>
-            </div><!-- /section-body -->
-        </div>
-
-        <!-- Genomics Results Cards (hidden until genomics processed) -->
-        <div class="bm2-section" id="genomics-results-section" style="display:none;" data-collapsible data-tab-section="Genomics">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Analysis</h2>
-            <div class="section-body">
-            <div id="genomics-cards"></div>
-            </div><!-- /section-body -->
-        </div>
-
-        <!-- BMD Summary Table (auto-generated once any .bm2 approved, hidden initially) -->
-        <div class="output-section" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary">
-            <div class="output-header" onclick="toggleSection(this)">
-                <h2>Apical Endpoint BMD Summary</h2>
-                <div class="output-actions">
-                    <button class="btn-action approve" id="btn-approve-bmd-summary" onclick="event.stopPropagation(); approveSection('bmd_summary')">Approve</button>
-                    <span class="approved-badge" id="badge-bmd-summary" style="display:none">Approved</span>
-                </div>
-            </div>
-            <div class="section-body">
-            <div class="table-preview" id="bmd-summary-table"></div>
             </div><!-- /section-body -->
         </div>
 
@@ -354,38 +301,6 @@
         <div class="notes-panel" id="notes-panel">
             <strong>Notes:</strong>
             <ul id="notes-list"></ul>
-        </div>
-
-        <!-- Output panel — background paragraphs + references -->
-        <div class="output-section" id="output-section" data-collapsible data-tab-section="Background">
-            <div class="output-header" onclick="toggleSection(this)">
-                <h2>Generated Background</h2>
-                <div class="output-actions">
-                    <button class="btn-action" id="btn-edit-bg" onclick="event.stopPropagation(); editBackground()" style="display:none">Edit</button>
-                    <button class="btn-action approve" id="btn-approve-bg" onclick="event.stopPropagation(); approveBackground()" style="display:none">Approve</button>
-                    <button class="btn-action" id="btn-retry-bg" onclick="event.stopPropagation(); retryBackground()" style="display:none">Try Again</button>
-                    <span class="approved-badge" id="badge-bg" style="display:none">Approved</span>
-                    <span class="version-history" id="version-history-bg" style="display:none">
-                        <button class="version-btn" onclick="event.stopPropagation(); toggleVersionHistory('background')">
-                            v<span id="version-num-bg">1</span> &#x25BE;
-                        </button>
-                        <div class="version-dropdown" id="version-dropdown-bg" style="display:none"></div>
-                    </span>
-                    <button class="btn-action" onclick="event.stopPropagation(); copyToClipboard()">Copy</button>
-                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocx()" disabled>Export .docx</button>
-                </div>
-            </div>
-
-            <div class="section-body">
-            <div class="output-prose" id="output-prose"></div>
-
-            <div class="references-section">
-                <h3>References</h3>
-                <div class="references-list" id="references-list"></div>
-            </div>
-
-            <div class="meta-info" id="meta-info"></div>
-            </div><!-- /section-body -->
         </div>
     </div>
 

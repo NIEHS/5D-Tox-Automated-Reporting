@@ -628,63 +628,6 @@ header p {
     color: #dc3545;
 }
 
-/* ----------------------------------------------------------------
- * Section builder — form panel below the file pool where the user
- * picks a section type, selects a file, configures options, and
- * clicks "Add & Process" to create a report section.
- * ---------------------------------------------------------------- */
-#section-builder {
-    background: var(--c-bg-white);
-    border: 1px solid var(--c-border);
-    border-radius: var(--r-xl);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    /* Initial visibility controlled by inline style="display:none" on the
-       HTML element.  show('section-builder') clears the inline style to
-       reveal the section.  A CSS `display:none` here would override the
-       cleared inline style and keep it permanently hidden. */
-}
-
-#section-builder h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--c-text-secondary);
-    margin-bottom: 0.75rem;
-}
-
-/* Row layout for the section type + file picker + Add button */
-.builder-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.75rem;
-}
-
-.builder-row .form-group {
-    flex: 1;
-    min-width: 160px;
-}
-
-.builder-row select {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--c-border-input);
-    border-radius: var(--r-md);
-    font-size: 0.9rem;
-    color: var(--c-text);
-    background: var(--c-bg-white);
-}
-
-/* Config panels — shown/hidden depending on the selected section type */
-.builder-config {
-    display: none;
-}
-
-.builder-config.visible {
-    display: block;
-}
-
 /* Drag-and-drop zone for .bm2 file uploads */
 .drop-zone {
     border: 2px dashed var(--c-border-input);
