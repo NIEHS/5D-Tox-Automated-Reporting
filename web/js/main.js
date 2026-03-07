@@ -3085,16 +3085,15 @@ async function restoreSession(data) {
         } catch (_) { /* non-critical — previewer just stays hidden */ }
     }
 
-    // --- Auto-process pending files if pool was approved but sections are missing ---
-    // This handles two cases:
-    //   1. Session saved after pool approval but before processing (no sections at all)
-    //   2. Session saved before genomics integration was added — apical sections
-    //      exist but genomics sections are missing.  Re-running autoProcessPool
-    //      is safe because it skips already-created apical sections (idempotent).
-    const hasBm2Sections = data.bm2_sections && Object.keys(data.bm2_sections).length > 0;
-    const hasGenomicsSections = data.genomics_sections && Object.keys(data.genomics_sections).length > 0;
-    const needsProcessing = !hasBm2Sections || !hasGenomicsSections;
-    if (animalReportApproved && data.pending_files?.length > 0 && needsProcessing) {
+    // --- Auto-process pending files if pool was approved ---
+    // Always re-run autoProcessPool on restore when the pool is approved.
+    // It's idempotent: approved apical sections are skipped, approved
+    // genomics sections are skipped (via the ?.approved guard), and
+    // createGenomicsCard / createBm2Card de-duplicate by removing existing
+    // cards before creating new ones.  This ensures any sections that were
+    // missing from the session (e.g. liver_male genomics added after the
+    // session was last saved) get created on restore.
+    if (animalReportApproved && data.pending_files?.length > 0) {
         await autoProcessPool();
     }
 
@@ -3977,7 +3976,11 @@ async function autoProcessPool() {
             // ran, and we read its results directly (no CSV re-analysis).
             if (result.genomics_sections) {
                 for (const [key, gData] of Object.entries(result.genomics_sections)) {
-                    if (genomicsResults[key]) continue;
+                    // Skip sections that were already restored and approved
+                    // from a prior session — don't overwrite user-approved data.
+                    // But DO create cards for new sections (e.g. liver_male
+                    // missing from a session saved before all sections existed).
+                    if (genomicsResults[key]?.approved) continue;
 
                     genomicsResults[key] = {
                         ...gData,
@@ -4317,6 +4320,15 @@ async function processCsv(fileId, organ, sex) {
  * organ × sex combination.  Displays the top 10 gene sets and
  * top 10 genes as HTML tables with approve/retry buttons.
  */
+// Format a numeric value to fixed decimals, handling Java NaN/Infinity
+// strings that survive JSON serialization from BMDExpress.
+function _fmtNum(val, decimals = 3) {
+    if (val == null) return '\u2013';
+    const n = Number(val);
+    if (!isFinite(n)) return '\u2013';
+    return n.toFixed(decimals);
+}
+
 function createGenomicsCard(key, data, organ, sex) {
     const cardsDiv = document.getElementById('genomics-cards');
 
@@ -4343,8 +4355,8 @@ function createGenomicsCard(key, data, organ, sex) {
                     <tr>
                         <td>${escapeHtml(gs.go_term)}</td>
                         <td>${escapeHtml(gs.go_id)}</td>
-                        <td class="bmd-col">${gs.bmd_median?.toFixed(3) || '\u2013'}</td>
-                        <td class="bmd-col">${gs.bmdl_median?.toFixed(3) || '\u2013'}</td>
+                        <td class="bmd-col">${_fmtNum(gs.bmd_median)}</td>
+                        <td class="bmd-col">${_fmtNum(gs.bmdl_median)}</td>
                         <td>${gs.n_genes}</td>
                         <td>${escapeHtml(gs.direction)}</td>
                     </tr>
@@ -4382,9 +4394,9 @@ function createGenomicsCard(key, data, organ, sex) {
                 ${data.top_genes.map(g => `
                     <tr>
                         <td class="endpoint-label">${escapeHtml(g.gene_symbol)}</td>
-                        <td class="bmd-col">${g.bmd?.toFixed(3) || '\u2013'}</td>
-                        <td class="bmd-col">${g.bmdl?.toFixed(3) || '\u2013'}</td>
-                        <td>${g.fold_change?.toFixed(2) || '\u2013'}</td>
+                        <td class="bmd-col">${_fmtNum(g.bmd)}</td>
+                        <td class="bmd-col">${_fmtNum(g.bmdl)}</td>
+                        <td>${_fmtNum(g.fold_change, 2)}</td>
                         <td>${escapeHtml(g.direction)}</td>
                     </tr>
                 `).join('')}
