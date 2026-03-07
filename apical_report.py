@@ -63,14 +63,21 @@ from apical_stats import analyze_endpoint, EndpointStats
 # Constants — paths and configuration
 # ---------------------------------------------------------------------------
 
-# BMDExpress 3 project root — used to locate the JAR and build the classpath
+# BMDExpress 3 project root — location of the bmdx-core library JAR
+# and its Maven-resolved dependencies (target/deps/*.jar).
+# bmdx-core is a headless subset of BMDExpress 3 (132 source files, 288KB)
+# containing the full data model, CLI I/O commands, and metadata system —
+# without the GUI, analysis engines, or JavaFX dependencies.
 BMDX_PROJECT = Path.home() / "Dev" / "Projects" / "BMDExpress-3"
 
-# Maven repository root — JAR dependencies are cached here
-M2_REPO = Path.home() / ".m2" / "repository"
+# The bmdx-core library JAR — contains all BMDExpress model classes,
+# CLI commands (combine, export, query), and utilities.
+BMDX_CORE_JAR = BMDX_PROJECT / "target" / "bmdx-core.jar"
 
-# The compiled BMDExpress 3 JAR (not a fat JAR — needs classpath assembly)
-BMDX_JAR = BMDX_PROJECT / "target" / "bmdexpress3-3.0.0-SNAPSHOT.jar"
+# Maven-resolved dependency JARs — downloaded by `mvn dependency:copy-dependencies`
+# into target/deps/ on the bmdx-core branch.  Includes Jackson, commons-math3,
+# commons-cli, SLF4J, Guava, Easy Rules, etc.
+BMDX_DEPS_DIR = BMDX_PROJECT / "target" / "deps"
 
 # Font size for table cells (small to fit many dose columns)
 TABLE_FONT_SIZE = 8
@@ -85,58 +92,21 @@ HEADER_FONT_SIZE = 8
 
 def _build_classpath() -> str:
     """
-    Assemble the Java classpath from the BMDExpress 3 JAR and its Maven
-    dependencies.  The compiled JAR is NOT a fat JAR, so we need to find
-    each dependency in the local Maven repository (~/.m2/repository/).
+    Assemble the Java classpath from bmdx-core.jar + its Maven-resolved deps.
+
+    bmdx-core is a self-contained headless subset of BMDExpress 3.  All
+    dependency JARs live in target/deps/ (downloaded by Maven on the
+    bmdx-core branch).  No manual Maven path resolution needed.
 
     Returns:
         Colon-separated classpath string suitable for java -cp.
     """
-    jars = [str(BMDX_JAR)]
+    jars = [str(BMDX_CORE_JAR)]
 
-    # The lib/ directory has jfreechart-1.0.19-fx.jar
-    lib_dir = BMDX_PROJECT / "lib"
-    if lib_dir.exists():
-        for jar in lib_dir.glob("*.jar"):
+    # Add all dependency JARs from target/deps/
+    if BMDX_DEPS_DIR.exists():
+        for jar in BMDX_DEPS_DIR.glob("*.jar"):
             jars.append(str(jar))
-
-    # Known Maven dependencies and their repository paths
-    # (groupId/artifactId/version/artifactId-version.jar)
-    maven_deps = [
-        "commons-cli/commons-cli/1.6.0/commons-cli-1.6.0.jar",
-        "com/fasterxml/jackson/core/jackson-core/2.18.1/jackson-core-2.18.1.jar",
-        "com/fasterxml/jackson/core/jackson-databind/2.18.1/jackson-databind-2.18.1.jar",
-        "com/fasterxml/jackson/core/jackson-annotations/2.18.1/jackson-annotations-2.18.1.jar",
-        "commons-io/commons-io/2.17.0/commons-io-2.17.0.jar",
-        "org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar",
-        "org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar",
-        "gov/nist/math/jama/1.0.3/jama-1.0.3.jar",
-    ]
-
-    for dep in maven_deps:
-        full_path = M2_REPO / dep
-        if full_path.exists():
-            jars.append(str(full_path))
-
-    # Dependencies with non-trivial paths — find them by glob
-    glob_patterns = [
-        ("sciome-commons", "*.jar"),
-        ("org/slf4j", "slf4j-api-1.7.36.jar"),
-        ("ch/qos/logback", "logback-classic-1.2.11.jar"),
-        ("ch/qos/logback", "logback-core-1.2.11.jar"),
-        ("com/google/guava", "guava-33.3.1-jre.jar"),
-        ("org/jfree", "jfreechart-1.5.0.jar"),
-        ("org/jfree", "jcommon-1.0.24.jar"),
-        ("org/jfree", "jfreesvg-3.3.jar"),
-        ("org/jeasy", "easy-rules-core-4.1.0.jar"),
-        ("org/jeasy", "easy-rules-support-4.1.0.jar"),
-    ]
-
-    for subdir, pattern in glob_patterns:
-        search_dir = M2_REPO / subdir
-        if search_dir.exists():
-            for jar in search_dir.rglob(pattern):
-                jars.append(str(jar))
 
     return ":".join(jars)
 

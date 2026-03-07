@@ -3684,17 +3684,35 @@ async def api_pool_integrate(dtxsid: str):
         except (json.JSONDecodeError, Exception):
             pass
 
+    # Load test article identity for metadata inference.
+    # The LLM uses this to populate testArticle on each experiment.
+    meta_path = session_dir / "meta.json"
+    test_article = None
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            test_article = {
+                "name": meta.get("name", ""),
+                "casrn": meta.get("casrn", ""),
+                "dsstox": meta.get("dtxsid", dtxsid),
+            }
+        except (json.JSONDecodeError, Exception):
+            pass
+
     # Run integration in a thread pool — xlsx parsing uses openpyxl (blocking I/O)
     loop = asyncio.get_running_loop()
     try:
         integrated = await loop.run_in_executor(
             None,
-            integrate_pool,
-            dtxsid,
-            str(session_dir),
-            fps,
-            coverage_matrix,
-            precedence,
+            lambda: integrate_pool(
+                dtxsid,
+                str(session_dir),
+                fps,
+                coverage_matrix,
+                precedence,
+                test_article=test_article,
+                llm_generate_json=_llm_generate_json,
+            ),
         )
     except Exception as e:
         logger.exception("Pool integration failed for %s", dtxsid)

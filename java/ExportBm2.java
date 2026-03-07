@@ -32,7 +32,6 @@ import java.io.*;
 import java.util.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sciome.bmdexpress2.mvp.model.BMDProject;
 import com.sciome.bmdexpress2.mvp.model.BMDExpressAnalysisDataSet;
 import com.sciome.bmdexpress2.mvp.model.category.CategoryAnalysisResults;
@@ -64,9 +63,10 @@ public class ExportBm2 {
         }
 
         // --- Export #1: Full BMDProject as JSON via Jackson ---
+        // Use IntegrateProject's NaN-safe mapper so NaN/Infinity serialize
+        // as JSON null instead of bare tokens (which break client parsers).
         System.out.println("  Writing JSON to " + jsonOut + "...");
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        ObjectMapper mapper = IntegrateProject.createNanSafeMapper();
         mapper.writeValue(new File(jsonOut), project);
 
         // --- Export #2: Category analysis as TSV ---

@@ -117,10 +117,14 @@ def jonckheere_test(groups_by_dose: dict[float, list[float]]) -> tuple[float, st
     Returns:
         (p_value, direction) where direction is "UP" or "DOWN".
     """
-    # Sort doses to ensure correct ordering
+    # Sort doses and exclude empty groups (doses where no observations survived
+    # filtering — e.g. high-dose groups with complete mortality).
     sorted_doses = sorted(groups_by_dose.keys())
-    ordered_groups = [groups_by_dose[d] for d in sorted_doses]
+    ordered_groups = [groups_by_dose[d] for d in sorted_doses if len(groups_by_dose[d]) > 0]
     k = len(ordered_groups)
+    if k < 2:
+        # Need at least 2 non-empty groups for a trend test
+        return 1.0, "UP"
 
     # Count the J statistic: for each pair of groups (i < j),
     # count how many times an observation in group j exceeds one in group i
@@ -438,6 +442,15 @@ def analyze_endpoint(
         control_dose=control_dose,
     )
 
+    # Sanitize groups_by_dose once up front: remove None and NaN values.
+    # These represent missing observations from Java BMDExpress serialization
+    # or NaN→null JSON sanitization.  All downstream code (descriptive stats,
+    # Jonckheere, Williams, Dunnett) receives only valid numeric values.
+    groups_by_dose = {
+        dose: [v for v in vals if v is not None and not (isinstance(v, float) and math.isnan(v))]
+        for dose, vals in groups_by_dose.items()
+    }
+
     # ---- Descriptive statistics ----
     sorted_doses = sorted(groups_by_dose.keys())
     treatment_doses = [d for d in sorted_doses if d != control_dose]
@@ -446,6 +459,11 @@ def analyze_endpoint(
     for dose in sorted_doses:
         vals = groups_by_dose[dose]
         n = len(vals)
+        if n == 0:
+            result.n_per_dose[dose] = 0
+            result.mean_per_dose[dose] = None
+            result.se_per_dose[dose] = None
+            continue
         mean = sum(vals) / n
         result.n_per_dose[dose] = n
         result.mean_per_dose[dose] = mean
@@ -464,10 +482,21 @@ def analyze_endpoint(
     result.trend_marker = _sig_marker(jonck_p)
 
     # ---- Pairwise comparisons ----
+    # Exclude dose groups with no valid observations — these represent doses
+    # where all animals died or were sacrificed early (e.g. high-dose groups
+    # in an NTP 28-day study).  The statistical tests require ≥1 observation
+    # per group; empty groups are a normal study design feature, not an error.
     control_vals = groups_by_dose[control_dose]
-    treatment_groups = {d: groups_by_dose[d] for d in treatment_doses}
+    treatment_groups = {
+        d: groups_by_dose[d] for d in treatment_doses
+        if len(groups_by_dose[d]) > 0
+    }
 
-    if result.jonckheere_sig:
+    if not control_vals or not treatment_groups:
+        # No valid control or no valid treatment groups — can't run pairwise
+        result.pairwise_method = "none"
+        pairwise_p = {}
+    elif result.jonckheere_sig:
         # Trend detected → use Williams (trend-sensitive, more powerful)
         result.pairwise_method = "williams"
         pairwise_p = williams_test(control_vals, treatment_groups)
