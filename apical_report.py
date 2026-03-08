@@ -56,7 +56,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 
-from apical_stats import analyze_endpoint, EndpointStats
+from apical_stats import analyze_endpoint, EndpointStats, run_java_prefilter
 
 
 # ---------------------------------------------------------------------------
@@ -205,48 +205,118 @@ def export_genomics(bm2_path: str, output_json: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Category analysis BMD lookup — parse the TSV export
+# Category analysis BMD extraction — via native Java API
 # ---------------------------------------------------------------------------
 
-def build_category_lookup(tsv_path: str) -> dict[tuple[str, str], dict]:
+def export_categories(bm2_path: str, output_json: str) -> dict:
     """
-    Parse the BMDExpress category analysis TSV export into a lookup dict.
+    Extract all category analysis BMD values from a .bm2 file.
 
-    The category analysis maps defined-category endpoints to their BMD
-    results.  Each row represents one endpoint that passed all filters
-    (R² threshold, BMDU/BMDL ratio, confidence level).
+    Uses the pre-compiled ExportCategories.class which reads
+    CategoryAnalysisResults directly from the BMDProject via BMDExpress's
+    native Java API.  This replaces the broken DataCombinerService TSV
+    export path (which crashes with IndexOutOfBoundsException).
 
-    The key is (experiment_prefix, endpoint_name), matching how we identify
-    endpoints in the dose-response data.
+    Exports ALL BMD statistics per endpoint: mean, median, minimum,
+    weighted mean, 5th/10th percentile, 95% CI bounds — so the user
+    can choose which statistic to display in report tables.
 
     Args:
-        tsv_path: Path to the category analysis TSV export.
+        bm2_path:    Path to the .bm2 file.
+        output_json: Path where the categories JSON will be written.
+
+    Returns:
+        The parsed JSON dict with structure:
+        {
+            "analysis_count": int,
+            "total_endpoints": int,
+            "analyses": [
+                {
+                    "name": str,
+                    "experiment_prefix": str,
+                    "category_type": str,
+                    "results": [
+                        {
+                            "category_id": str,
+                            "category_title": str,
+                            "bmd": { "mean", "median", "minimum", ... },
+                            "bmdl": { ... },
+                            "bmdu": { ... },
+                            "genes_passed": int,
+                            ...
+                        }
+                    ]
+                }
+            ]
+        }
+    """
+    cp = _build_classpath()
+    helper_dir = str(JAVA_HELPER_DIR)
+
+    subprocess.run(
+        [
+            "java", "-cp", f"{cp}:{helper_dir}",
+            "ExportCategories", bm2_path, output_json,
+        ],
+        check=True, capture_output=True,
+    )
+
+    with open(output_json, "rb") as f:
+        import orjson
+        return orjson.loads(f.read())
+
+
+def build_category_lookup(
+    categories_json: dict,
+    bmd_stat: str = "mean",
+) -> dict[tuple[str, str], dict]:
+    """
+    Build the category lookup dict from ExportCategories output.
+
+    Transforms the structured JSON from export_categories() into the
+    (experiment_prefix, endpoint_name) → {bmd, bmdl, bmdu, ...} lookup
+    that build_table_data() uses to populate BMD/BMDL columns.
+
+    The bmd_stat parameter controls which BMD aggregate statistic is used.
+    For single-gene apical endpoints (1 gene per category), all statistics
+    are identical.  For GO categories in genomics data, the choice matters
+    (e.g., median vs 5th percentile can differ substantially).
+
+    Args:
+        categories_json: Output from export_categories().
+        bmd_stat:        Which BMD statistic to use. One of:
+                         "mean", "median", "minimum", "weighted_mean",
+                         "fifth_pct", "tenth_pct", "lower95", "upper95".
+                         Defaults to "mean" for backward compatibility.
 
     Returns:
         Dict mapping (experiment_prefix, endpoint_name) → {bmd, bmdl, bmdu, ...}
     """
     lookup = {}
-    with open(tsv_path) as f:
-        lines = [line for line in f.readlines() if line.strip()]
 
-    reader = csv.DictReader(lines, delimiter="\t")
-    for row in reader:
-        analysis = row.get("Analysis", "")
-        endpoint = row.get("GO/Pathway/Gene Set/Gene Name", "")
+    for analysis in categories_json.get("analyses", []):
+        prefix = analysis.get("experiment_prefix", "")
 
-        # The analysis name looks like:
-        #   BodyWeightFemale_BMD_null_DEFINED-Category File-..._true_rsquared0.6_...
-        # We need the prefix before "_BMD" to match against experiment names
-        prefix = analysis.split("_BMD")[0]
+        for result in analysis.get("results", []):
+            endpoint = result.get("category_title", "")
 
-        lookup[(prefix, endpoint)] = {
-            "bmd": row.get("BMD Mean", ""),
-            "bmdl": row.get("BMDL Mean", ""),
-            "bmdu": row.get("BMDU Mean", ""),
-            "category_id": row.get("GO/Pathway/Gene Set/Gene ID", ""),
-            "direction": row.get("Overall Direction", ""),
-            "fold_change": row.get("Max Fold Change", ""),
-        }
+            # Pull the selected statistic from the nested bmd/bmdl/bmdu blocks
+            bmd_block = result.get("bmd", {})
+            bmdl_block = result.get("bmdl", {})
+            bmdu_block = result.get("bmdu", {})
+
+            lookup[(prefix, endpoint)] = {
+                "bmd": bmd_block.get(bmd_stat, bmd_block.get("mean", "")),
+                "bmdl": bmdl_block.get(bmd_stat, bmdl_block.get("mean", "")),
+                "bmdu": bmdu_block.get(bmd_stat, bmdu_block.get("mean", "")),
+                "category_id": result.get("category_id", ""),
+                "direction": result.get("direction", ""),
+                "fold_change": result.get("max_fold_change", ""),
+                # Preserve the full stat blocks for downstream use
+                "bmd_stats": bmd_block,
+                "bmdl_stats": bmdl_block,
+                "bmdu_stats": bmdu_block,
+            }
 
     return lookup
 
@@ -284,11 +354,11 @@ def build_table_data(
     """
     Build the table data for all endpoints, organized by sex.
 
-    For each endpoint:
-      1. Run NTP statistical tests (Jonckheere → Williams/Dunnett)
-      2. Check if endpoint appears in category analysis
-      3. Apply business rule: report BMD only if BOTH trend + pairwise sig
-      4. Format mean ± SE with significance markers for each dose group
+    Two-phase approach for efficiency:
+      Phase 1: Batch all endpoints into a single Java RunPrefilter call
+               to get Williams/Dunnett p-values (one JVM launch total).
+      Phase 2: For each endpoint, compute Jonckheere in Python, combine
+               with Java pairwise results, apply business rules.
 
     Args:
         bm2_json:        Parsed JSON from the .bm2 export.
@@ -299,16 +369,29 @@ def build_table_data(
         Each list is ordered: body weight endpoints first, then organ
         weight endpoints.
     """
-    tables: dict[str, list[TableRow]] = {}
+    from apical_stats import (
+        _call_java_prefilter, _sig_marker, jonckheere_test,
+        ALPHA_STAR, EndpointStats,
+    )
+    import math
+
+    # ---- Phase 1: Batch Java prefilter ----
+    # Collect all endpoints across all experiments into a single batch,
+    # so we only launch one JVM for the entire set (~20 endpoints instead
+    # of 20 separate JVM launches = ~15s saved).
+    batch_doses: list[float] = []
+    batch_probe_ids: list[str] = []
+    batch_responses: list[list[float]] = []
+    # Track endpoint metadata for reassembly after Java returns
+    endpoint_meta: list[dict] = []
 
     for exp in bm2_json.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
         treatments = exp.get("treatments", [])
+        exp_doses = [t["dose"] for t in treatments]
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
 
-        # Determine sex from experiment name.
-        # Case-insensitive: handles both CamelCase ("BodyWeightFemale")
-        # and underscore-delimited ("female_body_weight") naming conventions.
+        # Determine sex from experiment name
         exp_name_lower = exp_name.lower()
         if "female" in exp_name_lower:
             sex = "Female"
@@ -317,78 +400,199 @@ def build_table_data(
         else:
             sex = "Unknown"
 
-        if sex not in tables:
-            tables[sex] = []
-
         for pr in exp.get("probeResponses", []):
             probe_name = pr["probe"]["id"]
             responses = pr["responses"]
 
-            # Group responses by dose
-            groups_by_dose: dict[float, list[float]] = {}
+            # Group responses by dose (raw, unsanitized — keeps None/NaN)
+            groups_by_dose_raw: dict[float, list] = {}
             for i, val in enumerate(responses):
                 dose = treat_doses[i]
-                groups_by_dose.setdefault(dose, []).append(val)
+                groups_by_dose_raw.setdefault(dose, []).append(val)
 
-            # Skip endpoints without a control dose group (dose=0.0).
-            # This can happen with tissue concentration or other measurement
-            # data that only has treated groups and no vehicle control.
-            # The NTP statistical tests require a control group as baseline.
-            if 0.0 not in groups_by_dose:
+            # Skip endpoints without control
+            if 0.0 not in groups_by_dose_raw:
                 continue
 
-            # Run the NTP statistical analysis
-            stats = analyze_endpoint(exp_name, probe_name, groups_by_dose)
+            # Sanitized groups for Python Jonckheere (needs clean values)
+            groups_by_dose = {
+                dose: [v for v in vals
+                       if v is not None
+                       and not (isinstance(v, float) and math.isnan(v))]
+                for dose, vals in groups_by_dose_raw.items()
+            }
 
-            # Check category analysis for BMD/BMDL
-            cat = category_lookup.get((exp_name, probe_name))
+            # For Java batching, use the RAW response vector (preserving
+            # the original sample count so all endpoints have the same
+            # number of columns).  Replace None with 0.0 for JSON safety —
+            # None values are exceedingly rare in apical data and would
+            # represent missing observations (dead animals), which don't
+            # meaningfully affect Williams/Dunnett on the remaining groups.
+            flat_responses = [
+                v if v is not None else 0.0
+                for v in responses
+            ]
 
-            # Business rule: report BMD only if stats say so AND category
-            # analysis has the value
-            if stats.report_bmd and cat:
-                try:
-                    bmd_val = float(cat["bmd"])
-                    bmdl_val = float(cat["bmdl"])
-                    bmd_str = _format_bmd(bmd_val)
-                    bmdl_str = _format_bmd(bmdl_val)
-                except (ValueError, KeyError):
-                    bmd_str = "ND"
-                    bmdl_str = "ND"
+            batch_key = f"{exp_name}::{probe_name}"
+            batch_probe_ids.append(batch_key)
+            batch_responses.append(flat_responses)
+            endpoint_meta.append({
+                "exp_name": exp_name,
+                "probe_name": probe_name,
+                "sex": sex,
+                "groups_by_dose": groups_by_dose,
+                "sorted_doses": sorted(groups_by_dose.keys()),
+                "exp_doses": exp_doses,
+            })
+
+    # Run Java prefilter — one batch per unique dose design.
+    # Different experiments can have different numbers of treatments/replicates
+    # (e.g., female_hematology has 37 samples, male_hematology has 30).
+    # Group endpoints by their dose vector and batch each group separately.
+    java_results: dict[str, dict] = {}
+    if batch_probe_ids:
+        # Group by dose vector (as tuple for hashability)
+        from collections import defaultdict
+        dose_groups: dict[tuple, list[int]] = defaultdict(list)
+        for idx, meta in enumerate(endpoint_meta):
+            dose_key = tuple(meta["exp_doses"])
+            dose_groups[dose_key].append(idx)
+
+        for dose_key, indices in dose_groups.items():
+            group_doses = list(dose_key)
+            group_ids = [batch_probe_ids[i] for i in indices]
+            group_responses = [batch_responses[i] for i in indices]
+
+            try:
+                # williams_p_cutoff=1.0 → always run Dunnett's for apical
+                # endpoints.  Jonckheere (Python) is the trend gatekeeper
+                # for apical data, not Williams.  With ~20 endpoints,
+                # running Dunnett's on all of them is fast.
+                result = _call_java_prefilter(
+                    doses=group_doses,
+                    probe_ids=group_ids,
+                    responses=group_responses,
+                    num_permutations=1000,
+                    num_threads=4,
+                    dunnett_simulations=15000,
+                    williams_p_cutoff=1.0,
+                )
+                for probe_result in result.get("probes", []):
+                    java_results[probe_result["probe_id"]] = probe_result
+            except (RuntimeError, FileNotFoundError) as e:
+                import sys
+                print(f"  WARNING: Batch Java prefilter failed for "
+                      f"{len(group_ids)} endpoints: {e}", file=sys.stderr)
+
+    # ---- Phase 2: Build EndpointStats from Jonckheere + Java results ----
+    tables: dict[str, list[TableRow]] = {}
+
+    for i, meta in enumerate(endpoint_meta):
+        exp_name = meta["exp_name"]
+        probe_name = meta["probe_name"]
+        sex = meta["sex"]
+        groups_by_dose = meta["groups_by_dose"]
+        sorted_doses = meta["sorted_doses"]
+
+        if sex not in tables:
+            tables[sex] = []
+
+        # Descriptive statistics
+        control_dose = 0.0
+        treatment_doses = [d for d in sorted_doses if d != control_dose]
+        n_per_dose = {}
+        mean_per_dose = {}
+        se_per_dose = {}
+
+        for dose in sorted_doses:
+            vals = groups_by_dose[dose]
+            n = len(vals)
+            if n == 0:
+                n_per_dose[dose] = 0
+                mean_per_dose[dose] = None
+                se_per_dose[dose] = None
+                continue
+            mean_val = sum(vals) / n
+            n_per_dose[dose] = n
+            mean_per_dose[dose] = mean_val
+            if n > 1:
+                variance = sum((v - mean_val) ** 2 for v in vals) / (n - 1)
+                se_per_dose[dose] = math.sqrt(variance / n)
             else:
+                se_per_dose[dose] = 0.0
+
+        # Jonckheere trend test (stays in Python — NTP convention)
+        jonck_p, direction = jonckheere_test(groups_by_dose)
+        jonckheere_sig = jonck_p <= ALPHA_STAR
+        trend_marker = _sig_marker(jonck_p)
+
+        # Pairwise p-values from Java batch.
+        # NaN/null p-values (from zero-variance endpoints where Dunnett's
+        # can't compute a test statistic) are treated as non-significant (1.0).
+        batch_key = f"{exp_name}::{probe_name}"
+        java_probe = java_results.get(batch_key)
+
+        pairwise_p: dict[float, float] = {}
+        if java_probe:
+            for dose_str, pval in java_probe.get("dunnett_p", {}).items():
+                if pval is None or (isinstance(pval, str)):
+                    pval = 1.0
+                pairwise_p[float(dose_str)] = float(pval)
+            pairwise_method = "williams" if jonckheere_sig else "dunnett"
+        else:
+            pairwise_method = "none"
+
+        pairwise_marker = {d: _sig_marker(p) for d, p in pairwise_p.items()}
+        any_pairwise_sig = any(p <= ALPHA_STAR for p in pairwise_p.values())
+        report_bmd = jonckheere_sig and any_pairwise_sig
+
+        # Check category analysis for BMD/BMDL
+        cat = category_lookup.get((exp_name, probe_name))
+        if report_bmd and cat:
+            try:
+                bmd_val = float(cat["bmd"])
+                bmdl_val = float(cat["bmdl"])
+                bmd_str = _format_bmd(bmd_val)
+                bmdl_str = _format_bmd(bmdl_val)
+            except (ValueError, KeyError):
                 bmd_str = "ND"
                 bmdl_str = "ND"
+        else:
+            bmd_str = "ND"
+            bmdl_str = "ND"
 
-            # Build the formatted values for each dose group
-            sorted_doses = sorted(groups_by_dose.keys())
-            values_by_dose = {}
-            n_by_dose = {}
+        # Build the formatted values for each dose group
+        values_by_dose = {}
+        n_by_dose = {}
 
-            for dose in sorted_doses:
-                n = stats.n_per_dose[dose]
-                mean = stats.mean_per_dose[dose]
-                se = stats.se_per_dose[dose]
-                n_by_dose[dose] = n
+        for dose in sorted_doses:
+            n = n_per_dose[dose]
+            mean = mean_per_dose[dose]
+            se = se_per_dose[dose]
+            n_by_dose[dose] = n
 
-                # Format: "mean ± SE" with significance marker
-                if dose == stats.control_dose:
-                    marker = stats.trend_marker
-                else:
-                    marker = stats.pairwise_marker.get(dose, "")
+            # Format: "mean ± SE" with significance marker
+            if dose == control_dose:
+                marker = trend_marker
+            else:
+                marker = pairwise_marker.get(dose, "")
 
-                if se > 0:
-                    values_by_dose[dose] = f"{mean:.1f} ± {se:.1f}{marker}"
-                else:
-                    values_by_dose[dose] = f"{mean:.1f}{marker}"
+            if se is not None and se > 0:
+                values_by_dose[dose] = f"{mean:.1f} ± {se:.1f}{marker}"
+            elif mean is not None:
+                values_by_dose[dose] = f"{mean:.1f}{marker}"
+            else:
+                values_by_dose[dose] = "—"
 
-            row = TableRow(
-                label=probe_name,
-                values_by_dose=values_by_dose,
-                n_by_dose=n_by_dose,
-                bmd_str=bmd_str,
-                bmdl_str=bmdl_str,
-                trend_marker=stats.trend_marker,
-            )
-            tables[sex].append(row)
+        row = TableRow(
+            label=probe_name,
+            values_by_dose=values_by_dose,
+            n_by_dose=n_by_dose,
+            bmd_str=bmd_str,
+            bmdl_str=bmdl_str,
+            trend_marker=trend_marker,
+        )
+        tables[sex].append(row)
 
     return tables
 
@@ -1001,26 +1205,28 @@ def generate_table(
 
 def build_table_data_from_bm2(
     bm2_path: str,
+    bmd_stat: str = "mean",
 ) -> tuple[dict[str, list[TableRow]], dict, dict]:
     """
-    Convenience wrapper: export .bm2 → JSON + TSV, run stats, return
+    Convenience wrapper: export .bm2 → JSON + categories, run stats, return
     (table_data, category_lookup, bm2_json).
 
     Handles the full export-and-analyze pipeline so callers don't need
-    to manage temp files or know about the BMDExpress CLI.  This is
-    steps 1–5 of the generate_report() pipeline extracted into a
-    reusable function for the web server.
+    to manage temp files or know about the BMDExpress Java classes.
 
-    Sidecar caching: the two expensive Java exports (full JSON + category
-    TSV) are cached as files next to the .bm2 source:
-      - {bm2_path}.json          — full BMDProject JSON
-      - {bm2_path}.categories.tsv — category analysis TSV
-    On subsequent calls for the same .bm2 file, the cached exports are
-    read directly — zero JVM launches.  This means processing only
-    happens once per .bm2 file per report project.
+    Caching: both the full BMDProject JSON and category analysis are cached
+    in LMDB (bm2_cache module).  On first call: run Java exports → store
+    in LMDB.  On subsequent calls: LMDB lookup + orjson.loads (no JVM).
+
+    The category export now uses ExportCategories.java which reads
+    CategoryAnalysisResults directly from the BMDProject via BMDExpress's
+    native Java API — replacing the broken DataCombinerService TSV path.
 
     Args:
         bm2_path: Path to the BMDExpress 3 .bm2 file.
+        bmd_stat: Which BMD aggregate statistic to use for the lookup.
+                  One of: "mean", "median", "minimum", "weighted_mean",
+                  "fifth_pct", "tenth_pct".  Defaults to "mean".
 
     Returns:
         A 3-tuple:
@@ -1028,78 +1234,48 @@ def build_table_data_from_bm2(
             TableRow, ready for generate_table() or add_apical_tables_to_doc().
           - category_lookup: Dict from build_category_lookup(), mapping
             (experiment_prefix, endpoint_name) → BMD info dict.
-          - bm2_json: The full deserialized BMDProject as a dict — contains
-            all 7 top-level lists (doseResponseExperiments, bMDResult,
-            categoryAnalysisResults, oneWayANOVAResults, williamsTrendResults,
-            curveFitPrefilterResults, oriogenResults) plus the project name.
-            Preserved for file preview so users can inspect the complete
-            .bm2 structure, not just the processed dose-response tables.
+          - bm2_json: The full deserialized BMDProject as a dict.
     """
     print(f"Processing: {bm2_path}")
 
-    # Step 1: Load or export the full BMDProject structure.
-    # The LMDB B-tree cache (bm2_cache module) stores deserialized dicts
-    # keyed by file path.  After first access the OS page cache keeps the
-    # LMDB pages hot, and orjson deserialization is ~10ms for a 5 MB dict.
-    # On first call: run Java export → parse JSON → store in LMDB.
-    # On subsequent calls: B-tree lookup + orjson.loads (no JVM, no file I/O).
-    # Step 1 + 2: Try LMDB cache for both BMDProject JSON and category lookup.
-    # If either is missing, we need to export — and with the unified Java
-    # helper (ExportBm2.class), both come from a single JVM launch (~0.4s).
+    # Step 1: Load or export the full BMDProject JSON.
+    # LMDB B-tree cache stores deserialized dicts keyed by file path.
     bm2_json = bm2_cache.get_json(bm2_path)
     category_lookup = bm2_cache.get_categories(bm2_path)
 
     if bm2_json is not None and category_lookup is not None:
         print("  Loaded BMDProject + categories from LMDB cache")
     else:
-        # Check for legacy pickle sidecars from before the LMDB migration.
-        # If found, import them into LMDB and delete the pickle files.
-        pkl_path = bm2_path + ".pkl"
-        cat_pkl_path = bm2_path + ".categories.pkl"
-
-        if bm2_json is None and os.path.exists(pkl_path):
-            print("  Migrating BMDProject from pickle → LMDB...")
-            import pickle
-            with open(pkl_path, "rb") as f:
-                bm2_json = pickle.load(f)
-            bm2_cache.put_json(bm2_path, bm2_json)
-            os.unlink(pkl_path)
-
-        if category_lookup is None and os.path.exists(cat_pkl_path):
-            print("  Migrating category analysis from pickle → LMDB...")
-            import pickle
-            with open(cat_pkl_path, "rb") as f:
-                category_lookup = pickle.load(f)
-            bm2_cache.put_categories(bm2_path, category_lookup)
-            os.unlink(cat_pkl_path)
-
-        # If either is still missing after migration, run the unified
-        # Java export — one JVM launch produces both JSON + category TSV.
-        if bm2_json is None or category_lookup is None:
-            print("  Exporting .bm2 (single JVM launch — JSON + categories)...")
+        # Export BMDProject JSON if not cached
+        if bm2_json is None:
+            print("  Exporting .bm2 → JSON (ExportBm2)...")
             with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
                 tmp_json = tmp.name
-            with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False) as tmp:
-                tmp_tsv = tmp.name
-
-            export_bm2(bm2_path, tmp_json, tmp_tsv)
-
-            if bm2_json is None:
-                with open(tmp_json) as f:
-                    bm2_json = json.load(f)
-                bm2_cache.put_json(bm2_path, bm2_json)
+            # Skip the TSV export — we use ExportCategories instead
+            export_bm2(bm2_path, tmp_json, "NONE")
+            with open(tmp_json, "rb") as f:
+                import orjson
+                bm2_json = orjson.loads(f.read())
+            bm2_cache.put_json(bm2_path, bm2_json)
             os.unlink(tmp_json)
 
-            if category_lookup is None:
-                category_lookup = build_category_lookup(tmp_tsv)
-                bm2_cache.put_categories(bm2_path, category_lookup)
-            os.unlink(tmp_tsv)
+        # Export category analysis if not cached
+        if category_lookup is None:
+            print("  Exporting categories (ExportCategories)...")
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+                tmp_cat = tmp.name
+            categories_json = export_categories(bm2_path, tmp_cat)
+            category_lookup = build_category_lookup(categories_json, bmd_stat)
+            bm2_cache.put_categories(bm2_path, category_lookup)
+            os.unlink(tmp_cat)
 
     print(f"  Category analysis: {len(category_lookup)} endpoints with BMD values")
 
     # Steps 3-5: Build table data (runs stats + cross-references + business rules).
-    # This is pure Python (no JVM) and fast, so we always re-run it.
-    print("  Running NTP statistical tests (Jonckheere → Williams/Dunnett)...")
+    # Phase 1 batches all endpoints into a single Java RunPrefilter call
+    # for Williams/Dunnett (BMDExpress-native stats via sciome-commons-math).
+    # Phase 2 runs Jonckheere in Python and combines with Java results.
+    print("  Running NTP statistical tests (Jonckheere + Java Williams/Dunnett)...")
     table_data = build_table_data(bm2_json, category_lookup)
 
     return table_data, category_lookup, bm2_json

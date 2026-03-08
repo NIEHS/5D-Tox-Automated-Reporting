@@ -639,7 +639,8 @@ async def api_process_integrated(dtxsid: str, request: Request):
     Input JSON:
       {
         "compound_name": "PFHxSAm",
-        "dose_unit": "mg/kg"
+        "dose_unit": "mg/kg",
+        "bmd_stat": "mean"        // optional: mean, median, minimum, etc.
       }
 
     Loads the integrated JSON from _integrated_pool (in-memory) or from
@@ -663,6 +664,25 @@ async def api_process_integrated(dtxsid: str, request: Request):
     body = await request.json()
     compound_name = body.get("compound_name", "Test Compound")
     dose_unit = body.get("dose_unit", "mg/kg")
+    # BMD statistics — array of stat keys, each producing a separate GO table.
+    # Accepts both the old single "bmd_stat" and the new "bmd_stats" array.
+    bmd_stats_raw = body.get("bmd_stats", None)
+    if bmd_stats_raw and isinstance(bmd_stats_raw, list):
+        bmd_stats = bmd_stats_raw
+    else:
+        bmd_stats = [body.get("bmd_stat", "median")]
+
+    # First stat is also used for apical category lookup
+    bmd_stat = bmd_stats[0]
+
+    # GO category filter cutoffs — sent from the Settings panel.
+    # go_pct:       minimum % of genes in a category that must have BMD values
+    # go_min_genes: minimum total genes annotated to the GO category
+    # go_min_bmd:   minimum genes with a BMD value in the category
+    go_pct = body.get("go_pct", 5)
+    go_min_genes = body.get("go_min_genes", 20)
+    go_max_genes = body.get("go_max_genes", 500)
+    go_min_bmd = body.get("go_min_bmd", 3)
 
     # Load integrated data -- prefer in-memory, fall back to disk
     integrated = _integrated_pool.get(dtxsid)
@@ -686,11 +706,27 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # integrate_pool() stored this as _category_lookup with "prefix|endpoint"
         # string keys; we restore them to (prefix, endpoint) tuple keys that
         # build_table_data() expects.
+        #
+        # Re-select BMD/BMDL/BMDU values using the requested bmd_stat.
+        # build_category_lookup() stores the full stat blocks (bmd_stats,
+        # bmdl_stats, bmdu_stats) alongside the pre-selected values, so we
+        # can re-pick the statistic without re-running Java.
         flat_cat = integrated.get("_category_lookup", {})
-        cat_lookup: dict[tuple[str, str], dict] = {
-            tuple(k.split("|", 1)): v
-            for k, v in flat_cat.items()
-        }
+        cat_lookup: dict[tuple[str, str], dict] = {}
+        for k, v in flat_cat.items():
+            entry = dict(v)
+            # Re-select from stored stat blocks if they exist.
+            # Use prefixed names to avoid shadowing the outer bmd_stats list.
+            cat_bmd_blk = entry.get("bmd_stats", {})
+            cat_bmdl_blk = entry.get("bmdl_stats", {})
+            cat_bmdu_blk = entry.get("bmdu_stats", {})
+            if cat_bmd_blk:
+                entry["bmd"] = cat_bmd_blk.get(bmd_stat, cat_bmd_blk.get("mean", ""))
+            if cat_bmdl_blk:
+                entry["bmdl"] = cat_bmdl_blk.get(bmd_stat, cat_bmdl_blk.get("mean", ""))
+            if cat_bmdu_blk:
+                entry["bmdu"] = cat_bmdu_blk.get(bmd_stat, cat_bmdu_blk.get("mean", ""))
+            cat_lookup[tuple(k.split("|", 1))] = entry
 
         loop = asyncio.get_running_loop()
 
@@ -898,31 +934,79 @@ async def api_process_integrated(dtxsid: str, request: Request):
                             key=lambda g: _safe_float(g.get("bmd")),
                         )
 
-                        # Sort GO terms by bmd_median ascending
-                        go_bp = sorted(
-                            exp.get("go_bp", []),
-                            key=lambda g: _safe_float(g.get("bmd_median")),
-                        )
+                        # Filter and sort GO terms.
+                        # Apply the three user-configured cutoffs:
+                        #   1. go_min_genes: category must have at least this many
+                        #      genes annotated (n_genes from ExportGenomics)
+                        #   2. go_min_bmd:   at least this many genes must have a
+                        #      BMD value (n_passed from ExportGenomics)
+                        #   3. go_pct:       the ratio n_passed/n_genes must be at
+                        #      least this percentage
+                        raw_go = exp.get("go_bp", [])
+                        filtered_go = []
+                        for g in raw_go:
+                            n_total = g.get("n_genes", 0) or 0
+                            n_passed = g.get("n_passed", 0) or 0
+                            if n_total < go_min_genes or n_total > go_max_genes:
+                                continue
+                            if n_passed < go_min_bmd:
+                                continue
+                            pct = (n_passed / n_total * 100) if n_total > 0 else 0
+                            if pct < go_pct:
+                                continue
+                            filtered_go.append(g)
+
+                        # Helper: pick a specific BMD stat from the stat block.
+                        # Returns None (not a fallback) if the stat isn't available,
+                        # so that categories missing the stat get excluded.
+                        def _pick_stat_strict(g, metric, stat):
+                            block = g.get(f"{metric}_stats", {})
+                            if block:
+                                return block.get(stat)
+                            # Legacy data only has median
+                            if stat == "median":
+                                return g.get(f"{metric}_median")
+                            return None
+
+                        # Build a separate gene_sets table for each requested
+                        # BMD statistic.  Categories where the stat is null
+                        # (not computed by BMDExpress) are excluded from that
+                        # table entirely rather than falling back to another stat.
+                        gene_sets_by_stat = {}
+                        for stat in bmd_stats:
+                            # Filter to categories that have a non-null value
+                            stat_go = [
+                                g for g in filtered_go
+                                if _pick_stat_strict(g, "bmd", stat) is not None
+                            ]
+                            # Sort by BMD ascending (most sensitive first)
+                            stat_go.sort(
+                                key=lambda g: _safe_float(
+                                    _pick_stat_strict(g, "bmd", stat),
+                                ),
+                            )
+                            gene_sets_by_stat[stat] = [
+                                {
+                                    "rank": i + 1,
+                                    "go_id": g["go_id"],
+                                    "go_term": g["go_term"],
+                                    "bmd": _pick_stat_strict(g, "bmd", stat),
+                                    "bmdl": _pick_stat_strict(g, "bmdl", stat),
+                                    "n_genes": g.get("n_genes", 0),
+                                    "n_genes_with_bmd": g.get("n_passed", 0),
+                                    "direction": g.get("direction", ""),
+                                    "fishers_p": g.get("fishers_two_tail"),
+                                    "genes": g.get("gene_symbols", ""),
+                                }
+                                for i, g in enumerate(stat_go[:20])
+                            ]
 
                         genomics_sections[key] = {
                             "organ": organ,
                             "sex": sex,
                             "total_probes": exp.get("total_probes", 0),
                             "total_responsive_genes": len(genes),
-                            "gene_sets": [
-                                {
-                                    "rank": i + 1,
-                                    "go_id": g["go_id"],
-                                    "go_term": g["go_term"],
-                                    "bmd_median": g.get("bmd_median"),
-                                    "bmdl_median": g.get("bmdl_median"),
-                                    "n_genes": g.get("n_passed", 0),
-                                    "direction": g.get("direction", ""),
-                                    "fishers_p": g.get("fishers_two_tail"),
-                                    "genes": g.get("gene_symbols", ""),
-                                }
-                                for i, g in enumerate(go_bp[:20])
-                            ],
+                            "gene_sets_by_stat": gene_sets_by_stat,
                             "top_genes": [
                                 {
                                     "rank": i + 1,
@@ -940,9 +1024,28 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 finally:
                     os.unlink(tmp_json.name)
 
+        # Human-readable labels for BMD statistics, used by the UI
+        # to set table column headers (e.g. "BMD 5th Pct").
+        _BMD_STAT_LABELS = {
+            "mean": "Mean",
+            "median": "Median",
+            "minimum": "Minimum",
+            "weighted_mean": "Weighted Mean",
+            "fifth_pct": "5th %ile",
+            "tenth_pct": "10th %ile",
+            "lower95": "Lower 95%",
+            "upper95": "Upper 95%",
+        }
+        stat_labels = {
+            s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
+            for s in bmd_stats
+        }
+
         return JSONResponse({
             "sections": sections,
             "genomics_sections": genomics_sections,
+            "bmd_stats": list(bmd_stats),
+            "bmd_stat_labels": stat_labels,
         })
 
     except Exception as e:

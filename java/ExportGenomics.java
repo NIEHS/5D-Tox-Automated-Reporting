@@ -232,7 +232,29 @@ public class ExportGenomics {
                     if (level != null) goEntry.put("go_level", Integer.parseInt(level));
                 }
 
-                // BMD statistics (already aggregated by BMDExpress)
+                // BMD statistics — full stat blocks so the UI can display
+                // whichever aggregate the user selects (mean, median, 5th pct, etc.)
+                // Use the *TotalGenes variants for 5th/10th percentile —
+                // the short-named getters (getBmdFifthPercentile etc.) are
+                // transient fields that are null after Java deserialization.
+                // The TotalGenes variants are the persisted fields with data.
+                goEntry.set("bmd_stats", buildStatBlock(mapper,
+                    car.getBmdMean(), car.getBmdMedian(), car.getBmdMinimum(),
+                    car.getBmdWMean(), car.getBmdSD(), car.getBmdWSD(),
+                    car.getBmdFifthPercentileTotalGenes(), car.getBmdTenthPercentileTotalGenes(),
+                    car.getbmdLower95(), car.getbmdUpper95()));
+                goEntry.set("bmdl_stats", buildStatBlock(mapper,
+                    car.getBmdlMean(), car.getBmdlMedian(), car.getBmdlMinimum(),
+                    car.getBmdlWMean(), car.getBmdlSD(), car.getBmdlWSD(),
+                    car.getBmdlFifthPercentileTotalGenes(), car.getBmdlTenthPercentileTotalGenes(),
+                    car.getbmdlLower95(), car.getbmdlUpper95()));
+                goEntry.set("bmdu_stats", buildStatBlock(mapper,
+                    car.getBmduMean(), car.getBmduMedian(), car.getBmduMinimum(),
+                    car.getBmduWMean(), car.getBmduSD(), car.getBmduWSD(),
+                    car.getBmduFifthPercentileTotalGenes(), car.getBmduTenthPercentileTotalGenes(),
+                    car.getbmduLower95(), car.getbmduUpper95()));
+
+                // Legacy fields for backward compatibility
                 Double bmdMedian = car.getBmdMedian();
                 Double bmdlMedian = car.getBmdlMedian();
                 Double bmduMedian = car.getBmduMedian();
@@ -279,5 +301,29 @@ public class ExportGenomics {
         System.err.println("  Writing genomics JSON to " + jsonOut + "...");
         mapper.writeValue(new File(jsonOut), root);
         System.err.println("  Done. " + expNodes.size() + " experiments exported.");
+    }
+
+    /**
+     * Build a JSON object containing all BMD aggregate statistics for one
+     * metric (BMD, BMDL, or BMDU).  Mirrors ExportCategories.buildStatBlock().
+     */
+    private static ObjectNode buildStatBlock(
+            ObjectMapper mapper,
+            Double mean, Double median, Double minimum,
+            Double weightedMean, Double sd, Double weightedSd,
+            Double fifthPct, Double tenthPct,
+            Double lower95, Double upper95) {
+        ObjectNode block = mapper.createObjectNode();
+        block.put("mean", mean);
+        block.put("median", median);
+        block.put("minimum", minimum);
+        block.put("weighted_mean", weightedMean);
+        block.put("sd", sd);
+        block.put("weighted_sd", weightedSd);
+        block.put("fifth_pct", fifthPct);
+        block.put("tenth_pct", tenthPct);
+        block.put("lower95", lower95);
+        block.put("upper95", upper95);
+        return block;
     }
 }

@@ -12,6 +12,251 @@
  * ----------------------------------------------------------------- */
 
 /* ================================================================
+ * Report Settings — persistent configuration panel
+ *
+ * Settings are stored in localStorage and loaded on page init.
+ * When a setting changes, the new values are saved immediately.
+ * API callers read from the global `reportSettings` object.
+ * ================================================================ */
+
+/**
+ * Toggle the settings panel visibility.
+ * Called from the gear icon in the header.
+ */
+function toggleSettingsPanel() {
+    const panel = document.getElementById('settings-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+/**
+ * Load saved settings from localStorage into the form and state.
+ * Called once on page load from initApp().
+ */
+function loadSettings() {
+    try {
+        const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            reportSettings = { ...DEFAULT_SETTINGS, ...parsed };
+        }
+    } catch (e) {
+        reportSettings = { ...DEFAULT_SETTINGS };
+    }
+
+    // Migrate old single-stat setting to array format
+    if (reportSettings.bmd_stat && !reportSettings.bmd_stats) {
+        reportSettings.bmd_stats = [reportSettings.bmd_stat];
+        delete reportSettings.bmd_stat;
+    }
+    // Ensure bmd_stats is always an array
+    if (!Array.isArray(reportSettings.bmd_stats)) {
+        reportSettings.bmd_stats = ['median'];
+    }
+
+    // Populate BMD stat checkboxes from state
+    const statsContainer = document.getElementById('setting-bmd-stats');
+    if (statsContainer) {
+        for (const cb of statsContainer.querySelectorAll('input[type="checkbox"]')) {
+            cb.checked = reportSettings.bmd_stats.includes(cb.value);
+        }
+    }
+
+    const doseUnit = document.getElementById('setting-dose-unit');
+    if (doseUnit) doseUnit.value = reportSettings.dose_unit;
+
+    const pStar = document.getElementById('setting-p-star');
+    if (pStar) pStar.value = reportSettings.p_star;
+
+    const pDstar = document.getElementById('setting-p-dstar');
+    if (pDstar) pDstar.value = reportSettings.p_dstar;
+
+    const goPct = document.getElementById('setting-go-pct');
+    if (goPct) goPct.value = reportSettings.go_pct;
+
+    const goMinGenes = document.getElementById('setting-go-min-genes');
+    if (goMinGenes) goMinGenes.value = reportSettings.go_min_genes;
+
+    const goMaxGenes = document.getElementById('setting-go-max-genes');
+    if (goMaxGenes) goMaxGenes.value = reportSettings.go_max_genes;
+
+    const goMinBmd = document.getElementById('setting-go-min-bmd');
+    if (goMinBmd) goMinBmd.value = reportSettings.go_min_bmd;
+}
+
+/**
+ * Called when any setting field changes.  Reads all fields,
+ * updates the global reportSettings object, and persists to localStorage.
+ */
+function onSettingChanged() {
+    // Read checked BMD statistics from checkboxes
+    const statsContainer = document.getElementById('setting-bmd-stats');
+    if (statsContainer) {
+        const checked = [];
+        for (const cb of statsContainer.querySelectorAll('input[type="checkbox"]')) {
+            if (cb.checked) checked.push(cb.value);
+        }
+        // Require at least one — default to median if all unchecked
+        reportSettings.bmd_stats = checked.length > 0 ? checked : ['median'];
+    }
+
+    const doseUnit = document.getElementById('setting-dose-unit');
+    if (doseUnit) reportSettings.dose_unit = doseUnit.value.trim() || 'mg/kg';
+
+    const pStar = document.getElementById('setting-p-star');
+    if (pStar) reportSettings.p_star = parseFloat(pStar.value) || 0.05;
+
+    const pDstar = document.getElementById('setting-p-dstar');
+    if (pDstar) reportSettings.p_dstar = parseFloat(pDstar.value) || 0.01;
+
+    const goPct = document.getElementById('setting-go-pct');
+    if (goPct) reportSettings.go_pct = parseInt(goPct.value, 10) || 5;
+
+    const goMinGenes = document.getElementById('setting-go-min-genes');
+    if (goMinGenes) reportSettings.go_min_genes = parseInt(goMinGenes.value, 10) || 20;
+
+    const goMaxGenes = document.getElementById('setting-go-max-genes');
+    if (goMaxGenes) reportSettings.go_max_genes = parseInt(goMaxGenes.value, 10) || 500;
+
+    const goMinBmd = document.getElementById('setting-go-min-bmd');
+    if (goMinBmd) reportSettings.go_min_bmd = parseInt(goMinBmd.value, 10) || 3;
+
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(reportSettings));
+}
+
+/**
+ * Map a bmd_stat key to a human-readable label for table column headers.
+ * Mirrors the server-side _BMD_STAT_LABELS dict.
+ */
+function _bmdStatLabel(stat) {
+    const labels = {
+        mean: 'Mean', median: 'Median', minimum: 'Minimum',
+        weighted_mean: 'Weighted Mean', fifth_pct: '5th %ile',
+        tenth_pct: '10th %ile', lower95: 'Lower 95%', upper95: 'Upper 95%',
+    };
+    return labels[stat] || stat;
+}
+
+/**
+ * Extract the best available gene_sets array from genomics data.
+ * Prefers gene_sets_by_stat (picks the first stat's list),
+ * falls back to legacy gene_sets field.
+ */
+function _flattenGeneSets(data) {
+    if (data.gene_sets_by_stat) {
+        const first = Object.values(data.gene_sets_by_stat).find(s => s && s.length > 0);
+        if (first) return first;
+    }
+    return data.gene_sets || [];
+}
+
+/**
+ * Apply settings and re-run the full processing pipeline.
+ *
+ * Saves current settings, then calls the server's process-integrated
+ * endpoint directly (bypassing autoProcessPool's guards and assumptions).
+ * Clears and rebuilds all apical and genomics cards with the new data.
+ */
+async function applySettings() {
+    onSettingChanged();
+
+    const dtxsid = currentIdentity?.dtxsid;
+    if (!dtxsid) return;
+
+    // Close the settings panel
+    toggleSettingsPanel();
+
+    // Build request body with all current settings
+    const compoundName = currentIdentity?.name || 'Test Compound';
+    let doseUnit = reportSettings.dose_unit || 'mg/kg';
+    const processBody = {
+        compound_name: compoundName,
+        dose_unit: doseUnit,
+        bmd_stats: reportSettings.bmd_stats || ['median'],
+        go_pct: reportSettings.go_pct ?? 5,
+        go_min_genes: reportSettings.go_min_genes ?? 20,
+        go_max_genes: reportSettings.go_max_genes ?? 500,
+        go_min_bmd: reportSettings.go_min_bmd ?? 3,
+    };
+
+    try {
+        const resp = await fetch(`/api/process-integrated/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(processBody),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Reprocessing failed');
+            return;
+        }
+
+        const result = await resp.json();
+
+        // --- Rebuild apical section cards ---
+        // Clear the cards container and state, then recreate from response
+        const bm2Cards = document.getElementById('bm2-cards');
+        if (bm2Cards) bm2Cards.innerHTML = '';
+        for (const secId of Object.keys(apicalSections)) {
+            delete apicalSections[secId];
+        }
+
+        for (const section of (result.sections || [])) {
+            const sectionId = 'integrated-' + section.domain;
+
+            apicalSections[sectionId] = {
+                fileId:            null,
+                filename:          section.title,
+                processed:         true,
+                approved:          false,
+                tableData:         section.tables_json,
+                narrative:         section.narrative,
+                originalNarrative: (section.narrative || []).join('\n\n'),
+                domain:            section.domain,
+            };
+
+            createBm2Card(sectionId, section.title);
+
+            const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
+            if (unitEl) unitEl.value = doseUnit;
+            const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
+            if (compoundEl) compoundEl.value = compoundName;
+
+            renderBm2Results(sectionId, section.tables_json, section.narrative);
+        }
+        show('bm2-results-section');
+
+        // --- Rebuild genomics cards ---
+        const genomicsCards = document.getElementById('genomics-cards');
+        if (genomicsCards) genomicsCards.innerHTML = '';
+        for (const key of Object.keys(genomicsResults)) {
+            delete genomicsResults[key];
+        }
+
+        const statLabelsMap = result.bmd_stat_labels || null;
+        if (result.genomics_sections) {
+            for (const [key, gData] of Object.entries(result.genomics_sections)) {
+                genomicsResults[key] = { ...gData, approved: false };
+                createGenomicsCard(key, gData, gData.organ, gData.sex, statLabelsMap);
+            }
+        }
+        if (Object.keys(genomicsResults).length > 0) {
+            show('genomics-results-section');
+        }
+
+        // Refresh tabs and export button
+        if (tabbedViewActive) buildTabBar();
+        updateExportButton();
+        markReportDirty();
+
+    } catch (e) {
+        console.error('applySettings failed:', e);
+        showToast('Reprocessing failed: ' + e.message);
+    }
+}
+
+
+/* ================================================================
  * Collapsible sections — toggles the .collapsed class on the
  * nearest [data-collapsible] ancestor, hiding or showing the
  * .section-body.  Called from onclick on section headers.
@@ -1730,10 +1975,30 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
     const secs = [];
     for (const [, gData] of Object.entries(entries)) {
         if (onlyApproved && !gData.approved) continue;
-        if (!gData.gene_sets && !gData.top_genes) continue;
 
-        // Gene set section (with GO descriptions)
-        if (gData.gene_sets && gData.gene_sets.length > 0) {
+        const hasByStatSets = gData.gene_sets_by_stat
+            && Object.values(gData.gene_sets_by_stat).some(s => s.length > 0);
+        const hasLegacySets = gData.gene_sets && gData.gene_sets.length > 0;
+
+        if (!hasByStatSets && !hasLegacySets && !gData.top_genes) continue;
+
+        // Gene set sections — one per selected statistic
+        if (hasByStatSets) {
+            for (const [stat, sets] of Object.entries(gData.gene_sets_by_stat)) {
+                if (sets.length === 0) continue;
+                secs.push({
+                    type: 'gene_set',
+                    organ: gData.organ,
+                    sex: gData.sex,
+                    bmd_stat: stat,
+                    bmd_stat_label: _bmdStatLabel(stat),
+                    gene_sets: sets,
+                    go_descriptions: gData.go_descriptions || [],
+                    gene_set_narrative: gData.gene_set_narrative || [],
+                    dose_unit: 'mg/kg',
+                });
+            }
+        } else if (hasLegacySets) {
             secs.push({
                 type: 'gene_set',
                 organ: gData.organ,
@@ -3039,8 +3304,13 @@ async function restoreSession(data) {
                 approved: true,
             };
 
-            // Create the card and lock it as approved
-            createGenomicsCard(key, section, organ, sex);
+            // Create the card and lock it as approved.
+            // Build stat labels dict from current settings for column headers.
+            const restoreLabels = {};
+            for (const s of (reportSettings.bmd_stats || ['median'])) {
+                restoreLabels[s] = _bmdStatLabel(s);
+            }
+            createGenomicsCard(key, section, organ, sex, restoreLabels);
             const card = document.getElementById(`genomics-card-${key}`);
             if (card) {
                 lockSection(card);
@@ -3281,6 +3551,7 @@ CHEM_ID_FIELDS.forEach(id => {
 });
 
 // Restore saved values on page load
+loadSettings();
 restoreChemId();
 
 // Apply the default tabbed layout on page load.
@@ -3907,13 +4178,22 @@ async function autoProcessPool() {
         // on-disk integrated.json).  If it returns 400 (no integrated data),
         // re-run integration first, then retry.  This handles the case where
         // integrated.json was deleted or never included gene expression data.
+        // Include the BMD statistic selection from settings so the server
+        // can pick the right aggregate (mean, median, minimum, etc.)
+        const processBody = {
+            compound_name: compoundName,
+            dose_unit: reportSettings.dose_unit || doseUnit,
+            bmd_stats: reportSettings.bmd_stats || ['median'],
+            go_pct: reportSettings.go_pct ?? 5,
+            go_min_genes: reportSettings.go_min_genes ?? 20,
+            go_max_genes: reportSettings.go_max_genes ?? 500,
+            go_min_bmd: reportSettings.go_min_bmd ?? 3,
+        };
+
         let resp = await fetch(`/api/process-integrated/${dtxsid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                compound_name: compoundName,
-                dose_unit: doseUnit,
-            }),
+            body: JSON.stringify(processBody),
         });
 
         if (resp.status === 400) {
@@ -3925,10 +4205,7 @@ async function autoProcessPool() {
                 resp = await fetch(`/api/process-integrated/${dtxsid}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        compound_name: compoundName,
-                        dose_unit: doseUnit,
-                    }),
+                    body: JSON.stringify(processBody),
                 });
             }
         }
@@ -3975,6 +4252,7 @@ async function autoProcessPool() {
             // BMDExpress's own prefilter → curve fit → BMD pipeline already
             // ran, and we read its results directly (no CSV re-analysis).
             if (result.genomics_sections) {
+                const autoStatLabels = result.bmd_stat_labels || null;
                 for (const [key, gData] of Object.entries(result.genomics_sections)) {
                     // Skip sections that were already restored and approved
                     // from a prior session — don't overwrite user-approved data.
@@ -3987,7 +4265,7 @@ async function autoProcessPool() {
                         approved: false,
                     };
 
-                    createGenomicsCard(key, gData, gData.organ, gData.sex);
+                    createGenomicsCard(key, gData, gData.organ, gData.sex, autoStatLabels);
                 }
             }
         } else {
@@ -4300,7 +4578,11 @@ async function processCsv(fileId, organ, sex) {
         };
 
         // Create a genomics results card
-        createGenomicsCard(key, result, organ, sex);
+        const csvLabels = {};
+        for (const s of (reportSettings.bmd_stats || ['median'])) {
+            csvLabels[s] = _bmdStatLabel(s);
+        }
+        createGenomicsCard(key, result, organ, sex, csvLabels);
 
         // Show genomics results section
         show('genomics-results-section');
@@ -4329,7 +4611,7 @@ function _fmtNum(val, decimals = 3) {
     return n.toFixed(decimals);
 }
 
-function createGenomicsCard(key, data, organ, sex) {
+function createGenomicsCard(key, data, organ, sex, statLabels) {
     const cardsDiv = document.getElementById('genomics-cards');
 
     // Remove existing card for same key if re-processing
@@ -4343,24 +4625,68 @@ function createGenomicsCard(key, data, organ, sex) {
     const organTitle = organ.charAt(0).toUpperCase() + organ.slice(1);
     const sexTitle = sex.charAt(0).toUpperCase() + sex.slice(1);
 
-    // Build gene sets table HTML
+    // Build gene sets tables — one per selected BMD statistic.
+    // gene_sets_by_stat is a dict keyed by stat name (e.g. "median", "mean").
+    // Legacy data has a single gene_sets array (no stat key).
     let geneSetHtml = '';
-    if (data.gene_sets && data.gene_sets.length > 0) {
+    const byStatMap = data.gene_sets_by_stat || {};
+    const statKeys = Object.keys(byStatMap);
+
+    if (statKeys.length > 0) {
+        // One table per statistic
+        for (const stat of statKeys) {
+            const sets = byStatMap[stat] || [];
+            const label = (statLabels && statLabels[stat]) || _bmdStatLabel(stat);
+            if (sets.length === 0) {
+                geneSetHtml += `<h4>Gene Sets — BMD ${escapeHtml(label)}</h4>
+                    <p style="color:#6c757d; font-size:0.85rem">No qualifying gene sets for this statistic.</p>`;
+                continue;
+            }
+            geneSetHtml += `
+                <h4>Gene Sets — BMD ${escapeHtml(label)}</h4>
+                <table>
+                    <tr><th>GO Term</th><th>GO ID</th><th>BMD ${escapeHtml(label)}</th>
+                        <th>BMDL ${escapeHtml(label)}</th><th># Genes</th><th>%age</th><th>Direction</th></tr>
+                    ${sets.map(gs => {
+                        const nTotal = gs.n_genes || 0;
+                        const nBmd = gs.n_genes_with_bmd || 0;
+                        const pct = nTotal > 0 ? Math.round(nBmd / nTotal * 100) : 0;
+                        return `
+                        <tr>
+                            <td>${escapeHtml(gs.go_term)}</td>
+                            <td>${escapeHtml(gs.go_id)}</td>
+                            <td class="bmd-col">${_fmtNum(gs.bmd)}</td>
+                            <td class="bmd-col">${_fmtNum(gs.bmdl)}</td>
+                            <td>${nTotal}</td>
+                            <td>${pct}%</td>
+                            <td>${escapeHtml(gs.direction)}</td>
+                        </tr>`;
+                    }).join('')}
+                </table>
+            `;
+        }
+    } else if (data.gene_sets && data.gene_sets.length > 0) {
+        // Legacy single-list format
         geneSetHtml = `
             <h4>Top Gene Sets (by BMD)</h4>
             <table>
                 <tr><th>GO Term</th><th>GO ID</th><th>BMD Median</th>
-                    <th>BMDL Median</th><th># Genes</th><th>Direction</th></tr>
-                ${data.gene_sets.map(gs => `
+                    <th>BMDL Median</th><th># Genes</th><th>%age</th><th>Direction</th></tr>
+                ${data.gene_sets.map(gs => {
+                    const nTotal = gs.n_genes || 0;
+                    const nBmd = gs.n_genes_with_bmd || gs.n_passed || 0;
+                    const pct = nTotal > 0 ? Math.round(nBmd / nTotal * 100) : 0;
+                    return `
                     <tr>
                         <td>${escapeHtml(gs.go_term)}</td>
                         <td>${escapeHtml(gs.go_id)}</td>
                         <td class="bmd-col">${_fmtNum(gs.bmd_median)}</td>
                         <td class="bmd-col">${_fmtNum(gs.bmdl_median)}</td>
-                        <td>${gs.n_genes}</td>
+                        <td>${nTotal}</td>
+                        <td>${pct}%</td>
                         <td>${escapeHtml(gs.direction)}</td>
-                    </tr>
-                `).join('')}
+                    </tr>`;
+                }).join('')}
             </table>
         `;
     } else {
@@ -4504,7 +4830,10 @@ async function generateGenomicsNarrative(key) {
                 identity: currentIdentity,
                 organ: data.organ,
                 sex: data.sex,
-                gene_sets: data.gene_sets,
+                // Flatten gene_sets_by_stat into a single array for the
+                // narrative generator (it just needs representative GO terms).
+                // Use the first stat's list, or fall back to legacy gene_sets.
+                gene_sets: _flattenGeneSets(data),
                 top_genes: data.top_genes,
                 total_responsive_genes: data.total_responsive_genes,
                 dose_unit: 'mg/kg',
@@ -4554,7 +4883,8 @@ async function approveGenomics(key) {
         {
             organ: data.organ,
             sex: data.sex,
-            gene_sets: data.gene_sets,
+            gene_sets: _flattenGeneSets(data),
+            gene_sets_by_stat: data.gene_sets_by_stat || null,
             top_genes: data.top_genes,
             go_descriptions: data.go_descriptions || [],
             gene_descriptions: data.gene_descriptions || [],
@@ -4579,13 +4909,12 @@ function editGenomics(key) {
     updateExportButton();
 }
 
-function retryGenomics(key) {
-    // Remove the card — user needs to re-process the CSV
+async function retryGenomics(key) {
+    // Re-run the processing pipeline with current settings to rebuild
+    // genomics cards.  Delegates to applySettings() which does a clean
+    // fetch + rebuild of both apical and genomics sections.
     markReportDirty();
-    const card = document.getElementById(`genomics-card-${key}`);
-    if (card) card.remove();
-    delete genomicsResults[key];
-    updateExportButton();
+    await applySettings();
 }
 
 /* ----------------------------------------------------------------
@@ -5359,7 +5688,7 @@ async function renderReportTab() {
     const hasMethodsProse = methodsProseEl && methodsProseEl.textContent.trim().length > 0;
     const hasApical = Object.values(apicalSections).some(s => s.tableData);
     const hasBmd = bmdSummaryEndpoints.length > 0;
-    const hasGenomics = Object.values(genomicsResults).some(g => g.gene_sets || g.top_genes);
+    const hasGenomics = Object.values(genomicsResults).some(g => g.gene_sets_by_stat || g.gene_sets || g.top_genes);
     const summaryProseEl = document.getElementById('summary-prose');
     const hasSummary = summaryProseEl && summaryProseEl.textContent.trim().length > 0;
 

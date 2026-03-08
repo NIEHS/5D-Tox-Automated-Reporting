@@ -442,38 +442,28 @@ def integrate_pool(
         "source_files": source_files,
     }
 
-    # --- Build category lookup from the category TSV ---
-    # The Java-produced JSON contains categoryAnalysisResults as native
-    # BMDExpress objects.  For the process-integrated endpoint, we need
-    # a (prefix, endpoint) → BMD info lookup dict.  We export the category
-    # TSV via ExportBm2, then parse it with build_category_lookup().
+    # --- Build category lookup via native Java API ---
+    # ExportCategories.java reads CategoryAnalysisResults directly from the
+    # BMDProject — no DataCombinerService, no TSV.  This replaces the broken
+    # TSV export path that crashed with IndexOutOfBoundsException.
     cat_results = integrated.get("categoryAnalysisResults", [])
     if cat_results:
-        from apical_report import build_category_lookup, _build_classpath, JAVA_HELPER_DIR
+        from apical_report import export_categories, build_category_lookup
 
-        # Write a temporary .bm2 from the combined data so we can call
-        # ExportBm2 for the category TSV.  Actually — the category data
-        # is already in the JSON.  We need to export the TSV from one of
-        # the original .bm2 files.
-        #
-        # Simpler: export category TSV from each .bm2 file and merge the
-        # lookups.  This is what the old code did via bm2_cache.
         merged_cat_lookup: dict[tuple[str, str], dict] = {}
         for bm2_path in bm2_paths:
-            tsv_path = os.path.join(session_dir, f"_cat_{os.path.basename(bm2_path)}.tsv")
+            cat_json_path = os.path.join(
+                session_dir, f"_cat_{os.path.basename(bm2_path)}.json",
+            )
             try:
-                from apical_report import export_bm2
-                # Export category TSV only (JSON output not needed here)
-                json_tmp = os.path.join(session_dir, f"_tmp_{os.path.basename(bm2_path)}.json")
-                export_bm2(bm2_path, json_tmp, tsv_path)
-                cat_lookup = build_category_lookup(tsv_path)
+                categories_json = export_categories(bm2_path, cat_json_path)
+                cat_lookup = build_category_lookup(categories_json)
                 merged_cat_lookup.update(cat_lookup)
-                # Clean up temp files
-                for tmp in (json_tmp, tsv_path):
-                    if os.path.exists(tmp):
-                        os.remove(tmp)
             except Exception as e:
                 logger.warning("Category export failed for %s: %s", bm2_path, e)
+            finally:
+                if os.path.exists(cat_json_path):
+                    os.remove(cat_json_path)
 
         integrated["_category_lookup"] = {
             f"{k[0]}|{k[1]}": v

@@ -108,6 +108,24 @@ let _previewEscapeHandler = null;
 // Human-readable labels for experimental domains.  Used in coverage matrix
 // rendering, animal report display, and integrated pool sections.
 // Defined once here to avoid duplicated mappings in main.js.
+// --- Report settings ---
+// Persisted to localStorage.  Loaded on startup, sent to the server
+// with process-integrated and other endpoints that need them.
+const SETTINGS_STORAGE_KEY = '5dtox-settings';
+const DEFAULT_SETTINGS = {
+    bmd_stats: ['median'],   // BMD aggregates to show (each = separate GO table)
+    dose_unit: 'mg/kg',      // Dose unit for table headers and narratives
+    p_star: 0.05,            // Single-star significance threshold
+    p_dstar: 0.01,           // Double-star significance threshold
+    go_pct: 5,               // Min % of genes in a GO category that must have BMD values
+    go_min_genes: 20,        // Min total genes annotated to a GO category
+    go_max_genes: 500,       // Max total genes annotated to a GO category
+    go_min_bmd: 3,           // Min genes with a BMD value in a GO category
+};
+// Live settings object — mutated by onSettingChanged(), read by API callers
+let reportSettings = { ...DEFAULT_SETTINGS };
+
+
 const DOMAIN_LABELS = {
     body_weight:    'Body Weight',
     organ_weights:  'Organ Weights',

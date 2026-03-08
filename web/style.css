@@ -92,6 +92,14 @@ header {
     border-bottom: 2px solid var(--c-border);
 }
 
+/* Header row — title on the left, gear icon on the right */
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
 header h1 {
     font-size: 1.5rem;
     font-weight: 600;
@@ -102,6 +110,152 @@ header h1 {
 header p {
     font-size: 0.9rem;
     color: var(--c-text-muted);
+}
+
+/* Gear button — fixed to the right edge of the header row */
+.settings-gear {
+    position: absolute;
+    right: 0;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    font-size: 1.4rem;
+    color: var(--c-text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    transition: all 0.15s;
+}
+
+.settings-gear:hover {
+    color: var(--c-primary);
+    border-color: var(--c-border-input);
+    background: var(--c-bg-hover);
+}
+
+/* ----------------------------------------------------------------
+ * Settings panel — collapsible panel below header for report config.
+ * Appears/disappears via toggleSettingsPanel() in main.js.
+ * ---------------------------------------------------------------- */
+.settings-panel {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--c-border-light);
+    background: var(--c-bg);
+}
+
+.settings-header h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    margin: 0;
+}
+
+.settings-body {
+    padding: 1rem 1.25rem;
+}
+
+/* Each fieldset groups related settings (e.g., BMD stat, dose unit) */
+.settings-group {
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-lg);
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.settings-group:last-child {
+    margin-bottom: 0;
+}
+
+.settings-group legend {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    padding: 0 0.3rem;
+}
+
+/* Hint text explaining what the setting controls */
+.settings-hint {
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+    margin: 0.25rem 0 0.5rem 0;
+    line-height: 1.4;
+}
+
+/* Label + input/select pair inside a settings group */
+.settings-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.settings-field:last-child {
+    margin-bottom: 0;
+}
+
+.settings-field label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--c-text);
+    min-width: 90px;
+}
+
+.settings-field select,
+.settings-field input {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-size: 0.8rem;
+    color: var(--c-text);
+    background: var(--c-bg-white);
+    flex: 1;
+    max-width: 220px;
+}
+
+.settings-field select:focus,
+.settings-field input:focus {
+    outline: none;
+    border-color: var(--c-blue);
+    box-shadow: var(--shadow-focus);
+}
+
+/* Unit suffix shown after an input (e.g., "%" after the percentage field) */
+.settings-unit {
+    font-size: 0.8rem;
+    color: var(--c-text-muted);
+    flex-shrink: 0;
+}
+
+/* Checkbox grid for multi-select settings (e.g., BMD statistics) */
+.settings-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+
+.settings-checkboxes label {
+    font-size: 0.8rem;
+    color: var(--c-text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* Apply button row — right-aligned at the bottom of the settings body */
+.settings-apply {
+    margin-top: 1rem;
+    text-align: right;
 }
 
 /* ----------------------------------------------------------------

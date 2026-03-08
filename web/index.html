@@ -10,9 +10,113 @@
     <div class="container">
         <!-- Header — renamed from "Background Section Generator" -->
         <header>
-            <h1>5dToxReport</h1>
-            <p>5 Day Genomic Dose Response in Sprague-Dawley Rats</p>
+            <div class="header-row">
+                <div>
+                    <h1>5dToxReport</h1>
+                    <p>5 Day Genomic Dose Response in Sprague-Dawley Rats</p>
+                </div>
+                <button class="settings-gear" onclick="toggleSettingsPanel()" title="Settings">&#x2699;</button>
+            </div>
         </header>
+
+        <!-- Settings panel — slide-down panel for report configuration.
+             Persisted to localStorage so settings survive page reloads.
+             Extensible: add new fieldsets for future configuration items. -->
+        <div id="settings-panel" class="settings-panel" style="display:none;">
+            <div class="settings-header">
+                <h3>Report Settings</h3>
+                <button class="modal-close" onclick="toggleSettingsPanel()" title="Close">&times;</button>
+            </div>
+            <div class="settings-body">
+
+                <!-- BMD Statistic Selection — checkboxes for multi-select.
+                     Each checked statistic produces a separate GO BP table
+                     in the genomics cards. Categories where the statistic
+                     is null (not computed by BMDExpress) are excluded. -->
+                <fieldset class="settings-group">
+                    <legend>BMD Statistics</legend>
+                    <p class="settings-hint">
+                        Which aggregate statistics to include in GO category tables.
+                        Each selected statistic produces a separate table.
+                        Categories without a value for a statistic are excluded.
+                    </p>
+                    <div class="settings-checkboxes" id="setting-bmd-stats">
+                        <label><input type="checkbox" value="mean" onchange="onSettingChanged()"> Mean</label>
+                        <label><input type="checkbox" value="median" onchange="onSettingChanged()" checked> Median</label>
+                        <label><input type="checkbox" value="minimum" onchange="onSettingChanged()"> Minimum</label>
+                        <label><input type="checkbox" value="weighted_mean" onchange="onSettingChanged()"> Weighted Mean</label>
+                        <label><input type="checkbox" value="fifth_pct" onchange="onSettingChanged()"> 5th Percentile</label>
+                        <label><input type="checkbox" value="tenth_pct" onchange="onSettingChanged()"> 10th Percentile</label>
+                    </div>
+                </fieldset>
+
+                <!-- Dose Unit Override -->
+                <fieldset class="settings-group">
+                    <legend>Dose Unit</legend>
+                    <p class="settings-hint">
+                        Unit displayed in table headers and narratives.
+                        Auto-detected from uploaded files if available.
+                    </p>
+                    <div class="settings-field">
+                        <label for="setting-dose-unit">Unit:</label>
+                        <input type="text" id="setting-dose-unit" value="mg/kg" onchange="onSettingChanged()">
+                    </div>
+                </fieldset>
+
+                <!-- Significance Thresholds -->
+                <fieldset class="settings-group">
+                    <legend>Significance Thresholds</legend>
+                    <p class="settings-hint">
+                        P-value cutoffs for statistical significance markers
+                        (* and **) in report tables.
+                    </p>
+                    <div class="settings-field">
+                        <label for="setting-p-star">* threshold:</label>
+                        <input type="number" id="setting-p-star" value="0.05" step="0.01" min="0" max="1" onchange="onSettingChanged()">
+                    </div>
+                    <div class="settings-field">
+                        <label for="setting-p-dstar">** threshold:</label>
+                        <input type="number" id="setting-p-dstar" value="0.01" step="0.01" min="0" max="1" onchange="onSettingChanged()">
+                    </div>
+                </fieldset>
+
+                <!-- GO Category Filters -->
+                <fieldset class="settings-group">
+                    <legend>GO Category Filters</legend>
+                    <p class="settings-hint">
+                        Filtering criteria for Gene Ontology categories in genomics
+                        report tables. Categories that fail any of these cutoffs are
+                        excluded from the GO BP table.
+                    </p>
+                    <div class="settings-field">
+                        <label for="setting-go-pct">BMD % cutoff:</label>
+                        <input type="number" id="setting-go-pct" value="5" step="1" min="0" max="100" onchange="onSettingChanged()">
+                        <span class="settings-unit">%</span>
+                    </div>
+                    <div class="settings-field">
+                        <label for="setting-go-min-genes">Min genes in category:</label>
+                        <input type="number" id="setting-go-min-genes" value="20" step="1" min="1" onchange="onSettingChanged()">
+                    </div>
+                    <div class="settings-field">
+                        <label for="setting-go-max-genes">Max genes in category:</label>
+                        <input type="number" id="setting-go-max-genes" value="500" step="1" min="1" onchange="onSettingChanged()">
+                    </div>
+                    <div class="settings-field">
+                        <label for="setting-go-min-bmd">Min genes with BMD:</label>
+                        <input type="number" id="setting-go-min-bmd" value="3" step="1" min="1" onchange="onSettingChanged()">
+                    </div>
+                </fieldset>
+
+                <!-- Apply button — re-runs the processing pipeline with updated
+                     settings so table data reflects the new filters/statistics. -->
+                <div class="settings-apply">
+                    <button class="btn-action primary" onclick="applySettings()">
+                        Apply &amp; Reprocess
+                    </button>
+                </div>
+
+            </div>
+        </div>
 
         <!-- View controls — Collapse All / Expand All / Tabbed View toggle -->
         <div class="view-controls" id="view-controls">
@@ -335,8 +439,8 @@
          response incrementally so we can build the JSON tree in the Preview
          Data modal without holding the entire string in memory at once. -->
     <script src="https://unpkg.com/oboe@2.1.5/dist/oboe-browser.min.js"></script>
-    <script src="/js/state.js"></script>
-    <script src="/js/utils.js"></script>
-    <script src="/js/main.js"></script>
+    <script src="/js/state.js?v=3"></script>
+    <script src="/js/utils.js?v=3"></script>
+    <script src="/js/main.js?v=3"></script>
 </body>
 </html>

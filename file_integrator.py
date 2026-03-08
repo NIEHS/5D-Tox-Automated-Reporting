@@ -1103,7 +1103,12 @@ def fingerprint_bm2(
                     if isinstance(s, str)
                 )
             if llm_meta.get("domain"):
-                fp.domain = llm_meta["domain"]
+                # LLM may return a list of domains — take the first string
+                domain_val = llm_meta["domain"]
+                if isinstance(domain_val, list):
+                    domain_val = domain_val[0] if domain_val else None
+                if isinstance(domain_val, str):
+                    fp.domain = domain_val
             if llm_meta.get("species") and not fp.species:
                 # Ignore placeholder values like "generic" that Haiku returns
                 # when species can't be determined from experiment names alone
