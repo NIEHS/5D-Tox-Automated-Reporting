@@ -63,68 +63,17 @@ from apical_stats import analyze_endpoint, EndpointStats, run_java_prefilter
 # Constants — paths and configuration
 # ---------------------------------------------------------------------------
 
-# BMDExpress 3 project root — location of the bmdx-core library JAR
-# and its Maven-resolved dependencies (target/deps/*.jar).
-# bmdx-core is a headless subset of BMDExpress 3 (132 source files, 288KB)
-# containing the full data model, CLI I/O commands, and metadata system —
-# without the GUI, analysis engines, or JavaFX dependencies.
-BMDX_PROJECT = Path.home() / "Dev" / "Projects" / "BMDExpress-3"
-
-# The bmdx-core library JAR — contains all BMDExpress model classes,
-# CLI commands (combine, export, query), and utilities.
-BMDX_CORE_JAR = BMDX_PROJECT / "target" / "bmdx-core.jar"
-
-# Maven-resolved dependency JARs — downloaded by `mvn dependency:copy-dependencies`
-# into target/deps/ on the bmdx-core branch.  Includes Jackson, commons-math3,
-# commons-cli, SLF4J, Guava, Easy Rules, etc.
-BMDX_DEPS_DIR = BMDX_PROJECT / "target" / "deps"
+# Java classpath, project paths, and helper directory are centralized in
+# java_bridge.py to avoid duplication across apical_report, apical_stats,
+# and pool_integrator.
+from java_bridge import build_classpath as _build_classpath
+from java_bridge import JAVA_HELPER_DIR
 
 # Font size for table cells (small to fit many dose columns)
 TABLE_FONT_SIZE = 8
 
 # Font size for table header cells
 HEADER_FONT_SIZE = 8
-
-
-# ---------------------------------------------------------------------------
-# Classpath assembly — collect all JARs needed to run the BMDExpress CLI
-# ---------------------------------------------------------------------------
-
-def _build_classpath() -> str:
-    """
-    Assemble the Java classpath from bmdx-core.jar + its Maven-resolved deps.
-
-    bmdx-core is a self-contained headless subset of BMDExpress 3.  All
-    dependency JARs live in target/deps/ (downloaded by Maven on the
-    bmdx-core branch).  No manual Maven path resolution needed.
-
-    Returns:
-        Colon-separated classpath string suitable for java -cp.
-    """
-    jars = [str(BMDX_CORE_JAR)]
-
-    # Add all dependency JARs from target/deps/
-    if BMDX_DEPS_DIR.exists():
-        for jar in BMDX_DEPS_DIR.glob("*.jar"):
-            jars.append(str(jar))
-
-    return ":".join(jars)
-
-
-# ---------------------------------------------------------------------------
-# .bm2 export — single JVM launch via pre-compiled Java helper
-# ---------------------------------------------------------------------------
-# The old approach launched 3 JVMs:
-#   1. javac to compile an inline Java source file
-#   2. java to run the compiled class (JSON export)
-#   3. java to run BMDExpressCommandLine (category TSV export)
-#
-# The new approach uses a pre-compiled ExportBm2.class that does both
-# JSON + category TSV in a single JVM launch (~0.4s total vs ~15s before).
-# The .class file lives at java/ExportBm2.class (compiled from java/ExportBm2.java).
-
-# Path to the directory containing ExportBm2.class
-JAVA_HELPER_DIR = Path(__file__).parent / "java"
 
 
 def export_bm2(bm2_path: str, output_json: str, output_tsv: str) -> None:

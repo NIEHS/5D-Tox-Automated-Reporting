@@ -64,8 +64,8 @@ logger = logging.getLogger(__name__)
 # then txt/csv (BMDExpress-importable pivot), then xlsx (raw long-format).
 _TIER_PREFERENCE = {"bm2": 1, "txt": 2, "csv": 2, "txt_csv": 2, "xlsx": 3}
 
-# Path to the Java helper directory containing IntegrateProject.class
-JAVA_HELPER_DIR = Path(__file__).parent / "java"
+# Java helper directory — centralized in java_bridge.py
+from java_bridge import JAVA_HELPER_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -94,10 +94,9 @@ def _run_integrate_java(
         output_path:   Where to write the integrated JSON.
         metadata_path: Optional path to LLM metadata sidecar JSON.
     """
-    # Import here to avoid circular dependency at module load time
-    from apical_report import _build_classpath
+    from java_bridge import build_classpath
 
-    cp = _build_classpath()
+    cp = build_classpath()
     helper_dir = str(JAVA_HELPER_DIR)
 
     cmd = [

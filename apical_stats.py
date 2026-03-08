@@ -42,6 +42,7 @@ Usage:
 import json
 import math
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -192,30 +193,9 @@ def jonckheere_test(groups_by_dose: dict[float, list[float]]) -> tuple[float, st
 # Java classpath and RunPrefilter invocation
 # ---------------------------------------------------------------------------
 
-# BMDExpress 3 project root — same as apical_report.py uses
-_BMDX_PROJECT = Path.home() / "Dev" / "Projects" / "BMDExpress-3"
-_BMDX_CORE_JAR = _BMDX_PROJECT / "target" / "bmdx-core.jar"
-_BMDX_DEPS_DIR = _BMDX_PROJECT / "target" / "deps"
-_JAVA_HELPER_DIR = Path(__file__).parent / "java"
-
-
-def _build_classpath() -> str:
-    """
-    Assemble the Java classpath from bmdx-core.jar + its Maven-resolved deps.
-
-    Includes sciome-commons-math (Williams/Dunnett), jdistlib, commons-math3,
-    and Jackson for JSON I/O.  Also includes the java/ helper directory where
-    RunPrefilter.class lives.
-
-    Returns:
-        Colon-separated classpath string suitable for java -cp.
-    """
-    jars = [str(_BMDX_CORE_JAR)]
-    if _BMDX_DEPS_DIR.exists():
-        for jar in _BMDX_DEPS_DIR.glob("*.jar"):
-            jars.append(str(jar))
-    jars.append(str(_JAVA_HELPER_DIR))
-    return ":".join(jars)
+# Java classpath and helper directory are centralized in java_bridge.py
+# to avoid duplication across apical_report, apical_stats, and pool_integrator.
+from java_bridge import build_classpath as _build_classpath
 
 
 def _call_java_prefilter(
@@ -358,7 +338,6 @@ def run_java_prefilter(
             # Process this experiment as its own batch and merge results.
             # For now, log a warning and skip.  In practice, experiments in
             # the same .bm2 file almost always share the same dose design.
-            import sys
             print(f"  WARNING: Experiment '{exp_name}' has different doses, "
                   f"processing separately", file=sys.stderr)
             continue
@@ -603,7 +582,6 @@ def analyze_endpoint(
         except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as e:
             # If Java stats fail (e.g., RunPrefilter not compiled, JVM not
             # available), fall back gracefully with a warning.
-            import sys
             print(f"  WARNING: Java prefilter failed for {endpoint_name}: "
                   f"{e}", file=sys.stderr)
             result.pairwise_method = "none"
