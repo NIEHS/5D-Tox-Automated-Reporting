@@ -60,7 +60,6 @@ import traceback
 import uuid
 import zipfile
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +71,18 @@ from fastapi.responses import (
 from starlette.staticfiles import StaticFiles
 
 import bm2_cache
+from session_store import (
+    SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
+    save_section, delete_section,
+)
+from llm_helpers import (
+    strip_markdown_fences, llm_generate_json, llm_generate_json_async,
+)
+from style_learning import (
+    STYLE_PROFILE_PATH, STYLE_CATEGORIES, MAX_STYLE_RULES,
+    load_style_profile, save_style_profile, merge_rules,
+    extract_and_merge_style_rules,
+)
 from chem_resolver import ChemicalIdentity, resolve_chemical
 from data_gatherer import BackgroundData, gather_all
 from background_writer import generate_background
@@ -93,14 +104,11 @@ from pool_orchestrator import (
     get_data_uploads,
 )
 
-# AnthropicEndpoint wraps the Claude API — used here for style rule extraction
-# (haiku model for speed/cost, ~$0.001 per extraction call).
 # rank_go_sets_by_bmd / rank_genes_by_bmd produce the data for the Gene Set
 # and Gene BMD Analysis report sections (NIEHS format).
 # ToxKBQuerier provides read-only access to the bmdx.duckdb knowledge base.
 # load_dose_response parses and validates gene-level BMD CSV files.
 from interpret import (
-    AnthropicEndpoint,
     ToxKBQuerier,
     fetch_gene_descriptions,
     fetch_go_descriptions,
@@ -171,313 +179,23 @@ _integrated_pool = get_integrated_pool()
 # ---------------------------------------------------------------------------
 # Session persistence helpers
 # ---------------------------------------------------------------------------
-# Approved sections are persisted to disk as JSON files under sessions/{dtxsid}/.
-# This allows the user to close the browser, restart the server, and pick up
-# exactly where they left off — the UI auto-restores on DTXSID resolution.
+# Core session functions (session_dir, save_section, delete_section, etc.)
+# live in session_store.py and are imported at the top of this file.
+# Underscore aliases preserve backward compatibility within this module.
+_session_dir = session_dir
+_bm2_slug = bm2_slug
+_now_iso = now_iso
+_save_section = save_section
+_delete_section = delete_section
+_safe_filename = safe_filename
 
-SESSIONS_DIR = Path(__file__).parent / "sessions"
-
-# Global style profile — stores learned writing style rules extracted from
-# user edits.  Lives at sessions/_style_profile.json (not per-chemical,
-# because writing style transcends individual chemicals).
-STYLE_PROFILE_PATH = SESSIONS_DIR / "_style_profile.json"
-
-# Maximum number of style rules to retain — when full, the lowest-confidence
-# rule is evicted to make room for new ones.
-MAX_STYLE_RULES = 30
-
-# Valid categories for style rules — used for validation when merging
-STYLE_CATEGORIES = {
-    "terminology", "grammar", "phrasing", "structure", "formatting", "tone",
-}
+# Style learning aliases — originals now live in style_learning.py
+_load_style_profile = load_style_profile
+_save_style_profile = save_style_profile
+_merge_rules = merge_rules
+_extract_and_merge_style_rules = extract_and_merge_style_rules
 
 
-def _load_style_profile() -> dict:
-    """
-    Load the global style profile from disk, returning an empty structure if
-    the file doesn't exist yet.
-
-    The profile has three top-level keys:
-      - version (int): schema version for future migrations
-      - updated_at (str): ISO 8601 timestamp of last modification
-      - rules (list[dict]): ordered list of learned style rules, each with:
-          rule (str), category (str), confidence (int), first_seen, last_seen
-    """
-    if STYLE_PROFILE_PATH.exists():
-        try:
-            return json.loads(STYLE_PROFILE_PATH.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            # Corrupted file — start fresh rather than crash
-            pass
-    return {"version": 1, "updated_at": _now_iso(), "rules": []}
-
-
-def _save_style_profile(profile: dict) -> None:
-    """
-    Write the style profile to disk.  Creates the sessions/ directory if
-    needed (same dir used for per-chemical session storage).
-    """
-    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    profile["updated_at"] = _now_iso()
-    STYLE_PROFILE_PATH.write_text(
-        json.dumps(profile, indent=2, default=str), encoding="utf-8",
-    )
-
-
-def _merge_rules(profile: dict, new_rules: list[dict]) -> dict:
-    """
-    Merge newly-extracted style rules into the existing profile.
-
-    For each new rule:
-      - If it matches an existing rule (exact string match on the 'rule' key),
-        increment the existing rule's confidence and update last_seen.
-      - If it's genuinely new, add it with confidence=1.
-      - If adding pushes the total past MAX_STYLE_RULES, evict the rule with
-        the lowest confidence (oldest last_seen breaks ties).
-
-    The LLM extraction prompt is given the existing rules to avoid semantic
-    duplicates, so exact-match dedup here is a safety net — most real dedup
-    happens at extraction time.
-
-    Returns the modified profile (also mutates in place for convenience).
-    """
-    existing_rules = profile.get("rules", [])
-    now = _now_iso()
-
-    for nr in new_rules:
-        rule_text = nr.get("rule", "").strip()
-        category = nr.get("category", "phrasing").strip().lower()
-        if not rule_text:
-            continue
-        # Default to "phrasing" if the LLM returns an unknown category
-        if category not in STYLE_CATEGORIES:
-            category = "phrasing"
-
-        # Check for exact duplicate by rule text
-        matched = False
-        for er in existing_rules:
-            if er["rule"].strip().lower() == rule_text.lower():
-                # Reinforce: bump confidence and update timestamp
-                er["confidence"] = er.get("confidence", 1) + 1
-                er["last_seen"] = now
-                matched = True
-                break
-
-        if not matched:
-            existing_rules.append({
-                "rule": rule_text,
-                "category": category,
-                "confidence": 1,
-                "first_seen": now,
-                "last_seen": now,
-            })
-
-    # Evict lowest-confidence rules if over the cap.
-    # Sort by confidence ascending, then by last_seen ascending (oldest first)
-    # so we drop the least-reinforced, least-recently-seen rules.
-    if len(existing_rules) > MAX_STYLE_RULES:
-        existing_rules.sort(
-            key=lambda r: (r.get("confidence", 1), r.get("last_seen", "")),
-        )
-        existing_rules = existing_rules[-MAX_STYLE_RULES:]
-
-    profile["rules"] = existing_rules
-    return profile
-
-
-def _extract_and_merge_style_rules(original: str, edited: str) -> int:
-    """
-    Extract writing style rules by comparing original LLM text to user edits,
-    then merge them into the global style profile.
-
-    This runs in a background thread (called via run_in_executor) so it
-    doesn't block the approve response.  Uses Claude Haiku for speed and
-    cost (~$0.001 per call).
-
-    Args:
-        original: The original text generated by the LLM
-        edited: The user's edited version of the same text
-
-    Returns:
-        Number of new rules extracted and merged (0 if none found or on error)
-    """
-    try:
-        profile = _load_style_profile()
-        existing_rule_strings = [r["rule"] for r in profile.get("rules", [])]
-
-        # Build the extraction prompt — tells the LLM to compare the two
-        # versions and find deliberate style preferences.  Existing rules are
-        # included so the LLM can avoid re-extracting duplicates.
-        existing_rules_json = json.dumps(existing_rule_strings, indent=2)
-        prompt = f"""Compare the ORIGINAL and EDITED versions of this scientific/toxicology text.
-The editor made deliberate style changes. Extract specific, reusable writing
-style rules that the editor is consistently applying.
-
-Focus on these categories:
-- terminology: preferred word choices and technical terms
-- grammar: comma usage, voice (active/passive), tense preferences
-- phrasing: preferred sentence constructions, transition patterns
-- structure: paragraph organization, how information is ordered
-- formatting: citation style, abbreviation conventions
-- tone: formality level, hedging language, precision
-
-EXISTING RULES (already learned — do NOT re-extract these):
-{existing_rules_json}
-
-ORIGINAL TEXT:
-{original}
-
-EDITED TEXT:
-{edited}
-
-Return ONLY a JSON array of new rules not already covered above:
-[{{"rule": "description of the style preference", "category": "terminology|grammar|phrasing|structure|formatting|tone"}}]
-
-If no new rules are evident, return an empty array: []"""
-
-        # Use Haiku for speed and cost — style rule extraction doesn't need
-        # the full reasoning power of Sonnet/Opus.
-        # _llm_generate_json handles endpoint creation, fence stripping,
-        # and JSON parsing in one call.
-        new_rules = _llm_generate_json(
-            "style-rule-extractor",
-            prompt,
-            system=(
-                "You are a writing style analyst. Compare original and edited text "
-                "to identify deliberate style preferences. Output ONLY valid JSON."
-            ),
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
-        )
-
-        if not isinstance(new_rules, list) or len(new_rules) == 0:
-            logger.info("Style extraction found no new rules")
-            return 0
-
-        # Merge extracted rules into the profile and save
-        count_before = len(profile.get("rules", []))
-        _merge_rules(profile, new_rules)
-        _save_style_profile(profile)
-        count_after = len(profile.get("rules", []))
-
-        new_count = count_after - count_before
-        logger.info(
-            "Style learning: extracted %d rules, %d new (total: %d)",
-            len(new_rules), max(new_count, 0), count_after,
-        )
-        return len(new_rules)
-
-    except Exception:
-        # Style learning is non-critical — log the error but don't crash
-        # the approve flow
-        logger.error("Style rule extraction failed:\n%s", traceback.format_exc())
-        return 0
-
-
-def _session_dir(dtxsid: str) -> Path:
-    """
-    Return the session directory for a given DTXSID, creating it if needed.
-
-    Each chemical gets its own directory under sessions/ (e.g.,
-    sessions/DTXSID6020430/).  The directory is created on first approve.
-    """
-    d = SESSIONS_DIR / dtxsid
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def _bm2_slug(filename: str) -> str:
-    """
-    Slugify a .bm2 filename for use as a JSON key / filename stem.
-
-    Strips the compound prefix (everything before the first hyphen), lowercases,
-    replaces spaces/non-alphanum with hyphens, and strips the .bm2 extension.
-
-    Example:
-        'P3MP-Organ and Body Weights.bm2' → 'organ-and-body-weights'
-        'P3MP-Clinical Pathology.bm2'     → 'clinical-pathology'
-    """
-    # Remove .bm2 extension
-    stem = filename.rsplit(".bm2", 1)[0]
-    # Drop the compound prefix before the first hyphen (e.g. "P3MP-")
-    if "-" in stem:
-        stem = stem.split("-", 1)[1]
-    # Lowercase, replace non-alphanumeric runs with single hyphens, strip edges
-    slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")
-    return slug
-
-
-def _now_iso() -> str:
-    """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _save_section(dtxsid: str, section_key: str, data: dict) -> None:
-    """
-    Write data as JSON to sessions/{dtxsid}/{section_key}.json, archiving the
-    previous version first so we keep full history.
-
-    Version history layout:
-        sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json
-    The current file ({section_key}.json) is always the latest version.
-    Before overwriting, the existing current is copied into history/ using
-    its approved_at timestamp as the filename.
-
-    Also stamps the data with an incrementing "version" number (v1, v2, ...)
-    and updates meta.json's updated_at timestamp.
-    """
-    d = _session_dir(dtxsid)
-    current_path = d / f"{section_key}.json"
-    history_dir = d / "history" / section_key
-
-    # --- Archive the current version before overwriting (if it exists) ---
-    # This preserves every previously-approved version as a timestamped file
-    # in the history/ subdirectory.  First-ever approve has no file to archive.
-    if current_path.exists():
-        existing = json.loads(current_path.read_text(encoding="utf-8"))
-        # Use the existing file's approved_at as the archive filename
-        # so timestamps reflect when that version was actually approved
-        ts = existing.get("approved_at", _now_iso())
-        # Replace colons with hyphens so the filename is filesystem-safe
-        # (ISO 8601 timestamps contain colons, e.g. "2026-03-02T19:23:59+00:00")
-        safe_ts = ts.replace(":", "-")
-        history_dir.mkdir(parents=True, exist_ok=True)
-        (history_dir / f"{safe_ts}.json").write_text(
-            json.dumps(existing, indent=2, default=str), encoding="utf-8",
-        )
-
-    # --- Compute the version number for this new save ---
-    # Count existing history files (previous versions) and add 1 for the
-    # new version.  First approve = 0 history files → version 1.
-    version_count = len(list(history_dir.glob("*.json"))) if history_dir.exists() else 0
-    data["version"] = version_count + 1
-
-    # --- Write the new version as the canonical current file ---
-    current_path.write_text(
-        json.dumps(data, indent=2, default=str), encoding="utf-8",
-    )
-
-    # Touch meta.json's updated_at
-    meta_path = d / "meta.json"
-    if meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    else:
-        meta = {"dtxsid": dtxsid, "created_at": _now_iso()}
-    meta["updated_at"] = _now_iso()
-    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-
-
-def _delete_section(dtxsid: str, section_key: str) -> None:
-    """
-    Remove sessions/{dtxsid}/{section_key}.json if it exists.
-
-    Called when the user clicks "Try Again" to unapprove a section.
-    The .bm2 file in files/ is kept — it's still useful for reprocessing.
-    """
-    d = SESSIONS_DIR / dtxsid
-    section_path = d / f"{section_key}.json"
-    if section_path.exists():
-        section_path.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -649,122 +367,25 @@ _js_dose_key = pool_orchestrator._js_dose_key
 _serialize_table_rows = serialize_table_rows
 
 
-def _strip_markdown_fences(text: str) -> str:
-    """
-    Remove markdown code fences (```json ... ```) from LLM responses.
-
-    Claude sometimes wraps JSON output in markdown code blocks even when
-    instructed to return raw JSON.  This strips those fences so the
-    response can be parsed as JSON.
-
-    Args:
-        text: Raw LLM response text, possibly wrapped in code fences.
-
-    Returns:
-        The text with leading ```json and trailing ``` removed, if present.
-    """
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    return cleaned
-
-
-def _llm_generate_json(
-    name: str,
-    prompt: str,
-    system: str,
-    *,
-    model: str = "claude-sonnet-4-6",
-    max_tokens: int = 8192,
-    temperature: float = 0.2,
-) -> Any:
-    """
-    Synchronous helper: call Claude → strip markdown fences → parse JSON.
-
-    Centralizes the repeated pattern of creating an AnthropicEndpoint,
-    generating text, stripping markdown code fences, and JSON-parsing the
-    result.  Can be called directly in sync code (e.g. inside a thread-pool
-    worker) or wrapped in run_in_executor for async endpoints.
-
-    Args:
-        name:        Logical name for the endpoint (appears in logs / billing).
-        prompt:      The user-turn prompt to send.
-        system:      The system prompt.
-        model:       Claude model ID (default: claude-sonnet-4-6).
-        max_tokens:  Max tokens for the response.
-        temperature: Sampling temperature.
-
-    Returns:
-        Parsed JSON (dict or list) from the LLM response.
-
-    Raises:
-        ValueError:  If the LLM returns an empty response.
-        json.JSONDecodeError: If the response isn't valid JSON after fence stripping.
-    """
-    endpoint = AnthropicEndpoint(
-        name=name,
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
-    response = endpoint.generate(prompt, system=system)
-    if not response:
-        raise ValueError(f"LLM '{name}' returned empty response")
-    return json.loads(_strip_markdown_fences(response))
-
-
-async def _llm_generate_json_async(
-    name: str,
-    prompt: str,
-    system: str,
-    **kwargs,
-) -> Any:
-    """
-    Async wrapper around _llm_generate_json — runs the blocking LLM call
-    in a thread-pool executor so it doesn't block the event loop.
-
-    Accepts the same keyword arguments as _llm_generate_json (model,
-    max_tokens, temperature).
-
-    Returns:
-        Parsed JSON (dict or list) from the LLM response.
-    """
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: _llm_generate_json(name, prompt, system, **kwargs),
-    )
+# LLM helper aliases — originals now live in llm_helpers.py
+_strip_markdown_fences = strip_markdown_fences
+_llm_generate_json = llm_generate_json
+_llm_generate_json_async = llm_generate_json_async
 
 
 # ---------------------------------------------------------------------------
 # Wire pool orchestrator dependencies
 # ---------------------------------------------------------------------------
-# Must happen after _session_dir, _llm_generate_json, and _bm2_uploads are
-# defined.  Passes references so the orchestrator can access session dirs,
+# Must happen after _llm_generate_json and _bm2_uploads are defined.
+# Passes references so the orchestrator can access session dirs,
 # call the LLM, and read the bm2 uploads store without circular imports.
 pool_orchestrator.init_orchestrator(
-    session_dir_fn=_session_dir,
+    session_dir_fn=session_dir,
     llm_generate_json_fn=_llm_generate_json,
     bm2_uploads=_bm2_uploads,
 )
 
 
-def _safe_filename(name: str) -> str:
-    """
-    Sanitize a chemical name for use as a filename.
-
-    Replaces non-alphanumeric characters (except spaces, hyphens, and
-    underscores) with underscores.  Used when building download filenames
-    for exported .docx and .pdf reports.
-
-    Args:
-        name: The chemical name (e.g., "1,2-Dichlorobenzene").
-
-    Returns:
-        A filesystem-safe string (e.g., "1_2-Dichlorobenzene").
-    """
-    return "".join(c if c.isalnum() or c in " -_" else "_" for c in name)
 
 
 # These functions now live in pool_orchestrator.py — aliases for existing call sites.
