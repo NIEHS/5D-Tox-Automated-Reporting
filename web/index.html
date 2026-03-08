@@ -7,7 +7,248 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="container">
+    <!-- Login gate — ALWAYS shown on page load.  Contains the deployment
+         guide ("README FIRST") and a login form.  The app is hidden behind
+         this overlay until the user enters a valid username.  Even in open
+         mode (local dev), the gate appears so the guide is always visible.
+         The user must explicitly click "Sign In" to proceed. -->
+    <div id="login-gate">
+
+        <div class="login-page">
+            <!-- Login form — pinned to the top -->
+            <div class="login-box">
+                <h2>5dToxReport</h2>
+                <p>Enter your username to continue.</p>
+                <input type="text" id="login-username" placeholder="Username"
+                       autocomplete="username" autofocus>
+                <button id="login-submit">Sign In</button>
+                <p id="login-error" style="color:#e74c3c;display:none;margin-top:8px;font-size:0.85rem;"></p>
+            </div>
+
+            <!-- Application guide — how to use 5dToxReport -->
+            <div class="login-guide">
+                <h1>README FIRST, OR SUFFER THE CONSEQUENCES</h1>
+
+                <h2>Work through the process slowly and deliberately, following instructions precisely. It should work well. All bets are off if you move too quickly, or jump around. User safeguards have not been explored yet. This trial run is not to give it a stress test, but to successfully generate results.</h2>
+
+                <p>5dToxReport builds structured toxicology reports for NTP &ldquo;5 Day Genomic Dose Response in Sprague-Dawley Rats&rdquo; studies. You work through sections in order: identify the chemical, generate text with an LLM, upload dose-response data, review and approve each section, then export the final report as PDF.</p>
+
+                <p>Every section follows the same cycle: <strong>generate &rarr; review &rarr; edit (optional) &rarr; approve</strong>. Approved sections are saved to the server and restored automatically if you reload the page or come back later. You can unapprove any section to regenerate or re-edit it.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 1 &mdash; Identify the Chemical</h2>
+
+                <p>Type any identifier into the <strong>Chemical Identification</strong> form: a chemical name, CASRN, DTXSID, or PubChem CID. The app resolves it against EPA&rsquo;s CompTox and PubChem databases and fills in all the other fields automatically.</p>
+
+                <ol>
+                    <li>Enter a value in <em>any one</em> field (e.g., <code>95-50-1</code> in the CASRN box).</li>
+                    <li>The app auto-resolves on blur &mdash; all fields populate within a few seconds.</li>
+                    <li>If a saved session exists for this DTXSID, it loads automatically: all previously approved sections reappear exactly as you left them.</li>
+                </ol>
+
+                <div class="guide-warning">
+                    <strong>The DTXSID is the session key.</strong> Everything you approve is saved under this identifier. If you switch chemicals, you start (or resume) a different session.
+                </div>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 2 &mdash; Generate the Background</h2>
+
+                <p>Once the chemical is resolved, click <strong>Generate Background</strong>. The server gathers data from multiple sources (ATSDR ToxProfiles, PubChem, EPA CompTox, the bmdx knowledge base) and sends it to Claude, which writes a structured six-paragraph background section with inline references.</p>
+
+                <ol>
+                    <li>Select an LLM from the dropdown (Claude is recommended; Ollama is for local/offline use).</li>
+                    <li>Click <strong>Generate Background</strong>. A progress panel shows real-time status as data sources are queried.</li>
+                    <li>The generated text appears as editable paragraphs. References are listed below.</li>
+                    <li>Edit the text directly in the browser if you want to change wording, fix facts, or rearrange paragraphs.</li>
+                    <li>Click <strong>Approve</strong> to save. If you edited the text before approving, the app learns from your changes and adjusts its writing style for future generations.</li>
+                </ol>
+
+                <p>After approval, the Background tab gets a green border and a version badge. You can click <strong>Edit</strong> to unlock it again, or <strong>Try Again</strong> to regenerate from scratch.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 3 &mdash; Upload Dose-Response Data</h2>
+
+                <p>The <strong>Data</strong> tab appears after the background section exists. This is where you upload dose-response data files. All files go into a shared pool.</p>
+
+                <ol>
+                    <li>Drag files onto the drop zone, or click to browse. You can upload individual files or a <code>.zip</code> archive containing multiple files.</li>
+                    <li>Upload any and all <code>.bm2</code>, <code>.csv</code>, <code>.txt</code>, and <code>.xlsx</code> files that contain dose-response data on your test article of interest that you deem relevant. The app will fingerprint each file, classify its data type, and merge everything into a unified pool.</li>
+                    <li>Uploaded files appear in the collapsible <strong>Uploaded files</strong> list with type and row count.</li>
+                </ol>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 4 &mdash; Validate &amp; Integrate</h2>
+
+                <p>Once files are uploaded, the <strong>Pool Validation</strong> panel appears. This step merges your files into a single integrated dataset, resolving overlaps between files that cover the same experimental domain. The entire dataset-building pipeline &mdash; file parsing, domain classification, dose-response extraction, and BMD model results &mdash; runs through <strong>BMDExpress 3 native code</strong> (Java subprocess), ensuring full fidelity with the BMDExpress analysis engine.</p>
+
+                <ol>
+                    <li>Click <strong>Preview</strong> to inspect the raw data extracted from each file before committing to integration.</li>
+                    <li>Click <strong>Validate &amp; Integrate</strong>. The server fingerprints each file, detects its domain (body weight, organ weights, clinical chemistry, etc.), checks for conflicts, and merges everything.</li>
+                    <li>A <strong>coverage matrix</strong> appears showing which domains are covered and by which file tier (<code>.bm2</code> takes priority over <code>.txt</code>/<code>.xlsx</code>).</li>
+                    <li>If there are conflicts (two files claiming the same domain), resolve them using the controls shown.</li>
+                    <li>Review the validation results, then click <strong>Approve</strong> to lock the pool.</li>
+                </ol>
+
+                <p>After pool approval, the app automatically processes all files: apical endpoint tables are generated from the integrated data, and genomics analysis runs on gene expression data. This can take 10&ndash;30 seconds depending on file size.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 5 &mdash; Review Apical Endpoint Results</h2>
+
+                <p>The <strong>Apical</strong> tab shows one card per experimental domain (e.g., &ldquo;Organ and Body Weights&rdquo;, &ldquo;Clinical Pathology&rdquo;). Each card contains:</p>
+
+                <ul>
+                    <li>NTP-style dose-response tables with statistical significance markers (* p&lt;0.05, ** p&lt;0.01)</li>
+                    <li>An LLM-generated narrative summarizing the key findings (direction, magnitude, dose-response relationship)</li>
+                    <li>BMD/BMDL values for each endpoint where modeling succeeded</li>
+                </ul>
+
+                <ol>
+                    <li>Review each card. Edit the narrative text if needed.</li>
+                    <li>Click <strong>Approve</strong> on each card individually.</li>
+                    <li>As you approve cards, the <strong>BMD Summary</strong> tab auto-populates with a cross-domain summary table. Approve that too.</li>
+                </ol>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 6 &mdash; Configure GO Category Filters</h2>
+
+                <p>Before generating the genomics report, review the GO category filter settings. Click the <strong>gear icon</strong> (top right) to open the settings panel. Here you can adjust:</p>
+
+                <ul>
+                    <li>Minimum and maximum gene counts per GO category</li>
+                    <li>Minimum BMD percentage cutoff</li>
+                    <li>Which BMD statistics to display in the tables</li>
+                </ul>
+
+                <p>Click <strong>Apply &amp; Reprocess</strong> to save your settings. You can change these later and reprocess at any time.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 7 &mdash; Review Genomics Analysis</h2>
+
+                <p>The <strong>Genomics</strong> tab shows cards organized by organ and sex (e.g., &ldquo;Liver (Male)&rdquo;). Each card contains:</p>
+
+                <ul>
+                    <li>A <strong>GO Biological Process table</strong> ranking gene categories by their median (or other selected statistic) BMD value. Categories with the lowest BMD are the most sensitive biological pathways.</li>
+                    <li>A <strong>Top Genes table</strong> showing individual genes ranked by BMD.</li>
+                    <li>An LLM-generated narrative interpreting the pathway results in the context of the test article&rsquo;s known toxicology.</li>
+                </ul>
+
+                <ol>
+                    <li>Click <strong>Generate Report</strong> to run the genomics analysis for the first time. This produces the GO and gene tables and generates the LLM narrative for each card.</li>
+                    <li>Review the tables and narrative for each organ/sex combination.</li>
+                    <li>Edit the narrative if needed.</li>
+                    <li>Approve each card.</li>
+                </ol>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 8 &mdash; Generate Materials &amp; Methods</h2>
+
+                <p>The <strong>Methods</strong> tab generates the Materials and Methods section. It pulls study parameters from the uploaded data (species, strain, doses, route, duration, endpoints measured) and writes structured prose covering the experimental design, BMD modeling approach, and statistical methods.</p>
+
+                <ol>
+                    <li>Click <strong>Generate</strong>. The server assembles context from the approved sections and uploaded data, then calls the LLM.</li>
+                    <li>Review and edit the generated text.</li>
+                    <li>Approve.</li>
+                </ol>
+
+                <p>You can click <strong>Preview Data</strong> to see exactly what context the LLM will receive before generating.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 9 &mdash; Generate Summary</h2>
+
+                <p>The <strong>Summary</strong> tab synthesizes all approved sections into a concise summary. It reads the approved background, apical results, genomics findings, and BMD summary to produce a cohesive conclusion.</p>
+
+                <ol>
+                    <li>Click <strong>Generate</strong>.</li>
+                    <li>Review, edit if needed, approve.</li>
+                </ol>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Step 10 &mdash; Export</h2>
+
+                <p>The <strong>Report</strong> tab contains an integrated PDF viewer that shows a live preview of your report, updated automatically as you approve sections. When you are satisfied with the report, click <strong>Export PDF</strong> to download a tagged PDF/UA-1 generated with Typst.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>How Sessions Work</h2>
+
+                <p>Every time you approve a section, it&rsquo;s saved to the server as a JSON file under your chemical&rsquo;s DTXSID. When you return and resolve the same DTXSID, all approved sections are restored automatically.</p>
+
+                <ul>
+                    <li><strong>Version history</strong> &mdash; each approve archives the previous version. Click the version badge (e.g., &ldquo;v3 &#x25BE;&rdquo;) to browse and restore past versions.</li>
+                    <li><strong>Unapprove</strong> &mdash; click <strong>Try Again</strong> on any approved section to delete the saved data and regenerate.</li>
+                    <li><strong>Style learning</strong> &mdash; when you edit text before approving, the app extracts style rules from your changes. These persist in a global style profile and are applied to future LLM generations.</li>
+                </ul>
+
+                <div class="guide-warning">
+                    <strong>Sessions live on the server&rsquo;s filesystem.</strong> On Cloud Run, containers are ephemeral &mdash; if the container restarts, sessions created since the last deployment are lost. This is expected. Sessions baked into the image at deploy time always survive.
+                </div>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Settings</h2>
+
+                <p>Click the gear icon in the top-right corner to open the settings panel. Settings are saved in your browser and persist across page reloads.</p>
+
+                <table>
+                    <thead><tr><th>Setting</th><th>What it controls</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>BMD Statistics</strong></td><td>Which aggregate statistics (mean, median, 5th percentile, etc.) appear in GO category tables. Each checked statistic produces a separate table.</td></tr>
+                        <tr><td><strong>Dose Unit</strong></td><td>Unit shown in table headers and narratives (e.g., mg/kg). Auto-detected from uploaded files when possible.</td></tr>
+                        <tr><td><strong>Significance Thresholds</strong></td><td>P-value cutoffs for * and ** markers in report tables.</td></tr>
+                        <tr><td><strong>GO Category Filters</strong></td><td>Min/max gene counts and BMD percentage cutoffs that determine which GO categories appear in genomics tables.</td></tr>
+                    </tbody>
+                </table>
+                <p>After changing settings, click <strong>Apply &amp; Reprocess</strong> to regenerate tables with the new parameters.</p>
+
+                <hr>
+
+                <!-- ============================================ -->
+                <h2>Quick Reference</h2>
+
+                <table>
+                    <thead><tr><th>Action</th><th>How</th></tr></thead>
+                    <tbody>
+                        <tr><td>Identify chemical</td><td>Type any identifier, app auto-resolves on blur</td></tr>
+                        <tr><td>Generate text</td><td>Click <strong>Generate</strong> in the section header</td></tr>
+                        <tr><td>Edit before approving</td><td>Click directly on the text &mdash; paragraphs are contentEditable</td></tr>
+                        <tr><td>Approve a section</td><td>Click <strong>Approve</strong> &mdash; green border confirms it&rsquo;s saved</td></tr>
+                        <tr><td>Undo an approval</td><td>Click <strong>Try Again</strong> to delete and regenerate</td></tr>
+                        <tr><td>Edit after approving</td><td>Click <strong>Edit</strong> to unlock, then re-approve</td></tr>
+                        <tr><td>Browse version history</td><td>Click the version badge (e.g., <strong>v3 &#x25BE;</strong>)</td></tr>
+                        <tr><td>Restore a past version</td><td>Open version history, click <strong>Restore</strong> on any entry</td></tr>
+                        <tr><td>Upload files</td><td>Drag onto the drop zone, or click to browse</td></tr>
+                        <tr><td>Change GO filters</td><td>Gear icon &rarr; GO Category Filters &rarr; Apply &amp; Reprocess</td></tr>
+                        <tr><td>Export PDF</td><td><strong>Report</strong> tab &rarr; <strong>Export PDF</strong></td></tr>
+                        <tr><td>Switch views</td><td><strong>Tabbed View</strong> / <strong>Stacked View</strong> button in toolbar</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="app-container" style="display:none;">
         <!-- Header — renamed from "Background Section Generator" -->
         <header>
             <div class="header-row">
@@ -410,6 +651,18 @@
 
     <!-- Toast notification -->
     <div class="toast" id="toast"></div>
+
+    <!-- Blocking overlay — covers the entire viewport with a spinner and
+         status message while a side-effect operation is in flight.  Prevents
+         the user from triggering conflicting actions (double-approve,
+         navigating away mid-upload, etc.).  Hidden by default; toggled by
+         showBlockingSpinner() / hideBlockingSpinner() in utils.js. -->
+    <div id="blocking-overlay" class="blocking-overlay" style="display:none">
+        <div class="blocking-overlay-content">
+            <span class="spinner blocking-spinner"></span>
+            <span id="blocking-overlay-msg">Working...</span>
+        </div>
+    </div>
 
     <!-- ================================================================
          File preview modal — first modal in the codebase.

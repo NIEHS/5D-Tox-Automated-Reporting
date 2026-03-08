@@ -435,6 +435,58 @@ function buildTable(headers, rows, opts = {}) {
 
 
 /* ==================================================================
+ * Blocking overlay — full-viewport spinner shown during side-effect
+ * operations (uploads, approvals, exports, generation).  Prevents the
+ * user from triggering conflicting actions while one is in flight.
+ *
+ * Usage:
+ *   showBlockingSpinner('Uploading files...');
+ *   try { await doWork(); } finally { hideBlockingSpinner(); }
+ *
+ * The overlay is reference-counted so nested calls are safe — only
+ * the outermost hide() actually removes the overlay.
+ * ================================================================== */
+
+/** @type {number} Reference count for nested showBlockingSpinner calls */
+let _blockingDepth = 0;
+
+/**
+ * Show the full-viewport blocking overlay with a status message.
+ * Safe to call multiple times — only the first call shows the overlay;
+ * subsequent calls just update the message text.
+ *
+ * @param {string} [msg='Working...'] — Status message shown next to the spinner
+ */
+function showBlockingSpinner(msg = 'Working...') {
+    _blockingDepth++;
+    const overlay = document.getElementById('blocking-overlay');
+    document.getElementById('blocking-overlay-msg').textContent = msg;
+    overlay.style.display = '';
+}
+
+/**
+ * Hide the blocking overlay.  If showBlockingSpinner was called multiple
+ * times (nested operations), only the final hide actually removes it.
+ */
+function hideBlockingSpinner() {
+    if (_blockingDepth > 0) _blockingDepth--;
+    if (_blockingDepth === 0) {
+        document.getElementById('blocking-overlay').style.display = 'none';
+    }
+}
+
+/**
+ * Update the blocking overlay message without changing visibility.
+ * Useful for multi-step operations (e.g., "Validating..." → "Integrating...").
+ *
+ * @param {string} msg — New status message
+ */
+function updateBlockingMessage(msg) {
+    document.getElementById('blocking-overlay-msg').textContent = msg;
+}
+
+
+/* ==================================================================
  * postApproveToServer — centralized POST to /api/session/approve
  *
  * Every section type (background, bm2, methods, genomics, summary,
@@ -471,6 +523,7 @@ async function postApproveToServer(sectionType, sectionEl, buttonPrefix, data, t
         return null;
     }
 
+    showBlockingSpinner('Approving...');
     try {
         const result = await apiFetch('/api/session/approve', {
             method: 'POST',
@@ -501,5 +554,7 @@ async function postApproveToServer(sectionType, sectionEl, buttonPrefix, data, t
     } catch (err) {
         showError('Approve failed: ' + err.message);
         return null;
+    } finally {
+        hideBlockingSpinner();
     }
 }

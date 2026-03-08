@@ -1,0 +1,36 @@
+# .gcloudignore — limits what gets uploaded to Cloud Build.
+# gcloud builds submit tarballs the working directory; this keeps the
+# upload small and fast.
+
+.git
+.venv/
+__pycache__/
+*.pyc
+
+# DuckDB files in root — deploy.sh stages the one we need into _data/
+*.duckdb
+*.duckdb.wal
+
+# But allow the _data/ directory where deploy.sh puts the knowledge base
+!_data/
+!_data/*.duckdb
+
+# Allow the _bmdx_jars/ directory where deploy.sh puts BMDExpress JARs
+!_bmdx_jars/
+
+# Allow the _sessions/ directory where deploy.sh stages session data
+!_sessions/
+
+# Exclude session data, output files, and docs
+sessions/
+output/
+docs/
+*.docx
+*.md
+
+# Exclude rlm-code index and logs
+.rlm-code.duckdb
+*.log
+
+# Exclude claude config
+.claude/

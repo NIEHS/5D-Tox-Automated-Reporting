@@ -777,6 +777,8 @@ unifiedFileInput.addEventListener('change', () => {
  * @param {File[]} fileList — array of File objects from drag-drop or input
  */
 async function uploadFiles(fileList) {
+    showBlockingSpinner('Uploading files...');
+    try {
     // Partition files by extension — zip files are handled separately
     // because the server extracts them and returns individual file entries.
     const bm2List = [];
@@ -924,6 +926,7 @@ async function uploadFiles(fileList) {
         // Show the validation panel so user knows validation is available
         showValidationPanel();
     }
+    } finally { hideBlockingSpinner(); }
 }
 
 /**
@@ -1130,6 +1133,7 @@ async function runPoolValidation() {
         btn.textContent = 'Validating...';
     }
 
+    showBlockingSpinner('Validating file pool...');
     try {
         const resp = await fetch(`/api/pool/validate/${dtxsid}`, { method: 'POST' });
         if (!resp.ok) {
@@ -1159,6 +1163,7 @@ async function runPoolValidation() {
         // logic (bm2 > txt/csv > xlsx per domain, respecting user conflict
         // resolutions) and merges all dose-response data into a single structure.
         if (btn) btn.textContent = 'Integrating...';
+        updateBlockingMessage('Integrating files...');
 
         const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, { method: 'POST' });
         if (intResp.ok) {
@@ -1176,6 +1181,7 @@ async function runPoolValidation() {
     } catch (e) {
         showToast('Validation request failed: ' + e.message);
     } finally {
+        hideBlockingSpinner();
         if (btn) {
             btn.disabled = false;
             btn.textContent = 'Validate & Integrate';
@@ -1739,6 +1745,7 @@ async function processBm2(bm2Id) {
         ? (uploadedFiles[section.fileId]?.id || section.fileId)
         : bm2Id;
 
+    showBlockingSpinner('Processing .bm2 file...');
     try {
         const resp = await fetch('/api/process-bm2', {
             method: 'POST',
@@ -1795,6 +1802,8 @@ async function processBm2(bm2Id) {
         showError('Processing error: ' + err.message);
         btn.disabled = false;
         btn.textContent = 'Process';
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -2030,6 +2039,7 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
  * ================================================================ */
 
 async function exportDocx() {
+    showBlockingSpinner('Exporting .docx...');
     const proseEl = document.getElementById('output-prose');
     const refsEl = document.getElementById('references-list');
 
@@ -2150,6 +2160,8 @@ async function exportDocx() {
         showToast('Downloaded .docx');
     } catch (err) {
         showError('Export error: ' + err.message);
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -2238,6 +2250,7 @@ async function exportPdf() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
 
+    showBlockingSpinner('Generating PDF...');
     try {
         const resp = await fetch('/api/export-pdf', {
             method: 'POST',
@@ -2280,6 +2293,7 @@ async function exportPdf() {
     } catch (err) {
         showError('PDF export error: ' + err.message);
     } finally {
+        hideBlockingSpinner();
         btn.disabled = false;
         btn.textContent = 'Export PDF';
     }
@@ -2927,6 +2941,7 @@ async function restoreVersion(sectionType, version, bm2Id) {
     const sectionKey = getSectionKey(sectionType, bm2Id);
     const elId = getVersionElId(sectionType, bm2Id);
 
+    showBlockingSpinner('Restoring version...');
     try {
         const resp = await fetch(`/api/session/${dtxsid}/restore`, {
             method: 'POST',
@@ -2967,6 +2982,8 @@ async function restoreVersion(sectionType, version, bm2Id) {
 
     } catch (err) {
         showError('Restore error: ' + err.message);
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -3411,6 +3428,7 @@ async function loadStyleProfile() {
  * @param {number} idx — 0-based index of the rule to delete
  */
 async function deleteStyleRule(idx) {
+    showBlockingSpinner('Deleting rule...');
     try {
         const resp = await fetch(`/api/style-profile/${idx}`, {
             method: 'DELETE',
@@ -3426,6 +3444,8 @@ async function deleteStyleRule(idx) {
         showToast('Style rule removed');
     } catch (err) {
         showError('Delete error: ' + err.message);
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -3614,6 +3634,7 @@ async function generateMethods() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
 
+    showBlockingSpinner('Generating methods...');
     try {
         // Send identity and study params to the server.
         // The server extracts dose groups, sample sizes, endpoints, and BMDExpress
@@ -3653,6 +3674,7 @@ async function generateMethods() {
     } catch (e) {
         showError('Methods generation failed: ' + e.message);
     } finally {
+        hideBlockingSpinner();
         btn.disabled = false;
         btn.textContent = 'Generate';
     }
@@ -3757,7 +3779,10 @@ async function previewIntegratedData() {
     };
     document.addEventListener('keydown', _previewEscapeHandler);
 
-    const url = `/api/integrated/${dtxsid}`;
+    // Oboe uses XMLHttpRequest (not fetch), so the fetch interceptor
+    // doesn't apply — append ?user= manually for the user gate.
+    const _user = getStoredUser();
+    const url = `/api/integrated/${dtxsid}` + (_user ? `?user=${encodeURIComponent(_user)}` : '');
 
     // -- Oboe streaming path --
     // Uses Oboe.js to incrementally parse the JSON response.  For each
@@ -4017,6 +4042,7 @@ async function generateSummary() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
 
+    showBlockingSpinner('Generating summary...');
     try {
         const resp = await fetch('/api/generate-summary', {
             method: 'POST',
@@ -4043,6 +4069,7 @@ async function generateSummary() {
     } catch (e) {
         showError('Summary generation failed: ' + e.message);
     } finally {
+        hideBlockingSpinner();
         btn.disabled = false;
         btn.textContent = 'Generate';
     }
@@ -4092,6 +4119,7 @@ async function approvePool() {
     btn.disabled = true;
     btn.textContent = 'Generating report...';
 
+    showBlockingSpinner('Generating animal report...');
     try {
         const resp = await fetch(
             `/api/generate-animal-report/${currentIdentity.dtxsid}`,
@@ -4119,6 +4147,7 @@ async function approvePool() {
     } catch (e) {
         showError('Animal report generation failed: ' + e.message);
     } finally {
+        hideBlockingSpinner();
         btn.disabled = false;
         btn.textContent = 'Approve';
     }
@@ -4156,6 +4185,8 @@ async function autoProcessPool() {
 
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
     if (!dtxsid) return;
+
+    showBlockingSpinner('Processing integrated data...');
 
     // Show the results sections so cards have a container to land in
     show('bm2-results-section');
@@ -4287,6 +4318,7 @@ async function autoProcessPool() {
     // Rebuild tabs to include any newly-created sections
     if (tabbedViewActive) buildTabBar();
     updateExportButton();
+    hideBlockingSpinner();
 }
 
 
@@ -4549,6 +4581,7 @@ async function processCsv(fileId, organ, sex) {
     const file = uploadedFiles[fileId];
     const serverCsvId = file?.id || fileId;
 
+    showBlockingSpinner('Processing genomics...');
     try {
         const compound = currentIdentity?.name || 'Test Compound';
         const resp = await fetch('/api/process-genomics', {
@@ -4594,6 +4627,8 @@ async function processCsv(fileId, organ, sex) {
 
     } catch (e) {
         showError('Genomics processing failed: ' + e.message);
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -6032,5 +6067,99 @@ function togglePdfViewer() {
     } else {
         setup();
     }
+})();
+
+
+/* ==================================================================
+ * Login gate — ALWAYS shown on page load.
+ *
+ * The login page contains the deployment guide and a username form.
+ * The user must click "Sign In" to proceed — the gate is never
+ * auto-skipped, even in open mode (local dev) or when a username is
+ * already stored in localStorage.  This ensures the guide is always
+ * one click away from the user.
+ *
+ * If the stored user is still valid, the input is pre-filled so the
+ * user can just hit Enter.  If the server is in open mode, any
+ * non-empty username is accepted.
+ * ================================================================== */
+
+(function initLoginGate() {
+    const gate         = document.getElementById('login-gate');
+    const appContainer = document.getElementById('app-container');
+    const input        = document.getElementById('login-username');
+    const btn          = document.getElementById('login-submit');
+    const errEl        = document.getElementById('login-error');
+
+    /**
+     * Try a probe request to see if the current stored user is accepted.
+     * Returns true if the server is in open mode or the user is valid.
+     */
+    async function probeAccess() {
+        try {
+            const resp = await fetch('/api/admin/sessions/summary');
+            return resp.ok;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Show the app, hide the login gate.
+     */
+    function showApp() {
+        gate.style.display = 'none';
+        appContainer.style.display = '';
+    }
+
+    /**
+     * Attempt login with the entered username.
+     * Makes a probe request with the candidate user — if accepted,
+     * stores the username and reveals the app.
+     */
+    async function attemptLogin() {
+        const username = input.value.trim();
+        if (!username) {
+            errEl.textContent = 'Please enter a username.';
+            errEl.style.display = '';
+            return;
+        }
+
+        // Temporarily store the candidate so the fetch interceptor picks it up
+        localStorage.setItem(USER_STORAGE_KEY, username);
+        errEl.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+
+        const ok = await probeAccess();
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+
+        if (ok) {
+            showApp();
+        } else {
+            // Remove the bad username so it doesn't pollute future requests
+            localStorage.removeItem(USER_STORAGE_KEY);
+            errEl.textContent = 'Username not recognized.';
+            errEl.style.display = '';
+            input.select();
+        }
+    }
+
+    btn.addEventListener('click', attemptLogin);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') attemptLogin();
+    });
+
+    // Pre-fill the input with the stored username (if any) so the user
+    // can just hit Enter to re-enter.  But always show the gate.
+    const stored = getStoredUser();
+    if (stored) {
+        input.value = stored;
+    }
+
+    // Gate is visible by default (no display:none in HTML).  App is
+    // hidden by default (display:none in HTML).  User must click Sign In.
+    input.focus();
 })();
 

@@ -11,6 +11,43 @@
  * ----------------------------------------------------------------- */
 
 
+// --- User gate ---
+// Lightweight access control: if the server has ALLOWED_USERS set, every
+// /api/ request must include ?user=<name>.  The username is stored in
+// localStorage and prompted on first visit.  This is security-through-
+// obscurity — no passwords, no tokens, just a shared secret username.
+const USER_STORAGE_KEY = '5dtox-user';
+
+/**
+ * Get the stored username from localStorage.
+ * @returns {string|null} The username, or null if not set.
+ */
+function getStoredUser() {
+    return localStorage.getItem(USER_STORAGE_KEY);
+}
+
+/**
+ * Wrap the browser's native fetch() to automatically append ?user=<name>
+ * to every /api/ request.  This avoids editing 35+ individual fetch call
+ * sites — the wrapper intercepts at the single global entry point and
+ * delegates to the real fetch after adding the query parameter.
+ *
+ * Non-API requests (static assets, external URLs) pass through unchanged.
+ * If no user is stored, API fetches proceed without the param — the
+ * server returns 403, and the UI shows the login prompt.
+ */
+const _originalFetch = window.fetch;
+window.fetch = function(input, init) {
+    const user = getStoredUser();
+    if (user && typeof input === 'string' && input.startsWith('/api/')) {
+        // Append ?user= (or &user= if query params already exist)
+        const sep = input.includes('?') ? '&' : '?';
+        input = input + sep + 'user=' + encodeURIComponent(user);
+    }
+    return _originalFetch.call(this, input, init);
+};
+
+
 // --- UI mode ---
 // Whether the tabbed (vs. stacked) layout is active.
 // Defaults to true — tabs are the primary layout.  The user can

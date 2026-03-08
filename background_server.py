@@ -152,6 +152,61 @@ app = FastAPI(
     version="2.0.0",
 )
 
+
+# ---------------------------------------------------------------------------
+# User gate — lightweight access control via ?user= query parameter.
+#
+# If ALLOWED_USERS is set (comma-separated list), every /api/ request must
+# include ?user=<name> matching one of the allowed values.  Static assets
+# (HTML, CSS, JS) are served without the check — the app shell loads but
+# all API calls fail with 403 if the user is invalid.
+#
+# This is security-through-obscurity, not real auth.  Good enough to keep
+# random visitors out of a Cloud Run deployment without adding login flows.
+#
+# If ALLOWED_USERS is unset or empty, the gate is disabled (open mode for
+# local dev).
+# ---------------------------------------------------------------------------
+
+_ALLOWED_USERS_RAW = os.environ.get("ALLOWED_USERS", "")
+ALLOWED_USERS: set[str] = {
+    u.strip().lower() for u in _ALLOWED_USERS_RAW.split(",") if u.strip()
+}
+
+if ALLOWED_USERS:
+    logger.info("User gate enabled — %d allowed user(s)", len(ALLOWED_USERS))
+else:
+    logger.info("User gate disabled (ALLOWED_USERS not set) — open mode")
+
+
+@app.middleware("http")
+async def user_gate_middleware(request: Request, call_next):
+    """
+    Check ?user= on every /api/ request against the allowed users list.
+
+    Skips the check for:
+      - Non-API routes (static assets, the root HTML page)
+      - Open mode (ALLOWED_USERS is empty)
+    """
+    path = request.url.path
+
+    # Only gate /api/ endpoints — let static assets through
+    if ALLOWED_USERS and path.startswith("/api/"):
+        user = request.query_params.get("user", "").strip().lower()
+        if not user:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Missing ?user= parameter."},
+            )
+        if user not in ALLOWED_USERS:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"User '{user}' is not authorized."},
+            )
+
+    return await call_next(request)
+
+
 # Mount the pool orchestrator router — all /api/pool/*, /api/integrated/*,
 # /api/process-integrated/*, and /api/generate-animal-report/* endpoints.
 app.include_router(pool_orchestrator.router)
@@ -2966,6 +3021,73 @@ def _add_text_with_superscript_refs(paragraph, text: str) -> None:
 # processing, animal report) is in pool_orchestrator.py.
 # Endpoints are mounted via app.include_router(pool_orchestrator.router).
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Admin: session state export for sync workflow
+# ---------------------------------------------------------------------------
+# Used by sync.sh pull to download session data from the running Cloud Run
+# instance back to the local machine.  Returns a .tar.gz of the sessions/
+# directory (excluding _bm2_cache which is an ephemeral LMDB cache that
+# rebuilds on demand and uses mmap — not suitable for transfer).
+
+@app.get("/api/admin/sessions/export")
+async def export_sessions_tar():
+    """
+    Stream the sessions/ directory as a .tar.gz download.
+
+    Excludes _bm2_cache/ (LMDB — ephemeral, rebuilds on demand) and any
+    __pycache__ directories.  The tarball preserves the directory structure
+    so sync.sh can untar it directly into the project root.
+
+    Returns:
+        StreamingResponse with application/gzip content type.
+    """
+    import io
+    import tarfile
+    from starlette.responses import StreamingResponse
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        if SESSIONS_DIR.exists():
+            for item in SESSIONS_DIR.rglob("*"):
+                # Skip the LMDB cache (mmap-based, not portable) and __pycache__
+                rel = item.relative_to(SESSIONS_DIR)
+                if "_bm2_cache" in rel.parts or "__pycache__" in rel.parts:
+                    continue
+                # Archive with the sessions/ prefix so untar restores correctly
+                tar.add(str(item), arcname=f"sessions/{rel}")
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/gzip",
+        headers={"Content-Disposition": "attachment; filename=sessions.tar.gz"},
+    )
+
+
+@app.get("/api/admin/sessions/summary")
+async def sessions_summary():
+    """
+    Return a quick summary of what's in the sessions/ directory.
+
+    Lists each DTXSID session with its section count and last-modified time.
+    Useful for verifying that a sync push/pull moved the expected data.
+    """
+    summary = []
+    if SESSIONS_DIR.exists():
+        for d in sorted(SESSIONS_DIR.iterdir()):
+            # Skip non-directories and internal dirs (underscore-prefixed)
+            if not d.is_dir() or d.name.startswith("_"):
+                continue
+            section_files = list(d.glob("*.json"))
+            # Exclude meta.json from the section count
+            sections = [f.stem for f in section_files if f.stem != "meta"]
+            summary.append({
+                "dtxsid": d.name,
+                "sections": len(sections),
+                "section_keys": sections,
+            })
+    return {"sessions": summary, "count": len(summary)}
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,20 @@
+# Dockerfile.sync — fast session-only deploy for 5dToxReport.
+#
+# Instead of rebuilding from scratch (apt-get, pip install, copy JARs, etc.),
+# this extends the EXISTING deployed image and only replaces the sessions/
+# layer.  This is useful when only approved report sections have changed
+# and we want to push them to Cloud Run without a full rebuild.
+#
+# Cloud Build pulls the existing image, adds a single COPY layer, and pushes.
+# Typical build time: ~30-60 seconds vs ~3 minutes for a full deploy.sh run.
+#
+# Usage (via sync.sh):
+#   sync.sh push        — stages sessions/, submits this Dockerfile
+#   sync.sh push --full — falls back to the full deploy.sh rebuild
+#
+# The _sessions/ directory is staged by sync.sh before the build, containing
+# per-DTXSID session directories with approved section JSON files and
+# version history.  Excludes _bm2_cache/ (LMDB, rebuilds on demand).
+
+FROM us-east1-docker.pkg.dev/rlm-pipe/rlm-bmdx-repo/rlm-bmdx:latest
+COPY _sessions/ ./sessions/
