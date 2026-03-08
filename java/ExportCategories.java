@@ -64,6 +64,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sciome.bmdexpress2.mvp.model.BMDProject;
 import com.sciome.bmdexpress2.mvp.model.category.CategoryAnalysisResult;
 import com.sciome.bmdexpress2.mvp.model.category.CategoryAnalysisResults;
+import com.sciome.bmdexpress2.mvp.model.category.ReferenceGeneProbeStatResult;
+import com.sciome.bmdexpress2.mvp.model.stat.ProbeStatResult;
 import com.sciome.bmdexpress2.mvp.model.category.identifier.CategoryIdentifier;
 import com.sciome.bmdexpress2.mvp.model.category.identifier.GOCategoryIdentifier;
 import com.sciome.bmdexpress2.mvp.model.category.identifier.GenericCategoryIdentifier;
@@ -185,13 +187,38 @@ public class ExportCategories {
                 if (anovaCount != null) entry.put("genes_significant_anova", anovaCount);
 
                 // --- Direction ---
+                // The overallDirection field is transient (null after Java
+                // deserialization), so we replicate the BMDExpress logic:
+                // iterate per-gene adverse directions, apply 60% threshold.
                 try {
-                    Object dir = car.getOverallDirection();
-                    if (dir != null) {
-                        entry.put("direction", dir.toString().toLowerCase());
+                    var refs = car.getReferenceGeneProbeStatResults();
+                    if (refs != null) {
+                        int upcount = 0, downcount = 0, conflictcount = 0, totalcount = 0;
+                        for (var rp : refs) {
+                            int pupcount = 0, pdowncount = 0;
+                            for (ProbeStatResult psr : rp.getProbeStatResults()) {
+                                if (psr.getBestStatResult() != null) {
+                                    short ad = psr.getBestStatResult().getAdverseDirection();
+                                    if (ad == 1) pupcount++;
+                                    else if (ad == -1) pdowncount++;
+                                }
+                            }
+                            if (pupcount > 0 && pdowncount == 0) upcount++;
+                            else if (pdowncount > 0 && pupcount == 0) downcount++;
+                            else conflictcount++;
+                            totalcount++;
+                        }
+                        if (totalcount > 0) {
+                            if ((float) upcount / totalcount >= 0.6f)
+                                entry.put("direction", "up");
+                            else if ((float) downcount / totalcount >= 0.6f)
+                                entry.put("direction", "down");
+                            else
+                                entry.put("direction", "conflict");
+                        }
                     }
                 } catch (Exception e) {
-                    // Direction enum not available
+                    // Direction not available — leave field absent
                 }
 
                 // --- Fisher's exact test ---
