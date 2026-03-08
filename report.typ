@@ -1103,20 +1103,22 @@
 
         if label != "" { heading(level: 3, label) }
 
-        // Gene sets table
+        // Gene sets table — use the stat label from the section (e.g. "5th %ile")
+        // falling back to "Median" for legacy data that doesn't carry a label.
         let gene-sets = gs-sec.at("gene_sets", default: ())
         if gene-sets.len() > 0 {
+          let stat-label = gs-sec.at("bmd_stat_label", default: "Median")
           let gs-rows = gene-sets.map(gs => (
             gs.at("go_term", default: ""),
             gs.at("go_id", default: ""),
-            fmt-val3(gs.at("bmd_median", default: none)),
-            fmt-val3(gs.at("bmdl_median", default: none)),
+            fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
+            fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
             str(gs.at("n_genes", default: "")),
             gs.at("direction", default: ""),
           ))
 
           niehs-table(
-            ("GO Term", "GO ID", "BMD Median", "BMDL Median", "# Genes", "Direction"),
+            ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", "Direction"),
             gs-rows,
             caption: gs-sec.at("caption", default: "Gene Set BMD Analysis — " + label),
             numeric-cols: (2, 3, 4),
@@ -1222,20 +1224,21 @@
 
       heading(level: 3, label)
 
-      // Gene sets table
+      // Gene sets table — use the stat label from the section if available
       let gene-sets = gs-sec.at("gene_sets", default: ())
       if gene-sets.len() > 0 {
+        let stat-label = gs-sec.at("bmd_stat_label", default: "Median")
         let gs-rows = gene-sets.map(gs => (
           gs.at("go_term", default: ""),
           gs.at("go_id", default: ""),
-          fmt-val3(gs.at("bmd_median", default: none)),
-          fmt-val3(gs.at("bmdl_median", default: none)),
+          fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
+          fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
           str(gs.at("n_genes", default: "")),
           gs.at("direction", default: ""),
         ))
 
         niehs-table(
-          ("GO Term", "GO ID", "BMD Median", "BMDL Median", "# Genes", "Direction"),
+          ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", "Direction"),
           gs-rows,
           caption: "Gene Set BMD Analysis — " + label,
           numeric-cols: (2, 3, 4),

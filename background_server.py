@@ -3116,12 +3116,16 @@ async def api_export_docx(request: Request):
         top_genes = gs_section.get("top_genes", [])
         dose_unit = gs_section.get("dose_unit", "mg/kg")
 
-        # Gene Set BMD Analysis table (4c)
+        # Gene Set BMD Analysis table (4c) — use the stat label from
+        # the section (e.g. "5th %ile") so the column header matches
+        # the statistic selected in the settings panel.
+        stat_label = gs_section.get("bmd_stat_label", "Median")
         if gene_sets:
             next_table_num = add_gene_set_bmd_tables_to_doc(
                 doc, gene_sets, organ, sex,
                 table_num=next_table_num,
                 dose_unit=dose_unit,
+                bmd_stat_label=stat_label,
             )
 
         # Gene BMD Analysis table (4d)

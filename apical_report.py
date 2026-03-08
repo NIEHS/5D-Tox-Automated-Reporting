@@ -1544,31 +1544,38 @@ def add_gene_set_bmd_tables_to_doc(
     sex: str,
     table_num: int,
     dose_unit: str = "mg/kg",
+    bmd_stat_label: str = "Median",
 ) -> int:
     """
     Add a Gene Set (GO Biological Process) BMD table to the document.
 
     Produces one table for a specific organ × sex combination (e.g.,
-    "Liver Male").  The table shows the top 10 GO terms ranked by the
-    median BMD of their member genes — lower median BMD means the gene
-    set was perturbed at a lower dose (more potent).
+    "Liver Male").  The table shows the top GO terms ranked by BMD —
+    lower BMD means the gene set was perturbed at a lower dose (more potent).
+
+    The bmd_stat_label controls the column header text (e.g., "Median",
+    "5th %ile", "10th %ile") and must match whichever statistic was used
+    to populate the bmd/bmdl values in gene_sets_data.
 
     Matching NIEHS format:
       Caption: "Top 10 {Organ} Gene Ontology Biological Process Gene Sets
                 Ranked by Potency of Perturbation, Sorted by Benchmark
-                Dose Median ({Sex})"
-      Columns: GO Term | GO ID | BMD Median (unit) | BMDL Median (unit) |
+                Dose {stat_label} ({Sex})"
+      Columns: GO Term | GO ID | BMD {stat} (unit) | BMDL {stat} (unit) |
                # Genes | Direction
 
     Args:
         doc:             The Document to add the table to.
-        gene_sets_data:  List of gene set dicts from rank_go_sets_by_bmd():
-                           [{rank, go_id, go_term, bmd_median, bmdl_median,
+        gene_sets_data:  List of gene set dicts:
+                           [{rank, go_id, go_term, bmd, bmdl,
                              n_genes, genes, direction}, ...]
+                         Legacy data may use bmd_median/bmdl_median instead.
         organ:           Organ name for the caption (e.g., "Liver").
         sex:             Sex label for the caption (e.g., "Male").
         table_num:       Sequential table number.
         dose_unit:       Unit string for column headers.
+        bmd_stat_label:  Human-readable label for the BMD statistic used
+                         (e.g., "Median", "5th %ile").
 
     Returns:
         The next available table number (table_num + 1).
@@ -1582,7 +1589,7 @@ def add_gene_set_bmd_tables_to_doc(
     caption = (
         f"Table {table_num}. Top 10 {organ_title} Gene Ontology Biological "
         f"Process Gene Sets Ranked by Potency of Perturbation, Sorted by "
-        f"Benchmark Dose Median ({sex_title})."
+        f"Benchmark Dose {bmd_stat_label} ({sex_title})."
     )
     cap_para = doc.add_paragraph()
     run = cap_para.add_run(caption)
@@ -1602,8 +1609,8 @@ def add_gene_set_bmd_tables_to_doc(
     headers = [
         "GO Term",
         "GO ID",
-        f"BMD Median ({dose_unit})",
-        f"BMDL Median ({dose_unit})",
+        f"BMD {bmd_stat_label} ({dose_unit})",
+        f"BMDL {bmd_stat_label} ({dose_unit})",
         "# Genes",
         "Direction",
     ]
@@ -1616,13 +1623,15 @@ def add_gene_set_bmd_tables_to_doc(
     for i, header in enumerate(headers):
         _format_table_cell(table.rows[0].cells[i], header, bold=True, size=HEADER_FONT_SIZE)
 
-    # Data rows
+    # Data rows — read "bmd"/"bmdl" first, fall back to legacy "bmd_median"/"bmdl_median"
     for row_idx, gs in enumerate(gene_sets_data, 1):
+        bmd_val = gs.get("bmd") if gs.get("bmd") is not None else gs.get("bmd_median")
+        bmdl_val = gs.get("bmdl") if gs.get("bmdl") is not None else gs.get("bmdl_median")
         row_data = [
             gs.get("go_term", ""),
             gs.get("go_id", ""),
-            f"{gs['bmd_median']:.3f}" if gs.get("bmd_median") is not None else "—",
-            f"{gs['bmdl_median']:.3f}" if gs.get("bmdl_median") is not None else "—",
+            f"{bmd_val:.3f}" if bmd_val is not None else "—",
+            f"{bmdl_val:.3f}" if bmdl_val is not None else "—",
             str(gs.get("n_genes", 0)),
             gs.get("direction", ""),
         ]
