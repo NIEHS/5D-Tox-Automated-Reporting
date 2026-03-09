@@ -37,11 +37,14 @@ import tempfile
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import orjson
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
+
+from session_store import session_dir as _session_dir_imported
+from llm_helpers import llm_generate_json as _llm_generate_json_imported
 
 from file_integrator import (
     FileFingerprint,
@@ -91,40 +94,21 @@ _data_uploads: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
-# Dependency injection slots
+# Direct imports replace the old init_orchestrator() injection pattern.
+# session_store and llm_helpers are leaf modules with no circular dependency.
+# bm2_uploads is imported lazily from server_state to break the import cycle
+# (server_state imports from pool_orchestrator, so we can't import at module level).
 # ---------------------------------------------------------------------------
-# These are set by init_orchestrator() when the main app wires us in.
-# They avoid circular imports between pool_orchestrator and background_server.
-
-_session_dir_fn: Callable[[str], Path] | None = None
-_llm_generate_json_fn: Callable[..., Any] | None = None
-_bm2_uploads_ref: dict[str, dict] | None = None
-
-
-def init_orchestrator(
-    *,
-    session_dir_fn: Callable[[str], Path],
-    llm_generate_json_fn: Callable[..., Any],
-    bm2_uploads: dict[str, dict],
-) -> None:
-    """
-    Wire in dependencies from the main app.
-
-    Called once at startup by background_server.py to provide:
-      - session_dir_fn:      maps dtxsid -> Path (creating dir if needed)
-      - llm_generate_json_fn: sync LLM helper for metadata inference
-      - bm2_uploads:         reference to _bm2_uploads dict (shared state)
-    """
-    global _session_dir_fn, _llm_generate_json_fn, _bm2_uploads_ref
-    _session_dir_fn = session_dir_fn
-    _llm_generate_json_fn = llm_generate_json_fn
-    _bm2_uploads_ref = bm2_uploads
-
 
 def _session_dir(dtxsid: str) -> Path:
-    """Delegate to the injected session_dir function."""
-    assert _session_dir_fn is not None, "init_orchestrator() not called"
-    return _session_dir_fn(dtxsid)
+    """Return the session directory for a DTXSID, creating it if needed."""
+    return _session_dir_imported(dtxsid)
+
+
+def _get_bm2_uploads() -> dict[str, dict]:
+    """Lazy import of bm2_uploads from server_state to avoid circular import."""
+    from server_state import get_bm2_uploads
+    return get_bm2_uploads()
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +293,7 @@ def ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
     fingerprinted: set[str] = set()
 
     # 1. Fingerprint files registered in _bm2_uploads
-    bm2_uploads = _bm2_uploads_ref or {}
+    bm2_uploads = _get_bm2_uploads()
     for fid, entry in bm2_uploads.items():
         path = entry.get("temp_path", "")
         if path and os.path.exists(path) and str(files_dir) in path:
@@ -543,7 +527,7 @@ async def api_pool_integrate(dtxsid: str):
                 coverage_matrix,
                 precedence,
                 test_article=test_article,
-                llm_generate_json=_llm_generate_json_fn,
+                llm_generate_json=_llm_generate_json_imported,
             ),
         )
     except Exception as e:
