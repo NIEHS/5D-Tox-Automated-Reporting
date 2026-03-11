@@ -769,9 +769,32 @@
          Loaded from CDN; the basic bundle includes scatter, bar, and
          common chart types without the full GL/geo overhead. -->
     <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
-    <script src="/js/state.js?v=6"></script>
-    <script src="/js/utils.js?v=6"></script>
-    <script src="/js/main.js?v=6"></script>
+    <!-- Application scripts — load order matters (classic <script>, not ES modules).
+         Dependencies flow left-to-right / top-to-bottom:
+           state.js      → globals (no deps)
+           utils.js      → shared helpers (depends on state)
+           login.js      → login gate IIFE (standalone)
+           settings.js   → settings panel (depends on state)
+           layout.js     → tabs, collapse (depends on state)
+           versions.js   → version history, style profile (depends on state, utils)
+           export.js     → DOCX/PDF export, report preview (depends on state, utils)
+           genomics.js   → genomics cards (depends on state, utils, export)
+           genomics_charts.js → Plotly charts (depends on genomics)
+           filepool.js   → file upload, validation, BM2 cards, metadata (depends on state, utils, export, genomics)
+           sections.js   → section generation/approval workflows (depends on state, utils, export, genomics, filepool, versions)
+           chemical.js   → identity resolution, session restore, init code (MUST BE LAST — calls restoreChemId on load)
+    -->
+    <script src="/js/state.js?v=7"></script>
+    <script src="/js/utils.js?v=7"></script>
+    <script src="/js/login.js?v=1"></script>
+    <script src="/js/settings.js?v=1"></script>
+    <script src="/js/layout.js?v=1"></script>
+    <script src="/js/versions.js?v=1"></script>
+    <script src="/js/export.js?v=1"></script>
+    <script src="/js/genomics.js?v=1"></script>
     <script src="/js/genomics_charts.js?v=1"></script>
+    <script src="/js/filepool.js?v=1"></script>
+    <script src="/js/sections.js?v=1"></script>
+    <script src="/js/chemical.js?v=1"></script>
 </body>
 </html>

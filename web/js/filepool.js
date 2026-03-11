@@ -1,0 +1,1818 @@
+/* -----------------------------------------------------------------
+ * filepool.js — File upload, pool management, validation, and metadata
+ *
+ * Handles drag-and-drop file uploads (.bm2, .csv, .txt, .xlsx, .zip),
+ * the file pool list UI, pool validation and integration, BM2 card
+ * creation and processing, conflict resolution, animal report rendering,
+ * and experiment metadata review/approval.
+ *
+ * Depends on: state.js (globals), utils.js (helpers), export.js,
+ *             genomics.js
+ * ----------------------------------------------------------------- */
+
+const unifiedDropZone = document.getElementById('unified-drop-zone');
+const unifiedFileInput = document.getElementById('unified-file-input');
+
+// Drag-and-drop event handlers — highlight the zone on dragover,
+// then upload files on drop
+unifiedDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    unifiedDropZone.classList.add('dragover');
+});
+
+unifiedDropZone.addEventListener('dragleave', () => {
+    unifiedDropZone.classList.remove('dragover');
+});
+
+unifiedDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    unifiedDropZone.classList.remove('dragover');
+    // Accept .bm2, .csv, .txt, .xlsx, and .zip files
+    const validExts = ['.bm2', '.csv', '.txt', '.xlsx', '.zip'];
+    const files = Array.from(e.dataTransfer.files).filter(
+        f => validExts.some(ext => f.name.toLowerCase().endsWith(ext))
+    );
+    if (files.length > 0) uploadFiles(files);
+});
+
+// Standard file input change handler (triggered by clicking the zone)
+unifiedFileInput.addEventListener('change', () => {
+    const files = Array.from(unifiedFileInput.files);
+    if (files.length > 0) uploadFiles(files);
+    unifiedFileInput.value = '';  // reset so the same file can be re-uploaded
+});
+
+/**
+ * Upload files (both .bm2 and .csv) to the server.
+ *
+ * Partitions the file list by extension, calls the appropriate
+ * upload endpoint for each group (/api/upload-bm2 for .bm2,
+ * /api/upload-csv for .csv), populates the unified uploadedFiles
+ * pool, and renders compact file pool items in the UI.
+ *
+ * @param {File[]} fileList — array of File objects from drag-drop or input
+ */
+async function uploadFiles(fileList) {
+    showBlockingSpinner('Uploading files...');
+    try {
+    // Partition files by extension — zip files are handled separately
+    // because the server extracts them and returns individual file entries.
+    const bm2List = [];
+    const csvList = [];
+    const zipList = [];
+    for (const f of fileList) {
+        const name = f.name.toLowerCase();
+        if (name.endsWith('.bm2')) bm2List.push(f);
+        else if (name.endsWith('.csv')) csvList.push(f);
+        else if (name.endsWith('.zip')) zipList.push(f);
+        // .txt and .xlsx are only supported inside zip archives —
+        // direct upload of loose .txt/.xlsx files isn't handled by
+        // the existing server endpoints, so we skip them here.
+    }
+
+    let totalUploaded = 0;
+
+    // Upload .bm2 files if any
+    if (bm2List.length > 0) {
+        const formData = new FormData();
+        for (const file of bm2List) formData.append('files', file);
+
+        try {
+            // Pass the DTXSID so the server can persist the file
+            // to sessions/{dtxsid}/files/ immediately (survives reload)
+            const dtxsid = currentIdentity?.dtxsid || '';
+            const uploadUrl = dtxsid
+                ? `/api/upload-bm2?dtxsid=${encodeURIComponent(dtxsid)}`
+                : '/api/upload-bm2';
+            const resp = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                showError(err.error || 'BM2 upload failed');
+            } else {
+                const results = await resp.json();
+                for (const item of results) {
+                    uploadedFiles[item.id] = {
+                        id: item.id,
+                        filename: item.filename,
+                        type: 'bm2',
+                    };
+                    renderFilePoolItem(item.id);
+                    totalUploaded++;
+                }
+            }
+        } catch (err) {
+            showError('BM2 upload error: ' + err.message);
+        }
+    }
+
+    // Upload .csv files if any
+    if (csvList.length > 0) {
+        const formData = new FormData();
+        for (const file of csvList) formData.append('files', file);
+
+        try {
+            const resp = await fetch('/api/upload-csv', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                showError(err.error || 'CSV upload failed');
+            } else {
+                const results = await resp.json();
+                for (const item of results) {
+                    uploadedFiles[item.id] = {
+                        id: item.id,
+                        filename: item.filename,
+                        type: 'csv',
+                        row_count: item.row_count,
+                        columns: item.columns_found,
+                    };
+                    renderFilePoolItem(item.id);
+                    totalUploaded++;
+                }
+            }
+        } catch (err) {
+            showError('CSV upload error: ' + err.message);
+        }
+    }
+
+    // Upload .zip files — server extracts and returns individual entries
+    for (const zipFile of zipList) {
+        const formData = new FormData();
+        formData.append('file', zipFile);
+
+        try {
+            // Pass DTXSID so .bm2 files inside the zip are persisted
+            const zipDtxsid = currentIdentity?.dtxsid || '';
+            const zipUploadUrl = zipDtxsid
+                ? `/api/upload-zip?dtxsid=${encodeURIComponent(zipDtxsid)}`
+                : '/api/upload-zip';
+            const resp = await fetch(zipUploadUrl, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                showError(err.error || 'ZIP upload failed');
+                continue;
+            }
+            const result = await resp.json();
+
+            // Register extracted .bm2 files (BMDExpress output)
+            for (const item of (result.bm2_files || [])) {
+                uploadedFiles[item.id] = {
+                    id: item.id,
+                    filename: item.filename,
+                    type: 'bm2',
+                };
+                renderFilePoolItem(item.id);
+                totalUploaded++;
+            }
+
+            // Register extracted raw data files (.csv, .txt, .xlsx)
+            // These are dose-response experimental data — animal IDs
+            // across columns, concentrations in row 2, endpoints in
+            // subsequent rows.  Suitable for import into BMDExpress.
+            for (const item of (result.other_files || [])) {
+                uploadedFiles[item.id] = {
+                    id: item.id,
+                    filename: item.filename,
+                    type: item.type,  // "csv", "txt", or "xlsx"
+                };
+                renderFilePoolItem(item.id);
+                totalUploaded++;
+            }
+
+            // Report any skipped files
+            if (result.skipped && result.skipped.length > 0) {
+                showToast(`Skipped ${result.skipped.length} unsupported file(s) from zip`);
+            }
+        } catch (err) {
+            showError('ZIP upload error: ' + err.message);
+        }
+    }
+
+    if (totalUploaded > 0) {
+        showToast(`Uploaded ${totalUploaded} file(s)`);
+        updateClearFilesButton();
+        // Show the validation panel so user knows validation is available
+        showValidationPanel();
+    }
+    } finally { hideBlockingSpinner(); }
+}
+
+/**
+ * Render a compact file pool item in the #file-pool-list container.
+ *
+ * Each item shows: a type badge (.bm2 / .csv), the filename, optional
+ * info (row count for CSVs), and a remove button (hidden for restored files).
+ *
+ * @param {string} fileId — the ID of the file in uploadedFiles
+ */
+function renderFilePoolItem(fileId) {
+    const file = uploadedFiles[fileId];
+    if (!file) return;
+
+    const listEl = document.getElementById('file-pool-list');
+
+    const item = document.createElement('div');
+    // Greyed-out for files loaded from a saved session that already
+    // have an approved section (they're shown for context, not action).
+    // Pending (unapproved) session files look normal so the user knows
+    // they still need processing.
+    item.className = 'file-pool-item' + ((file.restored || file.fromSession) ? ' restored' : '');
+    item.id = `file-pool-${fileId}`;
+
+    // Type badge — color-coded by file type
+    const badge = document.createElement('span');
+    badge.className = `file-badge ${file.type}`;
+    const badgeLabels = { bm2: '.bm2', csv: '.csv', txt: '.txt', xlsx: '.xlsx' };
+    badge.textContent = badgeLabels[file.type] || `.${file.type}`;
+
+    // Filename — clickable to open the file preview modal.
+    // The 'clickable' CSS class adds cursor:pointer and underline-on-hover.
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-name clickable';
+    nameSpan.textContent = file.filename;
+    nameSpan.onclick = (e) => {
+        e.stopPropagation();
+        openPreviewModal(fileId);
+    };
+
+    // Info — row count for CSVs
+    const infoSpan = document.createElement('span');
+    infoSpan.className = 'file-info';
+    if (file.type === 'csv' && file.row_count) {
+        infoSpan.textContent = `${file.row_count} genes`;
+    }
+
+    // Remove button — hidden for restored files (can't re-upload them)
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove-file';
+    removeBtn.textContent = '\u00d7';
+    removeBtn.title = 'Remove file';
+    removeBtn.onclick = () => removeFile(fileId);
+    if (file.restored || file.fromSession || file.sessionPersisted) removeBtn.style.display = 'none';
+
+    item.appendChild(badge);
+    item.appendChild(nameSpan);
+    item.appendChild(infoSpan);
+    item.appendChild(removeBtn);
+    listEl.appendChild(item);
+
+    // Keep the collapsible summary line in sync with current file counts
+    updateFilePoolSummary();
+}
+
+/**
+ * Update the file pool collapsible header with a brief count summary.
+ *
+ * Counts files by type (xlsx, txt, csv, bm2) from the uploadedFiles map
+ * and renders something like "28 files — 7 xlsx, 14 txt, 7 bm2".
+ * Called after every add/remove so the summary stays current.
+ */
+function updateFilePoolSummary() {
+    const el = document.getElementById('file-pool-summary');
+    if (!el) return;
+
+    const counts = {};
+    let total = 0;
+    for (const fid of Object.keys(uploadedFiles)) {
+        const f = uploadedFiles[fid];
+        if (!f) continue;
+        const t = f.type || 'unknown';
+        counts[t] = (counts[t] || 0) + 1;
+        total++;
+    }
+
+    // Show/hide the "Reset Pool" button — visible whenever there are files
+    // in the pool (regardless of whether they're from a fresh upload or
+    // a restored session).  This is the only way to clear restored files.
+    const resetBtn = document.getElementById('btn-reset-pool');
+    if (resetBtn) resetBtn.style.display = total > 0 ? '' : 'none';
+
+    if (total === 0) {
+        el.textContent = 'Uploaded files';
+        return;
+    }
+
+    // Build "7 xlsx, 14 txt, 7 bm2" with a consistent order
+    const order = ['xlsx', 'txt', 'csv', 'bm2'];
+    const parts = [];
+    for (const t of order) {
+        if (counts[t]) parts.push(`${counts[t]} ${t}`);
+    }
+    // Any types not in the predefined order
+    for (const t of Object.keys(counts)) {
+        if (!order.includes(t)) parts.push(`${counts[t]} ${t}`);
+    }
+
+    el.textContent = `${total} file${total !== 1 ? 's' : ''} — ${parts.join(', ')}`;
+}
+
+/**
+ * Remove a file from the upload pool and from the DOM.
+ * Also removes it from the file pool list.
+ *
+ * @param {string} fileId — the ID of the file to remove
+ */
+function removeFile(fileId) {
+    delete uploadedFiles[fileId];
+    const el = document.getElementById(`file-pool-${fileId}`);
+    if (el) el.remove();
+    updateClearFilesButton();
+    updateFilePoolSummary();
+}
+
+/**
+ * Remove all non-restored files from the upload pool.
+ * Restored files (from a prior session) are kept because they
+ * can't be re-uploaded — removing them would orphan their sections.
+ */
+function clearAllFiles() {
+    const removable = Object.keys(uploadedFiles).filter(
+        id => !uploadedFiles[id].restored && !uploadedFiles[id].fromSession && !uploadedFiles[id].sessionPersisted
+    );
+    for (const fileId of removable) {
+        delete uploadedFiles[fileId];
+        const el = document.getElementById(`file-pool-${fileId}`);
+        if (el) el.remove();
+    }
+    updateClearFilesButton();
+    updateFilePoolSummary();
+}
+
+/**
+ * Show the "Clear Files" button only when there is at least one
+ * removable (non-restored) file in the pool.
+ */
+function updateClearFilesButton() {
+    const btn = document.getElementById('btn-clear-files');
+    if (!btn) return;
+    const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession && !f.sessionPersisted);
+    btn.style.display = hasRemovable ? '' : 'none';
+}
+
+
+/**
+ * Confirm and execute a full pool reset — removes ALL files, integrated data,
+ * metadata, and approved sections for the current chemical.  This is
+ * irreversible: the user gets a browser confirm() dialog spelling out
+ * exactly what will be lost before the reset proceeds.
+ *
+ * After the server wipes the session data, the client clears all in-memory
+ * state (uploadedFiles, apicalSections, genomicsResults) and hides the
+ * result sections so the UI returns to a fresh "upload files" state.
+ */
+async function confirmResetPool() {
+    const dtxsid = document.getElementById('dtxsid')?.value;
+    if (!dtxsid) {
+        showToast('No chemical resolved — nothing to reset.');
+        return;
+    }
+
+    // Explicit, detailed warning so the user knows exactly what they're losing
+    const ok = confirm(
+        'RESET POOL — This will permanently delete:\n\n' +
+        '  • All uploaded files (.bm2, .csv, .txt, .xlsx)\n' +
+        '  • Integrated data and .bm2 export\n' +
+        '  • Experiment metadata and approval status\n' +
+        '  • All approved apical endpoint sections\n' +
+        '  • All approved genomics sections\n' +
+        '  • Methods, BMD Summary, and Summary sections\n' +
+        '  • Validation report and conflict resolutions\n\n' +
+        'Chemical identity and version history are preserved.\n\n' +
+        'This cannot be undone. Continue?'
+    );
+    if (!ok) return;
+
+    try {
+        const resp = await fetch(`/api/pool/reset/${dtxsid}`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.error || 'Reset failed');
+            return;
+        }
+
+        // --- Clear all client-side state ---
+
+        // File pool — clear both the state dict and the DOM list
+        for (const id of Object.keys(uploadedFiles)) {
+            delete uploadedFiles[id];
+        }
+        const fileList = document.getElementById('file-pool-list');
+        if (fileList) fileList.innerHTML = '';
+
+        // Apical sections
+        for (const id of Object.keys(apicalSections)) {
+            delete apicalSections[id];
+        }
+        apicalSectionCounter = 0;
+
+        // Genomics results
+        for (const key of Object.keys(genomicsResults)) {
+            delete genomicsResults[key];
+        }
+
+        // BMD summary
+        bmdSummaryEndpoints = [];
+
+        // Summary paragraphs (methods paragraphs are embedded in the section DOM)
+        summaryParagraphs = null;
+
+        // Validation state
+        lastValidationReport = null;
+
+        // --- Hide/reset UI sections ---
+
+        // Hide the validation panel and clear its inner content
+        // (coverage matrix, validation issues, animal report table)
+        const validationPanel = document.getElementById('validation-panel');
+        if (validationPanel) validationPanel.style.display = 'none';
+        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content', 'validation-body']) {
+            const el = document.getElementById(innerId);
+            if (el && innerId !== 'validation-body') el.innerHTML = '';
+            if (el && innerId === 'validation-body') el.style.display = 'none';
+        }
+
+        // Hide apical results section and clear its content
+        const apicalSection = document.getElementById('apical-results');
+        if (apicalSection) apicalSection.style.display = 'none';
+        const apicalContent = document.getElementById('apical-content');
+        if (apicalContent) apicalContent.innerHTML = '';
+
+        // Hide genomics results section and clear its content
+        const genomicsSection = document.getElementById('genomics-results');
+        if (genomicsSection) genomicsSection.style.display = 'none';
+        const genomicsContent = document.getElementById('genomics-content');
+        if (genomicsContent) genomicsContent.innerHTML = '';
+
+        // Hide metadata review section
+        const metadataSection = document.getElementById('metadata-review-section');
+        if (metadataSection) metadataSection.style.display = 'none';
+
+        // Hide methods, BMD summary, and summary sections
+        for (const secId of ['methods-section', 'bmd-summary-section', 'summary-section']) {
+            const sec = document.getElementById(secId);
+            if (sec) sec.style.display = 'none';
+        }
+
+        // Reset file pool summary and buttons
+        updateFilePoolSummary();
+        updateClearFilesButton();
+
+        const deleted = data.deleted || [];
+        showToast(`Pool reset: ${deleted.length} items removed. Ready for fresh uploads.`);
+        console.info('Pool reset complete:', deleted);
+
+    } catch (err) {
+        showToast('Reset failed: ' + err.message);
+    }
+}
+
+
+/**
+ * Confirm and execute a full session reset — deletes EVERYTHING for the
+ * current chemical: background, identity, all approved sections, files,
+ * integrated data, version history.  The chemical identity form stays
+ * filled (from localStorage) but the server has no record of any work.
+ *
+ * This is the nuclear option.  Pool Reset preserves background and identity;
+ * Session Reset does not.
+ */
+async function confirmResetSession() {
+    const dtxsid = document.getElementById('dtxsid')?.value;
+    if (!dtxsid) {
+        showToast('No chemical resolved — nothing to reset.');
+        return;
+    }
+
+    const name = document.getElementById('name')?.value || dtxsid;
+    const ok = confirm(
+        `RESET SESSION for ${name}\n\n` +
+        'This will permanently delete ALL session data:\n\n' +
+        '  • Background section and references\n' +
+        '  • All uploaded files and integrated data\n' +
+        '  • All approved sections (apical, genomics, methods, summary)\n' +
+        '  • BMD summary and experiment metadata\n' +
+        '  • Version history\n' +
+        '  • Chemical identity (server-side)\n\n' +
+        'The chemical identity form will stay filled (from your browser),\n' +
+        'but the server will have no record of any prior work.\n\n' +
+        'This CANNOT be undone. Continue?'
+    );
+    if (!ok) return;
+
+    try {
+        const resp = await fetch(`/api/session/reset/${dtxsid}`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.error || 'Session reset failed');
+            return;
+        }
+
+        // Clear everything that Pool Reset clears
+        for (const id of Object.keys(uploadedFiles)) delete uploadedFiles[id];
+        const fileList = document.getElementById('file-pool-list');
+        if (fileList) fileList.innerHTML = '';
+        for (const id of Object.keys(apicalSections)) delete apicalSections[id];
+        apicalSectionCounter = 0;
+        for (const key of Object.keys(genomicsResults)) delete genomicsResults[key];
+        bmdSummaryEndpoints = [];
+        summaryParagraphs = null;
+        lastValidationReport = null;
+
+        // Hide pool-related UI
+        const validationPanel = document.getElementById('validation-panel');
+        if (validationPanel) validationPanel.style.display = 'none';
+        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content']) {
+            const el = document.getElementById(innerId);
+            if (el) el.innerHTML = '';
+        }
+        const vBody = document.getElementById('validation-body');
+        if (vBody) vBody.style.display = 'none';
+
+        // Hide all result sections
+        for (const secId of [
+            'apical-results', 'genomics-results', 'metadata-review-section',
+            'methods-section', 'bmd-summary-section', 'summary-section'
+        ]) {
+            const sec = document.getElementById(secId);
+            if (sec) sec.style.display = 'none';
+        }
+        const apicalContent = document.getElementById('apical-content');
+        if (apicalContent) apicalContent.innerHTML = '';
+        const genomicsContent = document.getElementById('genomics-content');
+        if (genomicsContent) genomicsContent.innerHTML = '';
+
+        // Also clear background section — this is what distinguishes
+        // Session Reset from Pool Reset
+        const outputSection = document.getElementById('output-section');
+        if (outputSection) outputSection.style.display = 'none';
+        const bgContent = document.getElementById('output-prose');
+        if (bgContent) bgContent.innerHTML = '';
+        const refContent = document.getElementById('references-list');
+        if (refContent) refContent.innerHTML = '';
+        const metaInfo = document.getElementById('meta-info');
+        if (metaInfo) metaInfo.innerHTML = '';
+        // Re-enable the Generate Background button
+        const btnGenerate = document.getElementById('btn-generate');
+        if (btnGenerate) btnGenerate.disabled = false;
+        // Hide approve/edit buttons
+        for (const btnId of ['btn-edit-bg', 'btn-approve-bg', 'btn-retry-bg']) {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.style.display = 'none';
+        }
+
+        updateFilePoolSummary();
+        updateClearFilesButton();
+
+        showToast('Session reset. All data for ' + name + ' has been deleted.');
+        console.info('Session reset complete for', dtxsid);
+
+    } catch (err) {
+        showToast('Session reset failed: ' + err.message);
+    }
+}
+
+
+// =========================================================================
+// Pool Validation — coverage matrix, issues, and conflict resolution
+// =========================================================================
+// The validation panel sits below the file pool list and provides:
+//   1. A "Validate & Integrate" button that triggers full pool validation
+//   2. A coverage matrix (domain × tier: xlsx, txt/csv, bm2)
+//   3. An issues list with severity icons (error, warning, info)
+//   4. Conflict resolution dialogs for error-severity issues
+//
+// Validation results are fetched from POST /api/pool/validate/{dtxsid}
+// and cached in lastValidationReport for UI rendering.
+
+/** Cached validation report from last full validation run */
+let lastValidationReport = null;
+
+/**
+ * Show the validation panel (visible once files exist in the pool).
+ * Called after file upload or session restore adds files.
+ */
+function showValidationPanel() {
+    const panel = document.getElementById('validation-panel');
+    if (panel) panel.style.display = '';
+}
+
+/**
+ * Toggle the validation panel body (expand/collapse).
+ * The chevron rotates to indicate state.
+ */
+function toggleValidationPanel() {
+    const header = document.querySelector('.validation-header');
+    const body = document.getElementById('validation-body');
+    if (!header || !body) return;
+    const isExpanded = header.classList.toggle('expanded');
+    body.style.display = isExpanded ? '' : 'none';
+}
+
+/**
+ * Run full pool validation by calling POST /api/pool/validate/{dtxsid}.
+ *
+ * Sends the request, receives a ValidationReport JSON, and renders
+ * the coverage matrix + issues list in the validation panel.
+ * Also updates status dots on each file pool item.
+ */
+async function runPoolValidation() {
+    // Need a DTXSID to validate against — it's stored in the chem ID form
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) {
+        showToast('Resolve a chemical identity first');
+        return;
+    }
+
+    const btn = document.getElementById('btn-validate');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Validating...';
+    }
+
+    showBlockingSpinner('Validating file pool...');
+    try {
+        const resp = await fetch(`/api/pool/validate/${dtxsid}`, { method: 'POST' });
+        if (!resp.ok) {
+            const err = await resp.json();
+            showToast(err.error || 'Validation failed');
+            return;
+        }
+        const report = await resp.json();
+        lastValidationReport = report;
+
+        // Expand the panel to show results
+        const header = document.querySelector('.validation-header');
+        const body = document.getElementById('validation-body');
+        if (header && !header.classList.contains('expanded')) {
+            header.classList.add('expanded');
+        }
+        if (body) body.style.display = '';
+
+        renderCoverageMatrix(report);
+        renderValidationIssues(report);
+        updateValidationSummary(report);
+        updateFileStatusDots(report);
+
+        // --- Integration step: merge files into unified BMDProject ---
+        // After validation succeeds, automatically call the integrate endpoint
+        // to produce the merged BMDProject JSON.  This runs the file selection
+        // logic (bm2 > txt/csv > xlsx per domain, respecting user conflict
+        // resolutions) and merges all dose-response data into a single structure.
+        if (btn) btn.textContent = 'Integrating...';
+        updateBlockingMessage('Integrating files...');
+
+        const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identity: currentIdentity }),
+        });
+        if (intResp.ok) {
+            integratedPoolData = await intResp.json();
+            renderIntegratedDataPreview(integratedPoolData);
+            showToast('Pool validated and integrated');
+        } else {
+            const intErr = await intResp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
+            showToast(intErr.error || 'Integration failed — validation OK');
+        }
+
+        // Show the Approve button so the user can sign off on the pool
+        // and trigger the animal report generation.
+        show('btn-approve-pool');
+    } catch (e) {
+        showToast('Validation request failed: ' + e.message);
+    } finally {
+        hideBlockingSpinner();
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Validate & Integrate';
+        }
+    }
+}
+
+
+/**
+ * Render a collapsible preview of the integrated BMDProject data.
+ *
+ * Shows a summary of source files and experiment counts, plus a JSON tree
+ * browser so the user can inspect the merged data before approving.
+ * Rendered inline below the validation panel.
+ *
+ * @param {Object} data — the integrated BMDProject JSON from the server
+ */
+/**
+ * Render the integrated dataset previewer in the Data tab.
+ *
+ * Accepts either the full integrated BMDProject JSON (from validate flow)
+ * or the lightweight summary (from GET /api/integrated-summary, used on
+ * session restore to avoid loading 60MB+ into the browser).
+ *
+ * Full format has: doseResponseExperiments[], bMDResult[], categoryAnalysisResults[]
+ * Summary format has: experiment_count, experiments[{name, probe_count}],
+ *                     bmd_result_count, category_analysis_count
+ *
+ * @param {Object} data — full integrated JSON or summary response
+ */
+function renderIntegratedDataPreview(data) {
+    renderIntegratedPreview(data);
+}
+
+function renderIntegratedPreview(data) {
+    // Target the pre-existing preview content area in the Data tab.
+    const wrapper = document.getElementById('integrated-preview');
+    const container = document.getElementById('integrated-preview-content');
+    if (!container) return;
+    if (wrapper) wrapper.style.display = '';
+
+    const meta = data._meta || {};
+    const sources = meta.source_files || {};
+
+    // Handle both full and summary formats
+    const isSummary = 'experiment_count' in data;
+    const expCount = isSummary ? data.experiment_count : (data.doseResponseExperiments || []).length;
+    const bmdCount = isSummary ? (data.bmd_result_count || 0) : (data.bMDResult || []).length;
+    const catCount = isSummary ? (data.category_analysis_count || 0) : (data.categoryAnalysisResults || []).length;
+
+    // Count total endpoints (probes) across all experiments
+    let totalProbes = 0;
+    if (isSummary) {
+        for (const exp of (data.experiments || [])) {
+            totalProbes += exp.probe_count || 0;
+        }
+    } else {
+        for (const exp of (data.doseResponseExperiments || [])) {
+            totalProbes += (exp.probeResponses || []).length;
+        }
+    }
+
+    // Domain labels for the source files table
+    const domainLabels = {
+        body_weight: 'Body Weight', organ_weights: 'Organ Weights',
+        clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
+        hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
+        clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
+    };
+
+    // Build source file rows — one per domain
+    const sourceRows = Object.entries(sources).map(([domain, info]) => {
+        const tierClass = info.tier === 'bm2' ? 'tier-bm2' :
+                          info.tier === 'xlsx' ? 'tier-xlsx' : 'tier-csv';
+        const label = domainLabels[domain] || domain.replace(/_/g, ' ');
+        const isGenomic = domain === 'gene_expression';
+
+        return `<tr class="${isGenomic ? 'genomic-row' : ''}">
+            <td><strong>${escapeHtml(label)}</strong></td>
+            <td><code class="filename">${escapeHtml(info.filename || '—')}</code></td>
+            <td><span class="tier-badge ${tierClass}">${info.tier || '?'}</span></td>
+            <td class="num">${info.experiment_count || 0}</td>
+        </tr>`;
+    }).join('');
+
+    const domainCount = Object.keys(sources).length;
+
+    container.innerHTML = `
+        <div class="preview-stats">
+            <div class="stat-card">
+                <span class="stat-value">${domainCount}</span>
+                <span class="stat-label">Domains</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${expCount}</span>
+                <span class="stat-label">Experiments</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${totalProbes.toLocaleString()}</span>
+                <span class="stat-label">Endpoints</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">${bmdCount}</span>
+                <span class="stat-label">BMD Results</span>
+            </div>
+            ${catCount > 0 ? `<div class="stat-card">
+                <span class="stat-value">${catCount}</span>
+                <span class="stat-label">Category Analyses</span>
+            </div>` : ''}
+        </div>
+        <table class="source-files-table">
+            <thead><tr><th>Domain</th><th>Source File</th><th>Tier</th><th>Experiments</th></tr></thead>
+            <tbody>${sourceRows}</tbody>
+        </table>
+    `;
+}
+
+/**
+ * Render the coverage matrix table.
+ *
+ * Shows a table with one row per domain and columns for xlsx, txt/csv, bm2.
+ * Each cell shows checkmarks (✓) for present files, dashes (—) for missing,
+ * and a warning icon (⚠) in the rightmost column if any tier is missing.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function renderCoverageMatrix(report) {
+    const container = document.getElementById('coverage-matrix');
+    if (!container) return;
+
+    const matrix = report.coverage_matrix || {};
+    const domains = Object.keys(matrix).sort();
+
+    if (domains.length === 0) {
+        container.innerHTML = '<p style="color:var(--c-text-muted);font-size:0.8rem;">No domains detected.</p>';
+        return;
+    }
+
+    // Human-readable domain labels (shared constant from state.js)
+    const domainLabels = DOMAIN_LABELS;
+
+    let html = '<table class="coverage-matrix">';
+    html += '<thead><tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
+    html += '<tbody>';
+
+    for (const domain of domains) {
+        const tiers = matrix[domain];
+        const hasXlsx = !!tiers.xlsx;
+        const txtCsvCount = (tiers.txt_csv || []).length;
+        const hasBm2 = !!tiers.bm2;
+
+        // Gene expression typically has no xlsx — don't show missing as a gap
+        const xlsxExpected = domain !== 'gene_expression';
+
+        // Build tier cells — show ✓ count for txt_csv (may have multiple: one per sex)
+        const xlsxCell = hasXlsx
+            ? '<span class="coverage-check">✓</span>'
+            : (xlsxExpected ? '<span class="coverage-dash">—</span>' : '<span class="coverage-dash">n/a</span>');
+
+        let txtCell;
+        if (txtCsvCount === 0) {
+            txtCell = '<span class="coverage-dash">—</span>';
+        } else if (txtCsvCount === 1) {
+            txtCell = '<span class="coverage-check">✓</span>';
+        } else {
+            // Multiple txt/csv files (one per sex) — show count
+            txtCell = '<span class="coverage-check">' + '✓'.repeat(Math.min(txtCsvCount, 4)) + '</span>';
+        }
+
+        const bm2Cell = hasBm2
+            ? '<span class="coverage-check">✓</span>'
+            : '<span class="coverage-dash">—</span>';
+
+        // Warning indicator — show if any expected tier is missing
+        const hasMissingTier = (xlsxExpected && !hasXlsx) || txtCsvCount === 0 || !hasBm2;
+        const warnCell = hasMissingTier
+            ? '<span class="coverage-warn">⚠</span>'
+            : '';
+
+        const label = domainLabels[domain] || domain;
+        html += `<tr><td>${label}</td><td>${xlsxCell}</td><td>${txtCell}</td><td>${bm2Cell}</td><td>${warnCell}</td></tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+/**
+ * Render the validation issues list.
+ *
+ * Shows each issue with a severity icon and human-readable message.
+ * Error-severity issues are clickable to expand a conflict resolution
+ * dialog where the user can choose which file is authoritative.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function renderValidationIssues(report) {
+    const container = document.getElementById('validation-issues');
+    if (!container) return;
+
+    const issues = report.issues || [];
+    if (issues.length === 0) {
+        container.innerHTML = '<p style="color:var(--c-success);font-size:0.8rem;margin-top:0.5rem;">No issues found — all tiers are consistent.</p>';
+        return;
+    }
+
+    // Group issues by severity so each level gets its own collapsible section
+    const grouped = { error: [], warning: [], info: [] };
+    for (let i = 0; i < issues.length; i++) {
+        const sev = issues[i].severity || 'info';
+        if (!grouped[sev]) grouped[sev] = [];
+        grouped[sev].push({ issue: issues[i], index: i });
+    }
+
+    // Severity display config: icon, label, CSS class suffix
+    const sevConfig = {
+        error:   { icon: '⛔', label: 'Errors',   cls: 'error' },
+        warning: { icon: '⚠',  label: 'Warnings', cls: 'warning' },
+        info:    { icon: 'ℹ️',  label: 'Info',     cls: 'info' }
+    };
+
+    let html = '';
+
+    // One collapsible section per severity level that has issues
+    for (const sev of ['error', 'warning', 'info']) {
+        const items = grouped[sev];
+        if (!items || items.length === 0) continue;
+
+        const cfg = sevConfig[sev];
+        const n = items.length;
+        const summaryText = `${cfg.icon} ${n} ${cfg.label.toLowerCase()}`;
+
+        // Build the list of issues inside this severity group
+        let bodyHtml = '';
+        for (const { issue, index } of items) {
+            bodyHtml += `<div class="validation-issue severity-${sev}" data-issue-index="${index}">`;
+            bodyHtml += `<span class="issue-icon">${cfg.icon}</span>`;
+            bodyHtml += `<span class="issue-text">${issue.message}`;
+
+            // For dose mismatch errors, add expandable conflict resolution
+            if (sev === 'error' && issue.issue_type === 'dose_mismatch' && issue.details) {
+                bodyHtml += renderConflictResolution(issue, index, report);
+            }
+
+            bodyHtml += '</span></div>';
+        }
+
+        // Errors default open (user needs to act on them), others collapsed
+        const openClass = sev === 'error' ? ' ar-open' : '';
+
+        html += `<div class="ar-collapse issue-group-${cfg.cls}${openClass}">`;
+        html += `<div class="ar-collapse-header" onclick="this.parentElement.classList.toggle('ar-open')">`;
+        html += `<span class="ar-chevron">▸</span> ${summaryText}`;
+        html += `</div>`;
+        html += `<div class="ar-collapse-body">${bodyHtml}</div>`;
+        html += `</div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render an inline conflict resolution panel for a dose mismatch error.
+ *
+ * Shows the dose groups from each file, timestamps, and radio buttons
+ * for the user to choose which file is authoritative.
+ *
+ * @param {Object} issue — the ValidationIssue dict
+ * @param {number} index — the issue index in the report
+ * @param {Object} report — the full ValidationReport (for fingerprint lookup)
+ * @returns {string} — HTML fragment for the conflict resolution panel
+ */
+function renderConflictResolution(issue, index, report) {
+    const d = issue.details || {};
+    const expectedDoses = (d.expected || []).join(', ');
+    const actualDoses = (d.actual || []).join(', ');
+    const expectedFile = d.expected_file || 'File 1';
+    const actualFile = d.actual_file || 'File 2';
+    const suggested = issue.suggested_precedence || '';
+
+    // Look up timestamps from fingerprints
+    const fps = report.fingerprints || {};
+    const files = issue.files_involved || [];
+    let tsHtml = '';
+    for (const fid of files) {
+        const fp = fps[fid];
+        if (fp) {
+            const added = fp.ts_added ? new Date(fp.ts_added).toLocaleString() : '?';
+            const internal = fp.ts_internal ? new Date(fp.ts_internal).toLocaleDateString() : 'none';
+            tsHtml += `<div>${escapeHtml(fp.filename)} — added: ${added}, internal date: ${internal}</div>`;
+        }
+    }
+
+    let html = '<div class="conflict-resolution">';
+    html += `<h4>Dose group conflict: ${issue.domain}</h4>`;
+    html += `<div class="conflict-detail">${expectedFile}: [${expectedDoses}]</div>`;
+    html += `<div class="conflict-detail">${actualFile}: [${actualDoses}]</div>`;
+
+    if (tsHtml) {
+        html += `<div class="conflict-timestamps">${tsHtml}</div>`;
+    }
+
+    html += '<div>Which file has the correct dose groups?</div>';
+    html += '<div class="conflict-options">';
+
+    for (const fid of files) {
+        const fp = fps[fid];
+        const label = fp ? `${escapeHtml(fp.filename)} (${escapeHtml(fp.file_type)})` : escapeHtml(fid);
+        const isRec = fid === suggested;
+        html += `<label class="${isRec ? 'recommended' : ''}">`;
+        html += `<input type="radio" name="conflict-${index}" value="${escapeHtml(fid)}"`;
+        html += ` onchange="resolveConflict(${index}, '${escapeHtml(fid)}')"`;
+        html += `> ${label}${isRec ? ' (recommended)' : ''}`;
+        html += '</label>';
+    }
+
+    html += '<label><input type="radio" name="conflict-' + index + '" value="skip"';
+    html += ` onchange="resolveConflict(${index}, 'skip')"> Skip</label>`;
+    html += '</div></div>';
+
+    return html;
+}
+
+/**
+ * Record a precedence decision for a conflict via POST /api/pool/resolve.
+ *
+ * @param {number} issueIndex — index of the issue in the validation report
+ * @param {string} chosenFileId — file_id the user chose, or "skip"
+ */
+async function resolveConflict(issueIndex, chosenFileId) {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    try {
+        await fetch('/api/pool/resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dtxsid: dtxsid,
+                issue_index: issueIndex,
+                chosen_file_id: chosenFileId,
+            }),
+        });
+        showToast('Precedence recorded');
+    } catch (e) {
+        showToast('Failed to record precedence: ' + e.message);
+    }
+}
+
+/**
+ * Update the summary badge in the validation panel header.
+ * Shows counts like "4 errors, 2 warnings" or "No issues" in green.
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function updateValidationSummary(report) {
+    const el = document.getElementById('validation-summary');
+    if (!el) return;
+
+    const issues = report.issues || [];
+    if (issues.length === 0) {
+        el.textContent = '— No issues';
+        el.style.color = 'var(--c-success)';
+        return;
+    }
+
+    const counts = { error: 0, warning: 0, info: 0 };
+    for (const issue of issues) {
+        counts[issue.severity] = (counts[issue.severity] || 0) + 1;
+    }
+
+    const parts = [];
+    if (counts.error > 0) parts.push(`${counts.error} error${counts.error > 1 ? 's' : ''}`);
+    if (counts.warning > 0) parts.push(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`);
+
+    el.textContent = '— ' + parts.join(', ');
+    el.style.color = counts.error > 0 ? '#ef4444' : '#f59e0b';
+}
+
+/**
+ * Update validation status dots on each file pool item.
+ *
+ * Each file gets a small colored dot before its type badge:
+ *   - Green:  fingerprinted, no issues involving this file
+ *   - Yellow: warnings involving this file
+ *   - Red:    errors involving this file
+ *   - Gray:   not fingerprinted (not in the report)
+ *
+ * @param {Object} report — ValidationReport from the server
+ */
+function updateFileStatusDots(report) {
+    // Build a map of file_id → worst severity
+    const fileSeverity = {};
+    for (const issue of (report.issues || [])) {
+        for (const fid of (issue.files_involved || [])) {
+            const current = fileSeverity[fid] || 'none';
+            const incoming = issue.severity;
+            // Severity ranking: error > warning > info > none
+            if (incoming === 'error' || current === 'none' ||
+                (incoming === 'warning' && current !== 'error')) {
+                fileSeverity[fid] = incoming;
+            }
+        }
+    }
+
+    // Update or create dots on each file pool item
+    for (const fileId of Object.keys(uploadedFiles)) {
+        const itemEl = document.getElementById(`file-pool-${fileId}`);
+        if (!itemEl) continue;
+
+        // Remove any existing dot
+        const existingDot = itemEl.querySelector('.validation-dot');
+        if (existingDot) existingDot.remove();
+
+        // Determine dot color
+        const fp = (report.fingerprints || {})[fileId];
+        let dotClass;
+        if (!fp) {
+            dotClass = 'gray';
+        } else {
+            const sev = fileSeverity[fileId];
+            if (sev === 'error') dotClass = 'red';
+            else if (sev === 'warning') dotClass = 'yellow';
+            else dotClass = 'green';
+        }
+
+        // Insert dot as the first child (before the badge)
+        const dot = document.createElement('span');
+        dot.className = `validation-dot ${dotClass}`;
+        dot.title = dotClass === 'green' ? 'No issues' :
+                    dotClass === 'gray' ? 'Not validated' :
+                    dotClass === 'red' ? 'Has errors' : 'Has warnings';
+        itemEl.insertBefore(dot, itemEl.firstChild);
+    }
+}
+
+/**
+ * Restore a cached validation report from session data.
+ * Called during loadSession() if the server returned validation_report.
+ *
+ * @param {Object} report — the persisted validation report JSON
+ */
+function restoreValidationReport(report) {
+    if (!report) return;
+    lastValidationReport = report;
+    showValidationPanel();
+    renderCoverageMatrix(report);
+    renderValidationIssues(report);
+    updateValidationSummary(report);
+    updateFileStatusDots(report);
+}
+
+
+/**
+ * Create a card UI element for an uploaded .bm2 file.
+ * The card shows the filename, config fields (section title,
+ * caption template, compound name, dose unit), and Process/Remove
+ * buttons.
+ */
+function createBm2Card(bm2Id, filename) {
+    const container = document.getElementById('bm2-cards');
+
+    // Detect section type from the filename — if it contains
+    // "clinical" or "pathology", use Clinical Pathology defaults;
+    // otherwise default to organ/body weight section.
+    const lowerName = filename.toLowerCase();
+    const isClinical = lowerName.includes('clinical') || lowerName.includes('pathology');
+
+    const defaultTitle = isClinical
+        ? 'Clinical Pathology'
+        : 'Animal Condition, Body Weights, and Organ Weights';
+    const defaultCaption = isClinical
+        ? 'Summary of Clinical Pathology Findings of {sex} Rats Administered {compound} for Five Days'
+        : 'Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days';
+
+    // Process button is disabled until chemical ID is resolved —
+    // we need the compound name for the narrative and table captions
+    const processDisabled = !currentIdentity ? 'disabled' : '';
+
+    const card = document.createElement('div');
+    card.className = 'bm2-card';
+    card.id = `bm2-card-${bm2Id}`;
+    card.innerHTML = `
+        <div class="card-header">
+            <span class="filename">${escapeHtml(filename)}</span>
+            <div class="card-actions">
+                <button class="btn-small" id="btn-edit-${bm2Id}" onclick="editBm2('${bm2Id}')" style="display:none">
+                    Edit
+                </button>
+                <button class="btn-small approve" id="btn-approve-${bm2Id}" onclick="approveBm2('${bm2Id}')" style="display:none">
+                    Approve
+                </button>
+                <button class="btn-small" id="btn-retry-${bm2Id}" onclick="retryBm2('${bm2Id}')" style="display:none">
+                    Try Again
+                </button>
+                <span class="approved-badge" id="badge-${bm2Id}" style="display:none">Approved</span>
+                <span class="version-history" id="version-history-${bm2Id}" style="display:none">
+                    <button class="version-btn" onclick="toggleVersionHistory('bm2', '${bm2Id}')">
+                        v<span id="version-num-${bm2Id}">1</span> &#x25BE;
+                    </button>
+                    <div class="version-dropdown" id="version-dropdown-${bm2Id}" style="display:none"></div>
+                </span>
+                <button class="btn-small primary" onclick="processBm2('${bm2Id}')" id="btn-process-${bm2Id}" ${processDisabled}>
+                    Process
+                </button>
+                <button class="btn-small danger" onclick="removeBm2('${bm2Id}')">
+                    Remove
+                </button>
+            </div>
+        </div>
+        <div class="card-fields">
+            <div class="form-group">
+                <label>Section Title</label>
+                <input type="text" id="bm2-title-${bm2Id}"
+                    value="${escapeHtml(defaultTitle)}">
+            </div>
+            <div class="form-group">
+                <label>Table Caption</label>
+                <input type="text" id="bm2-caption-${bm2Id}"
+                    value="${escapeHtml(defaultCaption)}">
+            </div>
+            <div class="form-group">
+                <label>Compound Name</label>
+                <input type="text" id="bm2-compound-${bm2Id}"
+                    placeholder="e.g., PFHxSAm"
+                    value="${escapeHtml(currentIdentity?.name || '')}">
+            </div>
+            <div class="form-group">
+                <label>Dose Unit</label>
+                <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
+            </div>
+        </div>
+        <div class="bm2-narrative-label">Results Narrative</div>
+        <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" rows="6"
+            placeholder="Results narrative will be auto-generated after processing. You can edit it here before exporting."></textarea>
+        <div class="table-preview" id="bm2-preview-${bm2Id}"></div>
+    `;
+
+    container.appendChild(card);
+}
+
+/**
+ * Process an uploaded .bm2 file by calling /api/process-bm2.
+ * Sends the bm2_id and user-configured fields, receives table
+ * data back, caches it, and renders an HTML table preview.
+ */
+async function processBm2(bm2Id) {
+    const btn = document.getElementById(`btn-process-${bm2Id}`);
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    hideError();
+
+    const compoundName = document.getElementById(`bm2-compound-${bm2Id}`).value.trim();
+    const doseUnit = document.getElementById(`bm2-unit-${bm2Id}`).value.trim();
+
+    // Look up the file's server-side ID — the section's fileId points into
+    // the uploadedFiles pool, and the pool entry's .id is the upload ID
+    // that the server recognises.
+    const section = apicalSections[bm2Id];
+    const serverFileId = section?.fileId
+        ? (uploadedFiles[section.fileId]?.id || section.fileId)
+        : bm2Id;
+
+    showBlockingSpinner('Processing .bm2 file...');
+    try {
+        const resp = await fetch('/api/process-bm2', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bm2_id: serverFileId,
+                compound_name: compoundName || 'Test Compound',
+                dose_unit: doseUnit || 'mg/kg',
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            showError(err.error || 'Processing failed');
+            btn.disabled = false;
+            btn.textContent = 'Process';
+            return;
+        }
+
+        const result = await resp.json();
+
+        // Cache the table data and narrative for export
+        apicalSections[bm2Id].processed = true;
+        apicalSections[bm2Id].tableData = result.tables;
+        apicalSections[bm2Id].narrative = result.narrative || [];
+
+        // Save the original auto-generated narrative so we can detect
+        // user edits later when they approve the card
+        apicalSections[bm2Id].originalNarrative = (result.narrative || []).join('\n\n');
+
+        // Populate the narrative textarea with auto-generated prose.
+        // Paragraphs are joined with double-newlines so the user can
+        // visually distinguish them and edit freely.
+        const narrativeEl = document.getElementById(`bm2-narrative-${bm2Id}`);
+        if (narrativeEl && result.narrative && result.narrative.length > 0) {
+            narrativeEl.value = result.narrative.join('\n\n');
+            autoResizeTextarea(narrativeEl);
+        }
+
+        // Render HTML table preview
+        renderTablePreview(bm2Id, result.tables, doseUnit || 'mg/kg');
+
+        // Hide Process button, show Edit / Approve / Try Again buttons
+        btn.style.display = 'none';
+        show(`btn-edit-${bm2Id}`);
+        show(`btn-approve-${bm2Id}`);
+        show(`btn-retry-${bm2Id}`);
+
+        showToast('Tables generated');
+        markReportDirty();
+        updateExportButton();
+
+    } catch (err) {
+        showError('Processing error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Process';
+    } finally {
+        hideBlockingSpinner();
+    }
+}
+
+/**
+ * Render an NTP-style HTML table preview for the processed .bm2 data.
+ * Creates one table per sex (Male/Female) showing endpoint rows,
+ * dose columns, significance markers, and BMD/BMDL columns.
+ */
+function renderTablePreview(bm2Id, tables, doseUnit) {
+    const previewEl = document.getElementById(`bm2-preview-${bm2Id}`);
+    previewEl.innerHTML = '';
+
+    const sectionTitle = document.getElementById(`bm2-title-${bm2Id}`).value.trim();
+    const caption = document.getElementById(`bm2-caption-${bm2Id}`).value.trim();
+    const compound = document.getElementById(`bm2-compound-${bm2Id}`).value.trim() || 'Test Compound';
+
+    let tableNum = 1;
+
+    for (const sex of ['Male', 'Female']) {
+        const rows = tables[sex];
+        if (!rows || rows.length === 0) continue;
+
+        // Get dose groups from the first row
+        const doses = rows[0].doses;
+
+        // Table caption heading
+        const captionText = caption
+            .replace('{sex}', sex)
+            .replace('{compound}', compound);
+        const h4 = document.createElement('h4');
+        h4.textContent = `Table ${tableNum}. ${captionText}`;
+        previewEl.appendChild(h4);
+
+        // Build the HTML table
+        const table = document.createElement('table');
+
+        // Header row: Endpoint | dose columns | BMD1Std | BMDL1Std
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = '<th>Endpoint</th>';
+        for (const dose of doses) {
+            const label = dose === 0 ? `0 ${doseUnit}` :
+                (dose === Math.floor(dose) ? `${Math.floor(dose)} ${doseUnit}` : `${dose} ${doseUnit}`);
+            headerRow.innerHTML += `<th>${label}</th>`;
+        }
+        // BMD/BMDL columns removed — they belong in the BMD summary table
+        // (Table 8 equivalent), matching the NIEHS reference report structure.
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        // "n" row — sample sizes per dose group (max across endpoints)
+        const nRow = document.createElement('tr');
+        nRow.innerHTML = '<td class="endpoint-label">n</td>';
+        for (const dose of doses) {
+            const maxN = Math.max(...rows.map(r => r.n[String(dose)] || 0));
+            nRow.innerHTML += `<td>${maxN}</td>`;
+        }
+        // No BMD/BMDL cells in domain tables (moved to BMD summary)
+        tbody.appendChild(nRow);
+
+        // Data rows — one per endpoint
+        for (const row of rows) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="endpoint-label">${row.label}</td>`;
+            for (const dose of doses) {
+                const val = row.values[String(dose)] || '\u2013';
+                tr.innerHTML += `<td>${val}</td>`;
+            }
+            // No BMD/BMDL cells in domain tables (moved to BMD summary)
+            tbody.appendChild(tr);
+        }
+
+        table.appendChild(tbody);
+        previewEl.appendChild(table);
+        tableNum++;
+    }
+
+    // Show a message if no data was found
+    if (tableNum === 1) {
+        previewEl.innerHTML = '<p style="color:#6c757d;font-size:0.8rem;">No endpoint data found in this .bm2 file.</p>';
+    }
+}
+
+/**
+ * Render pre-computed table data and narrative into a BM2 section card.
+ *
+ * This is the "already processed" counterpart of processBm2() — instead
+ * of hitting the server, it takes pre-computed results (from the integrated
+ * process-integrated endpoint) and populates the card's preview and
+ * narrative textarea directly.
+ *
+ * @param {string} sectionId   — the section ID (e.g., "integrated-body_weight")
+ * @param {Object} tablesJson  — {Male: [...], Female: [...]} table data
+ * @param {string[]} narrative — array of auto-generated paragraph strings
+ */
+function renderBm2Results(sectionId, tablesJson, narrative) {
+    // Populate the narrative textarea
+    const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
+    if (narrativeEl && narrative && narrative.length > 0) {
+        narrativeEl.value = narrative.join('\n\n');
+        autoResizeTextarea(narrativeEl);
+    }
+
+    // Determine dose unit from the card's input field
+    const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
+    const doseUnit = unitEl ? unitEl.value : 'mg/kg';
+
+    // Render the table preview
+    renderTablePreview(sectionId, tablesJson, doseUnit);
+
+    // Hide Process button, show Edit / Approve / Try Again buttons
+    const btn = document.getElementById(`btn-process-${sectionId}`);
+    if (btn) btn.style.display = 'none';
+    show(`btn-edit-${sectionId}`);
+    show(`btn-approve-${sectionId}`);
+    show(`btn-retry-${sectionId}`);
+}
+
+
+/**
+ * Remove an uploaded .bm2 file card from the UI and delete it
+ * from the local state.  The server-side temp file is left for
+ * OS cleanup (no DELETE endpoint needed for ephemeral data).
+ */
+function removeBm2(bm2Id) {
+    delete apicalSections[bm2Id];
+    const card = document.getElementById(`bm2-card-${bm2Id}`);
+    if (card) card.remove();
+
+    // Hide the results section if no cards remain
+    if (Object.keys(apicalSections).length === 0) {
+        hide('bm2-results-section');
+    }
+}
+
+// =========================================================================
+// Experiment Metadata Review
+//
+// After pool integration, the LLM infers structured metadata for each
+// experiment (species, sex, organ, strain, etc.).  This panel lets the
+// user review and correct those inferences before they're baked into the
+// exported .bm2 file.
+//
+// The panel renders a horizontal table: one row per experiment, one column
+// per metadata field.  Fields use <select> dropdowns constrained to the
+// controlled vocabularies from BMDExpress 3's vocabulary.yml.
+// =========================================================================
+
+// Cached vocabularies from the server (populated on first load)
+let _metadataVocabularies = null;
+
+// Cached experiment data from the server (includes probe_ids for organ modals)
+let _metadataExperiments = null;
+
+// The metadata fields to show in the table, in display order.
+// Each entry: [jsonKey, displayLabel, inputType]
+// inputType: 'select' for vocabulary-constrained, 'text' for free-text
+const METADATA_FIELDS = [
+    ['species',             'Species',              'select'],
+    ['strain',              'Strain',               'select'],  // dynamic: filtered by species
+    ['sex',                 'Sex',                   'select'],
+    ['organ',               'Organ',                 'select'],
+    ['subjectType',         'Subject Type',          'select'],
+    ['platform',            'Platform',              'select'],
+    ['provider',            'Provider',              'select'],
+    ['studyDuration',       'Duration',              'select'],
+    ['articleRoute',        'Route',                 'select'],
+    ['articleVehicle',      'Vehicle',               'select'],
+    ['administrationMeans', 'Administration',        'select'],
+    ['articleType',         'Article Type',          'select'],
+    ['cellLine',            'Cell Line',             'text'],
+];
+
+
+/**
+ * Load experiment metadata from the server and render the review table.
+ *
+ * Called after integration completes (from autoProcessPool).  Fetches
+ * the current experimentDescription for each experiment plus the
+ * controlled vocabularies, then builds the editable table.
+ */
+async function loadMetadataReview() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    try {
+        const resp = await fetch(`/api/experiment-metadata/${dtxsid}`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        _metadataVocabularies = data.vocabularies;
+        _metadataExperiments = data.experiments;
+
+        renderMetadataTable(data.experiments, data.vocabularies);
+
+        // Show the section
+        show('metadata-review-section');
+        if (tabbedViewActive) buildTabBar();
+
+        // If already approved (e.g. restored session), show the badge,
+        // lock the form, and skip the gate — proceed directly to the
+        // processing pipeline so the user doesn't have to re-approve.
+        if (data.approved) {
+            const section = document.getElementById('metadata-review-section');
+            section.classList.add('approved');
+            hide('btn-approve-metadata');
+            const badge = document.getElementById('badge-metadata');
+            badge.style.display = '';
+            badge.textContent = 'Approved';
+
+            // Auto-proceed: metadata was already approved in a prior session
+            await runProcessingPipeline();
+        }
+    } catch (e) {
+        console.error('Failed to load metadata:', e);
+    }
+}
+
+
+/**
+ * Build the metadata review table from experiment data and vocabularies.
+ *
+ * Creates a <table> with one row per experiment and one column per
+ * metadata field.  Select dropdowns are populated from the controlled
+ * vocabularies.  The strain dropdown is dynamically filtered by the
+ * selected species.
+ */
+function renderMetadataTable(experiments, vocabularies) {
+    const container = document.getElementById('metadata-table-container');
+
+    // Build header row
+    let headerHtml = '<th>Experiment</th>';
+    for (const [key, label] of METADATA_FIELDS) {
+        headerHtml += `<th>${label}</th>`;
+    }
+
+    // Build body rows — one per experiment
+    let bodyHtml = '';
+    for (const exp of experiments) {
+        const ed = exp.experimentDescription || {};
+        const name = exp.name;
+        const probeCount = exp.probe_count || 0;
+        // Detect organ weight experiments by platform
+        const isOrganWeight = (ed.platform || '').toLowerCase().includes('organ weight');
+
+        bodyHtml += `<tr data-exp-name="${name}">`;
+        bodyHtml += `<td title="${name}">${name}<span class="meta-probe-count">${probeCount}</span></td>`;
+
+        for (const [key, label, inputType] of METADATA_FIELDS) {
+            const currentVal = ed[key] || '';
+
+            // Organ weight experiments get a checkbox dropdown for organs,
+            // populated from the same vocabulary used for single-organ selects.
+            // Pre-selected values come from probe IDs extracted during integration.
+            if (key === 'organ' && isOrganWeight) {
+                const selectedOrgans = (currentVal || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                const organVocab = vocabularies.organ || [];
+                const count = selectedOrgans.length;
+                const summary = count > 0 ? `${count} organ${count > 1 ? 's' : ''}` : '— select —';
+
+                let cbHtml = '';
+                for (const org of organVocab) {
+                    const chk = selectedOrgans.includes(org.toLowerCase()) ? 'checked' : '';
+                    cbHtml += `<label class="cb-dropdown-item"><input type="checkbox" value="${escapeHtml(org)}" ${chk}><span>${escapeHtml(org)}</span></label>`;
+                }
+
+                bodyHtml += `<td class="cb-dropdown-cell">`;
+                bodyHtml += `<div class="cb-dropdown" data-field="organ">`;
+                bodyHtml += `<button type="button" class="cb-dropdown-toggle" onclick="toggleCbDropdown(this)">${summary}</button>`;
+                bodyHtml += `<div class="cb-dropdown-menu">${cbHtml}</div>`;
+                bodyHtml += `</div></td>`;
+            } else if (inputType === 'text') {
+                bodyHtml += `<td><input type="text" data-field="${key}" value="${escapeHtml(currentVal)}"></td>`;
+            } else {
+                // Build <select> with vocabulary options
+                let options = buildVocabOptions(key, currentVal, vocabularies, ed);
+                const emptyClass = currentVal ? '' : 'meta-empty';
+                bodyHtml += `<td><select data-field="${key}" class="${emptyClass}" `;
+
+                // Strain dropdowns get a special onchange on their sibling species select
+                if (key === 'species') {
+                    bodyHtml += `onchange="onSpeciesChange(this)"`;
+                }
+                bodyHtml += `>${options}</select></td>`;
+            }
+        }
+        bodyHtml += '</tr>';
+    }
+
+    container.innerHTML = `
+        <div class="metadata-table-wrap">
+            <table class="metadata-table">
+                <thead><tr>${headerHtml}</tr></thead>
+                <tbody>${bodyHtml}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+
+/**
+ * Build <option> elements for a vocabulary-constrained select.
+ *
+ * For most fields, the vocabulary is a flat list.  For 'strain', it's
+ * nested by species — we filter to show only strains for the currently
+ * selected species (with a fallback to all strains if no species set).
+ */
+function buildVocabOptions(fieldKey, currentVal, vocabularies, expDesc) {
+    let vocab = vocabularies[fieldKey] || [];
+
+    // Strain is nested: { "rat": [...], "mouse": [...] }
+    if (fieldKey === 'strain' && typeof vocab === 'object' && !Array.isArray(vocab)) {
+        const species = expDesc?.species || '';
+        if (species && vocab[species]) {
+            vocab = vocab[species];
+        } else {
+            // Flatten all strains
+            vocab = Object.values(vocab).flat();
+        }
+    }
+
+    // studyDuration: combine in vivo and in vitro durations
+    // The vocabularies object has separate inVitroDurations and inVivoDurations
+    // but also studyDuration as the combined list
+    if (fieldKey === 'studyDuration' && (!Array.isArray(vocab) || vocab.length === 0)) {
+        vocab = [
+            ...(vocabularies.inVivoDurations || []),
+            ...(vocabularies.inVitroDurations || []),
+        ];
+    }
+
+    let html = '<option value="">—</option>';
+    for (const val of vocab) {
+        const selected = (val === currentVal) ? 'selected' : '';
+        html += `<option value="${escapeHtml(val)}" ${selected}>${escapeHtml(val)}</option>`;
+    }
+
+    // If the current value isn't in the vocabulary (LLM hallucination or
+    // legacy data), add it as a disabled option so the user can see what
+    // was there and pick a valid replacement.
+    if (currentVal && !vocab.includes(currentVal)) {
+        html += `<option value="${escapeHtml(currentVal)}" selected disabled>${escapeHtml(currentVal)} (not in vocabulary)</option>`;
+    }
+
+    return html;
+}
+
+
+/**
+ * Handle species change: re-populate the strain dropdown in the same row
+ * with strains for the newly selected species.
+ */
+function onSpeciesChange(speciesSelect) {
+    const row = speciesSelect.closest('tr');
+    const strainSelect = row.querySelector('select[data-field="strain"]');
+    if (!strainSelect || !_metadataVocabularies) return;
+
+    const species = speciesSelect.value;
+    const strainVocab = _metadataVocabularies.strain || {};
+    const strains = (species && strainVocab[species]) ? strainVocab[species] : Object.values(strainVocab).flat();
+
+    let html = '<option value="">—</option>';
+    for (const s of strains) {
+        html += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+    }
+    strainSelect.innerHTML = html;
+    strainSelect.classList.add('meta-empty');
+}
+
+
+
+
+/**
+ * Toggle a checkbox dropdown menu open/closed.  Clicking outside closes it.
+ */
+function toggleCbDropdown(btn) {
+    const dropdown = btn.closest('.cb-dropdown');
+    const menu = dropdown.querySelector('.cb-dropdown-menu');
+    const isOpen = menu.classList.toggle('open');
+
+    if (isOpen) {
+        // Close on outside click
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target)) {
+                menu.classList.remove('open');
+                updateCbDropdownSummary(dropdown);
+                document.removeEventListener('mousedown', closeHandler);
+            }
+        };
+        // Defer so the current click doesn't immediately close it
+        setTimeout(() => document.addEventListener('mousedown', closeHandler), 0);
+    } else {
+        updateCbDropdownSummary(dropdown);
+    }
+}
+
+/**
+ * Update the toggle button text to reflect how many items are checked.
+ */
+function updateCbDropdownSummary(dropdown) {
+    const checked = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+    const btn = dropdown.querySelector('.cb-dropdown-toggle');
+    const count = checked.length;
+    if (count === 0) {
+        btn.textContent = '— select —';
+    } else if (count <= 3) {
+        btn.textContent = [...checked].map(cb => cb.value).join(', ');
+    } else {
+        btn.textContent = `${count} organs`;
+    }
+}
+
+
+/**
+ * Collect the current metadata from the table and POST it to the server.
+ *
+ * Reads every row's select/input values, builds a metadata-by-name dict,
+ * and sends it to POST /api/experiment-metadata/{dtxsid}.  On success,
+ * shows the approval badge and locks the form.
+ */
+async function approveMetadata() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    const table = document.querySelector('.metadata-table tbody');
+    if (!table) return;
+
+    // Collect metadata from each row
+    const metadata = {};
+    for (const row of table.querySelectorAll('tr')) {
+        const expName = row.dataset.expName;
+        if (!expName) continue;
+
+        const desc = {};
+        // Standard selects and text inputs
+        for (const input of row.querySelectorAll('select, input[type="text"]')) {
+            const field = input.dataset.field;
+            const val = input.value.trim();
+            desc[field] = val || null;
+        }
+        // Checkbox dropdowns (organ weight multi-organ)
+        for (const cbDrop of row.querySelectorAll('.cb-dropdown')) {
+            const field = cbDrop.dataset.field;
+            const checked = cbDrop.querySelectorAll('input[type="checkbox"]:checked');
+            const vals = [...checked].map(cb => cb.value);
+            desc[field] = vals.length > 0 ? vals.join(', ') : null;
+        }
+
+        // Add testArticle from currentIdentity (always the same for all experiments)
+        if (currentIdentity) {
+            desc.testArticle = {
+                name: currentIdentity.name || null,
+                casrn: currentIdentity.casrn || null,
+                dsstox: currentIdentity.dtxsid || null,
+            };
+        }
+
+        metadata[expName] = desc;
+    }
+
+    try {
+        showBlockingSpinner('Saving metadata and exporting .bm2...');
+
+        const resp = await fetch(`/api/experiment-metadata/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata }),
+        });
+
+        hideBlockingSpinner();
+
+        if (resp.ok) {
+            const result = await resp.json();
+
+            // Show approved state
+            const section = document.getElementById('metadata-review-section');
+            section.classList.add('approved');
+            hide('btn-approve-metadata');
+            const badge = document.getElementById('badge-metadata');
+            badge.style.display = '';
+            badge.textContent = 'Approved';
+
+            const bm2Msg = result.bm2_exported
+                ? ' Enriched .bm2 exported.'
+                : ' (Note: .bm2 export failed — metadata saved to JSON only.)';
+            showToast(`Metadata approved for ${result.updated} experiments.${bm2Msg}`);
+
+            // Metadata approval is the gatekeeper — now proceed to the
+            // processing pipeline (NTP stats, section cards, genomics).
+            await runProcessingPipeline();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Failed to save metadata');
+        }
+    } catch (e) {
+        hideBlockingSpinner();
+        showToast('Failed to save metadata: ' + e.message);
+    }
+}
+
+
+// escapeHtml() is defined in utils.js (loaded before this file)
