@@ -54,17 +54,24 @@ import typst
 _TEMPLATE_PATH = str(Path(__file__).parent / "report.typ")
 
 
-def build_report_pdf(data: dict) -> bytes:
+def build_report_pdf(data: dict, chart_images: dict | None = None) -> bytes:
     """
     Compile the NIEHS-styled report to PDF/UA-1.
 
     Serializes `data` to JSON, passes it to the Typst template via
     sys.inputs, and compiles with the ua-1 PDF standard.
 
+    If chart_images is provided (dict with umap_png/cluster_png as
+    base64 strings), the PNGs are written to temp files and their
+    paths injected into the data dict so the Typst template can
+    embed them as figures.
+
     Args:
         data: Report data dictionary matching the report.typ JSON schema.
               All top-level keys are optional — missing sections are
               simply omitted from the output.
+        chart_images: Optional dict with base64-encoded PNG chart images
+                      and caption strings.
 
     Returns:
         The compiled PDF as raw bytes, ready to write to a file or
@@ -74,22 +81,62 @@ def build_report_pdf(data: dict) -> bytes:
         typst.TypstError: If the template fails to compile (e.g., due
             to missing alt text on figures under PDF/UA-1 strict mode).
     """
+    import base64
+    import tempfile
+
     # Ensure required metadata fields have defaults so PDF/UA-1
     # validation doesn't fail on missing title or language.
     data.setdefault("title", "5dToxReport")
     data.setdefault("author", "5dToxReport")
 
-    pdf_bytes = typst.compile(
-        _TEMPLATE_PATH,
-        sys_inputs={"data": json.dumps(data, default=str)},
-        # PDF/UA-1 (ISO 14289-1) — enforces:
-        #   - StructTreeRoot with full tag hierarchy
-        #   - /MarkInfo << /Marked true >>
-        #   - PDF/UA identifier in XMP metadata
-        #   - /Lang in the document catalog
-        #   - Compile-time validation of heading order, alt text, etc.
-        pdf_standards=["ua-1"],
-    )
+    # Write chart images to temp files so Typst can reference them.
+    # The temp files are created in the same directory as the template
+    # so Typst's file resolution finds them relative to the root.
+    temp_files = []
+    if chart_images:
+        template_dir = Path(_TEMPLATE_PATH).parent
+        chart_data = {}
+
+        for key, filename in [("umap_png", "chart_umap.png"), ("cluster_png", "chart_cluster.png")]:
+            b64 = chart_images.get(key)
+            if not b64:
+                continue
+            try:
+                png_bytes = base64.b64decode(b64)
+                img_path = template_dir / filename
+                img_path.write_bytes(png_bytes)
+                temp_files.append(img_path)
+                chart_data[key.replace("_png", "_path")] = filename
+            except Exception:
+                pass
+
+        # Pass captions through
+        for cap_key in ("umap_caption", "cluster_caption"):
+            if chart_images.get(cap_key):
+                chart_data[cap_key] = chart_images[cap_key]
+
+        if chart_data:
+            data["genomics_charts"] = chart_data
+
+    try:
+        pdf_bytes = typst.compile(
+            _TEMPLATE_PATH,
+            sys_inputs={"data": json.dumps(data, default=str)},
+            # PDF/UA-1 (ISO 14289-1) — enforces:
+            #   - StructTreeRoot with full tag hierarchy
+            #   - /MarkInfo << /Marked true >>
+            #   - PDF/UA identifier in XMP metadata
+            #   - /Lang in the document catalog
+            #   - Compile-time validation of heading order, alt text, etc.
+            pdf_standards=["ua-1"],
+        )
+    finally:
+        # Clean up temp chart image files
+        for f in temp_files:
+            try:
+                f.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     return pdf_bytes
 

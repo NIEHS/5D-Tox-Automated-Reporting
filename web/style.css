@@ -2865,3 +2865,43 @@ header p {
     opacity: 0.7;
     background: var(--c-bg);
 }
+
+
+/* -----------------------------------------------------------------
+ * Genomics Charts — UMAP and Cluster Scatter Plot panels
+ * ----------------------------------------------------------------- */
+
+.chart-panel {
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.chart-panel h3 {
+    margin: 0 0 4px 0;
+    font-size: 1rem;
+    color: var(--c-text);
+}
+
+.chart-caption {
+    margin: 0 0 12px 0;
+    font-size: 0.82rem;
+    color: var(--c-text-muted);
+    line-height: 1.4;
+}
+
+/* Organ/sex picker for charts tab */
+#charts-organ-picker select {
+    padding: 4px 8px;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    background: var(--c-bg-white);
+}
+
+#charts-organ-picker label {
+    font-size: 0.85rem;
+    color: var(--c-text-secondary);
+    margin-right: 8px;
+}

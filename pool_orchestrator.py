@@ -29,6 +29,7 @@ public accessor functions exported at the bottom of this file.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -232,8 +233,101 @@ def fingerprint_and_store(
         if dtxsid not in _pool_fingerprints:
             _pool_fingerprints[dtxsid] = {}
         _pool_fingerprints[dtxsid][file_id] = fp
+        # Persist to disk so session restore can skip the expensive LLM call
+        # in _deduce_metadata_from_experiments().  Keyed by filename (stable
+        # across restarts) rather than file_id (regenerated each session load).
+        _save_fingerprints_to_disk(dtxsid)
 
     return fp
+
+
+def _save_fingerprints_to_disk(dtxsid: str) -> None:
+    """
+    Persist all fingerprints for a DTXSID to sessions/{dtxsid}/_fingerprints.json.
+
+    Keyed by filename (not file_id) because file_ids are freshly generated
+    UUIDs on each session restore.  The fingerprint data is a plain dict
+    serialized from the FileFingerprint dataclass.
+
+    Called after every fingerprint_and_store() so the cache stays current.
+    """
+    if dtxsid not in _pool_fingerprints:
+        return
+    d = _session_dir(dtxsid)
+    cache: dict[str, dict] = {}
+    for fp in _pool_fingerprints[dtxsid].values():
+        cache[fp.filename] = asdict(fp)
+    try:
+        (d / "_fingerprints.json").write_text(
+            json.dumps(cache, indent=2, default=str),
+            encoding="utf-8",
+        )
+    except Exception:
+        logger.warning("Failed to persist fingerprints for %s", dtxsid, exc_info=True)
+
+
+def load_cached_fingerprint(
+    dtxsid: str,
+    filename: str,
+    file_id: str,
+) -> FileFingerprint | None:
+    """
+    Load a single cached fingerprint from sessions/{dtxsid}/_fingerprints.json.
+
+    Returns a FileFingerprint with file_id updated to the new session's UUID,
+    or None if no cache exists or the filename isn't found.
+
+    This avoids the expensive LLM call in _deduce_metadata_from_experiments()
+    that would otherwise run on every session restore for each pending .bm2 file.
+
+    Args:
+        dtxsid:   The DTXSID session directory to look in.
+        filename: Original filename to look up (stable key across restarts).
+        file_id:  New UUID for this session — replaces the cached file_id.
+
+    Returns:
+        FileFingerprint with updated file_id, or None on cache miss.
+    """
+    d = _session_dir(dtxsid)
+    cache_path = d / "_fingerprints.json"
+    if not cache_path.exists():
+        return None
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    entry = cache.get(filename)
+    if not entry:
+        return None
+    # Rebuild the FileFingerprint from the cached dict, swapping in the new
+    # file_id (since file_ids are regenerated each session load).
+    entry["file_id"] = file_id
+    # n_animals_by_dose keys are floats but JSON serializes them as strings —
+    # convert back to float keys.
+    if entry.get("n_animals_by_dose"):
+        entry["n_animals_by_dose"] = {
+            float(k): v for k, v in entry["n_animals_by_dose"].items()
+        }
+    return FileFingerprint(**entry)
+
+
+def restore_fingerprint(
+    dtxsid: str,
+    file_id: str,
+    fp: FileFingerprint,
+) -> None:
+    """
+    Store a pre-loaded fingerprint into the in-memory pool without re-running
+    fingerprint_file().  Used by session restore to inject cached fingerprints.
+
+    Args:
+        dtxsid:  Session DTXSID.
+        file_id: New file_id for this session.
+        fp:      The cached FileFingerprint to store.
+    """
+    if dtxsid not in _pool_fingerprints:
+        _pool_fingerprints[dtxsid] = {}
+    _pool_fingerprints[dtxsid][file_id] = fp
 
 
 def run_lightweight_validation(
@@ -564,6 +658,12 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     # Cache in memory for the process-integrated endpoint
     _integrated_pool[dtxsid] = integrated
 
+    # Invalidate any stale processed-results caches from previous integration
+    # runs — the input data has changed, so cached NTP stats are stale.
+    for old_cache in _session_dir(dtxsid).glob("_processed_cache_*.json"):
+        old_cache.unlink(missing_ok=True)
+        logger.debug("Invalidated stale process cache: %s", old_cache.name)
+
     # Return a lightweight summary instead of the full integrated JSON
     # (which can be 50+ MB and exceeds Cloud Run's 32 MiB response limit).
     # The client can fetch the full data via GET /api/integrated/{dtxsid}
@@ -727,6 +827,40 @@ async def api_process_integrated(dtxsid: str, request: Request):
             {"error": "No integrated data found -- run integration first"},
             status_code=400,
         )
+
+    # --- Check processed-results cache ---
+    # Computing NTP stats (Java Williams/Dunnett) + pybmds + genomics takes
+    # 30-60 seconds.  Cache the full response keyed by a hash of the inputs
+    # that affect the output: integrated data identity + processing settings.
+    # On page refresh the client re-sends process-integrated with the same
+    # settings, so we can return the cached result instantly.
+    cache_key_parts = json.dumps({
+        "bmd_stats": list(bmd_stats),
+        "go_pct": go_pct,
+        "go_min_genes": go_min_genes,
+        "go_max_genes": go_max_genes,
+        "go_min_bmd": go_min_bmd,
+        # Include a fingerprint of the integrated data so the cache
+        # invalidates if the user re-integrates with different files.
+        "n_experiments": len(integrated.get("doseResponseExperiments", [])),
+        "experiment_names": sorted(
+            e.get("name", "") for e in integrated.get("doseResponseExperiments", [])
+        ),
+    }, sort_keys=True)
+    cache_hash = hashlib.sha256(cache_key_parts.encode()).hexdigest()[:16]
+    cache_path = _session_dir(dtxsid) / f"_processed_cache_{cache_hash}.json"
+
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            logger.info(
+                "Returning cached processed results for %s (hash %s)",
+                dtxsid, cache_hash,
+            )
+            return JSONResponse(cached)
+        except (json.JSONDecodeError, Exception):
+            # Corrupted cache — fall through to recompute
+            logger.warning("Corrupted process cache for %s, recomputing", dtxsid)
 
     try:
         # Restore category lookup from the serialized pipe-separated keys.
@@ -1198,14 +1332,31 @@ async def api_process_integrated(dtxsid: str, request: Request):
                             "direction": row.direction,
                         })
 
-        return JSONResponse({
+        result_payload = {
             "sections": sections,
             "genomics_sections": genomics_sections,
             "apical_bmd_summary": apical_bmd_summary,
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
-        })
+        }
+
+        # Persist the fully-computed result so page refreshes are instant.
+        # Also clean up stale caches from previous settings combinations.
+        try:
+            # Remove old cache files for this session (different settings hash)
+            for old in _session_dir(dtxsid).glob("_processed_cache_*.json"):
+                if old != cache_path:
+                    old.unlink(missing_ok=True)
+            cache_path.write_text(
+                json.dumps(result_payload, indent=2, default=str),
+                encoding="utf-8",
+            )
+            logger.info("Cached processed results for %s (hash %s)", dtxsid, cache_hash)
+        except Exception:
+            logger.warning("Failed to cache processed results for %s", dtxsid, exc_info=True)
+
+        return JSONResponse(result_payload)
 
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)

@@ -377,6 +377,48 @@ async def api_export_docx(request: Request):
                 dose_unit=dose_unit,
             )
 
+    # ===== 4e. Genomics Charts (UMAP + Cluster Scatter) =====
+    # Client-captured Plotly chart images, base64-encoded PNG.
+    # Appended after all genomics tables as captioned figures.
+    chart_images = body.get("genomics_chart_images")
+    if chart_images:
+        import base64
+        from io import BytesIO
+        from docx.shared import Inches
+
+        for chart_key, caption_key, heading_text in [
+            ("umap_png", "umap_caption", "GO Term Semantic Map (UMAP)"),
+            ("cluster_png", "cluster_caption", "GO Category Cluster Scatter"),
+        ]:
+            png_b64 = chart_images.get(chart_key)
+            caption_text = chart_images.get(caption_key, "")
+            if not png_b64:
+                continue
+
+            try:
+                png_bytes = base64.b64decode(png_b64)
+                img_stream = BytesIO(png_bytes)
+
+                # Add a heading for the chart
+                doc.add_heading(heading_text, level=3)
+
+                # Add the image — sized to fit page width (6.5 inches
+                # for a standard letter page with 1-inch margins)
+                doc.add_picture(img_stream, width=Inches(6.0))
+
+                # Add caption below the image
+                if caption_text:
+                    caption_para = doc.add_paragraph()
+                    caption_run = caption_para.add_run(caption_text)
+                    caption_run.font.size = Pt(9)
+                    caption_run.font.name = "Calibri"
+                    caption_run.font.italic = True
+                    caption_run.font.color.rgb = RGBColor(0x6c, 0x75, 0x7d)
+                    caption_para.paragraph_format.space_before = Pt(4)
+                    caption_para.paragraph_format.space_after = Pt(12)
+            except Exception as exc:
+                logger.warning("Failed to embed %s chart image: %s", chart_key, exc)
+
     # ===== 5. Summary (NEW — if approved) =====
     if summary_paragraphs:
         doc.add_heading("Summary", level=2)
@@ -457,12 +499,17 @@ async def api_export_pdf(request: Request):
             if upload and upload.get("narrative"):
                 sec["narrative_paragraphs"] = upload["narrative"]
 
+    # Extract client-captured chart images (base64 PNGs) for embedding
+    chart_images = body.get("genomics_chart_images")
+
     try:
         # Marshal the DOCX-format payload into the Typst template schema
         report_data = marshal_export_data(body)
 
-        # Compile to PDF/UA-1 — sub-second for typical report sizes
-        pdf_bytes = build_report_pdf(report_data)
+        # Compile to PDF/UA-1 — sub-second for typical report sizes.
+        # Chart images are written to temp files alongside the Typst
+        # template so it can reference them as local images.
+        pdf_bytes = build_report_pdf(report_data, chart_images=chart_images)
     except Exception as e:
         logging.exception("PDF export failed")
         return JSONResponse(

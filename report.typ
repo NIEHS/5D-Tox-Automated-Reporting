@@ -1309,6 +1309,37 @@
 }
 
 
+// --- Genomics Charts ---
+// Client-captured Plotly visualizations embedded as figures.
+// These appear after all genomics tables and before References.
+// Each chart has a heading, the image, and an italic caption below.
+//
+// The chart images are written to temp PNG files alongside this template
+// by build_report_pdf() in report_pdf.py.  The data dict contains their
+// filenames (relative to this template's directory) and caption strings.
+#let charts = data.at("genomics_charts", default: none)
+#if charts != none {
+  // UMAP Scatter Plot
+  #let umap-path = charts.at("umap_path", default: none)
+  #if umap-path != none {
+    heading(level: 2, "GO Term Semantic Map (UMAP)")
+    figure(
+      image(umap-path, width: 90%),
+      caption: [#text(size: 9pt, style: "italic")[#charts.at("umap_caption", default: "")]],
+    )
+  }
+  // Cluster Scatter Plot
+  #let cluster-path = charts.at("cluster_path", default: none)
+  #if cluster-path != none {
+    heading(level: 2, "GO Category Cluster Scatter")
+    figure(
+      image(cluster-path, width: 90%),
+      caption: [#text(size: 9pt, style: "italic")[#charts.at("cluster_caption", default: "")]],
+    )
+  }
+}
+
+
 // --- References ---
 // NIEHS pages 48-50 (body 36-38): numbered reference list in 10pt text
 // with hanging indent.  In the NIEHS PDF, references are a standalone H1

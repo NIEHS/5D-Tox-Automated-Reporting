@@ -41,6 +41,7 @@ from style_learning import (
 )
 from pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, _js_dose_key,
+    load_cached_fingerprint, restore_fingerprint,
 )
 from server_state import (
     get_bm2_uploads,
@@ -305,12 +306,21 @@ async def api_session_load(dtxsid: str):
                     "filename": data_file.name,
                     "type": "bm2",
                 })
-                # Fingerprint the .bm2 file so _pool_fingerprints is
-                # populated for methods context extraction and validation.
-                # This is cheap (~10ms from LMDB cache, no Java export).
-                fingerprint_and_store(
-                    file_id, data_file.name, str(data_file), "bm2", dtxsid,
-                )
+                # Try loading the fingerprint from the on-disk cache first.
+                # This avoids the expensive LLM call in
+                # _deduce_metadata_from_experiments() that runs inside
+                # fingerprint_and_store() for .bm2 files without augmented
+                # ExperimentDescription metadata.
+                cached_fp = load_cached_fingerprint(dtxsid, data_file.name, file_id)
+                if cached_fp:
+                    restore_fingerprint(dtxsid, file_id, cached_fp)
+                else:
+                    # No cache — fall back to full fingerprinting (includes
+                    # LLM call).  This only happens on the first load of a
+                    # file; subsequent restores will use the cache.
+                    fingerprint_and_store(
+                        file_id, data_file.name, str(data_file), "bm2", dtxsid,
+                    )
 
             elif ext in (".csv", ".txt", ".xlsx"):
                 # Raw data file (dose-response experimental data or
@@ -328,11 +338,16 @@ async def api_session_load(dtxsid: str):
                     "filename": data_file.name,
                     "type": file_type,
                 })
-                # Fingerprint the data file so endpoints, sexes, and
-                # dose groups are available for methods context extraction.
-                fingerprint_and_store(
-                    file_id, data_file.name, str(data_file), file_type, dtxsid,
-                )
+                # Try cached fingerprint first (xlsx/csv/txt fingerprinting
+                # is cheaper than .bm2 but still worth caching for
+                # consistency and to avoid re-parsing files).
+                cached_fp = load_cached_fingerprint(dtxsid, data_file.name, file_id)
+                if cached_fp:
+                    restore_fingerprint(dtxsid, file_id, cached_fp)
+                else:
+                    fingerprint_and_store(
+                        file_id, data_file.name, str(data_file), file_type, dtxsid,
+                    )
             # Skip other file types (e.g., leftover pickle sidecars)
 
     # Gather all genomics_*.json files into a dict keyed by organ_sex

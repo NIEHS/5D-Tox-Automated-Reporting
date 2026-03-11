@@ -132,6 +132,10 @@ app.include_router(llm_routes.router)
 import export_routes
 app.include_router(export_routes.router)
 
+# Genomics visualization: clustering endpoint and server-side chart rendering
+import genomics_viz
+app.include_router(genomics_viz.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI

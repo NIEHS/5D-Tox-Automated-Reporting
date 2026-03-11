@@ -247,6 +247,7 @@ async function applySettings() {
         }
         if (Object.keys(genomicsResults).length > 0) {
             show('genomics-results-section');
+            show('genomics-charts-section');
         }
 
         // --- Rebuild BMD summary from apical_bmd_summary ---
@@ -404,6 +405,13 @@ function activateTab(label) {
 
     // Lazy-render the Report tab when the user switches to it
     if (label === 'Report') renderReportTab();
+
+    // Lazy-render genomics charts when the Charts tab is activated.
+    // renderGenomicsCharts() is defined in genomics_charts.js and
+    // reads from the global genomicsResults dict.
+    if (label === 'Charts' && typeof renderGenomicsCharts === 'function') {
+        renderGenomicsCharts();
+    }
 }
 
 
@@ -2377,6 +2385,14 @@ async function exportDocx() {
     const animalReportPayload = (animalReportApproved && animalReportData)
         ? animalReportData : null;
 
+    // Capture genomics chart images for report embedding.
+    // captureGenomicsChartImages() is defined in genomics_charts.js
+    // and returns base64 PNGs + captions, or null if no charts exist.
+    let chartImages = null;
+    if (typeof captureGenomicsChartImages === 'function') {
+        chartImages = await captureGenomicsChartImages();
+    }
+
     try {
         const resp = await fetch('/api/export-docx', {
             method: 'POST',
@@ -2394,6 +2410,7 @@ async function exportDocx() {
                 gene_set_narrative: { paragraphs: allGsNarr },
                 gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
+                genomics_chart_images: chartImages,
             }),
         });
 
@@ -2503,6 +2520,12 @@ async function exportPdf() {
     const casrn = currentIdentity?.casrn || '';
     const dtxsid = currentIdentity?.dtxsid || '';
 
+    // Capture genomics chart images for report embedding
+    let chartImages = null;
+    if (typeof captureGenomicsChartImages === 'function') {
+        chartImages = await captureGenomicsChartImages();
+    }
+
     const btn = document.getElementById('btn-export-pdf');
     btn.disabled = true;
     btn.textContent = 'Generating...';
@@ -2526,6 +2549,7 @@ async function exportPdf() {
                 gene_set_narrative: { paragraphs: allGsNarr },
                 gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
+                genomics_chart_images: chartImages,
             }),
         });
 
@@ -3551,9 +3575,10 @@ async function restoreSession(data) {
     // create a genomicsResults entry, and create the results card.
     if (data.genomics_sections && Object.keys(data.genomics_sections).length > 0) {
         show('data-tab-section');
-    
+
 
         show('genomics-results-section');
+        show('genomics-charts-section');
 
         for (const [slug, section] of Object.entries(data.genomics_sections)) {
             const organ = section.organ || '';
@@ -3807,13 +3832,54 @@ async function restoreChemId() {
             const el = document.getElementById(id);
             if (el && data[id]) el.value = data[id];
         });
-        // If a DTXSID was restored, auto-resolve to load the session.
-        // Await so errors propagate (previously fire-and-forget meant
-        // resolve failures were silently swallowed).
+
         const dtxsid = data['dtxsid'];
-        if (dtxsid && dtxsid.startsWith('DTXSID')) {
-            await onFieldBlur('dtxsid');
+        if (!dtxsid || !dtxsid.startsWith('DTXSID')) return;
+
+        // Fast path: if localStorage already has a complete identity
+        // (dtxsid + name), skip the expensive /api/resolve network call
+        // (PubChem + CTX APIs).  Instead, reconstruct currentIdentity from
+        // the saved form values and go straight to session restore.
+        // This cuts ~2-5 seconds from every page refresh.
+        if (data['name']) {
+            currentIdentity = {
+                name: data['name'] || '',
+                casrn: data['casrn'] || '',
+                dtxsid: data['dtxsid'] || '',
+                pubchem_cid: data['cid'] || '',
+                ec_number: data['ec'] || '',
+                iupac_name: data['iupac'] || '',
+            };
+            // Mark the DTXSID as "already resolved" so typing in the same
+            // value doesn't trigger a redundant server call.
+            lastResolvedValue = dtxsid;
+
+            // Visual: mark populated fields as resolved (green border)
+            const fields = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac'];
+            fields.forEach(f => {
+                const el = document.getElementById(f);
+                if (el && el.value) el.classList.add('resolved');
+            });
+
+            // Enable buttons that depend on a resolved identity
+            onIdentityResolved();
+
+            // Show Reset Session button
+            const btnResetSession = document.getElementById('btn-reset-session');
+            if (btnResetSession) btnResetSession.style.display = '';
+
+            // Go straight to session restore — no /api/resolve needed
+            const sessionResp = await fetch(`/api/session/${dtxsid}`);
+            const sessionData = await sessionResp.json();
+            if (sessionData.exists) {
+                await restoreSession(sessionData);
+            }
+            return;
         }
+
+        // Slow path: localStorage has a DTXSID but no name — need full
+        // resolve to populate all fields.
+        await onFieldBlur('dtxsid');
     } catch (e) {
         console.error('restoreChemId failed:', e);
     }
@@ -4623,6 +4689,7 @@ async function runProcessingPipeline() {
     // Show the genomics section if any genomics results were created
     if (Object.keys(genomicsResults).length > 0) {
         show('genomics-results-section');
+        show('genomics-charts-section');
     }
 
     // Show the summary section now that sections exist
@@ -4932,6 +4999,7 @@ async function processCsv(fileId, organ, sex) {
 
         // Show genomics results section
         show('genomics-results-section');
+        show('genomics-charts-section');
         if (tabbedViewActive) buildTabBar();
         markReportDirty();
 
@@ -6233,6 +6301,12 @@ async function compilePdfPreview() {
         const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
         const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
+        // Capture genomics chart images for report embedding
+        let chartImages = null;
+        if (typeof captureGenomicsChartImages === 'function') {
+            chartImages = await captureGenomicsChartImages();
+        }
+
         // --- POST to server for Typst compilation ---
         const resp = await fetch('/api/export-pdf', {
             method: 'POST',
@@ -6251,6 +6325,7 @@ async function compilePdfPreview() {
                 gene_set_narrative: { paragraphs: allGsNarr },
                 gene_narrative: { paragraphs: allGeneNarr },
                 summary_paragraphs: summaryParas,
+                genomics_chart_images: chartImages,
             }),
         });
 

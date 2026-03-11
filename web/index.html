@@ -572,6 +572,43 @@
             </div><!-- /section-body -->
         </div>
 
+        <!-- Genomics Charts — interactive Plotly visualizations of GO category
+             BMD distributions and semantic UMAP embeddings.  Hidden until
+             genomics data is available.  Contains two charts:
+               1. Cluster Scatter Plot — BMD vs hierarchical gene cluster ID
+               2. UMAP Scatter Plot — GO terms projected into 2D semantic space
+             Both charts are also rendered server-side for inclusion in the
+             exported PDF/DOCX report. -->
+        <div class="bm2-section" id="genomics-charts-section" style="display:none;" data-collapsible data-tab-section="Charts">
+            <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Charts</h2>
+            <div class="section-body">
+                <!-- Organ/sex selector — when multiple genomics experiments exist,
+                     the user picks which one to visualize.  Populated dynamically
+                     by renderGenomicsCharts() in genomics_charts.js. -->
+                <div id="charts-organ-picker" style="margin-bottom:12px;"></div>
+
+                <!-- UMAP Scatter Plot container -->
+                <div class="chart-panel">
+                    <h3>GO Term Semantic Map (UMAP)</h3>
+                    <p class="chart-caption">Gene Ontology Biological Process categories from this analysis projected
+                    onto a pre-computed UMAP embedding of ~2,840 GO BP terms. Points are colored by
+                    HDBSCAN semantic cluster. Backdrop shows the full reference space.</p>
+                    <div id="umap-chart" style="width:100%; aspect-ratio:1/1;"></div>
+                </div>
+
+                <!-- Cluster Scatter Plot container -->
+                <div class="chart-panel" style="margin-top:24px;">
+                    <h3>GO Category Cluster Scatter</h3>
+                    <p class="chart-caption">GO categories plotted by BMD value (x-axis) against hierarchical
+                    gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes
+                    with BMD values. Points are colored by UMAP semantic cluster (same palette as the
+                    semantic map above). Categories are clustered on the y-axis by Jaccard similarity
+                    of their gene sets.</p>
+                    <div id="cluster-chart" style="width:100%; aspect-ratio:1.25/1;"></div>
+                </div>
+            </div><!-- /section-body -->
+        </div>
+
         <!-- .bm2 file cards — processing and report (hidden until files uploaded) -->
         <div class="bm2-section" id="bm2-results-section" style="display:none;" data-collapsible data-tab-section="Apical">
             <h2 class="section-toggle" onclick="toggleSection(this)">Apical Endpoint Results</h2>
@@ -728,8 +765,13 @@
          response incrementally so we can build the JSON tree in the Preview
          Data modal without holding the entire string in memory at once. -->
     <script src="https://unpkg.com/oboe@2.1.5/dist/oboe-browser.min.js"></script>
+    <!-- Plotly.js — used for genomics UMAP and cluster scatter charts.
+         Loaded from CDN; the basic bundle includes scatter, bar, and
+         common chart types without the full GL/geo overhead. -->
+    <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js"></script>
     <script src="/js/state.js?v=6"></script>
     <script src="/js/utils.js?v=6"></script>
     <script src="/js/main.js?v=6"></script>
+    <script src="/js/genomics_charts.js?v=1"></script>
 </body>
 </html>
