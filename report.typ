@@ -1319,22 +1319,22 @@
 // filenames (relative to this template's directory) and caption strings.
 #let charts = data.at("genomics_charts", default: none)
 #if charts != none {
-  // UMAP Scatter Plot
-  #let umap-path = charts.at("umap_path", default: none)
-  #if umap-path != none {
+  // UMAP Scatter Plot — no # prefix inside code blocks (already in code mode)
+  let umap-path = charts.at("umap_path", default: none)
+  if umap-path != none {
     heading(level: 2, "GO Term Semantic Map (UMAP)")
     figure(
-      image(umap-path, width: 90%),
-      caption: [#text(size: 9pt, style: "italic")[#charts.at("umap_caption", default: "")]],
+      image(umap-path, width: 90%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster"),
+      caption: text(size: 9pt, style: "italic", charts.at("umap_caption", default: "")),
     )
   }
   // Cluster Scatter Plot
-  #let cluster-path = charts.at("cluster_path", default: none)
-  #if cluster-path != none {
+  let cluster-path = charts.at("cluster_path", default: none)
+  if cluster-path != none {
     heading(level: 2, "GO Category Cluster Scatter")
     figure(
-      image(cluster-path, width: 90%),
-      caption: [#text(size: 9pt, style: "italic")[#charts.at("cluster_caption", default: "")]],
+      image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity and colored by semantic cluster"),
+      caption: text(size: 9pt, style: "italic", charts.at("cluster_caption", default: "")),
     )
   }
 }

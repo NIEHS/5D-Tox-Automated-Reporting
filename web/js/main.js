@@ -2305,14 +2305,16 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
 
 async function exportDocx() {
     showBlockingSpinner('Exporting .docx...');
+    try {
     const proseEl = document.getElementById('output-prose');
     const refsEl = document.getElementById('references-list');
 
     // Collect current text from editable elements (user may have polished)
     const paragraphs = extractProse('output-prose');
 
-    const references = Array.from(refsEl.querySelectorAll('div'))
-        .map(div => div.textContent.trim());
+    const references = refsEl
+        ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
+        : [];
 
     const chemicalName = currentIdentity?.name || 'Chemical';
 
@@ -2437,6 +2439,11 @@ async function exportDocx() {
     } finally {
         hideBlockingSpinner();
     }
+    } catch (outerErr) {
+        // Catch errors from payload assembly (missing DOM elements, etc.)
+        showError('DOCX export failed: ' + outerErr.message);
+        hideBlockingSpinner();
+    }
 }
 
 /**
@@ -2449,11 +2456,14 @@ async function exportDocx() {
  * Typst template schema and compiles it to PDF/UA-1.
  */
 async function exportPdf() {
+    // Wrap the entire export in a try/catch so that missing DOM elements
+    // or other unexpected errors show a toast instead of crashing the tab.
+    try {
     // Collect the same payload as DOCX export — identical data,
     // different output format (the server handles the conversion).
     const paragraphs = backgroundApproved ? extractProse('output-prose') : [];
     const refsEl = document.getElementById('references-list');
-    const references = backgroundApproved
+    const references = (backgroundApproved && refsEl)
         ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
         : [];
     const chemicalName = currentIdentity?.name || 'Chemical';
@@ -2577,6 +2587,14 @@ async function exportPdf() {
         hideBlockingSpinner();
         btn.disabled = false;
         btn.textContent = 'Export PDF';
+    }
+    } catch (outerErr) {
+        // Catch errors from payload assembly (missing DOM elements, etc.)
+        // so the tab doesn't crash.
+        showError('PDF export failed: ' + outerErr.message);
+        hideBlockingSpinner();
+        const btn = document.getElementById('btn-export-pdf');
+        if (btn) { btn.disabled = false; btn.textContent = 'Export PDF'; }
     }
 }
 
@@ -4299,6 +4317,7 @@ function displayMethodsSections(sections, table1) {
  */
 function extractMethodsSections() {
     const container = document.getElementById('methods-prose');
+    if (!container) return [];
     const sections = [];
     for (const wrapper of container.querySelectorAll('.methods-subsection')) {
         const key = wrapper.dataset.key;
