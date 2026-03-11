@@ -15,6 +15,10 @@ Endpoints:
   GET  /api/session/{dtxsid}/history/{section_key}  — Version history
   POST /api/session/{dtxsid}/restore                — Restore a past version
   GET  /api/session/{dtxsid}/bmd-summary            — Auto-derive BMD summary
+  GET  /api/experiment-metadata/{dtxsid}            — Retrieve experiment metadata
+  POST /api/experiment-metadata/{dtxsid}            — Save user-edited metadata
+  POST /api/pool/reset/{dtxsid}                     — Full pool reset (destructive)
+  POST /api/session/reset/{dtxsid}                  — Full session reset (nuclear)
 """
 
 import asyncio
@@ -43,6 +47,7 @@ from server_state import (
     get_csv_uploads,
     get_data_uploads,
     get_pool_fingerprints,
+    get_integrated_pool,
 )
 
 logger = logging.getLogger(__name__)
@@ -798,3 +803,339 @@ async def api_session_restore(dtxsid: str, request: Request):
         "version": target_data.get("version", 1),
         "section_key": section_key,
     })
+
+
+# ---------------------------------------------------------------------------
+# GET /api/experiment-metadata/{dtxsid} — retrieve experiment metadata
+# ---------------------------------------------------------------------------
+
+@router.get("/api/experiment-metadata/{dtxsid}")
+async def api_get_experiment_metadata(dtxsid: str):
+    """
+    Return experiment metadata for all experiments in the integrated data.
+
+    Reads integrated.json and extracts experimentDescription from each
+    DoseResponseExperiment.  Also returns the controlled vocabularies so
+    the frontend can build dropdown menus.
+
+    Returns:
+      {
+        "experiments": [
+          {
+            "name": "BodyWeightFemale",
+            "probe_count": 2,
+            "experimentDescription": { "species": "rat", "sex": "female", ... }
+          },
+          ...
+        ],
+        "vocabularies": { "species": [...], "sex": [...], ... },
+        "approved": true/false
+      }
+    """
+    sess_path = session_dir(dtxsid)
+    json_path = sess_path / "integrated.json"
+
+    if not json_path.exists():
+        return JSONResponse(
+            {"error": "No integrated data found"}, status_code=404,
+        )
+
+    try:
+        integrated = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to read integrated data: {e}"}, status_code=500,
+        )
+
+    # Extract experiment summaries with their metadata
+    experiments = []
+    for exp in integrated.get("doseResponseExperiments", []):
+        ed = exp.get("experimentDescription", {})
+        # Strip computed fields that Jackson serialized — they're derived
+        # from the stored fields and would just clutter the form.
+        for key in ("columnHeaders", "columnValues", "experimentType",
+                     "formattedString", "inVivo", "inVitro", "statusBarString"):
+            ed.pop(key, None)
+
+        # Extract probe IDs for this experiment — used by the frontend to
+        # build organ selection modals for organ weight experiments.
+        probe_ids = []
+        for pr in exp.get("probeResponses", []):
+            pid = pr.get("probe", {}).get("id", "") or pr.get("name", "")
+            if pid:
+                probe_ids.append(pid)
+
+        experiments.append({
+            "name": exp.get("name", ""),
+            "probe_count": len(exp.get("probeResponses", [])),
+            "experimentDescription": ed,
+            "probe_ids": probe_ids,
+        })
+
+    # Check if metadata was already approved
+    meta_approved_path = sess_path / "metadata_approved.json"
+    approved = meta_approved_path.exists()
+
+    # Controlled vocabularies — same as experiment_metadata.py VOCABULARIES
+    from experiment_metadata import VOCABULARIES
+
+    return JSONResponse({
+        "experiments": experiments,
+        "vocabularies": VOCABULARIES,
+        "approved": approved,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/experiment-metadata/{dtxsid} — save user-edited metadata
+# ---------------------------------------------------------------------------
+
+@router.post("/api/experiment-metadata/{dtxsid}")
+async def api_save_experiment_metadata(dtxsid: str, request: Request):
+    """
+    Save user-edited experiment metadata back to integrated.json.
+
+    The request body contains the edited metadata for each experiment,
+    keyed by experiment name:
+      {
+        "metadata": {
+          "BodyWeightFemale": { "species": "rat", "sex": "female", ... },
+          "OrganWeightMale": { "species": "rat", "sex": "male", ... },
+          ...
+        }
+      }
+
+    Updates each experiment's experimentDescription in integrated.json,
+    then re-exports integrated.bm2 so the .bm2 file reflects the
+    user-approved metadata.
+
+    Also writes a metadata_approved.json marker so the UI knows the
+    user has explicitly reviewed and approved the metadata.
+    """
+    sess_path = session_dir(dtxsid)
+    json_path = sess_path / "integrated.json"
+
+    if not json_path.exists():
+        return JSONResponse(
+            {"error": "No integrated data found"}, status_code=404,
+        )
+
+    body = await request.json()
+    metadata_by_name = body.get("metadata", {})
+
+    if not metadata_by_name:
+        return JSONResponse(
+            {"error": "No metadata provided"}, status_code=400,
+        )
+
+    try:
+        integrated = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Failed to read integrated data: {e}"}, status_code=500,
+        )
+
+    # Apply user-edited metadata to each experiment
+    updated_count = 0
+    for exp in integrated.get("doseResponseExperiments", []):
+        name = exp.get("name", "")
+        if name in metadata_by_name:
+            exp["experimentDescription"] = metadata_by_name[name]
+            updated_count += 1
+
+    # Write updated integrated.json
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(integrated, f, indent=2)
+
+    # Re-export .bm2 with the approved metadata
+    bm2_path = sess_path / "integrated.bm2"
+    bm2_ok = False
+    try:
+        from pool_integrator import export_integrated_bm2
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            export_integrated_bm2,
+            str(json_path),
+            str(bm2_path),
+        )
+        bm2_ok = True
+    except Exception as e:
+        logger.warning("Failed to re-export .bm2 after metadata edit: %s", e)
+
+    # Write approval marker
+    meta_approved = {
+        "approved_at": now_iso(),
+        "experiments_updated": updated_count,
+    }
+    (sess_path / "metadata_approved.json").write_text(
+        json.dumps(meta_approved, indent=2), encoding="utf-8",
+    )
+
+    logger.info(
+        "Metadata approved for %s: %d experiments updated, bm2=%s",
+        dtxsid, updated_count, "ok" if bm2_ok else "failed",
+    )
+
+    return JSONResponse({
+        "ok": True,
+        "updated": updated_count,
+        "bm2_exported": bm2_ok,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/pool/reset/{dtxsid} — full pool reset (destructive)
+# ---------------------------------------------------------------------------
+
+@router.post("/api/pool/reset/{dtxsid}")
+async def api_pool_reset(dtxsid: str):
+    """
+    Completely reset the data pool for a given DTXSID.
+
+    This is a destructive operation — it deletes:
+      - files/           (all uploaded .bm2, .csv, .txt, .xlsx files)
+      - integrated.json  (merged BMDProject from pool integration)
+      - integrated.bm2   (binary export of integrated data)
+      - metadata_approved.json  (experiment metadata approval marker)
+      - All bm2_*.json   (approved apical endpoint sections)
+      - All genomics_*.json (approved genomics sections)
+      - methods.json, bmd_summary.json, summary.json (approved report sections)
+      - validation_report.json, precedence.json (validation artifacts)
+      - animal_report.json (cached animal report)
+
+    Also clears the in-memory server-side state:
+      - _bm2_uploads entries pointing to this session's files
+      - _csv_uploads entries pointing to this session's files
+      - _pool_fingerprints[dtxsid]
+      - _integrated_pool[dtxsid]
+      - _data_uploads entries for this session's files
+
+    Does NOT delete:
+      - meta.json, identity.json (chemical identity — still valid)
+      - history/ (version history of approved sections — archival)
+
+    The user is warned on the client side before this endpoint is called.
+    After reset, the session directory still exists but is effectively empty
+    (just meta.json and identity.json), ready for fresh uploads.
+    """
+    _bm2_uploads = get_bm2_uploads()
+    _csv_uploads = get_csv_uploads()
+    _pool_fingerprints = get_pool_fingerprints()
+    _data_uploads = get_data_uploads()
+    _integrated_pool = get_integrated_pool()
+
+    d = SESSIONS_DIR / dtxsid
+    if not d.exists():
+        return JSONResponse(
+            {"error": f"No session found for {dtxsid}"},
+            status_code=404,
+        )
+
+    deleted_items = []
+
+    # 1. Delete files/ directory (all uploaded raw data)
+    files_dir = d / "files"
+    if files_dir.exists():
+        shutil.rmtree(files_dir)
+        deleted_items.append("files/")
+
+    # 2. Delete integration artifacts
+    for artifact in ("integrated.json", "integrated.bm2",
+                     "metadata_approved.json", "validation_report.json",
+                     "precedence.json", "animal_report.json"):
+        p = d / artifact
+        if p.exists():
+            p.unlink()
+            deleted_items.append(artifact)
+
+    # 3. Delete all approved section files (bm2_*, genomics_*, methods, etc.)
+    for pattern in ("bm2_*.json", "genomics_*.json"):
+        for f in d.glob(pattern):
+            f.unlink()
+            deleted_items.append(f.name)
+
+    for section_file in ("methods.json", "bmd_summary.json", "summary.json"):
+        p = d / section_file
+        if p.exists():
+            p.unlink()
+            deleted_items.append(section_file)
+
+    # 4. Clear in-memory server state for this DTXSID.
+    #    Remove bm2/csv/data upload entries whose temp_path pointed into
+    #    this session's files/ directory (now deleted).  Also remove any
+    #    entries whose temp files no longer exist on disk (stale uploads).
+    session_files_prefix = str(files_dir)
+    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
+        stale_ids = [
+            fid for fid, info in store.items()
+            if info.get("temp_path", "").startswith(session_files_prefix)
+            or not os.path.exists(info.get("temp_path", ""))
+        ]
+        for fid in stale_ids:
+            del store[fid]
+
+    # Clear pool fingerprints and integrated pool for this chemical
+    _pool_fingerprints.pop(dtxsid, None)
+    _integrated_pool.pop(dtxsid, None)
+
+    logger.info(
+        "Pool reset for %s: deleted %d items: %s",
+        dtxsid, len(deleted_items), ", ".join(deleted_items),
+    )
+
+    return JSONResponse({
+        "ok": True,
+        "deleted": deleted_items,
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/reset/{dtxsid} — full session reset (nuclear option)
+# ---------------------------------------------------------------------------
+
+@router.post("/api/session/reset/{dtxsid}")
+async def api_session_reset(dtxsid: str):
+    """
+    Completely delete the entire session for a given DTXSID.
+
+    Unlike pool reset (which preserves identity and history), this removes
+    EVERYTHING: the entire sessions/{dtxsid}/ directory including meta.json,
+    identity.json, background.json, history/, files/, and all approved sections.
+
+    Also clears all in-memory server state for this chemical (same as pool reset).
+
+    After this, the chemical identity form is still filled (from localStorage)
+    but the server has no record of any prior work.  The user starts completely
+    from scratch.
+    """
+    _bm2_uploads = get_bm2_uploads()
+    _csv_uploads = get_csv_uploads()
+    _pool_fingerprints = get_pool_fingerprints()
+    _data_uploads = get_data_uploads()
+    _integrated_pool = get_integrated_pool()
+
+    d = SESSIONS_DIR / dtxsid
+    if not d.exists():
+        return JSONResponse({"ok": True, "message": "No session to reset"})
+
+    # Delete the entire session directory tree
+    shutil.rmtree(d)
+
+    # Clear in-memory server state (same cleanup as pool reset)
+    session_files_prefix = str(d / "files")
+    for store in (_bm2_uploads, _csv_uploads, _data_uploads):
+        stale_ids = [
+            fid for fid, info in store.items()
+            if info.get("temp_path", "").startswith(session_files_prefix)
+            or not os.path.exists(info.get("temp_path", ""))
+        ]
+        for fid in stale_ids:
+            del store[fid]
+
+    _pool_fingerprints.pop(dtxsid, None)
+    _integrated_pool.pop(dtxsid, None)
+
+    logger.info("Full session reset for %s — directory deleted", dtxsid)
+
+    return JSONResponse({"ok": True})

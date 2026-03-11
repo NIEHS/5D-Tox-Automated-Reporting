@@ -160,7 +160,10 @@ async function applySettings() {
     onSettingChanged();
 
     const dtxsid = currentIdentity?.dtxsid;
-    if (!dtxsid) return;
+    if (!dtxsid) {
+        showToast('Resolve a chemical first before reprocessing');
+        return;
+    }
 
     // Close the settings panel
     toggleSettingsPanel();
@@ -179,6 +182,8 @@ async function applySettings() {
     };
 
     try {
+        showBlockingSpinner('Reprocessing with new settings...');
+
         const resp = await fetch(`/api/process-integrated/${dtxsid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -244,6 +249,21 @@ async function applySettings() {
             show('genomics-results-section');
         }
 
+        // --- Rebuild BMD summary from apical_bmd_summary ---
+        if (result.apical_bmd_summary && result.apical_bmd_summary.length > 0) {
+            bmdSummaryEndpoints = result.apical_bmd_summary;
+            renderBmdSummaryTable(bmdSummaryEndpoints);
+            show('bmd-summary-section');
+            document.getElementById('bmd-summary-section').classList.add('visible');
+        }
+
+        // --- Rebuild BMDS summary (pybmds) ---
+        if (result.apical_bmd_summary_bmds && result.apical_bmd_summary_bmds.length > 0) {
+            renderBmdSummaryTableBmds(result.apical_bmd_summary_bmds);
+            show('bmd-summary-bmds-section');
+            document.getElementById('bmd-summary-bmds-section').classList.add('visible');
+        }
+
         // Refresh tabs and export button
         if (tabbedViewActive) buildTabBar();
         updateExportButton();
@@ -252,6 +272,8 @@ async function applySettings() {
     } catch (e) {
         console.error('applySettings failed:', e);
         showToast('Reprocessing failed: ' + e.message);
+    } finally {
+        hideBlockingSpinner();
     }
 }
 
@@ -502,6 +524,10 @@ async function onFieldBlur(fieldId) {
 
         // Enable Process buttons and backfill compound name
         onIdentityResolved();
+
+        // Show Reset Session button now that a chemical is resolved
+        const btnResetSession = document.getElementById('btn-reset-session');
+        if (btnResetSession) btnResetSession.style.display = '';
 
         // Auto-restore: if the DTXSID has a previously saved session,
         // load it and restore all approved sections (background + bm2 cards).
@@ -1013,6 +1039,12 @@ function updateFilePoolSummary() {
         total++;
     }
 
+    // Show/hide the "Reset Pool" button — visible whenever there are files
+    // in the pool (regardless of whether they're from a fresh upload or
+    // a restored session).  This is the only way to clear restored files.
+    const resetBtn = document.getElementById('btn-reset-pool');
+    if (resetBtn) resetBtn.style.display = total > 0 ? '' : 'none';
+
     if (total === 0) {
         el.textContent = 'Uploaded files';
         return;
@@ -1073,6 +1105,228 @@ function updateClearFilesButton() {
     if (!btn) return;
     const hasRemovable = Object.values(uploadedFiles).some(f => !f.restored && !f.fromSession && !f.sessionPersisted);
     btn.style.display = hasRemovable ? '' : 'none';
+}
+
+
+/**
+ * Confirm and execute a full pool reset — removes ALL files, integrated data,
+ * metadata, and approved sections for the current chemical.  This is
+ * irreversible: the user gets a browser confirm() dialog spelling out
+ * exactly what will be lost before the reset proceeds.
+ *
+ * After the server wipes the session data, the client clears all in-memory
+ * state (uploadedFiles, apicalSections, genomicsResults) and hides the
+ * result sections so the UI returns to a fresh "upload files" state.
+ */
+async function confirmResetPool() {
+    const dtxsid = document.getElementById('dtxsid')?.value;
+    if (!dtxsid) {
+        showToast('No chemical resolved — nothing to reset.');
+        return;
+    }
+
+    // Explicit, detailed warning so the user knows exactly what they're losing
+    const ok = confirm(
+        'RESET POOL — This will permanently delete:\n\n' +
+        '  • All uploaded files (.bm2, .csv, .txt, .xlsx)\n' +
+        '  • Integrated data and .bm2 export\n' +
+        '  • Experiment metadata and approval status\n' +
+        '  • All approved apical endpoint sections\n' +
+        '  • All approved genomics sections\n' +
+        '  • Methods, BMD Summary, and Summary sections\n' +
+        '  • Validation report and conflict resolutions\n\n' +
+        'Chemical identity and version history are preserved.\n\n' +
+        'This cannot be undone. Continue?'
+    );
+    if (!ok) return;
+
+    try {
+        const resp = await fetch(`/api/pool/reset/${dtxsid}`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.error || 'Reset failed');
+            return;
+        }
+
+        // --- Clear all client-side state ---
+
+        // File pool — clear both the state dict and the DOM list
+        for (const id of Object.keys(uploadedFiles)) {
+            delete uploadedFiles[id];
+        }
+        const fileList = document.getElementById('file-pool-list');
+        if (fileList) fileList.innerHTML = '';
+
+        // Apical sections
+        for (const id of Object.keys(apicalSections)) {
+            delete apicalSections[id];
+        }
+        apicalSectionCounter = 0;
+
+        // Genomics results
+        for (const key of Object.keys(genomicsResults)) {
+            delete genomicsResults[key];
+        }
+
+        // BMD summary
+        bmdSummaryEndpoints = [];
+
+        // Summary paragraphs (methods paragraphs are embedded in the section DOM)
+        summaryParagraphs = null;
+
+        // Validation state
+        lastValidationReport = null;
+
+        // --- Hide/reset UI sections ---
+
+        // Hide the validation panel and clear its inner content
+        // (coverage matrix, validation issues, animal report table)
+        const validationPanel = document.getElementById('validation-panel');
+        if (validationPanel) validationPanel.style.display = 'none';
+        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content', 'validation-body']) {
+            const el = document.getElementById(innerId);
+            if (el && innerId !== 'validation-body') el.innerHTML = '';
+            if (el && innerId === 'validation-body') el.style.display = 'none';
+        }
+
+        // Hide apical results section and clear its content
+        const apicalSection = document.getElementById('apical-results');
+        if (apicalSection) apicalSection.style.display = 'none';
+        const apicalContent = document.getElementById('apical-content');
+        if (apicalContent) apicalContent.innerHTML = '';
+
+        // Hide genomics results section and clear its content
+        const genomicsSection = document.getElementById('genomics-results');
+        if (genomicsSection) genomicsSection.style.display = 'none';
+        const genomicsContent = document.getElementById('genomics-content');
+        if (genomicsContent) genomicsContent.innerHTML = '';
+
+        // Hide metadata review section
+        const metadataSection = document.getElementById('metadata-review-section');
+        if (metadataSection) metadataSection.style.display = 'none';
+
+        // Hide methods, BMD summary, and summary sections
+        for (const secId of ['methods-section', 'bmd-summary-section', 'summary-section']) {
+            const sec = document.getElementById(secId);
+            if (sec) sec.style.display = 'none';
+        }
+
+        // Reset file pool summary and buttons
+        updateFilePoolSummary();
+        updateClearFilesButton();
+
+        const deleted = data.deleted || [];
+        showToast(`Pool reset: ${deleted.length} items removed. Ready for fresh uploads.`);
+        console.info('Pool reset complete:', deleted);
+
+    } catch (err) {
+        showToast('Reset failed: ' + err.message);
+    }
+}
+
+
+/**
+ * Confirm and execute a full session reset — deletes EVERYTHING for the
+ * current chemical: background, identity, all approved sections, files,
+ * integrated data, version history.  The chemical identity form stays
+ * filled (from localStorage) but the server has no record of any work.
+ *
+ * This is the nuclear option.  Pool Reset preserves background and identity;
+ * Session Reset does not.
+ */
+async function confirmResetSession() {
+    const dtxsid = document.getElementById('dtxsid')?.value;
+    if (!dtxsid) {
+        showToast('No chemical resolved — nothing to reset.');
+        return;
+    }
+
+    const name = document.getElementById('name')?.value || dtxsid;
+    const ok = confirm(
+        `RESET SESSION for ${name}\n\n` +
+        'This will permanently delete ALL session data:\n\n' +
+        '  • Background section and references\n' +
+        '  • All uploaded files and integrated data\n' +
+        '  • All approved sections (apical, genomics, methods, summary)\n' +
+        '  • BMD summary and experiment metadata\n' +
+        '  • Version history\n' +
+        '  • Chemical identity (server-side)\n\n' +
+        'The chemical identity form will stay filled (from your browser),\n' +
+        'but the server will have no record of any prior work.\n\n' +
+        'This CANNOT be undone. Continue?'
+    );
+    if (!ok) return;
+
+    try {
+        const resp = await fetch(`/api/session/reset/${dtxsid}`, { method: 'POST' });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.error || 'Session reset failed');
+            return;
+        }
+
+        // Clear everything that Pool Reset clears
+        for (const id of Object.keys(uploadedFiles)) delete uploadedFiles[id];
+        const fileList = document.getElementById('file-pool-list');
+        if (fileList) fileList.innerHTML = '';
+        for (const id of Object.keys(apicalSections)) delete apicalSections[id];
+        apicalSectionCounter = 0;
+        for (const key of Object.keys(genomicsResults)) delete genomicsResults[key];
+        bmdSummaryEndpoints = [];
+        summaryParagraphs = null;
+        lastValidationReport = null;
+
+        // Hide pool-related UI
+        const validationPanel = document.getElementById('validation-panel');
+        if (validationPanel) validationPanel.style.display = 'none';
+        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content']) {
+            const el = document.getElementById(innerId);
+            if (el) el.innerHTML = '';
+        }
+        const vBody = document.getElementById('validation-body');
+        if (vBody) vBody.style.display = 'none';
+
+        // Hide all result sections
+        for (const secId of [
+            'apical-results', 'genomics-results', 'metadata-review-section',
+            'methods-section', 'bmd-summary-section', 'summary-section'
+        ]) {
+            const sec = document.getElementById(secId);
+            if (sec) sec.style.display = 'none';
+        }
+        const apicalContent = document.getElementById('apical-content');
+        if (apicalContent) apicalContent.innerHTML = '';
+        const genomicsContent = document.getElementById('genomics-content');
+        if (genomicsContent) genomicsContent.innerHTML = '';
+
+        // Also clear background section — this is what distinguishes
+        // Session Reset from Pool Reset
+        const outputSection = document.getElementById('output-section');
+        if (outputSection) outputSection.style.display = 'none';
+        const bgContent = document.getElementById('output-prose');
+        if (bgContent) bgContent.innerHTML = '';
+        const refContent = document.getElementById('references-list');
+        if (refContent) refContent.innerHTML = '';
+        const metaInfo = document.getElementById('meta-info');
+        if (metaInfo) metaInfo.innerHTML = '';
+        // Re-enable the Generate Background button
+        const btnGenerate = document.getElementById('btn-generate');
+        if (btnGenerate) btnGenerate.disabled = false;
+        // Hide approve/edit buttons
+        for (const btnId of ['btn-edit-bg', 'btn-approve-bg', 'btn-retry-bg']) {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.style.display = 'none';
+        }
+
+        updateFilePoolSummary();
+        updateClearFilesButton();
+
+        showToast('Session reset. All data for ' + name + ' has been deleted.');
+        console.info('Session reset complete for', dtxsid);
+
+    } catch (err) {
+        showToast('Session reset failed: ' + err.message);
+    }
 }
 
 
@@ -1165,7 +1419,11 @@ async function runPoolValidation() {
         if (btn) btn.textContent = 'Integrating...';
         updateBlockingMessage('Integrating files...');
 
-        const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, { method: 'POST' });
+        const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identity: currentIdentity }),
+        });
         if (intResp.ok) {
             integratedPoolData = await intResp.json();
             renderIntegratedDataPreview(integratedPoolData);
@@ -1849,8 +2107,8 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
                 (dose === Math.floor(dose) ? `${Math.floor(dose)} ${doseUnit}` : `${dose} ${doseUnit}`);
             headerRow.innerHTML += `<th>${label}</th>`;
         }
-        headerRow.innerHTML += `<th class="bmd-col">BMD1Std (${doseUnit})</th>`;
-        headerRow.innerHTML += `<th class="bmd-col">BMDL1Std (${doseUnit})</th>`;
+        // BMD/BMDL columns removed — they belong in the BMD summary table
+        // (Table 8 equivalent), matching the NIEHS reference report structure.
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
@@ -1863,7 +2121,7 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
             const maxN = Math.max(...rows.map(r => r.n[String(dose)] || 0));
             nRow.innerHTML += `<td>${maxN}</td>`;
         }
-        nRow.innerHTML += '<td class="bmd-col">NA</td><td class="bmd-col">NA</td>';
+        // No BMD/BMDL cells in domain tables (moved to BMD summary)
         tbody.appendChild(nRow);
 
         // Data rows — one per endpoint
@@ -1874,8 +2132,7 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
                 const val = row.values[String(dose)] || '\u2013';
                 tr.innerHTML += `<td>${val}</td>`;
             }
-            tr.innerHTML += `<td class="bmd-col">${row.bmd}</td>`;
-            tr.innerHTML += `<td class="bmd-col">${row.bmdl}</td>`;
+            // No BMD/BMDL cells in domain tables (moved to BMD summary)
             tbody.appendChild(tr);
         }
 
@@ -4186,6 +4443,38 @@ async function autoProcessPool() {
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
     if (!dtxsid) return;
 
+    showBlockingSpinner('Loading experiment metadata...');
+
+    // Metadata approval is the gatekeeper: the user must review and approve
+    // LLM-inferred experiment metadata (species, sex, organ, strain, etc.)
+    // before we proceed to NTP stats and report section generation.
+    // loadMetadataReview() shows the editable table.  If metadata is already
+    // approved (restored session), it auto-proceeds to the processing pipeline.
+    await loadMetadataReview();
+
+    hideBlockingSpinner();
+}
+
+
+/**
+ * Run the processing pipeline: NTP stats, apical section cards, genomics.
+ *
+ * Extracted from autoProcessPool so it can be called from two places:
+ *   1. approveMetadata() — after the user approves experiment metadata
+ *   2. loadMetadataReview() — when restoring a session with already-approved metadata
+ *
+ * This is the expensive step: it calls /api/process-integrated which runs
+ * Williams trend, Dunnett's pairwise, and Jonckheere tests on the unified
+ * BMDProject, then returns pre-computed sections for every domain plus
+ * any genomics results from gene expression .bm2 files.
+ */
+async function runProcessingPipeline() {
+    const fingerprints = lastValidationReport?.fingerprints || {};
+    if (Object.keys(fingerprints).length === 0) return;
+
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
     showBlockingSpinner('Processing integrated data...');
 
     // Show the results sections so cards have a container to land in
@@ -4230,7 +4519,11 @@ async function autoProcessPool() {
         if (resp.status === 400) {
             // Re-integrate the pool (regenerates integrated.json with all
             // domains including gene expression)
-            const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, { method: 'POST' });
+            const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identity: currentIdentity }),
+            });
             if (intResp.ok) {
                 // Retry process-integrated now that data exists
                 resp = await fetch(`/api/process-integrated/${dtxsid}`, {
@@ -4298,6 +4591,26 @@ async function autoProcessPool() {
 
                     createGenomicsCard(key, gData, gData.organ, gData.sex, autoStatLabels);
                 }
+            }
+
+            // --- Apical BMD summary (Table 8 equivalent) ---
+            // The process-integrated endpoint now returns apical_bmd_summary
+            // with BMD, BMDL, LOEL, NOEL, direction for all modeled endpoints.
+            // This replaces the separate /api/bmd-summary call for apical data.
+            if (result.apical_bmd_summary && result.apical_bmd_summary.length > 0) {
+                bmdSummaryEndpoints = result.apical_bmd_summary;
+                renderBmdSummaryTable(bmdSummaryEndpoints);
+                show('bmd-summary-section');
+                document.getElementById('bmd-summary-section').classList.add('visible');
+                markReportDirty();
+            }
+
+            // --- BMDS summary (pybmds — EPA BMDS methodology) ---
+            if (result.apical_bmd_summary_bmds && result.apical_bmd_summary_bmds.length > 0) {
+                renderBmdSummaryTableBmds(result.apical_bmd_summary_bmds);
+                show('bmd-summary-bmds-section');
+                document.getElementById('bmd-summary-bmds-section').classList.add('visible');
+                markReportDirty();
             }
         } else {
             const err = await resp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
@@ -5017,6 +5330,83 @@ function renderBmdSummaryTable(endpoints) {
         }
     }
     html += '</table>';
+
+    // Footnotes matching NIEHS reference report conventions.
+    // Explains abbreviations and notes the BMDExpress 3 vs BMDS 2.7.0 tool
+    // difference so users understand why values may not exactly match
+    // published NIEHS reports that used pybmds.
+    html += `<div style="font-size:0.75rem; color:#64748b; margin-top:0.75rem; line-height:1.6; border-top:1px solid #e2e8f0; padding-top:0.5rem;">
+        <p>BMD<sub>1Std</sub> = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean;
+        BMDL<sub>1Std</sub> = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean;
+        LOEL = lowest-observed-effect level; NOEL = no-observed-effect level.</p>
+        <p style="margin-top:0.25rem;">
+        <b>NVM</b> = nonviable model (model completed but failed acceptability criteria);
+        <b>UREP</b> = unreliable estimate of potency (BMD<sub>U</sub>/BMD<sub>L</sub> &gt; 40 or BMD below lower limit of extrapolation);
+        <b>NA</b> = not applicable; <b>—</b> = not determined.</p>
+        <p style="margin-top:0.25rem;">
+        BMD modeling performed using BMDExpress 3 (Java native API). Values may differ from reports using BMDS 2.7.0 (pybmds)
+        due to differences in model repertoire, model selection criteria, and outlier handling.</p>
+    </div>`;
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render the BMDS (pybmds) BMD summary as an HTML table.
+ *
+ * Same structure as renderBmdSummaryTable() but adds a "Model" column
+ * showing which BMDS model was selected (e.g., "Hill", "Exponential 5").
+ * This table matches the NIEHS reference report methodology (EPA BMDS).
+ */
+function renderBmdSummaryTableBmds(endpoints) {
+    const container = document.getElementById('bmd-summary-bmds-table');
+
+    // Group by sex
+    const male = endpoints.filter(e => e.sex === 'Male');
+    const female = endpoints.filter(e => e.sex === 'Female');
+
+    let html = `<table>
+        <tr>
+            <th>Endpoint</th>
+            <th>BMD₁Std</th>
+            <th>BMDL₁Std</th>
+            <th>Model</th>
+            <th>LOEL</th>
+            <th>NOEL</th>
+            <th>Direction</th>
+        </tr>`;
+
+    for (const [sexLabel, sexData] of [['Male', male], ['Female', female]]) {
+        if (sexData.length === 0) continue;
+        html += `<tr><td colspan="7" style="font-weight:bold; background:#f1f5f9">${sexLabel}</td></tr>`;
+        for (const ep of sexData) {
+            const fmtVal = (v) => v == null ? '—' : typeof v === 'number' ? v.toFixed(2) : String(v);
+            html += `<tr>
+                <td class="endpoint-label">${ep.endpoint}</td>
+                <td class="bmd-col">${fmtVal(ep.bmd)}</td>
+                <td class="bmd-col">${fmtVal(ep.bmdl)}</td>
+                <td style="font-size:0.8rem; color:#64748b">${ep.model_name || '—'}</td>
+                <td>${fmtVal(ep.loel)}</td>
+                <td>${fmtVal(ep.noel)}</td>
+                <td>${ep.direction || ''}</td>
+            </tr>`;
+        }
+    }
+    html += '</table>';
+
+    // Footnotes for the BMDS table
+    html += `<div style="font-size:0.75rem; color:#64748b; margin-top:0.75rem; line-height:1.6; border-top:1px solid #e2e8f0; padding-top:0.5rem;">
+        <p>BMD<sub>1Std</sub> = benchmark dose (1 SD BMR relative to control);
+        BMDL<sub>1Std</sub> = lower confidence limit;
+        LOEL = lowest-observed-effect level; NOEL = no-observed-effect level.</p>
+        <p style="margin-top:0.25rem;">
+        <b>NVM</b> = nonviable model; <b>UREP</b> = unreliable estimate of potency;
+        <b>NR</b> = not reportable (BMD &lt; &frac13; lowest nonzero dose); <b>—</b> = not determined.</p>
+        <p style="margin-top:0.25rem;">
+        BMD modeling performed using EPA BMDS via pybmds. Models: Linear, Polynomial 2°–N°, Power, Hill,
+        Exponential M3/M5. Model selection follows EPA guidance (lowest AIC among viable models).</p>
+    </div>`;
+
     container.innerHTML = html;
 }
 
@@ -6151,6 +6541,15 @@ function togglePdfViewer() {
         if (e.key === 'Enter') attemptLogin();
     });
 
+    // On localhost, skip the login gate entirely — no authentication
+    // needed for local development.  The server-side ALLOWED_USERS env
+    // var is also typically unset locally (open mode).
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+        showApp();
+        return;
+    }
+
     // Pre-fill the input with the stored username (if any) so the user
     // can just hit Enter to re-enter.  But always show the gate.
     const stored = getStoredUser();
@@ -6162,4 +6561,383 @@ function togglePdfViewer() {
     // hidden by default (display:none in HTML).  User must click Sign In.
     input.focus();
 })();
+
+
+// =========================================================================
+// Experiment Metadata Review
+//
+// After pool integration, the LLM infers structured metadata for each
+// experiment (species, sex, organ, strain, etc.).  This panel lets the
+// user review and correct those inferences before they're baked into the
+// exported .bm2 file.
+//
+// The panel renders a horizontal table: one row per experiment, one column
+// per metadata field.  Fields use <select> dropdowns constrained to the
+// controlled vocabularies from BMDExpress 3's vocabulary.yml.
+// =========================================================================
+
+// Cached vocabularies from the server (populated on first load)
+let _metadataVocabularies = null;
+
+// Cached experiment data from the server (includes probe_ids for organ modals)
+let _metadataExperiments = null;
+
+// The metadata fields to show in the table, in display order.
+// Each entry: [jsonKey, displayLabel, inputType]
+// inputType: 'select' for vocabulary-constrained, 'text' for free-text
+const METADATA_FIELDS = [
+    ['species',             'Species',              'select'],
+    ['strain',              'Strain',               'select'],  // dynamic: filtered by species
+    ['sex',                 'Sex',                   'select'],
+    ['organ',               'Organ',                 'select'],
+    ['subjectType',         'Subject Type',          'select'],
+    ['platform',            'Platform',              'select'],
+    ['provider',            'Provider',              'select'],
+    ['studyDuration',       'Duration',              'select'],
+    ['articleRoute',        'Route',                 'select'],
+    ['articleVehicle',      'Vehicle',               'select'],
+    ['administrationMeans', 'Administration',        'select'],
+    ['articleType',         'Article Type',          'select'],
+    ['cellLine',            'Cell Line',             'text'],
+];
+
+
+/**
+ * Load experiment metadata from the server and render the review table.
+ *
+ * Called after integration completes (from autoProcessPool).  Fetches
+ * the current experimentDescription for each experiment plus the
+ * controlled vocabularies, then builds the editable table.
+ */
+async function loadMetadataReview() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    try {
+        const resp = await fetch(`/api/experiment-metadata/${dtxsid}`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        _metadataVocabularies = data.vocabularies;
+        _metadataExperiments = data.experiments;
+
+        renderMetadataTable(data.experiments, data.vocabularies);
+
+        // Show the section
+        show('metadata-review-section');
+        if (tabbedViewActive) buildTabBar();
+
+        // If already approved (e.g. restored session), show the badge,
+        // lock the form, and skip the gate — proceed directly to the
+        // processing pipeline so the user doesn't have to re-approve.
+        if (data.approved) {
+            const section = document.getElementById('metadata-review-section');
+            section.classList.add('approved');
+            hide('btn-approve-metadata');
+            const badge = document.getElementById('badge-metadata');
+            badge.style.display = '';
+            badge.textContent = 'Approved';
+
+            // Auto-proceed: metadata was already approved in a prior session
+            await runProcessingPipeline();
+        }
+    } catch (e) {
+        console.error('Failed to load metadata:', e);
+    }
+}
+
+
+/**
+ * Build the metadata review table from experiment data and vocabularies.
+ *
+ * Creates a <table> with one row per experiment and one column per
+ * metadata field.  Select dropdowns are populated from the controlled
+ * vocabularies.  The strain dropdown is dynamically filtered by the
+ * selected species.
+ */
+function renderMetadataTable(experiments, vocabularies) {
+    const container = document.getElementById('metadata-table-container');
+
+    // Build header row
+    let headerHtml = '<th>Experiment</th>';
+    for (const [key, label] of METADATA_FIELDS) {
+        headerHtml += `<th>${label}</th>`;
+    }
+
+    // Build body rows — one per experiment
+    let bodyHtml = '';
+    for (const exp of experiments) {
+        const ed = exp.experimentDescription || {};
+        const name = exp.name;
+        const probeCount = exp.probe_count || 0;
+        // Detect organ weight experiments by platform
+        const isOrganWeight = (ed.platform || '').toLowerCase().includes('organ weight');
+
+        bodyHtml += `<tr data-exp-name="${name}">`;
+        bodyHtml += `<td title="${name}">${name}<span class="meta-probe-count">${probeCount}</span></td>`;
+
+        for (const [key, label, inputType] of METADATA_FIELDS) {
+            const currentVal = ed[key] || '';
+
+            // Organ weight experiments get a checkbox dropdown for organs,
+            // populated from the same vocabulary used for single-organ selects.
+            // Pre-selected values come from probe IDs extracted during integration.
+            if (key === 'organ' && isOrganWeight) {
+                const selectedOrgans = (currentVal || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                const organVocab = vocabularies.organ || [];
+                const count = selectedOrgans.length;
+                const summary = count > 0 ? `${count} organ${count > 1 ? 's' : ''}` : '— select —';
+
+                let cbHtml = '';
+                for (const org of organVocab) {
+                    const chk = selectedOrgans.includes(org.toLowerCase()) ? 'checked' : '';
+                    cbHtml += `<label class="cb-dropdown-item"><input type="checkbox" value="${escapeHtml(org)}" ${chk}><span>${escapeHtml(org)}</span></label>`;
+                }
+
+                bodyHtml += `<td class="cb-dropdown-cell">`;
+                bodyHtml += `<div class="cb-dropdown" data-field="organ">`;
+                bodyHtml += `<button type="button" class="cb-dropdown-toggle" onclick="toggleCbDropdown(this)">${summary}</button>`;
+                bodyHtml += `<div class="cb-dropdown-menu">${cbHtml}</div>`;
+                bodyHtml += `</div></td>`;
+            } else if (inputType === 'text') {
+                bodyHtml += `<td><input type="text" data-field="${key}" value="${escapeHtml(currentVal)}"></td>`;
+            } else {
+                // Build <select> with vocabulary options
+                let options = buildVocabOptions(key, currentVal, vocabularies, ed);
+                const emptyClass = currentVal ? '' : 'meta-empty';
+                bodyHtml += `<td><select data-field="${key}" class="${emptyClass}" `;
+
+                // Strain dropdowns get a special onchange on their sibling species select
+                if (key === 'species') {
+                    bodyHtml += `onchange="onSpeciesChange(this)"`;
+                }
+                bodyHtml += `>${options}</select></td>`;
+            }
+        }
+        bodyHtml += '</tr>';
+    }
+
+    container.innerHTML = `
+        <div class="metadata-table-wrap">
+            <table class="metadata-table">
+                <thead><tr>${headerHtml}</tr></thead>
+                <tbody>${bodyHtml}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+
+/**
+ * Build <option> elements for a vocabulary-constrained select.
+ *
+ * For most fields, the vocabulary is a flat list.  For 'strain', it's
+ * nested by species — we filter to show only strains for the currently
+ * selected species (with a fallback to all strains if no species set).
+ */
+function buildVocabOptions(fieldKey, currentVal, vocabularies, expDesc) {
+    let vocab = vocabularies[fieldKey] || [];
+
+    // Strain is nested: { "rat": [...], "mouse": [...] }
+    if (fieldKey === 'strain' && typeof vocab === 'object' && !Array.isArray(vocab)) {
+        const species = expDesc?.species || '';
+        if (species && vocab[species]) {
+            vocab = vocab[species];
+        } else {
+            // Flatten all strains
+            vocab = Object.values(vocab).flat();
+        }
+    }
+
+    // studyDuration: combine in vivo and in vitro durations
+    // The vocabularies object has separate inVitroDurations and inVivoDurations
+    // but also studyDuration as the combined list
+    if (fieldKey === 'studyDuration' && (!Array.isArray(vocab) || vocab.length === 0)) {
+        vocab = [
+            ...(vocabularies.inVivoDurations || []),
+            ...(vocabularies.inVitroDurations || []),
+        ];
+    }
+
+    let html = '<option value="">—</option>';
+    for (const val of vocab) {
+        const selected = (val === currentVal) ? 'selected' : '';
+        html += `<option value="${escapeHtml(val)}" ${selected}>${escapeHtml(val)}</option>`;
+    }
+
+    // If the current value isn't in the vocabulary (LLM hallucination or
+    // legacy data), add it as a disabled option so the user can see what
+    // was there and pick a valid replacement.
+    if (currentVal && !vocab.includes(currentVal)) {
+        html += `<option value="${escapeHtml(currentVal)}" selected disabled>${escapeHtml(currentVal)} (not in vocabulary)</option>`;
+    }
+
+    return html;
+}
+
+
+/**
+ * Handle species change: re-populate the strain dropdown in the same row
+ * with strains for the newly selected species.
+ */
+function onSpeciesChange(speciesSelect) {
+    const row = speciesSelect.closest('tr');
+    const strainSelect = row.querySelector('select[data-field="strain"]');
+    if (!strainSelect || !_metadataVocabularies) return;
+
+    const species = speciesSelect.value;
+    const strainVocab = _metadataVocabularies.strain || {};
+    const strains = (species && strainVocab[species]) ? strainVocab[species] : Object.values(strainVocab).flat();
+
+    let html = '<option value="">—</option>';
+    for (const s of strains) {
+        html += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+    }
+    strainSelect.innerHTML = html;
+    strainSelect.classList.add('meta-empty');
+}
+
+
+
+
+/**
+ * Toggle a checkbox dropdown menu open/closed.  Clicking outside closes it.
+ */
+function toggleCbDropdown(btn) {
+    const dropdown = btn.closest('.cb-dropdown');
+    const menu = dropdown.querySelector('.cb-dropdown-menu');
+    const isOpen = menu.classList.toggle('open');
+
+    if (isOpen) {
+        // Close on outside click
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target)) {
+                menu.classList.remove('open');
+                updateCbDropdownSummary(dropdown);
+                document.removeEventListener('mousedown', closeHandler);
+            }
+        };
+        // Defer so the current click doesn't immediately close it
+        setTimeout(() => document.addEventListener('mousedown', closeHandler), 0);
+    } else {
+        updateCbDropdownSummary(dropdown);
+    }
+}
+
+/**
+ * Update the toggle button text to reflect how many items are checked.
+ */
+function updateCbDropdownSummary(dropdown) {
+    const checked = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+    const btn = dropdown.querySelector('.cb-dropdown-toggle');
+    const count = checked.length;
+    if (count === 0) {
+        btn.textContent = '— select —';
+    } else if (count <= 3) {
+        btn.textContent = [...checked].map(cb => cb.value).join(', ');
+    } else {
+        btn.textContent = `${count} organs`;
+    }
+}
+
+
+/**
+ * Collect the current metadata from the table and POST it to the server.
+ *
+ * Reads every row's select/input values, builds a metadata-by-name dict,
+ * and sends it to POST /api/experiment-metadata/{dtxsid}.  On success,
+ * shows the approval badge and locks the form.
+ */
+async function approveMetadata() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    const table = document.querySelector('.metadata-table tbody');
+    if (!table) return;
+
+    // Collect metadata from each row
+    const metadata = {};
+    for (const row of table.querySelectorAll('tr')) {
+        const expName = row.dataset.expName;
+        if (!expName) continue;
+
+        const desc = {};
+        // Standard selects and text inputs
+        for (const input of row.querySelectorAll('select, input[type="text"]')) {
+            const field = input.dataset.field;
+            const val = input.value.trim();
+            desc[field] = val || null;
+        }
+        // Checkbox dropdowns (organ weight multi-organ)
+        for (const cbDrop of row.querySelectorAll('.cb-dropdown')) {
+            const field = cbDrop.dataset.field;
+            const checked = cbDrop.querySelectorAll('input[type="checkbox"]:checked');
+            const vals = [...checked].map(cb => cb.value);
+            desc[field] = vals.length > 0 ? vals.join(', ') : null;
+        }
+
+        // Add testArticle from currentIdentity (always the same for all experiments)
+        if (currentIdentity) {
+            desc.testArticle = {
+                name: currentIdentity.name || null,
+                casrn: currentIdentity.casrn || null,
+                dsstox: currentIdentity.dtxsid || null,
+            };
+        }
+
+        metadata[expName] = desc;
+    }
+
+    try {
+        showBlockingSpinner('Saving metadata and exporting .bm2...');
+
+        const resp = await fetch(`/api/experiment-metadata/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata }),
+        });
+
+        hideBlockingSpinner();
+
+        if (resp.ok) {
+            const result = await resp.json();
+
+            // Show approved state
+            const section = document.getElementById('metadata-review-section');
+            section.classList.add('approved');
+            hide('btn-approve-metadata');
+            const badge = document.getElementById('badge-metadata');
+            badge.style.display = '';
+            badge.textContent = 'Approved';
+
+            const bm2Msg = result.bm2_exported
+                ? ' Enriched .bm2 exported.'
+                : ' (Note: .bm2 export failed — metadata saved to JSON only.)';
+            showToast(`Metadata approved for ${result.updated} experiments.${bm2Msg}`);
+
+            // Metadata approval is the gatekeeper — now proceed to the
+            // processing pipeline (NTP stats, section cards, genomics).
+            await runProcessingPipeline();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Failed to save metadata');
+        }
+    } catch (e) {
+        hideBlockingSpinner();
+        showToast('Failed to save metadata: ' + e.message);
+    }
+}
+
+
+/**
+ * Simple HTML escaping for attribute values and text content.
+ */
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
 

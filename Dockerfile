@@ -23,7 +23,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         openjdk-21-jre-headless \
         ca-certificates \
-        curl && \
+        curl \
+        fonts-liberation && \
     rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -40,9 +41,11 @@ RUN uv pip install --system .
 # ---------------------------------------------------------------------------
 # Backend source — all Python modules at the project root.
 # Copies every .py file rather than listing individually, so newly-added
-# modules are automatically included.
+# modules are automatically included.  Also copies the Typst report template
+# (report.typ) used by report_pdf.py for PDF/UA-1 export.
 # ---------------------------------------------------------------------------
 COPY *.py ./
+COPY report.typ cover-bg.jpg ./
 
 # ---------------------------------------------------------------------------
 # Frontend assets — static HTML/CSS/JS served by FastAPI StaticFiles.
@@ -70,13 +73,12 @@ COPY _bmdx_jars/deps/ ./bmdx/target/deps/
 COPY _data/bmdx.duckdb ./bmdx.duckdb
 
 # ---------------------------------------------------------------------------
-# Session data — approved sections, version history, style profiles.
-# Staged by deploy.sh into _sessions/ (excluding _bm2_cache which uses
-# mmap and rebuilds on demand).  Baked into the image so sessions persist
-# across deployments.  Use sync.sh pull to download runtime-created
-# sessions before the next deploy.
+# Sessions directory — created empty here; at runtime it is overlaid by a
+# GCS FUSE volume mount (gs://rlm-bmdx-sessions/sessions/) so session data
+# persists independently of the container image.  The mkdir ensures the
+# mount point exists even if the volume isn't attached (local dev).
 # ---------------------------------------------------------------------------
-COPY _sessions/ ./sessions/
+RUN mkdir -p /app/sessions
 
 # ---------------------------------------------------------------------------
 # Environment: tell java_bridge.py where the BMDExpress JARs live.

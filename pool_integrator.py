@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 _TIER_PREFERENCE = {"bm2": 1, "txt": 2, "csv": 2, "txt_csv": 2, "xlsx": 3}
 
 # Java helper directory — centralized in java_bridge.py
-from java_bridge import JAVA_HELPER_DIR
+from java_bridge import JAVA_HELPER_DIR, build_classpath
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +449,15 @@ def integrate_pool(
     if cat_results:
         from apical_report import export_categories, build_category_lookup
 
+        # Collect all experiment names from the integrated data so
+        # build_category_lookup can resolve BMDExpress pipeline suffixes
+        # (e.g., "_williams_0.05_NOMTC_nofoldfilter") back to the raw
+        # experiment names used by build_table_data().
+        all_exp_names = [
+            exp.get("name", "")
+            for exp in integrated.get("doseResponseExperiments", [])
+        ]
+
         merged_cat_lookup: dict[tuple[str, str], dict] = {}
         for bm2_path in bm2_paths:
             cat_json_path = os.path.join(
@@ -456,7 +465,9 @@ def integrate_pool(
             )
             try:
                 categories_json = export_categories(bm2_path, cat_json_path)
-                cat_lookup = build_category_lookup(categories_json)
+                cat_lookup = build_category_lookup(
+                    categories_json, experiment_names=all_exp_names,
+                )
                 merged_cat_lookup.update(cat_lookup)
             except Exception as e:
                 logger.warning("Category export failed for %s: %s", bm2_path, e)
@@ -486,6 +497,22 @@ def integrate_pool(
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(integrated, f, indent=2)
 
+    # --- Write enriched .bm2 file ---
+    # Serialize the metadata-enriched BMDProject back to the canonical .bm2
+    # format (Java ObjectOutputStream).  This closes the metadata loop:
+    # the LLM inferred metadata, the user will approve it, and the .bm2
+    # becomes the single source of truth — openable in BMDExpress 3 with
+    # all ExperimentDescription fields pre-populated.
+    #
+    # The .bm2 is written alongside integrated.json in the session directory.
+    # It can be re-exported on demand via export_integrated_bm2().
+    bm2_out = os.path.join(session_dir, "integrated.bm2")
+    try:
+        export_integrated_bm2(out_path, bm2_out)
+    except Exception as e:
+        # Non-fatal: the JSON is the primary artifact; .bm2 is a convenience.
+        logger.warning("Failed to write enriched .bm2: %s", e)
+
     logger.info(
         "Integration complete: %d experiments, %d BMD results, %d category results → %s",
         len(integrated.get("doseResponseExperiments", [])),
@@ -495,3 +522,38 @@ def integrate_pool(
     )
 
     return integrated
+
+
+def export_integrated_bm2(json_path: str, bm2_path: str) -> str:
+    """
+    Convert a metadata-enriched integrated.json back to .bm2 format.
+
+    Uses JsonToBm2.java to deserialize the Jackson-annotated JSON into a
+    BMDProject object graph, then write it via ObjectOutputStream.  The
+    resulting .bm2 file is a standard BMDExpress 3 project file that can
+    be opened natively — with ExperimentDescription metadata pre-filled.
+
+    Args:
+        json_path: Path to the integrated.json (with @type/@ref annotations).
+        bm2_path:  Path to write the output .bm2 file.
+
+    Returns:
+        The bm2_path on success.
+
+    Raises:
+        RuntimeError: If the Java process exits with a non-zero code.
+    """
+    classpath = build_classpath()
+    cmd = [
+        "java", "-cp", classpath,
+        "JsonToBm2", json_path, bm2_path,
+    ]
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"JsonToBm2 failed (exit {result.returncode}): {result.stderr}"
+        )
+    logger.info("Wrote enriched .bm2: %s", bm2_path)
+    return bm2_path

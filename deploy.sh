@@ -4,9 +4,10 @@
 # What it does:
 #   1. Copies BMDExpress 3 JARs into _bmdx_jars/ (temporary, gitignored).
 #   2. Copies the bmdx.duckdb knowledge base into _data/.
-#   3. Stages session data into _sessions/ (excludes LMDB cache).
+#   3. Clears per-user GCS session buckets (fresh start each deploy).
 #   4. Submits the build context to Cloud Build (one image).
-#   5. Deploys TWO Cloud Run services from the same image:
+#   5. Deploys TWO Cloud Run services from the same image, each with its
+#      own GCS FUSE volume mount for isolated session storage:
 #        rlm-bmdx-dan   — allowed user: dan_22bc6d42
 #        rlm-bmdx-scott — allowed user: scott_2d774f16
 #      Each service has its own session state (ephemeral per container,
@@ -37,8 +38,10 @@ BMDX_PROJECT_DIR="${BMDX_PROJECT_DIR:-$HOME/Dev/Projects/BMDExpress-3}"
 # Override with SERVICE_NAME + ALLOWED_USERS + --single for custom deploys.
 DAN_SERVICE="rlm-bmdx-dan"
 DAN_USER="dan_22bc6d42"
+DAN_BUCKET="rlm-bmdx-sessions-dan"
 SCOTT_SERVICE="rlm-bmdx-scott"
 SCOTT_USER="scott_2d774f16"
+SCOTT_BUCKET="rlm-bmdx-sessions-scott"
 
 # -- Parse flags -----------------------------------------------------------
 
@@ -73,22 +76,13 @@ rm -rf _data
 mkdir -p _data
 cp bmdx.duckdb _data/bmdx.duckdb
 
-# -- Step 3: Stage session data --------------------------------------------
+# -- Step 3: Session buckets (preserved across deploys) ---------------------
+# GCS session buckets persist across deploys so users don't lose work.
+# To manually clear a bucket:
+#   gcloud storage rm "gs://rlm-bmdx-sessions-dan/**" --recursive --project=rlm-pipe
+#   gcloud storage rm "gs://rlm-bmdx-sessions-scott/**" --recursive --project=rlm-pipe
 
-echo "==> Staging session data..."
-rm -rf _sessions
-mkdir -p _sessions
-
-if [ -d sessions ]; then
-    rsync -a \
-        --exclude='_bm2_cache' \
-        --exclude='files' \
-        sessions/ _sessions/
-    session_count=$(find _sessions -maxdepth 1 -mindepth 1 -type d | wc -l)
-    echo "    Staged ${session_count} session(s)"
-else
-    echo "    No sessions/ directory found — deploying with empty sessions"
-fi
+echo "==> Session buckets preserved (not clearing)"
 
 # -- Step 4: Cloud Build ---------------------------------------------------
 # One image build, shared by both services.
@@ -104,8 +98,9 @@ gcloud builds submit --tag "$IMAGE" --timeout=20m --project="$PROJECT_ID"
 deploy_service() {
     local service="$1"
     local allowed="$2"
+    local bucket="$3"
 
-    echo "==> Deploying ${service} (allowed: ${allowed})..."
+    echo "==> Deploying ${service} (allowed: ${allowed}, bucket: ${bucket})..."
     gcloud run deploy "$service" \
       --image "$IMAGE" \
       --region "$REGION" \
@@ -115,7 +110,10 @@ deploy_service() {
       --memory 2Gi \
       --cpu 2 \
       --set-env-vars "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-},ALLOWED_USERS=${allowed}" \
-      --session-affinity
+      --session-affinity \
+      --execution-environment gen2 \
+      --add-volume name=sessions-vol,type=cloud-storage,bucket="${bucket}" \
+      --add-volume-mount volume=sessions-vol,mount-path=/app/sessions
 
     echo "    $(gcloud run services describe "$service" \
       --region "$REGION" --project "$PROJECT_ID" \
@@ -123,17 +121,17 @@ deploy_service() {
 }
 
 if $SINGLE_MODE; then
-    # Single-service mode — use SERVICE_NAME and ALLOWED_USERS from env
-    deploy_service "${SERVICE_NAME:-rlm-bmdx}" "${ALLOWED_USERS:-dan_22bc6d42,scott_2d774f16}"
+    # Single-service mode — use env vars (bucket defaults to dan's)
+    deploy_service "${SERVICE_NAME:-rlm-bmdx}" "${ALLOWED_USERS:-dan_22bc6d42,scott_2d774f16}" "${SESSION_BUCKET:-$DAN_BUCKET}"
 else
-    # Dual deploy — one service per user
-    deploy_service "$DAN_SERVICE"   "$DAN_USER"
-    deploy_service "$SCOTT_SERVICE" "$SCOTT_USER"
+    # Dual deploy — each user gets their own service and session bucket
+    deploy_service "$DAN_SERVICE"   "$DAN_USER"   "$DAN_BUCKET"
+    deploy_service "$SCOTT_SERVICE" "$SCOTT_USER" "$SCOTT_BUCKET"
 fi
 
 # -- Step 6: Clean up -----------------------------------------------------
 
 echo "==> Cleaning up temporary directories..."
-rm -rf _bmdx_jars _data _sessions
+rm -rf _bmdx_jars _data
 
 echo "==> Done."

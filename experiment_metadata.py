@@ -59,9 +59,16 @@ logger = logging.getLogger(__name__)
 VOCABULARIES = {
     "sex": ["male", "female", "both", "mixed", "NA"],
     "organ": [
-        "adrenal", "blood", "bone", "brain", "colon", "heart", "intestine",
-        "kidney", "liver", "lung", "muscle", "ovary", "pancreas", "prostate",
-        "skin", "spleen", "stomach", "testes", "thymus", "thyroid", "uterus",
+        "adrenal", "bladder", "blood", "bone", "bone marrow", "brain",
+        "cecum", "cervix", "colon", "duodenum", "epididymis", "esophagus",
+        "eye", "gallbladder", "harderian gland", "heart", "ileum",
+        "intestine", "jejunum", "kidney", "larynx", "liver", "lung",
+        "lymph node", "mammary gland", "muscle", "nasal cavity", "nerve",
+        "ovary", "oviduct", "pancreas", "parathyroid", "pituitary",
+        "preputial gland", "prostate", "rectum", "salivary gland",
+        "seminal vesicle", "skin", "spinal cord", "spleen", "sternum",
+        "stomach", "testes", "thymus", "thyroid", "tongue", "trachea",
+        "ureter", "uterus", "vagina", "Whole Body",
     ],
     "species": [
         "rat", "mouse", "human", "rabbit", "dog", "monkey",
@@ -72,7 +79,8 @@ VOCABULARIES = {
         "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID"],
     },
     "platform": [
-        "Clinical Chemistry", "Hematology", "Organ Weight", "Generic",
+        "Body Weight", "Clinical Chemistry", "Hematology", "Hormone", "IVIVE",
+        "Organ Weight", "Generic",
         "S1500+_rat", "S1500+_human",
         "Affymetrix Drosophila Genome Array", "Drosophila Genome 2.0 Array",
         "Human HG-Focus Target Array", "Human Genome U133A Array",
@@ -91,16 +99,17 @@ VOCABULARIES = {
         "Agilent-026437 D. rerio (Zebrafish) Oligo Microarray V3",
     ],
     "provider": [
-        "Affymetrix", "Agilent", "BioSpyder", "RefSeq", "Ensembl",
-        "Clinical Endpoint", "Generic",
+        "Affymetrix", "Agilent", "BioSpyder", "BMDExpress 3", "RefSeq", "Ensembl",
+        "Clinical Endpoint", "Study", "Generic",
     ],
-    "subjectType": ["in vivo", "in vitro"],
-    "articleRoute": ["oral", "inhaled", "transdermal"],
+    "subjectType": ["in vivo", "in vitro", "in silico"],
+    "articleRoute": ["gavage", "oral", "inhaled", "transdermal"],
     "articleVehicle": ["corn oil", "feed", "water", "aerosol", "gas"],
     "administrationMeans": ["gavage", "drinking water", "dietary"],
     "studyDuration": [
+        "5d", "28d",
         "3h", "6h", "9h", "24h",
-        "1d", "3d", "5d", "7d", "14d", "28d",
+        "1d", "3d", "7d", "14d",
     ],
     "articleType": ["chemical", "mixture", "electromagnetic radiation"],
 }
@@ -114,6 +123,94 @@ VOCABULARIES = {
 # Gene expression experiments can have thousands of probes — we only need
 # a sample for the LLM to recognize the data type.
 _MAX_PROBE_SAMPLE = 10
+
+# Probe names that are NOT organs — used by _extract_organ_names to filter
+# out non-organ endpoints from organ weight experiments.
+_ORGAN_WEIGHT_SKIP_TERMS = {"terminal body weight", "body weight", "bw", "tbw"}
+
+
+def _extract_probe_ids(exp: dict) -> list[str]:
+    """
+    Extract all probe IDs from an experiment's probeResponses.
+
+    Each probeResponse has a nested probe.id, but some older formats use
+    a top-level 'name' field instead.  This helper handles both, returning
+    a flat list of non-empty IDs.
+
+    Used by:
+      - _build_experiment_signals (samples first N for LLM context)
+      - infer_experiment_metadata (full list for organ weight extraction)
+    """
+    probe_ids = []
+    for pr in exp.get("probeResponses", []):
+        pid = pr.get("probe", {}).get("id", "") or pr.get("name", "")
+        if pid:
+            probe_ids.append(pid)
+    return probe_ids
+
+
+def _extract_organ_names(probe_ids: list[str]) -> list[str]:
+    """
+    Extract organ names from organ weight probe IDs.
+
+    Organ weight experiments use probe.id values like "Heart", "Kidney-Left",
+    "Liver".  This function normalizes them (strips laterality suffixes like
+    "-Left"/"-Right", lowercases) and filters out non-organ probes like
+    "Terminal Body Weight".
+
+    Returns a deduplicated list of lowercase organ names, preserving insertion
+    order, suitable for joining into a comma-separated organ field value.
+    """
+    organ_names = []
+    for pid in probe_ids:
+        # Normalize: "Kidney-Left" → "kidney" (strip laterality)
+        base = pid.split("-")[0].strip().lower()
+        if base not in _ORGAN_WEIGHT_SKIP_TERMS and base not in organ_names:
+            organ_names.append(base)
+    return organ_names
+
+
+def _resolve_vocab_value(value: str, allowed: list[str]) -> str | None:
+    """
+    Match a value against a vocabulary list, returning the canonical form.
+
+    Tries exact match first, then case-insensitive.  Returns None if the
+    value doesn't match any allowed term — meaning the LLM hallucinated
+    a value outside the controlled vocabulary.
+    """
+    # Exact match — fastest path
+    if value in allowed:
+        return value
+
+    # Case-insensitive fallback — handles "Oral" → "oral", etc.
+    lower_map = {v.lower(): v for v in allowed}
+    if value.lower() in lower_map:
+        return lower_map[value.lower()]
+
+    return None
+
+
+def _get_allowed_values(field: str, vocab, desc: dict) -> list[str]:
+    """
+    Resolve the allowed values list for a vocabulary field.
+
+    Most vocabularies are flat lists, but 'strain' is nested by species
+    (e.g. {"rat": ["Sprague-Dawley", ...], "mouse": ["C57BL/6", ...]}).
+    For strain, narrows to the species-specific list if species is known,
+    otherwise flattens all strains into one list.
+
+    Args:
+        field:  The vocabulary field name (e.g. "strain", "sex").
+        vocab:  The vocabulary entry — either a list or a dict (strain only).
+        desc:   The full description dict, used to look up species for strain.
+    """
+    if field == "strain" and isinstance(vocab, dict):
+        species = desc.get("species")
+        if species and species in vocab:
+            return vocab[species]
+        # Species unknown or not in strain dict — allow any strain
+        return [s for strains in vocab.values() for s in strains]
+    return vocab
 
 
 def _build_experiment_signals(
@@ -143,9 +240,9 @@ def _build_experiment_signals(
     signals = []
     for exp in experiments:
         name = exp["name"]
-        probes = exp.get("probeResponses", [])
-        probe_names = [p["probe"]["id"] for p in probes[:_MAX_PROBE_SAMPLE]]
-        n_probes = len(probes)
+        all_probe_ids = _extract_probe_ids(exp)
+        probe_names = all_probe_ids[:_MAX_PROBE_SAMPLE]
+        n_probes = len(all_probe_ids)
 
         # Try to find the source filename — match domain key against experiment name.
         # This is a heuristic; the LLM will also see the filename as context.
@@ -181,10 +278,11 @@ Examples of synonym mapping:
   - "M", "mal", "♂" → "male"
   - "Sprague Dawley", "SD" → "Sprague-Dawley"
   - "oral gavage" → articleRoute: "oral", administrationMeans: "gavage"
-  - "BW", "body wt" → platform: "Generic" (body weight is a generic endpoint)
+  - "BW", "body wt" → platform: "Body Weight"
   - "clin chem", "clinical chemistry", "serum chemistry" → platform: "Clinical Chemistry"
   - "heme", "CBC" → platform: "Hematology"
   - "organ wt", "organ weight" → platform: "Organ Weight"
+  - "hormone", "T3", "T4", "TSH", "testosterone" → platform: "Hormone"
   - Gene probe IDs like "AADAC_7934" indicate gene expression data
 
 Rules:
@@ -192,10 +290,25 @@ Rules:
    map it to the vocabulary term.  If nothing fits, use null.
 2. For gene expression experiments (many probes with gene-like names), infer the organ
    from the experiment name if present (e.g. "Kidney_..." → organ: "kidney").
-3. The test article identity is provided separately — populate testArticle for ALL experiments.
+3. The test article identity is provided separately — do NOT include testArticle in your output.
+   It will be attached automatically in post-processing (same for all experiments).
 4. If the study is clearly in vivo (animal data), set subjectType to "in vivo".
 5. Strain and species may be inferable from filenames or context.  If not, use null.
-6. Return valid JSON only — no markdown fences, no commentary."""
+6. For apical/clinical endpoints, use provider "Study" and match the platform to the domain:
+   "Body Weight" for body weight, "Organ Weight" for organ weight,
+   "Clinical Chemistry" for clinical chemistry, "Hematology" for hematology,
+   "Hormone" for hormone/thyroid hormone endpoints.
+7. Organ assignments by domain:
+   - Hematology, Clinical Chemistry, Hormone → organ: "blood"
+   - Body Weight → organ: "Whole Body"
+   - Organ Weight → organ: list of organs found in the probe/endpoint names
+     (e.g. probes like "liver", "kidney", "spleen" → organ: "liver, kidney, spleen").
+     If organ names aren't clear from the probes, use null.
+8. Tissue concentration / IVIVE experiments → platform: "IVIVE", provider: "BMDExpress 3".
+   Apply this even if no IVIVE data is present (it's the canonical classification).
+9. Defaults (use these unless evidence suggests otherwise):
+   studyDuration: "5d", articleRoute: "gavage", articleVehicle: "corn oil".
+10. Return valid JSON only — no markdown fences, no commentary."""
 
 
 def _build_prompt(
@@ -234,7 +347,6 @@ def _build_prompt(
     )
     prompt_parts.append(json.dumps({
         "<experiment_name>": {
-            "testArticle": {"name": "str", "casrn": "str", "dsstox": "str"},
             "subjectType": "str",
             "species": "str",
             "strain": "str",
@@ -282,37 +394,16 @@ def _validate_description(desc: dict) -> dict:
             cleaned[field] = None
             continue
 
-        # strain vocabulary is nested by species — flatten for validation
-        if field == "strain":
-            species = desc.get("species")
-            if isinstance(vocab, dict):
-                # Get strain list for the inferred species, or all strains
-                if species and species in vocab:
-                    allowed = vocab[species]
-                else:
-                    allowed = [s for strains in vocab.values() for s in strains]
-            else:
-                allowed = vocab
-        else:
-            allowed = vocab
+        allowed = _get_allowed_values(field, vocab, desc)
+        resolved = _resolve_vocab_value(value, allowed)
 
-        # Exact match
-        if value in allowed:
-            cleaned[field] = value
-            continue
+        if resolved is None:
+            logger.warning(
+                "Metadata field '%s' value '%s' not in vocabulary — dropping to null",
+                field, value,
+            )
 
-        # Case-insensitive match
-        lower_map = {v.lower(): v for v in allowed}
-        if value.lower() in lower_map:
-            cleaned[field] = lower_map[value.lower()]
-            continue
-
-        # No match — the LLM hallucinated a value outside the vocabulary
-        logger.warning(
-            "Metadata field '%s' value '%s' not in vocabulary — dropping to null",
-            field, value,
-        )
-        cleaned[field] = None
+        cleaned[field] = resolved
 
     return cleaned
 
@@ -368,7 +459,7 @@ def infer_experiment_metadata(
             prompt,
             _SYSTEM_PROMPT,
             model="claude-sonnet-4-6",
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0.0,
         )
     except Exception:
@@ -382,13 +473,50 @@ def infer_experiment_metadata(
         )
         return {}
 
-    # Validate each description against controlled vocabularies
+    # Build the testArticle block once — same for all experiments.
+    # Includes synonyms from the resolved chemical identity so the .bm2
+    # carries all known names (trade names, alternate CAS names, etc.).
+    test_article_block = None
+    if test_article:
+        test_article_block = {
+            "name": test_article.get("name"),
+            "casrn": test_article.get("casrn"),
+            "dsstox": test_article.get("dsstox"),
+        }
+        # Include synonyms if available (from PubChem resolver)
+        synonyms = test_article.get("synonyms", [])
+        if synonyms:
+            test_article_block["synonyms"] = synonyms
+
+    # Build a lookup of probe IDs per experiment for organ weight extraction.
+    # For organ weight experiments, the probe.id values ARE the organ names
+    # (e.g. "Heart", "Kidney-Left", "Liver").
+    experiment_probes: dict[str, list[str]] = {
+        exp["name"]: _extract_probe_ids(exp) for exp in experiments
+    }
+
+    # Validate each description against controlled vocabularies, then
+    # apply post-processing: testArticle attachment + organ weight extraction.
     validated: dict[str, dict] = {}
     for exp_name, desc in raw_descriptions.items():
         if not isinstance(desc, dict):
             logger.warning("Skipping non-dict description for '%s'", exp_name)
             continue
-        validated[exp_name] = _validate_description(desc)
+        validated_desc = _validate_description(desc)
+
+        # Attach testArticle (not LLM-generated — same for all experiments)
+        if test_article_block:
+            validated_desc["testArticle"] = test_article_block
+
+        # For organ weight experiments, derive organ list from probe IDs
+        if validated_desc.get("platform") == "Organ Weight":
+            organ_names = _extract_organ_names(
+                experiment_probes.get(exp_name, []),
+            )
+            if organ_names:
+                validated_desc["organ"] = ", ".join(organ_names)
+
+        validated[exp_name] = validated_desc
 
     logger.info(
         "Metadata inference complete: %d/%d experiments described",
@@ -398,6 +526,44 @@ def infer_experiment_metadata(
     return validated
 
 
+# Fields that are study-level properties — same across all experiments in a
+# study.  Used by attach_metadata to propagate consensus values to experiments
+# where the LLM returned null (e.g. tissue concentration experiments whose
+# names don't encode species/strain).
+_STUDY_LEVEL_FIELDS = [
+    "species", "strain", "studyDuration", "articleRoute",
+    "articleVehicle", "administrationMeans", "articleType", "subjectType",
+]
+
+
+def _compute_study_consensus(experiments: list[dict]) -> dict[str, str]:
+    """
+    Compute consensus values for study-level fields across all experiments.
+
+    For each field in _STUDY_LEVEL_FIELDS, counts non-null values and picks
+    the most common one — but only if it appears in a majority of experiments
+    that have any value for that field (i.e. the mode).  This prevents a
+    single outlier from overriding.
+
+    Returns a dict of field → consensus value (only fields with a clear
+    winner are included).
+    """
+    from collections import Counter
+    consensus = {}
+    for field in _STUDY_LEVEL_FIELDS:
+        counts: Counter[str] = Counter()
+        for exp in experiments:
+            ed = exp.get("experimentDescription") or {}
+            val = ed.get(field)
+            if val is not None:
+                counts[val] += 1
+        if counts:
+            # Pick the most common value — it represents the study default
+            best, _count = counts.most_common(1)[0]
+            consensus[field] = best
+    return consensus
+
+
 def attach_metadata(
     experiments: list[dict],
     descriptions: dict[str, dict],
@@ -405,23 +571,58 @@ def attach_metadata(
     """
     Attach inferred ExperimentDescription metadata to experiments in-place.
 
-    For each experiment, if a description was inferred, it's stored under
-    the 'experimentDescription' key — matching the BMDExpress 3 Java schema.
-
-    Existing experimentDescription fields are NOT overwritten — the LLM
-    inference is a fallback for experiments that lack metadata.
+    Three-phase merge:
+      1. Field-by-field merge of LLM-inferred descriptions into each
+         experiment's existing experimentDescription.  Only sets a field
+         if its current value is null/missing — preserves human edits,
+         prior LLM runs, and Jackson deserialization defaults.
+      2. Post-processing overrides: tissue concentration experiments get
+         platform="IVIVE" and provider="BMDExpress 3" if still null.
+      3. Study-level consensus propagation: fields like species, strain,
+         studyDuration are study-wide properties.  If the LLM inferred
+         them for most experiments but missed some (e.g. tissue concentration),
+         the consensus value fills the gaps.
 
     Args:
         experiments:  List of doseResponseExperiment dicts (mutated in place).
         descriptions: Dict from infer_experiment_metadata().
     """
+    # --- Phase 1: merge LLM descriptions + tissue concentration override ---
     for exp in experiments:
         name = exp["name"]
-        # Don't overwrite existing metadata (e.g. from a metadata-aware .bm2)
-        existing = exp.get("experimentDescription")
-        if existing and any(v for v in existing.values() if v is not None):
-            continue
+        existing = exp.get("experimentDescription") or {}
 
+        # Merge LLM-inferred metadata, only for fields currently null/missing.
         desc = descriptions.get(name)
         if desc:
-            exp["experimentDescription"] = desc
+            for field, value in desc.items():
+                if existing.get(field) is None:
+                    existing[field] = value
+
+        # Tissue concentration experiments: IVIVE is computational modeling
+        # (in vitro → in vivo extrapolation), so platform="IVIVE",
+        # provider="BMDExpress 3", subjectType="in silico".
+        if "tissue" in name.lower() and "concentration" in name.lower():
+            if existing.get("platform") is None:
+                existing["platform"] = "IVIVE"
+            if existing.get("provider") is None:
+                existing["provider"] = "BMDExpress 3"
+            existing["subjectType"] = "in silico"
+
+        # Always write back — existing may have been mutated by merge or
+        # post-processing, and the `or {}` fallback above may have created
+        # a new dict not yet assigned to the experiment.
+        exp["experimentDescription"] = existing
+
+    # --- Phase 2: propagate study-level consensus to fill remaining gaps ---
+    # Fields like species/strain/studyDuration are study-wide — if the LLM
+    # got them for body weight and clin chem but not tissue concentration,
+    # the consensus fills those in.
+    consensus = _compute_study_consensus(experiments)
+    if consensus:
+        for exp in experiments:
+            ed = exp.get("experimentDescription") or {}
+            for field, value in consensus.items():
+                if ed.get(field) is None:
+                    ed[field] = value
+            exp["experimentDescription"] = ed

@@ -163,9 +163,11 @@ def serialize_table_rows(table_data: dict) -> dict:
     """
     Convert a {sex: [TableRow, ...]} dict to JSON-friendly nested dicts.
 
-    Each TableRow has values_by_dose, n_by_dose, bmd_str, bmdl_str, and
-    trend_marker attributes.  Dose float keys are converted via _js_dose_key()
-    to match JavaScript's String(number) behavior.
+    Each TableRow has values_by_dose, n_by_dose, and trend_marker attributes.
+    BMD/BMDL are excluded — they belong in the separate BMD summary table
+    (matching the NIEHS reference report structure: domain tables + Table 8).
+    Dose float keys are converted via _js_dose_key() to match JavaScript's
+    String(number) behavior.
 
     Used by /api/process-bm2 and /api/process-integrated to serialize
     the NTP stats pipeline output for the browser.
@@ -187,8 +189,6 @@ def serialize_table_rows(table_data: dict) -> dict:
                 "doses": sorted_doses,
                 "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
                 "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
-                "bmd": row.bmd_str,
-                "bmdl": row.bmdl_str,
                 "trend_marker": row.trend_marker,
             })
     return tables_json
@@ -435,7 +435,7 @@ async def api_pool_resolve(request: Request):
 
 
 @router.post("/api/pool/integrate/{dtxsid}")
-async def api_pool_integrate(dtxsid: str):
+async def api_pool_integrate(dtxsid: str, request: Request):
     """
     Merge all pool files into a unified BMDProject JSON.
 
@@ -500,20 +500,44 @@ async def api_pool_integrate(dtxsid: str):
         except (json.JSONDecodeError, Exception):
             pass
 
+    # Persist identity.json early — the client sends the resolved chemical
+    # identity in the request body so it's available for LLM metadata inference.
+    # Previously this was only written on section approve, which meant integration
+    # (which happens before any approve) couldn't find the test article.
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if body.get("identity"):
+        identity_path = session_dir / "identity.json"
+        identity_path.write_text(
+            json.dumps(body["identity"], indent=2, default=str),
+            encoding="utf-8",
+        )
+
     # Load test article identity for metadata inference.
     # The LLM uses this to populate testArticle on each experiment.
-    meta_path = session_dir / "meta.json"
+    # Try identity.json (written above or on section approve), then fall back
+    # to meta.json (legacy — written on section approve with name/casrn).
     test_article = None
-    if meta_path.exists():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            test_article = {
-                "name": meta.get("name", ""),
-                "casrn": meta.get("casrn", ""),
-                "dsstox": meta.get("dtxsid", dtxsid),
-            }
-        except (json.JSONDecodeError, Exception):
-            pass
+    for identity_file in ("identity.json", "meta.json"):
+        id_path = session_dir / identity_file
+        if id_path.exists():
+            try:
+                id_data = json.loads(id_path.read_text(encoding="utf-8"))
+                name = id_data.get("name", "")
+                casrn = id_data.get("casrn", "")
+                dsstox = id_data.get("dtxsid", dtxsid)
+                if name or casrn:
+                    test_article = {
+                        "name": name,
+                        "casrn": casrn,
+                        "dsstox": dsstox,
+                        "synonyms": id_data.get("synonyms", []),
+                    }
+                    break
+            except (json.JSONDecodeError, Exception):
+                continue
 
     # Run integration in a thread pool -- xlsx parsing uses openpyxl (blocking I/O)
     loop = asyncio.get_running_loop()
@@ -540,10 +564,29 @@ async def api_pool_integrate(dtxsid: str):
     # Cache in memory for the process-integrated endpoint
     _integrated_pool[dtxsid] = integrated
 
-    return Response(
-        content=orjson.dumps(integrated),
-        media_type="application/json",
-    )
+    # Return a lightweight summary instead of the full integrated JSON
+    # (which can be 50+ MB and exceeds Cloud Run's 32 MiB response limit).
+    # The client can fetch the full data via GET /api/integrated/{dtxsid}
+    # if needed (that endpoint uses FileResponse with chunked streaming).
+    #
+    # The summary mirrors the structure the client's renderIntegratedPreview()
+    # expects: _meta.source_files for the domain table, plus top-level counts.
+    meta = integrated.get("_meta", {})
+    experiments = integrated.get("doseResponseExperiments", [])
+    return JSONResponse({
+        "ok": True,
+        "_meta": meta,
+        "experiment_count": len(experiments),
+        "bmd_result_count": len(integrated.get("bMDResult", [])),
+        "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
+        "experiments": [
+            {
+                "name": exp.get("name", ""),
+                "probe_count": len(exp.get("probeResponses", [])),
+            }
+            for exp in experiments
+        ],
+    })
 
 
 @router.get("/api/integrated/{dtxsid}")
@@ -697,6 +740,16 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # can re-pick the statistic without re-running Java.
         flat_cat = integrated.get("_category_lookup", {})
         cat_lookup: dict[tuple[str, str], dict] = {}
+
+        # Collect experiment names so we can resolve BMDExpress pipeline
+        # suffixes in category keys.  Old integrated.json files may have
+        # keys like "female_clin_chem_williams_0.05_NOMTC_nofoldfilter|endpoint"
+        # but build_table_data() queries with "female_clin_chem".
+        all_exp_names = sorted(
+            [exp.get("name", "") for exp in integrated.get("doseResponseExperiments", [])],
+            key=len, reverse=True,
+        )
+
         for k, v in flat_cat.items():
             entry = dict(v)
             # Re-select from stored stat blocks if they exist.
@@ -710,7 +763,24 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 entry["bmdl"] = cat_bmdl_blk.get(bmd_stat, cat_bmdl_blk.get("mean", ""))
             if cat_bmdu_blk:
                 entry["bmdu"] = cat_bmdu_blk.get(bmd_stat, cat_bmdu_blk.get("mean", ""))
-            cat_lookup[tuple(k.split("|", 1))] = entry
+
+            prefix, endpoint = k.split("|", 1) if "|" in k else (k, "")
+
+            # Resolve suffixed prefix to raw experiment name.
+            # This handles both new (already resolved) and old (suffixed) keys.
+            resolved = prefix
+            for exp_name in all_exp_names:
+                if prefix == exp_name:
+                    resolved = exp_name
+                    break
+                if prefix.startswith(exp_name) and prefix[len(exp_name):len(exp_name) + 1] == "_":
+                    resolved = exp_name
+                    break
+
+            cat_lookup[(resolved, endpoint)] = entry
+            # Also keep the original key for backward compat
+            if resolved != prefix:
+                cat_lookup[(prefix, endpoint)] = entry
 
         loop = asyncio.get_running_loop()
 
@@ -872,6 +942,28 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 "narrative": narrative,
             })
 
+        # --- BMDS modeling (pybmds) for apical endpoints ---
+        # Run the EPA BMDS continuous models on the same dose-response data
+        # to produce a second BMD summary that matches the NIEHS reference
+        # report methodology (BMDS 2.7.0 via pybmds).  This gives users
+        # both the BMDExpress 3-native results AND the BMDS results.
+        from apical_bmds import run_bmds_for_endpoints
+
+        bmds_inputs = []
+        for _dom, sex_rows in domain_tables.items():
+            for _sex, rows in sex_rows.items():
+                for row in rows:
+                    if hasattr(row, "_bmds_input") and row._bmds_input:
+                        bmds_inputs.append(row._bmds_input)
+
+        # Run BMDS in a thread pool — pybmds model fitting is CPU-bound
+        # and takes ~0.5-2s per endpoint (total ~10-30s for a full study).
+        bmds_results = {}
+        if bmds_inputs:
+            bmds_results = await loop.run_in_executor(
+                None, run_bmds_for_endpoints, bmds_inputs,
+            )
+
         # --- Gene expression genomics (from integrated .bm2) ---
         # If the integration included gene_expression, extract per-gene BMD
         # and GO BP category results directly from the .bm2 using the
@@ -1025,9 +1117,92 @@ async def api_process_integrated(dtxsid: str, request: Request):
             for s in bmd_stats
         }
 
+        # --- Build apical BMD summary (Table 8 equivalent) ---
+        # Collects BMD, BMDL, LOEL, NOEL, direction from ALL domain
+        # TableRows into a flat list for the separate BMD summary card.
+        # Matches the NIEHS reference report structure where domain tables
+        # (Tables 2-7) show dose-response data and Table 8 summarizes BMDs.
+        apical_bmd_summary = []
+        for dom, sex_rows in sorted(domain_tables.items()):
+            for sex, rows in sex_rows.items():
+                for row in rows:
+                    # Include the row if it has a BMD result OR significant
+                    # trend/pairwise findings (LOEL exists).  Endpoints with
+                    # neither are uninteresting for the summary.
+                    has_bmd = row.bmd_status is not None
+                    has_loel = row.loel is not None
+                    if not has_bmd and not has_loel:
+                        continue
+                    apical_bmd_summary.append({
+                        "endpoint": row.label,
+                        "sex": sex,
+                        "domain": dom,
+                        "bmd": row.bmd_str,
+                        "bmdl": row.bmdl_str,
+                        "bmd_status": row.bmd_status,
+                        "loel": row.loel,
+                        "noel": row.noel,
+                        "direction": row.direction,
+                    })
+
+        # --- Build BMDS-based BMD summary (second Table 8) ---
+        # Same structure as the BMDExpress 3 summary, but using pybmds
+        # results.  Only includes endpoints that pybmds modeled.
+        apical_bmd_summary_bmds = []
+        if bmds_results:
+            for dom, sex_rows in sorted(domain_tables.items()):
+                for sex, rows in sex_rows.items():
+                    for row in rows:
+                        bmds_key = f"{sex}::{row.label}"
+                        bmds_res = bmds_results.get(bmds_key)
+                        if not bmds_res:
+                            continue
+                        # Match the NIEHS reference Table 8 inclusion gate:
+                        # include only endpoints that have a significant trend
+                        # + pairwise finding (LOEL exists) OR a viable BMDS
+                        # result.  This filters out the many endpoints where
+                        # pybmds produces a UREP/NVM but there's no statistical
+                        # significance — those aren't informative for the summary.
+                        has_viable_bmds = bmds_res["status"] == "viable"
+                        has_loel = row.loel is not None
+                        if not has_viable_bmds and not has_loel:
+                            continue
+
+                        # Format BMD/BMDL strings matching NIEHS conventions
+                        status = bmds_res["status"]
+                        if status == "viable" and bmds_res["bmd"] is not None:
+                            bmd_str = f"{bmds_res['bmd']:.3g}"
+                            bmdl_str = f"{bmds_res['bmdl']:.3g}" if bmds_res["bmdl"] else "—"
+                        elif status == "NR":
+                            nonzero = [d for d in row.values_by_dose if d > 0]
+                            lnzd = min(nonzero) if nonzero else 0
+                            bmd_str = f"<{lnzd / 3:.3g}" if lnzd > 0 else "NR"
+                            bmdl_str = "—"
+                        elif status == "UREP":
+                            bmd_str = "UREP"
+                            bmdl_str = "UREP"
+                        else:
+                            bmd_str = "NVM"
+                            bmdl_str = "NVM"
+
+                        apical_bmd_summary_bmds.append({
+                            "endpoint": row.label,
+                            "sex": sex,
+                            "domain": dom,
+                            "bmd": bmd_str,
+                            "bmdl": bmdl_str,
+                            "bmd_status": status,
+                            "model_name": bmds_res.get("model_name"),
+                            "loel": row.loel,
+                            "noel": row.noel,
+                            "direction": row.direction,
+                        })
+
         return JSONResponse({
             "sections": sections,
             "genomics_sections": genomics_sections,
+            "apical_bmd_summary": apical_bmd_summary,
+            "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
         })

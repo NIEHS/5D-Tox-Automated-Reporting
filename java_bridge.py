@@ -2,7 +2,7 @@
 java_bridge.py — Shared Java classpath and path constants for the bmdx-core bridge.
 
 All Python modules that invoke Java helpers (ExportBm2, ExportGenomics,
-ExportCategories, IntegrateProject, RunPrefilter) import their classpath
+ExportCategories, IntegrateProject, RunPrefilter, JsonToBm2) import their classpath
 and directory constants from here.  This eliminates the duplication that
 previously existed across apical_report.py, apical_stats.py, and
 pool_integrator.py.
@@ -43,7 +43,7 @@ BMDX_CORE_JAR = BMDX_PROJECT / "target" / "bmdx-core.jar"
 BMDX_DEPS_DIR = BMDX_PROJECT / "target" / "deps"
 
 # Path to the directory containing our pre-compiled Java helper .class files
-# (ExportBm2, ExportGenomics, ExportCategories, IntegrateProject, RunPrefilter).
+# (ExportBm2, ExportGenomics, ExportCategories, IntegrateProject, RunPrefilter, JsonToBm2).
 JAVA_HELPER_DIR = Path(__file__).parent / "java"
 
 

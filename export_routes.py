@@ -552,3 +552,83 @@ async def api_export_pdf_scaffold(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/export-bm2/{dtxsid} — download enriched .bm2 file
+# ---------------------------------------------------------------------------
+
+@router.get("/api/export-bm2/{dtxsid}")
+async def api_export_bm2(dtxsid: str):
+    """
+    Download the metadata-enriched .bm2 file for a session.
+
+    Reads the session's integrated.json (which contains LLM-inferred and
+    user-approved ExperimentDescription metadata) and converts it to the
+    canonical .bm2 format (Java ObjectOutputStream) via JsonToBm2.
+
+    The resulting file is a standard BMDExpress 3 project file — opening
+    it in BMDExpress 3 shows experiments with metadata pre-filled (species,
+    sex, organ, test article, study duration, etc.).
+
+    If an integrated.bm2 already exists and is newer than integrated.json,
+    it's served directly without re-export.
+
+    Returns the .bm2 file as a download attachment.
+    """
+    from session_store import session_dir
+    from pool_integrator import export_integrated_bm2
+
+    sess_path = session_dir(dtxsid)
+    json_path = sess_path / "integrated.json"
+    bm2_path = sess_path / "integrated.bm2"
+
+    if not json_path.exists():
+        return JSONResponse(
+            {"error": "No integrated data found — run integration first"},
+            status_code=404,
+        )
+
+    # Re-export if .bm2 is missing or older than the JSON source.
+    # This handles the case where the user edits metadata (re-runs
+    # integration) and then downloads — always gets the latest.
+    needs_export = (
+        not bm2_path.exists()
+        or bm2_path.stat().st_mtime < json_path.stat().st_mtime
+    )
+    if needs_export:
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                export_integrated_bm2,
+                str(json_path),
+                str(bm2_path),
+            )
+        except Exception as e:
+            logger.exception("Failed to export enriched .bm2 for %s", dtxsid)
+            return JSONResponse(
+                {"error": f"Export failed: {e}"},
+                status_code=500,
+            )
+
+    # Derive a human-readable filename from the session identity
+    identity_path = sess_path / "identity.json"
+    filename = f"{dtxsid}_integrated.bm2"
+    if identity_path.exists():
+        try:
+            import json
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+            chem_name = identity.get("preferredName", "")
+            if chem_name:
+                safe_name = safe_filename(chem_name)
+                filename = f"{safe_name}_integrated.bm2"
+        except Exception:
+            pass
+
+    return FileResponse(
+        str(bm2_path),
+        filename=filename,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

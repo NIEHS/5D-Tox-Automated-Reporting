@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BMD Summary Comparison: 5dToxReport vs NIEHS Reference</title>
+<style>
+  :root {
+    --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+    --text: #1e293b; --muted: #64748b; --accent: #2563eb;
+    --green: #16a34a; --red: #dc2626; --amber: #d97706;
+    --viable-bg: #f0fdf4; --nvm-bg: #fef9c3; --urep-bg: #fef2f2;
+    --match-bg: #eff6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.6; padding: 2rem;
+    max-width: 1200px; margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 0.75rem; color: var(--accent); }
+  h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    margin: 0.75rem 0;
+  }
+  th, td {
+    padding: 6px 10px; border: 1px solid var(--border);
+    text-align: left; white-space: nowrap;
+  }
+  th { background: #f1f5f9; font-weight: 600; font-size: 0.8rem; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.sex-header td {
+    font-weight: 700; background: #f1f5f9;
+    border-bottom: 2px solid var(--border);
+  }
+  .viable { background: var(--viable-bg); }
+  .nvm { background: var(--nvm-bg); }
+  .urep { background: var(--urep-bg); }
+  .match { background: var(--match-bg); }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 4px;
+    font-size: 0.75rem; font-weight: 600;
+  }
+  .badge-viable { background: #dcfce7; color: #166534; }
+  .badge-nvm { background: #fef08a; color: #854d0e; }
+  .badge-urep { background: #fecaca; color: #991b1b; }
+  .badge-nd { background: #e2e8f0; color: #475569; }
+  .badge-match { background: #dbeafe; color: #1e40af; }
+  .badge-diff { background: #fecaca; color: #991b1b; }
+  .footnotes {
+    font-size: 0.8rem; color: var(--muted); margin-top: 1rem;
+    padding-top: 0.75rem; border-top: 1px solid var(--border);
+  }
+  .footnotes p { margin-bottom: 0.25rem; }
+  .finding {
+    padding: 0.75rem 1rem; border-left: 3px solid var(--accent);
+    background: #f8fafc; margin: 0.5rem 0; font-size: 0.9rem;
+  }
+  .finding.warn { border-left-color: var(--amber); }
+  .finding.err { border-left-color: var(--red); }
+  .finding.ok { border-left-color: var(--green); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+  sup { font-size: 0.7em; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0; font-size: 0.8rem; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch {
+    width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<h1>BMD Summary Comparison</h1>
+<p class="subtitle">
+  5dToxReport (BMDExpress 3) vs NIEHS Reference Report 10 (BMDS 2.7.0)<br>
+  Chemical: Perfluorohexanesulfonamide (PFHxSAm) &mdash; CASRN 41997-13-1 &mdash; DTXSID50469320<br>
+  Generated: <script>document.write(new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}))</script>
+</p>
+
+<!-- ============================================================ -->
+<h2>1. Side-by-Side: Table 8 Equivalent</h2>
+<!-- ============================================================ -->
+
+<div class="card">
+  <p style="font-size:0.85rem; margin-bottom:0.5rem;">
+    Rows are aligned by endpoint. Where the same endpoint appears in both reports,
+    values are shown side by side. Rows unique to one report are shaded.
+  </p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--viable-bg)"></div> Viable BMD</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--nvm-bg)"></div> NVM</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--urep-bg)"></div> UREP</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--match-bg)"></div> Only in one report</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2">Endpoint</th>
+        <th colspan="5" style="text-align:center; background:#dbeafe;">NIEHS Reference (BMDS 2.7.0)</th>
+        <th colspan="5" style="text-align:center; background:#dcfce7;">5dToxReport (BMDExpress 3)</th>
+      </tr>
+      <tr>
+        <th>BMD</th><th>BMDL</th><th>LOEL</th><th>NOEL</th><th>Dir</th>
+        <th>BMD</th><th>BMDL</th><th>LOEL</th><th>NOEL</th><th>Dir</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- MALE -->
+      <tr class="sex-header"><td colspan="11">Male</td></tr>
+
+      <tr class="viable">
+        <td>Total Thyroxine (T4)</td>
+        <td class="num">7.264</td><td class="num">5.024</td><td class="num">12</td><td class="num">4</td><td>DOWN</td>
+        <td class="num">8.54</td><td class="num">3.59</td><td class="num">37</td><td class="num">12</td><td>&mdash;</td>
+      </tr>
+      <tr class="viable">
+        <td>Absolute Liver Weight</td>
+        <td class="num">8.492</td><td class="num">5.426</td><td class="num">12</td><td class="num">4</td><td>UP</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Not split (see "Liver" below)</td>
+      </tr>
+      <tr class="viable">
+        <td>Relative Liver Weight</td>
+        <td class="num">16.251</td><td class="num">8.358</td><td class="num">12</td><td class="num">4</td><td>UP</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Not split (see "Liver" below)</td>
+      </tr>
+      <tr class="match">
+        <td>Liver <sup>a</sup></td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Split into Absolute/Relative above</td>
+        <td class="num">20.5</td><td class="num">3.04</td><td class="num">12</td><td class="num">4</td><td>&mdash;</td>
+      </tr>
+      <tr class="viable">
+        <td>Total Triiodothyronine (T3)</td>
+        <td class="num">19.107</td><td class="num">7.426</td><td class="num">111</td><td class="num">37</td><td>DOWN</td>
+        <td class="num">27.3</td><td class="num">10.8</td><td class="num">111</td><td class="num">37</td><td>&mdash;</td>
+      </tr>
+      <tr class="urep">
+        <td>Cholesterol</td>
+        <td>UREP</td><td>UREP</td><td class="num">111</td><td class="num">37</td><td>&mdash;</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Not in summary <sup>b</sup></td>
+      </tr>
+      <tr>
+        <td>Neutrophils</td>
+        <td class="urep">UREP</td><td class="urep">UREP</td><td class="num">111</td><td class="num">37</td><td>&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num">4.0</td><td class="num">1.4</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Mean Cell Hemoglobin</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num">1.4</td><td class="num">0.5</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Mean Cell HGB Concentration</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num">1.4</td><td class="num">0.5</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Reticulocyte count</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td>&mdash;</td><td class="num">111</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Kidney-Right</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td>&mdash;</td><td>&mdash;</td><td class="num">1.4</td><td class="num">0.5</td><td>&mdash;</td>
+      </tr>
+
+      <!-- FEMALE -->
+      <tr class="sex-header"><td colspan="11">Female</td></tr>
+
+      <tr>
+        <td>Manual Hematocrit</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num"><b>37</b></td><td class="num">12</td><td>DOWN</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td>&mdash;</td><td class="num">111</td><td>&mdash;</td>
+      </tr>
+      <tr class="urep">
+        <td>Sorbitol Dehydrogenase</td>
+        <td>UREP</td><td>UREP</td><td class="num"><b>37</b></td><td class="num">12</td><td>&mdash;</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Not in summary <sup>b</sup></td>
+      </tr>
+      <tr>
+        <td>Total Thyroxine (T4)</td>
+        <td class="urep">UREP</td><td class="urep">UREP</td><td class="num"><b>37</b></td><td class="num">12</td><td>&mdash;</td>
+        <td class="num viable">14.8</td><td class="num viable">6.76</td><td class="num">37</td><td class="num">12</td><td>&mdash;</td>
+      </tr>
+      <tr class="urep">
+        <td>Aspartate Aminotransferase</td>
+        <td>UREP</td><td>UREP</td><td class="num"><b>111</b></td><td class="num">37</td><td>&mdash;</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">Not in summary <sup>b</sup></td>
+      </tr>
+      <tr class="match">
+        <td>Basophil count</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="num viable">109</td><td class="num viable">64.4</td><td>&mdash;</td><td class="num">111</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Mean Cell Hemoglobin</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="num viable">115</td><td class="num viable">70.6</td><td class="num">0.15</td><td class="num">0</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Mean Cell HGB Concentration</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num">0.15</td><td class="num">0</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Platelet count</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="nvm">NVM</td><td class="nvm">NVM</td><td class="num">37</td><td class="num">12</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Free Thyroxine</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td>&mdash;</td><td>&mdash;</td><td class="num">4.0</td><td class="num">1.4</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Thyroid Stimulating Hormone</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="num viable">28</td><td class="num viable">16.4</td><td class="num">111</td><td class="num">37</td><td>&mdash;</td>
+      </tr>
+      <tr class="match">
+        <td>Triiodiodothyronine (T3)</td>
+        <td colspan="5" style="text-align:center; color:var(--muted);">&mdash;</td>
+        <td class="num viable">51</td><td class="num viable">28.6</td><td class="num">1.4</td><td class="num">0.5</td><td>&mdash;</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footnotes">
+    <p><sup>a</sup> BMDExpress 3 reports a single "Liver" endpoint rather than splitting into absolute and relative weight. The BMD of 20.5 is closest to the reference's relative liver weight BMD of 16.251.</p>
+    <p><sup>b</sup> Endpoint exists in the underlying data but did not appear in our BMD summary &mdash; either BMDExpress 3 did not model it, or it lacked both a BMD result and a significant LOEL.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>2. Analysis of Differences</h2>
+<!-- ============================================================ -->
+
+<div class="card">
+  <h3>A. BMD Modeling Tool</h3>
+  <div class="finding warn">
+    <strong>Root cause of numerical differences.</strong>
+    The reference used <strong>BMDS 2.7.0</strong> (via pybmds 0.11) with 15+ model types
+    (Linear, Polynomial 2&deg;&ndash;8&deg;, Power, Hill, Exponential M2&ndash;M5).
+    We use <strong>BMDExpress 3</strong> which fits fewer models
+    (Hill, Power, Linear, Polynomial 2&deg;, Exponential M2&ndash;M5).
+    Fewer candidate models means fewer chances to find a well-fitting curve,
+    and different model selection criteria (AIC vs best-fit logic) yield different BMD/BMDL values.
+  </div>
+
+  <h3>B. BMD Values &mdash; Same Ballpark, Different Numbers</h3>
+  <table>
+    <tr><th>Endpoint (Male)</th><th>Reference BMD</th><th>Ours BMD</th><th>Ratio</th><th>Assessment</th></tr>
+    <tr>
+      <td>Total T4</td><td class="num">7.264</td><td class="num">8.54</td><td class="num">1.18&times;</td>
+      <td><span class="badge badge-viable">Close</span></td>
+    </tr>
+    <tr>
+      <td>Total T3</td><td class="num">19.107</td><td class="num">27.3</td><td class="num">1.43&times;</td>
+      <td><span class="badge badge-nvm">Moderate diff</span></td>
+    </tr>
+    <tr>
+      <td>Liver (abs)</td><td class="num">8.492</td><td class="num">20.5</td><td class="num">2.41&times;</td>
+      <td><span class="badge badge-urep">Large diff</span></td>
+    </tr>
+    <tr><th>Endpoint (Female)</th><th>Reference BMD</th><th>Ours BMD</th><th>Ratio</th><th>Assessment</th></tr>
+    <tr>
+      <td>Total T4</td><td>UREP</td><td class="num">14.8</td><td>&mdash;</td>
+      <td><span class="badge badge-diff">Status mismatch</span> &mdash; BMDS couldn't find viable model; BMDExpress 3 did</td>
+    </tr>
+  </table>
+
+  <h3>C. Status Classification (NVM vs UREP)</h3>
+  <div class="finding err">
+    <strong>Systematic mismatch.</strong>
+    The reference has <strong>4 UREP</strong> endpoints and <strong>1 NVM</strong>.
+    We have <strong>0 UREP</strong> and <strong>8 NVM</strong>.
+    This happens because BMDExpress 3 model fitting either succeeds (viable) or fails entirely (NVM);
+    it rarely produces the intermediate state where a model fits but BMDU/BMDL&nbsp;&gt;&nbsp;40 (UREP).
+    BMDS 2.7.0 with its richer model set more often finds <em>some</em> model that fits
+    but with unreliable confidence intervals, yielding UREP.
+  </div>
+
+  <h3>D. LOEL / NOEL Discrepancies</h3>
+  <div class="finding warn">
+    <strong>Male T4:</strong> Reference LOEL = 12, NOEL = 4. Ours: LOEL = 37, NOEL = 12.
+    The reference likely used different p-value thresholds or applied outlier exclusion
+    (Dixon and Massey test, per their methods section) which we do not currently perform.
+    This shifts which dose first reaches significance.
+  </div>
+  <div class="finding warn">
+    <strong>Female Manual Hematocrit:</strong> Reference LOEL = <b>37</b>, NOEL = 12.
+    Ours: LOEL = &mdash; (none), NOEL = 111.
+    The reference found pairwise significance at 37 mg/kg; our Dunnett/Williams tests
+    did not flag any dose as pairwise-significant for this endpoint.
+  </div>
+
+  <h3>E. Direction of Change</h3>
+  <div class="finding err">
+    <strong>Bug: direction field is empty for all rows.</strong>
+    The Jonckheere test computes direction (1 = UP, &minus;1 = DOWN), but it is not
+    propagating into the BMD summary. The reference has clear DOWN/UP annotations
+    for 4 of 10 endpoints. This is a code bug in <code>build_table_data()</code>.
+  </div>
+
+  <h3>F. Endpoint Coverage</h3>
+  <div class="two-col">
+    <div>
+      <h3 style="margin-top:0">In reference only (3)</h3>
+      <ul style="font-size:0.85rem; padding-left:1.25rem;">
+        <li>Absolute Liver Weight <span class="badge badge-viable">viable</span></li>
+        <li>Cholesterol <span class="badge badge-urep">UREP</span></li>
+        <li>Sorbitol Dehydrogenase <span class="badge badge-urep">UREP</span></li>
+      </ul>
+      <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">
+        The reference included only endpoints with significant trend AND pairwise tests.
+        Cholesterol and Sorbitol Dehydrogenase were included despite UREP because
+        their LOEL/NOEL are informative.
+      </p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">In ours only (11)</h3>
+      <ul style="font-size:0.85rem; padding-left:1.25rem;">
+        <li>Basophil count, MCH, MCHC, Platelets (Female)</li>
+        <li>MCH, MCHC, Reticulocyte count (Male)</li>
+        <li>Free Thyroxine, TSH, T3 (Female)</li>
+        <li>Kidney-Right (Male)</li>
+      </ul>
+      <p style="font-size:0.8rem; color:var(--muted); margin-top:0.5rem;">
+        We include any endpoint with a BMD result OR a significant LOEL.
+        The reference applied a stricter gate: significant Jonckheere trend
+        AND at least one significant pairwise dose.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>3. Summary of Gaps</h2>
+<!-- ============================================================ -->
+
+<div class="card">
+  <table>
+    <tr><th style="width:30%">Gap</th><th>Impact</th><th style="width:20%">Fix</th></tr>
+    <tr>
+      <td>Different BMD tool</td>
+      <td>BMD/BMDL values differ by 1.2&ndash;2.4&times;; UREP/NVM classifications diverge</td>
+      <td>Integrate pybmds for apical BMD modeling</td>
+    </tr>
+    <tr>
+      <td>Direction field empty</td>
+      <td>No UP/DOWN annotations in summary</td>
+      <td>Code bug &mdash; fix propagation from Jonckheere</td>
+    </tr>
+    <tr>
+      <td>LOEL/NOEL shifted</td>
+      <td>Pairwise significance at different doses</td>
+      <td>Investigate outlier exclusion (Dixon &amp; Massey); verify Dunnett p-values</td>
+    </tr>
+    <tr>
+      <td>Too many rows</td>
+      <td>17 rows vs reference's 10 &mdash; includes non-significant endpoints</td>
+      <td>Apply reference gate: require both trend + pairwise significance</td>
+    </tr>
+    <tr>
+      <td>Liver not split</td>
+      <td>Single "Liver" row vs Absolute + Relative</td>
+      <td>BMDExpress 3 probe naming &mdash; may need endpoint name parsing</td>
+    </tr>
+    <tr>
+      <td>Missing endpoints</td>
+      <td>Cholesterol, Sorbitol Dehydrogenase absent from our summary</td>
+      <td>Check if BMDExpress 3 modeled them; may be excluded by current filter</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>4. Methodology Notes</h2>
+<!-- ============================================================ -->
+
+<div class="card">
+  <div class="two-col">
+    <div>
+      <h3 style="margin-top:0">NIEHS Reference (BMDS 2.7.0)</h3>
+      <ul style="font-size:0.85rem; padding-left:1.25rem; line-height:1.8;">
+        <li>Tool: pybmds 0.11 (Python BMDS interface)</li>
+        <li>Models: Linear, Poly 2&deg;&ndash;8&deg;, Power, Hill, Exp M2&ndash;M5</li>
+        <li>BMR: 1 SD relative to control</li>
+        <li>Model selection: EPA guidance &mdash; lowest AIC or lowest BMDL</li>
+        <li>Bins: Failure &rarr; NVM &rarr; NR &rarr; UREP &rarr; Viable</li>
+        <li>NR threshold: BMD &lt; &frac13; lowest nonzero dose</li>
+        <li>UREP: subject matter expert review</li>
+        <li>Stats: Williams/Dunnett (parametric), Shirley/Dunn (nonparametric)</li>
+        <li>Outlier exclusion: Dixon &amp; Massey test</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-top:0">5dToxReport (BMDExpress 3)</h3>
+      <ul style="font-size:0.85rem; padding-left:1.25rem; line-height:1.8;">
+        <li>Tool: BMDExpress 3 Java API (native BMD pipeline)</li>
+        <li>Models: Hill, Power, Linear, Poly 2&deg;, Exp M2&ndash;M5</li>
+        <li>BMR: 1 SD relative to control</li>
+        <li>Model selection: bestBMD from probeStatResults</li>
+        <li>Bins: Failure &rarr; NVM &rarr; NR &rarr; UREP &rarr; Viable</li>
+        <li>NR threshold: BMD &lt; &frac13; lowest nonzero dose</li>
+        <li>UREP: BMDU/BMDL &gt; 40 (automated, no SME review)</li>
+        <li>Stats: Jonckheere (Python) + Williams/Dunnett (Java, sciome-commons-math)</li>
+        <li>Outlier exclusion: none currently</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

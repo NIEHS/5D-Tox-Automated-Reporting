@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body>
     <!-- Login gate — ALWAYS shown on page load.  Contains the deployment
@@ -367,6 +368,8 @@
             </span>
             <span class="separator"></span>
             <button id="btn-tabbed-view" onclick="toggleTabbedView()">Tabbed View</button>
+            <span style="flex:1"></span>
+            <button class="btn-small danger" id="btn-reset-session" onclick="confirmResetSession()" style="display:none" title="Delete all session data and start over">&#x2622; Reset</button>
         </div>
 
         <!-- Tab bar — horizontal tab buttons, hidden until Tabbed View is activated -->
@@ -490,6 +493,9 @@
                     <button class="btn-small danger" id="btn-clear-files" onclick="event.stopPropagation(); clearAllFiles()" style="display:none">
                         Clear Files
                     </button>
+                    <button class="btn-small danger" id="btn-reset-pool" onclick="event.stopPropagation(); confirmResetPool()" style="display:none">
+                        Reset Pool
+                    </button>
                 </div>
                 <div class="section-body">
                 <p class="section-desc">
@@ -542,6 +548,22 @@
             </div>
         </div>
 
+        <!-- Experiment Metadata Review (hidden until integration completes) -->
+        <div class="bm2-section" id="metadata-review-section" style="display:none;" data-collapsible data-tab-section="Metadata">
+            <h2 class="section-toggle" onclick="toggleSection(this)">Experiment Metadata</h2>
+            <div class="section-body">
+                <p class="section-desc">
+                    Review and correct the inferred metadata for each experiment.
+                    These fields describe the study design and will be embedded in the exported .bm2 file.
+                </p>
+                <div id="metadata-table-container"></div>
+                <div class="metadata-actions">
+                    <button class="btn-action approve" id="btn-approve-metadata" onclick="approveMetadata()">Approve Metadata</button>
+                    <span class="approved-badge" id="badge-metadata" style="display:none">Approved</span>
+                </div>
+            </div><!-- /section-body -->
+        </div>
+
         <!-- Genomics Results Cards (hidden until genomics processed) -->
         <div class="bm2-section" id="genomics-results-section" style="display:none;" data-collapsible data-tab-section="Genomics">
             <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Analysis</h2>
@@ -558,10 +580,10 @@
             </div><!-- /section-body -->
         </div>
 
-        <!-- BMD Summary Table (auto-generated once any .bm2 approved, hidden initially) -->
-        <div class="output-section" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary">
+        <!-- BMD Summary Table — BMDExpress 3 native results -->
+        <div class="output-section" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDExpress)">
             <div class="output-header" onclick="toggleSection(this)">
-                <h2>Apical Endpoint BMD Summary</h2>
+                <h2>Apical Endpoint BMD Summary (BMDExpress 3)</h2>
                 <div class="output-actions">
                     <button class="btn-action approve" id="btn-approve-bmd-summary" onclick="event.stopPropagation(); approveSection('bmd_summary')">Approve</button>
                     <span class="approved-badge" id="badge-bmd-summary" style="display:none">Approved</span>
@@ -569,6 +591,20 @@
             </div>
             <div class="section-body">
             <div class="table-preview" id="bmd-summary-table"></div>
+            </div><!-- /section-body -->
+        </div>
+
+        <!-- BMD Summary Table — BMDS (pybmds) results matching NIEHS methodology -->
+        <div class="output-section" id="bmd-summary-bmds-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDS)">
+            <div class="output-header" onclick="toggleSection(this)">
+                <h2>Apical Endpoint BMD Summary (BMDS)</h2>
+                <div class="output-actions">
+                    <button class="btn-action approve" id="btn-approve-bmd-summary-bmds" onclick="event.stopPropagation(); approveSection('bmd_summary_bmds')">Approve</button>
+                    <span class="approved-badge" id="badge-bmd-summary-bmds" style="display:none">Approved</span>
+                </div>
+            </div>
+            <div class="section-body">
+            <div class="table-preview" id="bmd-summary-bmds-table"></div>
             </div><!-- /section-body -->
         </div>
 
@@ -692,8 +728,8 @@
          response incrementally so we can build the JSON tree in the Preview
          Data modal without holding the entire string in memory at once. -->
     <script src="https://unpkg.com/oboe@2.1.5/dist/oboe-browser.min.js"></script>
-    <script src="/js/state.js?v=3"></script>
-    <script src="/js/utils.js?v=3"></script>
-    <script src="/js/main.js?v=3"></script>
+    <script src="/js/state.js?v=6"></script>
+    <script src="/js/utils.js?v=6"></script>
+    <script src="/js/main.js?v=6"></script>
 </body>
 </html>

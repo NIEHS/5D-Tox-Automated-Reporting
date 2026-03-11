@@ -20,10 +20,13 @@ Layout:
                 {section_key}/
                     {iso_timestamp}.json       — previous versions
         _style_profile.json                    — global writing style rules
-        _bm2_cache/                            — LMDB cache for deserialized .bm2 data
+
+Note: the LMDB bm2 cache lives at /tmp/_bm2_cache (not under sessions/)
+because LMDB's mmap()/flock() are incompatible with GCS FUSE mounts.
 """
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,8 +36,11 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-# Root directory for all session data — lives alongside the Python source.
-SESSIONS_DIR = Path(__file__).parent / "sessions"
+# Root directory for all session data.  Defaults to ./sessions/ (relative to
+# this source file), but can be overridden via the SESSIONS_DIR environment
+# variable — used when mounting a GCS bucket locally via gcsfuse or when
+# Cloud Run's GCS FUSE volume is mounted at a non-default path.
+SESSIONS_DIR = Path(os.environ.get("SESSIONS_DIR", Path(__file__).parent / "sessions"))
 
 
 # ---------------------------------------------------------------------------

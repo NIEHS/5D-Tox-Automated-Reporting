@@ -80,7 +80,7 @@ body {
  * Layout — centered column with header, form, output
  * ---------------------------------------------------------------- */
 .container {
-    max-width: 960px;
+    max-width: 100%;
     margin: 0 auto;
     padding: 2rem 1.5rem;
 }
@@ -1672,6 +1672,16 @@ header p {
     background: var(--c-primary-hover);
 }
 
+/* Danger button inside view-controls — override the neutral button styling
+   so the red color and border from .btn-small.danger come through. */
+.view-controls button.danger {
+    color: var(--c-error);
+    border-color: var(--c-error-border);
+}
+.view-controls button.danger:hover {
+    background: var(--c-error-bg);
+}
+
 /* Separator between button groups */
 .view-controls .separator {
     width: 1px;
@@ -2646,4 +2656,212 @@ header p {
 
 .guide-warning pre {
     margin-top: 0.5rem;
+}
+
+
+/* -----------------------------------------------------------------
+ * Experiment Metadata Review Panel
+ *
+ * Horizontal scrolling table where each row is an experiment and
+ * each column is a metadata field.  Fields use <select> dropdowns
+ * constrained to the controlled vocabularies from vocabulary.yml.
+ * The first column (experiment name) is sticky for readability.
+ * ----------------------------------------------------------------- */
+
+.metadata-table-wrap {
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-sm);
+}
+
+.metadata-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+.metadata-table th,
+.metadata-table td {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--c-border-light);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.metadata-table th {
+    background: var(--c-bg-neutral);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--c-text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* Sticky first column (experiment name) */
+.metadata-table th:first-child,
+.metadata-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--c-bg-white);
+    font-weight: 600;
+    min-width: 160px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.metadata-table th:first-child {
+    background: var(--c-bg-neutral);
+    z-index: 4;
+}
+
+.metadata-table tbody tr:nth-child(even) {
+    background: var(--c-bg);
+}
+
+.metadata-table tbody tr:nth-child(even) td:first-child {
+    background: var(--c-bg);
+}
+
+.metadata-table tbody tr:hover {
+    background: var(--c-bg-hover);
+}
+
+.metadata-table tbody tr:hover td:first-child {
+    background: var(--c-bg-hover);
+}
+
+/* Dropdown selects inside metadata cells */
+.metadata-table select,
+.metadata-table input[type="text"] {
+    width: 100%;
+    min-width: 100px;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-xs, 3px);
+    background: var(--c-bg-white);
+    color: var(--c-text);
+}
+
+.metadata-table select:focus,
+.metadata-table input[type="text"]:focus {
+    outline: none;
+    border-color: var(--c-blue);
+    box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
+}
+
+/* Null/empty values shown as muted placeholder */
+.metadata-table select.meta-empty {
+    color: var(--c-text-placeholder);
+}
+
+/* Probe count badge — small gray pill next to experiment name */
+.meta-probe-count {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 400;
+    background: var(--c-bg-neutral);
+    color: var(--c-text-muted);
+    border-radius: 9px;
+}
+
+/* Actions bar below the table */
+.metadata-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+}
+
+/* Approved state — lock the table */
+#metadata-review-section.approved .metadata-table select,
+#metadata-review-section.approved .metadata-table input[type="text"] {
+    pointer-events: none;
+    opacity: 0.7;
+    background: var(--c-bg);
+}
+
+/* -----------------------------------------------------------------
+ * Checkbox dropdown — custom multi-select for organ weight organs.
+ * A button toggles a dropdown panel of checkboxes; the button text
+ * summarizes the selection ("heart, kidney" or "4 organs").
+ * ----------------------------------------------------------------- */
+.cb-dropdown {
+    position: relative;
+    display: inline-block;
+    min-width: 9rem;
+}
+.cb-dropdown-toggle {
+    display: block;
+    width: 100%;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+    text-align: left;
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    color: var(--c-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cb-dropdown-toggle:hover {
+    border-color: var(--c-blue);
+}
+.cb-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    min-width: 100%;
+    max-height: 14rem;
+    overflow-y: auto;
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-elevated);
+    padding: 0.3rem 0;
+    margin-top: 2px;
+}
+.cb-dropdown-menu.open {
+    display: block;
+}
+.cb-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--c-text-secondary);
+    white-space: nowrap;
+}
+.cb-dropdown-item:hover {
+    background: var(--c-bg-hover);
+}
+.cb-dropdown-item input[type="checkbox"] {
+    accent-color: var(--c-blue);
+    margin: 0;
+}
+.cb-dropdown-item input[type="checkbox"]:checked + span {
+    color: var(--c-text);
+    font-weight: 500;
+}
+
+/* Lock checkbox dropdowns when approved */
+#metadata-review-section.approved .cb-dropdown-toggle {
+    pointer-events: none;
+    opacity: 0.7;
+    background: var(--c-bg);
 }

@@ -15,6 +15,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "orjson>=3.11.7",
     "pandas>=2.2.0",
+    "pybmds>=25.1",
     "python-docx>=1.2.0",
     "python-multipart>=0.0.22",
     "requests>=2.32.5",

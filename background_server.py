@@ -239,19 +239,24 @@ async def sessions_summary():
     Useful for verifying that a sync push/pull moved the expected data.
     """
     summary = []
-    if SESSIONS_DIR.exists():
-        for d in sorted(SESSIONS_DIR.iterdir()):
-            # Skip non-directories and internal dirs (underscore-prefixed)
-            if not d.is_dir() or d.name.startswith("_"):
-                continue
-            section_files = list(d.glob("*.json"))
-            # Exclude meta.json from the section count
-            sections = [f.stem for f in section_files if f.stem != "meta"]
-            summary.append({
-                "dtxsid": d.name,
-                "sections": len(sections),
-                "section_keys": sections,
-            })
+    try:
+        if SESSIONS_DIR.exists():
+            for d in sorted(SESSIONS_DIR.iterdir()):
+                # Skip non-directories and internal dirs (underscore-prefixed)
+                if not d.is_dir() or d.name.startswith("_"):
+                    continue
+                section_files = list(d.glob("*.json"))
+                # Exclude meta.json from the section count
+                sections = [f.stem for f in section_files if f.stem != "meta"]
+                summary.append({
+                    "dtxsid": d.name,
+                    "sections": len(sections),
+                    "section_keys": sections,
+                })
+    except OSError:
+        # GCS FUSE mount may not be ready or bucket may be empty —
+        # treat as empty sessions dir rather than crashing the login probe.
+        pass
     return {"sessions": summary, "count": len(summary)}
 
 

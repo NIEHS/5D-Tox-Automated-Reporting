@@ -218,13 +218,21 @@ def export_categories(bm2_path: str, output_json: str) -> dict:
 def build_category_lookup(
     categories_json: dict,
     bmd_stat: str = "mean",
+    experiment_names: list[str] | None = None,
 ) -> dict[tuple[str, str], dict]:
     """
     Build the category lookup dict from ExportCategories output.
 
     Transforms the structured JSON from export_categories() into the
-    (experiment_prefix, endpoint_name) → {bmd, bmdl, bmdu, ...} lookup
+    (experiment_name, endpoint_name) → {bmd, bmdl, bmdu, ...} lookup
     that build_table_data() uses to populate BMD/BMDL columns.
+
+    BMDExpress appends pipeline suffixes to experiment names in category
+    analysis results (e.g., "female_clin_chem" becomes
+    "female_clin_chem_williams_0.05_NOMTC_nofoldfilter").  When
+    experiment_names is provided, this function resolves each suffixed
+    prefix back to its raw experiment name so build_table_data() can
+    look up BMD values using the original experiment name.
 
     The bmd_stat parameter controls which BMD aggregate statistic is used.
     For single-gene apical endpoints (1 gene per category), all statistics
@@ -232,19 +240,53 @@ def build_category_lookup(
     (e.g., median vs 5th percentile can differ substantially).
 
     Args:
-        categories_json: Output from export_categories().
-        bmd_stat:        Which BMD statistic to use. One of:
-                         "mean", "median", "minimum", "weighted_mean",
-                         "fifth_pct", "tenth_pct", "lower95", "upper95".
-                         Defaults to "mean" for backward compatibility.
+        categories_json:  Output from export_categories().
+        bmd_stat:         Which BMD statistic to use. One of:
+                          "mean", "median", "minimum", "weighted_mean",
+                          "fifth_pct", "tenth_pct", "lower95", "upper95".
+                          Defaults to "mean" for backward compatibility.
+        experiment_names: Optional list of raw experiment names from the
+                          BMDProject's doseResponseExperiments.  When
+                          provided, category prefixes are resolved to the
+                          longest matching experiment name, fixing the
+                          key mismatch caused by BMDExpress pipeline
+                          suffixes.
 
     Returns:
-        Dict mapping (experiment_prefix, endpoint_name) → {bmd, bmdl, bmdu, ...}
+        Dict mapping (experiment_name, endpoint_name) → {bmd, bmdl, bmdu, ...}
     """
+    # Pre-sort experiment names by length (longest first) so we match the
+    # most specific name when a prefix starts with multiple candidates.
+    # E.g., "female_clin_chem" should match before "female_clin".
+    sorted_exp_names = (
+        sorted(experiment_names, key=len, reverse=True)
+        if experiment_names
+        else []
+    )
+
     lookup = {}
 
     for analysis in categories_json.get("analyses", []):
         prefix = analysis.get("experiment_prefix", "")
+
+        # Resolve the suffixed prefix to a raw experiment name.
+        # BMDExpress category analysis names look like:
+        #   female_clin_chem_williams_0.05_NOMTC_nofoldfilter_BMD_null_DEFINED-...
+        # ExportCategories splits on "_BMD" → prefix is the part before it:
+        #   female_clin_chem_williams_0.05_NOMTC_nofoldfilter
+        # We need to map this back to the raw experiment name:
+        #   female_clin_chem
+        resolved_prefix = prefix
+        for exp_name in sorted_exp_names:
+            # The prefix must start with the experiment name, and the
+            # character after (if any) must be '_' to avoid partial matches
+            # (e.g., "female_clin" should not match "female_clin_chem").
+            if prefix == exp_name:
+                resolved_prefix = exp_name
+                break
+            if prefix.startswith(exp_name) and prefix[len(exp_name):len(exp_name) + 1] == "_":
+                resolved_prefix = exp_name
+                break
 
         for result in analysis.get("results", []):
             endpoint = result.get("category_title", "")
@@ -254,7 +296,7 @@ def build_category_lookup(
             bmdl_block = result.get("bmdl", {})
             bmdu_block = result.get("bmdu", {})
 
-            lookup[(prefix, endpoint)] = {
+            entry = {
                 "bmd": bmd_block.get(bmd_stat, bmd_block.get("mean", "")),
                 "bmdl": bmdl_block.get(bmd_stat, bmdl_block.get("mean", "")),
                 "bmdu": bmdu_block.get(bmd_stat, bmdu_block.get("mean", "")),
@@ -266,6 +308,13 @@ def build_category_lookup(
                 "bmdl_stats": bmdl_block,
                 "bmdu_stats": bmdu_block,
             }
+
+            # Store under the resolved prefix (raw experiment name).
+            # Also store under the full suffixed prefix for callers that
+            # already use the suffixed key (backward compatibility).
+            lookup[(resolved_prefix, endpoint)] = entry
+            if resolved_prefix != prefix:
+                lookup[(prefix, endpoint)] = entry
 
     return lookup
 
@@ -280,20 +329,215 @@ class TableRow:
     One row of the final report table — represents a single endpoint
     (e.g., "Liver Weight Relative") for one sex.
 
+    The reference NIEHS report splits apical data into two table types:
+      - Domain tables (Tables 2-7): mean ± SE per dose group, significance
+        markers, sample sizes.  NO BMD columns.
+      - BMD summary (Table 8): Endpoint, BMD, BMDL, LOEL, NOEL, Direction.
+        Only includes endpoints with significant findings.
+
+    This dataclass carries all fields needed for both table types.
+
     Attributes:
         label:          Display label for the endpoint column
         values_by_dose: Dict mapping dose → formatted string ("mean ± SE**")
         n_by_dose:      Dict mapping dose → sample size (for the n row)
-        bmd_str:        Formatted BMD value or "ND"
-        bmdl_str:       Formatted BMDL value or "ND"
+        bmd_str:        Formatted BMD value, "NVM", "UREP", "—"
+        bmdl_str:       Formatted BMDL value, "NVM", "UREP", "—"
         trend_marker:   "*" or "**" or "" — for the control column
+        bmd_status:     NIEHS classification: "viable", "NVM", "NR", "UREP",
+                        "failure", or None (not modeled).
+        loel:           Lowest observed effect level (mg/kg), or None
+        noel:           No observed effect level (mg/kg), or None
+        direction:      "UP" or "DOWN" — direction of change vs control
     """
     label: str = ""
     values_by_dose: dict = field(default_factory=dict)
     n_by_dose: dict = field(default_factory=dict)
-    bmd_str: str = "ND"
-    bmdl_str: str = "ND"
+    bmd_str: str = "—"
+    bmdl_str: str = "—"
     trend_marker: str = ""
+    bmd_status: str | None = None
+    loel: float | None = None
+    noel: float | None = None
+    direction: str = ""
+
+
+def _safe_float(val) -> float | None:
+    """
+    Safely convert a value to float, handling None, string "NaN", and
+    Jackson serialization quirks.  Returns None if the value is not a
+    valid finite number.
+    """
+    if val is None:
+        return None
+    if isinstance(val, str):
+        if val.lower() == "nan" or val.lower() == "infinity":
+            return None
+        try:
+            f = float(val)
+            return f if f == f else None  # NaN check
+        except ValueError:
+            return None
+    if isinstance(val, (int, float)):
+        return val if val == val else None  # NaN check
+    return None
+
+
+def _classify_bmd_result(
+    bmd: float | None,
+    bmdl: float | None,
+    bmdu: float | None,
+    lowest_nonzero_dose: float,
+    best_stat_result: dict | None,
+) -> str:
+    """
+    Classify a BMD result into NIEHS reference report bins.
+
+    The NIEHS 5-day study reports use these classifications for apical
+    endpoint BMDs (see Appendix D, Table D-1 in the reference report):
+
+      - "failure":  Model did not successfully complete.
+      - "NVM":      Nonviable model — completed but failed acceptability.
+      - "NR":       Not reportable — BMD below lower limit of extrapolation
+                    (<1/3 lowest nonzero dose tested).  BMD is reported as
+                    "<1/3 LNZD" and BMDL is not reported.
+      - "UREP":     Unreliable estimate of potency — subject matter expert
+                    review flag.  Triggered by wide confidence interval
+                    (BMDU/BMDL ratio > 40) or other quality concerns.
+      - "viable":   Candidate for recommended model without warning.
+
+    Args:
+        bmd:   Best BMD value (None if modeling failed).
+        bmdl:  Best BMDL value (lower confidence limit).
+        bmdu:  Best BMDU value (upper confidence limit).
+        lowest_nonzero_dose: Smallest nonzero dose in the experiment.
+        best_stat_result: The bestStatResult dict from BMDExpress 3,
+                         containing model fit metrics.
+    """
+    # No BMD at all → failure (model didn't produce a result)
+    if bmd is None:
+        return "failure"
+
+    # Check model fit quality from bestStatResult
+    if best_stat_result:
+        success = best_stat_result.get("success")
+        # BMDExpress 3 serializes success as string "true" or null
+        if success is None or success == "false":
+            return "NVM"
+
+        r_squared = _safe_float(best_stat_result.get("rSquared"))
+        if r_squared is not None and r_squared < 0.1:
+            return "NVM"
+
+    # BMD below lower limit of extrapolation: <1/3 lowest nonzero dose.
+    # Reference report: "BMD values derived from viable models that were
+    # threefold lower than the lowest nonzero dose tested were reported
+    # as <1/3 the lowest nonzero dose tested, and corresponding BMDL
+    # values were not reported."
+    if lowest_nonzero_dose > 0 and bmd < lowest_nonzero_dose / 3:
+        return "NR"
+
+    # Wide confidence interval → unreliable estimate.
+    # Reference report: BMDU/BMDL ratio > 40 is flagged.
+    if bmdl is not None and bmdu is not None and bmdl > 0:
+        ratio = bmdu / bmdl
+        if ratio > 40:
+            return "UREP"
+
+    # Step function check — if BMD lands below the lowest dose, the
+    # model is extrapolating beyond the observed range.
+    if best_stat_result:
+        step_flag = best_stat_result.get("stepWithBMDLessLowest", False)
+        if step_flag:
+            return "UREP"
+
+    return "viable"
+
+
+def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
+    """
+    Build a lookup of BMD/BMDL values and NIEHS classification from
+    BMDExpress 3 native bMDResult data.
+
+    BMDExpress 3 stores dose-response modeling results in the bMDResult
+    array.  Each entry has probeStatResults with bestBMD/bestBMDL and
+    model fit metrics (rSquared, success, confidence bounds).
+
+    This function resolves Jackson @ref pointers, extracts BMD values,
+    and classifies each result into NIEHS bins: viable, NVM, NR, UREP,
+    or failure.  The lowest nonzero dose (LNZD) from the parent experiment
+    is used for the NR classification (BMD < LNZD/3).
+
+    Returns:
+        Dict mapping (experiment_name, probe_id) → {
+            "bmd": float|None, "bmdl": float|None, "bmdu": float|None,
+            "status": str  # "viable", "NVM", "NR", "UREP", "failure"
+        }.
+    """
+    import math
+
+    # Build @ref → object lookups for experiments and probeResponses.
+    # Jackson serialization uses integer @ref/@id pairs for object identity.
+    ref_to_exp_name: dict[int, str] = {}
+    ref_to_probe_id: dict[int, str] = {}
+    # Also need @ref → experiment for LNZD calculation
+    ref_to_exp: dict[int, dict] = {}
+    for exp in bm2_json.get("doseResponseExperiments", []):
+        ref = exp.get("@ref")
+        if ref is not None:
+            ref_to_exp_name[ref] = exp["name"]
+            ref_to_exp[ref] = exp
+        for pr in exp.get("probeResponses", []):
+            pref = pr.get("@ref")
+            if pref is not None:
+                ref_to_probe_id[pref] = pr.get("probe", {}).get("id", "")
+
+    # Cache LNZD per experiment (lowest nonzero dose tested).
+    # Used for NR classification: BMD < LNZD/3 means the model is
+    # extrapolating below the observed dose range.
+    lnzd_cache: dict[int, float] = {}
+
+    lookup: dict[tuple[str, str], dict] = {}
+    for result in bm2_json.get("bMDResult", []):
+        exp_ref = result.get("doseResponseExperiment")
+        exp_name = ref_to_exp_name.get(exp_ref, "")
+        if not exp_name:
+            continue
+
+        # Compute LNZD for this experiment (cached per @ref)
+        if exp_ref not in lnzd_cache:
+            exp = ref_to_exp.get(exp_ref, {})
+            doses = [t["dose"] for t in exp.get("treatments", [])]
+            nonzero = [d for d in doses if d > 0]
+            lnzd_cache[exp_ref] = min(nonzero) if nonzero else 0.0
+        lnzd = lnzd_cache[exp_ref]
+
+        for psr in result.get("probeStatResults", []):
+            pr_ref = psr.get("probeResponse")
+            probe_id = ref_to_probe_id.get(pr_ref, "")
+            if not probe_id:
+                continue
+
+            bmd = _safe_float(psr.get("bestBMD"))
+            bmdl = _safe_float(psr.get("bestBMDL"))
+            bmdu = _safe_float(psr.get("bestBMDU"))
+
+            # Get bestStatResult for model fit classification.
+            # It can be a dict (inline) or an int (@ref pointer).
+            bsr = psr.get("bestStatResult")
+            if isinstance(bsr, int):
+                bsr = None  # unresolved @ref — treat as no info
+
+            status = _classify_bmd_result(bmd, bmdl, bmdu, lnzd, bsr)
+
+            lookup[(exp_name, probe_id)] = {
+                "bmd": bmd,
+                "bmdl": bmdl,
+                "bmdu": bmdu,
+                "status": status,
+            }
+
+    return lookup
 
 
 def build_table_data(
@@ -303,11 +547,14 @@ def build_table_data(
     """
     Build the table data for all endpoints, organized by sex.
 
-    Two-phase approach for efficiency:
+    Three-phase approach:
       Phase 1: Batch all endpoints into a single Java RunPrefilter call
                to get Williams/Dunnett p-values (one JVM launch total).
       Phase 2: For each endpoint, compute Jonckheere in Python, combine
                with Java pairwise results, apply business rules.
+      BMD lookup: Uses BMDExpress 3 native bMDResult data (bestBMD/bestBMDL)
+               as the primary source, with category_lookup as fallback for
+               genomics endpoints.
 
     Args:
         bm2_json:        Parsed JSON from the .bm2 export.
@@ -323,6 +570,12 @@ def build_table_data(
         ALPHA_STAR, EndpointStats,
     )
     import math
+
+    # Build lookup of BMDExpress 3-native BMD values from bMDResult.
+    # This is the primary BMD source for apical endpoints (body weight,
+    # organ weight, clinical chemistry, hematology, hormones).  Category
+    # analysis (category_lookup) is the fallback for genomics endpoints.
+    bmd_result_lookup = _build_bmd_result_lookup(bm2_json)
 
     # ---- Phase 1: Batch Java prefilter ----
     # Collect all endpoints across all experiments into a single batch,
@@ -495,20 +748,70 @@ def build_table_data(
         any_pairwise_sig = any(p <= ALPHA_STAR for p in pairwise_p.values())
         report_bmd = jonckheere_sig and any_pairwise_sig
 
-        # Check category analysis for BMD/BMDL
-        cat = category_lookup.get((exp_name, probe_name))
-        if report_bmd and cat:
-            try:
-                bmd_val = float(cat["bmd"])
-                bmdl_val = float(cat["bmdl"])
-                bmd_str = _format_bmd(bmd_val)
-                bmdl_str = _format_bmd(bmdl_val)
-            except (ValueError, KeyError):
-                bmd_str = "ND"
-                bmdl_str = "ND"
+        # Look up BMD/BMDL and NIEHS classification status.
+        # BMD modeling and statistical significance are INDEPENDENT concerns:
+        #   - BMDExpress 3 runs its own prefilter → produces bMDResult
+        #   - Our NTP stats (Jonckheere + Dunnett) → determine LOEL/NOEL
+        # The reference report Table 8 shows both side by side.  We always
+        # show the BMDExpress 3 classification if a bMDResult exists,
+        # regardless of our stat gate.
+        #
+        # NIEHS classification bins (from reference report Appendix D):
+        #   "viable" → report BMD and BMDL values
+        #   "NR"     → not reportable (BMD < 1/3 LNZD); show "<LNZD/3"
+        #   "NVM"    → nonviable model; show "NVM"
+        #   "UREP"   → unreliable estimate of potency; show "UREP"
+        #   "failure" → model did not complete; show "NVM"
+        #   None     → endpoint not modeled by BMDExpress 3
+        bmd_str = "—"
+        bmdl_str = "—"
+        bmd_status = None
+
+        # Primary source: BMDExpress 3 native bMDResult
+        bmd_entry = bmd_result_lookup.get((exp_name, probe_name))
+        if bmd_entry:
+            status = bmd_entry["status"]
+            bmd_status = status
+
+            if status == "viable":
+                bmd_val = bmd_entry["bmd"]
+                bmdl_val = bmd_entry["bmdl"]
+                if bmd_val is not None and bmdl_val is not None:
+                    bmd_str = _format_bmd(bmd_val)
+                    bmdl_str = _format_bmd(bmdl_val)
+                else:
+                    bmd_str = "NVM"
+                    bmdl_str = "NVM"
+                    bmd_status = "NVM"
+            elif status == "NR":
+                # BMD below extrapolation limit — report as <1/3 LNZD.
+                # BMDL is not reported per NIEHS convention.
+                lnzd = sorted_doses[1] if len(sorted_doses) > 1 else 0
+                bmd_str = f"<{_format_bmd(lnzd / 3)}"
+                bmdl_str = "—"
+            elif status == "UREP":
+                bmd_str = "UREP"
+                bmdl_str = "UREP"
+            elif status == "NVM":
+                bmd_str = "NVM"
+                bmdl_str = "NVM"
+            else:
+                # "failure" or unknown
+                bmd_str = "NVM"
+                bmdl_str = "NVM"
+                bmd_status = "NVM"
         else:
-            bmd_str = "ND"
-            bmdl_str = "ND"
+            # Fallback: category analysis (genomics endpoints via GO terms)
+            cat = category_lookup.get((exp_name, probe_name))
+            if cat:
+                try:
+                    bmd_val = float(cat["bmd"])
+                    bmdl_val = float(cat["bmdl"])
+                    bmd_str = _format_bmd(bmd_val)
+                    bmdl_str = _format_bmd(bmdl_val)
+                    bmd_status = "viable"
+                except (ValueError, KeyError, TypeError):
+                    pass
 
         # Build the formatted values for each dose group
         values_by_dose = {}
@@ -533,6 +836,37 @@ def build_table_data(
             else:
                 values_by_dose[dose] = "—"
 
+        # Derive LOEL, NOEL, and direction of change for Table 8.
+        # LOEL: lowest treatment dose with a significant (p ≤ 0.05) pairwise
+        #   difference from control.  Per NIEHS: "the lowest dose demonstrating
+        #   a significant (p ≤ 0.05) pairwise difference relative to the
+        #   vehicle control group."
+        # NOEL: highest dose NOT showing a significant pairwise difference.
+        #   Per NIEHS: "the highest dose not showing a significant (p ≤ 0.05)
+        #   pairwise difference relative to the vehicle control group."
+        # Direction: UP or DOWN based on Jonckheere trend direction.
+        loel = None
+        noel = None
+        for d in treatment_doses:
+            if pairwise_p.get(d, 1.0) <= ALPHA_STAR:
+                if loel is None or d < loel:
+                    loel = d
+        if loel is not None:
+            # NOEL = highest dose below LOEL that is not significant
+            candidates = [d for d in treatment_doses if d < loel]
+            noel = max(candidates) if candidates else control_dose
+        else:
+            # No significant pairwise → NOEL is the highest dose tested
+            noel = max(treatment_doses) if treatment_doses else None
+
+        # Direction from Jonckheere: "UP" or "DOWN" string.
+        # Only show direction when the Jonckheere trend test is significant,
+        # matching the NIEHS reference convention (Table 8 shows direction
+        # only for endpoints with a significant monotonic trend).
+        dir_str = ""
+        if jonckheere_sig and direction in ("UP", "DOWN"):
+            dir_str = direction
+
         row = TableRow(
             label=probe_name,
             values_by_dose=values_by_dose,
@@ -540,8 +874,33 @@ def build_table_data(
             bmd_str=bmd_str,
             bmdl_str=bmdl_str,
             trend_marker=trend_marker,
+            bmd_status=bmd_status,
+            loel=loel,
+            noel=noel,
+            direction=dir_str,
         )
         tables[sex].append(row)
+
+        # Collect dose-response summary stats for optional BMDS modeling.
+        # These are the same means/SDs/Ns we computed above, packaged in a
+        # format that apical_bmds.run_bmds_for_endpoints() expects.
+        # Stored on the TableRow so the orchestrator can extract them without
+        # re-parsing the integrated JSON.
+        _sorted_doses = sorted(groups_by_dose.keys())
+        row._bmds_input = {
+            "key": f"{sex}::{probe_name}",
+            "doses": _sorted_doses,
+            "ns": [n_per_dose.get(d, 0) for d in _sorted_doses],
+            "means": [
+                mean_per_dose.get(d, 0.0) if mean_per_dose.get(d) is not None else 0.0
+                for d in _sorted_doses
+            ],
+            "stdevs": [
+                # Convert SE back to SD: SD = SE * sqrt(n)
+                (se_per_dose.get(d, 0.0) or 0.0) * math.sqrt(n_per_dose.get(d, 1))
+                for d in _sorted_doses
+            ],
+        }
 
     return tables
 
@@ -1214,7 +1573,16 @@ def build_table_data_from_bm2(
             with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
                 tmp_cat = tmp.name
             categories_json = export_categories(bm2_path, tmp_cat)
-            category_lookup = build_category_lookup(categories_json, bmd_stat)
+            # Pass experiment names so the lookup resolves BMDExpress
+            # pipeline suffixes (e.g., "_williams_0.05_NOMTC_nofoldfilter")
+            # back to raw experiment names used by build_table_data().
+            exp_names = [
+                exp.get("name", "")
+                for exp in bm2_json.get("doseResponseExperiments", [])
+            ]
+            category_lookup = build_category_lookup(
+                categories_json, bmd_stat, experiment_names=exp_names,
+            )
             bm2_cache.put_categories(bm2_path, category_lookup)
             os.unlink(tmp_cat)
 

@@ -51,6 +51,7 @@ Typical usage:
 # ---------------------------------------------------------------------------
 
 import logging
+import os
 from pathlib import Path
 
 import lmdb
@@ -62,11 +63,17 @@ import orjson
 
 logger = logging.getLogger(__name__)
 
-# LMDB environment lives alongside the session directories.
+# LMDB environment for caching deserialized .bm2 data.
+#
+# LMDB uses mmap() and flock(), which are incompatible with FUSE filesystems
+# (GCS FUSE on Cloud Run, gcsfuse locally).  So the cache MUST live on a real
+# local filesystem — /tmp is fine since it's ephemeral and rebuilds on demand.
+# Falls back to the old sessions/_bm2_cache/ path if BM2_CACHE_DIR is unset.
+#
 # The map_size is a virtual address space reservation, not actual disk usage —
 # LMDB uses sparse files on Linux, so a 1 GB reservation costs nothing until
 # data is actually written.
-_CACHE_DIR = Path(__file__).parent / "sessions" / "_bm2_cache"
+_CACHE_DIR = Path(os.environ.get("BM2_CACHE_DIR", "/tmp/_bm2_cache"))
 _MAP_SIZE = 1 * 1024 ** 3   # 1 GB virtual reservation
 
 # Key prefixes for the two data types stored in the cache.
