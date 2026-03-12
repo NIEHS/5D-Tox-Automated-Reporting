@@ -349,6 +349,11 @@ class TableRow:
         loel:           Lowest observed effect level (mg/kg), or None
         noel:           No observed effect level (mg/kg), or None
         direction:      "UP" or "DOWN" — direction of change vs control
+        responsive:     True if both Jonckheere trend AND Dunnett pairwise tests
+                        are significant (p ≤ 0.05).  Used to filter main body
+                        tables (Tables 2-7) per NIEHS business rule: only
+                        responsive endpoints appear in domain tables.  BMD
+                        summary (Table 8) uses its own inclusion gate.
     """
     label: str = ""
     values_by_dose: dict = field(default_factory=dict)
@@ -360,6 +365,7 @@ class TableRow:
     loel: float | None = None
     noel: float | None = None
     direction: str = ""
+    responsive: bool = False
 
 
 def _safe_float(val) -> float | None:
@@ -381,6 +387,38 @@ def _safe_float(val) -> float | None:
     if isinstance(val, (int, float)):
         return val if val == val else None  # NaN check
     return None
+
+
+def _adaptive_decimals(*values: float | None, min_dp: int = 1, max_dp: int = 4) -> int:
+    """
+    Choose the number of decimal places for a group of related values
+    (typically mean and SE for the same dose group).
+
+    Uses the smallest non-zero absolute value to decide:
+      - |v| >= 1    → 1 decimal  (e.g., "234.5 ± 12.3")
+      - |v| >= 0.1  → 2 decimals (e.g., "0.34 ± 0.12")
+      - |v| >= 0.01 → 3 decimals (e.g., "0.034 ± 0.012")
+      - |v| < 0.01  → 4 decimals (e.g., "0.0034 ± 0.0012")
+
+    This keeps large body weights at 1 dp (matching reference format) while
+    giving small clinical chemistry values enough precision.
+    """
+    # Find the smallest non-zero magnitude among all provided values
+    smallest = None
+    for v in values:
+        if v is not None and v != 0:
+            mag = abs(v)
+            if smallest is None or mag < smallest:
+                smallest = mag
+
+    if smallest is None or smallest >= 1.0:
+        return min_dp
+    elif smallest >= 0.1:
+        return max(min_dp, 2)
+    elif smallest >= 0.01:
+        return max(min_dp, 3)
+    else:
+        return max_dp
 
 
 def _classify_bmd_result(
@@ -830,9 +868,15 @@ def build_table_data(
                 marker = pairwise_marker.get(dose, "")
 
             if se is not None and se > 0:
-                values_by_dose[dose] = f"{mean:.1f} ± {se:.1f}{marker}"
+                # Adaptive decimal places: use more for small values so
+                # precision isn't lost (e.g., 0.0034 ± 0.0012 instead of
+                # 0.0 ± 0.0).  Large values (≥1) keep 1 decimal place to
+                # match the NTP reference format.
+                dp = _adaptive_decimals(mean, se)
+                values_by_dose[dose] = f"{mean:.{dp}f} ± {se:.{dp}f}{marker}"
             elif mean is not None:
-                values_by_dose[dose] = f"{mean:.1f}{marker}"
+                dp = _adaptive_decimals(mean)
+                values_by_dose[dose] = f"{mean:.{dp}f}{marker}"
             else:
                 values_by_dose[dose] = "—"
 
@@ -878,6 +922,7 @@ def build_table_data(
             loel=loel,
             noel=noel,
             direction=dir_str,
+            responsive=report_bmd,
         )
         tables[sex].append(row)
 
@@ -1829,12 +1874,14 @@ def add_bmd_summary_table_to_doc(
             noel_val = ep.get("noel", "—")
             direction = ep.get("direction", "")
 
-            # Format numeric values to reasonable precision
+            # Format numeric values using 3 significant figures (consistent
+            # with _format_bmd used in domain tables).  Previous .2f format
+            # lost precision for small values (e.g., 0.00679 → 0.01).
             def _fmt_val(v):
                 if v is None or str(v) in ("ND", "—", ""):
                     return str(v) if v else "—"
                 try:
-                    return f"{float(v):.2f}"
+                    return _format_bmd(float(v))
                 except (ValueError, TypeError):
                     return str(v)
 

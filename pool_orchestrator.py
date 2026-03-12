@@ -810,6 +810,25 @@ def _safe_float(val, default=float("inf")):
         return default
 
 
+def _safe_float_from_bmdl(bmdl_str: str, default=float("inf")) -> float:
+    """
+    Extract a numeric sort key from a formatted BMDL string.
+
+    BMDL strings can be:
+      - numeric: "12.3", "0.00679"
+      - NR threshold: "<0.1" (strip the '<' prefix)
+      - status codes: "NVM", "UREP", "—" → sort to end (infinity)
+
+    Used to sort BMD summary tables by BMDL within each sex group,
+    so the most potent (lowest BMDL) endpoints appear first.
+    """
+    if not bmdl_str or bmdl_str in ("—", "NVM", "UREP", "ND"):
+        return default
+    # Strip "<" prefix from NR thresholds like "<0.1"
+    cleaned = bmdl_str.lstrip("<")
+    return _safe_float(cleaned, default)
+
+
 def _pick_go_stat(go_entry: dict, metric: str, stat: str):
     """
     Pick a specific BMD statistic from a GO category's stat block.
@@ -1145,8 +1164,21 @@ def _build_section_cards(
     """
     sections = []
     for dom, sex_rows in sorted(domain_tables.items()):
-        tables_json = serialize_table_rows(sex_rows)
-        narrative = generate_results_narrative(sex_rows, compound_name, dose_unit)
+        # Business rule: only responsive endpoints (both Jonckheere trend AND
+        # Dunnett pairwise significant) appear in main body domain tables
+        # (Tables 2-7).  Non-responsive endpoints are excluded here but still
+        # available in the BMD summary (Table 8) which has its own gate.
+        responsive_rows = {
+            sex: [r for r in rows if r.responsive]
+            for sex, rows in sex_rows.items()
+        }
+        # Drop sex groups that have no responsive endpoints
+        responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
+        if not responsive_rows:
+            continue
+
+        tables_json = serialize_table_rows(responsive_rows)
+        narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
         sections.append({
             "domain": dom,
             "title": _DOMAIN_TITLES.get(dom, dom.replace("_", " ").title()),
@@ -1308,7 +1340,14 @@ def _build_apical_bmd_summary(domain_tables: dict[str, dict[str, list]]) -> list
     summary = []
     for dom, sex_rows in sorted(domain_tables.items()):
         for sex, rows in sex_rows.items():
-            for row in rows:
+            # Sort within each sex group by BMDL (ascending).
+            # Numeric BMDL values first; non-numeric statuses (NVM, UREP, "—")
+            # sort to the end so the most potent endpoints appear at top.
+            sorted_rows = sorted(
+                rows,
+                key=lambda r: _safe_float_from_bmdl(r.bmdl_str),
+            )
+            for row in sorted_rows:
                 has_bmd = row.bmd_status is not None
                 has_loel = row.loel is not None
                 if not has_bmd and not has_loel:
@@ -1350,7 +1389,13 @@ def _build_bmds_bmd_summary(
     summary = []
     for dom, sex_rows in sorted(domain_tables.items()):
         for sex, rows in sex_rows.items():
-            for row in rows:
+            # Sort within each sex group by BMDL (ascending), matching
+            # the apical BMD summary sort order.
+            sorted_rows = sorted(
+                rows,
+                key=lambda r: _safe_float_from_bmdl(r.bmdl_str),
+            )
+            for row in sorted_rows:
                 bmds_key = f"{sex}::{row.label}"
                 bmds_res = bmds_results.get(bmds_key)
                 if not bmds_res:

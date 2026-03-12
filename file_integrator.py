@@ -119,14 +119,22 @@ _BM2_SEX_PATTERN = re.compile(r"(Male|Female)", re.IGNORECASE)
 
 # BM2 experiment name → domain mapping.  These are the experiment name
 # prefixes used by BMDExpress 3 when exporting apical endpoint data.
+# Includes both full BMDExpress names (e.g., "ClinicalChemistry") and
+# abbreviated forms from xlsx_to_pivot_txt output (e.g., "clin_chem" →
+# stripped to "clinchem").  Both forms are needed because _partition_by_domain
+# and _filter_gene_expression strip underscores before matching.
 _BM2_DOMAIN_MAP: dict[str, str] = {
     "bodyweight": "body_weight",
     "organweight": "organ_weights",
     "clinicalchemistry": "clin_chem",
+    "clinchem": "clin_chem",
     "hematology": "hematology",
     "hormone": "hormones",
     "tissueconcentration": "tissue_conc",
+    "tissueconc": "tissue_conc",
     "clinicalobservation": "clinical_obs",
+    "clinicalobs": "clinical_obs",
+    "clinobs": "clinical_obs",
 }
 
 
