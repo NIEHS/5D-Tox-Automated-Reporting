@@ -66,6 +66,7 @@ from apical_report import (
     export_genomics,
     generate_results_narrative,
 )
+from apical_bmds import run_bmds_for_endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -757,61 +758,89 @@ async def api_integrated_summary(dtxsid: str):
     })
 
 
-@router.post("/api/process-integrated/{dtxsid}")
-async def api_process_integrated(dtxsid: str, request: Request):
+# ---------------------------------------------------------------------------
+# Process-integrated helpers
+# ---------------------------------------------------------------------------
+# These private functions implement the phases of the process-integrated
+# pipeline.  Extracted from the monolithic api_process_integrated() endpoint
+# to improve readability and testability.  Each function handles one phase
+# of the pipeline: loading data, restoring category lookups, filtering
+# gene expression experiments, partitioning by domain, building section
+# cards, extracting genomics, and building BMD summaries.
+
+# Human-readable domain titles for section headers in the UI.
+# Maps the internal domain key to a display-friendly label.
+_DOMAIN_TITLES = {
+    "body_weight":    "Body Weight",
+    "organ_weights":  "Organ Weights",
+    "clin_chem":      "Clinical Chemistry",
+    "hematology":     "Hematology",
+    "hormones":       "Hormones",
+    "tissue_conc":    "Tissue Concentration",
+    "clinical_obs":   "Clinical Observations",
+}
+
+# Human-readable labels for BMD statistics, used by the UI to set table
+# column headers (e.g. "BMD 5th Pct").
+_BMD_STAT_LABELS = {
+    "mean": "Mean",
+    "median": "Median",
+    "minimum": "Minimum",
+    "weighted_mean": "Weighted Mean",
+    "fifth_pct": "5th %ile",
+    "tenth_pct": "10th %ile",
+    "lower95": "Lower 95%",
+    "upper95": "Upper 95%",
+}
+
+
+def _safe_float(val, default=float("inf")):
     """
-    Process the integrated BMDProject JSON into section cards with tables
-    and narratives for each apical endpoint domain.
-
-    Input JSON:
-      {
-        "compound_name": "PFHxSAm",
-        "dose_unit": "mg/kg",
-        "bmd_stat": "mean"        // optional: mean, median, minimum, etc.
-      }
-
-    Loads the integrated JSON from _integrated_pool (in-memory) or from
-    sessions/{dtxsid}/integrated.json (disk fallback).  Calls
-    build_table_data() to run NTP stats on all experiments, then partitions
-    the results by domain for the UI's section cards.
-
-    Returns:
-      {
-        "sections": [
-          {
-            "domain": "body_weight",
-            "title": "Body Weight",
-            "tables_json": {"Male": [...], "Female": [...]},
-            "narrative": ["paragraph1", "paragraph2", ...]
-          },
-          ...
-        ]
-      }
+    Coerce a value to float, returning *default* for None, NaN, or unparseable
+    strings.  Used for sorting BMD values where Java serializes NaN/Infinity
+    as strings.
     """
-    body = await request.json()
-    compound_name = body.get("compound_name", "Test Compound")
-    dose_unit = body.get("dose_unit", "mg/kg")
-    # BMD statistics — array of stat keys, each producing a separate GO table.
-    # Accepts both the old single "bmd_stat" and the new "bmd_stats" array.
-    bmd_stats_raw = body.get("bmd_stats", None)
-    if bmd_stats_raw and isinstance(bmd_stats_raw, list):
-        bmd_stats = bmd_stats_raw
-    else:
-        bmd_stats = [body.get("bmd_stat", "median")]
+    if val is None:
+        return default
+    try:
+        v = float(val)
+        # NaN sorts inconsistently — treat as infinity
+        return default if v != v else v
+    except (TypeError, ValueError):
+        return default
 
-    # First stat is also used for apical category lookup
-    bmd_stat = bmd_stats[0]
 
-    # GO category filter cutoffs — sent from the Settings panel.
-    # go_pct:       minimum % of genes in a category that must have BMD values
-    # go_min_genes: minimum total genes annotated to the GO category
-    # go_min_bmd:   minimum genes with a BMD value in the category
-    go_pct = body.get("go_pct", 5)
-    go_min_genes = body.get("go_min_genes", 20)
-    go_max_genes = body.get("go_max_genes", 500)
-    go_min_bmd = body.get("go_min_bmd", 3)
+def _pick_go_stat(go_entry: dict, metric: str, stat: str):
+    """
+    Pick a specific BMD statistic from a GO category's stat block.
 
-    # Load integrated data -- prefer in-memory, fall back to disk
+    Returns None (not a fallback) if the stat isn't available, so that
+    categories missing the stat get excluded from the table rather than
+    showing a misleading value from a different statistic.
+
+    Args:
+        go_entry: A GO BP category dict with optional bmd_stats/bmdl_stats blocks.
+        metric:   "bmd", "bmdl", or "bmdu".
+        stat:     The statistic key (e.g., "mean", "median", "fifth_pct").
+    """
+    block = go_entry.get(f"{metric}_stats", {})
+    if block:
+        return block.get(stat)
+    # Legacy data only has median (pre-stat-block format)
+    if stat == "median":
+        return go_entry.get(f"{metric}_median")
+    return None
+
+
+def _load_integrated(dtxsid: str) -> dict | None:
+    """
+    Load the integrated BMDProject for a session.
+
+    Prefers the in-memory cache (_integrated_pool).  Falls back to reading
+    sessions/{dtxsid}/integrated.json from disk and populating the cache.
+
+    Returns None if no integrated data exists (caller should return 400).
+    """
     integrated = _integrated_pool.get(dtxsid)
     if integrated is None:
         integrated_path = _session_dir(dtxsid) / "integrated.json"
@@ -820,20 +849,34 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
                 _integrated_pool[dtxsid] = integrated
             except (json.JSONDecodeError, Exception):
-                pass
+                logger.warning("Failed to load integrated.json for %s", dtxsid)
+    return integrated
 
-    if not integrated:
-        return JSONResponse(
-            {"error": "No integrated data found -- run integration first"},
-            status_code=400,
-        )
 
-    # --- Check processed-results cache ---
-    # Computing NTP stats (Java Williams/Dunnett) + pybmds + genomics takes
-    # 30-60 seconds.  Cache the full response keyed by a hash of the inputs
-    # that affect the output: integrated data identity + processing settings.
-    # On page refresh the client re-sends process-integrated with the same
-    # settings, so we can return the cached result instantly.
+def _check_processed_cache(
+    dtxsid: str,
+    integrated: dict,
+    bmd_stats: list[str],
+    go_pct: float,
+    go_min_genes: int,
+    go_max_genes: int,
+    go_min_bmd: int,
+) -> tuple[dict | None, str, Path]:
+    """
+    Check for a cached process-integrated result on disk.
+
+    Computing NTP stats (Java Williams/Dunnett) + pybmds + genomics takes
+    30-60 seconds.  This caches the full response keyed by a hash of the
+    inputs that affect the output: integrated data identity + processing
+    settings.  On page refresh the client re-sends process-integrated with
+    the same settings, so we can return the cached result instantly.
+
+    Returns:
+        (cached_payload_or_None, cache_hash, cache_path)
+        If cached_payload is not None, the caller should return it immediately.
+        cache_hash and cache_path are needed by the caller to write the cache
+        after computation.
+    """
     cache_key_parts = json.dumps({
         "bmd_stats": list(bmd_stats),
         "go_pct": go_pct,
@@ -857,481 +900,633 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 "Returning cached processed results for %s (hash %s)",
                 dtxsid, cache_hash,
             )
-            return JSONResponse(cached)
+            return cached, cache_hash, cache_path
         except (json.JSONDecodeError, Exception):
             # Corrupted cache — fall through to recompute
             logger.warning("Corrupted process cache for %s, recomputing", dtxsid)
 
-    try:
-        # Restore category lookup from the serialized pipe-separated keys.
-        # integrate_pool() stored this as _category_lookup with "prefix|endpoint"
-        # string keys; we restore them to (prefix, endpoint) tuple keys that
-        # build_table_data() expects.
-        #
-        # Re-select BMD/BMDL/BMDU values using the requested bmd_stat.
-        # build_category_lookup() stores the full stat blocks (bmd_stats,
-        # bmdl_stats, bmdu_stats) alongside the pre-selected values, so we
-        # can re-pick the statistic without re-running Java.
-        flat_cat = integrated.get("_category_lookup", {})
-        cat_lookup: dict[tuple[str, str], dict] = {}
+    return None, cache_hash, cache_path
 
-        # Collect experiment names so we can resolve BMDExpress pipeline
-        # suffixes in category keys.  Old integrated.json files may have
-        # keys like "female_clin_chem_williams_0.05_NOMTC_nofoldfilter|endpoint"
-        # but build_table_data() queries with "female_clin_chem".
-        all_exp_names = sorted(
-            [exp.get("name", "") for exp in integrated.get("doseResponseExperiments", [])],
-            key=len, reverse=True,
+
+def _restore_category_lookup(integrated: dict, bmd_stat: str) -> dict[tuple[str, str], dict]:
+    """
+    Restore the category lookup from the serialized pipe-separated keys in
+    the integrated BMDProject.
+
+    integrate_pool() stored this as _category_lookup with "prefix|endpoint"
+    string keys; we restore them to (prefix, endpoint) tuple keys that
+    build_table_data() expects.
+
+    Also re-selects BMD/BMDL/BMDU values using the requested bmd_stat.
+    build_category_lookup() stores the full stat blocks (bmd_stats,
+    bmdl_stats, bmdu_stats) alongside the pre-selected values, so we can
+    re-pick the statistic without re-running Java.
+
+    Args:
+        integrated: The merged BMDProject dict.
+        bmd_stat:   The first (primary) BMD statistic key to select.
+
+    Returns:
+        Dict mapping (experiment_prefix, endpoint_name) to category info dicts.
+    """
+    flat_cat = integrated.get("_category_lookup", {})
+    cat_lookup: dict[tuple[str, str], dict] = {}
+
+    # Collect experiment names so we can resolve BMDExpress pipeline
+    # suffixes in category keys.  Old integrated.json files may have
+    # keys like "female_clin_chem_williams_0.05_NOMTC_nofoldfilter|endpoint"
+    # but build_table_data() queries with "female_clin_chem".
+    all_exp_names = sorted(
+        [exp.get("name", "") for exp in integrated.get("doseResponseExperiments", [])],
+        key=len, reverse=True,
+    )
+
+    for k, v in flat_cat.items():
+        entry = dict(v)
+        # Re-select from stored stat blocks if they exist.
+        cat_bmd_blk = entry.get("bmd_stats", {})
+        cat_bmdl_blk = entry.get("bmdl_stats", {})
+        cat_bmdu_blk = entry.get("bmdu_stats", {})
+        if cat_bmd_blk:
+            entry["bmd"] = cat_bmd_blk.get(bmd_stat, cat_bmd_blk.get("mean", ""))
+        if cat_bmdl_blk:
+            entry["bmdl"] = cat_bmdl_blk.get(bmd_stat, cat_bmdl_blk.get("mean", ""))
+        if cat_bmdu_blk:
+            entry["bmdu"] = cat_bmdu_blk.get(bmd_stat, cat_bmdu_blk.get("mean", ""))
+
+        prefix, endpoint = k.split("|", 1) if "|" in k else (k, "")
+
+        # Resolve suffixed prefix to raw experiment name.
+        # This handles both new (already resolved) and old (suffixed) keys.
+        resolved = prefix
+        for exp_name in all_exp_names:
+            if prefix == exp_name:
+                resolved = exp_name
+                break
+            if prefix.startswith(exp_name) and prefix[len(exp_name):len(exp_name) + 1] == "_":
+                resolved = exp_name
+                break
+
+        cat_lookup[(resolved, endpoint)] = entry
+        # Also keep the original key for backward compat
+        if resolved != prefix:
+            cat_lookup[(prefix, endpoint)] = entry
+
+    return cat_lookup
+
+
+def _filter_gene_expression(integrated: dict) -> dict:
+    """
+    Return a copy of the integrated BMDProject with gene expression
+    experiments removed.
+
+    Gene expression .bm2 data has thousands of probes — running Dunnett's
+    test on each would be extremely slow and isn't meaningful for clinical
+    endpoints.  Genomics is handled separately by export_genomics().
+
+    Identifies gene expression experiments by checking which experiment names
+    DON'T match any clinical domain prefix in _BM2_DOMAIN_MAP.
+
+    Args:
+        integrated: The full merged BMDProject dict.
+
+    Returns:
+        A shallow copy of integrated with gene expression experiments
+        filtered from doseResponseExperiments.  Returns the original dict
+        unchanged if no gene expression experiments were found.
+    """
+    meta = integrated.get("_meta", {})
+    source_files = meta.get("source_files", {})
+    ge_source = source_files.get("gene_expression")
+    if not ge_source:
+        return integrated
+
+    # Gene expression experiments have names starting with the organ
+    # (e.g., "Liver_PFHxSAm_Male_No0") — identify them by checking
+    # which experiments DON'T match any clinical domain prefix.
+    ge_exp_names = set()
+    for exp in integrated.get("doseResponseExperiments", []):
+        exp_name = exp.get("name", "")
+        exp_lower = exp_name.lower().replace("_", "")
+        matched = False
+        for prefix in _BM2_DOMAIN_MAP:
+            clean = exp_lower.replace("female", "").replace("male", "").strip()
+            if clean.startswith(prefix) or prefix.startswith(clean):
+                matched = True
+                break
+        if not matched:
+            ge_exp_names.add(exp_name)
+
+    if not ge_exp_names:
+        return integrated
+
+    logger.info(
+        "Filtered %d gene expression experiments from NTP stats pipeline",
+        len(ge_exp_names),
+    )
+    return {
+        **integrated,
+        "doseResponseExperiments": [
+            exp for exp in integrated.get("doseResponseExperiments", [])
+            if exp.get("name", "") not in ge_exp_names
+        ],
+    }
+
+
+def _partition_by_domain(
+    apical_integrated: dict,
+    source_files: dict,
+    table_data: dict[str, list],
+) -> dict[str, dict[str, list]]:
+    """
+    Partition NTP stats TableRows by domain, preserving sex grouping.
+
+    build_table_data() returns {"Male": [TableRow, ...], "Female": [...]}.
+    We need to split these into per-domain sections so the UI can create
+    separate section cards for body weight, organ weights, etc.
+
+    Strategy: look at the experiment names in the integrated data to build
+    a mapping of endpoint_name -> domain, then partition the table rows.
+
+    Args:
+        apical_integrated: The integrated BMDProject with GE experiments filtered out.
+        source_files:      The _meta.source_files dict mapping domain -> file info.
+        table_data:        The NTP stats output: {sex -> [TableRow, ...]}.
+
+    Returns:
+        Nested dict: {domain -> {sex -> [TableRow, ...]}}.
+    """
+    # Build experiment_name -> domain mapping.
+    # Use _meta.source_files to know which experiment names belong to which
+    # domain.  Also use detect_domain() on the experiment name as fallback.
+    exp_name_to_domain: dict[str, str] = {}
+
+    for exp in apical_integrated.get("doseResponseExperiments", []):
+        exp_name = exp.get("name", "")
+        exp_lower = exp_name.lower()
+
+        # Strip sex suffix/prefix for matching.
+        # IMPORTANT: strip "female" BEFORE "male" — "female" contains
+        # "male" as a substring, so stripping "male" first leaves "fe".
+        stripped = exp_lower.replace("female", "").replace("male", "").replace("_", "").strip()
+
+        domain_for_exp = None
+        for prefix, dom in _BM2_DOMAIN_MAP.items():
+            if stripped.startswith(prefix) or prefix.startswith(stripped):
+                domain_for_exp = dom
+                break
+
+        # Fallback: try detect_domain() which uses regex patterns.
+        # This handles abbreviated names like "clin_chem" that don't
+        # match the full BM2 prefix "clinicalchemistry".
+        if not domain_for_exp:
+            domain_for_exp = detect_domain(exp_name, "bm2", 0)
+
+        # Last resort: check if experiment name overlaps with source domain keys
+        if not domain_for_exp:
+            for dom in source_files:
+                dom_key = dom.replace("_", "")
+                if dom_key in exp_lower.replace("_", ""):
+                    domain_for_exp = dom
+                    break
+
+        if domain_for_exp:
+            exp_name_to_domain[exp_name] = domain_for_exp
+
+    # Build endpoint -> domain map using the experiment mapping.
+    # Each probe/endpoint in an experiment inherits that experiment's domain.
+    endpoint_domain_map: dict[str, str] = {}
+    for exp in apical_integrated.get("doseResponseExperiments", []):
+        exp_name = exp.get("name", "")
+        dom = exp_name_to_domain.get(exp_name)
+        if dom:
+            for pr in exp.get("probeResponses", []):
+                probe_id = pr.get("probe", {}).get("id", "")
+                if probe_id:
+                    endpoint_domain_map[(exp_name, probe_id)] = dom
+
+    # Build a secondary map: (sex, probe_name) -> domain.
+    # Since build_table_data doesn't preserve the experiment name on
+    # TableRow, we match back using the probe label.
+    sex_probe_domain: dict[tuple[str, str], str] = {}
+    for (exp_name, probe_id), dom in endpoint_domain_map.items():
+        sex = "Female" if "female" in exp_name.lower() else \
+              "Male" if "male" in exp_name.lower() else "Unknown"
+        sex_probe_domain[(sex, probe_id)] = dom
+
+    # Partition: {domain: {sex: [TableRow, ...]}}
+    domain_tables: dict[str, dict[str, list]] = {}
+    for sex, rows in table_data.items():
+        for row in rows:
+            dom = sex_probe_domain.get((sex, row.label), "unknown")
+            domain_tables.setdefault(dom, {}).setdefault(sex, []).append(row)
+
+    return domain_tables
+
+
+def _build_section_cards(
+    domain_tables: dict[str, dict[str, list]],
+    compound_name: str,
+    dose_unit: str,
+) -> list[dict]:
+    """
+    Build the UI section cards array: one per domain that has data.
+
+    For each domain, serializes TableRow objects to JSON-friendly dicts
+    and generates an auto-written results narrative.
+
+    Args:
+        domain_tables: The partitioned {domain -> {sex -> [TableRow, ...]}} dict.
+        compound_name: Chemical name for the narrative (e.g., "PFHxSAm").
+        dose_unit:     Dose unit string (e.g., "mg/kg").
+
+    Returns:
+        List of section dicts, each with domain, title, tables_json, narrative.
+    """
+    sections = []
+    for dom, sex_rows in sorted(domain_tables.items()):
+        tables_json = serialize_table_rows(sex_rows)
+        narrative = generate_results_narrative(sex_rows, compound_name, dose_unit)
+        sections.append({
+            "domain": dom,
+            "title": _DOMAIN_TITLES.get(dom, dom.replace("_", " ").title()),
+            "tables_json": tables_json,
+            "narrative": narrative,
+        })
+    return sections
+
+
+async def _extract_genomics(
+    dtxsid: str,
+    integrated: dict,
+    bmd_stats: list[str],
+    go_pct: float,
+    go_min_genes: int,
+    go_max_genes: int,
+    go_min_bmd: int,
+) -> dict:
+    """
+    Extract gene expression genomics data from the integrated .bm2 file.
+
+    If the integration included gene_expression, runs the BMDExpress 3 Java
+    export to extract per-gene BMD and GO Biological Process category results.
+    Applies user-configured GO filtering cutoffs, then builds per-organ/sex
+    sections with ranked gene_sets tables and top_genes lists.
+
+    Args:
+        dtxsid:       The DTXSID for this session.
+        integrated:   The full merged BMDProject dict.
+        bmd_stats:    List of BMD statistic keys to generate tables for.
+        go_pct:       Minimum % of genes in a category that must have BMD values.
+        go_min_genes: Minimum total genes annotated to the GO category.
+        go_max_genes: Maximum total genes (excludes overly broad categories).
+        go_min_bmd:   Minimum genes with a BMD value in the category.
+
+    Returns:
+        Dict mapping "organ_sex" keys to genomics section dicts.
+        Empty dict if no gene expression data exists.
+    """
+    genomics_sections = {}
+    meta = integrated.get("_meta", {})
+    ge_source = meta.get("source_files", {}).get("gene_expression")
+
+    # Only proceed if gene expression data was included at the bm2 tier
+    if not ge_source or ge_source.get("tier") != "bm2":
+        return genomics_sections
+
+    ge_filename = ge_source.get("filename", "")
+    ge_path = _session_dir(dtxsid) / "files" / ge_filename
+
+    if not ge_path.exists():
+        return genomics_sections
+
+    # Run the Java export in a thread pool (JVM startup ~0.5s)
+    tmp_json = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".json", prefix="genomics_",
+    )
+    tmp_json.close()
+
+    loop = asyncio.get_running_loop()
+    try:
+        ge_result = await loop.run_in_executor(
+            None, export_genomics, str(ge_path), tmp_json.name,
         )
 
-        for k, v in flat_cat.items():
-            entry = dict(v)
-            # Re-select from stored stat blocks if they exist.
-            # Use prefixed names to avoid shadowing the outer bmd_stats list.
-            cat_bmd_blk = entry.get("bmd_stats", {})
-            cat_bmdl_blk = entry.get("bmdl_stats", {})
-            cat_bmdu_blk = entry.get("bmdu_stats", {})
-            if cat_bmd_blk:
-                entry["bmd"] = cat_bmd_blk.get(bmd_stat, cat_bmd_blk.get("mean", ""))
-            if cat_bmdl_blk:
-                entry["bmdl"] = cat_bmdl_blk.get(bmd_stat, cat_bmdl_blk.get("mean", ""))
-            if cat_bmdu_blk:
-                entry["bmdu"] = cat_bmdu_blk.get(bmd_stat, cat_bmdu_blk.get("mean", ""))
+        # Reshape into the format the UI expects: keyed by organ_sex
+        for exp in ge_result.get("experiments", []):
+            organ = exp.get("organ", "unknown").lower()
+            sex = exp.get("sex", "unknown").lower()
+            key = f"{organ}_{sex}"
 
-            prefix, endpoint = k.split("|", 1) if "|" in k else (k, "")
+            # Sort genes by BMD ascending (lowest = most sensitive)
+            genes = sorted(
+                exp.get("genes", []),
+                key=lambda g: _safe_float(g.get("bmd")),
+            )
 
-            # Resolve suffixed prefix to raw experiment name.
-            # This handles both new (already resolved) and old (suffixed) keys.
-            resolved = prefix
-            for exp_name in all_exp_names:
-                if prefix == exp_name:
-                    resolved = exp_name
-                    break
-                if prefix.startswith(exp_name) and prefix[len(exp_name):len(exp_name) + 1] == "_":
-                    resolved = exp_name
-                    break
+            # Filter GO terms by user-configured cutoffs
+            raw_go = exp.get("go_bp", [])
+            filtered_go = []
+            for g in raw_go:
+                n_total = g.get("n_genes", 0) or 0
+                n_passed = g.get("n_passed", 0) or 0
+                if n_total < go_min_genes or n_total > go_max_genes:
+                    continue
+                if n_passed < go_min_bmd:
+                    continue
+                pct = (n_passed / n_total * 100) if n_total > 0 else 0
+                if pct < go_pct:
+                    continue
+                filtered_go.append(g)
 
-            cat_lookup[(resolved, endpoint)] = entry
-            # Also keep the original key for backward compat
-            if resolved != prefix:
-                cat_lookup[(prefix, endpoint)] = entry
+            # Build a separate gene_sets table for each requested BMD statistic.
+            # Categories where the stat is null (not computed by BMDExpress) are
+            # excluded from that table entirely rather than falling back.
+            gene_sets_by_stat = {}
+            for stat in bmd_stats:
+                stat_go = [
+                    g for g in filtered_go
+                    if _pick_go_stat(g, "bmd", stat) is not None
+                ]
+                stat_go.sort(
+                    key=lambda g: _safe_float(_pick_go_stat(g, "bmd", stat)),
+                )
+                gene_sets_by_stat[stat] = [
+                    {
+                        "rank": i + 1,
+                        "go_id": g["go_id"],
+                        "go_term": g["go_term"],
+                        "bmd": _pick_go_stat(g, "bmd", stat),
+                        "bmdl": _pick_go_stat(g, "bmdl", stat),
+                        "n_genes": g.get("n_genes", 0),
+                        "n_genes_with_bmd": g.get("n_passed", 0),
+                        "direction": g.get("direction", ""),
+                        "fishers_p": g.get("fishers_two_tail"),
+                        "genes": g.get("gene_symbols", ""),
+                    }
+                    for i, g in enumerate(stat_go[:20])
+                ]
 
-        loop = asyncio.get_running_loop()
-
-        # Filter out gene expression experiments before running NTP stats.
-        # Gene expression .bm2 data has thousands of probes -- running Dunnett's
-        # test on each would be extremely slow and isn't meaningful for clinical
-        # endpoints.  Genomics is handled separately by export_genomics().
-        meta = integrated.get("_meta", {})
-        source_files = meta.get("source_files", {})
-        ge_source = source_files.get("gene_expression")
-        ge_exp_names = set()
-        if ge_source:
-            # Gene expression experiments have names starting with the organ
-            # (e.g., "Liver_PFHxSAm_Male_No0") -- identify them by checking
-            # which experiments DON'T match any clinical domain prefix.
-            for exp in integrated.get("doseResponseExperiments", []):
-                exp_name = exp.get("name", "")
-                exp_lower = exp_name.lower().replace("_", "")
-                matched = False
-                for prefix in _BM2_DOMAIN_MAP:
-                    clean = exp_lower.replace("female", "").replace("male", "").strip()
-                    if clean.startswith(prefix) or prefix.startswith(clean):
-                        matched = True
-                        break
-                if not matched:
-                    ge_exp_names.add(exp_name)
-
-        # Build a filtered copy without gene expression experiments for NTP stats
-        if ge_exp_names:
-            apical_integrated = {
-                **integrated,
-                "doseResponseExperiments": [
-                    exp for exp in integrated.get("doseResponseExperiments", [])
-                    if exp.get("name", "") not in ge_exp_names
+            genomics_sections[key] = {
+                "organ": organ,
+                "sex": sex,
+                "total_probes": exp.get("total_probes", 0),
+                "total_responsive_genes": len(genes),
+                "gene_sets_by_stat": gene_sets_by_stat,
+                "top_genes": [
+                    {
+                        "rank": i + 1,
+                        "gene_symbol": g["gene_symbol"],
+                        "bmd": g.get("bmd"),
+                        "bmdl": g.get("bmdl"),
+                        "bmdu": g.get("bmdu"),
+                        "direction": g.get("direction", ""),
+                        "fold_change": g.get("fold_change"),
+                        "r_squared": g.get("r_squared"),
+                    }
+                    for i, g in enumerate(genes[:20])
                 ],
             }
-            logger.info(
-                "Filtered %d gene expression experiments from NTP stats pipeline",
-                len(ge_exp_names),
-            )
-        else:
-            apical_integrated = integrated
+    finally:
+        os.unlink(tmp_json.name)
 
-        # Run the NTP stats pipeline on clinical endpoint experiments only.
-        # This is pure Python (no JVM) and typically takes <1s.
+    return genomics_sections
+
+
+def _build_apical_bmd_summary(domain_tables: dict[str, dict[str, list]]) -> list[dict]:
+    """
+    Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
+
+    Collects BMD, BMDL, LOEL, NOEL, direction from ALL domain TableRows into
+    a flat list for the separate BMD summary card.  Matches the NIEHS reference
+    report structure where domain tables (Tables 2-7) show dose-response data
+    and Table 8 summarizes BMDs.
+
+    Only includes endpoints that have a BMD result OR significant trend/pairwise
+    findings (LOEL exists).  Endpoints with neither are uninteresting.
+    """
+    summary = []
+    for dom, sex_rows in sorted(domain_tables.items()):
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                has_bmd = row.bmd_status is not None
+                has_loel = row.loel is not None
+                if not has_bmd and not has_loel:
+                    continue
+                summary.append({
+                    "endpoint": row.label,
+                    "sex": sex,
+                    "domain": dom,
+                    "bmd": row.bmd_str,
+                    "bmdl": row.bmdl_str,
+                    "bmd_status": row.bmd_status,
+                    "loel": row.loel,
+                    "noel": row.noel,
+                    "direction": row.direction,
+                })
+    return summary
+
+
+def _build_bmds_bmd_summary(
+    domain_tables: dict[str, dict[str, list]],
+    bmds_results: dict,
+) -> list[dict]:
+    """
+    Build the BMDS-based BMD summary (second Table 8) using pybmds results.
+
+    Same structure as the BMDExpress 3 summary, but using EPA BMDS continuous
+    model results.  Only includes endpoints where pybmds produced a result AND
+    there's either a viable model or a significant LOEL.
+
+    Formats BMD/BMDL strings matching NIEHS conventions:
+      - viable: numeric value (e.g., "12.3")
+      - NR:     "<lowest_nonzero_dose/3" (e.g., "<0.1")
+      - UREP:   "UREP" (unreliable endpoint)
+      - NVM:    "NVM" (no viable model)
+    """
+    if not bmds_results:
+        return []
+
+    summary = []
+    for dom, sex_rows in sorted(domain_tables.items()):
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                bmds_key = f"{sex}::{row.label}"
+                bmds_res = bmds_results.get(bmds_key)
+                if not bmds_res:
+                    continue
+
+                # Inclusion gate: significant LOEL or viable BMDS result
+                has_viable_bmds = bmds_res["status"] == "viable"
+                has_loel = row.loel is not None
+                if not has_viable_bmds and not has_loel:
+                    continue
+
+                # Format BMD/BMDL strings matching NIEHS conventions
+                status = bmds_res["status"]
+                if status == "viable" and bmds_res["bmd"] is not None:
+                    bmd_str = f"{bmds_res['bmd']:.3g}"
+                    bmdl_str = f"{bmds_res['bmdl']:.3g}" if bmds_res["bmdl"] else "—"
+                elif status == "NR":
+                    nonzero = [d for d in row.values_by_dose if d > 0]
+                    lnzd = min(nonzero) if nonzero else 0
+                    bmd_str = f"<{lnzd / 3:.3g}" if lnzd > 0 else "NR"
+                    bmdl_str = "—"
+                elif status == "UREP":
+                    bmd_str = "UREP"
+                    bmdl_str = "UREP"
+                else:
+                    bmd_str = "NVM"
+                    bmdl_str = "NVM"
+
+                summary.append({
+                    "endpoint": row.label,
+                    "sex": sex,
+                    "domain": dom,
+                    "bmd": bmd_str,
+                    "bmdl": bmdl_str,
+                    "bmd_status": status,
+                    "model_name": bmds_res.get("model_name"),
+                    "loel": row.loel,
+                    "noel": row.noel,
+                    "direction": row.direction,
+                })
+    return summary
+
+
+def _cache_processed_result(dtxsid: str, cache_path: Path, payload: dict) -> None:
+    """
+    Persist the process-integrated result to disk so page refreshes are instant.
+
+    Also cleans up stale caches from previous settings combinations (different
+    hash).  Errors are logged but not raised — caching is a performance
+    optimization, not a correctness requirement.
+    """
+    try:
+        for old in _session_dir(dtxsid).glob("_processed_cache_*.json"):
+            if old != cache_path:
+                old.unlink(missing_ok=True)
+        cache_path.write_text(
+            json.dumps(payload, indent=2, default=str),
+            encoding="utf-8",
+        )
+        logger.info("Cached processed results for %s (%s)", dtxsid, cache_path.name)
+    except Exception:
+        logger.warning("Failed to cache processed results for %s", dtxsid, exc_info=True)
+
+
+@router.post("/api/process-integrated/{dtxsid}")
+async def api_process_integrated(dtxsid: str, request: Request):
+    """
+    Process the integrated BMDProject JSON into section cards with tables
+    and narratives for each apical endpoint domain.
+
+    Input JSON:
+      {
+        "compound_name": "PFHxSAm",
+        "dose_unit": "mg/kg",
+        "bmd_stats": ["median"],  // optional: mean, median, minimum, etc.
+        "go_pct": 5,              // optional: GO category filter cutoffs
+        "go_min_genes": 20,
+        "go_max_genes": 500,
+        "go_min_bmd": 3
+      }
+
+    Orchestrates the processing pipeline:
+      1. Load integrated data (memory or disk)
+      2. Check disk cache (return instantly on hit)
+      3. Restore category lookup from serialized keys
+      4. Filter gene expression experiments
+      5. Run NTP stats (Williams trend + Dunnett's pairwise + Jonckheere)
+      6. Partition results by domain
+      7. Build section cards with narratives
+      8. Run BMDS modeling (pybmds)
+      9. Extract genomics from gene expression .bm2
+      10. Build BMD summaries (BMDExpress 3 + BMDS)
+      11. Cache and return
+    """
+    # --- Parse request parameters ---
+    body = await request.json()
+    compound_name = body.get("compound_name", "Test Compound")
+    dose_unit = body.get("dose_unit", "mg/kg")
+
+    # BMD statistics — array of stat keys, each producing a separate GO table.
+    # Accepts both the old single "bmd_stat" and the new "bmd_stats" array.
+    bmd_stats_raw = body.get("bmd_stats", None)
+    bmd_stats = bmd_stats_raw if bmd_stats_raw and isinstance(bmd_stats_raw, list) \
+        else [body.get("bmd_stat", "median")]
+    bmd_stat = bmd_stats[0]  # primary stat for category lookup
+
+    # GO category filter cutoffs from the Settings panel
+    go_pct = body.get("go_pct", 5)
+    go_min_genes = body.get("go_min_genes", 20)
+    go_max_genes = body.get("go_max_genes", 500)
+    go_min_bmd = body.get("go_min_bmd", 3)
+
+    # --- Load integrated data ---
+    integrated = _load_integrated(dtxsid)
+    if not integrated:
+        return JSONResponse(
+            {"error": "No integrated data found -- run integration first"},
+            status_code=400,
+        )
+
+    # --- Check cache (instant return on hit) ---
+    cached, cache_hash, cache_path = _check_processed_cache(
+        dtxsid, integrated, bmd_stats, go_pct, go_min_genes, go_max_genes, go_min_bmd,
+    )
+    if cached:
+        return JSONResponse(cached)
+
+    try:
+        # --- Restore category lookup ---
+        cat_lookup = _restore_category_lookup(integrated, bmd_stat)
+
+        # --- Filter gene expression experiments ---
+        apical_integrated = _filter_gene_expression(integrated)
+
+        # --- Run NTP stats (thread pool — Java subprocess) ---
+        loop = asyncio.get_running_loop()
         table_data = await loop.run_in_executor(
             None, build_table_data, apical_integrated, cat_lookup,
         )
 
-        # --- Partition table rows by domain ---
-        # build_table_data() returns {"Male": [TableRow, ...], "Female": [...]}.
-        # We need to split these into per-domain sections so the UI can create
-        # separate section cards for body weight, organ weights, etc.
-        #
-        # Strategy: look at the experiment names in the integrated data to build
-        # a mapping of endpoint_name -> domain, then partition the table rows.
+        # --- Partition by domain ---
+        source_files = integrated.get("_meta", {}).get("source_files", {})
+        domain_tables = _partition_by_domain(apical_integrated, source_files, table_data)
 
-        # Build experiment_name -> domain mapping.
-        # Strategy: use _meta.source_files to know which experiment names
-        # belong to which domain.  Each source file contributed experiments
-        # whose names we can map back.  Also use detect_domain() on the
-        # experiment name itself as fallback.
-        exp_name_to_domain: dict[str, str] = {}
+        # --- Build section cards with narratives ---
+        sections = _build_section_cards(domain_tables, compound_name, dose_unit)
 
-        # Use the filtered (apical-only) experiments for domain mapping --
-        # gene expression experiments were already excluded above.
-        for exp in apical_integrated.get("doseResponseExperiments", []):
-            exp_name = exp.get("name", "")
-            exp_lower = exp_name.lower()
-
-            # Strip sex suffix/prefix for matching.
-            # IMPORTANT: strip "female" BEFORE "male" -- "female" contains
-            # "male" as a substring, so stripping "male" first leaves "fe".
-            stripped = exp_lower.replace("female", "").replace("male", "").replace("_", "").strip()
-
-            domain_for_exp = None
-            for prefix, dom in _BM2_DOMAIN_MAP.items():
-                if stripped.startswith(prefix) or prefix.startswith(stripped):
-                    domain_for_exp = dom
-                    break
-
-            # Fallback: try detect_domain() which uses regex patterns.
-            # This handles abbreviated names like "clin_chem" that don't
-            # match the full BM2 prefix "clinicalchemistry".
-            if not domain_for_exp:
-                domain_for_exp = detect_domain(exp_name, "bm2", 0)
-
-            # Last resort: check if experiment name overlaps with source domain keys
-            if not domain_for_exp:
-                for dom in source_files:
-                    dom_key = dom.replace("_", "")
-                    if dom_key in exp_lower.replace("_", ""):
-                        domain_for_exp = dom
-                        break
-
-            if domain_for_exp:
-                exp_name_to_domain[exp_name] = domain_for_exp
-
-        # Build endpoint -> domain map using the experiment mapping.
-        # Each probe/endpoint in an experiment inherits that experiment's domain.
-        endpoint_domain_map: dict[str, str] = {}
-        for exp in apical_integrated.get("doseResponseExperiments", []):
-            exp_name = exp.get("name", "")
-            dom = exp_name_to_domain.get(exp_name)
-            if dom:
-                for pr in exp.get("probeResponses", []):
-                    probe_id = pr.get("probe", {}).get("id", "")
-                    if probe_id:
-                        # Key by (sex, probe_id) to avoid collisions when
-                        # the same endpoint name appears in different domains
-                        # (unlikely but possible for generic names like "Day")
-                        endpoint_domain_map[(exp_name, probe_id)] = dom
-
-        # Partition TableRows by domain, preserving sex grouping.
-        # build_table_data() groups by sex and uses probe_name as the label.
-        # We need to match back to the (exp_name, probe_id) key.
-        #
-        # Since build_table_data doesn't preserve the experiment name on
-        # TableRow, we build a secondary map: (sex, probe_name) -> domain.
-        sex_probe_domain: dict[tuple[str, str], str] = {}
-        for (exp_name, probe_id), dom in endpoint_domain_map.items():
-            sex = "Female" if "female" in exp_name.lower() else \
-                  "Male" if "male" in exp_name.lower() else "Unknown"
-            sex_probe_domain[(sex, probe_id)] = dom
-
-        # Structure: {domain: {sex: [TableRow, ...]}}
-        domain_tables: dict[str, dict[str, list]] = {}
-        for sex, rows in table_data.items():
-            for row in rows:
-                dom = sex_probe_domain.get((sex, row.label), "unknown")
-                domain_tables.setdefault(dom, {}).setdefault(sex, []).append(row)
-
-        # Human-readable domain titles for section headers
-        _DOMAIN_TITLES = {
-            "body_weight":    "Body Weight",
-            "organ_weights":  "Organ Weights",
-            "clin_chem":      "Clinical Chemistry",
-            "hematology":     "Hematology",
-            "hormones":       "Hormones",
-            "tissue_conc":    "Tissue Concentration",
-            "clinical_obs":   "Clinical Observations",
-        }
-
-        # Build sections array: one per domain that has data
-        sections = []
-        for dom, sex_rows in sorted(domain_tables.items()):
-            # Serialize TableRow objects to JSON-friendly dicts
-            tables_json = serialize_table_rows(sex_rows)
-
-            # Generate narrative for this domain's data only
-            narrative = generate_results_narrative(
-                sex_rows, compound_name, dose_unit,
-            )
-
-            sections.append({
-                "domain": dom,
-                "title": _DOMAIN_TITLES.get(dom, dom.replace("_", " ").title()),
-                "tables_json": tables_json,
-                "narrative": narrative,
-            })
-
-        # --- BMDS modeling (pybmds) for apical endpoints ---
-        # Run the EPA BMDS continuous models on the same dose-response data
-        # to produce a second BMD summary that matches the NIEHS reference
-        # report methodology (BMDS 2.7.0 via pybmds).  This gives users
-        # both the BMDExpress 3-native results AND the BMDS results.
-        from apical_bmds import run_bmds_for_endpoints
-
-        bmds_inputs = []
-        for _dom, sex_rows in domain_tables.items():
-            for _sex, rows in sex_rows.items():
-                for row in rows:
-                    if hasattr(row, "_bmds_input") and row._bmds_input:
-                        bmds_inputs.append(row._bmds_input)
-
-        # Run BMDS in a thread pool — pybmds model fitting is CPU-bound
-        # and takes ~0.5-2s per endpoint (total ~10-30s for a full study).
+        # --- Run BMDS modeling (thread pool — pybmds is CPU-bound) ---
+        bmds_inputs = [
+            row._bmds_input
+            for sex_rows in domain_tables.values()
+            for rows in sex_rows.values()
+            for row in rows
+            if hasattr(row, "_bmds_input") and row._bmds_input
+        ]
         bmds_results = {}
         if bmds_inputs:
             bmds_results = await loop.run_in_executor(
                 None, run_bmds_for_endpoints, bmds_inputs,
             )
 
-        # --- Gene expression genomics (from integrated .bm2) ---
-        # If the integration included gene_expression, extract per-gene BMD
-        # and GO BP category results directly from the .bm2 using the
-        # BMDExpress 3 Java API.  This replaces the old CSV-based workflow.
-        genomics_sections = {}
-        meta = integrated.get("_meta", {})
-        ge_source = meta.get("source_files", {}).get("gene_expression")
-        if ge_source and ge_source.get("tier") == "bm2":
-            ge_filename = ge_source.get("filename", "")
-            ge_path = str(_session_dir(dtxsid) / "files" / ge_filename)
+        # --- Extract genomics ---
+        genomics_sections = await _extract_genomics(
+            dtxsid, integrated, bmd_stats,
+            go_pct, go_min_genes, go_max_genes, go_min_bmd,
+        )
 
-            if os.path.exists(ge_path):
-                # Run the Java export in a thread pool (JVM startup ~0.5s)
-                tmp_json = tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".json", prefix="genomics_",
-                )
-                tmp_json.close()
-
-                try:
-                    ge_result = await loop.run_in_executor(
-                        None, export_genomics, ge_path, tmp_json.name,
-                    )
-
-                    # Reshape into the format the UI expects: keyed by organ_sex
-                    for exp in ge_result.get("experiments", []):
-                        organ = exp.get("organ", "unknown").lower()
-                        sex = exp.get("sex", "unknown").lower()
-                        key = f"{organ}_{sex}"
-
-                        # Sort genes by BMD ascending (lowest = most sensitive).
-                        # Java serializes NaN/Infinity as strings -- coerce to float.
-                        def _safe_float(val, default=float("inf")):
-                            if val is None:
-                                return default
-                            try:
-                                v = float(val)
-                                # NaN sorts inconsistently -- treat as infinity
-                                return default if v != v else v
-                            except (TypeError, ValueError):
-                                return default
-
-                        genes = sorted(
-                            exp.get("genes", []),
-                            key=lambda g: _safe_float(g.get("bmd")),
-                        )
-
-                        # Filter and sort GO terms.
-                        # Apply the three user-configured cutoffs:
-                        #   1. go_min_genes: category must have at least this many
-                        #      genes annotated (n_genes from ExportGenomics)
-                        #   2. go_min_bmd:   at least this many genes must have a
-                        #      BMD value (n_passed from ExportGenomics)
-                        #   3. go_pct:       the ratio n_passed/n_genes must be at
-                        #      least this percentage
-                        raw_go = exp.get("go_bp", [])
-                        filtered_go = []
-                        for g in raw_go:
-                            n_total = g.get("n_genes", 0) or 0
-                            n_passed = g.get("n_passed", 0) or 0
-                            if n_total < go_min_genes or n_total > go_max_genes:
-                                continue
-                            if n_passed < go_min_bmd:
-                                continue
-                            pct = (n_passed / n_total * 100) if n_total > 0 else 0
-                            if pct < go_pct:
-                                continue
-                            filtered_go.append(g)
-
-                        # Helper: pick a specific BMD stat from the stat block.
-                        # Returns None (not a fallback) if the stat isn't available,
-                        # so that categories missing the stat get excluded.
-                        def _pick_stat_strict(g, metric, stat):
-                            block = g.get(f"{metric}_stats", {})
-                            if block:
-                                return block.get(stat)
-                            # Legacy data only has median
-                            if stat == "median":
-                                return g.get(f"{metric}_median")
-                            return None
-
-                        # Build a separate gene_sets table for each requested
-                        # BMD statistic.  Categories where the stat is null
-                        # (not computed by BMDExpress) are excluded from that
-                        # table entirely rather than falling back to another stat.
-                        gene_sets_by_stat = {}
-                        for stat in bmd_stats:
-                            # Filter to categories that have a non-null value
-                            stat_go = [
-                                g for g in filtered_go
-                                if _pick_stat_strict(g, "bmd", stat) is not None
-                            ]
-                            # Sort by BMD ascending (most sensitive first)
-                            stat_go.sort(
-                                key=lambda g: _safe_float(
-                                    _pick_stat_strict(g, "bmd", stat),
-                                ),
-                            )
-                            gene_sets_by_stat[stat] = [
-                                {
-                                    "rank": i + 1,
-                                    "go_id": g["go_id"],
-                                    "go_term": g["go_term"],
-                                    "bmd": _pick_stat_strict(g, "bmd", stat),
-                                    "bmdl": _pick_stat_strict(g, "bmdl", stat),
-                                    "n_genes": g.get("n_genes", 0),
-                                    "n_genes_with_bmd": g.get("n_passed", 0),
-                                    "direction": g.get("direction", ""),
-                                    "fishers_p": g.get("fishers_two_tail"),
-                                    "genes": g.get("gene_symbols", ""),
-                                }
-                                for i, g in enumerate(stat_go[:20])
-                            ]
-
-                        genomics_sections[key] = {
-                            "organ": organ,
-                            "sex": sex,
-                            "total_probes": exp.get("total_probes", 0),
-                            "total_responsive_genes": len(genes),
-                            "gene_sets_by_stat": gene_sets_by_stat,
-                            "top_genes": [
-                                {
-                                    "rank": i + 1,
-                                    "gene_symbol": g["gene_symbol"],
-                                    "bmd": g.get("bmd"),
-                                    "bmdl": g.get("bmdl"),
-                                    "bmdu": g.get("bmdu"),
-                                    "direction": g.get("direction", ""),
-                                    "fold_change": g.get("fold_change"),
-                                    "r_squared": g.get("r_squared"),
-                                }
-                                for i, g in enumerate(genes[:20])
-                            ],
-                        }
-                finally:
-                    os.unlink(tmp_json.name)
-
-        # Human-readable labels for BMD statistics, used by the UI
-        # to set table column headers (e.g. "BMD 5th Pct").
-        _BMD_STAT_LABELS = {
-            "mean": "Mean",
-            "median": "Median",
-            "minimum": "Minimum",
-            "weighted_mean": "Weighted Mean",
-            "fifth_pct": "5th %ile",
-            "tenth_pct": "10th %ile",
-            "lower95": "Lower 95%",
-            "upper95": "Upper 95%",
-        }
+        # --- Build BMD summaries ---
         stat_labels = {
             s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
             for s in bmd_stats
         }
+        apical_bmd_summary = _build_apical_bmd_summary(domain_tables)
+        apical_bmd_summary_bmds = _build_bmds_bmd_summary(domain_tables, bmds_results)
 
-        # --- Build apical BMD summary (Table 8 equivalent) ---
-        # Collects BMD, BMDL, LOEL, NOEL, direction from ALL domain
-        # TableRows into a flat list for the separate BMD summary card.
-        # Matches the NIEHS reference report structure where domain tables
-        # (Tables 2-7) show dose-response data and Table 8 summarizes BMDs.
-        apical_bmd_summary = []
-        for dom, sex_rows in sorted(domain_tables.items()):
-            for sex, rows in sex_rows.items():
-                for row in rows:
-                    # Include the row if it has a BMD result OR significant
-                    # trend/pairwise findings (LOEL exists).  Endpoints with
-                    # neither are uninteresting for the summary.
-                    has_bmd = row.bmd_status is not None
-                    has_loel = row.loel is not None
-                    if not has_bmd and not has_loel:
-                        continue
-                    apical_bmd_summary.append({
-                        "endpoint": row.label,
-                        "sex": sex,
-                        "domain": dom,
-                        "bmd": row.bmd_str,
-                        "bmdl": row.bmdl_str,
-                        "bmd_status": row.bmd_status,
-                        "loel": row.loel,
-                        "noel": row.noel,
-                        "direction": row.direction,
-                    })
-
-        # --- Build BMDS-based BMD summary (second Table 8) ---
-        # Same structure as the BMDExpress 3 summary, but using pybmds
-        # results.  Only includes endpoints that pybmds modeled.
-        apical_bmd_summary_bmds = []
-        if bmds_results:
-            for dom, sex_rows in sorted(domain_tables.items()):
-                for sex, rows in sex_rows.items():
-                    for row in rows:
-                        bmds_key = f"{sex}::{row.label}"
-                        bmds_res = bmds_results.get(bmds_key)
-                        if not bmds_res:
-                            continue
-                        # Match the NIEHS reference Table 8 inclusion gate:
-                        # include only endpoints that have a significant trend
-                        # + pairwise finding (LOEL exists) OR a viable BMDS
-                        # result.  This filters out the many endpoints where
-                        # pybmds produces a UREP/NVM but there's no statistical
-                        # significance — those aren't informative for the summary.
-                        has_viable_bmds = bmds_res["status"] == "viable"
-                        has_loel = row.loel is not None
-                        if not has_viable_bmds and not has_loel:
-                            continue
-
-                        # Format BMD/BMDL strings matching NIEHS conventions
-                        status = bmds_res["status"]
-                        if status == "viable" and bmds_res["bmd"] is not None:
-                            bmd_str = f"{bmds_res['bmd']:.3g}"
-                            bmdl_str = f"{bmds_res['bmdl']:.3g}" if bmds_res["bmdl"] else "—"
-                        elif status == "NR":
-                            nonzero = [d for d in row.values_by_dose if d > 0]
-                            lnzd = min(nonzero) if nonzero else 0
-                            bmd_str = f"<{lnzd / 3:.3g}" if lnzd > 0 else "NR"
-                            bmdl_str = "—"
-                        elif status == "UREP":
-                            bmd_str = "UREP"
-                            bmdl_str = "UREP"
-                        else:
-                            bmd_str = "NVM"
-                            bmdl_str = "NVM"
-
-                        apical_bmd_summary_bmds.append({
-                            "endpoint": row.label,
-                            "sex": sex,
-                            "domain": dom,
-                            "bmd": bmd_str,
-                            "bmdl": bmdl_str,
-                            "bmd_status": status,
-                            "model_name": bmds_res.get("model_name"),
-                            "loel": row.loel,
-                            "noel": row.noel,
-                            "direction": row.direction,
-                        })
-
+        # --- Assemble and cache result ---
         result_payload = {
             "sections": sections,
             "genomics_sections": genomics_sections,
@@ -1340,21 +1535,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
         }
-
-        # Persist the fully-computed result so page refreshes are instant.
-        # Also clean up stale caches from previous settings combinations.
-        try:
-            # Remove old cache files for this session (different settings hash)
-            for old in _session_dir(dtxsid).glob("_processed_cache_*.json"):
-                if old != cache_path:
-                    old.unlink(missing_ok=True)
-            cache_path.write_text(
-                json.dumps(result_payload, indent=2, default=str),
-                encoding="utf-8",
-            )
-            logger.info("Cached processed results for %s (hash %s)", dtxsid, cache_hash)
-        except Exception:
-            logger.warning("Failed to cache processed results for %s", dtxsid, exc_info=True)
+        _cache_processed_result(dtxsid, cache_path, result_payload)
 
         return JSONResponse(result_payload)
 
