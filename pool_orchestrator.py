@@ -62,6 +62,7 @@ from animal_report import (
     report_to_dict,
 )
 from apical_report import (
+    annotate_missing_animals,
     build_table_data,
     export_genomics,
     generate_results_narrative,
@@ -186,13 +187,21 @@ def serialize_table_rows(table_data: dict) -> dict:
         tables_json[sex] = []
         for row in rows:
             sorted_doses = sorted(row.values_by_dose.keys())
-            tables_json[sex].append({
+            entry = {
                 "label": row.label,
                 "doses": sorted_doses,
                 "values": {_js_dose_key(d): v for d, v in row.values_by_dose.items()},
                 "n": {_js_dose_key(d): n for d, n in row.n_by_dose.items()},
                 "trend_marker": row.trend_marker,
-            })
+            }
+            # Include missing-animal data when present, so the UI can
+            # render footnotes for dose groups with dead animals.
+            if row.missing_animals_by_dose:
+                entry["missing_animals"] = {
+                    _js_dose_key(d): n
+                    for d, n in row.missing_animals_by_dose.items()
+                }
+            tables_json[sex].append(entry)
     return tables_json
 
 
@@ -303,12 +312,21 @@ def load_cached_fingerprint(
     # Rebuild the FileFingerprint from the cached dict, swapping in the new
     # file_id (since file_ids are regenerated each session load).
     entry["file_id"] = file_id
-    # n_animals_by_dose keys are floats but JSON serializes them as strings —
-    # convert back to float keys.
-    if entry.get("n_animals_by_dose"):
-        entry["n_animals_by_dose"] = {
-            float(k): v for k, v in entry["n_animals_by_dose"].items()
-        }
+    # Dict fields with float dose keys are serialized with string keys by JSON —
+    # convert them back to float keys so FileFingerprint gets the right types.
+    for float_key_field in (
+        "n_animals_by_dose",
+        "animals_by_dose_selection",
+        "core_animals_by_dose_sex",
+    ):
+        if entry.get(float_key_field):
+            entry[float_key_field] = {
+                float(k): v for k, v in entry[float_key_field].items()
+            }
+    # FileFingerprint may have new fields not present in old caches —
+    # filter to only known fields to avoid TypeError on **entry.
+    known_fields = {f.name for f in FileFingerprint.__dataclass_fields__.values()}
+    entry = {k: v for k, v in entry.items() if k in known_fields}
     return FileFingerprint(**entry)
 
 
@@ -1539,6 +1557,13 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # --- Partition by domain ---
         source_files = integrated.get("_meta", {}).get("source_files", {})
         domain_tables = _partition_by_domain(apical_integrated, source_files, table_data)
+
+        # --- Annotate missing animals from xlsx study file rosters ---
+        # Compare bm2 N counts against xlsx Core Animals roster to detect
+        # animals that died before terminal sacrifice.
+        xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
+        if xlsx_rosters:
+            annotate_missing_animals(domain_tables, xlsx_rosters)
 
         # --- Build section cards with narratives ---
         sections = _build_section_cards(domain_tables, compound_name, dose_unit)

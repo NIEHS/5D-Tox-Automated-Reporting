@@ -62,6 +62,10 @@ logger = logging.getLogger(__name__)
 
 # Tier priority for auto-selection: .bm2 preferred (has BMD results),
 # then txt/csv (BMDExpress-importable pivot), then xlsx (raw long-format).
+# NOTE: xlsx files are the study-team source of truth for doses and animal
+# roster, but bm2 files are needed for BMD modeling results.  When both
+# exist, bm2 wins the integration (for BMD), and xlsx roster metadata
+# is overlaid separately via _collect_xlsx_rosters().
 _TIER_PREFERENCE = {"bm2": 1, "txt": 2, "csv": 2, "txt_csv": 2, "xlsx": 3}
 
 # Java helper directory — centralized in java_bridge.py
@@ -140,6 +144,87 @@ _DOMAIN_TO_BM2_PREFIX: dict[str, str] = {
     "tissue_conc":    "TissueConcentration",
     "clinical_obs":   "ClinicalObservation",
 }
+
+
+def _collect_xlsx_rosters(
+    coverage_matrix: dict,
+    fingerprints: dict,
+    files_dir: str,
+) -> dict[str, dict]:
+    """
+    For each domain that has a study xlsx, extract the authoritative animal
+    roster (doses, animal IDs, selection groups) from the fingerprint.
+
+    Study xlsx files are the source of truth for which animals were in which
+    dose groups — including animals that died before certain endpoints could
+    be measured.  This data is stored on integrated._meta.xlsx_rosters so
+    that build_table_data() can use it for accurate N counts and footnotes.
+
+    Args:
+        coverage_matrix: {domain → {tier_name → [file_ids]}}.
+        fingerprints:    {file_id → FileFingerprint or dict}.
+        files_dir:       Directory containing uploaded files.
+
+    Returns:
+        {domain → {
+            "file_id": str,
+            "filename": str,
+            "dose_groups": [float, ...],
+            "n_animals_by_dose": {dose: int},
+            "selection_groups": [str, ...],
+            "animals_by_dose_selection": {dose: {selection: [animal_ids]}},
+        }}
+    """
+    rosters = {}
+    for domain, tiers in coverage_matrix.items():
+        xlsx_fids = tiers.get("xlsx")
+        if not xlsx_fids:
+            continue
+        if isinstance(xlsx_fids, str):
+            xlsx_fids = [xlsx_fids]
+        xlsx_fids = [f for f in xlsx_fids if f]
+        if not xlsx_fids:
+            continue
+
+        fid = xlsx_fids[0]
+        fp = fingerprints.get(fid)
+        if fp is None:
+            continue
+
+        # Support both dict and FileFingerprint attribute access
+        def _get(obj, key, default=None):
+            return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
+
+        # Only include study files (two-tab NTP structure).
+        # For fingerprints from old caches (before is_study_file was added),
+        # fall back to assuming all xlsx files are study files — this is safe
+        # because non-study xlsx files would never appear in the pool.
+        is_study = _get(fp, "is_study_file", None)
+        if is_study is None:
+            # Legacy fingerprint without the field — assume xlsx = study file
+            is_study = _get(fp, "file_type", "") == "xlsx"
+        if not is_study:
+            continue
+
+        # Stringify float-keyed dicts for JSON serialization safety — the
+        # integrated.json is written with json.dump() which rejects non-str keys.
+        # Downstream annotate_missing_animals() converts back to float.
+        def _str_keys(d):
+            if not d:
+                return d
+            return {str(k): v for k, v in d.items()}
+
+        rosters[domain] = {
+            "file_id": fid,
+            "filename": _get(fp, "filename", ""),
+            "dose_groups": _get(fp, "dose_groups", []),
+            "n_animals_by_dose": _str_keys(_get(fp, "n_animals_by_dose", {})),
+            "selection_groups": _get(fp, "selection_groups", []),
+            "animals_by_dose_selection": _str_keys(_get(fp, "animals_by_dose_selection", {})),
+            "core_animals_by_dose_sex": _str_keys(_get(fp, "core_animals_by_dose_sex", {})),
+        }
+
+    return rosters
 
 
 def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
@@ -434,11 +519,18 @@ def integrate_pool(
     with open(out_path, "r") as f:
         integrated = json.load(f)
 
+    # --- Collect xlsx animal rosters for all domains ---
+    # Even when bm2 wins the integration (for BMD results), the study xlsx
+    # is authoritative for doses and animal roster.  Overlay this so
+    # build_table_data() can use xlsx N counts and detect dead animals.
+    xlsx_rosters = _collect_xlsx_rosters(coverage_matrix, fingerprints, files_dir)
+
     # Add provenance metadata
     integrated["_meta"] = {
         "dtxsid": dtxsid,
         "integrated_at": datetime.now(tz=timezone.utc).isoformat(),
         "source_files": source_files,
+        "xlsx_rosters": xlsx_rosters,
     }
 
     # --- Build category lookup via native Java API ---

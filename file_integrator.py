@@ -378,6 +378,25 @@ class FileFingerprint:
     animal_ids: list[str] = field(default_factory=list)
     n_animals_by_dose: dict[float, int] = field(default_factory=dict)
 
+    # Study-file detection — True when the xlsx has the two-tab NTP structure:
+    # "Key to Column Labels" + "Data" sheets.  Study files are authoritative
+    # for doses and animal roster; bm2 files are authoritative for BMD results.
+    is_study_file: bool = False
+
+    # Selection groups found in the xlsx "Selection" column (e.g., "Core Animals",
+    # "Biosampling Animals").  Used to filter to core animals for the report.
+    selection_groups: list[str] = field(default_factory=list)
+
+    # Animals per dose group per selection group.  Outer key is dose, inner
+    # maps selection label → set of animal IDs.  Enables detecting which
+    # dose groups lost animals (dead before terminal sacrifice).
+    animals_by_dose_selection: dict[float, dict[str, list[str]]] = field(default_factory=dict)
+
+    # Core animals per dose × sex — the reference roster for dead-animal
+    # detection.  Only populated for study xlsx files with a "Selection"
+    # column.  Structure: {dose → {"Male": [aids], "Female": [aids]}}.
+    core_animals_by_dose_sex: dict[float, dict[str, list[str]]] = field(default_factory=dict)
+
     # Transcriptomics-specific
     organ: str | None = None
     gene_count: int | None = None
@@ -649,6 +668,14 @@ def fingerprint_xlsx(
         logger.warning("Could not open xlsx %s: %s", filename, e)
         return fp
 
+    # --- Detect study file by sheet structure ---
+    # NTP study xlsx files always have exactly two tabs: "Key to Column Labels"
+    # and "Data".  This is more reliable than filename patterns for identifying
+    # the authoritative study data source.
+    has_key_sheet = any("Key to" in s for s in wb.sheetnames)
+    has_data_sheet = "Data" in wb.sheetnames
+    fp.is_study_file = has_key_sheet and has_data_sheet
+
     # --- Parse "Key to Column Labels" sheet for study metadata ---
     # Column D of this sheet sometimes has: study type (row 2), study number
     # (row 3), and date (row 4).
@@ -684,7 +711,15 @@ def fingerprint_xlsx(
         animal_ids_set: set[str] = set()
         # Track animal IDs per dose for n_animals_by_dose
         animals_per_dose: dict[float, set[str]] = {}
+        # Track animals per dose × selection group (e.g., "Core Animals"
+        # vs "Biosampling Animals").  Enables filtering to core animals
+        # and detecting which dose groups lost animals.
+        animals_by_dose_sel: dict[float, dict[str, set[str]]] = {}
+        selections_set: set[str] = set()
         endpoint_names_set: set[str] = set()
+        selection_col_idx: int | None = None
+        # Core animals by dose × sex for dead-animal detection
+        core_by_dose_sex: dict[float, dict[str, set[str]]] = {}
 
         for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
             if row_idx == 0:
@@ -692,13 +727,19 @@ def fingerprint_xlsx(
                 # Standard NTP columns are StudyNumber, Concentration, AnimalID,
                 # Sex, Selection; anything after that is domain-specific.
                 headers = [str(c) if c is not None else "" for c in row]
+                # Find the Selection column index (usually col 4 / index 4,
+                # but may shift if the file has extra metadata columns).
+                for ci, h in enumerate(headers):
+                    if h.strip().lower() == "selection":
+                        selection_col_idx = ci
+                        break
                 if len(headers) > 5:
                     endpoint_names_set.update(headers[5:])
                 elif len(headers) > 4:
                     endpoint_names_set.update(headers[4:])
                 continue
 
-            # Data rows — extract dose, animal ID, and sex
+            # Data rows — extract dose, animal ID, sex, and selection group
             if row[1] is not None:
                 try:
                     dose = float(row[1])
@@ -709,6 +750,22 @@ def fingerprint_xlsx(
                         if dose not in animals_per_dose:
                             animals_per_dose[dose] = set()
                         animals_per_dose[dose].add(aid)
+                        # Track by selection group
+                        sel_label = ""
+                        if selection_col_idx is not None and len(row) > selection_col_idx:
+                            sel_label = str(row[selection_col_idx]).strip() if row[selection_col_idx] else ""
+                        if sel_label:
+                            selections_set.add(sel_label)
+                            animals_by_dose_sel.setdefault(dose, {}).setdefault(sel_label, set()).add(aid)
+                        # Track Core Animals by dose × sex for dead-animal detection.
+                        # "Core Animals" is the NTP designation for animals intended
+                        # for terminal sacrifice (vs "Biosampling Animals" sacrificed
+                        # at an interim timepoint).  If no Selection column exists,
+                        # treat all animals as core.
+                        sex_val = str(row[3]).strip().title() if row[3] else ""
+                        is_core = (sel_label == "Core Animals") or (selection_col_idx is None)
+                        if is_core and sex_val:
+                            core_by_dose_sex.setdefault(dose, {}).setdefault(sex_val, set()).add(aid)
                 except (ValueError, TypeError):
                     pass
             if row[2] is not None:
@@ -728,6 +785,18 @@ def fingerprint_xlsx(
         # observation day), so we count *unique* animal IDs per dose.
         fp.n_animals_by_dose = {
             dose: len(aids) for dose, aids in sorted(animals_per_dose.items())
+        }
+        # Selection groups and per-dose animal rosters
+        fp.selection_groups = sorted(selections_set)
+        fp.animals_by_dose_selection = {
+            dose: {sel: sorted(aids) for sel, aids in sel_map.items()}
+            for dose, sel_map in sorted(animals_by_dose_sel.items())
+        }
+        # Core animals by dose × sex — the authoritative roster for
+        # dead-animal footnotes.
+        fp.core_animals_by_dose_sex = {
+            dose: {sex: sorted(aids) for sex, aids in sex_map.items()}
+            for dose, sex_map in sorted(core_by_dose_sex.items())
         }
         # Endpoint names — filter out standard NTP columns
         standard_cols = {
@@ -1672,16 +1741,21 @@ def validate_pool(
             "bm2": tiers["bm2"],
         }
 
-    # Serialize fingerprints with JSON-safe keys — n_animals_by_dose has
-    # float keys which orjson rejects (dict keys must be str).  Convert
+    # Serialize fingerprints with JSON-safe keys — several dict fields use
+    # float dose keys which orjson rejects (dict keys must be str).  Convert
     # them to strings here for safe serialization.
     fp_dicts = {}
     for fid, fp in fingerprints.items():
         d = asdict(fp)
-        if d.get("n_animals_by_dose"):
-            d["n_animals_by_dose"] = {
-                str(k): v for k, v in d["n_animals_by_dose"].items()
-            }
+        for float_key_field in (
+            "n_animals_by_dose",
+            "animals_by_dose_selection",
+            "core_animals_by_dose_sex",
+        ):
+            if d.get(float_key_field):
+                d[float_key_field] = {
+                    str(k): v for k, v in d[float_key_field].items()
+                }
         fp_dicts[fid] = d
 
     return ValidationReport(

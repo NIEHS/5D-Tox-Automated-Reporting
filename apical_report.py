@@ -366,6 +366,12 @@ class TableRow:
     noel: float | None = None
     direction: str = ""
     responsive: bool = False
+    # Missing-animal footnote data.  Populated when an xlsx study file
+    # provides the authoritative animal roster and some animals are absent
+    # from the bm2 data (died before terminal sacrifice).
+    # Maps dose → number of animals in the xlsx roster that have no data
+    # for this endpoint.  Empty dict means no missing animals.
+    missing_animals_by_dose: dict[float, int] = field(default_factory=dict)
 
 
 def _safe_float(val) -> float | None:
@@ -948,6 +954,94 @@ def build_table_data(
         }
 
     return tables
+
+
+def annotate_missing_animals(
+    domain_tables: dict[str, dict[str, list]],
+    xlsx_rosters: dict[str, dict],
+    reference_domain: str = "body_weight",
+) -> None:
+    """
+    Annotate TableRows with missing-animal counts by comparing bm2 N counts
+    against the xlsx study file roster.
+
+    Dead animals are detected by comparing the bm2 N per dose (survivors
+    with measurements) against the xlsx Core Animals roster (full assignment).
+    The difference is recorded as missing_animals_by_dose on each TableRow.
+
+    For domains whose xlsx roster has fewer dose groups than the reference
+    domain (e.g., clinical chemistry missing 333/1000 mg/kg), the entire
+    dose group is flagged as missing.
+
+    Mutates TableRows in place — no return value.
+
+    Args:
+        domain_tables:    {domain → {sex → [TableRow, ...]}}, as from _partition_by_domain.
+        xlsx_rosters:     From integrated["_meta"]["xlsx_rosters"].
+        reference_domain: Domain with the most complete roster (usually body_weight).
+    """
+    if not xlsx_rosters:
+        return
+
+    # Use the reference domain (body weight) to establish the full Core
+    # Animals roster — all dose groups and all animals expected to survive
+    # to terminal sacrifice.  If no body weight xlsx exists, use the domain
+    # with the most dose groups.
+    ref_roster = xlsx_rosters.get(reference_domain)
+    if not ref_roster:
+        # Fallback: domain with most dose groups
+        ref_roster = max(
+            xlsx_rosters.values(),
+            key=lambda r: len(r.get("dose_groups", [])),
+            default=None,
+        )
+    if not ref_roster:
+        return
+
+    # Reference: dose (float) → sex → expected Core Animal count.
+    # Dose keys may be strings from JSON — normalize to float.
+    ref_core_raw = ref_roster.get("core_animals_by_dose_sex", {})
+    ref_core = {float(k): v for k, v in ref_core_raw.items()}
+
+    for domain, sex_rows in domain_tables.items():
+        # Get this domain's xlsx roster for comparison.
+        # Normalize dose keys to float (may be strings from JSON).
+        dom_roster = xlsx_rosters.get(domain, {})
+        dom_core_raw = dom_roster.get("core_animals_by_dose_sex", {})
+        dom_core = {float(k): v for k, v in dom_core_raw.items()}
+
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                missing = {}
+                for dose, actual_n in row.n_by_dose.items():
+                    # Expected N: from this domain's xlsx, or from reference
+                    # domain if this domain's xlsx doesn't have the dose group
+                    dom_sex_aids = dom_core.get(dose, {}).get(sex)
+                    ref_sex_aids = ref_core.get(dose, {}).get(sex)
+
+                    if dom_sex_aids is not None:
+                        expected_n = len(dom_sex_aids)
+                    elif ref_sex_aids is not None:
+                        # This domain doesn't have this dose group in its
+                        # xlsx — all animals at this dose died before this
+                        # endpoint could be measured
+                        expected_n = len(ref_sex_aids)
+                    else:
+                        continue
+
+                    diff = expected_n - actual_n
+                    if diff > 0:
+                        missing[dose] = diff
+
+                # Also flag dose groups that are in the reference but
+                # completely absent from this endpoint's data
+                for dose in ref_core:
+                    if dose not in row.n_by_dose:
+                        sex_aids = ref_core[dose].get(sex)
+                        if sex_aids:
+                            missing[dose] = len(sex_aids)
+
+                row.missing_animals_by_dose = missing
 
 
 def _format_bmd(value: float) -> str:
