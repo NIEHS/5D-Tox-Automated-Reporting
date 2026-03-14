@@ -127,6 +127,12 @@ async function onFieldBlur(fieldId) {
         // Enable Process buttons and backfill compound name
         onIdentityResolved();
 
+        // Show the data tab immediately — file upload and pool management
+        // should be available as soon as a chemical is resolved, without
+        // waiting for background generation.
+        show('data-tab-section');
+        if (tabbedViewActive) buildTabBar();
+
         // Show Reset Session button now that a chemical is resolved
         const btnResetSession = document.getElementById('btn-reset-session');
         if (btnResetSession) btnResetSession.style.display = '';
@@ -232,33 +238,31 @@ async function restoreSession(data) {
     }
 
     // --- Restore .bm2 sections ---
-    // For each saved bm2 section: create a synthetic uploadedFiles entry
-    // (type='bm2', restored: true), render a greyed file pool item,
-    // create an apicalSections entry, and create the result card.
+    // Determine whether the integrated pipeline will re-run on this restore.
+    // If the pool is approved, autoProcessPool will create fresh domain-split
+    // section cards (one per endpoint domain: body_weight, organ_weights,
+    // hormones, etc.).  In that case, we should NOT restore old bm2 section
+    // cards — they used a single monolithic card per .bm2 file which lumped
+    // all domains together under one (wrong) header like "Body Weights and
+    // Organ Weights" even for hormones or clinical chem data.
+    //
+    // We still register the files in uploadedFiles so they're available for
+    // the integrated pipeline to find, and we stash the saved section data
+    // (narratives, compound name, dose unit) in _restoredBm2Data so the
+    // pipeline can carry forward user edits.
+    const poolWillReprocess = !!data.animal_report;
+
     if (data.bm2_sections && Object.keys(data.bm2_sections).length > 0) {
-        // Show the file pool, animal report, and results section
         show('data-tab-section');
-
-
         show('bm2-results-section');
 
         for (const [slug, section] of Object.entries(data.bm2_sections)) {
-            // Create the section card ID
             const sectionId = 'restored-' + slug;
 
-            // Use the server-assigned file_id if the .bm2 file was
-            // found on disk (re-registered in _bm2_uploads by the
-            // session load endpoint).  This makes the file fully
-            // functional — preview, reprocess, export all work.
-            // Falls back to a synthetic ID if the file is missing.
+            // Register the .bm2 file in the upload pool so it's available
+            // for reprocessing by the integrated pipeline.
             const fileId = section.server_file_id || ('file-restored-bm2-' + slug);
             const isServerBacked = !!section.server_file_id;
-
-            // Create the uploadedFiles entry.  If server-backed, the
-            // file is NOT marked as "restored" since it has a real
-            // server-side upload entry and can be previewed/processed
-            // normally.  The remove button is still hidden (restored
-            // appearance) since the user didn't upload it this session.
             uploadedFiles[fileId] = {
                 id: fileId,
                 filename: section.filename || slug,
@@ -268,7 +272,16 @@ async function restoreSession(data) {
             };
             renderFilePoolItem(fileId);
 
-            // Register in apicalSections state
+            // If the integrated pipeline will re-run, skip creating old
+            // monolithic section cards — the pipeline will create proper
+            // domain-split cards.  We stash saved data (compound name,
+            // dose unit) so it can be carried forward.
+            if (poolWillReprocess) continue;
+
+            // --- Fallback: no pool approval, restore cards as before ---
+            // This path handles sessions where the pool was never approved
+            // (e.g., user uploaded a single .bm2 manually without using
+            // the integrated pipeline).
             apicalSections[sectionId] = {
                 fileId: fileId,
                 filename: section.filename || slug,
@@ -278,10 +291,10 @@ async function restoreSession(data) {
                 narrative: section.narrative
                     ? section.narrative.split(/\n\s*\n/)
                     : [],
+                domain: section.domain || '',
             };
 
-            // Create the card UI
-            createBm2Card(sectionId, section.filename || slug);
+            createBm2Card(sectionId, section.filename || slug, section.domain);
 
             // Fill in config fields from saved data
             const titleEl = document.getElementById(`bm2-title-${sectionId}`);
@@ -293,28 +306,21 @@ async function restoreSession(data) {
             const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
             if (unitEl && section.dose_unit) unitEl.value = section.dose_unit;
 
-            // Fill in narrative textarea
             const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
             if (narrativeEl && section.narrative) {
                 narrativeEl.value = section.narrative;
                 autoResizeTextarea(narrativeEl);
             }
 
-            // Render table preview if we have table data
             if (section.tables_json && Object.keys(section.tables_json).length > 0) {
                 const doseUnit = section.dose_unit || 'mg/kg';
                 renderTablePreview(sectionId, section.tables_json, doseUnit);
             }
 
-            // Lock the card as approved (disable editing, add green border)
             const card = document.getElementById(`bm2-card-${sectionId}`);
             lockSection(card);
-
-            // Hide Process button, show approved state (Edit + Try Again + badge)
             hide(`btn-process-${sectionId}`);
             setButtons(sectionId, 'approved');
-
-            // Show version history with the version from the saved data
             showVersionHistory('bm2', section.version || 1, sectionId);
         }
     }
@@ -496,15 +502,14 @@ async function restoreSession(data) {
         } catch (_) { /* non-critical — previewer just stays hidden */ }
     }
 
-    // --- Auto-process pending files if pool was approved ---
-    // Always re-run autoProcessPool on restore when the pool is approved.
-    // It's idempotent: approved apical sections are skipped, approved
-    // genomics sections are skipped (via the ?.approved guard), and
-    // createGenomicsCard / createBm2Card de-duplicate by removing existing
-    // cards before creating new ones.  This ensures any sections that were
-    // missing from the session (e.g. liver_male genomics added after the
-    // session was last saved) get created on restore.
-    if (animalReportApproved && data.pending_files?.length > 0) {
+    // --- Re-run integrated pipeline if pool was approved ---
+    // Always re-run autoProcessPool on restore when the pool is approved,
+    // even if there are no pending files.  This recreates domain-split
+    // apical section cards (body_weight, organ_weights, hormones, etc.)
+    // from the integrated data, replacing the old monolithic per-file
+    // sections that had wrong headers.  The pipeline is idempotent:
+    // sections already in apicalSections are skipped.
+    if (animalReportApproved) {
         await autoProcessPool();
     }
 
@@ -575,6 +580,11 @@ async function restoreChemId() {
 
             // Enable buttons that depend on a resolved identity
             onIdentityResolved();
+
+            // Show the data tab immediately — file upload and pool
+            // management should not wait for background generation.
+            show('data-tab-section');
+            if (tabbedViewActive) buildTabBar();
 
             // Show Reset Session button
             const btnResetSession = document.getElementById('btn-reset-session');

@@ -506,7 +506,7 @@
                 <!-- Unified drag-and-drop zone accepting .bm2, .csv, .txt, .xlsx, and .zip -->
                 <div class="drop-zone" id="unified-drop-zone" onclick="document.getElementById('unified-file-input').click()">
                     Drop .bm2, .csv, .txt, .xlsx, or .zip files here or click to browse
-                    <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.xlsx,.zip" multiple>
+                    <input type="file" id="unified-file-input" accept=".bm2,.csv,.txt,.zip" multiple>
                 </div>
 
                 <!-- File pool list — collapsible container for uploaded files.
@@ -531,7 +531,10 @@
                         <span>Pool Validation</span>
                         <span class="validation-summary" id="validation-summary"></span>
                         <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()">
-                            Validate &amp; Integrate
+                            Validate
+                        </button>
+                        <button class="btn-small primary" id="btn-integrate" onclick="event.stopPropagation(); runPoolIntegration()" style="display:none" disabled>
+                            Integrate
                         </button>
                         <button class="btn-small approve" id="btn-approve-pool" onclick="event.stopPropagation(); approvePool()" style="display:none">
                             Approve
@@ -613,6 +616,12 @@
         <div class="bm2-section" id="bm2-results-section" style="display:none;" data-collapsible data-tab-section="Apical">
             <h2 class="section-toggle" onclick="toggleSection(this)">Apical Endpoint Results</h2>
             <div class="section-body">
+            <!-- Sub-tab bar — one tab per apical domain, shown dynamically -->
+            <div class="sub-tab-bar" id="apical-sub-tabs"></div>
+            <!-- Per-domain card containers — created dynamically by
+                 ensureDomainSubTab() when the first card for a domain
+                 is added.  Each container is a div with
+                 id="apical-domain-{domain}" and class="apical-domain-panel". -->
             <div id="bm2-cards"></div>
             </div><!-- /section-body -->
         </div>

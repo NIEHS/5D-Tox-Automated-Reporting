@@ -913,7 +913,9 @@
       // Build data rows
       let tbl-rows = ()
 
-      // "n" row — sample sizes per dose group
+      // "n" row — sample sizes per dose group.
+      // Show "–" for dose groups where N=0 (all animals died before
+      // terminal sacrifice), matching the NIEHS reference report.
       let n-row = ("n",)
       for dose in doses {
         let max-n = 0
@@ -921,7 +923,7 @@
           let nn = r.at("n", default: (:)).at(str(dose), default: 0)
           if nn > max-n { max-n = nn }
         }
-        n-row += (str(max-n),)
+        n-row += (if max-n > 0 { str(max-n) } else { "–" },)
       }
       n-row += ("NA", "NA")
       tbl-rows += (n-row,)
@@ -940,6 +942,19 @@
         tbl-rows += (row,)
       }
 
+      // Combine section-level footnotes with any per-sex missing-animal
+      // footnote.  Missing-animal footnotes are stored in a dict keyed by
+      // sex ("Male"/"Female") → footnote string, produced by Python during
+      // export marshaling from the xlsx study file roster comparison.
+      let base-fn = sec.at("footnotes", default: ())
+      let missing-fn = sec.at("missing_animal_footnotes", default: (:))
+      let sex-fn = missing-fn.at(sex, default: none)
+      let all-fn = if sex-fn != none {
+        base-fn + (sex-fn,)
+      } else {
+        base-fn
+      }
+
       // Wide tables (≥5 dose groups) get their own landscape page,
       // matching the NIEHS pattern where Tables 2-6 are landscape.
       // Narrow tables stay inline on the current portrait page.
@@ -955,7 +970,7 @@
           tbl-rows,
           caption: if caption-text != "" { caption-text },
           numeric-cols: num-cols,
-          footnotes: sec.at("footnotes", default: ()),
+          footnotes: all-fn,
         )
         // --- Return to portrait after the table ---
         // The next `set page(flipped: false)` (or any subsequent content
@@ -968,7 +983,7 @@
           tbl-rows,
           caption: if caption-text != "" { caption-text },
           numeric-cols: num-cols,
-          footnotes: sec.at("footnotes", default: ()),
+          footnotes: all-fn,
         )
         v(12pt)
       }

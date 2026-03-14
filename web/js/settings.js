@@ -230,7 +230,7 @@ async function applySettings() {
                 domain:            section.domain,
             };
 
-            createBm2Card(sectionId, section.title);
+            createBm2Card(sectionId, section.title, section.domain);
 
             const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
             if (unitEl) unitEl.value = doseUnit;

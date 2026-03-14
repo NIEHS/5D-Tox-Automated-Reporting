@@ -24,16 +24,10 @@ from typing import Optional
 
 import requests
 
-# Optional PDF extraction — skip PDF sources if not installed
-try:
-    import pymupdf  # pymupdf (fitz)
-    HAS_PDF = True
-except ImportError:
-    try:
-        import fitz as pymupdf  # older import name
-        HAS_PDF = True
-    except ImportError:
-        HAS_PDF = False
+# PDF extraction via the from-scratch parser (no external deps).
+# Always available — no optional dependency dance needed.
+from pdf_text import parse_pdf_bytes, chunks_to_text
+HAS_PDF = True
 
 
 # ---------------------------------------------------------------------------
@@ -119,16 +113,17 @@ def _extract_text_from_html(html: str) -> str:
 
 
 def _extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF bytes using pymupdf."""
-    if not HAS_PDF:
-        return ""
+    """Extract text from PDF bytes using the from-scratch parser.
+
+    Uses parse_pdf_bytes() to extract semantically-classified text chunks,
+    then joins them into plain text via chunks_to_text(). Table detection
+    is disabled since we only need raw text for full-text search.
+
+    Returns empty string on any error (e.g., encrypted/image-only PDFs).
+    """
     try:
-        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-        parts = []
-        for page in doc:
-            parts.append(page.get_text())
-        doc.close()
-        return "\n".join(parts)
+        chunks = parse_pdf_bytes(pdf_bytes, detect_tables=False)
+        return chunks_to_text(chunks)
     except Exception:
         return ""
 

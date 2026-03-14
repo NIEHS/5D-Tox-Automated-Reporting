@@ -57,17 +57,21 @@ async function uploadFiles(fileList) {
     try {
     // Partition files by extension — zip files are handled separately
     // because the server extracts them and returns individual file entries.
+    // CSV, TXT, and XLSX are format-equivalent dose-response data (comma,
+    // tab, or spreadsheet) and all go through the same /api/upload-csv
+    // endpoint into the generic data pool for fingerprinting.
     const bm2List = [];
-    const csvList = [];
+    const dataList = [];  // csv, txt, xlsx — all generic data pool files
     const zipList = [];
     for (const f of fileList) {
         const name = f.name.toLowerCase();
         if (name.endsWith('.bm2')) bm2List.push(f);
-        else if (name.endsWith('.csv')) csvList.push(f);
+        else if (name.endsWith('.csv') || name.endsWith('.txt')) dataList.push(f);
+        // .xlsx support exists in the server (same _data_uploads path)
+        // but is disabled on the frontend for now.  Re-enable by adding:
+        //   || name.endsWith('.xlsx')
+        // to the dataList condition above.
         else if (name.endsWith('.zip')) zipList.push(f);
-        // .txt and .xlsx are only supported inside zip archives —
-        // direct upload of loose .txt/.xlsx files isn't handled by
-        // the existing server endpoints, so we skip them here.
     }
 
     let totalUploaded = 0;
@@ -108,13 +112,22 @@ async function uploadFiles(fileList) {
         }
     }
 
-    // Upload .csv files if any
-    if (csvList.length > 0) {
+    // Upload data files (csv, txt, xlsx) if any — treated as generic
+    // data pool entries (same as files extracted from zip archives).
+    // The pool integrator fingerprints them to determine whether
+    // they're apical or genomic.
+    if (dataList.length > 0) {
         const formData = new FormData();
-        for (const file of csvList) formData.append('files', file);
+        for (const file of dataList) formData.append('files', file);
 
         try {
-            const resp = await fetch('/api/upload-csv', {
+            // Pass DTXSID so the server can persist the file to
+            // sessions/{dtxsid}/files/ and fingerprint immediately.
+            const dtxsid = currentIdentity?.dtxsid || '';
+            const uploadUrl = dtxsid
+                ? `/api/upload-csv?dtxsid=${encodeURIComponent(dtxsid)}`
+                : '/api/upload-csv';
+            const resp = await fetch(uploadUrl, {
                 method: 'POST',
                 body: formData,
             });
@@ -127,9 +140,7 @@ async function uploadFiles(fileList) {
                     uploadedFiles[item.id] = {
                         id: item.id,
                         filename: item.filename,
-                        type: 'csv',
-                        row_count: item.row_count,
-                        columns: item.columns_found,
+                        type: item.type || 'csv',
                     };
                     renderFilePoolItem(item.id);
                     totalUploaded++;
@@ -439,6 +450,12 @@ async function confirmResetPool() {
             if (el && innerId === 'validation-body') el.style.display = 'none';
         }
 
+        // Clear apical domain sub-tabs and panels
+        const subTabBar = document.getElementById('apical-sub-tabs');
+        if (subTabBar) { subTabBar.innerHTML = ''; subTabBar.classList.remove('visible'); }
+        const bm2Cards = document.getElementById('bm2-cards');
+        if (bm2Cards) bm2Cards.innerHTML = '';
+
         // Hide apical results section and clear its content
         const apicalSection = document.getElementById('apical-results');
         if (apicalSection) apicalSection.style.display = 'none';
@@ -617,24 +634,31 @@ function toggleValidationPanel() {
 }
 
 /**
- * Run full pool validation by calling POST /api/pool/validate/{dtxsid}.
+ * Run pool validation only (no integration).
  *
- * Sends the request, receives a ValidationReport JSON, and renders
- * the coverage matrix + issues list in the validation panel.
- * Also updates status dots on each file pool item.
+ * Calls POST /api/pool/validate/{dtxsid}, renders the coverage matrix
+ * and issues list.  If validation passes with zero errors, enables the
+ * Integrate button.  If errors exist, the Integrate button stays
+ * disabled — the user must fix the pool (remove/replace files) and
+ * re-validate.
  */
 async function runPoolValidation() {
-    // Need a DTXSID to validate against — it's stored in the chem ID form
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
     if (!dtxsid) {
         showToast('Resolve a chemical identity first');
         return;
     }
 
-    const btn = document.getElementById('btn-validate');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Validating...';
+    const btnValidate = document.getElementById('btn-validate');
+    const btnIntegrate = document.getElementById('btn-integrate');
+    if (btnValidate) {
+        btnValidate.disabled = true;
+        btnValidate.textContent = 'Validating...';
+    }
+    // Hide/disable Integrate until we know the result
+    if (btnIntegrate) {
+        btnIntegrate.disabled = true;
+        btnIntegrate.style.display = 'none';
     }
 
     showBlockingSpinner('Validating file pool...');
@@ -661,14 +685,52 @@ async function runPoolValidation() {
         updateValidationSummary(report);
         updateFileStatusDots(report);
 
-        // --- Integration step: merge files into unified BMDProject ---
-        // After validation succeeds, automatically call the integrate endpoint
-        // to produce the merged BMDProject JSON.  This runs the file selection
-        // logic (bm2 > txt/csv > xlsx per domain, respecting user conflict
-        // resolutions) and merges all dose-response data into a single structure.
-        if (btn) btn.textContent = 'Integrating...';
-        updateBlockingMessage('Integrating files...');
+        // Count errors — only enable Integrate if zero errors
+        const errorCount = (report.issues || []).filter(
+            i => i.severity === 'error'
+        ).length;
 
+        if (btnIntegrate) {
+            btnIntegrate.style.display = '';
+            if (errorCount === 0) {
+                btnIntegrate.disabled = false;
+                showToast('Validation passed — ready to integrate');
+            } else {
+                btnIntegrate.disabled = true;
+                showToast(`${errorCount} error(s) found — fix the file pool and re-validate`);
+            }
+        }
+    } catch (e) {
+        showToast('Validation request failed: ' + e.message);
+    } finally {
+        hideBlockingSpinner();
+        if (btnValidate) {
+            btnValidate.disabled = false;
+            btnValidate.textContent = 'Validate';
+        }
+    }
+}
+
+
+/**
+ * Run pool integration — merge validated files into a unified BMDProject.
+ *
+ * Only callable when validation has passed with zero errors (the Integrate
+ * button is disabled otherwise).  Calls POST /api/pool/integrate/{dtxsid}
+ * and renders the integrated data preview.
+ */
+async function runPoolIntegration() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    const btn = document.getElementById('btn-integrate');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Integrating...';
+    }
+
+    showBlockingSpinner('Integrating files...');
+    try {
         const intResp = await fetch(`/api/pool/integrate/${dtxsid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -677,22 +739,22 @@ async function runPoolValidation() {
         if (intResp.ok) {
             integratedPoolData = await intResp.json();
             renderIntegratedDataPreview(integratedPoolData);
-            showToast('Pool validated and integrated');
-        } else {
-            const intErr = await intResp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
-            showToast(intErr.error || 'Integration failed — validation OK');
-        }
+            showToast('Integration complete');
 
-        // Show the Approve button so the user can sign off on the pool
-        // and trigger the animal report generation.
-        show('btn-approve-pool');
+            // Show the Approve button so the user can sign off on the
+            // pool and trigger animal report generation.
+            show('btn-approve-pool');
+        } else {
+            const intErr = await intResp.json().catch(() => ({}));
+            showToast(intErr.error || 'Integration failed');
+        }
     } catch (e) {
-        showToast('Validation request failed: ' + e.message);
+        showToast('Integration failed: ' + e.message);
     } finally {
         hideBlockingSpinner();
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Validate & Integrate';
+            btn.textContent = 'Integrate';
         }
     }
 }
@@ -929,9 +991,18 @@ function renderValidationIssues(report) {
             bodyHtml += `<span class="issue-icon">${cfg.icon}</span>`;
             bodyHtml += `<span class="issue-text">${issue.message}`;
 
-            // For dose mismatch errors, add expandable conflict resolution
+            // For dose mismatch errors, show the conflicting dose groups
+            // so the user knows what to fix.  No conflict resolution —
+            // the user must update the file pool to resolve the error.
             if (sev === 'error' && issue.issue_type === 'dose_mismatch' && issue.details) {
-                bodyHtml += renderConflictResolution(issue, index, report);
+                const d = issue.details;
+                const expectedDoses = (d.expected || []).join(', ');
+                const actualDoses = (d.actual || []).join(', ');
+                bodyHtml += '<div class="conflict-detail" style="margin-top:0.3rem;font-size:0.75rem;color:var(--c-text-muted);">';
+                bodyHtml += `<div>${escapeHtml(d.expected_file || 'File 1')}: [${expectedDoses}]</div>`;
+                bodyHtml += `<div>${escapeHtml(d.actual_file || 'File 2')}: [${actualDoses}]</div>`;
+                bodyHtml += '<div style="margin-top:0.2rem;font-weight:600;">Remove or replace the incorrect file to resolve.</div>';
+                bodyHtml += '</div>';
             }
 
             bodyHtml += '</span></div>';
@@ -1140,30 +1211,252 @@ function restoreValidationReport(report) {
     renderValidationIssues(report);
     updateValidationSummary(report);
     updateFileStatusDots(report);
+
+    // Show Integrate button if validation had zero errors
+    const errorCount = (report.issues || []).filter(
+        i => i.severity === 'error'
+    ).length;
+    const btnIntegrate = document.getElementById('btn-integrate');
+    if (btnIntegrate) {
+        btnIntegrate.style.display = '';
+        btnIntegrate.disabled = errorCount > 0;
+    }
 }
 
+
+/**
+ * Map from server domain keys to human-readable section titles and
+ * NIEHS-style table caption templates.  These match the _DOMAIN_TITLES
+ * in pool_orchestrator.py and the caption conventions in the NTP
+ * reference report (Bookshelf_NBK589955.pdf).
+ *
+ * {sex} and {compound} are replaced at export time with the actual
+ * sex group label and compound name.
+ *
+ * Both base domains (source_of_truth — for NTP stats) and _inferred
+ * domains (gap-filled — for BMDExpress BMD/BMDL) are listed.  They
+ * share the same sub-tab; the suffix is shown in the card header.
+ */
+const _DOMAIN_DEFAULTS = {
+    body_weight:            { title: 'Body Weight',
+                              caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
+    body_weight_inferred:   { title: 'Body Weight (Inferred)',
+                              caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
+    organ_weights:          { title: 'Organ Weights',
+                              caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
+    organ_weights_inferred: { title: 'Organ Weights (Inferred)',
+                              caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
+    clin_chem:              { title: 'Clinical Chemistry',
+                              caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
+    clin_chem_inferred:     { title: 'Clinical Chemistry (Inferred)',
+                              caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
+    hematology:             { title: 'Hematology',
+                              caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
+    hematology_inferred:    { title: 'Hematology (Inferred)',
+                              caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
+    hormones:               { title: 'Hormones',
+                              caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
+    hormones_inferred:      { title: 'Hormones (Inferred)',
+                              caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
+    tissue_conc:            { title: 'Tissue Concentration',
+                              caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
+    tissue_conc_inferred:   { title: 'Tissue Concentration (Inferred)',
+                              caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
+    clinical_obs:           { title: 'Clinical Observations',
+                              caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
+};
+
+/**
+ * Canonical ordering of apical domain sub-tabs.
+ * _inferred domains share the same sub-tab as their base domain —
+ * the sub-tab key is the base domain (strip "_inferred" suffix).
+ */
+const _DOMAIN_SUB_TAB_ORDER = [
+    'body_weight', 'organ_weights', 'clin_chem',
+    'hematology', 'hormones', 'tissue_conc',
+];
+
+/**
+ * Human-readable labels for the domain sub-tabs.
+ */
+const _DOMAIN_SUB_TAB_LABELS = {
+    body_weight:   'Body Weight',
+    organ_weights: 'Organ Weights',
+    clin_chem:     'Clinical Chemistry',
+    hematology:    'Hematology',
+    hormones:      'Hormones',
+    tissue_conc:   'Tissue Concentration',
+};
+
+/**
+ * Strip the "_inferred" suffix to get the base domain key.
+ * Used to group base and inferred cards into the same sub-tab.
+ *
+ * @param {string} domain — full domain key (e.g. "hormones_inferred")
+ * @returns {string} — base domain key (e.g. "hormones")
+ */
+function _baseDomain(domain) {
+    return (domain || '').replace(/_inferred$/, '');
+}
+
+/**
+ * Ensure a domain sub-tab and its card container exist.
+ * Called by createBm2Card() the first time a card for a domain is added.
+ * Creates the sub-tab button and the panel div inside #bm2-cards.
+ *
+ * The sub-tab bar becomes visible once at least one domain has cards.
+ * Sub-tabs are inserted in _DOMAIN_SUB_TAB_ORDER so the order is
+ * stable regardless of which domain gets cards first.
+ *
+ * @param {string} baseDomain — base domain key (no _inferred suffix)
+ * @returns {HTMLElement} — the panel div to append cards into
+ */
+function ensureDomainSubTab(baseDomain) {
+    const panelId = `apical-domain-${baseDomain}`;
+    let panel = document.getElementById(panelId);
+    if (panel) return panel;
+
+    const tabBar = document.getElementById('apical-sub-tabs');
+    const container = document.getElementById('bm2-cards');
+
+    // Create the panel — a container for this domain's cards
+    panel = document.createElement('div');
+    panel.id = panelId;
+    panel.className = 'apical-domain-panel';
+    panel.setAttribute('data-domain', baseDomain);
+
+    // Insert panel in canonical order among existing panels
+    const myIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(baseDomain);
+    let inserted = false;
+    for (const existing of container.children) {
+        const existDomain = existing.getAttribute('data-domain');
+        const existIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(existDomain);
+        if (existIdx > myIdx) {
+            container.insertBefore(panel, existing);
+            inserted = true;
+            break;
+        }
+    }
+    if (!inserted) container.appendChild(panel);
+
+    // Create the sub-tab button — inserted in canonical order
+    const btn = document.createElement('button');
+    btn.textContent = _DOMAIN_SUB_TAB_LABELS[baseDomain] || baseDomain;
+    btn.setAttribute('data-domain', baseDomain);
+    btn.onclick = () => activateDomainSubTab(baseDomain);
+
+    const btnIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(baseDomain);
+    let btnInserted = false;
+    for (const existBtn of tabBar.children) {
+        const existBtnDomain = existBtn.getAttribute('data-domain');
+        const existBtnIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(existBtnDomain);
+        if (existBtnIdx > btnIdx) {
+            tabBar.insertBefore(btn, existBtn);
+            btnInserted = true;
+            break;
+        }
+    }
+    if (!btnInserted) tabBar.appendChild(btn);
+
+    // Show the sub-tab bar now that we have at least one domain
+    tabBar.classList.add('visible');
+
+    // If this is the first domain, activate it
+    if (tabBar.children.length === 1) {
+        activateDomainSubTab(baseDomain);
+    }
+
+    return panel;
+}
+
+/**
+ * Switch the active domain sub-tab — show that domain's panel,
+ * hide all others, and update button active states.
+ *
+ * @param {string} baseDomain — base domain key to activate
+ */
+function activateDomainSubTab(baseDomain) {
+    // Toggle panels
+    document.querySelectorAll('.apical-domain-panel').forEach(p => {
+        p.classList.toggle('active', p.getAttribute('data-domain') === baseDomain);
+    });
+
+    // Toggle button states
+    const tabBar = document.getElementById('apical-sub-tabs');
+    tabBar.querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-domain') === baseDomain);
+    });
+}
+
+/**
+ * Resolve the default section title and caption for a .bm2 card.
+ *
+ * Priority order:
+ * 1. Domain-specific defaults from _DOMAIN_DEFAULTS (best — uses the
+ *    server's domain classification to pick the right NIEHS-style title).
+ * 2. The server-provided section title (used as-is if no domain match,
+ *    with a generic caption built from it).
+ * 3. Filename-based heuristic fallback (legacy: "clinical"/"pathology"
+ *    in the filename → Clinical Pathology, otherwise generic).
+ *
+ * Why not just use the server title directly: the server title is
+ * short ("Hormones") but the form field needs the full NIEHS-style
+ * section heading, and the caption needs the full template with
+ * {sex}/{compound} placeholders.
+ */
+function _resolveBm2Defaults(filename, domain) {
+    // 1. Domain-specific lookup — best source of truth.
+    if (domain && _DOMAIN_DEFAULTS[domain]) {
+        const d = _DOMAIN_DEFAULTS[domain];
+        return { title: d.title, caption: d.caption };
+    }
+
+    // 2. Filename-based heuristic (for manually uploaded .bm2 files
+    //    that weren't routed through process-integrated and lack a domain).
+    const lowerName = (filename || '').toLowerCase();
+    const isClinical = lowerName.includes('clinical') || lowerName.includes('pathology');
+    if (isClinical) {
+        return {
+            title: 'Clinical Pathology',
+            caption: 'Summary of Clinical Pathology Findings of {sex} Rats Administered {compound} for Five Days',
+        };
+    }
+
+    // 3. Generic fallback — use the filename/title as-is with a
+    //    generic caption template.
+    return {
+        title: filename || 'Apical Endpoints',
+        caption: 'Summary of {sex} Rats Administered {compound} for Five Days',
+    };
+}
 
 /**
  * Create a card UI element for an uploaded .bm2 file.
  * The card shows the filename, config fields (section title,
  * caption template, compound name, dose unit), and Process/Remove
  * buttons.
+ *
+ * @param {string} bm2Id    — unique section identifier
+ * @param {string} filename — display name (often the server's section.title)
+ * @param {string} [domain] — server-assigned domain key (e.g. "hormones",
+ *                             "body_weight") used to pick the correct
+ *                             NIEHS-style title and caption defaults
  */
-function createBm2Card(bm2Id, filename) {
-    const container = document.getElementById('bm2-cards');
+function createBm2Card(bm2Id, filename, domain) {
+    // Route the card into the correct domain sub-tab panel.
+    // If the domain is known, ensure its sub-tab exists and append
+    // the card there.  Otherwise fall back to the flat #bm2-cards
+    // container (legacy path for manually uploaded files).
+    const baseDom = _baseDomain(domain);
+    const container = (baseDom && _DOMAIN_SUB_TAB_LABELS[baseDom])
+        ? ensureDomainSubTab(baseDom)
+        : document.getElementById('bm2-cards');
 
-    // Detect section type from the filename — if it contains
-    // "clinical" or "pathology", use Clinical Pathology defaults;
-    // otherwise default to organ/body weight section.
-    const lowerName = filename.toLowerCase();
-    const isClinical = lowerName.includes('clinical') || lowerName.includes('pathology');
-
-    const defaultTitle = isClinical
-        ? 'Clinical Pathology'
-        : 'Animal Condition, Body Weights, and Organ Weights';
-    const defaultCaption = isClinical
-        ? 'Summary of Clinical Pathology Findings of {sex} Rats Administered {compound} for Five Days'
-        : 'Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days';
+    // Resolve section title and caption from the domain (preferred)
+    // or filename (fallback for manually uploaded files).
+    const defaults = _resolveBm2Defaults(filename, domain);
+    const defaultTitle = defaults.title;
+    const defaultCaption = defaults.caption;
 
     // Process button is disabled until chemical ID is resolved —
     // we need the compound name for the narrative and table captions
@@ -1364,12 +1657,14 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
 
         const tbody = document.createElement('tbody');
 
-        // "n" row — sample sizes per dose group (max across endpoints)
+        // "n" row — sample sizes per dose group (max across endpoints).
+        // Show "–" for dose groups where N=0 (all animals died before
+        // terminal sacrifice), matching the NIEHS reference report.
         const nRow = document.createElement('tr');
         nRow.innerHTML = '<td class="endpoint-label">n</td>';
         for (const dose of doses) {
             const maxN = Math.max(...rows.map(r => r.n[String(dose)] || 0));
-            nRow.innerHTML += `<td>${maxN}</td>`;
+            nRow.innerHTML += `<td>${maxN > 0 ? maxN : '\u2013'}</td>`;
         }
         // No BMD/BMDL cells in domain tables (moved to BMD summary)
         tbody.appendChild(nRow);
@@ -1388,6 +1683,34 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
 
         table.appendChild(tbody);
         previewEl.appendChild(table);
+
+        // --- Missing-animal footnotes ---
+        // Collect dose groups where animals are missing (died before
+        // terminal sacrifice) from the xlsx study file roster.  Show a
+        // compact footnote below the table for affected dose groups.
+        const missingByDose = {};
+        for (const row of rows) {
+            if (!row.missing_animals) continue;
+            for (const [doseKey, count] of Object.entries(row.missing_animals)) {
+                const dose = Number(doseKey);
+                if (!missingByDose[dose] || count > missingByDose[dose]) {
+                    missingByDose[dose] = count;
+                }
+            }
+        }
+        const missingDoses = Object.keys(missingByDose).map(Number).sort((a, b) => a - b);
+        if (missingDoses.length > 0) {
+            const footnoteEl = document.createElement('div');
+            footnoteEl.className = 'table-footnote';
+            const notes = missingDoses.map(d => {
+                const n = missingByDose[d];
+                const doseLabel = d === Math.floor(d) ? Math.floor(d) : d;
+                return `${n} animal${n > 1 ? 's' : ''} at ${doseLabel} ${doseUnit}`;
+            });
+            footnoteEl.innerHTML = `<em>Note: ${notes.join('; ')} did not survive to terminal sacrifice.</em>`;
+            previewEl.appendChild(footnoteEl);
+        }
+
         tableNum++;
     }
 

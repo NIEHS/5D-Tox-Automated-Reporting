@@ -241,67 +241,88 @@ async def api_process_bm2(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/upload-csv — upload gene-level BMD CSV files for genomics analysis
+# POST /api/upload-csv — upload loose CSV/TXT data files into the data pool
 # ---------------------------------------------------------------------------
+# CSV and TXT files are format-equivalent (comma vs tab separator) and can
+# contain either apical endpoint data (body weights, organ weights, etc.) or
+# gene-level BMD results (genomics).  We don't know which until the pool
+# integrator fingerprints them, so we treat all loose CSVs the same as
+# CSVs extracted from zip archives: register in _data_uploads, fingerprint,
+# and let the pool pipeline determine the domain.
 
 @router.post("/api/upload-csv")
-async def api_upload_csv(files: list[UploadFile] = File(...)):
+async def api_upload_csv(
+    request: Request,
+    files: list[UploadFile] = File(...),
+):
     """
-    Accept one or more gene-level BMD CSV file uploads.
+    Accept one or more loose CSV (or TXT) file uploads.
 
-    Each CSV represents one organ × sex combination (e.g., "Liver Male").
-    Required columns: gene_symbol, bmd.
-    Optional columns: bmdl, bmdu, direction, fold_change, best_model,
-                      full_name, gof_p.
+    Unlike .bm2 files which have a dedicated binary format, CSV/TXT files
+    can be either apical endpoint data (tab/comma separated dose-response
+    tables) or gene-level BMD output.  The file is saved and registered
+    in the generic _data_uploads store — the same store used for CSV/TXT
+    files extracted from zip archives.  The pool integrator will
+    fingerprint them to determine the domain (body_weight, hormones,
+    gene_expression, etc.) during validation.
 
-    The uploaded CSV is saved to a temp directory and parsed via
-    interpret.py's load_dose_response() to validate structure and
-    normalize gene symbols.
+    Accepts an optional ?dtxsid= query parameter.  When provided, files
+    are saved to sessions/{dtxsid}/files/ for persistence across restarts
+    and fingerprinting is run immediately.
 
-    Returns a JSON list of metadata objects:
-      [{id, filename, row_count, columns_found}, ...]
+    Returns JSON:
+      [{id, filename, type, validation_issues}, ...]
     """
-    _csv_uploads = get_csv_uploads()
+    _data_uploads = get_data_uploads()
+
+    # Optional DTXSID for persistence and fingerprinting
+    dtxsid = request.query_params.get("dtxsid", "")
 
     results = []
 
     for upload in files:
-        csv_id = str(uuid.uuid4())
-
-        # Save the uploaded file to a temp directory so we can parse it
-        tmp_dir = tempfile.mkdtemp(prefix="csv_")
+        file_id = str(uuid.uuid4())
         safe_name = os.path.basename(upload.filename or "upload.csv")
-        tmp_path = os.path.join(tmp_dir, safe_name)
+        ext = os.path.splitext(safe_name)[1].lower()
+        file_type = ext.lstrip(".")  # "csv" or "txt"
 
-        with open(tmp_path, "wb") as f:
+        # Persist to session directory if DTXSID is available,
+        # otherwise save to a temp directory (lost on restart).
+        if dtxsid:
+            d = session_dir(dtxsid) / "files"
+            d.mkdir(parents=True, exist_ok=True)
+            file_path = str(d / safe_name)
+        else:
+            tmp_dir = tempfile.mkdtemp(prefix=f"{file_type}_")
+            file_path = os.path.join(tmp_dir, safe_name)
+
+        with open(file_path, "wb") as f:
             content = await upload.read()
             f.write(content)
 
-        try:
-            # Validate and parse the CSV using the existing dose-response loader.
-            # This normalizes gene symbols and ensures bmd is numeric.
-            df = load_dose_response(tmp_path)
+        # Register in the generic data pool — same store as zip-extracted
+        # CSV/TXT files.  The pool integrator fingerprints this file during
+        # validation to determine its domain (apical vs genomics).
+        _data_uploads[file_id] = {
+            "filename": safe_name,
+            "temp_path": file_path,
+            "type": file_type,
+        }
 
-            _csv_uploads[csv_id] = {
-                "filename": safe_name,
-                "temp_path": tmp_path,
-                "temp_dir": tmp_dir,
-                "df": df,  # parsed DataFrame for fast reuse
-            }
-
-            results.append({
-                "id": csv_id,
-                "filename": safe_name,
-                "row_count": len(df),
-                "columns_found": list(df.columns),
-            })
-        except Exception as e:
-            # Clean up temp dir on parse failure
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            return JSONResponse(
-                {"error": f"CSV validation failed for {safe_name}: {e}"},
-                status_code=400,
+        # Fingerprint for cross-validation if DTXSID is available
+        v_issues = []
+        if dtxsid:
+            fp = fingerprint_and_store(
+                file_id, safe_name, file_path, file_type, dtxsid,
             )
+            v_issues = run_lightweight_validation(fp, dtxsid)
+
+        results.append({
+            "id": file_id,
+            "filename": safe_name,
+            "type": file_type,
+            "validation_issues": v_issues,
+        })
 
     return JSONResponse(results)
 

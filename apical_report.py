@@ -1044,6 +1044,68 @@ def annotate_missing_animals(
                 row.missing_animals_by_dose = missing
 
 
+def backfill_missing_doses(
+    domain_tables: dict[str, dict[str, list]],
+    xlsx_rosters: dict[str, dict],
+    reference_domain: str = "body_weight",
+) -> None:
+    """
+    Ensure every TableRow uses the full study dose list as columns, filling
+    in "–" (em-dash) for dose groups where no animals survived to be measured.
+
+    The NIEHS reference report shows ALL dose columns in every domain table,
+    even when an entire dose group is absent (all animals died).  Those
+    columns display "–" for the value and 0 for N, making it visually clear
+    that the study included that dose but no data was collected.
+
+    This function runs AFTER annotate_missing_animals() so that the
+    missing_animals_by_dose dict is already populated.  It:
+      1. Determines the full dose list from the reference xlsx roster
+      2. For each TableRow, adds any missing doses with "–" values and N=0
+
+    Mutates TableRows in place — no return value.
+
+    Args:
+        domain_tables:    {domain → {sex → [TableRow, ...]}}, as from _partition_by_domain.
+        xlsx_rosters:     From integrated["_meta"]["xlsx_rosters"].
+        reference_domain: Domain with the most complete roster (usually body_weight).
+    """
+    if not xlsx_rosters:
+        return
+
+    # Determine the full study dose list from the reference domain's roster.
+    # The body_weight xlsx always has every dose group because body weight
+    # is measured on all animals regardless of survival.
+    ref_roster = xlsx_rosters.get(reference_domain)
+    if not ref_roster:
+        # Fallback: domain with the most dose groups
+        ref_roster = max(
+            xlsx_rosters.values(),
+            key=lambda r: len(r.get("dose_groups", [])),
+            default=None,
+        )
+    if not ref_roster:
+        return
+
+    # Full dose list from the reference roster, sorted ascending.
+    # Dose keys may be strings from JSON — normalize to float.
+    ref_doses_raw = ref_roster.get("dose_groups", [])
+    full_doses = sorted(float(d) for d in ref_doses_raw)
+    if not full_doses:
+        return
+
+    for domain, sex_rows in domain_tables.items():
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                # Add any doses from the full list that are absent from
+                # this row's data.  These are dose groups where no animals
+                # survived to have this endpoint measured.
+                for dose in full_doses:
+                    if dose not in row.values_by_dose:
+                        row.values_by_dose[dose] = "–"
+                        row.n_by_dose[dose] = 0
+
+
 def _format_bmd(value: float) -> str:
     """
     Format a BMD or BMDL value for display in the report table.

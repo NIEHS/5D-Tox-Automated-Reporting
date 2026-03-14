@@ -157,12 +157,18 @@ async function exportDocx() {
             ? (uploadedFiles[info.fileId]?.id || info.fileId)
             : sectionId;
 
+        // Resolve fallback title/caption from the domain if the form
+        // fields are empty.  This avoids the old bug where every section
+        // fell back to "Body Weights and Organ Weights".
+        const domain = info.domain || '';
+        const fallbacks = _resolveBm2Defaults(info.filename, domain);
+
         apicalPayload.push({
             bm2_id: serverFileId,
             section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                || 'Animal Condition, Body Weights, and Organ Weights',
+                || fallbacks.title,
             table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                || 'Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days',
+                || fallbacks.caption,
             compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
                 || chemicalName,
             dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
@@ -304,12 +310,15 @@ async function exportPdf() {
             ? (uploadedFiles[info.fileId]?.id || info.fileId)
             : sectionId;
 
+        const domain = info.domain || '';
+        const fallbacks = _resolveBm2Defaults(info.filename, domain);
+
         apicalPayload.push({
             bm2_id: serverFileId,
             section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                || 'Apical Endpoints',
+                || fallbacks.title,
             table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                || '',
+                || fallbacks.caption,
             compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
                 || chemicalName,
             dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
@@ -1185,12 +1194,15 @@ async function compilePdfPreview() {
                 ? (uploadedFiles[info.fileId]?.id || info.fileId)
                 : sectionId;
 
+            const domain = info.domain || '';
+            const fallbacks = _resolveBm2Defaults(info.filename, domain);
+
             apicalPayload.push({
                 bm2_id: serverFileId,
                 section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                    || 'Apical Endpoints',
+                    || fallbacks.title,
                 table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                    || '',
+                    || fallbacks.caption,
                 compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
                     || chemicalName,
                 dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()

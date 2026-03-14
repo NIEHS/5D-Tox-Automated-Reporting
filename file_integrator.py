@@ -75,9 +75,28 @@ _DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
     # false positives from small organ weight files.
     (re.compile(r"gene.?expression", re.IGNORECASE), "gene_expression"),
 
+    # --- Source-of-truth files (base domains) ---
+    # Files with "_truth" in the name are source-of-truth data: actual
+    # experimental values with potential gaps (missing animals, lost samples).
+    # Used for NTP traditional statistics (Williams, Dunnett, Jonckheere)
+    # and for computing N, mean, SD per dose group.
+    # These must come BEFORE the generic domain patterns so that
+    # "body_weight_truth" matches here, not as "body_weight" below.
+    (re.compile(r"tissue.?conc.*_truth", re.IGNORECASE), "tissue_conc"),
+    (re.compile(r"clinical.?obs.*_truth", re.IGNORECASE), "clinical_obs"),
+    (re.compile(r"clin.*chem.*_truth", re.IGNORECASE), "clin_chem"),
+    (re.compile(r"hematol.*_truth", re.IGNORECASE), "hematology"),
+    (re.compile(r"hormone.*_truth", re.IGNORECASE), "hormones"),
+    (re.compile(r"organ.?weight.*_truth", re.IGNORECASE), "organ_weights"),
+    (re.compile(r"body.?weight.*_truth", re.IGNORECASE), "body_weight"),
+
+    # --- Inferred files (_inferred domains) ---
+    # Files WITHOUT "_truth" in the name are inferred data: gaps filled
+    # with dose-group averages so BMDExpress can model them.  The .bm2
+    # output from these becomes the source of BMD/BMDL values.
     # Tissue concentration — check before generic "clinical" to avoid
     # "tissue_conc" matching a broader "clin" pattern.
-    (re.compile(r"tissue.?conc", re.IGNORECASE), "tissue_conc"),
+    (re.compile(r"tissue.?conc", re.IGNORECASE), "tissue_conc_inferred"),
 
     # Clinical observations — "clinical_obs" or "Clinical_Observations"
     (re.compile(r"clinical.?obs", re.IGNORECASE), "clinical_obs"),
@@ -85,19 +104,19 @@ _DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Clinical chemistry — "clin_chem" or "Clinical_Chemistry" or "Clinical Chemistry"
     # The .* bridge handles both short forms ("clin_chem") and full words
     # ("Clinical_Chemistry") where "ical_" separates "Clin" and "Chem".
-    (re.compile(r"clin.*chem", re.IGNORECASE), "clin_chem"),
+    (re.compile(r"clin.*chem", re.IGNORECASE), "clin_chem_inferred"),
 
     # Hematology — "hematol" or "Hematology"
-    (re.compile(r"hematol", re.IGNORECASE), "hematology"),
+    (re.compile(r"hematol", re.IGNORECASE), "hematology_inferred"),
 
     # Hormones — "hormone" or "Hormone"
-    (re.compile(r"hormone", re.IGNORECASE), "hormones"),
+    (re.compile(r"hormone", re.IGNORECASE), "hormones_inferred"),
 
     # Organ weights — "organ_weight" or "Organ_Weight"
-    (re.compile(r"organ.?weight", re.IGNORECASE), "organ_weights"),
+    (re.compile(r"organ.?weight", re.IGNORECASE), "organ_weights_inferred"),
 
     # Body weight — "body_weight" or "Body_Weight" or "Body weight"
-    (re.compile(r"body.?weight", re.IGNORECASE), "body_weight"),
+    (re.compile(r"body.?weight", re.IGNORECASE), "body_weight_inferred"),
 ]
 
 # Gene expression txt files are organ-prefixed (e.g., "Liver_PFHxSAm_Male_No0.txt").
@@ -124,14 +143,18 @@ _BM2_SEX_PATTERN = re.compile(r"(Male|Female)", re.IGNORECASE)
 # stripped to "clinchem").  Both forms are needed because _partition_by_domain
 # and _filter_gene_expression strip underscores before matching.
 _BM2_DOMAIN_MAP: dict[str, str] = {
-    "bodyweight": "body_weight",
-    "organweight": "organ_weights",
-    "clinicalchemistry": "clin_chem",
-    "clinchem": "clin_chem",
-    "hematology": "hematology",
-    "hormone": "hormones",
-    "tissueconcentration": "tissue_conc",
-    "tissueconc": "tissue_conc",
+    # .bm2 files are always produced from inferred (gap-filled) data,
+    # so they map to _inferred domains.  The source-of-truth data
+    # (with gaps) arrives as separate txt/csv files.
+    "bodyweight": "body_weight_inferred",
+    "organweight": "organ_weights_inferred",
+    "clinicalchemistry": "clin_chem_inferred",
+    "clinchem": "clin_chem_inferred",
+    "hematology": "hematology_inferred",
+    "hormone": "hormones_inferred",
+    "tissueconcentration": "tissue_conc_inferred",
+    "tissueconc": "tissue_conc_inferred",
+    # Clinical observations are categorical, not BMD-modeled — no _inferred variant
     "clinicalobservation": "clinical_obs",
     "clinicalobs": "clinical_obs",
     "clinobs": "clinical_obs",
@@ -876,8 +899,87 @@ def fingerprint_txt_csv(
     if len(lines) < 2:
         return fp
 
-    # Row 1: animal IDs (first cell is blank or a label like "Something")
+    # ----- Detect long format (NTP study data) vs wide format (BMDExpress) -----
+    # Long format: header row has named columns like "NTP Study Number",
+    # "Concentration", "Animal ID", "Sex".  Each data row is one observation.
+    # Wide format: row 1 = animal IDs, row 2 = doses, rows 3+ = endpoints.
     row1_cells = lines[0].split(separator)
+    row1_lower = {c.strip().lower() for c in row1_cells}
+
+    # Detect long format by checking for characteristic column names
+    _LONG_FORMAT_MARKERS = {"concentration", "animal id", "sex"}
+    is_long_format = _LONG_FORMAT_MARKERS.issubset(row1_lower)
+
+    if is_long_format:
+        # --- Long-format parsing (source-of-truth _truth.csv files) ---
+        # Parse header → column indices, then extract doses, animal IDs,
+        # sexes, and endpoint names from the data rows.
+        header = [c.strip() for c in row1_cells]
+        header_lower = [h.lower() for h in header]
+
+        # Find key column indices
+        dose_col = header_lower.index("concentration")
+        animal_col = header_lower.index("animal id")
+        sex_col = header_lower.index("sex") if "sex" in header_lower else None
+
+        # Endpoint columns: everything after the metadata columns.
+        # Known metadata columns that are NOT endpoints.
+        _META_COLS = {
+            "ntp study number", "concentration", "animal id", "sex",
+            "selection", "observation day", "terminal flag",
+            # Clinical observations metadata
+            "observation", "site", "modifier", "severity",
+        }
+        endpoint_cols = [
+            i for i, h in enumerate(header_lower)
+            if h not in _META_COLS and h
+        ]
+
+        doses_set: set[float] = set()
+        animal_ids_set: set[str] = set()
+        sexes_set: set[str] = set()
+        dose_animal_map: dict[float, set[str]] = {}
+        endpoint_names_set: set[str] = set()
+
+        for line in lines[1:]:
+            cells = line.split(separator)
+            if len(cells) <= max(dose_col, animal_col):
+                continue
+
+            # Dose
+            try:
+                dose_val = float(cells[dose_col].strip())
+                doses_set.add(dose_val)
+                aid = cells[animal_col].strip()
+                if aid:
+                    animal_ids_set.add(aid)
+                    dose_animal_map.setdefault(dose_val, set()).add(aid)
+            except (ValueError, TypeError, IndexError):
+                continue
+
+            # Sex
+            if sex_col is not None and sex_col < len(cells):
+                s = cells[sex_col].strip()
+                if s:
+                    sexes_set.add(s.title())
+
+        fp.dose_groups = sorted(doses_set)
+        fp.animal_ids = sorted(animal_ids_set)
+        fp.n_animals_by_dose = {
+            dose: len(aids) for dose, aids in sorted(dose_animal_map.items())
+        }
+
+        # Override sex detection with actual data (more reliable than filename)
+        if sexes_set:
+            fp.sexes = sorted(sexes_set)
+
+        # Endpoint names from the non-metadata columns
+        fp.endpoint_names = [header[i] for i in endpoint_cols]
+
+        return fp
+
+    # ----- Wide-format parsing (BMDExpress input files) -----
+    # Row 1: animal IDs (first cell is blank or a label like "Something")
     # Skip the first cell (it's a label column), rest are animal IDs
     animal_ids = [c.strip() for c in row1_cells[1:] if c.strip()]
     fp.animal_ids = sorted(set(animal_ids))
@@ -1448,32 +1550,46 @@ def _check_dose_consistency(
     if len(dose_sets) < 2:
         return issues  # Can't compare with fewer than 2
 
-    # Compare all pairs — O(n²) but n is tiny (at most ~4 files per domain)
-    reference_id, reference_doses = dose_sets[0]
-    for other_id, other_doses in dose_sets[1:]:
-        if reference_doses != other_doses:
-            ref_fp = fingerprints[reference_id]
+    # Compare all pairs — O(n²) but n is tiny (at most ~4 files per domain).
+    # Only compare files that share the same sex.  Male and female files
+    # within the same domain are independent — different animals, possibly
+    # different dose groups (high-dose deaths may differ by sex).
+    # Files with no detected sex are compared against everything (conservative).
+    def _sexes_overlap(fp_a: FileFingerprint, fp_b: FileFingerprint) -> bool:
+        """True if two files should be compared (same sex or sex unknown)."""
+        if not fp_a.sexes or not fp_b.sexes:
+            return True  # unknown sex → compare conservatively
+        return bool(set(fp_a.sexes) & set(fp_b.sexes))
+
+    for i, (ref_id, ref_doses) in enumerate(dose_sets):
+        for other_id, other_doses in dose_sets[i + 1:]:
+            ref_fp = fingerprints[ref_id]
             other_fp = fingerprints[other_id]
-            # Determine default precedence: lower tier number = more authoritative
-            suggested = reference_id if ref_fp.tier <= other_fp.tier else other_id
-            issues.append(ValidationIssue(
-                severity="error",
-                domain=domain,
-                issue_type="dose_mismatch",
-                message=(
-                    f"{domain}: dose groups differ between "
-                    f"{ref_fp.filename} ({ref_fp.file_type}) and "
-                    f"{other_fp.filename} ({other_fp.file_type})"
-                ),
-                files_involved=[reference_id, other_id],
-                suggested_precedence=suggested,
-                details={
-                    "expected": reference_doses,
-                    "actual": other_doses,
-                    "expected_file": ref_fp.filename,
-                    "actual_file": other_fp.filename,
-                },
-            ))
+
+            # Skip comparison if files are for different sexes
+            if not _sexes_overlap(ref_fp, other_fp):
+                continue
+
+            if ref_doses != other_doses:
+                suggested = ref_id if ref_fp.tier <= other_fp.tier else other_id
+                issues.append(ValidationIssue(
+                    severity="error",
+                    domain=domain,
+                    issue_type="dose_mismatch",
+                    message=(
+                        f"{domain}: dose groups differ between "
+                        f"{ref_fp.filename} ({ref_fp.file_type}) and "
+                        f"{other_fp.filename} ({other_fp.file_type})"
+                    ),
+                    files_involved=[ref_id, other_id],
+                    suggested_precedence=suggested,
+                    details={
+                        "expected": ref_doses,
+                        "actual": other_doses,
+                        "expected_file": ref_fp.filename,
+                        "actual_file": other_fp.filename,
+                    },
+                ))
 
     return issues
 

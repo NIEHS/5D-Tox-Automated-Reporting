@@ -63,6 +63,7 @@ from animal_report import (
 )
 from apical_report import (
     annotate_missing_animals,
+    backfill_missing_doses,
     build_table_data,
     export_genomics,
     generate_results_narrative,
@@ -789,6 +790,8 @@ async def api_integrated_summary(dtxsid: str):
 # Human-readable domain titles for section headers in the UI.
 # Maps the internal domain key to a display-friendly label.
 _DOMAIN_TITLES = {
+    # Base domains — source-of-truth data (actual experimental values,
+    # may have gaps).  Used for NTP stats: N, mean, SD, trend, pairwise.
     "body_weight":    "Body Weight",
     "organ_weights":  "Organ Weights",
     "clin_chem":      "Clinical Chemistry",
@@ -796,6 +799,14 @@ _DOMAIN_TITLES = {
     "hormones":       "Hormones",
     "tissue_conc":    "Tissue Concentration",
     "clinical_obs":   "Clinical Observations",
+    # Inferred domains — gap-filled data run through BMDExpress.
+    # Used for BMD/BMDL values in the report tables.
+    "body_weight_inferred":    "Body Weight (Inferred)",
+    "organ_weights_inferred":  "Organ Weights (Inferred)",
+    "clin_chem_inferred":      "Clinical Chemistry (Inferred)",
+    "hematology_inferred":     "Hematology (Inferred)",
+    "hormones_inferred":       "Hormones (Inferred)",
+    "tissue_conc_inferred":    "Tissue Concentration (Inferred)",
 }
 
 # Human-readable labels for BMD statistics, used by the UI to set table
@@ -1564,6 +1575,11 @@ async def api_process_integrated(dtxsid: str, request: Request):
         xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
         if xlsx_rosters:
             annotate_missing_animals(domain_tables, xlsx_rosters)
+            # Backfill absent dose columns with "–" so every domain table
+            # shows the full study dose design (matching NIEHS reference
+            # report convention — dose columns never disappear, they show
+            # dashes when no animals survived for that measurement).
+            backfill_missing_doses(domain_tables, xlsx_rosters)
 
         # --- Build section cards with narratives ---
         sections = _build_section_cards(domain_tables, compound_name, dose_unit)

@@ -265,14 +265,27 @@ def marshal_export_data(body: dict) -> dict:
     if apical_sections:
         data["apical_sections"] = []
         for sec in apical_sections:
+            footnotes = list(sec.get("footnotes", []))
+            dose_unit = sec.get("dose_unit", "mg/kg")
+
+            # Build per-sex missing-animal footnotes from table row data.
+            # Each row may have a missing_animals dict mapping dose → count
+            # (animals that died before terminal sacrifice).  We store these
+            # separately per sex so the Typst template can append the correct
+            # footnote to each sex's table independently.
+            missing_fn = _build_missing_animal_footnotes(
+                sec.get("table_data", {}), dose_unit
+            )
+
             data["apical_sections"].append({
                 "title": sec.get("section_title", "Apical Endpoints"),
                 "caption": sec.get("table_caption_template", ""),
                 "compound": sec.get("compound_name", chemical_name),
-                "dose_unit": sec.get("dose_unit", "mg/kg"),
+                "dose_unit": dose_unit,
                 "narrative": _split_narrative(sec.get("narrative_paragraphs")),
                 "table_data": sec.get("table_data", {}),
-                "footnotes": sec.get("footnotes", []),
+                "footnotes": footnotes,
+                "missing_animal_footnotes": missing_fn,
             })
 
     # Internal Dose Assessment
@@ -797,3 +810,75 @@ def _ensure_paragraphs(obj) -> dict:
     if isinstance(obj, str):
         return {"paragraphs": [obj]}
     return {"paragraphs": []}
+
+
+def _build_missing_animal_footnotes(
+    table_data: dict, dose_unit: str
+) -> dict[str, str]:
+    """
+    Scan table_data rows for missing-animal annotations and produce
+    per-sex footnote strings for the Typst template.
+
+    Each row in table_data[sex] may carry a `missing_animals` dict mapping
+    dose (as string) to integer count — the number of animals in the xlsx
+    study file roster that are absent from that domain's bm2 data (animals
+    that died before terminal sacrifice and couldn't have that endpoint
+    measured).
+
+    We aggregate per sex, taking the max count at each dose across all
+    endpoints (since different endpoints may report slightly different N),
+    and produce one footnote per sex, e.g.:
+
+        "5 animals at 333 mg/kg; 5 animals at 1000 mg/kg did not survive
+         to terminal sacrifice."
+
+    The result is a dict keyed by sex ("Male", "Female") → footnote string.
+    The Typst template appends each sex's footnote to that sex's table,
+    keeping Male footnotes under the Male table and vice versa.
+
+    Args:
+        table_data: Dict keyed by sex ("Male", "Female"), each value a
+                    list of row dicts with optional "missing_animals".
+        dose_unit:  Dose unit string (e.g., "mg/kg") for display.
+
+    Returns:
+        Dict mapping sex → footnote string.  Empty dict if no missing
+        animals in any sex.
+    """
+    result: dict[str, str] = {}
+
+    for sex in ("Male", "Female"):
+        rows = table_data.get(sex, [])
+        if not rows:
+            continue
+
+        # Aggregate: for each dose, take the max missing count across rows
+        missing_by_dose: dict[float, int] = {}
+        for row in rows:
+            ma = row.get("missing_animals")
+            if not ma:
+                continue
+            for dose_key, count in ma.items():
+                dose = float(dose_key)
+                if dose not in missing_by_dose or count > missing_by_dose[dose]:
+                    missing_by_dose[dose] = count
+
+        if not missing_by_dose:
+            continue
+
+        # Sort by dose for consistent display order
+        sorted_doses = sorted(missing_by_dose.keys())
+        parts = []
+        for d in sorted_doses:
+            n = missing_by_dose[d]
+            # Format dose: drop decimal for whole numbers (333 not 333.0)
+            d_label = str(int(d)) if d == int(d) else str(d)
+            parts.append(
+                f"{n} animal{'s' if n > 1 else ''} at {d_label} {dose_unit}"
+            )
+
+        result[sex] = (
+            f"{'; '.join(parts)} did not survive to terminal sacrifice."
+        )
+
+    return result

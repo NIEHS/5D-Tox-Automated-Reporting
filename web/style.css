@@ -1039,6 +1039,19 @@ header p {
     background: #fefce8;
 }
 
+/* Missing-animal footnote — appears below domain tables when the
+   xlsx study file roster shows fewer animals than expected (animals
+   that died before terminal sacrifice).  Matches the visual style
+   of the methods-table-footnote for consistency. */
+.table-footnote {
+    font-family: var(--font-prose);
+    font-size: 8pt;
+    font-style: italic;
+    color: var(--c-text-muted);
+    margin: 0.3rem 0 1rem;
+    padding-left: 0.25rem;
+}
+
 /* ----------------------------------------------------------------
  * File preview modal — full-viewport overlay with centered dialog.
  * This is the first (and currently only) modal in the app.
@@ -1766,6 +1779,65 @@ header p {
    since they don't apply */
 .tabbed-view .view-controls .collapse-btns {
     display: none;
+}
+
+
+/* ----------------------------------------------------------------
+   Sub-tab bar — domain sub-tabs inside the Apical section
+   ----------------------------------------------------------------
+   Reuses the top-level tab-bar styling but scoped to a single
+   section.  Each domain (Body Weight, Organ Weights, etc.) gets
+   its own sub-tab.  Only the active domain's cards are visible.
+   ---------------------------------------------------------------- */
+
+.sub-tab-bar {
+    display: none;        /* hidden until at least 2 domains exist */
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-bottom: 0.75rem;
+    padding: 0.3rem;
+    background: var(--c-bg-hover);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+}
+
+.sub-tab-bar.visible {
+    display: flex;
+}
+
+.sub-tab-bar button {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: transparent;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--c-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.sub-tab-bar button:hover {
+    background: #e9ecef;
+    color: var(--c-text-secondary);
+}
+
+.sub-tab-bar button.active {
+    background: var(--c-bg-white);
+    color: var(--c-primary);
+    border-color: var(--c-border);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Domain panels — only the active one is visible */
+.apical-domain-panel {
+    display: none;
+}
+
+.apical-domain-panel.active {
+    display: block;
 }
 
 

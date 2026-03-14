@@ -347,6 +347,7 @@ async function approveBm2(bm2Id) {
     const data = {
         bm2_id: serverFileId,
         filename: info.filename,
+        domain: info.domain || '',
         section_title: document.getElementById(`bm2-title-${bm2Id}`)?.value?.trim() || '',
         table_caption: document.getElementById(`bm2-caption-${bm2Id}`)?.value?.trim() || '',
         compound_name: document.getElementById(`bm2-compound-${bm2Id}`)?.value?.trim() || '',
@@ -1167,8 +1168,9 @@ async function runProcessingPipeline() {
                     domain:            section.domain,
                 };
 
-                // Create the visual card and populate it
-                createBm2Card(sectionId, section.title);
+                // Create the visual card and populate it — pass the domain
+                // so the card picks the correct NIEHS-style title/caption.
+                createBm2Card(sectionId, section.title, section.domain);
 
                 // Pre-fill the dose unit and compound fields
                 const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
