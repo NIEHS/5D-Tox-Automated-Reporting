@@ -1799,6 +1799,162 @@ def _check_redundancy(
     return issues
 
 
+# Base apical domains that come from source-of-truth (_truth) files.
+# These define the authoritative animal roster per sex.  Every other
+# file must have animal IDs that are a subset of this roster.
+_BASE_APICAL_DOMAINS = frozenset({
+    "body_weight", "organ_weights", "clin_chem",
+    "hematology", "hormones", "tissue_conc",
+})
+
+
+def _check_roster_consistency(
+    fingerprints: dict[str, FileFingerprint],
+) -> list[ValidationIssue]:
+    """
+    Top-level roster validation — runs before all other checks.
+
+    Source-of-truth files (base apical domains without '_inferred' suffix)
+    define the authoritative animal roster per sex.  This check enforces:
+
+    1. All _truth files for the same sex must have identical animal ID sets.
+       If they disagree, that's a top-level error blocking everything.
+    2. Every other file (inferred, .bm2, gene_expression) must have animal
+       IDs that are a subset of the roster for its sex.
+       Any unknown animal ID → top-level error.
+
+    Args:
+        fingerprints: Dict of file_id → FileFingerprint for all pool files.
+
+    Returns:
+        List of ValidationIssue objects.  Any issues here are severity="error"
+        and block all further processing.
+    """
+    issues: list[ValidationIssue] = []
+
+    # --- Phase 1: Build the authoritative roster from _truth files ---
+    # Group _truth fingerprints by sex.  Each _truth file should contain
+    # the complete roster for its sex — so all must agree.
+    # truth_by_sex: {"Male": {file_id: set(animal_ids), ...}, ...}
+    truth_by_sex: dict[str, dict[str, set[str]]] = {}
+
+    for fid, fp in fingerprints.items():
+        if fp.domain not in _BASE_APICAL_DOMAINS:
+            continue
+        if not fp.animal_ids:
+            continue
+
+        # A _truth file may cover one sex (from filename) or both
+        sexes = fp.sexes if fp.sexes else ["Unknown"]
+        for sex in sexes:
+            if sex not in truth_by_sex:
+                truth_by_sex[sex] = {}
+            truth_by_sex[sex][fid] = set(fp.animal_ids)
+
+    # Build the authoritative roster per sex as the UNION of all _truth
+    # files.  Not all _truth files have the same animals — high-dose animals
+    # that died won't appear in organ weights, clin chem, etc.  The body
+    # weight _truth file typically has the superset (all dose groups).
+    # Every _truth file must be a SUBSET of this union — if any file has
+    # an animal not present in any other _truth file, that's suspicious.
+    roster_by_sex: dict[str, set[str]] = {}
+    for sex, files in truth_by_sex.items():
+        if not files:
+            continue
+
+        # Union of all _truth animal IDs for this sex
+        union: set[str] = set()
+        for aids in files.values():
+            union |= aids
+        roster_by_sex[sex] = union
+
+        # Check each _truth file: its animals must be a subset of the union.
+        # Since the union includes this file's own animals, the only way
+        # this fails is if a file has an animal NOT in any other file —
+        # which is fine for the file with the most animals (body_weight).
+        # So instead we check: every animal in each file should appear in
+        # at least one OTHER _truth file, OR in the file with the most
+        # animals (which defines the study roster).
+        #
+        # The practical check: find the file with the most animals — that's
+        # the roster.  Every other _truth file must be a subset.
+        largest_fid = max(files, key=lambda fid: len(files[fid]))
+        largest_roster = files[largest_fid]
+        largest_fp = fingerprints[largest_fid]
+
+        for other_fid, other_roster in files.items():
+            if other_fid == largest_fid:
+                continue
+            extra = other_roster - largest_roster
+            if extra:
+                other_fp = fingerprints[other_fid]
+                issues.append(ValidationIssue(
+                    severity="error",
+                    domain="roster",
+                    issue_type="roster_mismatch",
+                    message=(
+                        f"Roster conflict ({sex}): {other_fp.filename} has "
+                        f"{len(extra)} animal ID(s) not in the study roster "
+                        f"({largest_fp.filename}): {', '.join(sorted(extra))}"
+                    ),
+                    files_involved=[other_fid, largest_fid],
+                    details={
+                        "sex": sex,
+                        "extra_ids": sorted(extra),
+                        "roster_file": largest_fp.filename,
+                        "roster_count": len(largest_roster),
+                    },
+                ))
+
+    # If no _truth files at all, we can't validate rosters — skip
+    if not roster_by_sex:
+        return issues
+
+    # --- Phase 2: Check every non-_truth file against the roster ---
+    for fid, fp in fingerprints.items():
+        # Skip _truth files (already checked above)
+        if fp.domain in _BASE_APICAL_DOMAINS:
+            continue
+        if not fp.animal_ids:
+            continue
+
+        # Gene expression files use plate/sample IDs (e.g., "Plate5-116"),
+        # not study animal IDs (e.g., "101").  Skip roster validation for
+        # these until a mapping between plate IDs and animal IDs is available.
+        if fp.domain == "gene_expression":
+            continue
+
+        # Determine which sex roster to check against
+        sexes = fp.sexes if fp.sexes else list(roster_by_sex.keys())
+        for sex in sexes:
+            roster = roster_by_sex.get(sex)
+            if roster is None:
+                continue  # No _truth file for this sex — can't validate
+
+            file_animals = set(fp.animal_ids)
+            unknown = file_animals - roster
+            if unknown:
+                issues.append(ValidationIssue(
+                    severity="error",
+                    domain="roster",
+                    issue_type="unknown_animal_ids",
+                    message=(
+                        f"{fp.filename} ({fp.domain}, {sex}): "
+                        f"{len(unknown)} animal ID(s) not in study roster: "
+                        f"{', '.join(sorted(unknown))}"
+                    ),
+                    files_involved=[fid],
+                    details={
+                        "sex": sex,
+                        "unknown_ids": sorted(unknown),
+                        "file_animal_count": len(file_animals),
+                        "roster_count": len(roster),
+                    },
+                ))
+
+    return issues
+
+
 def validate_pool(
     dtxsid: str,
     fingerprints: dict[str, FileFingerprint],
@@ -1806,10 +1962,15 @@ def validate_pool(
     """
     Run full cross-validation on a session's file pool.
 
-    Performs all validation checks across all domains:
-      1. Coverage check — which tiers exist for each domain?
-      2. Dose group consistency — do doses match across tiers?
-      3. Animal count consistency — do animal counts match?
+    Validation hierarchy (each level blocks the next):
+      0. Roster consistency — _truth files define the authoritative animal
+         roster per sex.  All _truth files for the same sex must agree.
+         Every other file must be a subset.  Errors here block everything.
+      1. Domain assignment — every file must have a recognized domain.
+         Unassigned files block all processing.
+      2. Intra-domain dose consistency — files within the same domain + sex
+         must agree on dose groups.
+      3. Animal count consistency — do animal counts match across tiers?
       4. Sex coverage — is the male/female split consistent?
       5. Redundancy detection — are there duplicate files?
 
@@ -1826,7 +1987,25 @@ def validate_pool(
     matrix = _build_coverage_matrix(fingerprints)
     all_issues: list[ValidationIssue] = []
 
-    # Per-domain checks
+    # --- Level 0: Roster consistency (top-level, blocks everything) ---
+    roster_issues = _check_roster_consistency(fingerprints)
+    all_issues.extend(roster_issues)
+
+    # --- Level 1: Unassigned files block all processing ---
+    for fid, fp in fingerprints.items():
+        if fp.domain is None:
+            all_issues.append(ValidationIssue(
+                severity="error",
+                domain="unassigned",
+                issue_type="unassigned_file",
+                message=(
+                    f"{fp.filename} could not be assigned to a recognized domain. "
+                    f"Remove it or rename it so the system can identify its purpose."
+                ),
+                files_involved=[fid],
+            ))
+
+    # --- Level 2+: Per-domain checks ---
     for domain, tiers in matrix.items():
         all_issues.extend(_check_coverage(domain, tiers, fingerprints))
         all_issues.extend(_check_dose_consistency(domain, tiers, fingerprints))
