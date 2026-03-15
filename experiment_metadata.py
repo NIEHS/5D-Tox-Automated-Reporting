@@ -81,7 +81,9 @@ VOCABULARIES = {
     "platform": [
         # Apical platforms — in vivo tox study endpoint classes
         "Body Weight", "Clinical Chemistry", "Hematology", "Hormones",
-        "Organ Weight", "Tissue Concentration", "Clinical Observations",
+        "Organ Weight", "Tissue Concentration",
+        # Observations platforms — categorical event data
+        "Clinical",
         "IVIVE", "Generic",
         # Genomics platforms
         "S1500+_rat", "S1500+_human",
@@ -103,7 +105,7 @@ VOCABULARIES = {
     ],
     "provider": [
         "Affymetrix", "Agilent", "BioSpyder", "BMDExpress 3", "RefSeq", "Ensembl",
-        "Apical", "Generic",
+        "Apical", "Observations", "Generic",
     ],
     "subjectType": ["in vivo", "in vitro", "in silico"],
     "articleRoute": ["gavage", "oral", "inhaled", "transdermal"],
@@ -304,7 +306,9 @@ Rules:
    "Body Weight" for body weight, "Organ Weight" for organ weight,
    "Clinical Chemistry" for clinical chemistry, "Hematology" for hematology,
    "Hormones" for hormone/thyroid hormone endpoints, "Tissue Concentration"
-   for IVIVE/plasma data, "Clinical Observations" for categorical observations.
+   for IVIVE/plasma data.
+   For clinical observations (categorical event data), use provider "Observations"
+   and platform "Clinical".
 7. Organ assignments by domain:
    - Hematology, Clinical Chemistry, Hormone → organ: "blood"
    - Body Weight → organ: "Whole Body"

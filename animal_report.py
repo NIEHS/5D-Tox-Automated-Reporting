@@ -64,7 +64,7 @@ PLATFORM_COLUMN_ORDER = [
     "Hematology",
     "Hormones",
     "Tissue Concentration",
-    "Clinical Observations",
+    "Clinical",
     "Gene Expression",
 ]
 
@@ -77,7 +77,7 @@ PLATFORM_SHORT_LABELS = {
     "Hematology": "Hem",
     "Hormones": "Horm",
     "Tissue Concentration": "TC",
-    "Clinical Observations": "CO",
+    "Clinical": "CO",
     "Gene Expression": "GE",
 }
 
@@ -92,7 +92,7 @@ PLATFORM_FULL_LABELS = {
     "Hematology": "Hematology",
     "Hormones": "Hormones",
     "Tissue Concentration": "Tissue Concentration",
-    "Clinical Observations": "Clinical Observations",
+    "Clinical": "Clinical",
     "Gene Expression": "Gene Expression",
 }
 

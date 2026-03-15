@@ -1408,12 +1408,12 @@ function renderAnimalReport(report) {
     if (report.animals && Object.keys(report.animals).length > 0) {
         const domainOrder = [
             'Body Weight', 'Organ Weights', 'Clinical Chemistry', 'Hematology',
-            'Hormones', 'Tissue Concentration', 'Clinical Observations', 'Gene Expression',
+            'Hormones', 'Tissue Concentration', 'Clinical', 'Gene Expression',
         ];
         const domainShort = {
             'Body Weight': 'BW', 'Organ Weights': 'OW', 'Clinical Chemistry': 'CC',
             'Hematology': 'Hem', 'Hormones': 'Horm', 'Tissue Concentration': 'TC',
-            'Clinical Observations': 'CO', 'Gene Expression': 'GE',
+            'Clinical': 'CO', 'Gene Expression': 'GE',
         };
         const activeDomains = domainOrder.filter(d => report.domain_coverage?.[d]);
 

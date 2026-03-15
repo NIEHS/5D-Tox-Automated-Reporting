@@ -196,7 +196,7 @@ const PLATFORM_LABELS = {
     'Hematology':            'Hematology',
     'Hormones':              'Hormones',
     'Tissue Concentration':  'Tissue Concentration',
-    'Clinical Observations': 'Clinical Observations',
+    'Clinical':              'Clinical Observations',
     'Gene Expression':       'Gene Expression',
     'Unknown':               'Unknown',
 };

@@ -141,7 +141,7 @@ _PLATFORM_TO_BM2_PREFIX: dict[str, str] = {
     "Hematology":           "Hematology",
     "Hormones":             "Hormone",
     "Tissue Concentration": "TissueConcentration",
-    "Clinical Observations":"ClinicalObservation",
+    "Clinical":             "ClinicalObservation",
 }
 
 

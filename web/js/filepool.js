@@ -981,7 +981,7 @@ function renderFileMetadataReview(fingerprints) {
     // Platform vocabulary for dropdown
     const platforms = [
         'Body Weight', 'Organ Weight', 'Clinical Chemistry', 'Hematology',
-        'Hormones', 'Tissue Concentration', 'Clinical Observations',
+        'Hormones', 'Tissue Concentration', 'Clinical',
     ];
     const dataTypes = ['tox_study', 'inferred', 'gene_expression'];
 
@@ -990,9 +990,11 @@ function renderFileMetadataReview(fingerprints) {
     function sortKey(fp) {
         const isBm2 = fp.file_type === 'bm2';
         const isGE = fp.data_type === 'gene_expression' && !isBm2;
-        if (isBm2) return 2;           // all bm2 files together
+        const isObs = fp.platform === 'Clinical';
+        if (isBm2) return 3;           // all bm2 files together
+        if (isObs) return 4;           // clinical observations (categorical)
         if (fp.data_type === 'tox_study') return 0;
-        if (isGE) return 3;            // gene expression txt only
+        if (isGE) return 5;            // gene expression txt only
         return 1;                       // inferred txt/csv
     }
     const entries = Object.entries(fingerprints)
@@ -1012,8 +1014,9 @@ function renderFileMetadataReview(fingerprints) {
     const sectionLabels = {
         0: 'Tox Study (source data)',
         1: 'Inferred (gap-filled)',
-        2: 'BMDExpress Results (.bm2)',
-        3: 'Gene Expression',
+        3: 'BMDExpress Results (.bm2)',
+        4: 'Clinical Observations',
+        5: 'Gene Expression',
     };
 
     let html = '<table class="coverage-matrix" style="font-size:0.8rem;">';
@@ -1425,8 +1428,8 @@ const _PLATFORM_DEFAULTS = {
                                caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
     'Tissue Concentration':  { title: 'Tissue Concentration',
                                caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
-    'Clinical Observations': { title: 'Clinical Observations',
-                               caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
+    'Clinical': { title: 'Clinical Observations',
+                  caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
 };
 
 /**

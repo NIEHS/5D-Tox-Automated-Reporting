@@ -91,7 +91,7 @@ _PLATFORM_PATTERNS: list[tuple[re.Pattern, str | None, str]] = [
     # "body_weight_tox_study" matches here, not as "body_weight" below.
     # The _truth alias handles existing files that predate the rename.
     (re.compile(r"tissue.?conc.*_(?:tox_study|truth)", re.IGNORECASE), "Tissue Concentration", "tox_study"),
-    (re.compile(r"clinical.?obs.*_(?:tox_study|truth)", re.IGNORECASE), "Clinical Observations", "tox_study"),
+    (re.compile(r"clinical.?obs.*_(?:tox_study|truth)", re.IGNORECASE), "Clinical", "tox_study"),
     (re.compile(r"clin.*chem.*_(?:tox_study|truth)", re.IGNORECASE), "Clinical Chemistry", "tox_study"),
     (re.compile(r"hematol.*_(?:tox_study|truth)", re.IGNORECASE), "Hematology", "tox_study"),
     (re.compile(r"hormone.*_(?:tox_study|truth)", re.IGNORECASE), "Hormones", "tox_study"),
@@ -107,7 +107,7 @@ _PLATFORM_PATTERNS: list[tuple[re.Pattern, str | None, str]] = [
     (re.compile(r"tissue.?conc", re.IGNORECASE), "Tissue Concentration", "inferred"),
 
     # Clinical observations — "clinical_obs" or "Clinical_Observations"
-    (re.compile(r"clinical.?obs", re.IGNORECASE), "Clinical Observations", "inferred"),
+    (re.compile(r"clinical.?obs", re.IGNORECASE), "Clinical", "inferred"),
 
     # Clinical chemistry — "clin_chem" or "Clinical_Chemistry" or "Clinical Chemistry"
     # The .* bridge handles both short forms ("clin_chem") and full words
@@ -198,9 +198,9 @@ _BM2_PLATFORM_MAP: dict[str, str] = {
     "hormone": "Hormones",
     "tissueconcentration": "Tissue Concentration",
     "tissueconc": "Tissue Concentration",
-    "clinicalobservation": "Clinical Observations",
-    "clinicalobs": "Clinical Observations",
-    "clinobs": "Clinical Observations",
+    "clinicalobservation": "Clinical",
+    "clinicalobs": "Clinical",
+    "clinobs": "Clinical",
 }
 
 # Backward-compatibility alias — imported by pool_orchestrator.py and
@@ -262,7 +262,7 @@ _VOCAB = {
     "platforms": [
         "Body Weight", "Organ Weight", "Clinical Chemistry",
         "Hematology", "Hormones", "Tissue Concentration",
-        "Clinical Observations", "gene_expression",
+        "Clinical", "gene_expression",
     ],
 }
 
@@ -647,7 +647,7 @@ def _platform_type_to_domain(
         ("Body Weight", "tox_study")   → "body_weight_tox_study"
         ("Body Weight", "inferred")    → "body_weight_inferred"
         (None, "gene_expression")      → "gene_expression"
-        ("Clinical Observations", *)   → "clinical_obs"
+        ("Clinical", *)   → "clinical_obs"
 
     Args:
         platform:  Apical platform name or None.
@@ -669,7 +669,7 @@ def _platform_type_to_domain(
         "Hematology": "hematology",
         "Hormones": "hormones",
         "Tissue Concentration": "tissue_conc",
-        "Clinical Observations": "clinical_obs",
+        "Clinical": "clinical_obs",
     }
 
     slug = _PLATFORM_TO_SLUG.get(platform or "", platform or "unknown")
@@ -1444,7 +1444,7 @@ def fingerprint_bm2(
             fp.data_type = "inferred"
         provider = exp_desc.get("provider", "")
         if provider == "Clinical Endpoint" and not fp.platform:
-            fp.platform = "Clinical Observations"
+            fp.platform = "Clinical"
             fp.data_type = "inferred"
         logger.debug("Using augmented ExperimentDescription for %s", filename)
     else:
@@ -1478,7 +1478,7 @@ def fingerprint_bm2(
                     _KNOWN_PLATFORMS = {
                         "Body Weight", "Organ Weight", "Clinical Chemistry",
                         "Hematology", "Hormones", "Tissue Concentration",
-                        "Clinical Observations",
+                        "Clinical",
                     }
                     if llm_platform in _KNOWN_PLATFORMS:
                         fp.platform = llm_platform
