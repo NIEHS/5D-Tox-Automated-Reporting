@@ -141,10 +141,12 @@ let integratedPoolData = null;
 let _previewEscapeHandler = null;
 
 
-// --- Domain label constants ---
-// Human-readable labels for experimental domains.  Used in coverage matrix
+// --- Platform label constants ---
+// Human-readable labels for experimental platforms.  Used in coverage matrix
 // rendering, animal report display, and integrated pool sections.
-// Defined once here to avoid duplicated mappings in main.js.
+// Platform strings are already human-readable, so PLATFORM_LABELS is an
+// identity map — kept for backward compatibility with code that calls
+// domainLabel() / baseDomain().
 // --- Report settings ---
 // Persisted to localStorage.  Loaded on startup, sent to the server
 // with process-integrated and other endpoints that need them.
@@ -164,37 +166,37 @@ let reportSettings = { ...DEFAULT_SETTINGS };
 
 
 /**
- * Strip the _tox_study or _inferred suffix to get the conceptual domain.
- * Used everywhere domain names from the server need to be mapped to
- * human-readable labels or grouped into sub-tabs.
+ * Pass-through for backward compatibility.  Platform strings no longer
+ * have _tox_study / _inferred suffixes, so this is essentially identity.
+ * Kept so existing callers (filepool.js, sections.js) don't break.
  *
- * @param {string} domain — full domain key (e.g., "body_weight_tox_study")
- * @returns {string} — base domain key (e.g., "body_weight")
+ * @param {string} platform — platform key (e.g., "Body Weight")
+ * @returns {string} — same platform key, unchanged
  */
-function baseDomain(domain) {
-    return (domain || '').replace(/(_tox_study|_inferred)$/, '');
+function baseDomain(platform) {
+    return platform || '';
 }
 
 /**
- * Look up a human-readable label for any domain string.
- * Normalizes via baseDomain() first, so both "body_weight_tox_study"
- * and "body_weight_inferred" resolve to "Body Weight".
+ * Look up a human-readable label for a platform string.
+ * Since platform strings are already human-readable (e.g., "Body Weight"),
+ * this is a pass-through.  Kept for backward compatibility.
  *
- * @param {string} domain — full or base domain key
- * @returns {string} — human-readable label
+ * @param {string} platform — platform key (e.g., "Body Weight")
+ * @returns {string} — human-readable label (same as input)
  */
-function domainLabel(domain) {
-    return DOMAIN_LABELS[baseDomain(domain)] || domain.replace(/_/g, ' ');
+function domainLabel(platform) {
+    return PLATFORM_LABELS[platform] || platform || '';
 }
 
-const DOMAIN_LABELS = {
-    body_weight:    'Body Weight',
-    organ_weights:  'Organ Weights',
-    clin_chem:      'Clinical Chemistry',
-    hematology:     'Hematology',
-    hormones:       'Hormones',
-    tissue_conc:    'Tissue Concentration',
-    clinical_obs:   'Clinical Observations',
-    gene_expression: 'Gene Expression',
-    unknown:        'Unknown',
+const PLATFORM_LABELS = {
+    'Body Weight':           'Body Weight',
+    'Organ Weights':         'Organ Weights',
+    'Clinical Chemistry':    'Clinical Chemistry',
+    'Hematology':            'Hematology',
+    'Hormones':              'Hormones',
+    'Tissue Concentration':  'Tissue Concentration',
+    'Clinical Observations': 'Clinical Observations',
+    'Gene Expression':       'Gene Expression',
+    'Unknown':               'Unknown',
 };

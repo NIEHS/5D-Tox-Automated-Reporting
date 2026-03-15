@@ -814,20 +814,14 @@ function renderIntegratedPreview(data) {
         }
     }
 
-    // Domain labels for the source files table
-    const domainLabels = {
-        body_weight: 'Body Weight', organ_weights: 'Organ Weights',
-        clin_chem: 'Clinical Chemistry', hematology: 'Hematology',
-        hormones: 'Hormones', tissue_conc: 'Tissue Concentration',
-        clinical_obs: 'Clinical Observations', gene_expression: 'Gene Expression',
-    };
-
-    // Build source file rows — one per domain
-    const sourceRows = Object.entries(sources).map(([domain, info]) => {
+    // Build source file rows — one per platform.
+    // Platform strings are already human-readable, so domainLabel()
+    // acts as a pass-through.
+    const sourceRows = Object.entries(sources).map(([platform, info]) => {
         const tierClass = info.tier === 'bm2' ? 'tier-bm2' :
                           info.tier === 'xlsx' ? 'tier-xlsx' : 'tier-csv';
-        const label = domainLabel(domain);
-        const isGenomic = domain === 'gene_expression';
+        const label = domainLabel(platform);
+        const isGenomic = platform === 'Gene Expression';
 
         return `<tr class="${isGenomic ? 'genomic-row' : ''}">
             <td><strong>${escapeHtml(label)}</strong></td>
@@ -837,13 +831,13 @@ function renderIntegratedPreview(data) {
         </tr>`;
     }).join('');
 
-    const domainCount = Object.keys(sources).length;
+    const platformCount = Object.keys(sources).length;
 
     container.innerHTML = `
         <div class="preview-stats">
             <div class="stat-card">
-                <span class="stat-value">${domainCount}</span>
-                <span class="stat-label">Domains</span>
+                <span class="stat-value">${platformCount}</span>
+                <span class="stat-label">Platforms</span>
             </div>
             <div class="stat-card">
                 <span class="stat-value">${expCount}</span>
@@ -863,7 +857,7 @@ function renderIntegratedPreview(data) {
             </div>` : ''}
         </div>
         <table class="source-files-table">
-            <thead><tr><th>Domain</th><th>Source File</th><th>Tier</th><th>Experiments</th></tr></thead>
+            <thead><tr><th>Platform</th><th>Source File</th><th>Tier</th><th>Experiments</th></tr></thead>
             <tbody>${sourceRows}</tbody>
         </table>
     `;
@@ -872,9 +866,9 @@ function renderIntegratedPreview(data) {
 /**
  * Render the coverage matrix table.
  *
- * Shows a table with one row per domain and columns for xlsx, txt/csv, bm2.
- * Each cell shows checkmarks (✓) for present files, dashes (—) for missing,
- * and a warning icon (⚠) in the rightmost column if any tier is missing.
+ * Shows a table with one row per platform and columns for xlsx, txt/csv, bm2.
+ * Each cell shows checkmarks for present files, dashes for missing,
+ * and a warning icon in the rightmost column if any tier is missing.
  *
  * @param {Object} report — ValidationReport from the server
  */
@@ -883,40 +877,38 @@ function renderCoverageMatrix(report) {
     if (!container) return;
 
     const matrix = report.coverage_matrix || {};
-    const rawDomains = Object.keys(matrix);
+    const platforms = Object.keys(matrix);
 
-    if (rawDomains.length === 0) {
-        container.innerHTML = '<p style="color:var(--c-text-muted);font-size:0.8rem;">No domains detected.</p>';
+    if (platforms.length === 0) {
+        container.innerHTML = '<p style="color:var(--c-text-muted);font-size:0.8rem;">No platforms detected.</p>';
         return;
     }
 
-    // Collapse to conceptual domains: merge _tox_study and _inferred
-    // entries that share the same base domain into one row.  Tier
-    // presence from any variant counts toward the conceptual domain.
+    // Platform strings are already conceptual — no suffix collapsing needed.
+    // Build the collapsed structure directly from the matrix.
     const collapsed = {};
-    for (const domain of rawDomains) {
-        const base = baseDomain(domain);
-        if (!collapsed[base]) {
-            collapsed[base] = { xlsx: false, txtCsvCount: 0, bm2: false };
+    for (const platform of platforms) {
+        if (!collapsed[platform]) {
+            collapsed[platform] = { xlsx: false, txtCsvCount: 0, bm2: false };
         }
-        const tiers = matrix[domain];
-        if (tiers.xlsx) collapsed[base].xlsx = true;
+        const tiers = matrix[platform];
+        if (tiers.xlsx) collapsed[platform].xlsx = true;
         const txtArr = tiers.txt_csv || [];
-        collapsed[base].txtCsvCount += Array.isArray(txtArr) ? txtArr.length : (txtArr ? 1 : 0);
-        if (tiers.bm2) collapsed[base].bm2 = true;
+        collapsed[platform].txtCsvCount += Array.isArray(txtArr) ? txtArr.length : (txtArr ? 1 : 0);
+        if (tiers.bm2) collapsed[platform].bm2 = true;
     }
 
-    const domains = Object.keys(collapsed).sort();
+    const sortedPlatforms = Object.keys(collapsed).sort();
 
     let html = '<table class="coverage-matrix">';
-    html += '<thead><tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
+    html += '<thead><tr><th>Platform</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
     html += '<tbody>';
 
-    for (const domain of domains) {
-        const c = collapsed[domain];
+    for (const platform of sortedPlatforms) {
+        const c = collapsed[platform];
 
         // Gene expression typically has no xlsx — don't show missing as a gap
-        const xlsxExpected = domain !== 'gene_expression';
+        const xlsxExpected = platform !== 'Gene Expression';
 
         const xlsxCell = c.xlsx
             ? '<span class="coverage-check">✓</span>'
@@ -940,7 +932,7 @@ function renderCoverageMatrix(report) {
             ? '<span class="coverage-warn">⚠</span>'
             : '';
 
-        const label = domainLabel(domain);
+        const label = domainLabel(platform);
         html += `<tr><td>${label}</td><td>${xlsxCell}</td><td>${txtCell}</td><td>${bm2Cell}</td><td>${warnCell}</td></tr>`;
     }
 
@@ -1234,112 +1226,87 @@ function restoreValidationReport(report) {
 
 
 /**
- * Map from server domain keys to human-readable section titles and
- * NIEHS-style table caption templates.  These match the _DOMAIN_TITLES
- * in pool_orchestrator.py and the caption conventions in the NTP
- * reference report (Bookshelf_NBK589955.pdf).
+ * Map from platform strings to human-readable section titles and
+ * NIEHS-style table caption templates.  These match the platform
+ * vocabulary in file_integrator.py and the caption conventions in the
+ * NTP reference report (Bookshelf_NBK589955.pdf).
  *
  * {sex} and {compound} are replaced at export time with the actual
  * sex group label and compound name.
  *
- * Both _tox_study domains (source of truth — for NTP stats) and _inferred
- * domains (gap-filled — for BMDExpress BMD/BMDL) are listed.  They
- * share the same sub-tab; the suffix is shown in the card header.
+ * Platform strings are already human-readable — keys match the
+ * title directly.  data_type (tox_study vs inferred) is tracked
+ * separately and doesn't affect the section title or caption.
  */
-const _DOMAIN_DEFAULTS = {
-    body_weight_tox_study:  { title: 'Body Weight',
-                              caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
-    body_weight_inferred:   { title: 'Body Weight (Inferred)',
-                              caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
-    organ_weights_tox_study: { title: 'Organ Weights',
-                              caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
-    organ_weights_inferred: { title: 'Organ Weights (Inferred)',
-                              caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
-    clin_chem_tox_study:    { title: 'Clinical Chemistry',
-                              caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
-    clin_chem_inferred:     { title: 'Clinical Chemistry (Inferred)',
-                              caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
-    hematology_tox_study:   { title: 'Hematology',
-                              caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
-    hematology_inferred:    { title: 'Hematology (Inferred)',
-                              caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
-    hormones_tox_study:     { title: 'Hormones',
-                              caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
-    hormones_inferred:      { title: 'Hormones (Inferred)',
-                              caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
-    tissue_conc_tox_study:  { title: 'Tissue Concentration',
-                              caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
-    tissue_conc_inferred:   { title: 'Tissue Concentration (Inferred)',
-                              caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
-    clinical_obs:           { title: 'Clinical Observations',
-                              caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
+const _PLATFORM_DEFAULTS = {
+    'Body Weight':           { title: 'Body Weight',
+                               caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
+    'Organ Weights':         { title: 'Organ Weights',
+                               caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
+    'Clinical Chemistry':    { title: 'Clinical Chemistry',
+                               caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
+    'Hematology':            { title: 'Hematology',
+                               caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
+    'Hormones':              { title: 'Hormones',
+                               caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
+    'Tissue Concentration':  { title: 'Tissue Concentration',
+                               caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
+    'Clinical Observations': { title: 'Clinical Observations',
+                               caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
 };
 
 /**
- * Canonical ordering of apical domain sub-tabs.
- * _inferred domains share the same sub-tab as their base domain —
- * the sub-tab key is the base domain (strip "_inferred" suffix).
+ * Canonical ordering of apical platform sub-tabs.
+ * Uses platform strings directly — no suffix stripping needed.
  */
-const _DOMAIN_SUB_TAB_ORDER = [
-    'body_weight', 'organ_weights', 'clin_chem',
-    'hematology', 'hormones', 'tissue_conc',
+const _PLATFORM_SUB_TAB_ORDER = [
+    'Body Weight', 'Organ Weights', 'Clinical Chemistry',
+    'Hematology', 'Hormones', 'Tissue Concentration',
 ];
 
 /**
- * Human-readable labels for the domain sub-tabs.
- */
-const _DOMAIN_SUB_TAB_LABELS = {
-    body_weight:   'Body Weight',
-    organ_weights: 'Organ Weights',
-    clin_chem:     'Clinical Chemistry',
-    hematology:    'Hematology',
-    hormones:      'Hormones',
-    tissue_conc:   'Tissue Concentration',
-};
-
-/**
- * Strip the "_inferred" suffix to get the base domain key.
- * Used to group base and inferred cards into the same sub-tab.
+ * Pass-through for backward compatibility.  Platform strings no longer
+ * have suffixes, so this just returns the input unchanged.
  *
- * @param {string} domain — full domain key (e.g. "hormones_inferred")
- * @returns {string} — base domain key (e.g. "hormones")
+ * @param {string} platform — platform key (e.g. "Hormones")
+ * @returns {string} — same platform key
  */
-function _baseDomain(domain) {
-    return (domain || '').replace(/(_tox_study|_inferred)$/, '');
+function _baseDomain(platform) {
+    return platform || '';
 }
 
 /**
- * Ensure a domain sub-tab and its card container exist.
- * Called by createBm2Card() the first time a card for a domain is added.
+ * Ensure a platform sub-tab and its card container exist.
+ * Called by createBm2Card() the first time a card for a platform is added.
  * Creates the sub-tab button and the panel div inside #bm2-cards.
  *
- * The sub-tab bar becomes visible once at least one domain has cards.
- * Sub-tabs are inserted in _DOMAIN_SUB_TAB_ORDER so the order is
- * stable regardless of which domain gets cards first.
+ * The sub-tab bar becomes visible once at least one platform has cards.
+ * Sub-tabs are inserted in _PLATFORM_SUB_TAB_ORDER so the order is
+ * stable regardless of which platform gets cards first.
  *
- * @param {string} baseDomain — base domain key (no _inferred suffix)
+ * @param {string} platform — platform key (e.g. "Body Weight")
  * @returns {HTMLElement} — the panel div to append cards into
  */
-function ensureDomainSubTab(baseDomain) {
-    const panelId = `apical-domain-${baseDomain}`;
+function ensureDomainSubTab(platform) {
+    const panelId = `apical-domain-${platform}`;
     let panel = document.getElementById(panelId);
     if (panel) return panel;
 
     const tabBar = document.getElementById('apical-sub-tabs');
     const container = document.getElementById('bm2-cards');
 
-    // Create the panel — a container for this domain's cards
+    // Create the panel — a container for this platform's cards
     panel = document.createElement('div');
     panel.id = panelId;
     panel.className = 'apical-domain-panel';
-    panel.setAttribute('data-domain', baseDomain);
+    panel.setAttribute('data-domain', platform);
 
     // Insert panel in canonical order among existing panels
-    const myIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(baseDomain);
+    const myIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(platform);
     let inserted = false;
     for (const existing of container.children) {
         const existDomain = existing.getAttribute('data-domain');
-        const existIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(existDomain);
+        const existIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(existDomain);
         if (existIdx > myIdx) {
             container.insertBefore(panel, existing);
             inserted = true;
@@ -1348,17 +1315,18 @@ function ensureDomainSubTab(baseDomain) {
     }
     if (!inserted) container.appendChild(panel);
 
-    // Create the sub-tab button — inserted in canonical order
+    // Create the sub-tab button — inserted in canonical order.
+    // Platform strings are already human-readable, so use directly.
     const btn = document.createElement('button');
-    btn.textContent = _DOMAIN_SUB_TAB_LABELS[baseDomain] || baseDomain;
-    btn.setAttribute('data-domain', baseDomain);
-    btn.onclick = () => activateDomainSubTab(baseDomain);
+    btn.textContent = platform;
+    btn.setAttribute('data-domain', platform);
+    btn.onclick = () => activateDomainSubTab(platform);
 
-    const btnIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(baseDomain);
+    const btnIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(platform);
     let btnInserted = false;
     for (const existBtn of tabBar.children) {
         const existBtnDomain = existBtn.getAttribute('data-domain');
-        const existBtnIdx = _DOMAIN_SUB_TAB_ORDER.indexOf(existBtnDomain);
+        const existBtnIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(existBtnDomain);
         if (existBtnIdx > btnIdx) {
             tabBar.insertBefore(btn, existBtn);
             btnInserted = true;
@@ -1367,33 +1335,33 @@ function ensureDomainSubTab(baseDomain) {
     }
     if (!btnInserted) tabBar.appendChild(btn);
 
-    // Show the sub-tab bar now that we have at least one domain
+    // Show the sub-tab bar now that we have at least one platform
     tabBar.classList.add('visible');
 
-    // If this is the first domain, activate it
+    // If this is the first platform, activate it
     if (tabBar.children.length === 1) {
-        activateDomainSubTab(baseDomain);
+        activateDomainSubTab(platform);
     }
 
     return panel;
 }
 
 /**
- * Switch the active domain sub-tab — show that domain's panel,
+ * Switch the active platform sub-tab — show that platform's panel,
  * hide all others, and update button active states.
  *
- * @param {string} baseDomain — base domain key to activate
+ * @param {string} platform — platform key to activate
  */
-function activateDomainSubTab(baseDomain) {
+function activateDomainSubTab(platform) {
     // Toggle panels
     document.querySelectorAll('.apical-domain-panel').forEach(p => {
-        p.classList.toggle('active', p.getAttribute('data-domain') === baseDomain);
+        p.classList.toggle('active', p.getAttribute('data-domain') === platform);
     });
 
     // Toggle button states
     const tabBar = document.getElementById('apical-sub-tabs');
     tabBar.querySelectorAll('button').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-domain') === baseDomain);
+        btn.classList.toggle('active', btn.getAttribute('data-domain') === platform);
     });
 }
 
@@ -1401,9 +1369,9 @@ function activateDomainSubTab(baseDomain) {
  * Resolve the default section title and caption for a .bm2 card.
  *
  * Priority order:
- * 1. Domain-specific defaults from _DOMAIN_DEFAULTS (best — uses the
- *    server's domain classification to pick the right NIEHS-style title).
- * 2. The server-provided section title (used as-is if no domain match,
+ * 1. Platform-specific defaults from _PLATFORM_DEFAULTS (best — uses the
+ *    server's platform classification to pick the right NIEHS-style title).
+ * 2. The server-provided section title (used as-is if no platform match,
  *    with a generic caption built from it).
  * 3. Filename-based heuristic fallback (legacy: "clinical"/"pathology"
  *    in the filename → Clinical Pathology, otherwise generic).
@@ -1413,15 +1381,15 @@ function activateDomainSubTab(baseDomain) {
  * section heading, and the caption needs the full template with
  * {sex}/{compound} placeholders.
  */
-function _resolveBm2Defaults(filename, domain) {
-    // 1. Domain-specific lookup — best source of truth.
-    if (domain && _DOMAIN_DEFAULTS[domain]) {
-        const d = _DOMAIN_DEFAULTS[domain];
+function _resolveBm2Defaults(filename, platform) {
+    // 1. Platform-specific lookup — best source of truth.
+    if (platform && _PLATFORM_DEFAULTS[platform]) {
+        const d = _PLATFORM_DEFAULTS[platform];
         return { title: d.title, caption: d.caption };
     }
 
     // 2. Filename-based heuristic (for manually uploaded .bm2 files
-    //    that weren't routed through process-integrated and lack a domain).
+    //    that weren't routed through process-integrated and lack a platform).
     const lowerName = (filename || '').toLowerCase();
     const isClinical = lowerName.includes('clinical') || lowerName.includes('pathology');
     if (isClinical) {
@@ -1447,23 +1415,23 @@ function _resolveBm2Defaults(filename, domain) {
  *
  * @param {string} bm2Id    — unique section identifier
  * @param {string} filename — display name (often the server's section.title)
- * @param {string} [domain] — server-assigned domain key (e.g. "hormones",
- *                             "body_weight") used to pick the correct
- *                             NIEHS-style title and caption defaults
+ * @param {string} [platform] — server-assigned platform key (e.g. "Hormones",
+ *                               "Body Weight") used to pick the correct
+ *                               NIEHS-style title and caption defaults
  */
-function createBm2Card(bm2Id, filename, domain) {
-    // Route the card into the correct domain sub-tab panel.
-    // If the domain is known, ensure its sub-tab exists and append
-    // the card there.  Otherwise fall back to the flat #bm2-cards
-    // container (legacy path for manually uploaded files).
-    const baseDom = _baseDomain(domain);
-    const container = (baseDom && _DOMAIN_SUB_TAB_LABELS[baseDom])
-        ? ensureDomainSubTab(baseDom)
+function createBm2Card(bm2Id, filename, platform) {
+    // Route the card into the correct platform sub-tab panel.
+    // If the platform is known and in the sub-tab order, ensure its
+    // sub-tab exists and append the card there.  Otherwise fall back
+    // to the flat #bm2-cards container (legacy path for manually
+    // uploaded files).
+    const container = (platform && _PLATFORM_SUB_TAB_ORDER.includes(platform))
+        ? ensureDomainSubTab(platform)
         : document.getElementById('bm2-cards');
 
-    // Resolve section title and caption from the domain (preferred)
+    // Resolve section title and caption from the platform (preferred)
     // or filename (fallback for manually uploaded files).
-    const defaults = _resolveBm2Defaults(filename, domain);
+    const defaults = _resolveBm2Defaults(filename, platform);
     const defaultTitle = defaults.title;
     const defaultCaption = defaults.caption;
 

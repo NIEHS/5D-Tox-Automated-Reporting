@@ -347,7 +347,7 @@ async function approveBm2(bm2Id) {
     const data = {
         bm2_id: serverFileId,
         filename: info.filename,
-        domain: info.domain || '',
+        platform: info.platform || '',
         section_title: document.getElementById(`bm2-title-${bm2Id}`)?.value?.trim() || '',
         table_caption: document.getElementById(`bm2-caption-${bm2Id}`)?.value?.trim() || '',
         compound_name: document.getElementById(`bm2-compound-${bm2Id}`)?.value?.trim() || '',
@@ -1149,9 +1149,9 @@ async function runProcessingPipeline() {
             const result = await resp.json();
             const sections = result.sections || [];
 
-            // Create a section card for each domain returned by the server
+            // Create a section card for each platform returned by the server
             for (const section of sections) {
-                const sectionId = 'integrated-' + section.domain;
+                const sectionId = 'integrated-' + section.platform;
 
                 // Skip if already created (idempotent)
                 if (apicalSections[sectionId]) continue;
@@ -1165,12 +1165,12 @@ async function runProcessingPipeline() {
                     tableData:         section.tables_json,
                     narrative:         section.narrative,
                     originalNarrative: (section.narrative || []).join('\n\n'),
-                    domain:            section.domain,
+                    platform:          section.platform,
                 };
 
-                // Create the visual card and populate it — pass the domain
+                // Create the visual card and populate it — pass the platform
                 // so the card picks the correct NIEHS-style title/caption.
-                createBm2Card(sectionId, section.title, section.domain);
+                createBm2Card(sectionId, section.title, section.platform);
 
                 // Pre-fill the dose unit and compound fields
                 const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
@@ -1263,8 +1263,9 @@ async function runProcessingPipeline() {
 function renderAnimalReport(report) {
     const container = document.getElementById('animal-report-content');
 
-    // Shared domain label lookup — use domainLabel() from state.js which
-    // normalizes via baseDomain() before looking up in DOMAIN_LABELS.
+    // Shared platform label lookup — platform strings are already
+    // human-readable, so this is effectively a pass-through via
+    // domainLabel() from state.js.
     const domainFullLabels = new Proxy({}, {
         get: (_, key) => domainLabel(key),
     });
@@ -1285,10 +1286,10 @@ function renderAnimalReport(report) {
     const selDetail = report.biosampling_count > 0
         ? ` (${report.core_count} core, ${report.biosampling_count} biosampling)`
         : '';
-    const nDomains = Object.keys(report.domain_coverage || {}).length;
+    const nPlatforms = Object.keys(report.domain_coverage || {}).length;
     html += `<div class="ar-summary">`;
     html += `<strong>${study}</strong> · ${report.total_animals} animals${selDetail} · `;
-    html += `${report.dose_groups?.length || 0} dose groups · ${nDomains} assay domains`;
+    html += `${report.dose_groups?.length || 0} dose groups · ${nPlatforms} assay platforms`;
     html += `</div>`;
 
     // --- A. Study Design (dose × sex table) ---
@@ -1329,7 +1330,7 @@ function renderAnimalReport(report) {
     // --- B. Domain Coverage (compact table with attrition columns) ---
     if (report.domain_coverage && Object.keys(report.domain_coverage).length > 0) {
         let tbl = `<table class="coverage-matrix">`;
-        tbl += `<tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th>Dropped</th><th>Completeness</th></tr>`;
+        tbl += `<tr><th>Platform</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th>Dropped</th><th>Completeness</th></tr>`;
 
         for (const domain of Object.keys(report.domain_coverage).sort()) {
             const cov = report.domain_coverage[domain];
@@ -1349,15 +1350,15 @@ function renderAnimalReport(report) {
         }
         tbl += `</table>`;
 
-        // Count domains at 100% vs those with attrition
-        const fullDomains = Object.values(report.completeness || {}).filter(c => c >= 1.0).length;
-        const partialDomains = nDomains - fullDomains;
-        const coverageSummary = partialDomains > 0
-            ? `${fullDomains} complete, ${partialDomains} with attrition`
-            : `all ${nDomains} domains complete`;
+        // Count platforms at 100% vs those with attrition
+        const fullPlatforms = Object.values(report.completeness || {}).filter(c => c >= 1.0).length;
+        const partialPlatforms = nPlatforms - fullPlatforms;
+        const coverageSummary = partialPlatforms > 0
+            ? `${fullPlatforms} complete, ${partialPlatforms} with attrition`
+            : `all ${nPlatforms} platforms complete`;
 
         html += collapse('coverage',
-            `<strong>Domain Coverage</strong> — ${nDomains} domains, ${coverageSummary}`,
+            `<strong>Platform Coverage</strong> — ${nPlatforms} platforms, ${coverageSummary}`,
             tbl);
     }
 
@@ -1398,7 +1399,7 @@ function renderAnimalReport(report) {
             }
 
             html += collapse('attrition',
-                `<strong>Attrition Detail</strong> — ${totalExclusions} animals excluded across domains`,
+                `<strong>Attrition Detail</strong> — ${totalExclusions} animals excluded across platforms`,
                 body);
         }
     }
@@ -1406,13 +1407,13 @@ function renderAnimalReport(report) {
     // --- D. Animal Roster (full per-animal table, collapsed by default) ---
     if (report.animals && Object.keys(report.animals).length > 0) {
         const domainOrder = [
-            'body_weight', 'organ_weights', 'clin_chem', 'hematology',
-            'hormones', 'tissue_conc', 'clinical_obs', 'gene_expression',
+            'Body Weight', 'Organ Weights', 'Clinical Chemistry', 'Hematology',
+            'Hormones', 'Tissue Concentration', 'Clinical Observations', 'Gene Expression',
         ];
         const domainShort = {
-            body_weight: 'BW', organ_weights: 'OW', clin_chem: 'CC',
-            hematology: 'Hem', hormones: 'Horm', tissue_conc: 'TC',
-            clinical_obs: 'CO', gene_expression: 'GE',
+            'Body Weight': 'BW', 'Organ Weights': 'OW', 'Clinical Chemistry': 'CC',
+            'Hematology': 'Hem', 'Hormones': 'Horm', 'Tissue Concentration': 'TC',
+            'Clinical Observations': 'CO', 'Gene Expression': 'GE',
         };
         const activeDomains = domainOrder.filter(d => report.domain_coverage?.[d]);
 

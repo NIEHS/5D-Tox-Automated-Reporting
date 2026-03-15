@@ -44,7 +44,9 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from file_integrator import base_domain
+# base_domain is no longer needed — platform strings are used directly.
+# Kept as a no-op import guard in case downstream code still references it.
+
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +405,7 @@ def extract_methods_context(
     ctx.n_per_group = study_params.get("n_per_group", 5)
     ctx.n_control = study_params.get("n_control", 10)
 
-    # --- Scan fingerprints for domain presence and collect metadata ---
+    # --- Scan fingerprints for platform presence and collect metadata ---
     all_doses: set[float] = set()
     all_sexes: set[str] = set()
     dose_unit_found = None
@@ -412,34 +414,37 @@ def extract_methods_context(
         # Support both dict and object-style access
         _get = fp.get if isinstance(fp, dict) else lambda k, d=None: getattr(fp, k, d)
 
-        domain = _get("domain")
-        if not domain:
+        # Use platform directly — no suffix stripping needed.
+        # data_type "gene_expression" is checked separately since
+        # gene expression files have platform=None.
+        platform = _get("platform")
+        data_type = _get("data_type")
+
+        if not platform and data_type != "gene_expression":
             continue
 
-        # Set domain presence flags — use base_domain() to strip
-        # _tox_study / _inferred suffix for conceptual grouping.
-        bdom = base_domain(domain)
-        if bdom == "body_weight":
+        # Set platform presence flags using human-readable platform strings.
+        if platform == "Body Weight":
             ctx.has_body_weight = True
-        elif bdom == "organ_weights":
+        elif platform == "Organ Weights":
             ctx.has_organ_weights = True
             eps = _get("endpoint_names", [])
             ctx.organ_weight_endpoints = list(set(ctx.organ_weight_endpoints + eps))
-        elif bdom == "clin_chem":
+        elif platform == "Clinical Chemistry":
             ctx.has_clin_chem = True
             eps = _get("endpoint_names", [])
             ctx.clin_chem_endpoints = list(set(ctx.clin_chem_endpoints + eps))
-        elif bdom == "hematology":
+        elif platform == "Hematology":
             ctx.has_hematology = True
             eps = _get("endpoint_names", [])
             ctx.hematology_endpoints = list(set(ctx.hematology_endpoints + eps))
-        elif bdom == "hormones":
+        elif platform == "Hormones":
             ctx.has_hormones = True
             eps = _get("endpoint_names", [])
             ctx.hormone_endpoints = list(set(ctx.hormone_endpoints + eps))
-        elif bdom == "tissue_conc":
+        elif platform == "Tissue Concentration":
             ctx.has_tissue_conc = True
-        elif bdom == "gene_expression":
+        if data_type == "gene_expression":
             ctx.has_gene_expression = True
             organ = _get("organ")
             if organ and organ not in ctx.ge_organs:
@@ -476,24 +481,23 @@ def extract_methods_context(
         if not ctx.dose_groups and animal_report.get("dose_groups"):
             ctx.dose_groups = [float(d) for d in animal_report["dose_groups"]]
 
-        # Domain coverage can confirm domain presence — use base_domain()
-        # to handle both _tox_study and _inferred suffixed keys.
+        # Domain coverage can confirm platform presence — keys are now
+        # platform strings (e.g., "Body Weight", "Hematology").
         dc = animal_report.get("domain_coverage", {})
-        for dom in dc:
-            bdom = base_domain(dom)
-            if bdom == "body_weight":
+        for plat in dc:
+            if plat == "Body Weight":
                 ctx.has_body_weight = True
-            elif bdom == "organ_weights":
+            elif plat == "Organ Weights":
                 ctx.has_organ_weights = True
-            elif bdom == "clin_chem":
+            elif plat == "Clinical Chemistry":
                 ctx.has_clin_chem = True
-            elif bdom == "hematology":
+            elif plat == "Hematology":
                 ctx.has_hematology = True
-            elif bdom == "hormones":
+            elif plat == "Hormones":
                 ctx.has_hormones = True
-            elif bdom == "tissue_conc":
+            elif plat == "Tissue Concentration":
                 ctx.has_tissue_conc = True
-            elif bdom == "gene_expression":
+            elif plat == "Gene Expression":
                 ctx.has_gene_expression = True
 
     # --- BMDExpress analysis metadata from .bm2 files ---
@@ -556,7 +560,7 @@ def _build_genomics_sample_counts(
     for fid, fp in fingerprints.items():
         _get = fp.get if isinstance(fp, dict) else lambda k, d=None: getattr(fp, k, d)
 
-        if _get("domain") != "gene_expression":
+        if _get("data_type") != "gene_expression":
             continue
 
         organ = _get("organ", "Unknown")

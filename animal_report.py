@@ -38,11 +38,11 @@ import os
 import re
 from dataclasses import dataclass, field, asdict
 
-# file_integrator provides domain detection and sex detection helpers
-# that we reuse here to avoid duplicating pattern matching logic.
+# file_integrator provides sex detection helpers that we reuse here
+# to avoid duplicating pattern matching logic.
+# base_domain and detect_domain are no longer needed — platform strings
+# are read directly from fingerprints.
 from file_integrator import (
-    base_domain,
-    detect_domain,
     _detect_sex_from_filename,
     _BM2_SEX_PATTERN,
     _GENE_EXPR_ORGAN_PATTERN,
@@ -54,42 +54,46 @@ from file_integrator import (
 
 logger = logging.getLogger(__name__)
 
-# Short domain labels for the compact animal roster table columns.
+# Platform column order for the compact animal roster table columns.
 # Order matches the DOCX table column order (left to right).
-DOMAIN_COLUMN_ORDER = [
-    "body_weight",
-    "organ_weights",
-    "clin_chem",
-    "hematology",
-    "hormones",
-    "tissue_conc",
-    "clinical_obs",
-    "gene_expression",
+# Uses platform strings directly (human-readable names).
+PLATFORM_COLUMN_ORDER = [
+    "Body Weight",
+    "Organ Weights",
+    "Clinical Chemistry",
+    "Hematology",
+    "Hormones",
+    "Tissue Concentration",
+    "Clinical Observations",
+    "Gene Expression",
 ]
 
-# Human-readable abbreviations for domain column headers in the roster.
+# Abbreviations for platform column headers in the roster.
 # Keep to 2-3 characters to fit in compact table cells.
-DOMAIN_SHORT_LABELS = {
-    "body_weight": "BW",
-    "organ_weights": "OW",
-    "clin_chem": "CC",
-    "hematology": "Hem",
-    "hormones": "Horm",
-    "tissue_conc": "TC",
-    "clinical_obs": "CO",
-    "gene_expression": "GE",
+PLATFORM_SHORT_LABELS = {
+    "Body Weight": "BW",
+    "Organ Weights": "OW",
+    "Clinical Chemistry": "CC",
+    "Hematology": "Hem",
+    "Hormones": "Horm",
+    "Tissue Concentration": "TC",
+    "Clinical Observations": "CO",
+    "Gene Expression": "GE",
 }
 
-# Human-readable full names for domain rows in the coverage matrix.
-DOMAIN_FULL_LABELS = {
-    "body_weight": "Body Weight",
-    "organ_weights": "Organ Weights",
-    "clin_chem": "Clinical Chemistry",
-    "hematology": "Hematology",
-    "hormones": "Hormones",
-    "tissue_conc": "Tissue Concentration",
-    "clinical_obs": "Clinical Observations",
-    "gene_expression": "Gene Expression",
+# Full names for platform rows in the coverage matrix.
+# Since platform strings are already human-readable, this is
+# largely identity — but kept for consistency with DOCX rendering
+# which may need slightly different formatting.
+PLATFORM_FULL_LABELS = {
+    "Body Weight": "Body Weight",
+    "Organ Weights": "Organ Weights",
+    "Clinical Chemistry": "Clinical Chemistry",
+    "Hematology": "Hematology",
+    "Hormones": "Hormones",
+    "Tissue Concentration": "Tissue Concentration",
+    "Clinical Observations": "Clinical Observations",
+    "Gene Expression": "Gene Expression",
 }
 
 # Tier key names used in domain_presence dicts and coverage matrices.
@@ -116,8 +120,8 @@ class AnimalRecord:
     only present in xlsx files that have a Selection column.
 
     domain_presence tracks where this animal appears:
-      {"body_weight": {"xlsx": True, "txt_csv": True, "bm2": True},
-       "hematology": {"xlsx": True, "txt_csv": False, "bm2": False}}
+      {"Body Weight": {"xlsx": True, "txt_csv": True, "bm2": True},
+       "Hematology": {"xlsx": True, "txt_csv": False, "bm2": False}}
     """
     animal_id: str
     sex: str | None = None
@@ -548,19 +552,22 @@ def build_animal_report(
         if hasattr(fp, "filename"):
             filename = fp.filename
             file_type = fp.file_type
-            domain = fp.domain
+            platform = fp.platform
+            data_type = getattr(fp, "data_type", None)
         else:
             filename = fp.get("filename", "")
             file_type = fp.get("file_type", "")
-            domain = fp.get("domain")
+            platform = fp.get("platform")
+            data_type = fp.get("data_type")
 
+        # Use platform as the grouping key.  Gene expression files have
+        # platform=None but data_type="gene_expression" — use the label
+        # "Gene Expression" for those.
+        domain = platform
+        if not domain and data_type == "gene_expression":
+            domain = "Gene Expression"
         if not domain:
-            continue  # skip files with no detected domain
-
-        # Normalize to base domain (strip _tox_study / _inferred suffix)
-        # so both tox_study and inferred files contribute to the same
-        # conceptual domain column in the animal roster table.
-        domain = base_domain(domain)
+            continue  # skip files with no detected platform
 
         path = os.path.join(files_dir, filename)
         if not os.path.exists(path):
@@ -1063,14 +1070,14 @@ def add_animal_report_to_doc(
     # tier presence: "XTB" = present in xlsx, txt, bm2; "X--" = xlsx only.
 
     if report.animals:
-        # Determine which domains actually have data (skip empty columns)
+        # Determine which platforms actually have data (skip empty columns)
         active_domains = [
-            d for d in DOMAIN_COLUMN_ORDER
+            d for d in PLATFORM_COLUMN_ORDER
             if d in report.domain_coverage
         ]
 
         headers = ["Animal ID", "Sex", "Dose", "Selection"] + [
-            DOMAIN_SHORT_LABELS.get(d, d[:3]) for d in active_domains
+            PLATFORM_SHORT_LABELS.get(d, d[:3]) for d in active_domains
         ]
 
         # Sort animals numerically (IDs like "101", "503" should sort by number)
@@ -1172,7 +1179,7 @@ def add_animal_report_to_doc(
             att = report.attrition.get(domain)
             row = table.rows[1 + row_idx]
 
-            row.cells[0].text = DOMAIN_FULL_LABELS.get(domain, domain)
+            row.cells[0].text = PLATFORM_FULL_LABELS.get(domain, domain)
             row.cells[1].text = str(cov.get(TIER_XLSX, 0))
             row.cells[2].text = str(cov.get(TIER_TXT_CSV, 0))
             row.cells[3].text = str(cov.get(TIER_BM2, 0))
@@ -1193,7 +1200,7 @@ def add_animal_report_to_doc(
 
         for domain in sorted(report.attrition.keys()):
             att = report.attrition[domain]
-            domain_label = DOMAIN_FULL_LABELS.get(domain, domain)
+            domain_label = PLATFORM_FULL_LABELS.get(domain, domain)
             completeness_pct = report.completeness.get(domain, 1.0) * 100
 
             # Domain header with completeness

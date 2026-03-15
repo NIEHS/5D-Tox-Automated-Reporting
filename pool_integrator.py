@@ -2,13 +2,15 @@
 pool_integrator — Merge validated pool files into a unified BMDProject JSON.
 
 After file upload, fingerprinting, and cross-validation, the pool contains
-multiple files (xlsx, txt/csv, bm2) covering different endpoint domains
-(body_weight, organ_weights, clin_chem, hematology, hormones, gene_expression,
-etc.) at different processing tiers.
+multiple files (xlsx, txt/csv, bm2) covering different platforms (Body Weight,
+Organ Weight, Clinical Chemistry, Hematology, Hormones, gene_expression, etc.)
+at different processing tiers.
 
-This module's job is *integration*: select the best file for each domain
-(respecting user conflict resolutions), then delegate to bmdx-core's native
-Java code for .bm2 merging and JSON serialization.
+Each file has a *platform* (the Apical vocabulary name like "Body Weight") and
+a *data_type* ("tox_study", "inferred", or "gene_expression").  The coverage
+matrix groups files by platform, and this module selects the best file per
+platform (respecting user conflict resolutions), then delegates to bmdx-core's
+native Java code for .bm2 merging and JSON serialization.
 
 Data flow:
     Validate → Resolve conflicts → integrate_pool() → integrated.json
@@ -20,7 +22,7 @@ The Java layer (IntegrateProject) uses BMDExpress 3's native classes:
     - Jackson ObjectMapper with NaN→null serializers for valid JSON output
 
 Python handles:
-    - Tier selection (which file to use per domain)
+    - Tier selection (which file to use per platform)
     - xlsx pre-conversion (NTP long-format → pivot)
     - Post-integration metadata enrichment (_meta, _category_lookup)
     - LLM metadata inference (experiment descriptions)
@@ -48,12 +50,6 @@ from pathlib import Path
 from typing import Any
 
 from experiment_metadata import attach_metadata, infer_experiment_metadata
-from file_integrator import (
-    _BM2_DOMAIN_MAP,
-    _detect_sex_from_filename,
-    base_domain,
-    detect_domain,
-)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -134,37 +130,18 @@ def _run_integrate_java(
 # xlsx parser — NTP long-format needs Python pre-conversion
 # ---------------------------------------------------------------------------
 
-# Maps base domain names to Apical platform vocabulary values.
-# Used to write # Platform: headers on converted wide-format files.
-_DOMAIN_TO_PLATFORM: dict[str, str] = {
-    "body_weight":    "Body Weight",
-    "organ_weights":  "Organ Weight",
-    "clin_chem":      "Clinical Chemistry",
-    "hematology":     "Hematology",
-    "hormones":       "Hormones",
-    "tissue_conc":    "Tissue Concentration",
-    "clinical_obs":   "Clinical Observations",
-}
-
-# Reverse of _BM2_DOMAIN_MAP — maps our canonical domain names to the
-# BMDExpress experiment name prefixes.  Both _tox_study and _inferred
-# variants are included because either type of file might come through
-# xlsx_to_pivot_txt (xlsx files don't have _tox_study in their names,
-# so they get _inferred domains from the filename heuristics).
-_DOMAIN_TO_BM2_PREFIX: dict[str, str] = {
-    "body_weight_tox_study":    "BodyWeight",
-    "body_weight_inferred":     "BodyWeight",
-    "organ_weights_tox_study":  "OrganWeight",
-    "organ_weights_inferred":   "OrganWeight",
-    "clin_chem_tox_study":      "ClinicalChemistry",
-    "clin_chem_inferred":       "ClinicalChemistry",
-    "hematology_tox_study":     "Hematology",
-    "hematology_inferred":      "Hematology",
-    "hormones_tox_study":       "Hormone",
-    "hormones_inferred":        "Hormone",
-    "tissue_conc_tox_study":    "TissueConcentration",
-    "tissue_conc_inferred":     "TissueConcentration",
-    "clinical_obs":             "ClinicalObservation",
+# Maps Apical platform names (from FileFingerprint.platform) to the
+# BMDExpress experiment name prefixes used when constructing pivot files.
+# These prefixes become the first cell of the header row in the wide-format
+# output (e.g., "BodyWeightMale"), which BMDExpress uses as the experiment name.
+_PLATFORM_TO_BM2_PREFIX: dict[str, str] = {
+    "Body Weight":          "BodyWeight",
+    "Organ Weight":         "OrganWeight",
+    "Clinical Chemistry":   "ClinicalChemistry",
+    "Hematology":           "Hematology",
+    "Hormones":             "Hormone",
+    "Tissue Concentration": "TissueConcentration",
+    "Clinical Observations":"ClinicalObservation",
 }
 
 
@@ -174,7 +151,7 @@ def _collect_xlsx_rosters(
     files_dir: str,
 ) -> dict[str, dict]:
     """
-    For each domain that has a study xlsx, extract the authoritative animal
+    For each platform that has a study xlsx, extract the authoritative animal
     roster (doses, animal IDs, selection groups) from the fingerprint.
 
     Study xlsx files are the source of truth for which animals were in which
@@ -183,12 +160,12 @@ def _collect_xlsx_rosters(
     that build_table_data() can use it for accurate N counts and footnotes.
 
     Args:
-        coverage_matrix: {domain → {tier_name → [file_ids]}}.
+        coverage_matrix: {platform → {tier_name → [file_ids]}}.
         fingerprints:    {file_id → FileFingerprint or dict}.
         files_dir:       Directory containing uploaded files.
 
     Returns:
-        {domain → {
+        {platform → {
             "file_id": str,
             "filename": str,
             "dose_groups": [float, ...],
@@ -198,7 +175,7 @@ def _collect_xlsx_rosters(
         }}
     """
     rosters = {}
-    for domain, tiers in coverage_matrix.items():
+    for platform_key, tiers in coverage_matrix.items():
         xlsx_fids = tiers.get("xlsx")
         if not xlsx_fids:
             continue
@@ -236,7 +213,7 @@ def _collect_xlsx_rosters(
                 return d
             return {str(k): v for k, v in d.items()}
 
-        rosters[domain] = {
+        rosters[platform_key] = {
             "file_id": fid,
             "filename": _get(fp, "filename", ""),
             "dose_groups": _get(fp, "dose_groups", []),
@@ -249,7 +226,12 @@ def _collect_xlsx_rosters(
     return rosters
 
 
-def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
+def xlsx_to_pivot_txt(
+    path: str,
+    output_dir: str,
+    platform: str,
+    data_type: str,
+) -> list[str]:
     """
     Convert an NTP xlsx long-format file into tab-delimited pivot files
     that IntegrateProject can import via ExperimentFileUtil.
@@ -265,6 +247,8 @@ def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
     Args:
         path:       Absolute path to the xlsx file.
         output_dir: Directory to write the pivot .txt files.
+        platform:   Apical platform name (e.g., "Body Weight") from fingerprint.
+        data_type:  Data type (e.g., "tox_study", "inferred") from fingerprint.
 
     Returns:
         List of paths to the generated pivot .txt files.
@@ -335,11 +319,8 @@ def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
     if not data_by_sex_endpoint:
         return []
 
-    # --- Detect domain from filename ---
-    filename = os.path.basename(path)
-    file_size = os.path.getsize(path) if os.path.exists(path) else 0
-    domain = detect_domain(filename, "xlsx", file_size)
-    prefix = _DOMAIN_TO_BM2_PREFIX.get(domain, "Unknown")
+    # --- Look up BMDExpress experiment name prefix from platform ---
+    prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, "Unknown")
 
     # --- Group by sex and write pivot files ---
     # Collect all endpoints and animals per sex
@@ -362,8 +343,8 @@ def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
         lines = []
         # Metadata headers — provider, platform, data type
         lines.append(f"# Provider: Apical")
-        lines.append(f"# Platform: {_DOMAIN_TO_PLATFORM.get(base_domain(domain), 'Generic')}")
-        lines.append(f"# Data Type: {'tox_study' if domain.endswith('_tox_study') else 'inferred'}")
+        lines.append(f"# Platform: {platform}")
+        lines.append(f"# Data Type: {data_type}")
         # Row 1: header — probe_id + animal IDs
         lines.append("\t".join([f"{prefix}{sex}"] + animals))
         # Row 2: doses
@@ -395,7 +376,8 @@ def xlsx_to_pivot_txt(path: str, output_dir: str) -> list[str]:
 def tox_study_csv_to_pivot_txt(
     path: str,
     output_dir: str,
-    domain: str,
+    platform: str,
+    data_type: str,
 ) -> list[str]:
     """
     Convert a long-format _tox_study CSV file into tab-delimited pivot files
@@ -405,7 +387,7 @@ def tox_study_csv_to_pivot_txt(
       Concentration, Animal ID, Sex, endpoint1, endpoint2, ...
 
     The output pivot format is the same as xlsx_to_pivot_txt():
-      Row 0: # Domain: <domain>   (metadata for ExperimentDescriptionParser)
+      Row 0: # Provider/Platform/Data Type headers (for ExperimentDescriptionParser)
       Row 1: experiment_name, animal_id1, animal_id2, ...
       Row 2: Dose, dose1, dose2, ...
       Row 3+: endpoint_name, value1, value2, ...
@@ -415,7 +397,8 @@ def tox_study_csv_to_pivot_txt(
     Args:
         path:       Absolute path to the _tox_study CSV file.
         output_dir: Directory to write the pivot .txt files.
-        domain:     The canonical domain (e.g., "body_weight_tox_study").
+        platform:   Apical platform name (e.g., "Body Weight") from fingerprint.
+        data_type:  Data type (e.g., "tox_study") from fingerprint.
 
     Returns:
         List of paths to the generated pivot .txt files.
@@ -504,8 +487,8 @@ def tox_study_csv_to_pivot_txt(
     if not data_by_sex_endpoint:
         return []
 
-    # Build BMDExpress experiment name prefix from domain
-    prefix = _DOMAIN_TO_BM2_PREFIX.get(domain, base_domain(domain).title())
+    # Build BMDExpress experiment name prefix from platform
+    prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, platform.replace(" ", ""))
 
     # Group by sex and write pivot files
     sex_data: dict[str, dict] = {}
@@ -523,8 +506,8 @@ def tox_study_csv_to_pivot_txt(
         lines = []
         # Metadata headers for ExperimentDescriptionParser
         lines.append(f"# Provider: Apical")
-        lines.append(f"# Platform: {_DOMAIN_TO_PLATFORM.get(base_domain(domain), 'Generic')}")
-        lines.append(f"# Data Type: {'tox_study' if domain.endswith('_tox_study') else 'inferred'}")
+        lines.append(f"# Platform: {platform}")
+        lines.append(f"# Data Type: {data_type}")
         # Row 1: header — probe_id + animal IDs
         lines.append("\t".join([f"{prefix}{sex}"] + animals))
         # Row 2: doses
@@ -550,116 +533,6 @@ def tox_study_csv_to_pivot_txt(
 
 
 # ---------------------------------------------------------------------------
-# Post-integration domain stamping
-# ---------------------------------------------------------------------------
-
-
-def _stamp_domains(
-    integrated: dict,
-    source_files: dict[str, dict],
-    fingerprints: dict[str, dict],
-) -> None:
-    """
-    Set domain on each experiment's experimentDescription using authoritative
-    fingerprint data, overriding any LLM-inferred domain.
-
-    The source_files dict maps domain → {filename, file_id, tier}.  For each
-    experiment, we determine which source file it came from (by matching
-    experiment names to source filenames and _BM2_DOMAIN_MAP prefixes) and
-    set the domain accordingly.
-
-    This runs AFTER LLM metadata inference and provides an authoritative
-    domain assignment that doesn't depend on LLM accuracy.
-
-    Args:
-        integrated:   The merged BMDProject dict (mutated in place).
-        source_files: domain → {filename, file_id, tier} from integrate_pool.
-        fingerprints: file_id → fingerprint dict for all pool files.
-    """
-    # Build reverse map: experiment name prefix → domain.
-    # For each source file, determine what experiment names it would produce.
-    # bm2 files: experiments keep their original names (mapped via _BM2_DOMAIN_MAP)
-    # txt files: experiment name = first cell of header row (filename-derived)
-    # xlsx-converted: experiment name = {prefix}{sex} (from _DOMAIN_TO_BM2_PREFIX)
-
-    # First, build a map from file_id → domain for quick lookup
-    fid_to_domain: dict[str, str] = {}
-    for domain, info in source_files.items():
-        fid = info.get("file_id")
-        if fid:
-            fid_to_domain[fid] = domain
-
-    # Build experiment-name → domain mapping from source filenames
-    # For txt/csv files, the experiment name is typically the filename stem
-    # or the first header cell. For xlsx-converted files, it's {prefix}{sex}.
-    filename_to_domain: dict[str, str] = {}
-    for domain, info in source_files.items():
-        fname = info.get("filename", "")
-        if fname:
-            # Store both with and without extension for matching
-            filename_to_domain[fname] = domain
-            stem = os.path.splitext(fname)[0]
-            filename_to_domain[stem] = domain
-
-    experiments = integrated.get("doseResponseExperiments", [])
-    stamped = 0
-
-    for exp in experiments:
-        exp_name = exp.get("name", "")
-        desc = exp.get("experimentDescription")
-        if desc is None:
-            desc = {}
-            exp["experimentDescription"] = desc
-
-        # If Java already set domain (from # Domain: header), trust it.
-        if desc.get("domain"):
-            stamped += 1
-            continue
-
-        matched_domain = None
-
-        # Strategy 1: Direct experiment name → _BM2_DOMAIN_MAP prefix match.
-        # Strip underscores, spaces, and sex prefix before matching — BMDExpress
-        # experiment names can have sex as prefix ("female_organ_weights") or
-        # suffix ("OrganWeightFemale"), and _BM2_DOMAIN_MAP expects just the
-        # domain prefix ("organweight").
-        name_lower = exp_name.lower().replace("_", "").replace(" ", "")
-        # Strip "female"/"male" — strip "female" FIRST since it contains "male"
-        name_stripped = name_lower.replace("female", "").replace("male", "").strip()
-        for prefix, bm2_domain in _BM2_DOMAIN_MAP.items():
-            if name_stripped.startswith(prefix) or name_lower.startswith(prefix):
-                if bm2_domain in source_files:
-                    matched_domain = bm2_domain
-                    break
-
-        # Strategy 2: Match experiment name to source filenames
-        if not matched_domain:
-            for fname, dom in filename_to_domain.items():
-                stem = os.path.splitext(fname)[0]
-                # Experiment name might be the filename stem or derived from it
-                if exp_name == stem or exp_name.startswith(stem):
-                    matched_domain = dom
-                    break
-
-        # Strategy 3: Use _DOMAIN_TO_BM2_PREFIX reverse lookup.
-        # Case-insensitive, also tries after stripping sex prefix.
-        if not matched_domain:
-            for dom, prefix in _DOMAIN_TO_BM2_PREFIX.items():
-                prefix_lower = prefix.lower()
-                if (name_lower.startswith(prefix_lower) or
-                    name_stripped.startswith(prefix_lower)):
-                    if dom in source_files:
-                        matched_domain = dom
-                        break
-
-        if matched_domain:
-            desc["domain"] = matched_domain
-            stamped += 1
-
-    logger.info("Stamped domain on %d/%d experiments", stamped, len(experiments))
-
-
-# ---------------------------------------------------------------------------
 # Main integration orchestrator
 # ---------------------------------------------------------------------------
 
@@ -677,7 +550,7 @@ def integrate_pool(
     """
     Merge all pool files into a single unified BMDProject JSON.
 
-    For each domain in the coverage matrix:
+    For each platform in the coverage matrix:
       1. If the user resolved a conflict → use that chosen file.
       2. Otherwise, prefer .bm2 (has BMD results), then txt/csv, then xlsx.
       3. Collect .bm2 and .txt/.csv file paths for Java integration.
@@ -691,7 +564,7 @@ def integrate_pool(
         dtxsid:            The DTXSID identifying this session.
         session_dir:       Absolute path to sessions/{dtxsid}/.
         fingerprints:      Dict mapping file_id → fingerprint dict.
-        coverage_matrix:   Dict mapping domain → tier_name → list[file_id].
+        coverage_matrix:   Dict mapping platform → tier_name → list[file_id].
         precedence:        List of user conflict resolutions.
         test_article:      Dict with 'name', 'casrn', 'dsstox' for metadata.
         llm_generate_json: Callable for LLM metadata inference.
@@ -702,32 +575,41 @@ def integrate_pool(
     files_dir = os.path.join(session_dir, "files")
     out_path = os.path.join(session_dir, "integrated.json")
 
-    # Collect user-resolved file IDs for quick lookup
+    # Collect user-resolved file IDs for quick lookup.
+    # Keyed by the coverage matrix key (platform name or "gene_expression")
+    # so we can match resolutions to the correct coverage matrix entry.
     resolved_file_ids: dict[str, str] = {}
     for entry in precedence:
         fid = entry.get("chosen_file_id", "")
         if not fid:
             continue
         fp = fingerprints.get(fid, {})
-        domain = fp.get("domain") if isinstance(fp, dict) else getattr(fp, "domain", None)
-        if domain:
-            resolved_file_ids[domain] = fid
+        # Determine the coverage matrix key for this file — same logic as
+        # _build_coverage_matrix: gene_expression files use "gene_expression",
+        # apical files use their platform name.
+        fp_data_type = fp.get("data_type") if isinstance(fp, dict) else getattr(fp, "data_type", None)
+        fp_platform = fp.get("platform") if isinstance(fp, dict) else getattr(fp, "platform", None)
+        if fp_data_type == "gene_expression":
+            resolved_file_ids["gene_expression"] = fid
+        elif fp_platform:
+            resolved_file_ids[fp_platform] = fid
 
-    # --- Select files per domain ---
-    # Separate into lists for Java integration
+    # --- Select files per platform ---
+    # Coverage matrix keys are platform names (e.g., "Body Weight") or
+    # "gene_expression".  Separate chosen files into lists for Java integration.
     bm2_paths: list[str] = []
     txt_paths: list[str] = []
-    xlsx_paths: list[str] = []
-    tox_study_csv_paths: list[tuple[str, str]] = []  # (path, domain)
+    xlsx_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
+    tox_study_csv_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
     source_files: dict[str, dict] = {}
 
-    for domain, tiers in coverage_matrix.items():
+    for platform_key, tiers in coverage_matrix.items():
         chosen_fid = None
         chosen_tier = None
 
         # 1. Check user conflict resolution
-        if domain in resolved_file_ids:
-            chosen_fid = resolved_file_ids[domain]
+        if platform_key in resolved_file_ids:
+            chosen_fid = resolved_file_ids[platform_key]
             fp = fingerprints.get(chosen_fid, {})
             chosen_tier = (
                 fp.get("file_type") if isinstance(fp, dict)
@@ -755,7 +637,7 @@ def integrate_pool(
             chosen_fids = [chosen_fid]
 
         if not chosen_fid:
-            logger.warning("No file found for domain %s — skipping", domain)
+            logger.warning("No file found for platform %s — skipping", platform_key)
             continue
 
         # Route ALL files of the winning tier to the appropriate list
@@ -767,16 +649,21 @@ def integrate_pool(
                 fp.get("file_type") if isinstance(fp, dict)
                 else getattr(fp, "file_type", chosen_tier)
             )
+            # Get data_type from the fingerprint for routing decisions
+            fp_data_type = (
+                fp.get("data_type") if isinstance(fp, dict)
+                else getattr(fp, "data_type", None)
+            )
             file_path = os.path.join(files_dir, filename) if filename else ""
 
             if not file_path or not os.path.exists(file_path):
-                logger.warning("File not found for domain %s (id=%s) — skipping", domain, fid)
+                logger.warning("File not found for platform %s (id=%s) — skipping", platform_key, fid)
                 continue
 
             if first_filename is None:
                 first_filename = filename
 
-            logger.info("Selected domain=%s from %s (%s)", domain, filename, actual_file_type)
+            logger.info("Selected platform=%s from %s (%s)", platform_key, filename, actual_file_type)
 
             # Route to the appropriate list for Java integration
             if chosen_tier == "bm2" or actual_file_type == "bm2":
@@ -785,22 +672,22 @@ def integrate_pool(
                 # Gene expression txt/csv are raw matrices, not clinical pivots —
                 # they can't be imported directly.  Skip them; gene expression
                 # comes from the .bm2 tier via BMDExpress's analysis pipeline.
-                if domain == "gene_expression":
+                if fp_data_type == "gene_expression":
                     continue
-                # _tox_study CSV files are long-format (like xlsx) and need
+                # tox_study CSV files are long-format (like xlsx) and need
                 # conversion to pivot format.  Queue them for conversion.
-                if domain.endswith("_tox_study") and actual_file_type == "csv":
-                    tox_study_csv_paths.append((file_path, domain))
+                if fp_data_type == "tox_study" and actual_file_type == "csv":
+                    tox_study_csv_paths.append((file_path, platform_key, fp_data_type))
                 else:
                     txt_paths.append(file_path)
             elif actual_file_type == "xlsx" or chosen_tier == "xlsx":
-                xlsx_paths.append(file_path)
+                xlsx_paths.append((file_path, platform_key, fp_data_type or "tox_study"))
             else:
-                logger.warning("Unknown tier %s for domain %s — skipping", chosen_tier, domain)
+                logger.warning("Unknown tier %s for platform %s — skipping", chosen_tier, platform_key)
 
         # Record source file metadata (use first file as representative)
         if first_filename:
-            source_files[domain] = {
+            source_files[platform_key] = {
                 "file_id": chosen_fids[0], "filename": first_filename,
                 "tier": chosen_tier or actual_file_type,
                 "file_count": len(chosen_fids),
@@ -812,11 +699,11 @@ def integrate_pool(
     pivot_dir = os.path.join(session_dir, "_pivots")
     if xlsx_paths or tox_study_csv_paths:
         os.makedirs(pivot_dir, exist_ok=True)
-        for xlsx_path in xlsx_paths:
-            pivot_files = xlsx_to_pivot_txt(xlsx_path, pivot_dir)
+        for xlsx_path, xlsx_platform, xlsx_data_type in xlsx_paths:
+            pivot_files = xlsx_to_pivot_txt(xlsx_path, pivot_dir, xlsx_platform, xlsx_data_type)
             txt_paths.extend(pivot_files)
-        for csv_path, csv_domain in tox_study_csv_paths:
-            pivot_files = tox_study_csv_to_pivot_txt(csv_path, pivot_dir, csv_domain)
+        for csv_path, csv_platform, csv_data_type in tox_study_csv_paths:
+            pivot_files = tox_study_csv_to_pivot_txt(csv_path, pivot_dir, csv_platform, csv_data_type)
             txt_paths.extend(pivot_files)
 
     # --- Call Java to merge everything ---
@@ -833,7 +720,7 @@ def integrate_pool(
     with open(out_path, "r") as f:
         integrated = json.load(f)
 
-    # --- Collect xlsx animal rosters for all domains ---
+    # --- Collect xlsx animal rosters for all platforms ---
     # Even when bm2 wins the integration (for BMD results), the study xlsx
     # is authoritative for doses and animal roster.  Overlay this so
     # build_table_data() can use xlsx N counts and detect dead animals.
@@ -898,11 +785,6 @@ def integrate_pool(
             llm_generate_json=llm_generate_json,
         )
         attach_metadata(all_experiments, descriptions)
-
-    # --- Authoritative domain stamping from fingerprint data ---
-    # Override LLM-inferred domain with the authoritative domain from
-    # source_files (which comes directly from file fingerprinting).
-    _stamp_domains(integrated, source_files, fingerprints)
 
     # Re-write the JSON with our metadata additions
     with open(out_path, "w", encoding="utf-8") as f:

@@ -587,7 +587,7 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
 def build_table_data(
     bm2_json: dict,
     category_lookup: dict,
-    domains: list[str] | None = None,
+    platforms: list[str] | None = None,
 ) -> dict[str, list[TableRow]]:
     """
     Build the table data for all endpoints, organized by sex.
@@ -604,9 +604,9 @@ def build_table_data(
     Args:
         bm2_json:        Parsed JSON from the .bm2 export.
         category_lookup: Dict from build_category_lookup().
-        domains:         Optional list of domain strings to include.  When
+        platforms:       Optional list of platform strings to include.  When
                          provided, only experiments whose experimentDescription
-                         .domain is in this list are processed.  When None,
+                         .platform is in this list are processed.  When None,
                          all experiments are included (backward compat).
 
     Returns:
@@ -639,13 +639,13 @@ def build_table_data(
     for exp in bm2_json.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
 
-        # --- Domain filter: skip experiments not in the requested domains ---
-        if domains is not None:
-            exp_domain = None
+        # --- Platform filter: skip experiments not in the requested platforms ---
+        if platforms is not None:
+            exp_platform = None
             desc = exp.get("experimentDescription")
             if isinstance(desc, dict):
-                exp_domain = desc.get("domain")
-            if exp_domain not in domains:
+                exp_platform = desc.get("platform")
+            if exp_platform not in platforms:
                 continue
 
         treatments = exp.get("treatments", [])
@@ -974,7 +974,7 @@ def build_table_data(
 def annotate_missing_animals(
     domain_tables: dict[str, dict[str, list]],
     xlsx_rosters: dict[str, dict],
-    reference_domain: str = "body_weight_tox_study",
+    reference_platform: str = "Body Weight",
 ) -> None:
     """
     Annotate TableRows with missing-animal counts by comparing bm2 N counts
@@ -984,25 +984,25 @@ def annotate_missing_animals(
     with measurements) against the xlsx Core Animals roster (full assignment).
     The difference is recorded as missing_animals_by_dose on each TableRow.
 
-    For domains whose xlsx roster has fewer dose groups than the reference
-    domain (e.g., clinical chemistry missing 333/1000 mg/kg), the entire
+    For platforms whose xlsx roster has fewer dose groups than the reference
+    platform (e.g., clinical chemistry missing 333/1000 mg/kg), the entire
     dose group is flagged as missing.
 
     Mutates TableRows in place — no return value.
 
     Args:
-        domain_tables:    {domain → {sex → [TableRow, ...]}}, as from _partition_by_domain.
-        xlsx_rosters:     From integrated["_meta"]["xlsx_rosters"].
-        reference_domain: Domain with the most complete roster (usually body_weight).
+        domain_tables:      {platform → {sex → [TableRow, ...]}}, as from _partition_by_domain.
+        xlsx_rosters:       From integrated["_meta"]["xlsx_rosters"].
+        reference_platform: Platform with the most complete roster (usually Body Weight).
     """
     if not xlsx_rosters:
         return
 
-    # Use the reference domain (body weight) to establish the full Core
+    # Use the reference platform (body weight) to establish the full Core
     # Animals roster — all dose groups and all animals expected to survive
-    # to terminal sacrifice.  If no body weight xlsx exists, use the domain
+    # to terminal sacrifice.  If no body weight xlsx exists, use the platform
     # with the most dose groups.
-    ref_roster = xlsx_rosters.get(reference_domain)
+    ref_roster = xlsx_rosters.get(reference_platform)
     if not ref_roster:
         # Fallback: domain with most dose groups
         ref_roster = max(
@@ -1062,7 +1062,7 @@ def annotate_missing_animals(
 def backfill_missing_doses(
     domain_tables: dict[str, dict[str, list]],
     xlsx_rosters: dict[str, dict],
-    reference_domain: str = "body_weight_tox_study",
+    reference_platform: str = "Body Weight",
 ) -> None:
     """
     Ensure every TableRow uses the full study dose list as columns, filling
@@ -1081,17 +1081,17 @@ def backfill_missing_doses(
     Mutates TableRows in place — no return value.
 
     Args:
-        domain_tables:    {domain → {sex → [TableRow, ...]}}, as from _partition_by_domain.
-        xlsx_rosters:     From integrated["_meta"]["xlsx_rosters"].
-        reference_domain: Domain with the most complete roster (usually body_weight).
+        domain_tables:      {platform → {sex → [TableRow, ...]}}, as from _partition_by_domain.
+        xlsx_rosters:       From integrated["_meta"]["xlsx_rosters"].
+        reference_platform: Platform with the most complete roster (usually Body Weight).
     """
     if not xlsx_rosters:
         return
 
-    # Determine the full study dose list from the reference domain's roster.
+    # Determine the full study dose list from the reference platform's roster.
     # The body_weight xlsx always has every dose group because body weight
     # is measured on all animals regardless of survival.
-    ref_roster = xlsx_rosters.get(reference_domain)
+    ref_roster = xlsx_rosters.get(reference_platform)
     if not ref_roster:
         # Fallback: domain with the most dose groups
         ref_roster = max(

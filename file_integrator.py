@@ -61,98 +61,104 @@ TIER_XLSX = 1
 TIER_TXT_CSV = 2
 TIER_BM2 = 3
 
-# Domain detection patterns — maps filename substrings (case-insensitive)
-# to canonical domain names.  The order matters: more specific patterns
+# Platform detection patterns — maps filename substrings (case-insensitive)
+# to (platform, data_type) tuples.  The order matters: more specific patterns
 # are checked first so "tissue_conc" doesn't accidentally match "clinical".
+#
+# platform uses the Apical platform vocabulary (e.g., "Body Weight",
+# "Clinical Chemistry").  data_type is one of:
+#   "tox_study"       — source-of-truth data with potential gaps
+#   "inferred"        — gap-filled data for BMDExpress modeling
+#   "gene_expression" — transcriptomic microarray/TempO-Seq data
 #
 # NTP naming conventions use both snake_case (in txt/csv filenames) and
 # Title_Case (in xlsx filenames).  Each pattern is a tuple of
-# (compiled_regex, domain_name) checked against the filename.
-_DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
+# (compiled_regex, platform, data_type) checked against the filename.
+_PLATFORM_PATTERNS: list[tuple[re.Pattern, str | None, str]] = [
     # Gene expression — matches both "Gene_Expression" (bm2) and
     # organ-prefixed transcriptomics data like "Liver_PFHxSAm_Male_No0.txt".
     # The organ-prefixed pattern must be VERY large (>100KB) to avoid
     # false positives from small organ weight files.
-    (re.compile(r"gene.?expression", re.IGNORECASE), "gene_expression"),
+    # platform is None because gene expression platform comes from chip info.
+    (re.compile(r"gene.?expression", re.IGNORECASE), None, "gene_expression"),
 
-    # --- Tox study files (_tox_study domains) ---
+    # --- Tox study files (data_type="tox_study") ---
     # Files with "_tox_study" (or legacy "_truth") in the name are source-of-
     # truth data: actual experimental values with potential gaps (missing
     # animals, lost samples).  Used for NTP traditional statistics (Williams,
     # Dunnett, Jonckheere) and for computing N, mean, SD per dose group.
-    # These must come BEFORE the generic domain patterns so that
+    # These must come BEFORE the generic patterns so that
     # "body_weight_tox_study" matches here, not as "body_weight" below.
     # The _truth alias handles existing files that predate the rename.
-    (re.compile(r"tissue.?conc.*_(?:tox_study|truth)", re.IGNORECASE), "tissue_conc_tox_study"),
-    (re.compile(r"clinical.?obs.*_(?:tox_study|truth)", re.IGNORECASE), "clinical_obs"),
-    (re.compile(r"clin.*chem.*_(?:tox_study|truth)", re.IGNORECASE), "clin_chem_tox_study"),
-    (re.compile(r"hematol.*_(?:tox_study|truth)", re.IGNORECASE), "hematology_tox_study"),
-    (re.compile(r"hormone.*_(?:tox_study|truth)", re.IGNORECASE), "hormones_tox_study"),
-    (re.compile(r"organ.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "organ_weights_tox_study"),
-    (re.compile(r"body.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "body_weight_tox_study"),
+    (re.compile(r"tissue.?conc.*_(?:tox_study|truth)", re.IGNORECASE), "Tissue Concentration", "tox_study"),
+    (re.compile(r"clinical.?obs.*_(?:tox_study|truth)", re.IGNORECASE), "Clinical Observations", "tox_study"),
+    (re.compile(r"clin.*chem.*_(?:tox_study|truth)", re.IGNORECASE), "Clinical Chemistry", "tox_study"),
+    (re.compile(r"hematol.*_(?:tox_study|truth)", re.IGNORECASE), "Hematology", "tox_study"),
+    (re.compile(r"hormone.*_(?:tox_study|truth)", re.IGNORECASE), "Hormones", "tox_study"),
+    (re.compile(r"organ.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "Organ Weight", "tox_study"),
+    (re.compile(r"body.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "Body Weight", "tox_study"),
 
-    # --- Inferred files (_inferred domains) ---
+    # --- Inferred files (data_type="inferred") ---
     # Files WITHOUT "_tox_study" in the name are inferred data: gaps filled
     # with dose-group averages so BMDExpress can model them.  The .bm2
     # output from these becomes the source of BMD/BMDL values.
     # Tissue concentration — check before generic "clinical" to avoid
     # "tissue_conc" matching a broader "clin" pattern.
-    (re.compile(r"tissue.?conc", re.IGNORECASE), "tissue_conc_inferred"),
+    (re.compile(r"tissue.?conc", re.IGNORECASE), "Tissue Concentration", "inferred"),
 
     # Clinical observations — "clinical_obs" or "Clinical_Observations"
-    (re.compile(r"clinical.?obs", re.IGNORECASE), "clinical_obs"),
+    (re.compile(r"clinical.?obs", re.IGNORECASE), "Clinical Observations", "inferred"),
 
     # Clinical chemistry — "clin_chem" or "Clinical_Chemistry" or "Clinical Chemistry"
     # The .* bridge handles both short forms ("clin_chem") and full words
     # ("Clinical_Chemistry") where "ical_" separates "Clin" and "Chem".
-    (re.compile(r"clin.*chem", re.IGNORECASE), "clin_chem_inferred"),
+    (re.compile(r"clin.*chem", re.IGNORECASE), "Clinical Chemistry", "inferred"),
 
     # Hematology — "hematol" or "Hematology"
-    (re.compile(r"hematol", re.IGNORECASE), "hematology_inferred"),
+    (re.compile(r"hematol", re.IGNORECASE), "Hematology", "inferred"),
 
     # Hormones — "hormone" or "Hormone"
-    (re.compile(r"hormone", re.IGNORECASE), "hormones_inferred"),
+    (re.compile(r"hormone", re.IGNORECASE), "Hormones", "inferred"),
 
     # Organ weights — "organ_weight" or "Organ_Weight"
-    (re.compile(r"organ.?weight", re.IGNORECASE), "organ_weights_inferred"),
+    (re.compile(r"organ.?weight", re.IGNORECASE), "Organ Weight", "inferred"),
 
     # Body weight — "body_weight" or "Body_Weight" or "Body weight"
-    (re.compile(r"body.?weight", re.IGNORECASE), "body_weight_inferred"),
+    (re.compile(r"body.?weight", re.IGNORECASE), "Body Weight", "inferred"),
 ]
 
 # ---------------------------------------------------------------------------
-# Domain suffix helpers
+# Backward-compatibility helpers
 # ---------------------------------------------------------------------------
-# The 14-domain model uses suffixed names: body_weight_tox_study,
-# body_weight_inferred, etc.  base_domain() strips the suffix to get
-# the conceptual domain (e.g., "body_weight") for grouping and display.
+# The old 14-domain model used suffixed names like "body_weight_tox_study"
+# and "body_weight_inferred".  base_domain() stripped the suffix.
+# Now that platform + data_type are separate fields, base_domain() is a
+# no-op identity function kept only because it's imported by:
+#   methods_report.py, animal_report.py, pool_integrator.py, pool_orchestrator.py
+# Those callers will be updated separately.
 
 _DOMAIN_SUFFIX_RE = re.compile(r"(_tox_study|_inferred)$")
 
 
 def base_domain(domain: str) -> str:
     """
-    Strip the _tox_study or _inferred suffix to get the conceptual domain.
+    DEPRECATED — returns its input unchanged.
 
-    Used to group tox_study and inferred experiments under the same
-    conceptual domain for display, sub-tabs, and method text selection.
-    Domains without a suffix (clinical_obs, gene_expression) pass through
-    unchanged.
-
-    Examples:
-        base_domain("body_weight_tox_study")  → "body_weight"
-        base_domain("body_weight_inferred")   → "body_weight"
-        base_domain("clinical_obs")           → "clinical_obs"
-        base_domain("gene_expression")        → "gene_expression"
+    Previously stripped _tox_study / _inferred suffixes from the monolithic
+    domain string.  Now that platform and data_type are separate fields on
+    FileFingerprint, this function is a no-op.  Kept for backward
+    compatibility with callers in other modules.
 
     Args:
-        domain: Full domain string, possibly with _tox_study or _inferred suffix.
+        domain: Any domain/platform string.
 
     Returns:
-        The conceptual domain name without suffix.
+        The same string, unchanged.
     """
     if not domain:
         return domain
+    # Still strip for backward compat — callers pass old-style domain strings
+    # until they're migrated to use platform directly.
     return _DOMAIN_SUFFIX_RE.sub("", domain)
 
 
@@ -173,12 +179,33 @@ _SEX_PATTERN = re.compile(r"(?:^|[\b_\-\s])(male|female)(?:[\b_\-\s]|$)", re.IGN
 # BM2 experiment name patterns for sex detection (e.g., "BodyWeightMale")
 _BM2_SEX_PATTERN = re.compile(r"(Male|Female)", re.IGNORECASE)
 
-# BM2 experiment name → domain mapping.  These are the experiment name
+# BM2 experiment name → platform mapping.  These are the experiment name
 # prefixes used by BMDExpress 3 when exporting apical endpoint data.
 # Includes both full BMDExpress names (e.g., "ClinicalChemistry") and
 # abbreviated forms from xlsx_to_pivot_txt output (e.g., "clin_chem" →
 # stripped to "clinchem").  Both forms are needed because _partition_by_domain
 # and _filter_gene_expression strip underscores before matching.
+#
+# Values are Apical platform vocabulary strings (e.g., "Body Weight").
+# The data_type for all bm2 apical data is "inferred" (bm2 = BMDExpress
+# output from gap-filled data).
+_BM2_PLATFORM_MAP: dict[str, str] = {
+    "bodyweight": "Body Weight",
+    "organweight": "Organ Weight",
+    "clinicalchemistry": "Clinical Chemistry",
+    "clinchem": "Clinical Chemistry",
+    "hematology": "Hematology",
+    "hormone": "Hormones",
+    "tissueconcentration": "Tissue Concentration",
+    "tissueconc": "Tissue Concentration",
+    "clinicalobservation": "Clinical Observations",
+    "clinicalobs": "Clinical Observations",
+    "clinobs": "Clinical Observations",
+}
+
+# Backward-compatibility alias — imported by pool_orchestrator.py and
+# pool_integrator.py.  Maps to the old-style domain strings so those
+# modules keep working until they're migrated.
 _BM2_DOMAIN_MAP: dict[str, str] = {
     # .bm2 files are always produced from inferred (gap-filled) data,
     # so they map to _inferred domains.  The source-of-truth data
@@ -229,14 +256,13 @@ _VOCAB = {
         "kidney", "liver", "lung", "muscle", "ovary", "pancreas", "prostate",
         "skin", "spleen", "stomach", "testes", "thymus", "thyroid", "uterus",
     ],
-    "domains": [
-        "body_weight_tox_study", "body_weight_inferred",
-        "organ_weights_tox_study", "organ_weights_inferred",
-        "clin_chem_tox_study", "clin_chem_inferred",
-        "hematology_tox_study", "hematology_inferred",
-        "hormones_tox_study", "hormones_inferred",
-        "tissue_conc_tox_study", "tissue_conc_inferred",
-        "clinical_obs", "gene_expression",
+    # Platforms use the Apical platform vocabulary — these are the canonical
+    # display names for experimental data categories.  data_type (tox_study,
+    # inferred, gene_expression) is a separate concept not in this vocab.
+    "platforms": [
+        "Body Weight", "Organ Weight", "Clinical Chemistry",
+        "Hematology", "Hormones", "Tissue Concentration",
+        "Clinical Observations", "gene_expression",
     ],
 }
 
@@ -261,7 +287,7 @@ def _deduce_metadata_from_experiments(
       - organs: list of organs (for gene expression)
       - species: inferred species (from strain, chip, or naming conventions)
       - strain: inferred strain
-      - domain: the clinical endpoint domain or "gene_expression"
+      - platform: the Apical platform name or "gene_expression"
       - test_article: the chemical compound name if embedded in experiment names
 
     Falls back to regex-based detection if the LLM is unavailable or fails.
@@ -273,7 +299,7 @@ def _deduce_metadata_from_experiments(
         chip_info:         Optional chip metadata dict with provider, species, name.
 
     Returns:
-        Dict with keys: sexes, organs, species, strain, domain, test_article.
+        Dict with keys: sexes, organs, species, strain, platform, test_article.
         All values are strings or lists of strings; None if not detected.
     """
     if not experiment_names:
@@ -293,13 +319,13 @@ def _deduce_metadata_from_experiments(
         "  organs      — list of organs found (from vocabulary), or null\n"
         "  species     — single species string, or null\n"
         "  strain      — single strain string, or null\n"
-        "  domain      — one of the domain values, or null\n"
+        "  platform    — one of the platform values, or null\n"
         "  test_article — chemical/compound name if present, or null\n\n"
         "Valid values:\n"
         f"  species: {_VOCAB['species']}\n"
         f"  sexes: {_VOCAB['sexes']}\n"
         f"  organs: {_VOCAB['organs']}\n"
-        f"  domains: {_VOCAB['domains']}\n"
+        f"  platforms: {_VOCAB['platforms']}\n"
         f"  strains by species: {_VOCAB['strains']}\n\n"
         "Rules:\n"
         "- Use vocabulary values above when there is a close match.\n"
@@ -310,7 +336,7 @@ def _deduce_metadata_from_experiments(
         "NOT gene expression.\n"
         "- If probe IDs look like gene symbols with numeric suffixes "
         "(like 'AADAC_7934', 'CYP1A1_12345'), this is gene expression.\n"
-        "- 'SD0', 'SD5' are Study Day body weight measurements → domain = body_weight.\n"
+        "- 'SD0', 'SD5' are Study Day body weight measurements → platform = Body Weight.\n"
         "- Return ONLY valid JSON. No markdown, no explanation.\n\n"
         f"Experiment names: {experiment_names}\n"
     )
@@ -411,7 +437,9 @@ class FileFingerprint:
       dose_groups   — sorted unique doses, e.g., [0, 0.15, 0.5, 1.4, 4, 12, 37, 111]
       dose_unit     — "mg/kg" if detectable
 
-      domain        — canonical domain name (body_weight, organ_weights, etc.)
+      platform      — Apical platform name ("Body Weight", "Clinical Chemistry",
+                        etc.) or None for gene expression / unrecognized files
+      data_type     — "tox_study", "inferred", or "gene_expression"
       endpoint_names — e.g., ["SD0", "SD5"] or ["Liver Weight Absolute", ...]
       animal_ids    — e.g., ["101", "102", ...] — for cross-tier count comparison
       n_animals_by_dose — {0.0: 10, 4.0: 8, ...} — animals per dose group
@@ -437,8 +465,11 @@ class FileFingerprint:
     dose_groups: list[float] = field(default_factory=list)
     dose_unit: str | None = None
 
-    # Endpoint coverage
-    domain: str | None = None
+    # Endpoint coverage — platform is the Apical vocabulary name (e.g.,
+    # "Body Weight"), data_type distinguishes tox_study vs inferred vs
+    # gene_expression.  Together they replace the old monolithic domain string.
+    platform: str | None = None
+    data_type: str | None = None
     endpoint_names: list[str] = field(default_factory=list)
     animal_ids: list[str] = field(default_factory=list)
     n_animals_by_dose: dict[float, int] = field(default_factory=dict)
@@ -490,7 +521,7 @@ class ValidationIssue:
     """
 
     severity: str
-    domain: str
+    platform: str
     issue_type: str
     message: str
     files_involved: list[str]
@@ -525,33 +556,40 @@ class ValidationReport:
 # ---------------------------------------------------------------------------
 
 
-def detect_domain(filename: str, file_type: str, file_size: int = 0,
-                  endpoint_names: list[str] | None = None) -> str | None:
+def detect_platform_and_type(
+    filename: str,
+    file_type: str,
+    file_size: int = 0,
+    endpoint_names: list[str] | None = None,
+) -> tuple[str | None, str | None]:
     """
-    Infer the endpoint domain from a filename using NTP naming conventions.
+    Infer the platform and data_type from a filename using NTP naming conventions.
 
     Checks filename against a prioritized list of regex patterns.  More
-    specific patterns (tissue_conc, clinical_obs) are checked before
-    generic ones (body_weight) to avoid false matches.
+    specific patterns (Tissue Concentration, Clinical Observations) are
+    checked before generic ones (Body Weight) to avoid false matches.
 
     For large txt files (>100KB) with organ-prefixed names (e.g.,
-    "Liver_PFHxSAm_Male_No0.txt"), returns "gene_expression" — these are
-    transcriptomic microarray data, not apical endpoint tables.
+    "Liver_PFHxSAm_Male_No0.txt"), returns (None, "gene_expression") —
+    these are transcriptomic microarray data, not apical endpoint tables.
 
     Args:
         filename:       Original filename as uploaded.
         file_type:      "xlsx", "txt", "csv", or "bm2".
         file_size:      File size in bytes (used for gene expression heuristic).
         endpoint_names: Parsed endpoint/row labels (not used currently, reserved
-                        for future content-based domain detection).
+                        for future content-based detection).
 
     Returns:
-        Canonical domain string (e.g., "body_weight") or None if unrecognized.
+        Tuple of (platform, data_type).  platform is an Apical vocabulary
+        string like "Body Weight" or None for gene expression / unrecognized.
+        data_type is "tox_study", "inferred", or "gene_expression", or None
+        if unrecognized.
     """
     # Check named patterns first — covers most NTP file naming conventions
-    for pattern, domain in _DOMAIN_PATTERNS:
+    for pattern, platform, data_type in _PLATFORM_PATTERNS:
         if pattern.search(filename):
-            return domain
+            return (platform, data_type)
 
     # Gene expression heuristic for organ-prefixed txt files.
     # NTP transcriptomics data is named like "Liver_PFHxSAm_Male_No0.txt"
@@ -559,36 +597,117 @@ def detect_domain(filename: str, file_type: str, file_size: int = 0,
     # We require >100KB to avoid matching small organ weight txt files.
     if file_type in ("txt", "csv") and file_size > 100_000:
         if _GENE_EXPR_ORGAN_PATTERN.match(filename):
-            return "gene_expression"
+            return (None, "gene_expression")
 
-    return None
+    return (None, None)
 
 
-def detect_domain_from_bm2(experiment_names: list[str]) -> str | None:
+def detect_domain(filename: str, file_type: str, file_size: int = 0,
+                  endpoint_names: list[str] | None = None) -> str | None:
     """
-    Infer the endpoint domain from BMDExpress experiment names.
+    DEPRECATED backward-compatibility wrapper around detect_platform_and_type().
+
+    Returns a combined domain string in the old format (e.g.,
+    "body_weight_inferred", "gene_expression") for callers that haven't
+    been migrated yet.  Imported by: animal_report.py, pool_orchestrator.py.
+
+    Args:
+        filename:       Original filename as uploaded.
+        file_type:      "xlsx", "txt", "csv", or "bm2".
+        file_size:      File size in bytes (used for gene expression heuristic).
+        endpoint_names: Parsed endpoint/row labels (reserved for future use).
+
+    Returns:
+        Old-style domain string or None if unrecognized.
+    """
+    platform, data_type = detect_platform_and_type(
+        filename, file_type, file_size, endpoint_names,
+    )
+    return _platform_type_to_domain(platform, data_type)
+
+
+def _platform_type_to_domain(
+    platform: str | None,
+    data_type: str | None,
+) -> str | None:
+    """
+    Convert a (platform, data_type) pair back to the old monolithic domain string.
+
+    This is a backward-compatibility helper used by detect_domain() and
+    detect_domain_from_bm2() to produce old-style strings for callers that
+    haven't been migrated.  Will be removed once all callers use platform
+    + data_type directly.
+
+    The mapping reverses _PLATFORM_PATTERNS:
+        ("Body Weight", "tox_study")   → "body_weight_tox_study"
+        ("Body Weight", "inferred")    → "body_weight_inferred"
+        (None, "gene_expression")      → "gene_expression"
+        ("Clinical Observations", *)   → "clinical_obs"
+
+    Args:
+        platform:  Apical platform name or None.
+        data_type: "tox_study", "inferred", or "gene_expression", or None.
+
+    Returns:
+        Old-style domain string, or None if both inputs are None.
+    """
+    if platform is None and data_type is None:
+        return None
+    if data_type == "gene_expression":
+        return "gene_expression"
+
+    # Map platform display names to old-style base domain slugs
+    _PLATFORM_TO_SLUG: dict[str, str] = {
+        "Body Weight": "body_weight",
+        "Organ Weight": "organ_weights",
+        "Clinical Chemistry": "clin_chem",
+        "Hematology": "hematology",
+        "Hormones": "hormones",
+        "Tissue Concentration": "tissue_conc",
+        "Clinical Observations": "clinical_obs",
+    }
+
+    slug = _PLATFORM_TO_SLUG.get(platform or "", platform or "unknown")
+
+    # Clinical observations has no _inferred/_tox_study variant in old model
+    if slug == "clinical_obs":
+        return "clinical_obs"
+    if data_type:
+        return f"{slug}_{data_type}"
+    return slug
+
+
+def detect_platform_and_type_from_bm2(
+    experiment_names: list[str],
+) -> tuple[str | None, str | None]:
+    """
+    Infer (platform, data_type) from BMDExpress experiment names.
 
     BMDExpress 3 names experiments like "BodyWeightMale", "OrganWeightFemale",
     "HematologyMale", etc.  We normalize to lowercase and strip sex suffixes
-    to match against _BM2_DOMAIN_MAP.
+    to match against _BM2_PLATFORM_MAP.
 
     For gene expression .bm2 files, the experiment names reference individual
     probes/genes rather than named endpoints — these have thousands of
     experiments, which is the distinguishing heuristic.
 
+    All bm2 apical data has data_type="inferred" because bm2 files are
+    always produced from gap-filled data.
+
     Args:
         experiment_names: List of experiment.name values from the BMDProject JSON.
 
     Returns:
-        Canonical domain string or None if unrecognized.
+        Tuple of (platform, data_type).  Gene expression → (None, "gene_expression").
+        Apical → (platform_name, "inferred").  Unrecognized → (None, None).
     """
     if not experiment_names:
-        return None
+        return (None, None)
 
     # Gene expression bm2 files have thousands of "experiments" (one per probe).
     # Apical bm2 files have at most ~50 (endpoints × sexes).
     if len(experiment_names) > 200:
-        return "gene_expression"
+        return (None, "gene_expression")
 
     # Normalize the first experiment name: lowercase, strip sex suffix
     name = experiment_names[0].lower()
@@ -597,11 +716,28 @@ def detect_domain_from_bm2(experiment_names: list[str]) -> str | None:
     # Remove underscores, spaces, hyphens for fuzzy matching
     name_normalized = re.sub(r"[_\s\-]", "", name)
 
-    for prefix, domain in _BM2_DOMAIN_MAP.items():
+    for prefix, platform in _BM2_PLATFORM_MAP.items():
         if name_normalized.startswith(prefix):
-            return domain
+            return (platform, "inferred")
 
-    return None
+    return (None, None)
+
+
+def detect_domain_from_bm2(experiment_names: list[str]) -> str | None:
+    """
+    DEPRECATED backward-compatibility wrapper around detect_platform_and_type_from_bm2().
+
+    Returns an old-style domain string for callers that haven't been
+    migrated.  Imported by pool_orchestrator.py (indirectly via detect_domain).
+
+    Args:
+        experiment_names: List of experiment.name values from the BMDProject JSON.
+
+    Returns:
+        Old-style domain string or None if unrecognized.
+    """
+    platform, data_type = detect_platform_and_type_from_bm2(experiment_names)
+    return _platform_type_to_domain(platform, data_type)
 
 
 # ---------------------------------------------------------------------------
@@ -723,7 +859,7 @@ def fingerprint_xlsx(
     )
 
     file_size = os.path.getsize(path) if os.path.exists(path) else 0
-    fp.domain = detect_domain(filename, "xlsx", file_size)
+    fp.platform, fp.data_type = detect_platform_and_type(filename, "xlsx", file_size)
 
     try:
         # read_only=False because NTP xlsx files sometimes lack dimension
@@ -925,7 +1061,7 @@ def fingerprint_txt_csv(
     fp.sexes = _detect_sex_from_filename(filename)
 
     file_size = os.path.getsize(path) if os.path.exists(path) else 0
-    fp.domain = detect_domain(filename, file_type, file_size)
+    fp.platform, fp.data_type = detect_platform_and_type(filename, file_type, file_size)
 
     separator = "," if file_type == "csv" else "\t"
 
@@ -1058,7 +1194,8 @@ def fingerprint_txt_csv(
 
     # Gene expression detection — large files with many rows are probes/genes
     if len(endpoint_names) > 200:
-        fp.domain = "gene_expression"
+        fp.platform = None
+        fp.data_type = "gene_expression"
         fp.gene_count = len(endpoint_names)
         # Extract organ from filename for gene expression files
         organ_match = _GENE_EXPR_ORGAN_PATTERN.match(filename)
@@ -1201,8 +1338,8 @@ def fingerprint_bm2(
         ts_filesystem=_get_filesystem_timestamp(path),
     )
 
-    # Filename-based domain detection as a fallback
-    fp.domain = detect_domain(filename, "bm2")
+    # Filename-based platform/type detection as a fallback
+    fp.platform, fp.data_type = detect_platform_and_type(filename, "bm2")
 
     # Try loading from LMDB cache if not provided — this is fast (~10ms)
     # and avoids the expensive Java export on fingerprinting.
@@ -1291,26 +1428,22 @@ def fingerprint_bm2(
             fp.organ = exp_desc["organ"].title()
         if exp_desc.get("species"):
             fp.species = exp_desc["species"]
-        # Map platform to domain for augmented files.
+        # Set platform directly from augmented ExperimentDescription.
         # .bm2 files are always produced from gap-filled (inferred) data,
-        # so they map to _inferred domains.
-        platform = exp_desc.get("platform", "")
-        if platform:
-            platform_domain_map = {
-                "Clinical Chemistry": "clin_chem_inferred",
-                "Hematology": "hematology_inferred",
-                "Organ Weight": "organ_weights_inferred",
-            }
-            if platform in platform_domain_map:
-                fp.domain = platform_domain_map[platform]
+        # so data_type is always "inferred" for apical bm2.
+        desc_platform = exp_desc.get("platform", "")
+        if desc_platform:
+            fp.platform = desc_platform
+            fp.data_type = "inferred"
         provider = exp_desc.get("provider", "")
-        if provider == "Clinical Endpoint" and not fp.domain:
-            fp.domain = "clinical_obs"  # fallback for clinical endpoints
+        if provider == "Clinical Endpoint" and not fp.platform:
+            fp.platform = "Clinical Observations"
+            fp.data_type = "inferred"
         logger.debug("Using augmented ExperimentDescription for %s", filename)
     else:
         # --- LLM-based metadata deduction ---
         # Current .bm2 files lack ExperimentDescription, so we ask an LLM
-        # to infer sex, organ, species, strain, and domain from the
+        # to infer sex, organ, species, strain, and platform from the
         # experiment names and probe ID samples.  This mirrors the approach
         # in BMDExpress-3's LlmMetadataService.
         probe_sample = unique_probes[:15]
@@ -1325,13 +1458,37 @@ def fingerprint_bm2(
                     s.title() for s in llm_meta["sexes"]
                     if isinstance(s, str)
                 )
-            if llm_meta.get("domain"):
-                # LLM may return a list of domains — take the first string
-                domain_val = llm_meta["domain"]
-                if isinstance(domain_val, list):
-                    domain_val = domain_val[0] if domain_val else None
-                if isinstance(domain_val, str):
-                    fp.domain = domain_val
+            # LLM returns "platform" (new) or "domain" (old prompt format).
+            # Handle both for transition period.
+            llm_platform = llm_meta.get("platform") or llm_meta.get("domain")
+            if llm_platform:
+                # LLM may return a list — take the first string
+                if isinstance(llm_platform, list):
+                    llm_platform = llm_platform[0] if llm_platform else None
+                if isinstance(llm_platform, str):
+                    # LLM might return old-style domain or new platform name.
+                    # Check if it's a known platform value first.
+                    _KNOWN_PLATFORMS = {
+                        "Body Weight", "Organ Weight", "Clinical Chemistry",
+                        "Hematology", "Hormones", "Tissue Concentration",
+                        "Clinical Observations",
+                    }
+                    if llm_platform in _KNOWN_PLATFORMS:
+                        fp.platform = llm_platform
+                        fp.data_type = "inferred"
+                    elif llm_platform == "gene_expression":
+                        fp.platform = None
+                        fp.data_type = "gene_expression"
+                    else:
+                        # Old-style domain string from LLM — try to parse it
+                        # by running it through the old detect_domain path
+                        # and extracting the platform from that.
+                        old_platform, old_dtype = detect_platform_and_type(
+                            llm_platform, "bm2",
+                        )
+                        if old_platform:
+                            fp.platform = old_platform
+                            fp.data_type = old_dtype or "inferred"
             if llm_meta.get("species") and not fp.species:
                 # Ignore placeholder values like "generic" that Haiku returns
                 # when species can't be determined from experiment names alone
@@ -1348,21 +1505,23 @@ def fingerprint_bm2(
                     fp.species = f"{llm_meta['strain']} {llm_meta['species']}"
             if llm_meta.get("organs"):
                 organs = [o.title() for o in llm_meta["organs"] if isinstance(o, str)]
-                # Only set organ for gene expression — apical domains like
-                # organ_weights and hematology measure *across* organs, so
+                # Only set organ for gene expression — apical platforms like
+                # Organ Weight and Hematology measure *across* organs, so
                 # organ is semantically wrong there.
-                if organs and fp.domain == "gene_expression":
+                if organs and fp.data_type == "gene_expression":
                     fp.organ = organs[0]  # primary organ for transcriptomics
 
-        # Regex fallback if LLM didn't return a domain
-        if not fp.domain:
-            fp.domain = detect_domain_from_bm2(experiment_names)
+        # Regex fallback if LLM didn't return a platform
+        if not fp.platform and fp.data_type != "gene_expression":
+            fp.platform, fp.data_type = detect_platform_and_type_from_bm2(
+                experiment_names,
+            )
         # Regex fallback for sex detection
         if not fp.sexes:
             fp.sexes = _detect_sexes_from_bm2_experiments(experiment_names)
 
     # --- Set endpoint names and gene count ---
-    if fp.domain == "gene_expression":
+    if fp.data_type == "gene_expression":
         # For gene expression, probeResponses are genes — count them per
         # experiment (each experiment = one organ×sex combination).
         # The total gene count is from the first experiment.
@@ -1437,28 +1596,37 @@ def _build_coverage_matrix(
     fingerprints: dict[str, FileFingerprint],
 ) -> dict[str, dict[str, list[str] | str | None]]:
     """
-    Build a coverage matrix mapping domain → tier → file_id(s).
+    Build a coverage matrix mapping platform → tier → file_id(s).
 
-    Groups fingerprints by domain and tier.  xlsx and bm2 tiers expect a
-    single file per domain (stored as str | None), while txt_csv can have
-    multiple files per domain (one per sex), stored as a list of file_ids.
+    Groups fingerprints by platform and tier.  xlsx and bm2 tiers expect a
+    single file per platform (stored as str | None), while txt_csv can have
+    multiple files per platform (one per sex), stored as a list of file_ids.
+
+    Gene expression files (platform=None, data_type="gene_expression") are
+    grouped under the key "gene_expression".
 
     Args:
         fingerprints: All fingerprints in the pool (file_id → FileFingerprint).
 
     Returns:
-        Dict of domain → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }
+        Dict of platform → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }
     """
     matrix: dict[str, dict] = {}
 
     for fid, fp in fingerprints.items():
-        if fp.domain is None:
-            continue
+        # Determine the grouping key — use platform for apical data,
+        # "gene_expression" for gene expression (which has platform=None).
+        if fp.data_type == "gene_expression":
+            group_key = "gene_expression"
+        elif fp.platform is not None:
+            group_key = fp.platform
+        else:
+            continue  # unrecognized file — skip
 
-        if fp.domain not in matrix:
-            matrix[fp.domain] = {"xlsx": None, "txt_csv": [], "bm2": None}
+        if group_key not in matrix:
+            matrix[group_key] = {"xlsx": None, "txt_csv": [], "bm2": None}
 
-        entry = matrix[fp.domain]
+        entry = matrix[group_key]
         if fp.tier == TIER_XLSX:
             entry["xlsx"] = fid
         elif fp.tier == TIER_TXT_CSV:
@@ -1500,7 +1668,7 @@ def _check_coverage(
         if not has_txt_csv:
             issues.append(ValidationIssue(
                 severity="warning",
-                domain=domain,
+                platform=domain,
                 issue_type="missing_tier",
                 message=f"{domain}: no txt/csv gene expression input data found",
                 files_involved=[tiers["bm2"]] if has_bm2 else [],
@@ -1508,18 +1676,18 @@ def _check_coverage(
         if not has_bm2 and has_txt_csv:
             issues.append(ValidationIssue(
                 severity="warning",
-                domain=domain,
+                platform=domain,
                 issue_type="missing_tier",
                 message=f"{domain}: txt/csv exists but no .bm2 analysis found",
                 files_involved=tiers["txt_csv"],
             ))
         return issues
 
-    # Apical domains: all three tiers are expected (xlsx → txt/csv → bm2)
+    # Apical platforms: all three tiers are expected (xlsx → txt/csv → bm2)
     if not has_xlsx:
         issues.append(ValidationIssue(
             severity="info",
-            domain=domain,
+            platform=domain,
             issue_type="missing_tier",
             message=f"{domain}: no xlsx (study team raw data) found",
             files_involved=tiers["txt_csv"] + ([tiers["bm2"]] if has_bm2 else []),
@@ -1529,7 +1697,7 @@ def _check_coverage(
         # Missing txt/csv means can't re-run BMDExpress — significant gap
         issues.append(ValidationIssue(
             severity="warning",
-            domain=domain,
+            platform=domain,
             issue_type="missing_tier",
             message=f"{domain}: no txt/csv (BMDExpress input) found",
             files_involved=([tiers["xlsx"]] if has_xlsx else [])
@@ -1537,11 +1705,11 @@ def _check_coverage(
         ))
 
     if not has_bm2:
-        # Missing bm2 means analysis not yet done for this domain
+        # Missing bm2 means analysis not yet done for this platform
         sev = "warning" if (has_xlsx or has_txt_csv) else "info"
         issues.append(ValidationIssue(
             severity=sev,
-            domain=domain,
+            platform=domain,
             issue_type="missing_tier",
             message=f"{domain}: no .bm2 (BMDExpress analysis) found",
             files_involved=([tiers["xlsx"]] if has_xlsx else [])
@@ -1618,7 +1786,7 @@ def _check_dose_consistency(
                 suggested = ref_id if ref_fp.tier <= other_fp.tier else other_id
                 issues.append(ValidationIssue(
                     severity="error",
-                    domain=domain,
+                    platform=domain,
                     issue_type="dose_mismatch",
                     message=(
                         f"{domain}: dose groups differ between "
@@ -1684,7 +1852,7 @@ def _check_animal_counts(
             # Extra animals in txt/csv — something is wrong
             issues.append(ValidationIssue(
                 severity="error",
-                domain=domain,
+                platform=domain,
                 issue_type="animal_count_mismatch",
                 message=(
                     f"{domain}: txt/csv files have {txt_csv_count} unique animals "
@@ -1702,7 +1870,7 @@ def _check_animal_counts(
             # Fewer animals in txt/csv — some may have been excluded (common)
             issues.append(ValidationIssue(
                 severity="warning",
-                domain=domain,
+                platform=domain,
                 issue_type="animal_count_mismatch",
                 message=(
                     f"{domain}: txt/csv files have {txt_csv_count} unique animals "
@@ -1761,7 +1929,7 @@ def _check_sex_coverage(
         if missing_in_txt:
             issues.append(ValidationIssue(
                 severity="warning",
-                domain=domain,
+                platform=domain,
                 issue_type="sex_mismatch",
                 message=(
                     f"{domain}: xlsx has {sorted(xlsx_sexes)} but txt/csv "
@@ -1777,7 +1945,7 @@ def _check_sex_coverage(
         if missing_in_bm2:
             issues.append(ValidationIssue(
                 severity="warning",
-                domain=domain,
+                platform=domain,
                 issue_type="sex_mismatch",
                 message=(
                     f"{domain}: txt/csv covers {sorted(txt_csv_sexes)} but "
@@ -1810,12 +1978,14 @@ def _check_redundancy(
     seen: dict[tuple, str] = {}  # signature → first file_id
 
     for fid, fp in fingerprints.items():
-        # Build a structural signature: (domain, sorted_sexes, sorted_doses,
-        # sorted_endpoints, animal_id_count).  Including animal_ids prevents
-        # false positives for sex-split files (male and female txt files share
-        # the same domain/endpoints but have different animal cohorts).
+        # Build a structural signature: (platform, data_type, sorted_sexes,
+        # sorted_doses, sorted_endpoints, animal_id_sample).  Including
+        # animal_ids prevents false positives for sex-split files (male and
+        # female txt files share the same platform/endpoints but have
+        # different animal cohorts).
         sig = (
-            fp.domain,
+            fp.platform,
+            fp.data_type,
             tuple(fp.sexes),
             tuple(fp.dose_groups),
             tuple(fp.endpoint_names[:20]),  # truncate for efficiency
@@ -1829,11 +1999,11 @@ def _check_redundancy(
             if fp.tier == other_fp.tier:
                 issues.append(ValidationIssue(
                     severity="info",
-                    domain=fp.domain or "unknown",
+                    platform=fp.platform or "unknown",
                     issue_type="redundant_files",
                     message=(
                         f"{fp.filename} and {other_fp.filename} appear to "
-                        f"contain the same data (same domain, sexes, doses, endpoints)"
+                        f"contain the same data (same platform, sexes, doses, endpoints)"
                     ),
                     files_involved=[fid, other_fid],
                 ))
@@ -1882,7 +2052,7 @@ def _check_roster_consistency(
             continue
         # Gene expression files use plate/sample IDs (e.g., "Plate5-116"),
         # not study animal IDs (e.g., "101").  Exclude from roster.
-        if fp.domain == "gene_expression":
+        if fp.data_type == "gene_expression":
             continue
 
         sexes = fp.sexes if fp.sexes else ["Unknown"]
@@ -1912,7 +2082,7 @@ def _check_roster_consistency(
                 fp = fingerprints[fid]
                 issues.append(ValidationIssue(
                     severity="info",
-                    domain=fp.domain or "unknown",
+                    platform=fp.platform or "unknown",
                     issue_type="roster_subset",
                     message=(
                         f"{fp.filename} ({sex}): {len(file_animals)}/{len(roster)} "
@@ -1968,14 +2138,16 @@ def validate_pool(
     all_issues.extend(roster_issues)
 
     # --- Level 1: Unassigned files block all processing ---
+    # A file is unassigned if it has no platform AND no data_type — meaning
+    # neither filename patterns nor content-based detection could identify it.
     for fid, fp in fingerprints.items():
-        if fp.domain is None:
+        if fp.platform is None and fp.data_type is None:
             all_issues.append(ValidationIssue(
                 severity="error",
-                domain="unassigned",
+                platform="unassigned",
                 issue_type="unassigned_file",
                 message=(
-                    f"{fp.filename} could not be assigned to a recognized domain. "
+                    f"{fp.filename} could not be assigned to a recognized platform. "
                     f"Remove it or rename it so the system can identify its purpose."
                 ),
                 files_involved=[fid],
@@ -2064,26 +2236,41 @@ def lightweight_validate(
     """
     issues: list[ValidationIssue] = []
 
-    if new_fp.domain is None:
+    # A file needs either a platform or a data_type to be matchable
+    if new_fp.platform is None and new_fp.data_type is None:
         return issues
 
-    # Find existing files in the same domain
-    same_domain = {
+    # Determine the grouping key for matching — same logic as _build_coverage_matrix
+    if new_fp.data_type == "gene_expression":
+        new_group_key = "gene_expression"
+    else:
+        new_group_key = new_fp.platform
+
+    if new_group_key is None:
+        return issues
+
+    # Find existing files in the same platform group
+    def _group_key(fp: FileFingerprint) -> str | None:
+        if fp.data_type == "gene_expression":
+            return "gene_expression"
+        return fp.platform
+
+    same_platform = {
         fid: fp for fid, fp in existing_fps.items()
-        if fp.domain == new_fp.domain
+        if _group_key(fp) == new_group_key
     }
 
-    if not same_domain:
+    if not same_platform:
         return issues
 
     # Check dose group consistency
     if new_fp.dose_groups:
-        for fid, fp in same_domain.items():
+        for fid, fp in same_platform.items():
             if fp.dose_groups and fp.dose_groups != new_fp.dose_groups:
                 suggested = fid if fp.tier < new_fp.tier else new_fp.file_id
                 issues.append(ValidationIssue(
                     severity="error",
-                    domain=new_fp.domain,
+                    platform=new_group_key,
                     issue_type="dose_mismatch",
                     message=(
                         f"Dose groups in {new_fp.filename} differ from "
@@ -2098,18 +2285,18 @@ def lightweight_validate(
                 ))
 
     # Check for redundancy (same tier + similar structure)
-    new_sig = (new_fp.domain, tuple(new_fp.sexes), tuple(new_fp.dose_groups))
-    for fid, fp in same_domain.items():
+    new_sig = (new_fp.platform, new_fp.data_type, tuple(new_fp.sexes), tuple(new_fp.dose_groups))
+    for fid, fp in same_platform.items():
         if fp.tier == new_fp.tier:
-            existing_sig = (fp.domain, tuple(fp.sexes), tuple(fp.dose_groups))
+            existing_sig = (fp.platform, fp.data_type, tuple(fp.sexes), tuple(fp.dose_groups))
             if new_sig == existing_sig and new_fp.endpoint_names[:10] == fp.endpoint_names[:10]:
                 issues.append(ValidationIssue(
                     severity="info",
-                    domain=new_fp.domain,
+                    platform=new_group_key,
                     issue_type="redundant_files",
                     message=(
                         f"{new_fp.filename} appears redundant with "
-                        f"{fp.filename} (same domain, sexes, doses)"
+                        f"{fp.filename} (same platform, sexes, doses)"
                     ),
                     files_involved=[new_fp.file_id, fid],
                 ))

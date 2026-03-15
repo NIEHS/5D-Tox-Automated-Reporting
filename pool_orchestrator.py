@@ -5,17 +5,17 @@ processing endpoints extracted from background_server.py.
 This module owns the full lifecycle of the "file pool" concept:
 
   1. **Fingerprinting** — extract structural metadata (doses, animals, endpoints,
-     domain) from each uploaded file so we can cross-validate them.
+     platform, data_type) from each uploaded file so we can cross-validate them.
   2. **Validation** — check for dose group mismatches, coverage gaps, and
      redundancy across the pool.
   3. **Conflict resolution** — persist user precedence decisions when files
      disagree.
-  4. **Integration** — merge the best file per domain into a single unified
+  4. **Integration** — merge the best file per platform into a single unified
      BMDProject JSON via bmdx-core's native Java classes.
-  5. **Processing** — run NTP stats on the integrated data to produce per-domain
+  5. **Processing** — run NTP stats on the integrated data to produce per-platform
      section cards (tables + narratives) for the UI, plus genomics extraction
      from gene-expression .bm2 files.
-  6. **Animal traceability** — per-animal cross-tier/cross-domain report.
+  6. **Animal traceability** — per-animal cross-tier/cross-platform report.
 
 All endpoints are mounted as a FastAPI APIRouter, included by the main app.
 
@@ -50,12 +50,11 @@ from llm_helpers import llm_generate_json as _llm_generate_json_imported
 from file_integrator import (
     FileFingerprint,
     ValidationReport,
-    base_domain,
     fingerprint_file,
     validate_pool,
     lightweight_validate,
-    _BM2_DOMAIN_MAP,
-    detect_domain,
+    _BM2_PLATFORM_MAP,
+    detect_platform_and_type_from_bm2,
 )
 from pool_integrator import integrate_pool
 from animal_report import (
@@ -170,7 +169,7 @@ def serialize_table_rows(table_data: dict) -> dict:
 
     Each TableRow has values_by_dose, n_by_dose, and trend_marker attributes.
     BMD/BMDL are excluded — they belong in the separate BMD summary table
-    (matching the NIEHS reference report structure: domain tables + Table 8).
+    (matching the NIEHS reference report structure: platform tables + Table 8).
     Dose float keys are converted via _js_dose_key() to match JavaScript's
     String(number) behavior.
 
@@ -453,9 +452,9 @@ async def api_pool_validate(dtxsid: str):
     animal counts, sex coverage, and redundancy detection.
 
     Returns a ValidationReport as JSON with:
-      - coverage_matrix: domain -> tier -> file_id(s)
-      - issues: list of { severity, domain, issue_type, message, ... }
-      - is_complete: whether all domains have full tier coverage
+      - coverage_matrix: platform -> tier -> file_id(s)
+      - issues: list of { severity, platform, issue_type, message, ... }
+      - is_complete: whether all platforms have full tier coverage
 
     Saves the report to sessions/{dtxsid}/validation_report.json for
     persistence across page reloads.
@@ -557,13 +556,13 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     Reads fingerprints from _pool_fingerprints, coverage_matrix from the
     persisted validation_report.json, and precedence decisions from
     precedence.json.  Calls integrate_pool() to select the best file per
-    domain and produce the merged structure.
+    platform and produce the merged structure.
 
     The result is stored both in-memory (_integrated_pool) and on disk
     (sessions/{dtxsid}/integrated.json) for session restore.
 
     Returns the full integrated BMDProject JSON, including a _meta block
-    with provenance: which file was chosen for each domain and why.
+    with provenance: which file was chosen for each platform and why.
     """
     session_dir = _session_dir(dtxsid)
     files_dir = session_dir / "files"
@@ -691,7 +690,7 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     # if needed (that endpoint uses FileResponse with chunked streaming).
     #
     # The summary mirrors the structure the client's renderIntegratedPreview()
-    # expects: _meta.source_files for the domain table, plus top-level counts.
+    # expects: _meta.source_files for the platform table, plus top-level counts.
     meta = integrated.get("_meta", {})
     experiments = integrated.get("doseResponseExperiments", [])
     return JSONResponse({
@@ -785,36 +784,8 @@ async def api_integrated_summary(dtxsid: str):
 # pipeline.  Extracted from the monolithic api_process_integrated() endpoint
 # to improve readability and testability.  Each function handles one phase
 # of the pipeline: loading data, restoring category lookups, filtering
-# gene expression experiments, partitioning by domain, building section
+# gene expression experiments, partitioning by platform, building section
 # cards, extracting genomics, and building BMD summaries.
-
-# Human-readable domain titles for section headers in the UI.
-# Maps the internal domain key to a display-friendly label.
-_DOMAIN_TITLES = {
-    # Base (conceptual) domains — used for merged section cards that combine
-    # NTP stats from _tox_study data with BMD from _inferred data.
-    "body_weight":    "Body Weight",
-    "organ_weights":  "Organ Weights",
-    "clin_chem":      "Clinical Chemistry",
-    "hematology":     "Hematology",
-    "hormones":       "Hormones",
-    "tissue_conc":    "Tissue Concentration",
-    "clinical_obs":   "Clinical Observations",
-    # Suffixed variants — kept for direct lookups when the full domain
-    # name is used (e.g., in BMD summary tables or source file metadata).
-    "body_weight_tox_study":    "Body Weight",
-    "organ_weights_tox_study":  "Organ Weights",
-    "clin_chem_tox_study":      "Clinical Chemistry",
-    "hematology_tox_study":     "Hematology",
-    "hormones_tox_study":       "Hormones",
-    "tissue_conc_tox_study":    "Tissue Concentration",
-    "body_weight_inferred":    "Body Weight",
-    "organ_weights_inferred":  "Organ Weights",
-    "clin_chem_inferred":      "Clinical Chemistry",
-    "hematology_inferred":     "Hematology",
-    "hormones_inferred":       "Hormones",
-    "tissue_conc_inferred":    "Tissue Concentration",
-}
 
 # Human-readable labels for BMD statistics, used by the UI to set table
 # column headers (e.g. "BMD 5th Pct").
@@ -1040,7 +1011,7 @@ def _filter_gene_expression(integrated: dict) -> dict:
     endpoints.  Genomics is handled separately by export_genomics().
 
     Identifies gene expression experiments by checking which experiment names
-    DON'T match any clinical domain prefix in _BM2_DOMAIN_MAP.
+    DON'T match any clinical platform prefix in _BM2_PLATFORM_MAP.
 
     Args:
         integrated: The full merged BMDProject dict.
@@ -1058,13 +1029,13 @@ def _filter_gene_expression(integrated: dict) -> dict:
 
     # Gene expression experiments have names starting with the organ
     # (e.g., "Liver_PFHxSAm_Male_No0") — identify them by checking
-    # which experiments DON'T match any clinical domain prefix.
+    # which experiments DON'T match any clinical platform prefix.
     ge_exp_names = set()
     for exp in integrated.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
         exp_lower = exp_name.lower().replace("_", "")
         matched = False
-        for prefix in _BM2_DOMAIN_MAP:
+        for prefix in _BM2_PLATFORM_MAP:
             clean = exp_lower.replace("female", "").replace("male", "").strip()
             if clean.startswith(prefix) or prefix.startswith(clean):
                 matched = True
@@ -1088,48 +1059,50 @@ def _filter_gene_expression(integrated: dict) -> dict:
     }
 
 
-def _partition_by_domain(
+def _partition_by_platform(
     apical_integrated: dict,
     source_files: dict,
     table_data: dict[str, list],
 ) -> dict[str, dict[str, list]]:
     """
-    Partition NTP stats TableRows by domain, preserving sex grouping.
+    Partition NTP stats TableRows by platform, preserving sex grouping.
 
     build_table_data() returns {"Male": [TableRow, ...], "Female": [...]}.
-    We need to split these into per-domain sections so the UI can create
-    separate section cards for body weight, organ weights, etc.
+    We need to split these into per-platform sections so the UI can create
+    separate section cards for Body Weight, Organ Weight, etc.
 
     Strategy: look at the experiment names in the integrated data to build
-    a mapping of endpoint_name -> domain, then partition the table rows.
+    a mapping of endpoint_name -> platform, then partition the table rows.
 
     Args:
         apical_integrated: The integrated BMDProject with GE experiments filtered out.
-        source_files:      The _meta.source_files dict mapping domain -> file info.
+        source_files:      The _meta.source_files dict mapping platform -> file info.
         table_data:        The NTP stats output: {sex -> [TableRow, ...]}.
 
     Returns:
-        Nested dict: {domain -> {sex -> [TableRow, ...]}}.
+        Nested dict: {platform -> {sex -> [TableRow, ...]}}.
     """
-    # Build experiment_name -> conceptual domain mapping.
-    # All domains are normalized via base_domain() so that _tox_study and
-    # _inferred experiments end up in the same partition — producing one
-    # merged section card per conceptual domain (NIEHS reference format).
+    # Build experiment_name -> platform mapping.
     #
-    # Primary: use the authoritative experimentDescription.domain field
+    # Primary: use the authoritative experimentDescription.platform field
     # (set by _stamp_domains in pool_integrator.py from fingerprint data).
-    # Fallback: legacy heuristics for sessions integrated before domain stamping.
-    exp_name_to_domain: dict[str, str] = {}
+    # Fallback for old sessions: try experimentDescription.domain (which
+    # in newer sessions is already a platform string), then heuristics.
+    exp_name_to_platform: dict[str, str] = {}
 
     for exp in apical_integrated.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
 
-        # --- Primary: authoritative domain from experimentDescription ---
+        # --- Primary: authoritative platform from experimentDescription ---
         desc = exp.get("experimentDescription")
-        if isinstance(desc, dict) and desc.get("domain"):
-            # Normalize to conceptual domain for partition grouping
-            exp_name_to_domain[exp_name] = base_domain(desc["domain"])
-            continue
+        if isinstance(desc, dict):
+            # Prefer explicit platform field; fall back to domain field
+            # (which in newer sessions contains a platform string like
+            # "Body Weight" rather than the old "body_weight_inferred").
+            platform_val = desc.get("platform") or desc.get("domain")
+            if platform_val:
+                exp_name_to_platform[exp_name] = platform_val
+                continue
 
         # --- Fallback: legacy heuristics for old sessions ---
         exp_lower = exp_name.lower()
@@ -1139,85 +1112,86 @@ def _partition_by_domain(
         # "male" as a substring, so stripping "male" first leaves "fe".
         stripped = exp_lower.replace("female", "").replace("male", "").replace("_", "").strip()
 
-        domain_for_exp = None
-        for prefix, dom in _BM2_DOMAIN_MAP.items():
+        platform_for_exp = None
+        for prefix, plat in _BM2_PLATFORM_MAP.items():
             if stripped.startswith(prefix) or prefix.startswith(stripped):
-                domain_for_exp = base_domain(dom)
+                platform_for_exp = plat
                 break
 
-        # Fallback: try detect_domain() which uses regex patterns.
-        # This handles abbreviated names like "clin_chem" that don't
-        # match the full BM2 prefix "clinicalchemistry".
-        if not domain_for_exp:
-            detected = detect_domain(exp_name, "bm2", 0)
-            if detected:
-                domain_for_exp = base_domain(detected)
+        # Fallback: try detect_platform_and_type_from_bm2() which uses
+        # the same _BM2_PLATFORM_MAP but with additional normalization.
+        if not platform_for_exp:
+            detected_platform, detected_dtype = detect_platform_and_type_from_bm2([exp_name])
+            if detected_platform:
+                platform_for_exp = detected_platform
 
-        # Last resort: check if experiment name overlaps with source domain keys
-        if not domain_for_exp:
-            for dom in source_files:
-                dom_key = base_domain(dom).replace("_", "")
-                if dom_key in exp_lower.replace("_", ""):
-                    domain_for_exp = base_domain(dom)
+        # Last resort: check if experiment name overlaps with source_files
+        # platform keys (e.g., "Body Weight" → "bodyweight" matches in name).
+        if not platform_for_exp:
+            for plat_key in source_files:
+                plat_normalized = plat_key.lower().replace(" ", "").replace("_", "")
+                if plat_normalized in exp_lower.replace("_", ""):
+                    platform_for_exp = plat_key
                     break
 
-        if domain_for_exp:
-            exp_name_to_domain[exp_name] = domain_for_exp
+        if platform_for_exp:
+            exp_name_to_platform[exp_name] = platform_for_exp
 
-    # Build endpoint -> domain map using the experiment mapping.
-    # Each probe/endpoint in an experiment inherits that experiment's domain.
-    endpoint_domain_map: dict[str, str] = {}
+    # Build endpoint -> platform map using the experiment mapping.
+    # Each probe/endpoint in an experiment inherits that experiment's platform.
+    endpoint_platform_map: dict[str, str] = {}
     for exp in apical_integrated.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
-        dom = exp_name_to_domain.get(exp_name)
-        if dom:
+        plat = exp_name_to_platform.get(exp_name)
+        if plat:
             for pr in exp.get("probeResponses", []):
                 probe_id = pr.get("probe", {}).get("id", "")
                 if probe_id:
-                    endpoint_domain_map[(exp_name, probe_id)] = dom
+                    endpoint_platform_map[(exp_name, probe_id)] = plat
 
-    # Build a secondary map: (sex, probe_name) -> domain.
+    # Build a secondary map: (sex, probe_name) -> platform.
     # Since build_table_data doesn't preserve the experiment name on
     # TableRow, we match back using the probe label.
-    sex_probe_domain: dict[tuple[str, str], str] = {}
-    for (exp_name, probe_id), dom in endpoint_domain_map.items():
+    sex_probe_platform: dict[tuple[str, str], str] = {}
+    for (exp_name, probe_id), plat in endpoint_platform_map.items():
         sex = "Female" if "female" in exp_name.lower() else \
               "Male" if "male" in exp_name.lower() else "Unknown"
-        sex_probe_domain[(sex, probe_id)] = dom
+        sex_probe_platform[(sex, probe_id)] = plat
 
-    # Partition: {domain: {sex: [TableRow, ...]}}
-    domain_tables: dict[str, dict[str, list]] = {}
+    # Partition: {platform: {sex: [TableRow, ...]}}
+    platform_tables: dict[str, dict[str, list]] = {}
     for sex, rows in table_data.items():
         for row in rows:
-            dom = sex_probe_domain.get((sex, row.label), "unknown")
-            domain_tables.setdefault(dom, {}).setdefault(sex, []).append(row)
+            plat = sex_probe_platform.get((sex, row.label), "unknown")
+            platform_tables.setdefault(plat, {}).setdefault(sex, []).append(row)
 
-    return domain_tables
+    return platform_tables
 
 
 def _build_section_cards(
-    domain_tables: dict[str, dict[str, list]],
+    platform_tables: dict[str, dict[str, list]],
     compound_name: str,
     dose_unit: str,
 ) -> list[dict]:
     """
-    Build the UI section cards array: one per domain that has data.
+    Build the UI section cards array: one per platform that has data.
 
-    For each domain, serializes TableRow objects to JSON-friendly dicts
+    For each platform, serializes TableRow objects to JSON-friendly dicts
     and generates an auto-written results narrative.
 
     Args:
-        domain_tables: The partitioned {domain -> {sex -> [TableRow, ...]}} dict.
-        compound_name: Chemical name for the narrative (e.g., "PFHxSAm").
-        dose_unit:     Dose unit string (e.g., "mg/kg").
+        platform_tables: The partitioned {platform -> {sex -> [TableRow, ...]}} dict.
+        compound_name:   Chemical name for the narrative (e.g., "PFHxSAm").
+        dose_unit:       Dose unit string (e.g., "mg/kg").
 
     Returns:
-        List of section dicts, each with domain, title, tables_json, narrative.
+        List of section dicts, each with platform, title, tables_json, narrative.
+        The platform string IS the display title (e.g., "Body Weight").
     """
     sections = []
-    for dom, sex_rows in sorted(domain_tables.items()):
+    for platform, sex_rows in sorted(platform_tables.items()):
         # Business rule: only responsive endpoints (both Jonckheere trend AND
-        # Dunnett pairwise significant) appear in main body domain tables
+        # Dunnett pairwise significant) appear in main body platform tables
         # (Tables 2-7).  Non-responsive endpoints are excluded here but still
         # available in the BMD summary (Table 8) which has its own gate.
         responsive_rows = {
@@ -1232,8 +1206,8 @@ def _build_section_cards(
         tables_json = serialize_table_rows(responsive_rows)
         narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
         sections.append({
-            "domain": dom,
-            "title": _DOMAIN_TITLES.get(dom, dom.replace("_", " ").title()),
+            "platform": platform,
+            "title": platform,
             "tables_json": tables_json,
             "narrative": narrative,
         })
@@ -1377,20 +1351,20 @@ async def _extract_genomics(
     return genomics_sections
 
 
-def _build_apical_bmd_summary(domain_tables: dict[str, dict[str, list]]) -> list[dict]:
+def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
 
-    Collects BMD, BMDL, LOEL, NOEL, direction from ALL domain TableRows into
+    Collects BMD, BMDL, LOEL, NOEL, direction from ALL platform TableRows into
     a flat list for the separate BMD summary card.  Matches the NIEHS reference
-    report structure where domain tables (Tables 2-7) show dose-response data
+    report structure where platform tables (Tables 2-7) show dose-response data
     and Table 8 summarizes BMDs.
 
     Only includes endpoints that have a BMD result OR significant trend/pairwise
     findings (LOEL exists).  Endpoints with neither are uninteresting.
     """
     summary = []
-    for dom, sex_rows in sorted(domain_tables.items()):
+    for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
             # Sort within each sex group by BMDL (ascending).
             # Numeric BMDL values first; non-numeric statuses (NVM, UREP, "—")
@@ -1407,7 +1381,7 @@ def _build_apical_bmd_summary(domain_tables: dict[str, dict[str, list]]) -> list
                 summary.append({
                     "endpoint": row.label,
                     "sex": sex,
-                    "domain": dom,
+                    "platform": platform,
                     "bmd": row.bmd_str,
                     "bmdl": row.bmdl_str,
                     "bmd_status": row.bmd_status,
@@ -1419,7 +1393,7 @@ def _build_apical_bmd_summary(domain_tables: dict[str, dict[str, list]]) -> list
 
 
 def _build_bmds_bmd_summary(
-    domain_tables: dict[str, dict[str, list]],
+    platform_tables: dict[str, dict[str, list]],
     bmds_results: dict,
 ) -> list[dict]:
     """
@@ -1439,7 +1413,7 @@ def _build_bmds_bmd_summary(
         return []
 
     summary = []
-    for dom, sex_rows in sorted(domain_tables.items()):
+    for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
             # Sort within each sex group by BMDL (ascending), matching
             # the apical BMD summary sort order.
@@ -1479,7 +1453,7 @@ def _build_bmds_bmd_summary(
                 summary.append({
                     "endpoint": row.label,
                     "sex": sex,
-                    "domain": dom,
+                    "platform": platform,
                     "bmd": bmd_str,
                     "bmdl": bmdl_str,
                     "bmd_status": status,
@@ -1516,7 +1490,7 @@ def _cache_processed_result(dtxsid: str, cache_path: Path, payload: dict) -> Non
 async def api_process_integrated(dtxsid: str, request: Request):
     """
     Process the integrated BMDProject JSON into section cards with tables
-    and narratives for each apical endpoint domain.
+    and narratives for each apical endpoint platform.
 
     Input JSON:
       {
@@ -1535,7 +1509,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
       3. Restore category lookup from serialized keys
       4. Filter gene expression experiments
       5. Run NTP stats (Williams trend + Dunnett's pairwise + Jonckheere)
-      6. Partition results by domain
+      6. Partition results by platform
       7. Build section cards with narratives
       8. Run BMDS modeling (pybmds)
       9. Extract genomics from gene expression .bm2
@@ -1588,29 +1562,29 @@ async def api_process_integrated(dtxsid: str, request: Request):
             None, build_table_data, apical_integrated, cat_lookup,
         )
 
-        # --- Partition by domain ---
+        # --- Partition by platform ---
         source_files = integrated.get("_meta", {}).get("source_files", {})
-        domain_tables = _partition_by_domain(apical_integrated, source_files, table_data)
+        platform_tables = _partition_by_platform(apical_integrated, source_files, table_data)
 
         # --- Annotate missing animals from xlsx study file rosters ---
         # Compare bm2 N counts against xlsx Core Animals roster to detect
         # animals that died before terminal sacrifice.
         xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
         if xlsx_rosters:
-            annotate_missing_animals(domain_tables, xlsx_rosters)
-            # Backfill absent dose columns with "–" so every domain table
+            annotate_missing_animals(platform_tables, xlsx_rosters)
+            # Backfill absent dose columns with "–" so every platform table
             # shows the full study dose design (matching NIEHS reference
             # report convention — dose columns never disappear, they show
             # dashes when no animals survived for that measurement).
-            backfill_missing_doses(domain_tables, xlsx_rosters)
+            backfill_missing_doses(platform_tables, xlsx_rosters)
 
         # --- Build section cards with narratives ---
-        sections = _build_section_cards(domain_tables, compound_name, dose_unit)
+        sections = _build_section_cards(platform_tables, compound_name, dose_unit)
 
         # --- Run BMDS modeling (thread pool — pybmds is CPU-bound) ---
         bmds_inputs = [
             row._bmds_input
-            for sex_rows in domain_tables.values()
+            for sex_rows in platform_tables.values()
             for rows in sex_rows.values()
             for row in rows
             if hasattr(row, "_bmds_input") and row._bmds_input
@@ -1632,8 +1606,8 @@ async def api_process_integrated(dtxsid: str, request: Request):
             s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
             for s in bmd_stats
         }
-        apical_bmd_summary = _build_apical_bmd_summary(domain_tables)
-        apical_bmd_summary_bmds = _build_bmds_bmd_summary(domain_tables, bmds_results)
+        apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
+        apical_bmd_summary_bmds = _build_bmds_bmd_summary(platform_tables, bmds_results)
 
         # --- Assemble and cache result ---
         result_payload = {
@@ -1663,7 +1637,7 @@ async def api_generate_animal_report(dtxsid: str):
 
     Reads all fingerprinted files from disk, extracts per-animal data
     (animal_id -> dose, sex, selection), and cross-references across
-    tiers and domains.  Persists the result to
+    tiers and platforms.  Persists the result to
     sessions/{dtxsid}/animal_report.json.
 
     Requires fingerprints to exist (from prior /api/pool/validate call).
