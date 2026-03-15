@@ -548,6 +548,114 @@ async def api_pool_resolve(request: Request):
     return JSONResponse({"ok": True})
 
 
+@router.post("/api/pool/confirm-metadata/{dtxsid}")
+async def api_pool_confirm_metadata(dtxsid: str, request: Request):
+    """
+    Confirm file metadata and write headers into file copies.
+
+    Called after validation when the user has reviewed and corrected the
+    platform + data_type assignments for each file.  For txt/csv files,
+    this prepends metadata header lines (# Platform:, # Data Type:, etc.)
+    so that Java's ExperimentDescriptionParser picks them up during import.
+
+    Updates the fingerprints in memory with any user corrections.
+    .bm2 files cannot have headers written — their metadata is set via
+    the metadata sidecar in IntegrateProject.java.
+
+    Input JSON:
+      { "metadata": { "file_id": { "platform": "Body Weight", "data_type": "tox_study" }, ... } }
+    """
+    body = await request.json()
+    confirmed = body.get("metadata", {})
+
+    session_dir = _session_dir(dtxsid)
+    files_dir = session_dir / "files"
+
+    fps = get_pool_fingerprints().get(dtxsid, {})
+    updated = 0
+
+    for fid, corrections in confirmed.items():
+        fp = fps.get(fid)
+        if not fp:
+            continue
+
+        # Update fingerprint with user corrections
+        new_platform = corrections.get("platform")
+        new_data_type = corrections.get("data_type")
+        if new_platform and hasattr(fp, "platform"):
+            fp.platform = new_platform
+        elif new_platform and isinstance(fp, dict):
+            fp["platform"] = new_platform
+        if new_data_type and hasattr(fp, "data_type"):
+            fp.data_type = new_data_type
+        elif new_data_type and isinstance(fp, dict):
+            fp["data_type"] = new_data_type
+
+        # Write metadata headers into txt/csv files.
+        # We prepend headers to the file in-place in the session files dir.
+        # .bm2 files are binary — metadata goes through the sidecar instead.
+        fname = fp.filename if hasattr(fp, "filename") else fp.get("filename", "")
+        ftype = fp.file_type if hasattr(fp, "file_type") else fp.get("file_type", "")
+
+        if ftype in ("txt", "csv"):
+            file_path = files_dir / fname
+            if file_path.exists():
+                _write_metadata_headers(
+                    file_path,
+                    platform=new_platform or (fp.platform if hasattr(fp, "platform") else fp.get("platform")),
+                    data_type=new_data_type or (fp.data_type if hasattr(fp, "data_type") else fp.get("data_type")),
+                )
+                updated += 1
+
+    # Re-persist fingerprints with corrections — same format as _persist_fingerprints
+    cache: dict[str, dict] = {}
+    for fp_obj in fps.values():
+        fname = fp_obj.filename if hasattr(fp_obj, "filename") else fp_obj.get("filename", "")
+        cache[fname] = asdict(fp_obj) if hasattr(fp_obj, "filename") else fp_obj
+    fp_path = session_dir / "_fingerprints.json"
+    fp_path.write_text(
+        json.dumps(cache, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+    logger.info("Confirmed metadata for %d files in %s", updated, dtxsid)
+    return JSONResponse({"ok": True, "updated": updated})
+
+
+def _write_metadata_headers(file_path, platform: str, data_type: str) -> None:
+    """
+    Prepend # Provider / # Platform / # Data Type headers to a txt/csv file.
+
+    If the file already has metadata headers (lines starting with #),
+    replaces them.  Otherwise prepends before the first data line.
+
+    These headers are parsed by ExperimentDescriptionParser in Java
+    so that ExperimentDescription fields are set during import.
+    """
+    path = Path(file_path)
+    content = path.read_text(encoding="utf-8", errors="replace")
+    lines = content.splitlines(keepends=True)
+
+    # Build new header block
+    headers = []
+    headers.append(f"# Provider: Apical\n")
+    if platform:
+        headers.append(f"# Platform: {platform}\n")
+    if data_type:
+        headers.append(f"# Data Type: {data_type}\n")
+
+    # Strip any existing metadata header lines (start with #)
+    data_start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            data_start = i
+            break
+
+    # Write back: new headers + data lines
+    path.write_text("".join(headers + lines[data_start:]), encoding="utf-8")
+
+
 @router.post("/api/pool/integrate/{dtxsid}")
 async def api_pool_integrate(dtxsid: str, request: Request):
     """

@@ -1596,28 +1596,31 @@ def _build_coverage_matrix(
     fingerprints: dict[str, FileFingerprint],
 ) -> dict[str, dict[str, list[str] | str | None]]:
     """
-    Build a coverage matrix mapping platform → tier → file_id(s).
+    Build a coverage matrix mapping (platform, data_type) → tier → file_id(s).
 
-    Groups fingerprints by platform and tier.  xlsx and bm2 tiers expect a
-    single file per platform (stored as str | None), while txt_csv can have
-    multiple files per platform (one per sex), stored as a list of file_ids.
+    Groups fingerprints by platform AND data_type so that tox_study and
+    inferred files for the same platform get separate coverage entries.
+    This ensures both are included in integration — tox_study data provides
+    raw values for NTP stats, inferred .bm2 data provides BMD results.
 
-    Gene expression files (platform=None, data_type="gene_expression") are
-    grouped under the key "gene_expression".
+    The compound key format is "Platform|data_type" (e.g., "Body Weight|tox_study",
+    "Body Weight|inferred").  Gene expression uses "gene_expression".
 
     Args:
         fingerprints: All fingerprints in the pool (file_id → FileFingerprint).
 
     Returns:
-        Dict of platform → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }
+        Dict of compound_key → { "xlsx": file_id|None, "txt_csv": [file_ids], "bm2": file_id|None }
     """
     matrix: dict[str, dict] = {}
 
     for fid, fp in fingerprints.items():
-        # Determine the grouping key — use platform for apical data,
-        # "gene_expression" for gene expression (which has platform=None).
+        # Determine the grouping key — compound of platform + data_type.
+        # Gene expression (platform=None) uses just "gene_expression".
         if fp.data_type == "gene_expression":
             group_key = "gene_expression"
+        elif fp.platform is not None and fp.data_type:
+            group_key = f"{fp.platform}|{fp.data_type}"
         elif fp.platform is not None:
             group_key = fp.platform
         else:
@@ -1777,6 +1780,13 @@ def _check_dose_consistency(
         for other_id, other_doses in dose_sets[i + 1:]:
             ref_fp = fingerprints[ref_id]
             other_fp = fingerprints[other_id]
+
+            # Skip comparison if files have different data types —
+            # tox_study files (raw, with gaps) are expected to have more
+            # dose groups than inferred files (high-dose groups excluded
+            # when all animals died).
+            if ref_fp.data_type and other_fp.data_type and ref_fp.data_type != other_fp.data_type:
+                continue
 
             # Skip comparison if files are for different sexes
             if not _sexes_overlap(ref_fp, other_fp):

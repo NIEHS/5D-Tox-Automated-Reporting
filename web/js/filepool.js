@@ -685,20 +685,27 @@ async function runPoolValidation() {
         updateValidationSummary(report);
         updateFileStatusDots(report);
 
-        // Count errors — only enable Integrate if zero errors
+        // Count errors — show file metadata review if no errors
         const errorCount = (report.issues || []).filter(
             i => i.severity === 'error'
         ).length;
 
+        if (errorCount === 0) {
+            // Show file metadata confirmation table — user must confirm
+            // before integration is allowed.
+            renderFileMetadataReview(report.fingerprints || {});
+            showToast('Validation passed — confirm file metadata to integrate');
+        } else {
+            // Hide metadata review and disable integrate
+            const metaPanel = document.getElementById('file-metadata-review');
+            if (metaPanel) metaPanel.style.display = 'none';
+            showToast(`${errorCount} error(s) found — fix the file pool and re-validate`);
+        }
+
+        // Integrate button starts hidden — shown only after metadata confirmed
         if (btnIntegrate) {
-            btnIntegrate.style.display = '';
-            if (errorCount === 0) {
-                btnIntegrate.disabled = false;
-                showToast('Validation passed — ready to integrate');
-            } else {
-                btnIntegrate.disabled = true;
-                showToast(`${errorCount} error(s) found — fix the file pool and re-validate`);
-            }
+            btnIntegrate.style.display = 'none';
+            btnIntegrate.disabled = true;
         }
     } catch (e) {
         showToast('Validation request failed: ' + e.message);
@@ -817,11 +824,14 @@ function renderIntegratedPreview(data) {
     // Build source file rows — one per platform.
     // Platform strings are already human-readable, so domainLabel()
     // acts as a pass-through.
-    const sourceRows = Object.entries(sources).map(([platform, info]) => {
+    const sourceRows = Object.entries(sources).map(([key, info]) => {
+        // Keys may be compound: "Body Weight|tox_study" — extract platform part
+        const platform = key.includes('|') ? key.split('|')[0] : key;
+        const dataType = key.includes('|') ? key.split('|')[1] : '';
         const tierClass = info.tier === 'bm2' ? 'tier-bm2' :
                           info.tier === 'xlsx' ? 'tier-xlsx' : 'tier-csv';
-        const label = domainLabel(platform);
-        const isGenomic = platform === 'Gene Expression';
+        const label = domainLabel(platform) + (dataType ? ` (${dataType})` : '');
+        const isGenomic = key === 'gene_expression';
 
         return `<tr class="${isGenomic ? 'genomic-row' : ''}">
             <td><strong>${escapeHtml(label)}</strong></td>
@@ -884,14 +894,16 @@ function renderCoverageMatrix(report) {
         return;
     }
 
-    // Platform strings are already conceptual — no suffix collapsing needed.
-    // Build the collapsed structure directly from the matrix.
+    // Coverage matrix keys are compound: "Body Weight|tox_study", "Body Weight|inferred",
+    // "gene_expression".  Collapse to one row per conceptual platform by extracting
+    // the platform part (before "|") and merging tier presence across data types.
     const collapsed = {};
-    for (const platform of platforms) {
+    for (const key of platforms) {
+        const platform = key.includes('|') ? key.split('|')[0] : key;
         if (!collapsed[platform]) {
             collapsed[platform] = { xlsx: false, txtCsvCount: 0, bm2: false };
         }
-        const tiers = matrix[platform];
+        const tiers = matrix[key];
         if (tiers.xlsx) collapsed[platform].xlsx = true;
         const txtArr = tiers.txt_csv || [];
         collapsed[platform].txtCsvCount += Array.isArray(txtArr) ? txtArr.length : (txtArr ? 1 : 0);
@@ -939,6 +951,124 @@ function renderCoverageMatrix(report) {
     html += '</tbody></table>';
     container.innerHTML = html;
 }
+
+/**
+ * Render the file metadata review table — pre-integration gate.
+ *
+ * Shows one row per file with editable dropdowns for platform and data_type.
+ * Pre-filled from fingerprint detection.  User must click "Confirm & Integrate"
+ * to write metadata headers into files and proceed to integration.
+ *
+ * @param {Object} fingerprints — {file_id: fingerprint_dict} from validation
+ */
+function renderFileMetadataReview(fingerprints) {
+    const panel = document.getElementById('file-metadata-review');
+    const container = document.getElementById('file-metadata-table');
+    if (!panel || !container) return;
+
+    panel.style.display = '';
+
+    // Platform vocabulary for dropdown
+    const platforms = [
+        'Body Weight', 'Organ Weight', 'Clinical Chemistry', 'Hematology',
+        'Hormones', 'Tissue Concentration', 'Clinical Observations',
+    ];
+    const dataTypes = ['tox_study', 'inferred', 'gene_expression'];
+
+    // Sort files by filename
+    const entries = Object.entries(fingerprints)
+        .sort(([, a], [, b]) => (a.filename || '').localeCompare(b.filename || ''));
+
+    let html = '<table class="coverage-matrix" style="font-size:0.8rem;">';
+    html += '<thead><tr><th>File</th><th>Type</th><th>Platform</th><th>Data Type</th><th>Sex</th></tr></thead>';
+    html += '<tbody>';
+
+    for (const [fid, fp] of entries) {
+        const isGE = fp.data_type === 'gene_expression';
+
+        // Platform dropdown — disabled for gene expression (platform comes from chip info)
+        let platformCell;
+        if (isGE) {
+            platformCell = `<td><em>Gene Expression</em></td>`;
+        } else {
+            const opts = platforms.map(p =>
+                `<option value="${p}"${p === fp.platform ? ' selected' : ''}>${p}</option>`
+            ).join('');
+            platformCell = `<td><select data-fid="${fid}" data-field="platform" class="fm-select">${opts}</select></td>`;
+        }
+
+        // Data type dropdown
+        const dtOpts = dataTypes.map(dt =>
+            `<option value="${dt}"${dt === fp.data_type ? ' selected' : ''}>${dt}</option>`
+        ).join('');
+        const dtCell = `<td><select data-fid="${fid}" data-field="data_type" class="fm-select">${dtOpts}</select></td>`;
+
+        // Sex (read-only display from fingerprint)
+        const sexes = (fp.sexes || []).join(', ') || '—';
+
+        html += `<tr>`;
+        html += `<td><code style="font-size:0.75rem;">${escapeHtml(fp.filename || fid)}</code></td>`;
+        html += `<td>${fp.file_type || '?'}</td>`;
+        html += platformCell;
+        html += dtCell;
+        html += `<td>${sexes}</td>`;
+        html += `</tr>`;
+    }
+
+    html += '</tbody></table>';
+    html += `<div style="margin-top:0.75rem;">`;
+    html += `<button class="btn-small primary" onclick="confirmFileMetadataAndIntegrate()">Confirm &amp; Integrate</button>`;
+    html += `</div>`;
+
+    container.innerHTML = html;
+}
+
+
+/**
+ * Collect confirmed file metadata from the review table, POST to server
+ * to write headers into files, then run integration.
+ */
+async function confirmFileMetadataAndIntegrate() {
+    const dtxsid = document.getElementById('dtxsid')?.value?.trim();
+    if (!dtxsid) return;
+
+    // Collect metadata from all dropdowns
+    const metadata = {};
+    for (const sel of document.querySelectorAll('#file-metadata-table .fm-select')) {
+        const fid = sel.dataset.fid;
+        const field = sel.dataset.field;
+        if (!metadata[fid]) metadata[fid] = {};
+        metadata[fid][field] = sel.value;
+    }
+
+    try {
+        showBlockingSpinner('Writing metadata headers...');
+
+        // POST confirmed metadata to server — writes headers into file copies
+        const resp = await fetch(`/api/pool/confirm-metadata/${dtxsid}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.text();
+            showToast('Metadata confirmation failed: ' + err);
+            return;
+        }
+
+        showToast('Metadata confirmed — integrating...');
+    } catch (e) {
+        showToast('Metadata confirmation failed: ' + e.message);
+        return;
+    } finally {
+        hideBlockingSpinner();
+    }
+
+    // Now run integration — files have headers written
+    await runPoolIntegration();
+}
+
 
 /**
  * Render the validation issues list.
