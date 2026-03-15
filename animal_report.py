@@ -41,6 +41,7 @@ from dataclasses import dataclass, field, asdict
 # file_integrator provides domain detection and sex detection helpers
 # that we reuse here to avoid duplicating pattern matching logic.
 from file_integrator import (
+    base_domain,
     detect_domain,
     _detect_sex_from_filename,
     _BM2_SEX_PATTERN,
@@ -555,6 +556,11 @@ def build_animal_report(
 
         if not domain:
             continue  # skip files with no detected domain
+
+        # Normalize to base domain (strip _tox_study / _inferred suffix)
+        # so both tox_study and inferred files contribute to the same
+        # conceptual domain column in the animal roster table.
+        domain = base_domain(domain)
 
         path = os.path.join(files_dir, filename)
         if not os.path.exists(path):

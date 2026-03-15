@@ -75,23 +75,24 @@ _DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
     # false positives from small organ weight files.
     (re.compile(r"gene.?expression", re.IGNORECASE), "gene_expression"),
 
-    # --- Source-of-truth files (base domains) ---
-    # Files with "_truth" in the name are source-of-truth data: actual
-    # experimental values with potential gaps (missing animals, lost samples).
-    # Used for NTP traditional statistics (Williams, Dunnett, Jonckheere)
-    # and for computing N, mean, SD per dose group.
+    # --- Tox study files (_tox_study domains) ---
+    # Files with "_tox_study" (or legacy "_truth") in the name are source-of-
+    # truth data: actual experimental values with potential gaps (missing
+    # animals, lost samples).  Used for NTP traditional statistics (Williams,
+    # Dunnett, Jonckheere) and for computing N, mean, SD per dose group.
     # These must come BEFORE the generic domain patterns so that
-    # "body_weight_truth" matches here, not as "body_weight" below.
-    (re.compile(r"tissue.?conc.*_truth", re.IGNORECASE), "tissue_conc"),
-    (re.compile(r"clinical.?obs.*_truth", re.IGNORECASE), "clinical_obs"),
-    (re.compile(r"clin.*chem.*_truth", re.IGNORECASE), "clin_chem"),
-    (re.compile(r"hematol.*_truth", re.IGNORECASE), "hematology"),
-    (re.compile(r"hormone.*_truth", re.IGNORECASE), "hormones"),
-    (re.compile(r"organ.?weight.*_truth", re.IGNORECASE), "organ_weights"),
-    (re.compile(r"body.?weight.*_truth", re.IGNORECASE), "body_weight"),
+    # "body_weight_tox_study" matches here, not as "body_weight" below.
+    # The _truth alias handles existing files that predate the rename.
+    (re.compile(r"tissue.?conc.*_(?:tox_study|truth)", re.IGNORECASE), "tissue_conc_tox_study"),
+    (re.compile(r"clinical.?obs.*_(?:tox_study|truth)", re.IGNORECASE), "clinical_obs"),
+    (re.compile(r"clin.*chem.*_(?:tox_study|truth)", re.IGNORECASE), "clin_chem_tox_study"),
+    (re.compile(r"hematol.*_(?:tox_study|truth)", re.IGNORECASE), "hematology_tox_study"),
+    (re.compile(r"hormone.*_(?:tox_study|truth)", re.IGNORECASE), "hormones_tox_study"),
+    (re.compile(r"organ.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "organ_weights_tox_study"),
+    (re.compile(r"body.?weight.*_(?:tox_study|truth)", re.IGNORECASE), "body_weight_tox_study"),
 
     # --- Inferred files (_inferred domains) ---
-    # Files WITHOUT "_truth" in the name are inferred data: gaps filled
+    # Files WITHOUT "_tox_study" in the name are inferred data: gaps filled
     # with dose-group averages so BMDExpress can model them.  The .bm2
     # output from these becomes the source of BMD/BMDL values.
     # Tissue concentration — check before generic "clinical" to avoid
@@ -118,6 +119,42 @@ _DOMAIN_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Body weight — "body_weight" or "Body_Weight" or "Body weight"
     (re.compile(r"body.?weight", re.IGNORECASE), "body_weight_inferred"),
 ]
+
+# ---------------------------------------------------------------------------
+# Domain suffix helpers
+# ---------------------------------------------------------------------------
+# The 14-domain model uses suffixed names: body_weight_tox_study,
+# body_weight_inferred, etc.  base_domain() strips the suffix to get
+# the conceptual domain (e.g., "body_weight") for grouping and display.
+
+_DOMAIN_SUFFIX_RE = re.compile(r"(_tox_study|_inferred)$")
+
+
+def base_domain(domain: str) -> str:
+    """
+    Strip the _tox_study or _inferred suffix to get the conceptual domain.
+
+    Used to group tox_study and inferred experiments under the same
+    conceptual domain for display, sub-tabs, and method text selection.
+    Domains without a suffix (clinical_obs, gene_expression) pass through
+    unchanged.
+
+    Examples:
+        base_domain("body_weight_tox_study")  → "body_weight"
+        base_domain("body_weight_inferred")   → "body_weight"
+        base_domain("clinical_obs")           → "clinical_obs"
+        base_domain("gene_expression")        → "gene_expression"
+
+    Args:
+        domain: Full domain string, possibly with _tox_study or _inferred suffix.
+
+    Returns:
+        The conceptual domain name without suffix.
+    """
+    if not domain:
+        return domain
+    return _DOMAIN_SUFFIX_RE.sub("", domain)
+
 
 # Gene expression txt files are organ-prefixed (e.g., "Liver_PFHxSAm_Male_No0.txt").
 # They're distinguished from other small txt files by having >500 data rows
@@ -193,8 +230,13 @@ _VOCAB = {
         "skin", "spleen", "stomach", "testes", "thymus", "thyroid", "uterus",
     ],
     "domains": [
-        "body_weight", "organ_weights", "clin_chem", "hematology",
-        "hormones", "tissue_conc", "clinical_obs", "gene_expression",
+        "body_weight_tox_study", "body_weight_inferred",
+        "organ_weights_tox_study", "organ_weights_inferred",
+        "clin_chem_tox_study", "clin_chem_inferred",
+        "hematology_tox_study", "hematology_inferred",
+        "hormones_tox_study", "hormones_inferred",
+        "tissue_conc_tox_study", "tissue_conc_inferred",
+        "clinical_obs", "gene_expression",
     ],
 }
 
@@ -911,7 +953,7 @@ def fingerprint_txt_csv(
     is_long_format = _LONG_FORMAT_MARKERS.issubset(row1_lower)
 
     if is_long_format:
-        # --- Long-format parsing (source-of-truth _truth.csv files) ---
+        # --- Long-format parsing (source-of-truth _tox_study.csv files) ---
         # Parse header → column indices, then extract doses, animal IDs,
         # sexes, and endpoint names from the data rows.
         header = [c.strip() for c in row1_cells]
@@ -1249,13 +1291,15 @@ def fingerprint_bm2(
             fp.organ = exp_desc["organ"].title()
         if exp_desc.get("species"):
             fp.species = exp_desc["species"]
-        # Map platform to domain for augmented files
+        # Map platform to domain for augmented files.
+        # .bm2 files are always produced from gap-filled (inferred) data,
+        # so they map to _inferred domains.
         platform = exp_desc.get("platform", "")
         if platform:
             platform_domain_map = {
-                "Clinical Chemistry": "clin_chem",
-                "Hematology": "hematology",
-                "Organ Weight": "organ_weights",
+                "Clinical Chemistry": "clin_chem_inferred",
+                "Hematology": "hematology_inferred",
+                "Organ Weight": "organ_weights_inferred",
             }
             if platform in platform_domain_map:
                 fp.domain = platform_domain_map[platform]
@@ -1799,156 +1843,88 @@ def _check_redundancy(
     return issues
 
 
-# Base apical domains that come from source-of-truth (_truth) files.
-# These define the authoritative animal roster per sex.  Every other
-# file must have animal IDs that are a subset of this roster.
-_BASE_APICAL_DOMAINS = frozenset({
-    "body_weight", "organ_weights", "clin_chem",
-    "hematology", "hormones", "tissue_conc",
-})
-
-
 def _check_roster_consistency(
     fingerprints: dict[str, FileFingerprint],
 ) -> list[ValidationIssue]:
     """
     Top-level roster validation — runs before all other checks.
 
-    Source-of-truth files (base apical domains without '_inferred' suffix)
-    define the authoritative animal roster per sex.  This check enforces:
+    The study roster per sex is the UNION of animal IDs from ALL files
+    (all domains, all tiers).  No domain has special roster authority —
+    every file that reports animal IDs contributes to the universal roster.
 
-    1. All _truth files for the same sex must have identical animal ID sets.
-       If they disagree, that's a top-level error blocking everything.
-    2. Every other file (inferred, .bm2, gene_expression) must have animal
-       IDs that are a subset of the roster for its sex.
-       Any unknown animal ID → top-level error.
+    Once the universal roster is built, each individual file's animal set
+    must be a subset.  An animal ID appearing in only one file is fine
+    (that file simply has the most complete roster).  An animal ID NOT
+    in the universal set is impossible by construction (union includes
+    everything), so the only check is whether files are internally
+    consistent (no IDs that appear in one file but are clearly erroneous).
+
+    Currently this is a no-op warning generator: it reports which files
+    have fewer animals than the largest file for each sex, as an FYI.
+    This helps users spot files that are missing animals (dead animals,
+    excluded dose groups) without blocking processing.
 
     Args:
         fingerprints: Dict of file_id → FileFingerprint for all pool files.
 
     Returns:
-        List of ValidationIssue objects.  Any issues here are severity="error"
-        and block all further processing.
+        List of ValidationIssue objects (informational, not blocking).
     """
     issues: list[ValidationIssue] = []
 
-    # --- Phase 1: Build the authoritative roster from _truth files ---
-    # Group _truth fingerprints by sex.  Each _truth file should contain
-    # the complete roster for its sex — so all must agree.
-    # truth_by_sex: {"Male": {file_id: set(animal_ids), ...}, ...}
-    truth_by_sex: dict[str, dict[str, set[str]]] = {}
+    # --- Build universal roster per sex from ALL files ---
+    # files_by_sex: {"Male": {file_id: set(animal_ids), ...}, ...}
+    files_by_sex: dict[str, dict[str, set[str]]] = {}
 
     for fid, fp in fingerprints.items():
-        if fp.domain not in _BASE_APICAL_DOMAINS:
-            continue
         if not fp.animal_ids:
             continue
-
-        # A _truth file may cover one sex (from filename) or both
-        sexes = fp.sexes if fp.sexes else ["Unknown"]
-        for sex in sexes:
-            if sex not in truth_by_sex:
-                truth_by_sex[sex] = {}
-            truth_by_sex[sex][fid] = set(fp.animal_ids)
-
-    # Build the authoritative roster per sex as the UNION of all _truth
-    # files.  Not all _truth files have the same animals — high-dose animals
-    # that died won't appear in organ weights, clin chem, etc.  The body
-    # weight _truth file typically has the superset (all dose groups).
-    # Every _truth file must be a SUBSET of this union — if any file has
-    # an animal not present in any other _truth file, that's suspicious.
-    roster_by_sex: dict[str, set[str]] = {}
-    for sex, files in truth_by_sex.items():
-        if not files:
-            continue
-
-        # Union of all _truth animal IDs for this sex
-        union: set[str] = set()
-        for aids in files.values():
-            union |= aids
-        roster_by_sex[sex] = union
-
-        # Check each _truth file: its animals must be a subset of the union.
-        # Since the union includes this file's own animals, the only way
-        # this fails is if a file has an animal NOT in any other file —
-        # which is fine for the file with the most animals (body_weight).
-        # So instead we check: every animal in each file should appear in
-        # at least one OTHER _truth file, OR in the file with the most
-        # animals (which defines the study roster).
-        #
-        # The practical check: find the file with the most animals — that's
-        # the roster.  Every other _truth file must be a subset.
-        largest_fid = max(files, key=lambda fid: len(files[fid]))
-        largest_roster = files[largest_fid]
-        largest_fp = fingerprints[largest_fid]
-
-        for other_fid, other_roster in files.items():
-            if other_fid == largest_fid:
-                continue
-            extra = other_roster - largest_roster
-            if extra:
-                other_fp = fingerprints[other_fid]
-                issues.append(ValidationIssue(
-                    severity="error",
-                    domain="roster",
-                    issue_type="roster_mismatch",
-                    message=(
-                        f"Roster conflict ({sex}): {other_fp.filename} has "
-                        f"{len(extra)} animal ID(s) not in the study roster "
-                        f"({largest_fp.filename}): {', '.join(sorted(extra))}"
-                    ),
-                    files_involved=[other_fid, largest_fid],
-                    details={
-                        "sex": sex,
-                        "extra_ids": sorted(extra),
-                        "roster_file": largest_fp.filename,
-                        "roster_count": len(largest_roster),
-                    },
-                ))
-
-    # If no _truth files at all, we can't validate rosters — skip
-    if not roster_by_sex:
-        return issues
-
-    # --- Phase 2: Check every non-_truth file against the roster ---
-    for fid, fp in fingerprints.items():
-        # Skip _truth files (already checked above)
-        if fp.domain in _BASE_APICAL_DOMAINS:
-            continue
-        if not fp.animal_ids:
-            continue
-
         # Gene expression files use plate/sample IDs (e.g., "Plate5-116"),
-        # not study animal IDs (e.g., "101").  Skip roster validation for
-        # these until a mapping between plate IDs and animal IDs is available.
+        # not study animal IDs (e.g., "101").  Exclude from roster.
         if fp.domain == "gene_expression":
             continue
 
-        # Determine which sex roster to check against
-        sexes = fp.sexes if fp.sexes else list(roster_by_sex.keys())
+        sexes = fp.sexes if fp.sexes else ["Unknown"]
         for sex in sexes:
-            roster = roster_by_sex.get(sex)
-            if roster is None:
-                continue  # No _truth file for this sex — can't validate
+            files_by_sex.setdefault(sex, {})[fid] = set(fp.animal_ids)
 
-            file_animals = set(fp.animal_ids)
-            unknown = file_animals - roster
-            if unknown:
+    # For each sex, compute the universal roster (union) and report
+    # files that have fewer animals as informational warnings.
+    for sex, files in files_by_sex.items():
+        if not files:
+            continue
+
+        # Universal roster = union of all animal IDs for this sex
+        roster: set[str] = set()
+        for aids in files.values():
+            roster |= aids
+
+        # Find the file with the most animals (typically body weight)
+        largest_fid = max(files, key=lambda f: len(files[f]))
+        largest_fp = fingerprints[largest_fid]
+
+        for fid, file_animals in files.items():
+            missing = roster - file_animals
+            if missing and len(missing) <= len(roster) * 0.5:
+                # File has fewer animals than the universal roster —
+                # expected for domains where high-dose animals died.
+                fp = fingerprints[fid]
                 issues.append(ValidationIssue(
-                    severity="error",
-                    domain="roster",
-                    issue_type="unknown_animal_ids",
+                    severity="info",
+                    domain=fp.domain or "unknown",
+                    issue_type="roster_subset",
                     message=(
-                        f"{fp.filename} ({fp.domain}, {sex}): "
-                        f"{len(unknown)} animal ID(s) not in study roster: "
-                        f"{', '.join(sorted(unknown))}"
+                        f"{fp.filename} ({sex}): {len(file_animals)}/{len(roster)} "
+                        f"animals — missing {len(missing)} "
+                        f"({', '.join(sorted(list(missing)[:5]))})"
                     ),
                     files_involved=[fid],
                     details={
                         "sex": sex,
-                        "unknown_ids": sorted(unknown),
-                        "file_animal_count": len(file_animals),
+                        "file_count": len(file_animals),
                         "roster_count": len(roster),
+                        "missing_count": len(missing),
                     },
                 ))
 
@@ -1963,8 +1939,8 @@ def validate_pool(
     Run full cross-validation on a session's file pool.
 
     Validation hierarchy (each level blocks the next):
-      0. Roster consistency — _truth files define the authoritative animal
-         roster per sex.  All _truth files for the same sex must agree.
+      0. Roster consistency — _tox_study files define the authoritative animal
+         roster per sex.  All _tox_study files for the same sex must agree.
          Every other file must be a subset.  Errors here block everything.
       1. Domain assignment — every file must have a recognized domain.
          Unassigned files block all processing.

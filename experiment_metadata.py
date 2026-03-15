@@ -79,8 +79,11 @@ VOCABULARIES = {
         "mouse": ["C57BL/6", "BALB/c", "CD-1", "FVB/N", "129", "DBA/2", "NOD", "SCID"],
     },
     "platform": [
-        "Body Weight", "Clinical Chemistry", "Hematology", "Hormone", "IVIVE",
-        "Organ Weight", "Generic",
+        # Apical platforms — in vivo tox study endpoint classes
+        "Body Weight", "Clinical Chemistry", "Hematology", "Hormones",
+        "Organ Weight", "Tissue Concentration", "Clinical Observations",
+        "IVIVE", "Generic",
+        # Genomics platforms
         "S1500+_rat", "S1500+_human",
         "Affymetrix Drosophila Genome Array", "Drosophila Genome 2.0 Array",
         "Human HG-Focus Target Array", "Human Genome U133A Array",
@@ -100,7 +103,7 @@ VOCABULARIES = {
     ],
     "provider": [
         "Affymetrix", "Agilent", "BioSpyder", "BMDExpress 3", "RefSeq", "Ensembl",
-        "Clinical Endpoint", "Study", "Generic",
+        "Apical", "Generic",
     ],
     "subjectType": ["in vivo", "in vitro", "in silico"],
     "articleRoute": ["gavage", "oral", "inhaled", "transdermal"],
@@ -112,6 +115,9 @@ VOCABULARIES = {
         "1d", "3d", "7d", "14d",
     ],
     "articleType": ["chemical", "mixture", "electromagnetic radiation"],
+    # Data completeness classification — describes whether the data has gaps
+    # (tox_study = raw animal data) or is gap-filled for BMD modeling (inferred).
+    "dataType": ["tox_study", "inferred", "gene_expression"],
 }
 
 
@@ -294,21 +300,28 @@ Rules:
    It will be attached automatically in post-processing (same for all experiments).
 4. If the study is clearly in vivo (animal data), set subjectType to "in vivo".
 5. Strain and species may be inferable from filenames or context.  If not, use null.
-6. For apical/clinical endpoints, use provider "Study" and match the platform to the domain:
+6. For apical/clinical endpoints, use provider "Apical" and match the platform:
    "Body Weight" for body weight, "Organ Weight" for organ weight,
    "Clinical Chemistry" for clinical chemistry, "Hematology" for hematology,
-   "Hormone" for hormone/thyroid hormone endpoints.
+   "Hormones" for hormone/thyroid hormone endpoints, "Tissue Concentration"
+   for IVIVE/plasma data, "Clinical Observations" for categorical observations.
 7. Organ assignments by domain:
    - Hematology, Clinical Chemistry, Hormone → organ: "blood"
    - Body Weight → organ: "Whole Body"
    - Organ Weight → organ: list of organs found in the probe/endpoint names
      (e.g. probes like "liver", "kidney", "spleen" → organ: "liver, kidney, spleen").
      If organ names aren't clear from the probes, use null.
-8. Tissue concentration / IVIVE experiments → platform: "IVIVE", provider: "BMDExpress 3".
-   Apply this even if no IVIVE data is present (it's the canonical classification).
+8. Tissue concentration / IVIVE experiments → platform: "Tissue Concentration", provider: "Apical".
 9. Defaults (use these unless evidence suggests otherwise):
    studyDuration: "5d", articleRoute: "gavage", articleVehicle: "corn oil".
-10. Return valid JSON only — no markdown fences, no commentary."""
+10. Data type classification (dataType field):
+    - "tox_study" — raw experimental data that may have missing values (dead animals,
+      excluded samples).  Used for NTP traditional statistics.
+    - "inferred" — gap-filled data (dose-group averages substituted for missing values)
+      suitable for BMD modeling.  Most .bm2 data is inferred.
+    - "gene_expression" — transcriptomics data (always complete, different pipeline).
+    - When ambiguous, default to "inferred" (most common in .bm2 files).
+11. Return valid JSON only — no markdown fences, no commentary."""
 
 
 def _build_prompt(
@@ -360,6 +373,7 @@ def _build_prompt(
             "articleVehicle": "str or null",
             "administrationMeans": "str or null",
             "articleType": "str",
+            "dataType": "str — tox_study, inferred, or gene_expression",
         }
     }, indent=2))
 

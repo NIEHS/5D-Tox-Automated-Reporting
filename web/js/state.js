@@ -163,6 +163,30 @@ const DEFAULT_SETTINGS = {
 let reportSettings = { ...DEFAULT_SETTINGS };
 
 
+/**
+ * Strip the _tox_study or _inferred suffix to get the conceptual domain.
+ * Used everywhere domain names from the server need to be mapped to
+ * human-readable labels or grouped into sub-tabs.
+ *
+ * @param {string} domain — full domain key (e.g., "body_weight_tox_study")
+ * @returns {string} — base domain key (e.g., "body_weight")
+ */
+function baseDomain(domain) {
+    return (domain || '').replace(/(_tox_study|_inferred)$/, '');
+}
+
+/**
+ * Look up a human-readable label for any domain string.
+ * Normalizes via baseDomain() first, so both "body_weight_tox_study"
+ * and "body_weight_inferred" resolve to "Body Weight".
+ *
+ * @param {string} domain — full or base domain key
+ * @returns {string} — human-readable label
+ */
+function domainLabel(domain) {
+    return DOMAIN_LABELS[baseDomain(domain)] || domain.replace(/_/g, ' ');
+}
+
 const DOMAIN_LABELS = {
     body_weight:    'Body Weight',
     organ_weights:  'Organ Weights',

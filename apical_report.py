@@ -587,6 +587,7 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
 def build_table_data(
     bm2_json: dict,
     category_lookup: dict,
+    domains: list[str] | None = None,
 ) -> dict[str, list[TableRow]]:
     """
     Build the table data for all endpoints, organized by sex.
@@ -603,6 +604,10 @@ def build_table_data(
     Args:
         bm2_json:        Parsed JSON from the .bm2 export.
         category_lookup: Dict from build_category_lookup().
+        domains:         Optional list of domain strings to include.  When
+                         provided, only experiments whose experimentDescription
+                         .domain is in this list are processed.  When None,
+                         all experiments are included (backward compat).
 
     Returns:
         Dict mapping sex label ("Male" / "Female") → list of TableRow.
@@ -633,6 +638,16 @@ def build_table_data(
 
     for exp in bm2_json.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
+
+        # --- Domain filter: skip experiments not in the requested domains ---
+        if domains is not None:
+            exp_domain = None
+            desc = exp.get("experimentDescription")
+            if isinstance(desc, dict):
+                exp_domain = desc.get("domain")
+            if exp_domain not in domains:
+                continue
+
         treatments = exp.get("treatments", [])
         exp_doses = [t["dose"] for t in treatments]
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
@@ -959,7 +974,7 @@ def build_table_data(
 def annotate_missing_animals(
     domain_tables: dict[str, dict[str, list]],
     xlsx_rosters: dict[str, dict],
-    reference_domain: str = "body_weight",
+    reference_domain: str = "body_weight_tox_study",
 ) -> None:
     """
     Annotate TableRows with missing-animal counts by comparing bm2 N counts
@@ -1047,7 +1062,7 @@ def annotate_missing_animals(
 def backfill_missing_doses(
     domain_tables: dict[str, dict[str, list]],
     xlsx_rosters: dict[str, dict],
-    reference_domain: str = "body_weight",
+    reference_domain: str = "body_weight_tox_study",
 ) -> None:
     """
     Ensure every TableRow uses the full study dose list as columns, filling

@@ -249,6 +249,7 @@ public class IntegrateProject {
             setIfPresent(meta, "articleVehicle", desc::setArticleVehicle);
             setIfPresent(meta, "administrationMeans", desc::setAdministrationMeans);
             setIfPresent(meta, "articleType", desc::setArticleType);
+            setIfPresent(meta, "dataType",    desc::setDataType);
 
             exp.setExperimentDescription(desc);
             applied++;

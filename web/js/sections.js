@@ -1263,8 +1263,11 @@ async function runProcessingPipeline() {
 function renderAnimalReport(report) {
     const container = document.getElementById('animal-report-content');
 
-    // Shared domain label lookup (from state.js constant)
-    const domainFullLabels = DOMAIN_LABELS;
+    // Shared domain label lookup — use domainLabel() from state.js which
+    // normalizes via baseDomain() before looking up in DOMAIN_LABELS.
+    const domainFullLabels = new Proxy({}, {
+        get: (_, key) => domainLabel(key),
+    });
 
     // Helper: build a collapsible section.  The summary line is always
     // visible; clicking it toggles the body.  Starts collapsed.

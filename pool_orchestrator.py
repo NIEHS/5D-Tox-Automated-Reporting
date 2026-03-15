@@ -50,6 +50,7 @@ from llm_helpers import llm_generate_json as _llm_generate_json_imported
 from file_integrator import (
     FileFingerprint,
     ValidationReport,
+    base_domain,
     fingerprint_file,
     validate_pool,
     lightweight_validate,
@@ -790,8 +791,8 @@ async def api_integrated_summary(dtxsid: str):
 # Human-readable domain titles for section headers in the UI.
 # Maps the internal domain key to a display-friendly label.
 _DOMAIN_TITLES = {
-    # Base domains — source-of-truth data (actual experimental values,
-    # may have gaps).  Used for NTP stats: N, mean, SD, trend, pairwise.
+    # Base (conceptual) domains — used for merged section cards that combine
+    # NTP stats from _tox_study data with BMD from _inferred data.
     "body_weight":    "Body Weight",
     "organ_weights":  "Organ Weights",
     "clin_chem":      "Clinical Chemistry",
@@ -799,14 +800,20 @@ _DOMAIN_TITLES = {
     "hormones":       "Hormones",
     "tissue_conc":    "Tissue Concentration",
     "clinical_obs":   "Clinical Observations",
-    # Inferred domains — gap-filled data run through BMDExpress.
-    # Used for BMD/BMDL values in the report tables.
-    "body_weight_inferred":    "Body Weight (Inferred)",
-    "organ_weights_inferred":  "Organ Weights (Inferred)",
-    "clin_chem_inferred":      "Clinical Chemistry (Inferred)",
-    "hematology_inferred":     "Hematology (Inferred)",
-    "hormones_inferred":       "Hormones (Inferred)",
-    "tissue_conc_inferred":    "Tissue Concentration (Inferred)",
+    # Suffixed variants — kept for direct lookups when the full domain
+    # name is used (e.g., in BMD summary tables or source file metadata).
+    "body_weight_tox_study":    "Body Weight",
+    "organ_weights_tox_study":  "Organ Weights",
+    "clin_chem_tox_study":      "Clinical Chemistry",
+    "hematology_tox_study":     "Hematology",
+    "hormones_tox_study":       "Hormones",
+    "tissue_conc_tox_study":    "Tissue Concentration",
+    "body_weight_inferred":    "Body Weight",
+    "organ_weights_inferred":  "Organ Weights",
+    "clin_chem_inferred":      "Clinical Chemistry",
+    "hematology_inferred":     "Hematology",
+    "hormones_inferred":       "Hormones",
+    "tissue_conc_inferred":    "Tissue Concentration",
 }
 
 # Human-readable labels for BMD statistics, used by the UI to set table
@@ -1104,13 +1111,27 @@ def _partition_by_domain(
     Returns:
         Nested dict: {domain -> {sex -> [TableRow, ...]}}.
     """
-    # Build experiment_name -> domain mapping.
-    # Use _meta.source_files to know which experiment names belong to which
-    # domain.  Also use detect_domain() on the experiment name as fallback.
+    # Build experiment_name -> conceptual domain mapping.
+    # All domains are normalized via base_domain() so that _tox_study and
+    # _inferred experiments end up in the same partition — producing one
+    # merged section card per conceptual domain (NIEHS reference format).
+    #
+    # Primary: use the authoritative experimentDescription.domain field
+    # (set by _stamp_domains in pool_integrator.py from fingerprint data).
+    # Fallback: legacy heuristics for sessions integrated before domain stamping.
     exp_name_to_domain: dict[str, str] = {}
 
     for exp in apical_integrated.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
+
+        # --- Primary: authoritative domain from experimentDescription ---
+        desc = exp.get("experimentDescription")
+        if isinstance(desc, dict) and desc.get("domain"):
+            # Normalize to conceptual domain for partition grouping
+            exp_name_to_domain[exp_name] = base_domain(desc["domain"])
+            continue
+
+        # --- Fallback: legacy heuristics for old sessions ---
         exp_lower = exp_name.lower()
 
         # Strip sex suffix/prefix for matching.
@@ -1121,21 +1142,23 @@ def _partition_by_domain(
         domain_for_exp = None
         for prefix, dom in _BM2_DOMAIN_MAP.items():
             if stripped.startswith(prefix) or prefix.startswith(stripped):
-                domain_for_exp = dom
+                domain_for_exp = base_domain(dom)
                 break
 
         # Fallback: try detect_domain() which uses regex patterns.
         # This handles abbreviated names like "clin_chem" that don't
         # match the full BM2 prefix "clinicalchemistry".
         if not domain_for_exp:
-            domain_for_exp = detect_domain(exp_name, "bm2", 0)
+            detected = detect_domain(exp_name, "bm2", 0)
+            if detected:
+                domain_for_exp = base_domain(detected)
 
         # Last resort: check if experiment name overlaps with source domain keys
         if not domain_for_exp:
             for dom in source_files:
-                dom_key = dom.replace("_", "")
+                dom_key = base_domain(dom).replace("_", "")
                 if dom_key in exp_lower.replace("_", ""):
-                    domain_for_exp = dom
+                    domain_for_exp = base_domain(dom)
                     break
 
         if domain_for_exp:

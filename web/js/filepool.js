@@ -826,7 +826,7 @@ function renderIntegratedPreview(data) {
     const sourceRows = Object.entries(sources).map(([domain, info]) => {
         const tierClass = info.tier === 'bm2' ? 'tier-bm2' :
                           info.tier === 'xlsx' ? 'tier-xlsx' : 'tier-csv';
-        const label = domainLabels[domain] || domain.replace(/_/g, ' ');
+        const label = domainLabel(domain);
         const isGenomic = domain === 'gene_expression';
 
         return `<tr class="${isGenomic ? 'genomic-row' : ''}">
@@ -883,55 +883,64 @@ function renderCoverageMatrix(report) {
     if (!container) return;
 
     const matrix = report.coverage_matrix || {};
-    const domains = Object.keys(matrix).sort();
+    const rawDomains = Object.keys(matrix);
 
-    if (domains.length === 0) {
+    if (rawDomains.length === 0) {
         container.innerHTML = '<p style="color:var(--c-text-muted);font-size:0.8rem;">No domains detected.</p>';
         return;
     }
 
-    // Human-readable domain labels (shared constant from state.js)
-    const domainLabels = DOMAIN_LABELS;
+    // Collapse to conceptual domains: merge _tox_study and _inferred
+    // entries that share the same base domain into one row.  Tier
+    // presence from any variant counts toward the conceptual domain.
+    const collapsed = {};
+    for (const domain of rawDomains) {
+        const base = baseDomain(domain);
+        if (!collapsed[base]) {
+            collapsed[base] = { xlsx: false, txtCsvCount: 0, bm2: false };
+        }
+        const tiers = matrix[domain];
+        if (tiers.xlsx) collapsed[base].xlsx = true;
+        const txtArr = tiers.txt_csv || [];
+        collapsed[base].txtCsvCount += Array.isArray(txtArr) ? txtArr.length : (txtArr ? 1 : 0);
+        if (tiers.bm2) collapsed[base].bm2 = true;
+    }
+
+    const domains = Object.keys(collapsed).sort();
 
     let html = '<table class="coverage-matrix">';
     html += '<thead><tr><th>Domain</th><th>xlsx</th><th>txt/csv</th><th>bm2</th><th></th></tr></thead>';
     html += '<tbody>';
 
     for (const domain of domains) {
-        const tiers = matrix[domain];
-        const hasXlsx = !!tiers.xlsx;
-        const txtCsvCount = (tiers.txt_csv || []).length;
-        const hasBm2 = !!tiers.bm2;
+        const c = collapsed[domain];
 
         // Gene expression typically has no xlsx — don't show missing as a gap
         const xlsxExpected = domain !== 'gene_expression';
 
-        // Build tier cells — show ✓ count for txt_csv (may have multiple: one per sex)
-        const xlsxCell = hasXlsx
+        const xlsxCell = c.xlsx
             ? '<span class="coverage-check">✓</span>'
             : (xlsxExpected ? '<span class="coverage-dash">—</span>' : '<span class="coverage-dash">n/a</span>');
 
         let txtCell;
-        if (txtCsvCount === 0) {
+        if (c.txtCsvCount === 0) {
             txtCell = '<span class="coverage-dash">—</span>';
-        } else if (txtCsvCount === 1) {
+        } else if (c.txtCsvCount === 1) {
             txtCell = '<span class="coverage-check">✓</span>';
         } else {
-            // Multiple txt/csv files (one per sex) — show count
-            txtCell = '<span class="coverage-check">' + '✓'.repeat(Math.min(txtCsvCount, 4)) + '</span>';
+            txtCell = '<span class="coverage-check">' + '✓'.repeat(Math.min(c.txtCsvCount, 4)) + '</span>';
         }
 
-        const bm2Cell = hasBm2
+        const bm2Cell = c.bm2
             ? '<span class="coverage-check">✓</span>'
             : '<span class="coverage-dash">—</span>';
 
-        // Warning indicator — show if any expected tier is missing
-        const hasMissingTier = (xlsxExpected && !hasXlsx) || txtCsvCount === 0 || !hasBm2;
+        const hasMissingTier = (xlsxExpected && !c.xlsx) || c.txtCsvCount === 0 || !c.bm2;
         const warnCell = hasMissingTier
             ? '<span class="coverage-warn">⚠</span>'
             : '';
 
-        const label = domainLabels[domain] || domain;
+        const label = domainLabel(domain);
         html += `<tr><td>${label}</td><td>${xlsxCell}</td><td>${txtCell}</td><td>${bm2Cell}</td><td>${warnCell}</td></tr>`;
     }
 
@@ -1233,32 +1242,32 @@ function restoreValidationReport(report) {
  * {sex} and {compound} are replaced at export time with the actual
  * sex group label and compound name.
  *
- * Both base domains (source_of_truth — for NTP stats) and _inferred
+ * Both _tox_study domains (source of truth — for NTP stats) and _inferred
  * domains (gap-filled — for BMDExpress BMD/BMDL) are listed.  They
  * share the same sub-tab; the suffix is shown in the card header.
  */
 const _DOMAIN_DEFAULTS = {
-    body_weight:            { title: 'Body Weight',
+    body_weight_tox_study:  { title: 'Body Weight',
                               caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
     body_weight_inferred:   { title: 'Body Weight (Inferred)',
                               caption: 'Summary of Body Weights of {sex} Rats Administered {compound} for Five Days' },
-    organ_weights:          { title: 'Organ Weights',
+    organ_weights_tox_study: { title: 'Organ Weights',
                               caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
     organ_weights_inferred: { title: 'Organ Weights (Inferred)',
                               caption: 'Summary of Organ Weights of {sex} Rats Administered {compound} for Five Days' },
-    clin_chem:              { title: 'Clinical Chemistry',
+    clin_chem_tox_study:    { title: 'Clinical Chemistry',
                               caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
     clin_chem_inferred:     { title: 'Clinical Chemistry (Inferred)',
                               caption: 'Summary of Select Clinical Chemistry Data for {sex} Rats Administered {compound} for Five Days' },
-    hematology:             { title: 'Hematology',
+    hematology_tox_study:   { title: 'Hematology',
                               caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
     hematology_inferred:    { title: 'Hematology (Inferred)',
                               caption: 'Summary of Select Hematology Data for {sex} Rats Administered {compound} for Five Days' },
-    hormones:               { title: 'Hormones',
+    hormones_tox_study:     { title: 'Hormones',
                               caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
     hormones_inferred:      { title: 'Hormones (Inferred)',
                               caption: 'Summary of Select Hormone Data for {sex} Rats Administered {compound} for Five Days' },
-    tissue_conc:            { title: 'Tissue Concentration',
+    tissue_conc_tox_study:  { title: 'Tissue Concentration',
                               caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
     tissue_conc_inferred:   { title: 'Tissue Concentration (Inferred)',
                               caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
@@ -1296,7 +1305,7 @@ const _DOMAIN_SUB_TAB_LABELS = {
  * @returns {string} — base domain key (e.g. "hormones")
  */
 function _baseDomain(domain) {
-    return (domain || '').replace(/_inferred$/, '');
+    return (domain || '').replace(/(_tox_study|_inferred)$/, '');
 }
 
 /**

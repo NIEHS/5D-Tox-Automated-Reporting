@@ -44,6 +44,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from file_integrator import base_domain
+
 logger = logging.getLogger(__name__)
 
 
@@ -414,28 +416,30 @@ def extract_methods_context(
         if not domain:
             continue
 
-        # Set domain presence flags
-        if domain == "body_weight":
+        # Set domain presence flags — use base_domain() to strip
+        # _tox_study / _inferred suffix for conceptual grouping.
+        bdom = base_domain(domain)
+        if bdom == "body_weight":
             ctx.has_body_weight = True
-        elif domain == "organ_weights":
+        elif bdom == "organ_weights":
             ctx.has_organ_weights = True
             eps = _get("endpoint_names", [])
             ctx.organ_weight_endpoints = list(set(ctx.organ_weight_endpoints + eps))
-        elif domain == "clin_chem":
+        elif bdom == "clin_chem":
             ctx.has_clin_chem = True
             eps = _get("endpoint_names", [])
             ctx.clin_chem_endpoints = list(set(ctx.clin_chem_endpoints + eps))
-        elif domain == "hematology":
+        elif bdom == "hematology":
             ctx.has_hematology = True
             eps = _get("endpoint_names", [])
             ctx.hematology_endpoints = list(set(ctx.hematology_endpoints + eps))
-        elif domain == "hormones":
+        elif bdom == "hormones":
             ctx.has_hormones = True
             eps = _get("endpoint_names", [])
             ctx.hormone_endpoints = list(set(ctx.hormone_endpoints + eps))
-        elif domain == "tissue_conc":
+        elif bdom == "tissue_conc":
             ctx.has_tissue_conc = True
-        elif domain == "gene_expression":
+        elif bdom == "gene_expression":
             ctx.has_gene_expression = True
             organ = _get("organ")
             if organ and organ not in ctx.ge_organs:
@@ -472,22 +476,24 @@ def extract_methods_context(
         if not ctx.dose_groups and animal_report.get("dose_groups"):
             ctx.dose_groups = [float(d) for d in animal_report["dose_groups"]]
 
-        # Domain coverage can confirm domain presence
+        # Domain coverage can confirm domain presence — use base_domain()
+        # to handle both _tox_study and _inferred suffixed keys.
         dc = animal_report.get("domain_coverage", {})
         for dom in dc:
-            if dom == "body_weight":
+            bdom = base_domain(dom)
+            if bdom == "body_weight":
                 ctx.has_body_weight = True
-            elif dom == "organ_weights":
+            elif bdom == "organ_weights":
                 ctx.has_organ_weights = True
-            elif dom == "clin_chem":
+            elif bdom == "clin_chem":
                 ctx.has_clin_chem = True
-            elif dom == "hematology":
+            elif bdom == "hematology":
                 ctx.has_hematology = True
-            elif dom == "hormones":
+            elif bdom == "hormones":
                 ctx.has_hormones = True
-            elif dom == "tissue_conc":
+            elif bdom == "tissue_conc":
                 ctx.has_tissue_conc = True
-            elif dom == "gene_expression":
+            elif bdom == "gene_expression":
                 ctx.has_gene_expression = True
 
     # --- BMDExpress analysis metadata from .bm2 files ---
