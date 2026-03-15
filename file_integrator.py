@@ -174,7 +174,7 @@ _GENE_EXPR_ORGAN_PATTERN = re.compile(
 # Uses word boundary (\b) but also matches at start-of-string — filenames
 # like "male_body_weight.txt" start with "male" directly, and \b treats
 # the underscore as a word character.  So we also match at string boundaries.
-_SEX_PATTERN = re.compile(r"(?:^|[\b_\-\s])(male|female)(?:[\b_\-\s]|$)", re.IGNORECASE)
+_SEX_PATTERN = re.compile(r"(?:^|[\b_\-\s])(male|female)(?:[\b_\-\s\.]|$)", re.IGNORECASE)
 
 # BM2 experiment name patterns for sex detection (e.g., "BodyWeightMale")
 _BM2_SEX_PATTERN = re.compile(r"(Male|Female)", re.IGNORECASE)
@@ -492,6 +492,11 @@ class FileFingerprint:
     # detection.  Only populated for study xlsx files with a "Selection"
     # column.  Structure: {dose → {"Male": [aids], "Female": [aids]}}.
     core_animals_by_dose_sex: dict[float, dict[str, list[str]]] = field(default_factory=dict)
+
+    # Long-format flag — True when a txt/csv file has NTP long format
+    # (one row per animal × observation, with Concentration/Animal ID/Sex
+    # columns).  These need conversion to wide format before integration.
+    is_long_format: bool = False
 
     # Transcriptomics-specific
     organ: str | None = None
@@ -1089,6 +1094,7 @@ def fingerprint_txt_csv(
     is_long_format = _LONG_FORMAT_MARKERS.issubset(row1_lower)
 
     if is_long_format:
+        fp.is_long_format = True
         # --- Long-format parsing (source-of-truth _tox_study.csv files) ---
         # Parse header → column indices, then extract doses, animal IDs,
         # sexes, and endpoint names from the data rows.
@@ -1192,9 +1198,10 @@ def fingerprint_txt_csv(
             endpoint_names.append(cells[0].strip())
     fp.endpoint_names = endpoint_names
 
-    # Gene expression detection — large files with many rows are probes/genes
-    if len(endpoint_names) > 200:
-        fp.platform = None
+    # Gene expression detection — large files with many rows are probes/genes.
+    # Only apply if filename-based detection didn't already assign a platform
+    # (e.g., clinical_obs files can have 300+ observation types but aren't GE).
+    if len(endpoint_names) > 200 and fp.platform is None:
         fp.data_type = "gene_expression"
         fp.gene_count = len(endpoint_names)
         # Extract organ from filename for gene expression files

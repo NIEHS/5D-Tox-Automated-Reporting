@@ -226,6 +226,11 @@ def fingerprint_and_store(
     for lightweight_validate() on subsequent uploads and for full
     validate_pool() when the user clicks "Validate & Integrate".
 
+    Long-format files (NTP tall-and-skinny CSV/txt) are automatically
+    converted to wide format during this step.  The original file is
+    replaced in the pool by one wide-format file per sex.  This ensures
+    all files are in BMDExpress-compatible format before validation runs.
+
     Args:
         file_id:   UUID from upload.
         filename:  Original filename.
@@ -235,18 +240,72 @@ def fingerprint_and_store(
         bm2_json:  Pre-loaded BMDProject dict (optional, for bm2 files).
 
     Returns:
-        The created FileFingerprint.
+        The created FileFingerprint, or a list of FileFingerprints if the
+        file was long-format and got split into multiple wide-format files.
     """
     ts_added = datetime.now(tz=timezone.utc).isoformat()
     fp = fingerprint_file(file_id, filename, path, file_type, ts_added, bm2_json)
 
+    # --- Long-format conversion ---
+    # If a txt/csv file is long-format (one row per animal), convert it to
+    # wide-format (BMDExpress pivot) immediately.  The original file is
+    # replaced by one wide-format file per sex.  This happens before
+    # validation so all comparisons use the same format.
+    if fp.is_long_format and dtxsid:
+        from pool_integrator import tox_study_csv_to_pivot_txt
+        import uuid
+
+        session_dir = _session_dir(dtxsid)
+        files_dir = session_dir / "files"
+
+        platform = fp.platform or "Unknown"
+        data_type = fp.data_type or "tox_study"
+
+        wide_files = tox_study_csv_to_pivot_txt(
+            path, str(files_dir), platform, data_type,
+        )
+
+        if wide_files:
+            logger.info(
+                "Converted long-format %s → %d wide-format file(s)",
+                filename, len(wide_files),
+            )
+
+            # Move the original long-format file out of files/ so it
+            # won't be picked up by ensure_fingerprints directory scans.
+            originals_dir = session_dir / "_originals"
+            originals_dir.mkdir(exist_ok=True)
+            original_path = Path(path)
+            if original_path.exists() and original_path.parent == files_dir:
+                original_path.rename(originals_dir / original_path.name)
+                logger.info("Moved original %s → _originals/", filename)
+
+            # Fingerprint each wide-format output and store in the pool.
+            # The original long-format file is NOT added to the pool.
+            first_fp = None
+            for wide_path in wide_files:
+                wide_name = os.path.basename(wide_path)
+                wide_id = str(uuid.uuid4())
+                wide_fp = fingerprint_file(
+                    wide_id, wide_name, wide_path, "txt", ts_added, None,
+                )
+                if dtxsid not in _pool_fingerprints:
+                    _pool_fingerprints[dtxsid] = {}
+                _pool_fingerprints[dtxsid][wide_id] = wide_fp
+                if first_fp is None:
+                    first_fp = wide_fp
+
+            _save_fingerprints_to_disk(dtxsid)
+            # Return first wide-format fingerprint as representative.
+            # All wide-format files are in the pool; callers only need
+            # one result for the upload response.
+            return first_fp or fp
+
+    # Standard (non-long-format) path — store the fingerprint as-is
     if dtxsid:
         if dtxsid not in _pool_fingerprints:
             _pool_fingerprints[dtxsid] = {}
         _pool_fingerprints[dtxsid][file_id] = fp
-        # Persist to disk so session restore can skip the expensive LLM call
-        # in _deduce_metadata_from_experiments().  Keyed by filename (stable
-        # across restarts) rather than file_id (regenerated each session load).
         _save_fingerprints_to_disk(dtxsid)
 
     return fp
@@ -415,14 +474,22 @@ def ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
             fingerprint_and_store(fid, entry["filename"], path, "bm2", dtxsid, bm2_json)
             fingerprinted.add(entry["filename"])
 
-    # 2. Fingerprint files registered in _data_uploads
+    # 2. Fingerprint files registered in _data_uploads.
+    # Skip files that no longer exist (moved to _originals after flattening).
     for fid, entry in _data_uploads.items():
         path = entry.get("temp_path", "")
         if path and os.path.exists(path) and str(files_dir) in path:
-            fingerprint_and_store(fid, entry["filename"], path, entry["type"], dtxsid)
+            result = fingerprint_and_store(fid, entry["filename"], path, entry["type"], dtxsid)
             fingerprinted.add(entry["filename"])
+            # If long-format conversion happened, also mark the flattened
+            # output filenames so step 3 doesn't re-fingerprint them.
+            if result and hasattr(result, "filename"):
+                fingerprinted.add(result.filename)
+            # Check if more files were added to the pool by the conversion
+            for pool_fp in _pool_fingerprints.get(dtxsid, {}).values():
+                fingerprinted.add(pool_fp.filename)
 
-    # 3. Scan files/ directory for anything not yet registered
+    # 3. Scan files/ directory for anything not yet fingerprinted
     for data_file in sorted(files_dir.iterdir()):
         if not data_file.is_file() or data_file.name in fingerprinted:
             continue

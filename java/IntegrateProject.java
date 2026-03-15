@@ -137,8 +137,10 @@ public class IntegrateProject {
                 continue;
             }
 
-            unified.getDoseResponseExperiments().add(exp);
+            // Set unique name BEFORE adding — the public overload uses allowed=0,
+            // so if the experiment is already in the list it always renames.
             unified.giveBMDAnalysisUniqueName(exp, exp.getName());
+            unified.getDoseResponseExperiments().add(exp);
             System.out.println("    Added experiment: " + exp.getName() +
                 " (" + exp.getProbeResponses().size() + " probes)");
         }

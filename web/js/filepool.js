@@ -444,11 +444,21 @@ async function confirmResetPool() {
         // (coverage matrix, validation issues, animal report table)
         const validationPanel = document.getElementById('validation-panel');
         if (validationPanel) validationPanel.style.display = 'none';
-        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content', 'validation-body']) {
+        for (const innerId of ['coverage-matrix', 'validation-issues', 'animal-report-content', 'file-metadata-table', 'validation-body']) {
             const el = document.getElementById(innerId);
             if (el && innerId !== 'validation-body') el.innerHTML = '';
             if (el && innerId === 'validation-body') el.style.display = 'none';
         }
+        // Hide file metadata review panel
+        const fileMetaPanel = document.getElementById('file-metadata-review');
+        if (fileMetaPanel) fileMetaPanel.style.display = 'none';
+
+        // Hide integrated preview and clear its content
+        const intPreview = document.getElementById('integrated-preview');
+        if (intPreview) intPreview.style.display = 'none';
+        const intPreviewContent = document.getElementById('integrated-preview-content');
+        if (intPreviewContent) intPreviewContent.innerHTML = '';
+        integratedPoolData = null;
 
         // Clear apical domain sub-tabs and panels
         const subTabBar = document.getElementById('apical-sub-tabs');
@@ -975,15 +985,49 @@ function renderFileMetadataReview(fingerprints) {
     ];
     const dataTypes = ['tox_study', 'inferred', 'gene_expression'];
 
-    // Sort files by filename
+    // Sort by section: tox_study txt/csv, inferred txt/csv, bm2, gene_expression.
+    // Within each section, sort by filename.
+    function sortKey(fp) {
+        const isBm2 = fp.file_type === 'bm2';
+        const isGE = fp.data_type === 'gene_expression' && !isBm2;
+        if (isBm2) return 2;           // all bm2 files together
+        if (fp.data_type === 'tox_study') return 0;
+        if (isGE) return 3;            // gene expression txt only
+        return 1;                       // inferred txt/csv
+    }
     const entries = Object.entries(fingerprints)
-        .sort(([, a], [, b]) => (a.filename || '').localeCompare(b.filename || ''));
+        .sort(([, a], [, b]) => {
+            const sa = sortKey(a), sb = sortKey(b);
+            if (sa !== sb) return sa - sb;
+            // Within section: sort by platform, then filename, then sex
+            const pa = (a.platform || '').localeCompare(b.platform || '');
+            if (pa !== 0) return pa;
+            const fa = (a.filename || '').localeCompare(b.filename || '');
+            if (fa !== 0) return fa;
+            const sexa = (a.sexes || []).join(''), sexb = (b.sexes || []).join('');
+            return sexa.localeCompare(sexb);
+        });
+
+    // Section labels keyed by sortKey value
+    const sectionLabels = {
+        0: 'Tox Study (source data)',
+        1: 'Inferred (gap-filled)',
+        2: 'BMDExpress Results (.bm2)',
+        3: 'Gene Expression',
+    };
 
     let html = '<table class="coverage-matrix" style="font-size:0.8rem;">';
     html += '<thead><tr><th>File</th><th>Type</th><th>Platform</th><th>Data Type</th><th>Sex</th></tr></thead>';
     html += '<tbody>';
 
+    let lastSection = -1;
     for (const [fid, fp] of entries) {
+        // Insert group header when section changes
+        const section = sortKey(fp);
+        if (section !== lastSection) {
+            lastSection = section;
+            html += `<tr><td colspan="5" style="font-weight:bold; background:#f1f5f9; padding:0.4rem 0.5rem;">${sectionLabels[section]}</td></tr>`;
+        }
         const isGE = fp.data_type === 'gene_expression';
 
         // Platform dropdown — disabled for gene expression (platform comes from chip info)

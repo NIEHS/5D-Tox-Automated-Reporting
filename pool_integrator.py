@@ -403,14 +403,19 @@ def tox_study_csv_to_pivot_txt(
     Returns:
         List of paths to the generated pivot .txt files.
     """
-    # Detect separator (CSV or TSV)
+    # Read file, skipping # metadata header lines
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        first_line = f.readline()
-    sep = "\t" if "\t" in first_line else ","
+        raw_lines = [line for line in f if not line.startswith("#")]
 
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
-        reader = csv.reader(f, delimiter=sep)
-        rows = list(reader)
+    if not raw_lines:
+        logger.warning("tox_study CSV empty after skipping headers: %s", path)
+        return []
+
+    # Detect separator from first data line
+    sep = "\t" if "\t" in raw_lines[0] else ","
+
+    reader = csv.reader(raw_lines, delimiter=sep)
+    rows = list(reader)
 
     if len(rows) < 2:
         logger.warning("tox_study CSV too short: %s", path)
@@ -490,6 +495,10 @@ def tox_study_csv_to_pivot_txt(
     # Build BMDExpress experiment name prefix from platform
     prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, platform.replace(" ", ""))
 
+    # Source filename stem — used to derive output filenames.
+    # e.g., "body_weight_truth_female.csv" → "body_weight_truth_female"
+    source_stem = os.path.splitext(os.path.basename(path))[0]
+
     # Group by sex and write pivot files
     sex_data: dict[str, dict] = {}
     for (sex, endpoint), animal_vals in data_by_sex_endpoint.items():
@@ -519,14 +528,19 @@ def tox_study_csv_to_pivot_txt(
             values = [str(animal_vals.get(a, "")) for a in animals]
             lines.append("\t".join([endpoint] + values))
 
-        safe_sex = sex.replace(" ", "_")
-        out_name = f"{prefix}{safe_sex}.txt"
+        # Output filename = source filename with .txt extension.
+        # If multiple sexes in one source file, append sex to disambiguate.
+        if len(sex_data) > 1:
+            safe_sex = sex.replace(" ", "_")
+            out_name = f"{source_stem}_{safe_sex}.txt"
+        else:
+            out_name = f"{source_stem}.txt"
         out_path = os.path.join(output_dir, out_name)
         with open(out_path, "w") as f:
             f.write("\n".join(lines) + "\n")
 
         output_paths.append(out_path)
-        logger.info("Converted long-format CSV → wide: %s (%d endpoints, %d animals)",
+        logger.info("Converted long-format → wide: %s (%d endpoints, %d animals)",
                      out_name, len(info["endpoints"]), len(animals))
 
     return output_paths
@@ -600,10 +614,18 @@ def integrate_pool(
     bm2_paths: list[str] = []
     txt_paths: list[str] = []
     xlsx_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
-    tox_study_csv_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
     source_files: dict[str, dict] = {}
 
     for platform_key, tiers in coverage_matrix.items():
+        # Parse the compound key — "Body Weight|tox_study" → platform, data_type.
+        # Gene expression uses plain "gene_expression" (no pipe).
+        if "|" in platform_key:
+            cm_platform, cm_data_type = platform_key.split("|", 1)
+        elif platform_key == "gene_expression":
+            cm_platform, cm_data_type = None, "gene_expression"
+        else:
+            cm_platform, cm_data_type = platform_key, None
+
         chosen_fid = None
         chosen_tier = None
 
@@ -674,14 +696,11 @@ def integrate_pool(
                 # comes from the .bm2 tier via BMDExpress's analysis pipeline.
                 if fp_data_type == "gene_expression":
                     continue
-                # tox_study CSV files are long-format (like xlsx) and need
-                # conversion to pivot format.  Queue them for conversion.
-                if fp_data_type == "tox_study" and actual_file_type == "csv":
-                    tox_study_csv_paths.append((file_path, platform_key, fp_data_type))
-                else:
-                    txt_paths.append(file_path)
+                # All txt/csv files should be wide-format by now — long-format
+                # CSVs were converted during fingerprint_and_store().
+                txt_paths.append(file_path)
             elif actual_file_type == "xlsx" or chosen_tier == "xlsx":
-                xlsx_paths.append((file_path, platform_key, fp_data_type or "tox_study"))
+                xlsx_paths.append((file_path, cm_platform or platform_key, fp_data_type or "tox_study"))
             else:
                 logger.warning("Unknown tier %s for platform %s — skipping", chosen_tier, platform_key)
 
@@ -693,17 +712,15 @@ def integrate_pool(
                 "file_count": len(chosen_fids),
             }
 
-    # --- Convert long-format files to pivot format for Java import ---
-    # NTP xlsx files and _tox_study CSV files are long-format (one row
-    # per animal).  ExperimentFileUtil expects tab-delimited pivot format.
+    # --- Convert long-format xlsx files to wide format for Java import ---
+    # NTP xlsx files are long-format (one row per animal).  txt/csv files
+    # are already wide-format — long-format CSVs were converted during
+    # fingerprint_and_store() before validation.
     pivot_dir = os.path.join(session_dir, "_pivots")
-    if xlsx_paths or tox_study_csv_paths:
+    if xlsx_paths:
         os.makedirs(pivot_dir, exist_ok=True)
         for xlsx_path, xlsx_platform, xlsx_data_type in xlsx_paths:
             pivot_files = xlsx_to_pivot_txt(xlsx_path, pivot_dir, xlsx_platform, xlsx_data_type)
-            txt_paths.extend(pivot_files)
-        for csv_path, csv_platform, csv_data_type in tox_study_csv_paths:
-            pivot_files = tox_study_csv_to_pivot_txt(csv_path, pivot_dir, csv_platform, csv_data_type)
             txt_paths.extend(pivot_files)
 
     # --- Call Java to merge everything ---
