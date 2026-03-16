@@ -29,14 +29,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from build_docx import add_heading, add_para, fmt
-from apical_report import (
+from bmdx_pipe import (
     build_table_data_from_bm2,
     add_apical_tables_to_doc,
     add_bmd_summary_table_to_doc,
     add_gene_set_bmd_tables_to_doc,
     add_gene_bmd_tables_to_doc,
+    add_animal_report_to_doc,
 )
-from animal_report import add_animal_report_to_doc
 from session_store import safe_filename
 from style_learning import (
     load_style_profile, save_style_profile,
@@ -248,7 +248,7 @@ async def api_export_docx(request: Request):
     # animal_report.py.  We reconstruct an AnimalReport object from it
     # to reuse the add_animal_report_to_doc() DOCX builder.
     if animal_report_data:
-        from animal_report import AnimalReport, AnimalRecord
+        from bmdx_pipe import AnimalReport, AnimalRecord
         # Reconstruct AnimalReport from serialized dict
         ar = AnimalReport()
         ar.study_number = animal_report_data.get("study_number")
@@ -272,7 +272,7 @@ async def api_export_docx(request: Request):
                 domain_presence=rec_dict.get("domain_presence", {}),
             )
         # Reconstruct attrition objects
-        from animal_report import DomainAttrition
+        from bmdx_pipe import DomainAttrition
         for domain, att_dict in animal_report_data.get("attrition", {}).items():
             ar.attrition[domain] = DomainAttrition(
                 domain=domain,
@@ -624,7 +624,7 @@ async def api_export_bm2(dtxsid: str):
     Returns the .bm2 file as a download attachment.
     """
     from session_store import session_dir
-    from pool_integrator import export_integrated_bm2
+    from bmdx_pipe import export_integrated_bm2
 
     sess_path = session_dir(dtxsid)
     json_path = sess_path / "integrated.json"

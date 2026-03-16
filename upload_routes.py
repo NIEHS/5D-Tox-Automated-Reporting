@@ -30,7 +30,7 @@ import orjson
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response
 
-import bm2_cache
+from bmdx_pipe import bm2_cache
 from session_store import session_dir
 from pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, serialize_table_rows,
@@ -40,7 +40,7 @@ from server_state import (
     get_csv_uploads,
     get_data_uploads,
 )
-from apical_report import (
+from bmdx_pipe import (
     build_table_data_from_bm2,
     generate_results_narrative,
 )

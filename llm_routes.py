@@ -22,7 +22,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-import bm2_cache
+from bmdx_pipe import bm2_cache
 from session_store import SESSIONS_DIR
 from llm_helpers import llm_generate_json_async
 from style_learning import load_style_profile

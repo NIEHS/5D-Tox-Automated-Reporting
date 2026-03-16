@@ -80,6 +80,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "beautifulsoup4" },
+    { name = "bmdx-pipe" },
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "javaobj-py3" },
@@ -102,6 +103,7 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.82.0" },
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
+    { name = "bmdx-pipe", editable = "../bmdx-pipe" },
     { name = "duckdb", specifier = ">=1.2.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "javaobj-py3", specifier = ">=0.4.4" },
@@ -118,6 +120,27 @@ requires-dist = [
     { name = "typst", specifier = ">=0.14.8" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "watchfiles", specifier = ">=1.1.1" },
+]
+
+[[package]]
+name = "bmdx-pipe"
+version = "0.1.0"
+source = { editable = "../bmdx-pipe" }
+dependencies = [
+    { name = "lmdb" },
+    { name = "openpyxl" },
+    { name = "orjson" },
+    { name = "python-docx" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "lmdb", specifier = ">=1.7.5" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "orjson", specifier = ">=3.11.7" },
+    { name = "python-docx", specifier = ">=1.2.0" },
+    { name = "scipy", specifier = ">=1.14.0" },
 ]
 
 [[package]]

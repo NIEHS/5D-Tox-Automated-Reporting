@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "bmdx-pipe",
     "anthropic>=0.82.0",
     "beautifulsoup4>=4.12.0",
     "duckdb>=1.2.0",
@@ -24,3 +25,6 @@ dependencies = [
     "uvicorn>=0.34.0",
     "watchfiles>=1.1.1",
 ]
+
+[tool.uv.sources]
+bmdx-pipe = { path = "../bmdx-pipe", editable = true }

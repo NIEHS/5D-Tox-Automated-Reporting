@@ -47,7 +47,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from session_store import session_dir as _session_dir_imported
 from llm_helpers import llm_generate_json as _llm_generate_json_imported
 
-from file_integrator import (
+from bmdx_pipe import (
     FileFingerprint,
     ValidationReport,
     fingerprint_file,
@@ -55,13 +55,9 @@ from file_integrator import (
     lightweight_validate,
     _BM2_PLATFORM_MAP,
     detect_platform_and_type_from_bm2,
-)
-from pool_integrator import integrate_pool
-from animal_report import (
+    integrate_pool,
     build_animal_report,
     report_to_dict,
-)
-from apical_report import (
     annotate_missing_animals,
     backfill_missing_doses,
     build_table_data,
@@ -252,7 +248,7 @@ def fingerprint_and_store(
     # replaced by one wide-format file per sex.  This happens before
     # validation so all comparisons use the same format.
     if fp.is_long_format and dtxsid:
-        from pool_integrator import tox_study_csv_to_pivot_txt
+        from bmdx_pipe import tox_study_csv_to_pivot_txt
         import uuid
 
         session_dir = _session_dir(dtxsid)
@@ -911,18 +907,11 @@ async def api_integrated_summary(dtxsid: str):
     """
     Return a lightweight summary of the integrated BMDProject.
 
-    Loads from in-memory cache or disk, then extracts only the metadata
-    and per-experiment names/probe counts -- NOT the full response arrays.
+    Uses _load_integrated() which handles both the main integrated.json
+    and the _category_lookup.json sidecar.  Only summary fields are
+    returned — the full response arrays and category lookup stay server-side.
     """
-    integrated = _integrated_pool.get(dtxsid)
-    if integrated is None:
-        integrated_path = _session_dir(dtxsid) / "integrated.json"
-        if integrated_path.exists():
-            try:
-                integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
-                _integrated_pool[dtxsid] = integrated
-            except (json.JSONDecodeError, Exception):
-                pass
+    integrated = _load_integrated(dtxsid)
 
     if not integrated:
         return JSONResponse(
@@ -1040,17 +1029,38 @@ def _load_integrated(dtxsid: str) -> dict | None:
     Prefers the in-memory cache (_integrated_pool).  Falls back to reading
     sessions/{dtxsid}/integrated.json from disk and populating the cache.
 
+    The _category_lookup is stored in a separate sidecar file
+    (_category_lookup.json) to keep integrated.json lean for fast summary
+    loads.  It's merged back into the in-memory dict on first access.
+
     Returns None if no integrated data exists (caller should return 400).
     """
     integrated = _integrated_pool.get(dtxsid)
     if integrated is None:
-        integrated_path = _session_dir(dtxsid) / "integrated.json"
+        session = _session_dir(dtxsid)
+        integrated_path = session / "integrated.json"
         if integrated_path.exists():
             try:
                 integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
-                _integrated_pool[dtxsid] = integrated
             except (json.JSONDecodeError, Exception):
                 logger.warning("Failed to load integrated.json for %s", dtxsid)
+                return None
+
+            # Load the _category_lookup sidecar if it exists and the key
+            # is not already in the integrated dict (backward compat with
+            # old sessions that still have it inline).
+            if "_category_lookup" not in integrated:
+                cat_path = session / "_category_lookup.json"
+                if cat_path.exists():
+                    try:
+                        integrated["_category_lookup"] = json.loads(
+                            cat_path.read_text(encoding="utf-8")
+                        )
+                    except (json.JSONDecodeError, Exception):
+                        logger.warning("Failed to load _category_lookup.json for %s", dtxsid)
+                        integrated["_category_lookup"] = {}
+
+            _integrated_pool[dtxsid] = integrated
     return integrated
 
 

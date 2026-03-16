@@ -31,7 +31,7 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-import bm2_cache
+from bmdx_pipe import bm2_cache
 from session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
     save_section, delete_section,
@@ -892,7 +892,7 @@ async def api_get_experiment_metadata(dtxsid: str):
     approved = meta_approved_path.exists()
 
     # Controlled vocabularies — same as experiment_metadata.py VOCABULARIES
-    from experiment_metadata import VOCABULARIES
+    from bmdx_pipe import VOCABULARIES
 
     return JSONResponse({
         "experiments": experiments,
@@ -966,7 +966,7 @@ async def api_save_experiment_metadata(dtxsid: str, request: Request):
     bm2_path = sess_path / "integrated.bm2"
     bm2_ok = False
     try:
-        from pool_integrator import export_integrated_bm2
+        from bmdx_pipe import export_integrated_bm2
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
