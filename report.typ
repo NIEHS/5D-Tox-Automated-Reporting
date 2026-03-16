@@ -919,13 +919,26 @@
     let ref-data = if male-data.len() > 0 { male-data } else { female-data }
     let doses = ref-data.at(0).at("doses", default: ())
 
-    // Build header array
-    let headers = ("Endpoint",)
+    // Build header array.
+    // The first column header comes from the section data — "Study Day"
+    // for body weight tables (rows are day 0, day 5), "Endpoint" for
+    // all other apical tables (rows are measured parameters).
+    // Footnote markers (a,b) are appended to body weight headers per
+    // NIEHS convention — superscript letters referencing table footnotes.
+    let first-col = sec.at("first_col_header", default: "Endpoint")
+    let first-col-display = if first-col == "Study Day" {
+      [Study Day#super[a,b]]
+    } else {
+      first-col
+    }
+    let headers = (first-col-display,)
     for dose in doses {
+      // Use non-breaking spaces so dose headers don't wrap across lines.
+      // The reference PDF shows "0.15 mg/kg" on a single line, not split.
       let label = if dose == 0 {
-        "0 " + dose-unit
+        "0\u{00a0}" + dose-unit
       } else {
-        str(dose) + " " + dose-unit
+        str(dose) + "\u{00a0}" + dose-unit
       }
       headers += (label,)
     }
@@ -941,8 +954,16 @@
     // Each sex block: bold "Male"/"Female" separator → n row → endpoint rows
     let tbl-rows = ()
 
-    // Collect all footnotes (section-level + per-sex missing-animal)
+    // Collect all footnotes (section-level + per-sex missing-animal).
+    // For body weight tables ("Study Day" header), prepend the standard
+    // NIEHS footnotes that the superscript a,b markers reference.
     let all-fn = sec.at("footnotes", default: ()).map(x => x)
+    if first-col == "Study Day" and all-fn.len() == 0 {
+      all-fn = (
+        "Data are displayed as mean \u{00b1} standard error of the mean; body weight data are presented in grams.",
+        "Statistical analysis performed by the Jonckheere (trend) and Williams or Dunnett (pairwise) tests.",
+      )
+    }
     let missing-fn = sec.at("missing_animal_footnotes", default: (:))
 
     for (sex, rows-data) in (("Male", male-data), ("Female", female-data)) {
@@ -964,9 +985,18 @@
       n-row += ("NA", "NA")
       tbl-rows += (n-row,)
 
-      // Endpoint data rows
+      // Endpoint data rows.
+      // For body weight tables, labels come as "SD0", "SD5" (study day
+      // identifiers from BMDExpress).  Strip the "SD" prefix to match
+      // the NIEHS reference which shows just "0" and "5".
       for r in rows-data {
-        let row = (r.at("label", default: ""),)
+        let raw-label = r.at("label", default: "")
+        let label = if raw-label.starts-with("SD") {
+          raw-label.slice(2)
+        } else {
+          raw-label
+        }
+        let row = (label,)
         for dose in doses {
           let val = r.at("values", default: (:)).at(str(dose), default: "–")
           row += (str(val),)

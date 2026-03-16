@@ -283,11 +283,21 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 sec.get("table_data", {}), dose_unit
             )
 
+            # Determine the first column header based on section type.
+            # Body weight tables use "Study Day" (the rows are day 0, day 5);
+            # all other apical tables use "Endpoint" (each row is a measured
+            # parameter like ALT, albumin, etc.).
+            section_title = sec.get("section_title", "Apical Endpoints")
+            is_body_weight = "body weight" in section_title.lower()
+            first_col = sec.get("first_col_header",
+                                "Study Day" if is_body_weight else "Endpoint")
+
             data["apical_sections"].append({
-                "title": sec.get("section_title", "Apical Endpoints"),
+                "title": section_title,
                 "caption": sec.get("table_caption_template", ""),
                 "compound": sec.get("compound_name", chemical_name),
                 "dose_unit": dose_unit,
+                "first_col_header": first_col,
                 "narrative": _split_narrative(sec.get("narrative_paragraphs")),
                 "table_data": sec.get("table_data", {}),
                 "footnotes": footnotes,
