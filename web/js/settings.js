@@ -228,6 +228,7 @@ async function applySettings() {
                 narrative:         section.narrative,
                 originalNarrative: (section.narrative || []).join('\n\n'),
                 domain:            section.domain,
+                tableType:         section.table_type || null,
             };
 
             createBm2Card(sectionId, section.title, section.domain);
@@ -237,11 +238,13 @@ async function applySettings() {
             const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
             if (compoundEl) compoundEl.value = compoundName;
 
-            renderBm2Results(sectionId, section.tables_json, section.narrative);
+            renderBm2Results(sectionId, section.tables_json, section.narrative, section.table_type);
         }
         show('bm2-results-section');
 
         // --- Rebuild genomics cards ---
+        const genomicsSubTabs = document.getElementById('genomics-sub-tabs');
+        if (genomicsSubTabs) { genomicsSubTabs.innerHTML = ''; genomicsSubTabs.classList.remove('visible'); }
         const genomicsCards = document.getElementById('genomics-cards');
         if (genomicsCards) genomicsCards.innerHTML = '';
         for (const key of Object.keys(genomicsResults)) {

@@ -183,14 +183,85 @@ function _getGeneSets(data) {
 
 
 /* ================================================================
+ * Chart type tab switching — UMAP vs Cluster Scatter
+ *
+ * Two chart panels live inside the Charts tab.  Only the active
+ * one is visible; clicking a chart-type tab toggles between them.
+ * ================================================================ */
+
+/**
+ * Switch between the UMAP and Cluster Scatter chart panels.
+ *
+ * @param {string} type — "umap" or "cluster"
+ */
+function activateChartTypeTab(type) {
+    // Toggle panel visibility
+    document.querySelectorAll('.chart-type-panel').forEach(p => {
+        p.classList.toggle('active', p.id === `chart-panel-${type}`);
+    });
+
+    // Toggle button active states
+    const tabBar = document.getElementById('chart-type-tabs');
+    tabBar.querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-chart-type') === type);
+    });
+
+    // Plotly renders into a zero-size container when the panel is
+    // hidden.  After making it visible, tell Plotly to recalculate
+    // the layout so the chart fills its container correctly.
+    const chartId = type === 'umap' ? 'umap-chart' : 'cluster-chart';
+    const chartEl = document.getElementById(chartId);
+    if (chartEl && typeof Plotly !== 'undefined') {
+        requestAnimationFrame(() => Plotly.Plots.resize(chartEl));
+    }
+}
+
+
+/* ================================================================
+ * Charts organ×sex sub-tab switching
+ *
+ * Each organ×sex gets a sub-tab button.  Clicking one sets the
+ * active state and re-renders the shared chart containers with
+ * that experiment's data.
+ * ================================================================ */
+
+/**
+ * Switch the active charts sub-tab and re-render the charts for
+ * the selected organ×sex key.
+ *
+ * Called from sub-tab button clicks AND from renderGenomicsCharts()
+ * on first render to activate the default tab.  When called from a
+ * button click, `fromClick=true` triggers a re-render; when called
+ * internally during renderGenomicsCharts(), it just sets the active
+ * state without recursing.
+ *
+ * @param {string} key       — organ_sex key to activate
+ * @param {boolean} fromClick — true when triggered by user click
+ */
+function activateChartsSubTab(key, fromClick) {
+    const tabBar = document.getElementById('charts-sub-tabs');
+    tabBar.querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-chart-key') === key);
+    });
+
+    // When the user clicks a sub-tab, force re-render by clearing
+    // the cached key and calling renderGenomicsCharts().
+    if (fromClick) {
+        _currentChartKey = null;
+        renderGenomicsCharts();
+    }
+}
+
+
+/* ================================================================
  * Main entry point — called from activateTab('Charts') in main.js
  * ================================================================ */
 
 /**
  * Render (or re-render) the genomics charts for the currently selected
- * organ/sex.  Builds the organ picker dropdown if multiple experiments
- * exist, loads UMAP reference data, fetches cluster assignments from
- * the backend, and draws both Plotly charts.
+ * organ/sex.  Builds organ×sex sub-tabs if multiple experiments exist,
+ * loads UMAP reference data, fetches cluster assignments from the
+ * backend, and draws both Plotly charts.
  *
  * This function is idempotent — safe to call repeatedly.  It checks
  * whether the selected data has changed before re-rendering.
@@ -199,30 +270,35 @@ async function renderGenomicsCharts() {
     const keys = Object.keys(genomicsResults);
     if (keys.length === 0) return;
 
-    // Build organ/sex picker if multiple experiments exist
-    const pickerDiv = document.getElementById('charts-organ-picker');
-    let selectedKey = _currentChartKey;
-
-    if (keys.length > 1) {
-        // Only rebuild picker if keys changed
-        const existingSelect = pickerDiv.querySelector('select');
-        if (!existingSelect || existingSelect.dataset.keys !== keys.join(',')) {
-            pickerDiv.innerHTML = `
-                <label for="chart-organ-select">Experiment:</label>
-                <select id="chart-organ-select" data-keys="${keys.join(',')}"
-                        onchange="renderGenomicsCharts()">
-                    ${keys.map(k => {
-                        const d = genomicsResults[k];
-                        const label = `${(d.organ || '').charAt(0).toUpperCase() + (d.organ || '').slice(1)} — ${(d.sex || '').charAt(0).toUpperCase() + (d.sex || '').slice(1)}`;
-                        return `<option value="${k}" ${k === selectedKey ? 'selected' : ''}>${label}</option>`;
-                    }).join('')}
-                </select>`;
+    // Build organ×sex sub-tabs — mirrors the Genomics and Apical pattern.
+    // Only rebuild if keys changed since last render.
+    const tabBar = document.getElementById('charts-sub-tabs');
+    const cachedKeys = tabBar.dataset.keys || '';
+    if (cachedKeys !== keys.join(',')) {
+        tabBar.innerHTML = '';
+        for (const k of keys) {
+            const d = genomicsResults[k];
+            const organ = (d.organ || '').charAt(0).toUpperCase() + (d.organ || '').slice(1);
+            const sex = (d.sex || '').charAt(0).toUpperCase() + (d.sex || '').slice(1);
+            const btn = document.createElement('button');
+            btn.textContent = `${organ} — ${sex}`;
+            btn.setAttribute('data-chart-key', k);
+            btn.onclick = () => activateChartsSubTab(k, true);
+            tabBar.appendChild(btn);
         }
-        const sel = document.getElementById('chart-organ-select');
-        selectedKey = sel ? sel.value : keys[0];
+        tabBar.dataset.keys = keys.join(',');
+        tabBar.classList.add('visible');
+    }
+
+    // Determine selected key from the active sub-tab button
+    let selectedKey = _currentChartKey;
+    const activeBtn = tabBar.querySelector('button.active');
+    if (activeBtn) {
+        selectedKey = activeBtn.getAttribute('data-chart-key');
     } else {
-        pickerDiv.innerHTML = '';
+        // First render — activate the first tab
         selectedKey = keys[0];
+        activateChartsSubTab(selectedKey);
     }
 
     // Skip re-render if same key is already displayed

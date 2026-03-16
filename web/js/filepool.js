@@ -466,6 +466,20 @@ async function confirmResetPool() {
         const bm2Cards = document.getElementById('bm2-cards');
         if (bm2Cards) bm2Cards.innerHTML = '';
 
+        // Clear genomics organ×sex sub-tabs and panels
+        const genomicsSubTabs = document.getElementById('genomics-sub-tabs');
+        if (genomicsSubTabs) { genomicsSubTabs.innerHTML = ''; genomicsSubTabs.classList.remove('visible'); }
+        const genomicsCards = document.getElementById('genomics-cards');
+        if (genomicsCards) genomicsCards.innerHTML = '';
+
+        // Clear charts sub-tabs and chart containers
+        const chartsSubTabs = document.getElementById('charts-sub-tabs');
+        if (chartsSubTabs) { chartsSubTabs.innerHTML = ''; chartsSubTabs.classList.remove('visible'); delete chartsSubTabs.dataset.keys; }
+        const umapChart = document.getElementById('umap-chart');
+        if (umapChart) umapChart.innerHTML = '';
+        const clusterChart = document.getElementById('cluster-chart');
+        if (clusterChart) clusterChart.innerHTML = '';
+
         // Hide apical results section and clear its content
         const apicalSection = document.getElementById('apical-results');
         if (apicalSection) apicalSection.style.display = 'none';
@@ -1430,6 +1444,10 @@ const _PLATFORM_DEFAULTS = {
                                caption: 'Summary of Plasma Concentration Data for {sex} Rats Administered {compound} for Five Days' },
     'Clinical': { title: 'Clinical Observations',
                   caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
+    // "Clinical Observations" is the platform key used by the incidence
+    // table section (from _build_clinical_obs_section in pool_orchestrator).
+    'Clinical Observations': { title: 'Clinical Observations',
+                  caption: 'Summary of Clinical Observations for {sex} Rats Administered {compound} for Five Days' },
 };
 
 /**
@@ -1647,31 +1665,34 @@ function createBm2Card(bm2Id, filename, platform) {
                 </button>
             </div>
         </div>
-        <div class="card-fields">
-            <div class="form-group">
-                <label>Section Title</label>
-                <input type="text" id="bm2-title-${bm2Id}"
-                    value="${escapeHtml(defaultTitle)}">
+        <details class="card-config-collapse">
+            <summary>Section Config &amp; Narrative</summary>
+            <div class="card-fields">
+                <div class="form-group">
+                    <label>Section Title</label>
+                    <input type="text" id="bm2-title-${bm2Id}"
+                        value="${escapeHtml(defaultTitle)}">
+                </div>
+                <div class="form-group">
+                    <label>Table Caption</label>
+                    <input type="text" id="bm2-caption-${bm2Id}"
+                        value="${escapeHtml(defaultCaption)}">
+                </div>
+                <div class="form-group">
+                    <label>Compound Name</label>
+                    <input type="text" id="bm2-compound-${bm2Id}"
+                        placeholder="e.g., PFHxSAm"
+                        value="${escapeHtml(currentIdentity?.name || '')}">
+                </div>
+                <div class="form-group">
+                    <label>Dose Unit</label>
+                    <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Table Caption</label>
-                <input type="text" id="bm2-caption-${bm2Id}"
-                    value="${escapeHtml(defaultCaption)}">
-            </div>
-            <div class="form-group">
-                <label>Compound Name</label>
-                <input type="text" id="bm2-compound-${bm2Id}"
-                    placeholder="e.g., PFHxSAm"
-                    value="${escapeHtml(currentIdentity?.name || '')}">
-            </div>
-            <div class="form-group">
-                <label>Dose Unit</label>
-                <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
-            </div>
-        </div>
-        <div class="bm2-narrative-label">Results Narrative</div>
-        <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" rows="6"
-            placeholder="Results narrative will be auto-generated after processing. You can edit it here before exporting."></textarea>
+            <div class="bm2-narrative-label">Results Narrative</div>
+            <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" rows="6"
+                placeholder="Results narrative will be auto-generated after processing. You can edit it here before exporting."></textarea>
+        </details>
         <div class="table-preview" id="bm2-preview-${bm2Id}"></div>
     `;
 
@@ -1767,13 +1788,19 @@ async function processBm2(bm2Id) {
  * Creates one table per sex (Male/Female) showing endpoint rows,
  * dose columns, significance markers, and BMD/BMDL columns.
  */
-function renderTablePreview(bm2Id, tables, doseUnit) {
+function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
     const previewEl = document.getElementById(`bm2-preview-${bm2Id}`);
     previewEl.innerHTML = '';
 
     const sectionTitle = document.getElementById(`bm2-title-${bm2Id}`).value.trim();
     const caption = document.getElementById(`bm2-caption-${bm2Id}`).value.trim();
     const compound = document.getElementById(`bm2-compound-${bm2Id}`).value.trim() || 'Test Compound';
+
+    // Incidence tables (clinical observations) have a different structure:
+    // - Header: "Finding" instead of "Endpoint"
+    // - No "n" row (N is in the denominator of each "n/N" cell)
+    // - Values are pre-formatted "n/N" strings rendered directly
+    const isIncidence = tableType === 'incidence';
 
     let tableNum = 1;
 
@@ -1795,10 +1822,10 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
         // Build the HTML table
         const table = document.createElement('table');
 
-        // Header row: Endpoint | dose columns | BMD1Std | BMDL1Std
+        // Header row — "Finding" for incidence tables, "Endpoint" for normal
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        headerRow.innerHTML = '<th>Endpoint</th>';
+        headerRow.innerHTML = `<th>${isIncidence ? 'Finding' : 'Endpoint'}</th>`;
         for (const dose of doses) {
             const label = dose === 0 ? `0 ${doseUnit}` :
                 (dose === Math.floor(dose) ? `${Math.floor(dose)} ${doseUnit}` : `${dose} ${doseUnit}`);
@@ -1811,19 +1838,20 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
 
         const tbody = document.createElement('tbody');
 
-        // "n" row — sample sizes per dose group (max across endpoints).
-        // Show "–" for dose groups where N=0 (all animals died before
-        // terminal sacrifice), matching the NIEHS reference report.
-        const nRow = document.createElement('tr');
-        nRow.innerHTML = '<td class="endpoint-label">n</td>';
-        for (const dose of doses) {
-            const maxN = Math.max(...rows.map(r => r.n[String(dose)] || 0));
-            nRow.innerHTML += `<td>${maxN > 0 ? maxN : '\u2013'}</td>`;
+        // "n" row — only for normal apical tables, NOT for incidence tables.
+        // Incidence tables embed the denominator in each "n/N" cell.
+        if (!isIncidence) {
+            const nRow = document.createElement('tr');
+            nRow.innerHTML = '<td class="endpoint-label">n</td>';
+            for (const dose of doses) {
+                const maxN = Math.max(...rows.map(r => r.n[String(dose)] || 0));
+                nRow.innerHTML += `<td>${maxN > 0 ? maxN : '\u2013'}</td>`;
+            }
+            // No BMD/BMDL cells in domain tables (moved to BMD summary)
+            tbody.appendChild(nRow);
         }
-        // No BMD/BMDL cells in domain tables (moved to BMD summary)
-        tbody.appendChild(nRow);
 
-        // Data rows — one per endpoint
+        // Data rows — one per endpoint/finding
         for (const row of rows) {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td class="endpoint-label">${row.label}</td>`;
@@ -1838,31 +1866,42 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
         table.appendChild(tbody);
         previewEl.appendChild(table);
 
-        // --- Missing-animal footnotes ---
+        // --- Incidence table footnote ---
+        // Explain the n/N format for clinical observation tables.
+        if (isIncidence) {
+            const footnoteEl = document.createElement('div');
+            footnoteEl.className = 'table-footnote';
+            footnoteEl.innerHTML = '<em>n/N = number of animals with finding / total animals in dose group.</em>';
+            previewEl.appendChild(footnoteEl);
+        }
+
+        // --- Missing-animal footnotes (normal apical tables only) ---
         // Collect dose groups where animals are missing (died before
         // terminal sacrifice) from the xlsx study file roster.  Show a
         // compact footnote below the table for affected dose groups.
-        const missingByDose = {};
-        for (const row of rows) {
-            if (!row.missing_animals) continue;
-            for (const [doseKey, count] of Object.entries(row.missing_animals)) {
-                const dose = Number(doseKey);
-                if (!missingByDose[dose] || count > missingByDose[dose]) {
-                    missingByDose[dose] = count;
+        if (!isIncidence) {
+            const missingByDose = {};
+            for (const row of rows) {
+                if (!row.missing_animals) continue;
+                for (const [doseKey, count] of Object.entries(row.missing_animals)) {
+                    const dose = Number(doseKey);
+                    if (!missingByDose[dose] || count > missingByDose[dose]) {
+                        missingByDose[dose] = count;
+                    }
                 }
             }
-        }
-        const missingDoses = Object.keys(missingByDose).map(Number).sort((a, b) => a - b);
-        if (missingDoses.length > 0) {
-            const footnoteEl = document.createElement('div');
-            footnoteEl.className = 'table-footnote';
-            const notes = missingDoses.map(d => {
-                const n = missingByDose[d];
-                const doseLabel = d === Math.floor(d) ? Math.floor(d) : d;
-                return `${n} animal${n > 1 ? 's' : ''} at ${doseLabel} ${doseUnit}`;
-            });
-            footnoteEl.innerHTML = `<em>Note: ${notes.join('; ')} did not survive to terminal sacrifice.</em>`;
-            previewEl.appendChild(footnoteEl);
+            const missingDoses = Object.keys(missingByDose).map(Number).sort((a, b) => a - b);
+            if (missingDoses.length > 0) {
+                const footnoteEl = document.createElement('div');
+                footnoteEl.className = 'table-footnote';
+                const notes = missingDoses.map(d => {
+                    const n = missingByDose[d];
+                    const doseLabel = d === Math.floor(d) ? Math.floor(d) : d;
+                    return `${n} animal${n > 1 ? 's' : ''} at ${doseLabel} ${doseUnit}`;
+                });
+                footnoteEl.innerHTML = `<em>Note: ${notes.join('; ')} did not survive to terminal sacrifice.</em>`;
+                previewEl.appendChild(footnoteEl);
+            }
         }
 
         tableNum++;
@@ -1870,7 +1909,10 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
 
     // Show a message if no data was found
     if (tableNum === 1) {
-        previewEl.innerHTML = '<p style="color:#6c757d;font-size:0.8rem;">No endpoint data found in this .bm2 file.</p>';
+        const msg = isIncidence
+            ? 'No clinical observations found (all animals were Normal).'
+            : 'No endpoint data found in this .bm2 file.';
+        previewEl.innerHTML = `<p style="color:#6c757d;font-size:0.8rem;">${msg}</p>`;
     }
 }
 
@@ -1886,7 +1928,7 @@ function renderTablePreview(bm2Id, tables, doseUnit) {
  * @param {Object} tablesJson  — {Male: [...], Female: [...]} table data
  * @param {string[]} narrative — array of auto-generated paragraph strings
  */
-function renderBm2Results(sectionId, tablesJson, narrative) {
+function renderBm2Results(sectionId, tablesJson, narrative, tableType) {
     // Populate the narrative textarea
     const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
     if (narrativeEl && narrative && narrative.length > 0) {
@@ -1898,8 +1940,9 @@ function renderBm2Results(sectionId, tablesJson, narrative) {
     const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
     const doseUnit = unitEl ? unitEl.value : 'mg/kg';
 
-    // Render the table preview
-    renderTablePreview(sectionId, tablesJson, doseUnit);
+    // Render the table preview — pass tableType so incidence tables
+    // get different column headers and no "n" row.
+    renderTablePreview(sectionId, tablesJson, doseUnit, tableType);
 
     // Hide Process button, show Edit / Approve / Try Again buttons
     const btn = document.getElementById(`btn-process-${sectionId}`);
@@ -1986,9 +2029,9 @@ async function loadMetadataReview() {
 
         renderMetadataTable(data.experiments, data.vocabularies);
 
-        // Show the section
-        show('metadata-review-section');
-        if (tabbedViewActive) buildTabBar();
+        // Show the metadata review inline within the data tab —
+        // no separate tab, just unhide the subsection.
+        document.getElementById('metadata-review-section').style.display = '';
 
         // If already approved (e.g. restored session), show the badge,
         // lock the form, and skip the gate — proceed directly to the

@@ -357,6 +357,9 @@ async function approveBm2(bm2Id) {
         // Include original narrative so the server can detect edits
         // and learn writing style preferences from the diff
         original_narrative: info.originalNarrative || '',
+        // "incidence" for clinical obs tables, null for normal apical tables.
+        // Persisted so session restore can pass it to renderTablePreview.
+        table_type: info.tableType || null,
     };
 
     const result = await postApproveToServer(
@@ -1166,6 +1169,9 @@ async function runProcessingPipeline() {
                     narrative:         section.narrative,
                     originalNarrative: (section.narrative || []).join('\n\n'),
                     platform:          section.platform,
+                    // "incidence" for clinical obs tables (n/N cells),
+                    // undefined for normal apical tables (mean±SE cells).
+                    tableType:         section.table_type || null,
                 };
 
                 // Create the visual card and populate it — pass the platform
@@ -1179,7 +1185,7 @@ async function runProcessingPipeline() {
                 if (compoundEl) compoundEl.value = compoundName;
 
                 // Render the table data and narrative directly (no processBm2 call)
-                renderBm2Results(sectionId, section.tables_json, section.narrative);
+                renderBm2Results(sectionId, section.tables_json, section.narrative, section.table_type);
             }
 
             // --- Gene expression: extracted from the integrated .bm2 ---
@@ -1202,6 +1208,12 @@ async function runProcessingPipeline() {
                     };
 
                     createGenomicsCard(key, gData, gData.organ, gData.sex, autoStatLabels);
+
+                    // Pre-fill dose unit and compound fields (same as apical cards)
+                    const gUnitEl = document.getElementById(`genomics-unit-${key}`);
+                    if (gUnitEl) gUnitEl.value = doseUnit;
+                    const gCompoundEl = document.getElementById(`genomics-compound-${key}`);
+                    if (gCompoundEl) gCompoundEl.value = compoundName;
                 }
             }
 

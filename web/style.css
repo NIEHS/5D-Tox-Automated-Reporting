@@ -832,6 +832,53 @@ header p {
     gap: 0.4rem;
 }
 
+/* Collapsible container for config fields + narrative — keeps
+   the card compact by default, expandable on demand. */
+.card-config-collapse {
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    margin-bottom: 0.5rem;
+    background: var(--c-bg-white);
+}
+
+.card-config-collapse > summary {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.4rem 0.6rem;
+    list-style: none;       /* hide default marker */
+}
+
+/* Custom disclosure triangle */
+.card-config-collapse > summary::before {
+    content: "\25B8";       /* ▸ right-pointing */
+    display: inline-block;
+    margin-right: 0.4rem;
+    transition: transform 0.15s;
+}
+
+.card-config-collapse[open] > summary::before {
+    transform: rotate(90deg);  /* ▾ down-pointing when open */
+}
+
+/* Remove the default <details> marker in browsers that support it */
+.card-config-collapse > summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Pad the inner content when expanded */
+.card-config-collapse > :not(summary) {
+    padding: 0 0.6rem;
+}
+
+.card-config-collapse > :last-child {
+    padding-bottom: 0.5rem;
+}
+
 .bm2-card .card-fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1762,18 +1809,9 @@ header p {
     display: block;
 }
 
-/* In tabbed mode, sections should not be collapsible — the
-   tab bar replaces collapse/expand entirely.  Force section
-   bodies visible and hide chevrons. */
-.tabbed-view [data-collapsible] > .section-body {
-    display: block !important;
-}
-
-.tabbed-view [data-collapsible] > .section-toggle::before,
-.tabbed-view [data-collapsible] > .output-header > h2::before,
-.tabbed-view [data-collapsible] > .section-header-bar > h2::before {
-    display: none;
-}
+/* In tabbed mode, all sections remain collapsible — the tab bar
+   controls which tab is visible, but within each tab the user can
+   still collapse/expand individual sections via their headers. */
 
 /* In tabbed mode, hide view-controls collapse/expand buttons
    since they don't apply */
@@ -1831,12 +1869,16 @@ header p {
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-/* Domain panels — only the active one is visible */
-.apical-domain-panel {
+/* Domain / organ / chart-type panels — only the active one is visible */
+.apical-domain-panel,
+.genomics-organ-panel,
+.chart-type-panel {
     display: none;
 }
 
-.apical-domain-panel.active {
+.apical-domain-panel.active,
+.genomics-organ-panel.active,
+.chart-type-panel.active {
     display: block;
 }
 

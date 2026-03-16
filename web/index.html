@@ -478,12 +478,14 @@
                  at a glance: experiments, domains, probe counts, gene expression
                  coverage.  Populated by renderIntegratedPreview() after pool
                  approval or session restore. -->
-            <div id="integrated-preview" class="integrated-preview" style="display:none;">
-                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
-                    <h2 style="margin:0;">Integrated Dataset</h2>
-                    <button class="btn-action" id="btn-preview-integrated" onclick="previewIntegratedData()">Preview Data</button>
+            <div class="bm2-section" id="integrated-preview" style="display:none;" data-collapsible>
+                <div class="section-header-bar" onclick="toggleSection(this)">
+                    <h2>Integrated Dataset</h2>
+                    <button class="btn-action" id="btn-preview-integrated" onclick="event.stopPropagation(); previewIntegratedData()">Preview Data</button>
                 </div>
-                <div id="integrated-preview-content"></div>
+                <div class="section-body">
+                    <div id="integrated-preview-content"></div>
+                </div>
             </div>
 
             <!-- Data Pool — upload, validate, integrate. -->
@@ -553,30 +555,35 @@
                 </div>
                 </div><!-- /section-body -->
             </div>
-        </div>
 
-        <!-- Experiment Metadata Review (hidden until integration completes) -->
-        <div class="bm2-section" id="metadata-review-section" style="display:none;" data-collapsible data-tab-section="Metadata">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Experiment Metadata</h2>
-            <div class="section-body">
-                <p class="section-desc">
-                    Review and correct the inferred metadata for each experiment.
-                    These fields describe the study design and will be embedded in the exported .bm2 file.
-                </p>
-                <div id="metadata-table-container"></div>
-                <div class="metadata-actions">
-                    <button class="btn-action approve" id="btn-approve-metadata" onclick="approveMetadata()">Approve Metadata</button>
+            <!-- Experiment Metadata Review — final step of the data workflow.
+                 Shown inline after pool approval so the user reviews LLM-inferred
+                 experiment metadata (species, sex, organ, strain) without switching
+                 tabs.  Approving metadata triggers the processing pipeline. -->
+            <div class="bm2-section" id="metadata-review-section" style="display:none;" data-collapsible>
+                <div class="section-header-bar" onclick="toggleSection(this)">
+                    <h2>Experiment Metadata</h2>
                     <span class="approved-badge" id="badge-metadata" style="display:none">Approved</span>
                 </div>
-            </div><!-- /section-body -->
+                <div class="section-body">
+                    <p class="section-desc">
+                        Review and correct the inferred metadata for each experiment.
+                        These fields describe the study design and will be embedded in the exported .bm2 file.
+                    </p>
+                    <div id="metadata-table-container"></div>
+                    <div class="metadata-actions">
+                        <button class="btn-action approve" id="btn-approve-metadata" onclick="approveMetadata()">Approve Metadata</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Genomics Results Cards (hidden until genomics processed) -->
-        <div class="bm2-section" id="genomics-results-section" style="display:none;" data-collapsible data-tab-section="Genomics">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Analysis</h2>
-            <div class="section-body">
+        <div class="bm2-section" id="genomics-results-section" style="display:none;" data-tab-section="Genomics">
+            <h2>Genomics Analysis</h2>
+            <!-- Sub-tab bar — one tab per organ×sex, shown dynamically -->
+            <div class="sub-tab-bar" id="genomics-sub-tabs"></div>
             <div id="genomics-cards"></div>
-            </div><!-- /section-body -->
         </div>
 
         <!-- Genomics Charts — interactive Plotly visualizations of GO category
@@ -586,26 +593,39 @@
                2. UMAP Scatter Plot — GO terms projected into 2D semantic space
              Both charts are also rendered server-side for inclusion in the
              exported PDF/DOCX report. -->
-        <div class="bm2-section" id="genomics-charts-section" style="display:none;" data-collapsible data-tab-section="Charts">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Genomics Charts</h2>
-            <div class="section-body">
-                <!-- Organ/sex selector — when multiple genomics experiments exist,
-                     the user picks which one to visualize.  Populated dynamically
-                     by renderGenomicsCharts() in genomics_charts.js. -->
-                <div id="charts-organ-picker" style="margin-bottom:12px;"></div>
+        <div class="bm2-section" id="genomics-charts-section" style="display:none;" data-tab-section="Charts">
+            <h2>Genomics Charts</h2>
+            <!-- Organ×sex sub-tabs — switches which experiment's data
+                 is visualized in the chart panels below -->
+            <div class="sub-tab-bar" id="charts-sub-tabs"></div>
 
-                <!-- UMAP Scatter Plot container -->
-                <div class="chart-panel">
-                    <h3>GO Term Semantic Map (UMAP)</h3>
+            <!-- Chart type sub-tabs — switches between UMAP and Cluster views -->
+            <div class="sub-tab-bar visible" id="chart-type-tabs">
+                <button class="active" data-chart-type="umap"
+                        onclick="activateChartTypeTab('umap')">Semantic Map (UMAP)</button>
+                <button data-chart-type="cluster"
+                        onclick="activateChartTypeTab('cluster')">Cluster Scatter</button>
+            </div>
+
+            <!-- UMAP Scatter Plot panel -->
+            <div class="chart-type-panel active" id="chart-panel-umap">
+                <div class="bm2-card">
+                    <div class="card-header">
+                        <span class="filename">GO Term Semantic Map (UMAP)</span>
+                    </div>
                     <p class="chart-caption">Gene Ontology Biological Process categories from this analysis projected
                     onto a pre-computed UMAP embedding of ~2,840 GO BP terms. Points are colored by
                     HDBSCAN semantic cluster. Backdrop shows the full reference space.</p>
                     <div id="umap-chart" style="width:100%; aspect-ratio:1/1;"></div>
                 </div>
+            </div>
 
-                <!-- Cluster Scatter Plot container -->
-                <div class="chart-panel" style="margin-top:24px;">
-                    <h3>GO Category Cluster Scatter</h3>
+            <!-- Cluster Scatter Plot panel -->
+            <div class="chart-type-panel" id="chart-panel-cluster">
+                <div class="bm2-card">
+                    <div class="card-header">
+                        <span class="filename">GO Category Cluster Scatter</span>
+                    </div>
                     <p class="chart-caption">GO categories plotted by BMD value (x-axis) against hierarchical
                     gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes
                     with BMD values. Points are colored by UMAP semantic cluster (same palette as the
@@ -613,13 +633,12 @@
                     of their gene sets.</p>
                     <div id="cluster-chart" style="width:100%; aspect-ratio:1.25/1;"></div>
                 </div>
-            </div><!-- /section-body -->
+            </div>
         </div>
 
         <!-- .bm2 file cards — processing and report (hidden until files uploaded) -->
-        <div class="bm2-section" id="bm2-results-section" style="display:none;" data-collapsible data-tab-section="Apical">
-            <h2 class="section-toggle" onclick="toggleSection(this)">Apical Endpoint Results</h2>
-            <div class="section-body">
+        <div class="bm2-section" id="bm2-results-section" style="display:none;" data-tab-section="Apical">
+            <h2>Apical Endpoint Results</h2>
             <!-- Sub-tab bar — one tab per apical domain, shown dynamically -->
             <div class="sub-tab-bar" id="apical-sub-tabs"></div>
             <!-- Per-domain card containers — created dynamically by
@@ -627,11 +646,10 @@
                  is added.  Each container is a div with
                  id="apical-domain-{domain}" and class="apical-domain-panel". -->
             <div id="bm2-cards"></div>
-            </div><!-- /section-body -->
         </div>
 
         <!-- BMD Summary Table — BMDExpress 3 native results -->
-        <div class="output-section" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDExpress)">
+        <div class="output-section collapsed" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDExpress)">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Apical Endpoint BMD Summary (BMDExpress 3)</h2>
                 <div class="output-actions">
@@ -645,7 +663,7 @@
         </div>
 
         <!-- BMD Summary Table — BMDS (pybmds) results matching NIEHS methodology -->
-        <div class="output-section" id="bmd-summary-bmds-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDS)">
+        <div class="output-section collapsed" id="bmd-summary-bmds-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDS)">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Apical Endpoint BMD Summary (BMDS)</h2>
                 <div class="output-actions">
@@ -659,7 +677,7 @@
         </div>
 
         <!-- Materials and Methods section (hidden until background approved) -->
-        <div class="output-section" id="methods-section" style="display:none;" data-collapsible data-tab-section="Methods">
+        <div class="output-section collapsed" id="methods-section" style="display:none;" data-collapsible data-tab-section="Methods">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Materials and Methods</h2>
                 <div class="output-actions">
@@ -677,7 +695,7 @@
         </div>
 
         <!-- Summary section (hidden until other sections approved) -->
-        <div class="output-section" id="summary-section" style="display:none;" data-collapsible data-tab-section="Summary">
+        <div class="output-section collapsed" id="summary-section" style="display:none;" data-collapsible data-tab-section="Summary">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Summary</h2>
                 <div class="output-actions">

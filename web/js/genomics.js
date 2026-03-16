@@ -16,6 +16,79 @@
 //                  unlockSection, setButtons, showSummarySection, apiFetch
 
 /* ----------------------------------------------------------------
+ * Genomics sub-tabs — one tab per organ×sex combination
+ *
+ * Mirrors the apical sub-tab pattern (ensureDomainSubTab in
+ * filepool.js).  Each genomics card is placed inside a panel
+ * keyed by its organ_sex string; a sub-tab bar lets the user
+ * switch between them.
+ * ---------------------------------------------------------------- */
+
+/**
+ * Ensure a sub-tab panel exists for the given organ×sex key.
+ * Creates the panel and tab button on first call; returns the
+ * panel div so the caller can append cards into it.
+ *
+ * @param {string} key      — organ_sex key (e.g. "liver_male")
+ * @param {string} organ    — organ name
+ * @param {string} sex      — sex string
+ * @returns {HTMLElement} the panel div for this key
+ */
+function ensureGenomicsSubTab(key, organ, sex) {
+    const panelId = `genomics-panel-${key}`;
+    let panel = document.getElementById(panelId);
+    if (panel) return panel;
+
+    const tabBar = document.getElementById('genomics-sub-tabs');
+    const container = document.getElementById('genomics-cards');
+
+    // Create the panel — a container for this organ×sex's cards
+    panel = document.createElement('div');
+    panel.id = panelId;
+    panel.className = 'genomics-organ-panel';
+    panel.setAttribute('data-genomics-key', key);
+    container.appendChild(panel);
+
+    // Create the sub-tab button
+    const organTitle = organ.charAt(0).toUpperCase() + organ.slice(1);
+    const sexTitle = sex.charAt(0).toUpperCase() + sex.slice(1);
+    const btn = document.createElement('button');
+    btn.textContent = `${organTitle} — ${sexTitle}`;
+    btn.setAttribute('data-genomics-key', key);
+    btn.onclick = () => activateGenomicsSubTab(key);
+    tabBar.appendChild(btn);
+
+    // Show the sub-tab bar now that we have at least one entry
+    tabBar.classList.add('visible');
+
+    // If this is the first panel, activate it
+    if (tabBar.children.length === 1) {
+        activateGenomicsSubTab(key);
+    }
+
+    return panel;
+}
+
+/**
+ * Switch the active genomics sub-tab — show that key's panel,
+ * hide all others, and update button active states.
+ *
+ * @param {string} key — organ_sex key to activate
+ */
+function activateGenomicsSubTab(key) {
+    // Toggle panels
+    document.querySelectorAll('.genomics-organ-panel').forEach(p => {
+        p.classList.toggle('active', p.getAttribute('data-genomics-key') === key);
+    });
+
+    // Toggle button states
+    const tabBar = document.getElementById('genomics-sub-tabs');
+    tabBar.querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-genomics-key') === key);
+    });
+}
+
+/* ----------------------------------------------------------------
  * Genomics CSV upload and processing
  * ---------------------------------------------------------------- */
 
@@ -105,7 +178,8 @@ function _fmtNum(val, decimals = 3) {
 }
 
 function createGenomicsCard(key, data, organ, sex, statLabels) {
-    const cardsDiv = document.getElementById('genomics-cards');
+    // Route the card into the correct organ×sex sub-tab panel
+    const panel = ensureGenomicsSubTab(key, organ, sex);
 
     // Remove existing card for same key if re-processing
     const existing = document.getElementById(`genomics-card-${key}`);
@@ -247,6 +321,11 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
     // Pre-populate narrative if already generated (e.g., from session restore)
     const existingNarrative = _buildGenomicsNarrativeText(data);
 
+    // Default section title and caption — NIEHS-style for gene expression
+    const defaultTitle = `Gene Expression — ${organTitle}`;
+    const defaultCaption = `Summary of Gene Expression Findings in ${organTitle} of {sex} Rats Administered {compound} for Five Days`;
+    const compoundName = currentIdentity?.name || '';
+
     card.innerHTML = `
         <div class="card-header">
             <span class="filename">${escapeHtml(organTitle)} \u2014 ${escapeHtml(sexTitle)}
@@ -262,13 +341,38 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
                       style="display:none">Approved</span>
             </div>
         </div>
-        <div class="bm2-narrative-label">
-            Results Narrative
-            <button class="btn-small primary" id="btn-gen-narrative-${key}"
-                    onclick="generateGenomicsNarrative('${key}')">Generate Narrative</button>
-        </div>
-        <textarea class="bm2-narrative" id="genomics-narrative-${key}" rows="4"
-            placeholder="Click 'Generate Narrative' to create narrative paragraphs for this section.">${escapeHtml(existingNarrative)}</textarea>
+        <details class="card-config-collapse">
+            <summary>Section Config &amp; Narrative</summary>
+            <div class="card-fields">
+                <div class="form-group">
+                    <label>Section Title</label>
+                    <input type="text" id="genomics-title-${key}"
+                        value="${escapeHtml(defaultTitle)}">
+                </div>
+                <div class="form-group">
+                    <label>Table Caption</label>
+                    <input type="text" id="genomics-caption-${key}"
+                        value="${escapeHtml(defaultCaption)}">
+                </div>
+                <div class="form-group">
+                    <label>Compound Name</label>
+                    <input type="text" id="genomics-compound-${key}"
+                        placeholder="e.g., PFHxSAm"
+                        value="${escapeHtml(compoundName)}">
+                </div>
+                <div class="form-group">
+                    <label>Dose Unit</label>
+                    <input type="text" id="genomics-unit-${key}" value="mg/kg">
+                </div>
+            </div>
+            <div class="bm2-narrative-label">
+                Results Narrative
+                <button class="btn-small primary" id="btn-gen-narrative-${key}"
+                        onclick="generateGenomicsNarrative('${key}')">Generate Narrative</button>
+            </div>
+            <textarea class="bm2-narrative" id="genomics-narrative-${key}" rows="4"
+                placeholder="Click 'Generate Narrative' to create narrative paragraphs for this section.">${escapeHtml(existingNarrative)}</textarea>
+        </details>
         <div class="table-preview">
             ${geneSetHtml}
             ${goDescHtml}
@@ -276,7 +380,7 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
             ${geneDescHtml}
         </div>
     `;
-    cardsDiv.appendChild(card);
+    panel.appendChild(card);
 
     // Auto-resize the narrative textarea if it has content
     const narrativeEl = document.getElementById(`genomics-narrative-${key}`);
