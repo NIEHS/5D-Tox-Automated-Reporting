@@ -2517,6 +2517,62 @@ header p {
 
 
 /* ----------------------------------------------------------------
+ * Per-tab section PDF preview — embedded PDF iframe for Apical,
+ * Genomics, and Charts tabs.  Same visual treatment as the Report
+ * tab's full-document PDF viewer, but lives inside each tab's
+ * content area rather than a separate tab.
+ * ---------------------------------------------------------------- */
+
+/* Container for the PDF toolbar + iframe */
+.section-pdf-preview {
+    margin-top: 0.5rem;
+}
+
+/* Toolbar with the Compile PDF button — sits above the iframe */
+.section-pdf-preview .pdf-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Iframe that holds the compiled section PDF — sized to fill most
+   of the viewport height.  Border and radius match the card style. */
+.section-pdf-frame {
+    width: 100%;
+    height: 80vh;
+    border: 1px solid var(--c-border-light);
+    border-radius: var(--r-md);
+    background: #525659;
+}
+
+/* Row wrapper for dynamic sub-tab bar + fixed PDF Preview button.
+   The sub-tab bar grows to fill available space; the PDF Preview
+   button stays pinned to the right. */
+.sub-tab-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.sub-tab-row .sub-tab-bar {
+    flex: 1;
+}
+
+/* PDF Preview toggle button in the sub-tab row — styled to match
+   the sub-tab buttons visually but slightly smaller and muted
+   until activated. */
+.section-pdf-tab-btn {
+    white-space: nowrap;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+.section-pdf-tab-btn:hover,
+.section-pdf-tab-btn.active {
+    opacity: 1;
+}
+
+
+/* ----------------------------------------------------------------
  * Blocking overlay — full-viewport curtain shown during side-effect
  * operations (uploads, approvals, exports, LLM generation).
  * Prevents the user from triggering conflicting actions while one

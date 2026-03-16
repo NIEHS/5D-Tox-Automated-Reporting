@@ -1,8 +1,10 @@
-// export.js — DOCX/PDF export, PDF preview, file preview modals, report tab
+// export.js — PDF export, PDF preview, file preview modals, report tab
 //
 // Extracted from main.js.  These functions handle:
-//   - DOCX and PDF export (exportDocx, exportPdf)
+//   - Document export (exportDocument) — PDF/UA-1 via Typst
+//   - Shared payload builder (buildExportPayload)
 //   - Genomics export payload assembly (buildGenomicsExportSections)
+//   - Per-tab section PDF preview (compileSectionPdf, refreshSectionPdf)
 //   - Export button gating (updateExportButton)
 //   - Clipboard copying (copyToClipboard)
 //   - File preview modal (openPreviewModal, closePreviewModal, render helpers)
@@ -123,282 +125,44 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
  * Export .docx — sends background + apical sections to server
  * ================================================================ */
 
-async function exportDocx() {
-    showBlockingSpinner('Exporting .docx...');
-    try {
-    const proseEl = document.getElementById('output-prose');
-    const refsEl = document.getElementById('references-list');
-
-    // Collect current text from editable elements (user may have polished)
-    const paragraphs = extractProse('output-prose');
-
-    const references = refsEl
-        ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
-        : [];
-
-    const chemicalName = currentIdentity?.name || 'Chemical';
-
-    // Build apical sections payload from processed sections — only
-    // include sections that have been processed (have table data)
-    const apicalPayload = [];
-    for (const [sectionId, info] of Object.entries(apicalSections)) {
-        if (!info.processed) continue;
-
-        // Read narrative from the textarea (user may have edited it).
-        // Split on double-newlines to recover individual paragraphs.
-        const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
-        const narrativeText = narrativeEl?.value?.trim() || '';
-        const narrativeParagraphs = narrativeText
-            ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
-            : [];
-
-        // Look up the server-side file ID from the upload pool
-        const serverFileId = info.fileId
-            ? (uploadedFiles[info.fileId]?.id || info.fileId)
-            : sectionId;
-
-        // Resolve fallback title/caption from the domain if the form
-        // fields are empty.  This avoids the old bug where every section
-        // fell back to "Body Weights and Organ Weights".
-        const domain = info.domain || '';
-        const fallbacks = _resolveBm2Defaults(info.filename, domain);
-
-        apicalPayload.push({
-            bm2_id: serverFileId,
-            section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                || fallbacks.title,
-            table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                || fallbacks.caption,
-            compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
-                || chemicalName,
-            dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
-                || 'mg/kg',
-            narrative_paragraphs: narrativeParagraphs,
-        });
-    }
-
-    // Collect new NIEHS section data for export
-
-    // Methods data — structured format if available, else legacy flat paragraphs.
-    // When structured, we extract the edited subsection prose from the DOM
-    // and merge it back into the original methodsData structure so the server
-    // gets both the heading hierarchy and the (possibly edited) prose.
-    let methodsPayload = {};
-    if (methodsApproved && methodsData && methodsData.sections) {
-        // Structured format — extract edited subsections from DOM
-        const editedSections = extractMethodsSections();
-        methodsPayload = {
-            sections: editedSections,
-            context: methodsData.context || {},
-        };
-    }
-    const methodsParas = (methodsApproved && !methodsPayload.sections)
-        ? extractProse('methods-prose') : [];
-
-    // BMD summary endpoints (if loaded)
-    const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
-
-    // Genomics sections — split into typed entries for the Typst template
-    const genomicsSecs = buildGenomicsExportSections(genomicsResults, { onlyApproved: true });
-
-    // Summary paragraphs (if approved)
-    const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
-
-    // Aggregate genomics narratives across all organ×sex sections for the
-    // top-level keys expected by the Typst template.
-    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
-    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
-
-    // Animal report — include if approved and data is available
-    const animalReportPayload = (animalReportApproved && animalReportData)
-        ? animalReportData : null;
-
-    // Capture genomics chart images for report embedding.
-    // captureGenomicsChartImages() is defined in genomics_charts.js
-    // and returns base64 PNGs + captions, or null if no charts exist.
-    let chartImages = null;
-    if (typeof captureGenomicsChartImages === 'function') {
-        chartImages = await captureGenomicsChartImages();
-    }
-
-    try {
-        const resp = await fetch('/api/export-docx', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                paragraphs,
-                references,
-                chemical_name: chemicalName,
-                apical_sections: apicalPayload,
-                methods_data: methodsPayload.sections ? methodsPayload : null,
-                methods_paragraphs: methodsParas,
-                animal_report: animalReportPayload,
-                bmd_summary_endpoints: bmdSummaryEps,
-                genomics_sections: genomicsSecs,
-                gene_set_narrative: { paragraphs: allGsNarr },
-                gene_narrative: { paragraphs: allGeneNarr },
-                summary_paragraphs: summaryParas,
-                genomics_chart_images: chartImages,
-            }),
-        });
-
-        if (!resp.ok) {
-            const err = await resp.json();
-            showError(err.error || 'Export failed');
-            return;
-        }
-
-        // Download the file
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `5dToxReport_${chemicalName.replace(/[^a-zA-Z0-9 _-]/g, '_')}.docx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        showToast('Downloaded .docx');
-    } catch (err) {
-        showError('Export error: ' + err.message);
-    } finally {
-        hideBlockingSpinner();
-    }
-    } catch (outerErr) {
-        // Catch errors from payload assembly (missing DOM elements, etc.)
-        showError('DOCX export failed: ' + outerErr.message);
-        hideBlockingSpinner();
-    }
-}
-
 /**
  * Export the report as a tagged PDF/UA-1 file via /api/export-pdf.
  *
- * Builds the same payload as exportDocx() (same JSON schema) and
- * also includes table_data from apicalSections so the server can
- * render the tables without needing to re-export .bm2 files.
- * The server-side marshal_export_data() reshapes this into the
- * Typst template schema and compiles it to PDF/UA-1.
+ * Uses buildExportPayload() to collect all approved section data,
+ * POSTs to the server, and triggers a browser download of the
+ * compiled PDF.  The server-side marshal_export_data() reshapes the
+ * payload into the Typst template schema and compiles it to PDF/UA-1.
+ *
+ * This is the single export entry point — format-agnostic by design.
+ * Currently only PDF is implemented; additional formats (e.g., HTML,
+ * LaTeX) can be added by routing to different endpoints based on a
+ * format parameter.
  */
-async function exportPdf() {
-    // Wrap the entire export in a try/catch so that missing DOM elements
-    // or other unexpected errors show a toast instead of crashing the tab.
-    try {
-    // Collect the same payload as DOCX export — identical data,
-    // different output format (the server handles the conversion).
-    const paragraphs = backgroundApproved ? extractProse('output-prose') : [];
-    const refsEl = document.getElementById('references-list');
-    const references = (backgroundApproved && refsEl)
-        ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
-        : [];
-    const chemicalName = currentIdentity?.name || 'Chemical';
-
-    // Build apical sections — include table_data inline so the
-    // Typst template can render tables directly from the JSON.
-    const apicalPayload = [];
-    for (const [sectionId, info] of Object.entries(apicalSections)) {
-        if (!info.approved) continue;
-
-        const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
-        const narrativeText = narrativeEl?.value?.trim() || '';
-        const narrativeParagraphs = narrativeText
-            ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
-            : [];
-
-        const serverFileId = info.fileId
-            ? (uploadedFiles[info.fileId]?.id || info.fileId)
-            : sectionId;
-
-        const domain = info.domain || '';
-        const fallbacks = _resolveBm2Defaults(info.filename, domain);
-
-        apicalPayload.push({
-            bm2_id: serverFileId,
-            section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                || fallbacks.title,
-            table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                || fallbacks.caption,
-            compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
-                || chemicalName,
-            dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
-                || 'mg/kg',
-            narrative_paragraphs: narrativeParagraphs,
-            // Include table_data inline — the PDF endpoint uses this
-            // directly instead of looking up cached .bm2 exports
-            table_data: info.tableData || {},
-        });
+async function exportDocument() {
+    const btn = document.getElementById('btn-export');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
     }
-
-    // Methods
-    let methodsPayload = {};
-    if (methodsApproved && methodsData && methodsData.sections) {
-        const editedSections = extractMethodsSections();
-        methodsPayload = {
-            sections: editedSections,
-            context: methodsData.context || {},
-        };
-    }
-    const methodsParas = (methodsApproved && !methodsPayload.sections)
-        ? extractProse('methods-prose') : [];
-
-    // BMD Summary
-    const bmdSummaryEps = bmdSummaryApproved ? bmdSummaryEndpoints : [];
-
-    // Genomics — split into typed entries for the Typst template
-    const genomicsSecs = buildGenomicsExportSections(genomicsResults, { onlyApproved: true });
-
-    // Summary
-    const summaryParas = summaryApproved ? extractProse('summary-prose') : [];
-
-    // Aggregate genomics narratives for top-level Typst template keys
-    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
-    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
-
-    // Also pass CASRN and DTXSID for the title block
-    const casrn = currentIdentity?.casrn || '';
-    const dtxsid = currentIdentity?.dtxsid || '';
-
-    // Capture genomics chart images for report embedding
-    let chartImages = null;
-    if (typeof captureGenomicsChartImages === 'function') {
-        chartImages = await captureGenomicsChartImages();
-    }
-
-    const btn = document.getElementById('btn-export-pdf');
-    btn.disabled = true;
-    btn.textContent = 'Generating...';
 
     showBlockingSpinner('Generating PDF...');
     try {
+        const payload = await buildExportPayload({ includeCharts: true });
+        const chemicalName = payload.chemical_name || 'Chemical';
+
         const resp = await fetch('/api/export-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                paragraphs,
-                references,
-                chemical_name: chemicalName,
-                casrn,
-                dtxsid,
-                apical_sections: apicalPayload,
-                methods_data: methodsPayload.sections ? methodsPayload : null,
-                methods_paragraphs: methodsParas,
-                bmd_summary_endpoints: bmdSummaryEps,
-                genomics_sections: genomicsSecs,
-                gene_set_narrative: { paragraphs: allGsNarr },
-                gene_narrative: { paragraphs: allGeneNarr },
-                summary_paragraphs: summaryParas,
-                genomics_chart_images: chartImages,
-            }),
+            body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
-            const err = await resp.json();
+            const err = await resp.json().catch(() => ({ error: 'PDF export failed' }));
             showError(err.error || 'PDF export failed');
             return;
         }
 
-        // Download the PDF file
+        // Trigger browser download of the PDF file
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -414,16 +178,10 @@ async function exportPdf() {
         showError('PDF export error: ' + err.message);
     } finally {
         hideBlockingSpinner();
-        btn.disabled = false;
-        btn.textContent = 'Export PDF';
-    }
-    } catch (outerErr) {
-        // Catch errors from payload assembly (missing DOM elements, etc.)
-        // so the tab doesn't crash.
-        showError('PDF export failed: ' + outerErr.message);
-        hideBlockingSpinner();
-        const btn = document.getElementById('btn-export-pdf');
-        if (btn) { btn.disabled = false; btn.textContent = 'Export PDF'; }
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Export PDF';
+        }
     }
 }
 
@@ -433,9 +191,10 @@ async function exportPdf() {
  * ================================================================ */
 
 /**
- * Enable the Export .docx button only when:
+ * Enable the Export button only when:
  *   1. The background section is approved
- *   2. Every processed .bm2 file is also approved
+ *   2. At least one results section is approved
+ *   3. All processed .bm2 files are approved
  *
  * Called on every approval state change (approve, unapprove, retry,
  * new generation, session restore).
@@ -1146,6 +905,127 @@ async function renderReportTab() {
 
 
 /**
+ * Build the shared export payload for PDF compilation.
+ *
+ * Collects all generated section data from the DOM and state objects:
+ * background paragraphs, references, apical sections (with inline
+ * table_data), methods, BMD summary, genomics, summary, and chart
+ * images.  Returns a plain object ready to POST to /api/export-pdf.
+ *
+ * Used by both compilePdfPreview() (full report) and compileSectionPdf()
+ * (per-tab filtered preview) to avoid duplicating the payload assembly.
+ *
+ * Args:
+ *   options.includeCharts: Whether to capture and include genomics
+ *       chart images (base64 PNGs).  Default true.  Set to false for
+ *       section previews that don't need charts (avoids Plotly overhead).
+ * Returns:
+ *   Object with all export fields matching the /api/export-pdf schema.
+ */
+async function buildExportPayload({ includeCharts = true } = {}) {
+    const chemicalName = currentIdentity?.name || 'Chemical';
+    const casrn = currentIdentity?.casrn || '';
+    const dtxsid = currentIdentity?.dtxsid || '';
+
+    // Background paragraphs
+    const paragraphs = extractProse('output-prose');
+
+    // References
+    const refsEl = document.getElementById('references-list');
+    const references = refsEl
+        ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
+        : [];
+
+    // Apical sections — include all with table data, not just approved
+    const apicalPayload = [];
+    for (const [sectionId, info] of Object.entries(apicalSections)) {
+        if (!info.tableData) continue;
+
+        const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
+        const narrativeText = narrativeEl?.value?.trim() || '';
+        const narrativeParagraphs = narrativeText
+            ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+            : [];
+
+        const serverFileId = info.fileId
+            ? (uploadedFiles[info.fileId]?.id || info.fileId)
+            : sectionId;
+
+        const domain = info.domain || '';
+        const fallbacks = _resolveBm2Defaults(info.filename, domain);
+
+        apicalPayload.push({
+            bm2_id: serverFileId,
+            section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
+                || fallbacks.title,
+            table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
+                || fallbacks.caption,
+            compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
+                || chemicalName,
+            dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
+                || 'mg/kg',
+            narrative_paragraphs: narrativeParagraphs,
+            table_data: info.tableData || {},
+            table_type: info.tableType || null,
+        });
+    }
+
+    // Methods — include if generated (structured or flat)
+    let methodsPayload = null;
+    const methodsParas = [];
+    if (methodsData && methodsData.sections && methodsData.sections.length > 0) {
+        const editedSections = typeof extractMethodsSections === 'function'
+            ? extractMethodsSections() : methodsData.sections;
+        methodsPayload = {
+            sections: editedSections,
+            context: methodsData.context || {},
+        };
+    } else {
+        const mp = extractProse('methods-prose');
+        if (mp.length > 0) methodsParas.push(...mp);
+    }
+
+    // BMD Summary
+    const bmdSummaryEps = bmdSummaryEndpoints;
+
+    // Genomics — split into typed entries for the Typst template (include all, not just approved)
+    const genomicsSecs = buildGenomicsExportSections(genomicsResults);
+
+    // Summary
+    const summaryParas = extractProse('summary-prose');
+
+    // Aggregate top-level narrative arrays across all genomics sections
+    // (Typst template reads gene_set_narrative / gene_narrative from root, not per-section)
+    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
+    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
+
+    // Capture genomics chart images for report embedding (optional —
+    // skipped for section previews that don't need them)
+    let chartImages = null;
+    if (includeCharts && typeof captureGenomicsChartImages === 'function') {
+        chartImages = await captureGenomicsChartImages();
+    }
+
+    return {
+        paragraphs,
+        references,
+        chemical_name: chemicalName,
+        casrn,
+        dtxsid,
+        apical_sections: apicalPayload,
+        methods_data: methodsPayload,
+        methods_paragraphs: methodsParas,
+        bmd_summary_endpoints: bmdSummaryEps,
+        genomics_sections: genomicsSecs,
+        gene_set_narrative: { paragraphs: allGsNarr },
+        gene_narrative: { paragraphs: allGeneNarr },
+        summary_paragraphs: summaryParas,
+        genomics_chart_images: chartImages,
+    };
+}
+
+
+/**
  * Compile the PDF via /api/export-pdf and display it in the iframe.
  *
  * Collects all generated section data (same payload as exportPdf but
@@ -1165,108 +1045,14 @@ async function compilePdfPreview() {
     }
 
     try {
-        // --- Collect all generated content (not just approved) ---
-        const chemicalName = currentIdentity?.name || 'Chemical';
-        const casrn = currentIdentity?.casrn || '';
-        const dtxsid = currentIdentity?.dtxsid || '';
-
-        // Background paragraphs
-        const paragraphs = extractProse('output-prose');
-
-        // References
-        const refsEl = document.getElementById('references-list');
-        const references = refsEl
-            ? Array.from(refsEl.querySelectorAll('div')).map(div => div.textContent.trim())
-            : [];
-
-        // Apical sections — include all with table data, not just approved
-        const apicalPayload = [];
-        for (const [sectionId, info] of Object.entries(apicalSections)) {
-            if (!info.tableData) continue;
-
-            const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
-            const narrativeText = narrativeEl?.value?.trim() || '';
-            const narrativeParagraphs = narrativeText
-                ? narrativeText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
-                : [];
-
-            const serverFileId = info.fileId
-                ? (uploadedFiles[info.fileId]?.id || info.fileId)
-                : sectionId;
-
-            const domain = info.domain || '';
-            const fallbacks = _resolveBm2Defaults(info.filename, domain);
-
-            apicalPayload.push({
-                bm2_id: serverFileId,
-                section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
-                    || fallbacks.title,
-                table_caption_template: document.getElementById(`bm2-caption-${sectionId}`)?.value?.trim()
-                    || fallbacks.caption,
-                compound_name: document.getElementById(`bm2-compound-${sectionId}`)?.value?.trim()
-                    || chemicalName,
-                dose_unit: document.getElementById(`bm2-unit-${sectionId}`)?.value?.trim()
-                    || 'mg/kg',
-                narrative_paragraphs: narrativeParagraphs,
-                table_data: info.tableData || {},
-            });
-        }
-
-        // Methods — include if generated (structured or flat)
-        let methodsPayload = null;
-        const methodsParas = [];
-        if (methodsData && methodsData.sections && methodsData.sections.length > 0) {
-            const editedSections = typeof extractMethodsSections === 'function'
-                ? extractMethodsSections() : methodsData.sections;
-            methodsPayload = {
-                sections: editedSections,
-                context: methodsData.context || {},
-            };
-        } else {
-            const mp = extractProse('methods-prose');
-            if (mp.length > 0) methodsParas.push(...mp);
-        }
-
-        // BMD Summary
-        const bmdSummaryEps = bmdSummaryEndpoints;
-
-        // Genomics — split into typed entries for the Typst template (include all, not just approved)
-        const genomicsSecs = buildGenomicsExportSections(genomicsResults);
-
-        // Summary
-        const summaryParas = extractProse('summary-prose');
-
-        // Aggregate top-level narrative arrays across all genomics sections
-        // (Typst template reads gene_set_narrative / gene_narrative from root, not per-section)
-        const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
-        const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
-
-        // Capture genomics chart images for report embedding
-        let chartImages = null;
-        if (typeof captureGenomicsChartImages === 'function') {
-            chartImages = await captureGenomicsChartImages();
-        }
+        // Build the shared export payload (all sections, with charts)
+        const payload = await buildExportPayload({ includeCharts: true });
 
         // --- POST to server for Typst compilation ---
         const resp = await fetch('/api/export-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                paragraphs,
-                references,
-                chemical_name: chemicalName,
-                casrn,
-                dtxsid,
-                apical_sections: apicalPayload,
-                methods_data: methodsPayload,
-                methods_paragraphs: methodsParas,
-                bmd_summary_endpoints: bmdSummaryEps,
-                genomics_sections: genomicsSecs,
-                gene_set_narrative: { paragraphs: allGsNarr },
-                gene_narrative: { paragraphs: allGeneNarr },
-                summary_paragraphs: summaryParas,
-                genomics_chart_images: chartImages,
-            }),
+            body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
@@ -1294,6 +1080,166 @@ async function compilePdfPreview() {
         if (refreshBtn) {
             refreshBtn.disabled = false;
             refreshBtn.textContent = 'Refresh';
+        }
+    }
+}
+
+
+/* ================================================================
+ * Per-tab section PDF preview
+ *
+ * Each results tab (Apical, Genomics, Charts) has an embedded PDF
+ * preview that compiles only the relevant section of the NIEHS report.
+ * Uses the same Typst template and pipeline as the full Report tab,
+ * but with a section_filter parameter that strips everything except
+ * the requested section.
+ * ================================================================ */
+
+/**
+ * Track per-section blob URLs so we can revoke them when a new PDF
+ * is compiled (prevents memory leaks from accumulating blob URLs).
+ * Keyed by section filter name ("apical", "genomics", "charts").
+ */
+const _sectionPdfBlobUrls = {};
+
+
+/**
+ * Compile a section-filtered PDF and return a blob URL for iframe display.
+ *
+ * Builds a payload scoped to the currently active sub-tab within the
+ * requested section.  For example, if the Apical tab's "Clinical Pathology"
+ * sub-tab is active, only that domain's dose-response tables are included.
+ * The backend section_filter strips everything else (front matter, other
+ * body sections), so the resulting PDF shows exactly one document section.
+ *
+ * Sub-tab context is read from the DOM:
+ *   - Apical: active button in #apical-sub-tabs → data-domain attribute
+ *   - Genomics: active button in #genomics-sub-tabs → data-key attribute
+ *   - Charts: always includes all chart images (no sub-filtering)
+ *
+ * Args:
+ *   sectionFilter: "apical", "genomics", or "charts"
+ *
+ * Returns:
+ *   Blob URL string if successful, null on error.
+ */
+async function compileSectionPdf(sectionFilter) {
+    // Only capture chart images when the Charts tab needs them
+    const needCharts = sectionFilter === 'charts';
+    const payload = await buildExportPayload({ includeCharts: needCharts });
+    payload.section_filter = sectionFilter;
+
+    const resp = await fetch('/api/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Section PDF compilation failed' }));
+        showError(err.error || 'Section PDF compilation failed');
+        return null;
+    }
+
+    const blob = await resp.blob();
+
+    // Revoke previous blob URL for this section to free memory
+    if (_sectionPdfBlobUrls[sectionFilter]) {
+        URL.revokeObjectURL(_sectionPdfBlobUrls[sectionFilter]);
+    }
+    const blobUrl = URL.createObjectURL(blob);
+    _sectionPdfBlobUrls[sectionFilter] = blobUrl;
+
+    return blobUrl;
+}
+
+
+/**
+ * Compile and display a section-specific PDF preview in a tab's iframe.
+ *
+ * Called by the "Compile PDF" button in each tab's PDF preview container.
+ * Shows the preview container, clears the old iframe content, compiles
+ * the section PDF on the server, and loads the result into the iframe.
+ *
+ * Args:
+ *   sectionFilter: "apical", "genomics", or "charts"
+ */
+async function refreshSectionPdf(sectionFilter) {
+    const frameId = `${sectionFilter}-pdf-frame`;
+    const previewId = `${sectionFilter}-pdf-preview`;
+    const frame = document.getElementById(frameId);
+    const btn = document.querySelector(`#${previewId} .btn-compile-section-pdf`);
+
+    if (!frame) return;
+
+    // Show the preview container and clear old content
+    show(previewId);
+    frame.src = '';
+
+    // Disable button and show compiling state
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Compiling...';
+    }
+
+    try {
+        const blobUrl = await compileSectionPdf(sectionFilter);
+        if (blobUrl) {
+            frame.src = blobUrl;
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Compile PDF';
+        }
+    }
+}
+
+
+/**
+ * Toggle the section PDF preview for Apical or Genomics tabs.
+ *
+ * Hides the HTML card content and shows the PDF preview container
+ * (or vice versa).  For Charts, this is handled by activateChartTypeTab()
+ * since the PDF preview is a chart-type panel.
+ *
+ * The toggle button gets an "active" class when the PDF preview is visible,
+ * matching the visual style of other sub-tab buttons.
+ *
+ * @param {string} sectionFilter — "apical" or "genomics"
+ */
+function toggleSectionPdfPreview(sectionFilter) {
+    const previewId = `${sectionFilter}-pdf-preview`;
+    const preview = document.getElementById(previewId);
+    if (!preview) return;
+
+    const isShowing = preview.style.display !== 'none';
+
+    // Map section filter → the HTML content container to show/hide
+    const contentMap = {
+        apical: 'bm2-cards',
+        genomics: 'genomics-cards',
+    };
+    const contentId = contentMap[sectionFilter];
+    const content = contentId ? document.getElementById(contentId) : null;
+
+    // Toggle the PDF preview button's active state
+    const tabBtn = preview.closest('.bm2-section')?.querySelector('.section-pdf-tab-btn');
+
+    if (isShowing) {
+        // Hide PDF preview, show HTML cards
+        preview.style.display = 'none';
+        if (content) content.style.display = '';
+        if (tabBtn) tabBtn.classList.remove('active');
+    } else {
+        // Show PDF preview, hide HTML cards
+        preview.style.display = '';
+        if (content) content.style.display = 'none';
+        if (tabBtn) tabBtn.classList.add('active');
+        // Auto-compile if the iframe is empty (first time)
+        const frame = document.getElementById(`${sectionFilter}-pdf-frame`);
+        if (frame && !frame.src) {
+            refreshSectionPdf(sectionFilter);
         }
     }
 }

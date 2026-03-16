@@ -141,7 +141,7 @@ def build_report_pdf(data: dict, chart_images: dict | None = None) -> bytes:
     return pdf_bytes
 
 
-def marshal_export_data(body: dict) -> dict:
+def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     """
     Convert the /api/export-pdf request body (same schema as /api/export-docx)
     into the report.typ JSON schema.
@@ -157,6 +157,12 @@ def marshal_export_data(body: dict) -> dict:
 
     Args:
         body: The request JSON body from the web UI export call.
+        section_filter: Optional filter to keep only a specific report
+                        section for per-tab PDF previews.  Valid values:
+                        "apical" (dose-response tables + narrative),
+                        "genomics" (gene set/gene tables + descriptions),
+                        "charts" (UMAP + cluster scatter figures).
+                        When None, the full report is returned.
 
     Returns:
         A dict ready to pass to build_report_pdf().
@@ -318,6 +324,13 @@ def marshal_export_data(body: dict) -> dict:
     summary_paragraphs = body.get("summary_paragraphs", [])
     if summary_paragraphs:
         data["summary"] = {"paragraphs": summary_paragraphs}
+
+    # Apply section filter for per-tab PDF previews.
+    # This strips all sections except the requested one, producing
+    # a focused PDF that shows only the Apical, Genomics, or Charts
+    # content — suitable for embedding in a tab's iframe.
+    if section_filter:
+        _apply_section_filter(data, section_filter)
 
     return data
 
@@ -810,6 +823,67 @@ def _ensure_paragraphs(obj) -> dict:
     if isinstance(obj, str):
         return {"paragraphs": [obj]}
     return {"paragraphs": []}
+
+
+def _apply_section_filter(data: dict, section_filter: str) -> None:
+    """
+    Strip all report sections except the requested one for per-tab PDF preview.
+
+    Modifies `data` in place.  Removes front matter (title pages, TOC,
+    foreword, etc.) and all body sections that don't belong to the
+    requested filter.  The Typst template naturally skips empty/missing
+    sections, so the resulting PDF contains only the filtered content.
+
+    This is used by the per-tab "PDF Preview" feature — each results tab
+    (Apical, Genomics, Charts) can compile a focused section PDF without
+    duplicating the Typst template.
+
+    Args:
+        data: The full report data dict (modified in place).
+        section_filter: Which section to keep.  One of:
+            "apical"   — dose-response tables, narrative, BMD summary
+            "genomics" — gene set/gene tables, GO/gene descriptions
+            "charts"   — UMAP + cluster scatter figures
+    """
+    # --- Signal the Typst template to skip structural pages ---
+    # The cover page, inner title page, and TOC are unconditionally
+    # rendered in the template.  This flag tells the template to skip
+    # them entirely, producing a body-content-only PDF.
+    data["section_only"] = True
+
+    # --- Remove front matter ---
+    # Section PDFs don't need title pages, TOC, or boilerplate preamble.
+    # Stripping these produces a clean, content-only PDF.
+    for key in ("foreword", "about_report", "peer_review", "publication_details",
+                "acknowledgments", "abstract", "table_of_contents"):
+        data.pop(key, None)
+
+    # --- Map of filter → data keys to KEEP ---
+    # Each filter preserves only the sections relevant to that tab.
+    # "apical" keeps dose-response tables + BMD summary (which summarizes
+    #   apical endpoints).
+    # "genomics" keeps gene set/gene tables + their narrative descriptions.
+    # "charts" keeps the genomics chart images (UMAP + cluster scatter).
+    keep_map = {
+        "apical":   {"apical_sections", "bmd_summary"},
+        "genomics": {"genomics_sections", "gene_set_narrative", "gene_narrative"},
+        "charts":   {"genomics_charts"},
+    }
+    keep = keep_map.get(section_filter, set())
+
+    # --- Remove all body sections NOT in the keep set ---
+    # We pop (delete) the keys entirely rather than setting to None,
+    # because the Typst template uses `data.at("key", default: (:))` in
+    # some fallback paths — if the key exists with value null, the default
+    # isn't used and `.at()` is called on null, causing a compile error.
+    # Deleting the key ensures the default kicks in cleanly.
+    all_body = {
+        "background", "methods", "apical_sections", "internal_dose",
+        "bmd_summary", "genomics_sections", "gene_set_narrative",
+        "gene_narrative", "genomics_charts", "summary", "references",
+    }
+    for key in all_body - keep:
+        data.pop(key, None)
 
 
 def _build_missing_animal_footnotes(

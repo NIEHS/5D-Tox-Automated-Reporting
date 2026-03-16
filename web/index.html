@@ -436,7 +436,7 @@
                         <div class="version-dropdown" id="version-dropdown-bg" style="display:none"></div>
                     </span>
                     <button class="btn-action" onclick="event.stopPropagation(); copyToClipboard()">Copy</button>
-                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocx()" disabled>Export .docx</button>
+                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocument()" disabled>Export PDF</button>
                 </div>
             </div>
 
@@ -581,9 +581,23 @@
         <!-- Genomics Results Cards (hidden until genomics processed) -->
         <div class="bm2-section" id="genomics-results-section" style="display:none;" data-tab-section="Genomics">
             <h2>Genomics Analysis</h2>
-            <!-- Sub-tab bar — one tab per organ×sex, shown dynamically -->
-            <div class="sub-tab-bar" id="genomics-sub-tabs"></div>
+            <!-- Sub-tab bar — one tab per organ×sex, shown dynamically.
+                 PDF Preview button is a fixed sibling. -->
+            <div class="sub-tab-row">
+                <div class="sub-tab-bar" id="genomics-sub-tabs"></div>
+                <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')">PDF Preview</button>
+            </div>
             <div id="genomics-cards"></div>
+
+            <!-- Section PDF Preview — compiles just the genomics gene set
+                 and gene tables with GO/gene descriptions into a focused
+                 PDF.  Hidden until the user clicks "PDF Preview". -->
+            <div class="section-pdf-preview" id="genomics-pdf-preview" style="display:none;">
+                <div class="pdf-toolbar">
+                    <button onclick="refreshSectionPdf('genomics')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                </div>
+                <iframe id="genomics-pdf-frame" class="section-pdf-frame"></iframe>
+            </div>
         </div>
 
         <!-- Genomics Charts — interactive Plotly visualizations of GO category
@@ -599,12 +613,14 @@
                  is visualized in the chart panels below -->
             <div class="sub-tab-bar" id="charts-sub-tabs"></div>
 
-            <!-- Chart type sub-tabs — switches between UMAP and Cluster views -->
+            <!-- Chart type sub-tabs — switches between UMAP, Cluster, and PDF Preview -->
             <div class="sub-tab-bar visible" id="chart-type-tabs">
                 <button class="active" data-chart-type="umap"
                         onclick="activateChartTypeTab('umap')">Semantic Map (UMAP)</button>
                 <button data-chart-type="cluster"
                         onclick="activateChartTypeTab('cluster')">Cluster Scatter</button>
+                <button data-chart-type="pdf-preview"
+                        onclick="activateChartTypeTab('pdf-preview')">PDF Preview</button>
             </div>
 
             <!-- UMAP Scatter Plot panel -->
@@ -634,18 +650,47 @@
                     <div id="cluster-chart" style="width:100%; aspect-ratio:1.25/1;"></div>
                 </div>
             </div>
+
+            <!-- Charts PDF Preview panel — compiles just the UMAP and
+                 cluster scatter chart images into a focused PDF with
+                 NIEHS-styled figure captions.  Activated via the
+                 "PDF Preview" chart-type tab. -->
+            <div class="chart-type-panel" id="chart-panel-pdf-preview">
+                <div class="section-pdf-preview" id="charts-pdf-preview">
+                    <div class="pdf-toolbar">
+                        <button onclick="refreshSectionPdf('charts')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                    </div>
+                    <iframe id="charts-pdf-frame" class="section-pdf-frame"></iframe>
+                </div>
+            </div>
         </div>
 
         <!-- .bm2 file cards — processing and report (hidden until files uploaded) -->
         <div class="bm2-section" id="bm2-results-section" style="display:none;" data-tab-section="Apical">
             <h2>Apical Endpoint Results</h2>
-            <!-- Sub-tab bar — one tab per apical domain, shown dynamically -->
-            <div class="sub-tab-bar" id="apical-sub-tabs"></div>
+            <!-- Sub-tab bar — one tab per apical domain, shown dynamically.
+                 The PDF Preview button is a fixed sibling outside the dynamic
+                 bar so it survives innerHTML clears during pool reset. -->
+            <div class="sub-tab-row">
+                <div class="sub-tab-bar" id="apical-sub-tabs"></div>
+                <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('apical')">PDF Preview</button>
+            </div>
             <!-- Per-domain card containers — created dynamically by
                  ensureDomainSubTab() when the first card for a domain
                  is added.  Each container is a div with
                  id="apical-domain-{domain}" and class="apical-domain-panel". -->
             <div id="bm2-cards"></div>
+
+            <!-- Section PDF Preview — compiles just the apical dose-response
+                 tables and narrative into a focused PDF using the same
+                 NIEHS Typst template as the full report.  Hidden until the
+                 user clicks "PDF Preview" in the sub-tab bar. -->
+            <div class="section-pdf-preview" id="apical-pdf-preview" style="display:none;">
+                <div class="pdf-toolbar">
+                    <button onclick="refreshSectionPdf('apical')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                </div>
+                <iframe id="apical-pdf-frame" class="section-pdf-frame"></iframe>
+            </div>
         </div>
 
         <!-- BMD Summary Table — BMDExpress 3 native results -->
@@ -718,7 +763,7 @@
              activated, and re-rendered when approval state changes. -->
         <section data-tab-section="Report" id="report-view-section">
             <div class="report-toolbar">
-                <button onclick="exportPdf()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
+                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
                 <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
                 <button onclick="togglePdfViewer()" class="btn-action" id="btn-toggle-pdf" title="Collapse/expand PDF viewer">&#x25BC;</button>
             </div>

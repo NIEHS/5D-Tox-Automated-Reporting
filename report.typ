@@ -379,6 +379,14 @@
 #let report-date = data.at("report_date", default: "")
 #let report-series = data.at("report_series", default: "NIEHS Report Series")
 
+// --- Section-only mode ---
+// When section_only is true (set by _apply_section_filter in report_pdf.py),
+// the template skips the cover page, inner title page, and all front matter
+// (foreword, TOC, tables list, about, peer review, publication details,
+// acknowledgments, abstract).  The result is a body-content-only PDF
+// suitable for embedding in a per-tab PDF preview iframe.
+#let section-only = data.at("section_only", default: false)
+
 
 // =====================================================================
 // FRONT MATTER — roman numeral pages
@@ -419,6 +427,8 @@
 
 // Use page() function to create a single custom page without affecting
 // subsequent pages' settings.  The zero margins give a full-bleed effect.
+// Skipped in section-only mode (per-tab PDF preview).
+#if not section-only [
 #page(margin: 0pt, header: none, footer: none)[
 
   // --- White header band ---
@@ -500,6 +510,7 @@
     #data.at("report_date", default: "")
   ])
 ]
+] // end: if not section-only (cover page)
 
 
 // =====================================================================
@@ -517,8 +528,14 @@
 // The global header checks counter(page) > 1 to suppress on page 1.
 // Since the cover added a page, we reset the counter so the inner
 // title page is page 1 again (matching the original header suppression).
-#counter(page).update(1)
+// In section-only mode, the inner title page, front matter pages,
+// and roman numeral pagination are all skipped — we jump straight
+// to body content.
+#if not section-only {
+  counter(page).update(1)
+}
 
+#if not section-only [
 #align(center)[
   #block(below: 18pt, above: 72pt)[
     #set text(font: "Liberation Sans", size: 20pt, weight: "bold")
@@ -566,6 +583,7 @@
     Research Triangle Park, North Carolina, USA
   ]
 ]
+] // end: if not section-only (inner title page)
 
 
 // =====================================================================
@@ -577,6 +595,8 @@
 // =====================================================================
 
 // Start roman numbering at ii (title page was conceptually "i")
+// Skipped in section-only mode — body content uses arabic numbering.
+#if not section-only [
 #set page(
   footer: context {
     set text(size: 12pt, font: "Liberation Serif")
@@ -726,6 +746,7 @@
     parbreak()
   }
 }
+] // end: if not section-only (front matter)
 
 
 // =====================================================================
