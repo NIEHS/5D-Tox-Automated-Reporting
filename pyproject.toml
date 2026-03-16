@@ -1,0 +1,20 @@
+[project]
+name = "bmdx-pipe"
+version = "0.1.0"
+description = "BMDExpress data integration pipeline — file fingerprinting, cross-validation, pool integration, NTP statistical analysis, and report table generation."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lmdb>=1.7.5",
+    "openpyxl>=3.1.5",
+    "orjson>=3.11.7",
+    "python-docx>=1.2.0",
+    "scipy>=1.14.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bmdx_pipe"]
