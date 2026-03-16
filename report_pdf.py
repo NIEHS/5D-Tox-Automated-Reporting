@@ -865,9 +865,10 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     # "genomics" keeps gene set/gene tables + their narrative descriptions.
     # "charts" keeps the genomics chart images (UMAP + cluster scatter).
     keep_map = {
-        "apical":   {"apical_sections", "bmd_summary"},
-        "genomics": {"genomics_sections", "gene_set_narrative", "gene_narrative"},
-        "charts":   {"genomics_charts"},
+        "apical":      {"apical_sections"},
+        "bmd_summary": {"bmd_summary"},
+        "genomics":    {"genomics_sections", "gene_set_narrative", "gene_narrative"},
+        "charts":      {"genomics_charts"},
     }
     keep = keep_map.get(section_filter, set())
 

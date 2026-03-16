@@ -704,6 +704,15 @@
             </div>
             <div class="section-body">
             <div class="table-preview" id="bmd-summary-table"></div>
+            <!-- Section PDF Preview — BMD summary table in NIEHS format -->
+            <div class="section-pdf-preview" id="bmd_summary-pdf-preview" style="display:none;">
+                <div class="pdf-toolbar">
+                    <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                    <button onclick="toggleSectionPdfPreview('bmd_summary')" class="btn-small">Back to Table</button>
+                </div>
+                <iframe id="bmd_summary-pdf-frame" class="section-pdf-frame"></iframe>
+            </div>
+            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary')" style="margin-top:0.5rem">PDF Preview</button>
             </div><!-- /section-body -->
         </div>
 
@@ -718,6 +727,15 @@
             </div>
             <div class="section-body">
             <div class="table-preview" id="bmd-summary-bmds-table"></div>
+            <!-- Section PDF Preview — BMDS BMD summary table in NIEHS format -->
+            <div class="section-pdf-preview" id="bmd_summary_bmds-pdf-preview" style="display:none;">
+                <div class="pdf-toolbar">
+                    <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                    <button onclick="toggleSectionPdfPreview('bmd_summary_bmds')" class="btn-small">Back to Table</button>
+                </div>
+                <iframe id="bmd_summary_bmds-pdf-frame" class="section-pdf-frame"></iframe>
+            </div>
+            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary_bmds')" style="margin-top:0.5rem">PDF Preview</button>
             </div><!-- /section-body -->
         </div>
 

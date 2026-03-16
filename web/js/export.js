@@ -1215,16 +1215,23 @@ function toggleSectionPdfPreview(sectionFilter) {
 
     const isShowing = preview.style.display !== 'none';
 
-    // Map section filter → the HTML content container to show/hide
+    // Map section filter → the HTML content container to show/hide.
+    // For top-level tabs (apical, genomics), this is the cards container.
+    // For BMD summary sections, it's the table-preview div inside the
+    // collapsible section body.
     const contentMap = {
         apical: 'bm2-cards',
         genomics: 'genomics-cards',
+        bmd_summary: 'bmd-summary-table',
+        bmd_summary_bmds: 'bmd-summary-bmds-table',
     };
     const contentId = contentMap[sectionFilter];
     const content = contentId ? document.getElementById(contentId) : null;
 
-    // Toggle the PDF preview button's active state
-    const tabBtn = preview.closest('.bm2-section')?.querySelector('.section-pdf-tab-btn');
+    // Toggle the PDF preview button's active state.
+    // Look in the closest section container (bm2-section or output-section).
+    const tabBtn = (preview.closest('.bm2-section') || preview.closest('.section-body'))
+        ?.querySelector('.section-pdf-tab-btn');
 
     if (isShowing) {
         // Hide PDF preview, show HTML cards
