@@ -95,9 +95,9 @@ def _run_integrate_java(
         output_path:   Where to write the integrated JSON.
         metadata_path: Optional path to LLM metadata sidecar JSON.
     """
-    from java_bridge import build_classpath
+    from .java_bridge import build_classpath as _build_cp
 
-    cp = build_classpath()
+    cp = _build_cp()
     helper_dir = str(JAVA_HELPER_DIR)
 
     cmd = [
@@ -757,7 +757,7 @@ def integrate_pool(
     # TSV export path that crashed with IndexOutOfBoundsException.
     cat_results = integrated.get("categoryAnalysisResults", [])
     if cat_results:
-        from apical_report import export_categories, build_category_lookup
+        from .apical_report import export_categories, build_category_lookup
 
         # Collect all experiment names from the integrated data so
         # build_category_lookup can resolve BMDExpress pipeline suffixes
@@ -803,9 +803,22 @@ def integrate_pool(
         )
         attach_metadata(all_experiments, descriptions)
 
-    # Re-write the JSON with our metadata additions
+    # --- Write _category_lookup to a separate sidecar file ---
+    # The category lookup can be 10+ MB of JSON.  Keeping it out of
+    # integrated.json makes session-restore loads ~5x faster (the summary
+    # endpoint only needs _meta + experiment counts, not BMD statistics).
+    # The lookup is loaded on demand by the process-integrated pipeline.
+    cat_lookup_data = integrated.pop("_category_lookup", {})
+    cat_lookup_path = os.path.join(session_dir, "_category_lookup.json")
+    with open(cat_lookup_path, "w", encoding="utf-8") as f:
+        json.dump(cat_lookup_data, f)
+
+    # Re-write the JSON with our metadata additions (without _category_lookup)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(integrated, f, indent=2)
+
+    # Re-attach for the in-memory return value so callers still see it
+    integrated["_category_lookup"] = cat_lookup_data
 
     # --- Write enriched .bm2 file ---
     # Serialize the metadata-enriched BMDProject back to the canonical .bm2

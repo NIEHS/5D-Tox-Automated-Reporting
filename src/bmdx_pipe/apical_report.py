@@ -614,7 +614,7 @@ def build_table_data(
         Each list is ordered: body weight endpoints first, then organ
         weight endpoints.
     """
-    from apical_stats import (
+    from .apical_stats import (
         _call_java_prefilter, _sig_marker, jonckheere_test,
         ALPHA_STAR, EndpointStats,
     )

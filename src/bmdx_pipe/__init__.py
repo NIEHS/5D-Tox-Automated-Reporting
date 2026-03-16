@@ -25,7 +25,11 @@ from .file_integrator import (
 )
 
 # ── Pool integration (merge files → unified BMDProject JSON) ─────────────
-from .pool_integrator import integrate_pool
+from .pool_integrator import (
+    integrate_pool,
+    export_integrated_bm2,
+    tox_study_csv_to_pivot_txt,
+)
 
 # ── Statistical analysis & table generation ───────────────────────────────
 from .apical_report import (
@@ -54,6 +58,9 @@ from .apical_stats import (
 
 # ── Animal traceability ──────────────────────────────────────────────────
 from .animal_report import (
+    AnimalReport,
+    AnimalRecord,
+    DomainAttrition,
     build_animal_report,
     report_to_dict,
     add_animal_report_to_doc,
@@ -61,6 +68,7 @@ from .animal_report import (
 
 # ── LLM-based experiment metadata inference ──────────────────────────────
 from .experiment_metadata import (
+    VOCABULARIES,
     attach_metadata,
     infer_experiment_metadata,
 )
