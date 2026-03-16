@@ -899,44 +899,59 @@
     parbreak()
   }
 
-  // Data tables — one per sex, potentially on landscape pages
+  // Data table — single table with Male/Female sex-group separator rows,
+  // matching NIEHS Report 10 Tables 2-6 structure.  Each sex gets a bold
+  // separator row spanning all columns, followed by an "n" row (sample
+  // sizes per dose group) and then the endpoint data rows.
   let dose-unit = sec.at("dose_unit", default: "mg/kg")
-  for sex in ("Male", "Female") {
-    let rows-data = sec.at("table_data", default: (:)).at(sex, default: ())
-    if rows-data.len() > 0 {
-      // Caption template supports {sex} and {compound} placeholders.
-      // {compound} uses the table_caption name form (full name, never abbreviated)
-      // if a test_article object is available; otherwise falls back to the
-      // section's compound field.
-      let caption-text = sec.at("caption", default: "")
-        .replace("{sex}", sex)
-        .replace("{compound}", ta-form("table_caption"))
+  let male-data = sec.at("table_data", default: (:)).at("Male", default: ())
+  let female-data = sec.at("table_data", default: (:)).at("Female", default: ())
 
-      let doses = rows-data.at(0).at("doses", default: ())
+  if male-data.len() > 0 or female-data.len() > 0 {
+    // Caption — uses {compound} placeholder only (no {sex} since both
+    // sexes are in one table).  Remove any leftover {sex} placeholder.
+    let caption-text = sec.at("caption", default: "")
+      .replace(" of {sex} Rats", " of Male and Female Rats")
+      .replace("{sex}", "Male and Female")
+      .replace("{compound}", ta-form("table_caption"))
 
-      // Build header array
-      let headers = ("Endpoint",)
-      for dose in doses {
-        let label = if dose == 0 {
-          "0 " + dose-unit
-        } else {
-          str(dose) + " " + dose-unit
-        }
-        headers += (label,)
+    // Use whichever sex has data for dose columns
+    let ref-data = if male-data.len() > 0 { male-data } else { female-data }
+    let doses = ref-data.at(0).at("doses", default: ())
+
+    // Build header array
+    let headers = ("Endpoint",)
+    for dose in doses {
+      let label = if dose == 0 {
+        "0 " + dose-unit
+      } else {
+        str(dose) + " " + dose-unit
       }
-      headers += (
-        "BMD₁Std (" + dose-unit + ")",
-        "BMDL₁Std (" + dose-unit + ")",
-      )
+      headers += (label,)
+    }
+    headers += (
+      "BMD₁Std (" + dose-unit + ")",
+      "BMDL₁Std (" + dose-unit + ")",
+    )
 
-      let num-cols = range(1, headers.len())
+    let ncols = headers.len()
+    let num-cols = range(1, ncols)
 
-      // Build data rows
-      let tbl-rows = ()
+    // --- Build combined rows with sex group separators ---
+    // Each sex block: bold "Male"/"Female" separator → n row → endpoint rows
+    let tbl-rows = ()
 
-      // "n" row — sample sizes per dose group.
-      // Show "–" for dose groups where N=0 (all animals died before
-      // terminal sacrifice), matching the NIEHS reference report.
+    // Collect all footnotes (section-level + per-sex missing-animal)
+    let all-fn = sec.at("footnotes", default: ()).map(x => x)
+    let missing-fn = sec.at("missing_animal_footnotes", default: (:))
+
+    for (sex, rows-data) in (("Male", male-data), ("Female", female-data)) {
+      if rows-data.len() == 0 { continue }
+
+      // Bold sex separator row spanning all columns
+      tbl-rows += ((table.cell(colspan: ncols, text(weight: "bold", sex)),),)
+
+      // "n" row — sample sizes per dose group
       let n-row = ("n",)
       for dose in doses {
         let max-n = 0
@@ -963,51 +978,39 @@
         tbl-rows += (row,)
       }
 
-      // Combine section-level footnotes with any per-sex missing-animal
-      // footnote.  Missing-animal footnotes are stored in a dict keyed by
-      // sex ("Male"/"Female") → footnote string, produced by Python during
-      // export marshaling from the xlsx study file roster comparison.
-      let base-fn = sec.at("footnotes", default: ())
-      let missing-fn = sec.at("missing_animal_footnotes", default: (:))
+      // Append per-sex missing-animal footnote if present
       let sex-fn = missing-fn.at(sex, default: none)
-      let all-fn = if sex-fn != none {
-        base-fn + (sex-fn,)
-      } else {
-        base-fn
+      if sex-fn != none {
+        all-fn.push(sex-fn)
       }
+    }
 
-      // Wide tables (≥5 dose groups) get their own landscape page,
-      // matching the NIEHS pattern where Tables 2-6 are landscape.
-      // Narrow tables stay inline on the current portrait page.
-      //
-      // `set page(flipped: true/false)` implicitly triggers a page break
-      // in Typst, so no explicit pagebreak() is needed.  Using both would
-      // create an unwanted blank page.
-      if doses.len() >= 5 {
-        // --- Switch to landscape for this table ---
-        set page(flipped: true)
-        niehs-table(
-          headers,
-          tbl-rows,
-          caption: if caption-text != "" { caption-text },
-          numeric-cols: num-cols,
-          footnotes: all-fn,
-        )
-        // --- Return to portrait after the table ---
-        // The next `set page(flipped: false)` (or any subsequent content
-        // that uses portrait) will trigger the page break back.
-        set page(flipped: false)
-      } else {
-        // Narrow table — stays inline on portrait page
-        niehs-table(
-          headers,
-          tbl-rows,
-          caption: if caption-text != "" { caption-text },
-          numeric-cols: num-cols,
-          footnotes: all-fn,
-        )
-        v(12pt)
-      }
+    // Wide tables (≥5 dose groups) get their own landscape page,
+    // matching the NIEHS pattern where Tables 2-6 are landscape.
+    // Narrow tables stay inline on the current portrait page.
+    //
+    // `set page(flipped: true/false)` implicitly triggers a page break
+    // in Typst, so no explicit pagebreak() is needed.  Using both would
+    // create an unwanted blank page.
+    if doses.len() >= 5 {
+      set page(flipped: true)
+      niehs-table(
+        headers,
+        tbl-rows,
+        caption: if caption-text != "" { caption-text },
+        numeric-cols: num-cols,
+        footnotes: all-fn,
+      )
+      set page(flipped: false)
+    } else {
+      niehs-table(
+        headers,
+        tbl-rows,
+        caption: if caption-text != "" { caption-text },
+        numeric-cols: num-cols,
+        footnotes: all-fn,
+      )
+      v(12pt)
     }
   }
 }
