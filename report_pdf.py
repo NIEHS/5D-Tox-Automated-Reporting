@@ -292,16 +292,28 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
             first_col = sec.get("first_col_header",
                                 "Study Day" if is_body_weight else "Endpoint")
 
+            # Accept caption from either key — the body_weight_table builder
+            # outputs "caption" directly, while the frontend uses
+            # "table_caption_template".
+            caption = (sec.get("caption")
+                       or sec.get("table_caption_template", ""))
+
             data["apical_sections"].append({
                 "title": section_title,
-                "caption": sec.get("table_caption_template", ""),
+                "caption": caption,
                 "compound": sec.get("compound_name", chemical_name),
                 "dose_unit": dose_unit,
                 "first_col_header": first_col,
-                "narrative": _split_narrative(sec.get("narrative_paragraphs")),
+                "narrative": _split_narrative(
+                    sec.get("narrative_paragraphs") or sec.get("narrative")
+                ),
                 "table_data": sec.get("table_data", {}),
                 "footnotes": footnotes,
                 "missing_animal_footnotes": missing_fn,
+                # BMD/BMDL definition line — rendered above the lettered
+                # footnotes as an unnumbered paragraph.  Only body weight
+                # tables include this (from body_weight_table.py builder).
+                "bmd_definition": sec.get("bmd_definition"),
             })
 
     # Internal Dose Assessment

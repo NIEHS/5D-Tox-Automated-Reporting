@@ -212,7 +212,7 @@
 // Headers are bold.  Numeric columns are right-aligned.
 // =====================================================================
 
-#let niehs-table(headers, rows, caption: none, numeric-cols: (), footnotes: ()) = {
+#let niehs-table(headers, rows, caption: none, numeric-cols: (), footnotes: (), definition: none) = {
   // Caption above the table — bold, left-aligned, 11pt
   if caption != none {
     block(spacing: 4pt, text(weight: "bold", size: 11pt, caption))
@@ -246,7 +246,17 @@
     ),
   )
 
-  // Footnotes below the table — 9pt, tight leading
+  // Definition line — unnumbered paragraph below the table rule,
+  // above the lettered footnotes.  Used by body weight tables for
+  // the BMD/BMDL abbreviation definitions.
+  if definition != none {
+    set text(size: 9pt)
+    set par(leading: 0.4em, spacing: 4pt)
+    [#definition]
+    parbreak()
+  }
+
+  // Footnotes below the table — 9pt, tight leading, lettered a,b,c...
   if footnotes.len() > 0 {
     set text(size: 9pt)
     set par(leading: 0.4em, spacing: 4pt)
@@ -1022,6 +1032,10 @@
     // `set page(flipped: true/false)` implicitly triggers a page break
     // in Typst, so no explicit pagebreak() is needed.  Using both would
     // create an unwanted blank page.
+    // BMD definition line — only present on tables that include it
+    // (body weight tables from body_weight_table.py builder).
+    let bmd-def = sec.at("bmd_definition", default: none)
+
     if doses.len() >= 5 {
       set page(flipped: true)
       niehs-table(
@@ -1030,6 +1044,7 @@
         caption: if caption-text != "" { caption-text },
         numeric-cols: num-cols,
         footnotes: all-fn,
+        definition: bmd-def,
       )
       set page(flipped: false)
     } else {
@@ -1039,6 +1054,7 @@
         caption: if caption-text != "" { caption-text },
         numeric-cols: num-cols,
         footnotes: all-fn,
+        definition: bmd-def,
       )
       v(12pt)
     }
