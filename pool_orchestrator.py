@@ -1528,13 +1528,13 @@ def _build_section_cards(
                 # (title, caption, table_data, footnotes, bmd_definition,
                 # etc.).  We need to reshape it to match the section card
                 # format expected by the UI.
-                # Use all rows (not just responsive) for narrative since
-                # body weight appears regardless of the gate.  If no rows
-                # are responsive, the narrative describes the non-significant
-                # findings.
-                narrative_rows = responsive_rows if responsive_rows else sex_rows
+                # Pass only responsive rows to the narrative generator.
+                # When empty (gate didn't pass), it produces "no significant
+                # changes" text — which is correct.  DO NOT fall back to
+                # sex_rows because that includes the old pre-sidecar pivot
+                # rows which may have stale responsive=True flags.
                 narrative = generate_results_narrative(
-                    narrative_rows, compound_name, dose_unit,
+                    responsive_rows, compound_name, dose_unit,
                 )
                 sections.append({
                     "platform": platform,

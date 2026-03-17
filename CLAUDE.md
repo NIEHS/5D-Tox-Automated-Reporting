@@ -27,6 +27,7 @@
 - [ ] **Rework Data tab UX** — The current Data tab workflow (upload → validate → confirm metadata → integrate → process) is cryptic and hard to follow. Needs a clearer step-by-step flow with better status indicators, progress feedback, and guidance for new users.
 - [ ] **Process-integrated performance and UX** — Processing takes 10+ minutes (pybmds fitting ~15 models per endpoint). Needs: (1) progress feedback in the spinner showing current step (NTP stats → section cards → BMDS modeling → genomics), (2) ability to cancel/abort processing, (3) don't auto-process on page reload if cache exists, (4) optional email notification on completion, (5) nuclear reset should be possible even while processing is in progress.
 - [ ] **Typst template fidelity** — Typst-generated reports don't yet match NIEHS reference layout (Bookshelf_NBK589955.pdf, InDesign-produced). Use `diff_tables.py` for cell-level comparison and `pdf_text/` parser for detailed font/position metadata.
+- [ ] **Move generate_results_narrative out of bmdx-pipe** — Narrative generation is presentation logic (report writing), not data processing. It belongs in rlm-bmdx (the web app), not bmdx-pipe (the pipeline library). The template-based approach also produces generic boilerplate — consider LLM-generated narratives that read more like scientist-written prose.
 
 ### LONG-TERM
 
