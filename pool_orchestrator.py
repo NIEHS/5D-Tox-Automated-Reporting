@@ -61,6 +61,7 @@ from bmdx_pipe import (
     annotate_missing_animals,
     backfill_missing_doses,
     build_table_data,
+    build_clinical_obs_tables,
     export_genomics,
     generate_results_narrative,
 )
@@ -200,6 +201,90 @@ def serialize_table_rows(table_data: dict) -> dict:
                 }
             tables_json[sex].append(entry)
     return tables_json
+
+
+def serialize_incidence_rows(incidence_data: dict) -> dict:
+    """
+    Convert a {sex: [IncidenceRow, ...]} dict to JSON-friendly nested dicts.
+
+    Similar to serialize_table_rows() but for clinical observation incidence
+    data.  Each row has pre-formatted "n/N" strings instead of mean±SE values.
+    Dose keys are converted via _js_dose_key() for JavaScript compatibility.
+
+    The output includes a "table_type": "incidence" marker so the frontend
+    can detect this is an incidence table and render it differently (no "n"
+    row, "Finding" header instead of "Endpoint", cells are literal strings).
+
+    Args:
+        incidence_data: Dict mapping sex label to lists of IncidenceRow
+                        objects from build_clinical_obs_tables().
+
+    Returns:
+        Dict mapping sex label to lists of JSON-serializable row dicts.
+    """
+    tables_json = {}
+    for sex, rows in incidence_data.items():
+        tables_json[sex] = []
+        for row in rows:
+            sorted_doses = sorted(row.incidence_by_dose.keys())
+            entry = {
+                "label": row.label,
+                "doses": sorted_doses,
+                # Values are pre-formatted "n/N" strings — the frontend
+                # renders them directly without further formatting.
+                "values": {
+                    _js_dose_key(d): v
+                    for d, v in row.incidence_by_dose.items()
+                },
+                # Total N per dose group (for the frontend to use if needed)
+                "n": {
+                    _js_dose_key(d): n
+                    for d, n in row.total_n_by_dose.items()
+                },
+            }
+            tables_json[sex].append(entry)
+    return tables_json
+
+
+def _build_clinical_obs_section(
+    integrated: dict,
+    compound_name: str,
+    dose_unit: str,
+) -> dict | None:
+    """
+    Build the Clinical Observations section card from stored CSV paths.
+
+    Reads the CSV paths from integrated._meta.clinical_obs_files, calls
+    build_clinical_obs_tables() to produce incidence data, then serializes
+    it into the same shape as apical section cards — but with
+    table_type="incidence" so the frontend knows to render differently.
+
+    Args:
+        integrated:    The full merged BMDProject dict with _meta overlay.
+        compound_name: Chemical name for narrative/caption.
+        dose_unit:     Dose unit string (e.g., "mg/kg").
+
+    Returns:
+        Section card dict, or None if no clinical obs files or no findings.
+    """
+    meta = integrated.get("_meta", {})
+    csv_paths = meta.get("clinical_obs_files", [])
+    if not csv_paths:
+        return None
+
+    incidence_data = build_clinical_obs_tables(csv_paths)
+    if not incidence_data:
+        return None
+
+    tables_json = serialize_incidence_rows(incidence_data)
+
+    return {
+        "platform": "Clinical Observations",
+        "title": "Clinical Observations",
+        "tables_json": tables_json,
+        "table_type": "incidence",
+        "narrative": [],  # No auto-generated narrative for incidence tables
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1357,6 +1442,7 @@ def _build_section_cards(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
     dose_unit: str,
+    dtxsid: str | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -1364,10 +1450,20 @@ def _build_section_cards(
     For each platform, serializes TableRow objects to JSON-friendly dicts
     and generates an auto-written results narrative.
 
+    Special handling for Body Weight: when a tox_study sidecar JSON exists
+    (written by tox_study_csv_to_pivot_txt), the body weight section uses
+    build_body_weight_table_from_sidecar() instead of the generic path.
+    This fixes three mismatches vs the NIEHS reference:
+      1. Missing dose groups (333/1000 mg/kg where all animals died)
+      2. Inflated N counts (Biosampling Animals included)
+      3. Incorrect mean±SE (follows from #2)
+
     Args:
         platform_tables: The partitioned {platform -> {sex -> [TableRow, ...]}} dict.
         compound_name:   Chemical name for the narrative (e.g., "PFHxSAm").
         dose_unit:       Dose unit string (e.g., "mg/kg").
+        dtxsid:          The DTXSID for this session.  Needed to locate sidecar
+                         files for body weight.  If None, the generic path is used.
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -1387,6 +1483,68 @@ def _build_section_cards(
         responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
         if not responsive_rows:
             continue
+
+        # ── Body Weight: use sidecar builder when available ──────────────
+        # The sidecar JSON has per-animal metadata (Selection, Observation
+        # Day, Terminal Flag) that the generic build_table_data path loses.
+        # This produces correct N counts (Core Animals only), all dose
+        # groups (including those where animals died), and proper attrition
+        # footnotes.
+        if platform == "Body Weight" and dtxsid:
+            from body_weight_table import (
+                build_body_weight_table_from_sidecar,
+                find_sidecar_paths,
+            )
+            session_dir = str(_session_dir(dtxsid))
+            sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
+
+            if sidecar_paths:
+                # Extract BMD/BMDL results from the pipeline's TableRow data
+                # so the sidecar builder can display them in the BMD columns.
+                # The pipeline computes BMD from the pivoted data — we just
+                # carry those results through to the sidecar-built table.
+                bmd_results: dict[str, dict[str, str]] = {}
+                for sex, rows in responsive_rows.items():
+                    for row in rows:
+                        # row.label is "SD0", "SD5", etc.
+                        if row.label not in bmd_results:
+                            bmd_results[row.label] = {
+                                "bmd": row.bmd_str if row.bmd_str else "ND",
+                                "bmdl": row.bmdl_str if row.bmdl_str else "ND",
+                            }
+
+                bw_result = build_body_weight_table_from_sidecar(
+                    sidecar_paths,
+                    bmd_results=bmd_results,
+                    compound_name=compound_name,
+                    dose_unit=dose_unit,
+                )
+
+                # The sidecar builder returns a full apical_sections entry
+                # (title, caption, table_data, footnotes, bmd_definition,
+                # etc.).  We need to reshape it to match the section card
+                # format expected by the UI.
+                narrative = generate_results_narrative(
+                    responsive_rows, compound_name, dose_unit,
+                )
+                sections.append({
+                    "platform": platform,
+                    "title": platform,
+                    "tables_json": bw_result["table_data"],
+                    "narrative": narrative,
+                    # Pass through body-weight-specific fields that the
+                    # Typst template and UI use for specialized rendering.
+                    "first_col_header": bw_result.get("first_col_header"),
+                    "caption": bw_result.get("caption"),
+                    "footnotes": bw_result.get("footnotes"),
+                    "bmd_definition": bw_result.get("bmd_definition"),
+                })
+                logger.info(
+                    "Body Weight section built from sidecar (%d sexes, %d footnotes)",
+                    len(bw_result["table_data"]),
+                    len(bw_result.get("footnotes", [])),
+                )
+                continue  # skip generic path below
 
         tables_json = serialize_table_rows(responsive_rows)
         narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
@@ -1764,7 +1922,22 @@ async def api_process_integrated(dtxsid: str, request: Request):
             backfill_missing_doses(platform_tables, xlsx_rosters)
 
         # --- Build section cards with narratives ---
-        sections = _build_section_cards(platform_tables, compound_name, dose_unit)
+        # Pass dtxsid so body weight sections can use sidecar data when
+        # available, producing correct N counts and all dose groups.
+        sections = _build_section_cards(
+            platform_tables, compound_name, dose_unit, dtxsid=dtxsid,
+        )
+
+        # --- Append clinical observations incidence table (if any) ---
+        # Clinical obs CSVs bypass Java integration (categorical data, not
+        # numeric).  Their paths are stored in _meta.clinical_obs_files
+        # during integrate_pool().  We build incidence tables here and
+        # append them as a special section card with table_type="incidence".
+        clin_obs_section = _build_clinical_obs_section(
+            integrated, compound_name, dose_unit,
+        )
+        if clin_obs_section:
+            sections.append(clin_obs_section)
 
         # --- Run BMDS modeling (thread pool — pybmds is CPU-bound) ---
         bmds_inputs = [

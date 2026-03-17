@@ -220,29 +220,48 @@
 
   let ncols = headers.len()
 
-  // Typst automatically tags this as Table with TR/TH/TD
-  set text(size: 10pt)
+  // Typst automatically tags this as Table with TR/TH/TD.
+  // Font size 8.5pt with 4pt horizontal inset fits 13 columns on a
+  // landscape US-letter page without wrapping — matching the NIEHS
+  // reference InDesign layout (~8pt body text in data tables).
+  set text(size: 8.5pt)
   table(
-    columns: ncols,
+    // Auto-size each column to fit its widest cell content.
+    // Equal-width columns (the old `columns: ncols`) forced 13 columns
+    // into 1/13th of the page each (~57pt), wrapping dose headers like
+    // "0.15 mg/kg" and data values like "296.5 ± 4.4".  Auto columns
+    // let Typst shrink narrow columns (like "n" or "NA") and expand
+    // data columns to fit their content on one line.
+    columns: (auto,) * ncols,
     align: (col, _) => {
+      // First column (Study Day / Endpoint) is left-aligned;
+      // all numeric columns (doses, BMD, BMDL) are right-aligned,
+      // matching the NIEHS reference alignment.
       if col in numeric-cols { right } else { left }
     },
     stroke: none,
-    inset: (x: 6pt, y: 3pt),
+    inset: (x: 4pt, y: 2.5pt),
 
-    // Header row — Typst tags these cells as TH when inside table.header
+    // Header row — Typst tags these cells as TH when inside table.header.
+    // Line weights match the NIEHS reference:
+    //   - Top rule (above headers): ~1pt — thicker, defines table boundary
+    //   - Header separator (below headers): ~0.5pt — thin divider
     table.header(
-      table.hline(stroke: 1.5pt + black),
-      ..headers.map(h => table.cell(text(weight: "bold", h))),
+      table.hline(stroke: 1pt + black),
+      ..headers.map(h => table.cell(
+        align: horizon,  // vertically center header text
+        text(weight: "bold", h),
+      )),
       table.hline(stroke: 0.5pt + black),
     ),
 
     // Data rows
     ..rows.flatten(),
 
-    // Bottom border (thick)
+    // Bottom border — same weight as top rule (~1pt), matching NIEHS
+    // convention where top and bottom rules are equal weight.
     table.footer(
-      table.hline(stroke: 1.5pt + black),
+      table.hline(stroke: 1pt + black),
     ),
   )
 
@@ -279,18 +298,21 @@
 
   let ncols = headers.len()
 
-  set text(size: 10pt)
+  set text(size: 8.5pt)
   table(
-    columns: ncols,
+    columns: (auto,) * ncols,
     align: (col, _) => {
       if col in numeric-cols { right } else { left }
     },
     stroke: none,
-    inset: (x: 6pt, y: 3pt),
+    inset: (x: 4pt, y: 2.5pt),
 
     table.header(
-      table.hline(stroke: 1.5pt + black),
-      ..headers.map(h => table.cell(text(weight: "bold", h))),
+      table.hline(stroke: 1pt + black),
+      ..headers.map(h => table.cell(
+        align: horizon,
+        text(weight: "bold", h),
+      )),
       table.hline(stroke: 0.5pt + black),
     ),
 
@@ -311,7 +333,7 @@
     },
 
     table.footer(
-      table.hline(stroke: 1.5pt + black),
+      table.hline(stroke: 1pt + black),
     ),
   )
 
@@ -982,40 +1004,95 @@
       // Bold sex separator row spanning all columns
       tbl-rows += ((table.cell(colspan: ncols, text(weight: "bold", sex)),),)
 
-      // "n" row — sample sizes per dose group
-      let n-row = ("n",)
-      for dose in doses {
-        let max-n = 0
-        for r in rows-data {
-          let nn = r.at("n", default: (:)).at(str(dose), default: 0)
-          if nn > max-n { max-n = nn }
-        }
-        n-row += (if max-n > 0 { str(max-n) } else { "–" },)
-      }
-      n-row += ("NA", "NA")
-      tbl-rows += (n-row,)
+      // Check if Python pre-built the complete row grid (sidecar path).
+      // When the first row has is_n_row=true, the data contains every row
+      // the table needs — including the n row — and the template just
+      // renders them verbatim.  No data logic in the template.
+      let has-prebuilt-grid = rows-data.at(0).at("is_n_row", default: false)
 
-      // Endpoint data rows.
-      // For body weight tables, labels come as "SD0", "SD5" (study day
-      // identifiers from BMDExpress).  Strip the "SD" prefix to match
-      // the NIEHS reference which shows just "0" and "5".
-      for r in rows-data {
-        let raw-label = r.at("label", default: "")
-        let label = if raw-label.starts-with("SD") {
-          raw-label.slice(2)
-        } else {
-          raw-label
+      if has-prebuilt-grid {
+        // ── Pre-built grid: render rows as-is ─────────────────────────
+        // Python already decided which rows exist, what each cell shows,
+        // and where attrition markers go.  The template is a pure renderer.
+        //
+        // The `markers` dict on the n-row maps dose keys to footnote
+        // letters (e.g., {"1000": "c"}).  We render these as superscripts
+        // after the cell value: "4" + superscript "c" → "4ᶜ".
+        for r in rows-data {
+          let label = r.at("label", default: "")
+          let row-markers = r.at("markers", default: (:))
+          let row = (label,)
+          for dose in doses {
+            let val = r.at("values", default: (:)).at(str(dose), default: "")
+            let marker = row-markers.at(str(dose), default: none)
+            if marker != none {
+              row += ([#val#super[#marker]],)
+            } else {
+              row += (str(val),)
+            }
+          }
+          row += (
+            str(r.at("bmd", default: "")),
+            str(r.at("bmdl", default: "")),
+          )
+          tbl-rows += (row,)
         }
-        let row = (label,)
+      } else {
+        // ── Legacy path: template constructs n row + data rows ────────
+        // For non-sidecar sections (organ weight, clinical chem, etc.)
+        // the template builds the n row from per-row N counts and
+        // strips SD prefixes from labels.  This path will be deprecated
+        // as more platforms adopt the pre-built grid approach.
+        let n-row = ("n",)
+        let sex-markers = (:)
+        for r in rows-data {
+          let rm = r.at("attrition_markers", default: (:))
+          for (dk, letter) in rm {
+            sex-markers.insert(dk, letter)
+          }
+        }
         for dose in doses {
-          let val = r.at("values", default: (:)).at(str(dose), default: "–")
-          row += (str(val),)
+          let max-n = 0
+          for r in rows-data {
+            let nn = r.at("n", default: (:)).at(str(dose), default: 0)
+            if nn > max-n { max-n = nn }
+          }
+          let marker = sex-markers.at(str(dose), default: none)
+          if max-n > 0 {
+            if marker != none {
+              n-row += ([#str(max-n)#super[#marker]],)
+            } else {
+              n-row += (str(max-n),)
+            }
+          } else {
+            if marker != none {
+              n-row += ([–#super[#marker]],)
+            } else {
+              n-row += ("–",)
+            }
+          }
         }
-        row += (
-          str(r.at("bmd", default: "–")),
-          str(r.at("bmdl", default: "–")),
-        )
-        tbl-rows += (row,)
+        n-row += ("NA", "NA")
+        tbl-rows += (n-row,)
+
+        for r in rows-data {
+          let raw-label = r.at("label", default: "")
+          let label = if raw-label.starts-with("SD") {
+            raw-label.slice(2)
+          } else {
+            raw-label
+          }
+          let row = (label,)
+          for dose in doses {
+            let val = r.at("values", default: (:)).at(str(dose), default: "–")
+            row += (str(val),)
+          }
+          row += (
+            str(r.at("bmd", default: "–")),
+            str(r.at("bmdl", default: "–")),
+          )
+          tbl-rows += (row,)
+        }
       }
 
       // Append per-sex missing-animal footnote if present
