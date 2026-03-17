@@ -124,37 +124,41 @@ def _bmd_display(row, is_baseline: bool) -> tuple[str, str]:
     """
     Apply NIEHS business rules to determine BMD/BMDL cell text.
 
-    Rules (from NIEHS Report 10 Table 2):
-        - Baseline (study day 0): always "NA" — no treatment effect
-          measurable at baseline, BMD is not applicable.
-        - Terminal (study day 5):
-            - If the endpoint is NOT responsive (Jonckheere trend AND
-              Dunnett pairwise not both significant): "ND" — BMD was
-              not determined because the statistical gate was not passed.
-            - If responsive AND BMDExpress produced a result: show the
-              numeric BMD/BMDL value.
-            - If responsive BUT BMDExpress failed to model (noisy data,
-              convergence failure, etc.): "NA" — not applicable because
-              modeling couldn't produce a value despite significance.
+    The inferred .bm2 data is the source of truth for BMD values.
+    Each study day probe (SD0, SD5) is modeled independently by
+    BMDExpress, so both baseline and terminal can have BMD results
+    if the statistical gate passes.
+
+    Rules:
+        - If the endpoint is NOT responsive (Jonckheere trend AND
+          Dunnett pairwise not both significant): "ND" — BMD was
+          not determined because the statistical gate was not passed.
+        - If responsive AND BMDExpress produced a result: show the
+          numeric BMD/BMDL value.
+        - If responsive BUT BMDExpress failed to model (noisy data,
+          convergence failure, etc.): "ND" — not determined because
+          modeling couldn't produce a value.
+
+    The NIEHS reference shows ND for body weight because the gate
+    didn't pass.  With different data, any study day could show a
+    numeric BMD.
 
     Args:
         row:         A TableRow object with bmd_str, bmdl_str, responsive,
                      and bmd_status attributes.
-        is_baseline: True for study day 0 rows.
+        is_baseline: True for study day 0 rows (unused — all days use
+                     the same logic now).
 
     Returns:
         (bmd_text, bmdl_text) tuple of display strings.
     """
-    if is_baseline:
-        return ("NA", "NA")
-
     if not row.responsive:
         # Gate not passed — BMD not computed
         return ("ND", "ND")
 
     # Gate passed — show BMDExpress result
-    bmd = row.bmd_str if row.bmd_str and row.bmd_str != "\u2014" else "NA"
-    bmdl = row.bmdl_str if row.bmdl_str and row.bmdl_str != "\u2014" else "NA"
+    bmd = row.bmd_str if row.bmd_str and row.bmd_str != "\u2014" else "ND"
+    bmdl = row.bmdl_str if row.bmdl_str and row.bmdl_str != "\u2014" else "ND"
     return (bmd, bmdl)
 
 
@@ -871,18 +875,24 @@ def build_body_weight_table_from_sidecar(
             is_baseline = (label == "0")
 
             # BMD/BMDL business rules:
-            #   - Baseline (day 0): empty — BMD not applicable, but unlike
-            #     the n row we don't write "NA", we leave it blank.  The
-            #     reference Table 2 has empty BMD cells on day 0.
-            #   - Terminal (day 5): show pipeline BMD result, or "ND" if
-            #     the statistical gate wasn't passed, or a numeric value
-            #     if BMD modeling succeeded.
-            if is_baseline:
-                bmd_text, bmdl_text = "", ""
-            else:
-                day_bmd = bmd_results.get(day, {})
-                bmd_text = day_bmd.get("bmd", "ND")
-                bmdl_text = day_bmd.get("bmdl", "ND")
+            #   All data rows (baseline and terminal) show the pipeline's
+            #   BMD result.  The pipeline runs NTP stats on each probe
+            #   (SD0, SD5) from the inferred .bm2 data independently:
+            #
+            #   - If the statistical gate passes (significant Jonckheere
+            #     trend + Dunnett pairwise) AND BMDExpress modeling
+            #     succeeds → numeric BMD/BMDL value
+            #   - If the gate doesn't pass OR modeling fails → "ND"
+            #     (not determined)
+            #
+            #   The NIEHS reference shows ND for both day 0 and day 5
+            #   body weights because the gate didn't pass in that study.
+            #   With different data (e.g., a compound that causes
+            #   immediate weight loss), day 0 could show a numeric BMD.
+            #   The inferred .bm2 is the source of truth for BMD values.
+            day_bmd = bmd_results.get(day, {})
+            bmd_text = day_bmd.get("bmd", "ND")
+            bmdl_text = day_bmd.get("bmdl", "ND")
 
             values: dict[str, str] = {}
             row_markers: dict[str, str] = {}
