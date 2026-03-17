@@ -394,6 +394,17 @@ def tox_study_csv_to_pivot_txt(
 
     One output file per sex found in the data.
 
+    When Observation Day is present (e.g., "SD0", "SD5"), each observation day
+    becomes a separate endpoint row in the pivot.  This gives BMDExpress
+    distinct probes for baseline vs terminal body weight, matching how the
+    inferred .bm2 files already work.
+
+    A **sidecar JSON** file is written alongside each pivot txt, capturing
+    per-animal metadata that the wide format discards (Selection, Observation
+    Day, Terminal Flag).  The sidecar is consumed by the body weight table
+    builder to apply NIEHS business rules (Core Animals filtering, attrition
+    footnotes).  BMDExpress never sees the sidecar — it reads only the txt.
+
     Args:
         path:       Absolute path to the _tox_study CSV file.
         output_dir: Directory to write the pivot .txt files.
@@ -434,6 +445,20 @@ def tox_study_csv_to_pivot_txt(
     animal_col = header_lower.index("animal id")
     sex_col = header_lower.index("sex") if "sex" in header_lower else None
 
+    # Optional metadata columns — present in NTP tox_study CSVs but absent
+    # from generic dose-response files.  When present, they enable:
+    #   - Observation Day: split endpoints by study day (SD0, SD5 → separate rows)
+    #   - Selection: Core Animals vs Biosampling Animals (for N-count filtering)
+    #   - Terminal Flag: which measurement is the animal's last (for attrition)
+    obs_day_col = header_lower.index("observation day") if "observation day" in header_lower else None
+    selection_col = header_lower.index("selection") if "selection" in header_lower else None
+    terminal_col = header_lower.index("terminal flag") if "terminal flag" in header_lower else None
+
+    # Whether we have observation-day data and should split endpoints by day.
+    # When True, "Body Weight" at SD0 becomes "SD0" and at SD5 becomes "SD5"
+    # in the pivot — giving BMDExpress separate probes per study day.
+    has_obs_day = obs_day_col is not None
+
     # Endpoint columns: everything not in known metadata columns
     _META_COLS = {
         "ntp study number", "concentration", "animal id", "sex",
@@ -449,9 +474,26 @@ def tox_study_csv_to_pivot_txt(
         logger.warning("No endpoint columns found in %s", path)
         return []
 
-    # Parse data rows into {(sex, endpoint): {animal_id: value}}
+    # ── Parse data rows ──────────────────────────────────────────────────
+    #
+    # Build two structures simultaneously:
+    #   1. data_by_sex_endpoint: {(sex, endpoint_label): {animal_id: value}}
+    #      — the wide-format pivot input, where endpoint_label is either the
+    #      raw column name ("Body Weight") or the observation day tag ("SD0",
+    #      "SD5") when Observation Day is present.
+    #   2. sidecar_animals: {sex: {animal_id: {dose, selection, observations}}}
+    #      — per-animal metadata for the sidecar JSON, capturing everything
+    #      the pivot discards.
+    #
+    # When Observation Day is present, we use the day tag AS the endpoint
+    # label (not "Body Weight").  This means "SD0" and "SD5" become distinct
+    # rows in the pivot, matching how the inferred .bm2 already encodes them.
     data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]] = {}
     animal_dose_map: dict[str, float] = {}
+
+    # Sidecar: per-sex, per-animal metadata
+    # Structure: {sex: {animal_id: {dose, selection, observations: [{day, value, terminal, endpoint}]}}}
+    sidecar_animals: dict[str, dict[str, dict]] = {}
 
     for row in rows[1:]:
         if len(row) <= max(dose_col, animal_col):
@@ -474,19 +516,69 @@ def tox_study_csv_to_pivot_txt(
             if s:
                 sex = s.title()
 
+        # Read optional metadata columns
+        obs_day = ""
+        if obs_day_col is not None and obs_day_col < len(row):
+            obs_day = row[obs_day_col].strip()
+
+        selection = ""
+        if selection_col is not None and selection_col < len(row):
+            selection = row[selection_col].strip()
+
+        terminal = ""
+        if terminal_col is not None and terminal_col < len(row):
+            terminal = row[terminal_col].strip()
+
+        # Ensure this animal exists in the sidecar structure
+        sex_animals = sidecar_animals.setdefault(sex, {})
+        animal_rec = sex_animals.setdefault(aid, {
+            "dose": dose,
+            "selection": selection or "Unknown",
+            "observations": [],
+        })
+        # Update selection if we see a non-empty value (all rows for an
+        # animal should have the same selection, but be defensive)
+        if selection and animal_rec["selection"] == "Unknown":
+            animal_rec["selection"] = selection
+
         for col_idx in endpoint_cols:
             col_name = header[col_idx]
             if col_idx >= len(row):
                 continue
             val = row[col_idx].strip()
+
+            # Record the observation in the sidecar regardless of whether the
+            # value is numeric (we want to capture "NA" entries too — they
+            # signal missing data, e.g., animal 203 at 1000 mg/kg with NA
+            # body weight at SD0 because it was found dead).
+            if obs_day or terminal:
+                animal_rec["observations"].append({
+                    "day": obs_day,
+                    "endpoint": col_name,
+                    "value": val if val else None,
+                    "terminal": terminal.lower() in ("yes", "true", "1") if terminal else False,
+                })
+
             if not val:
                 continue
             try:
                 fval = float(val)
             except (ValueError, TypeError):
+                # Non-numeric values (like "NA") are not included in the
+                # pivot (BMDExpress can't model them), but they ARE captured
+                # in the sidecar for the table builder.
                 continue
 
-            key = (sex, col_name)
+            # When Observation Day is present, use the day tag as the endpoint
+            # label in the pivot.  "Body Weight" at "SD0" → endpoint "SD0",
+            # at "SD5" → endpoint "SD5".  This gives BMDExpress separate
+            # probes per study day, matching the inferred .bm2 structure.
+            if has_obs_day and obs_day:
+                endpoint_label = obs_day
+            else:
+                endpoint_label = col_name
+
+            key = (sex, endpoint_label)
             data_by_sex_endpoint.setdefault(key, {})[aid] = fval
 
     if not data_by_sex_endpoint:
@@ -523,8 +615,10 @@ def tox_study_csv_to_pivot_txt(
         lines.append("\t".join(["Dose"] + [
             str(animal_dose_map.get(a, 0)) for a in animals
         ]))
-        # Row 3+: endpoints
-        for endpoint, animal_vals in info["endpoints"].items():
+        # Row 3+: endpoints.  Sort endpoint keys so study days appear in
+        # natural order (SD0 before SD1 before SD5).
+        for endpoint in sorted(info["endpoints"].keys()):
+            animal_vals = info["endpoints"][endpoint]
             values = [str(animal_vals.get(a, "")) for a in animals]
             lines.append("\t".join([endpoint] + values))
 
@@ -542,6 +636,52 @@ def tox_study_csv_to_pivot_txt(
         output_paths.append(out_path)
         logger.info("Converted long-format → wide: %s (%d endpoints, %d animals)",
                      out_name, len(info["endpoints"]), len(animals))
+
+        # ── Write sidecar JSON ───────────────────────────────────────────
+        # The sidecar captures per-animal metadata that the wide-format pivot
+        # discards: Selection (Core vs Biosampling), Observation Day, Terminal
+        # Flag, and all raw observation values (including non-numeric "NA").
+        #
+        # Structure:
+        #   {
+        #     "source": "body_weight_truth_male.csv",
+        #     "platform": "Body Weight",
+        #     "sex": "Male",
+        #     "animals": {
+        #       "101": {
+        #         "dose": 0.0,
+        #         "selection": "Core Animals",
+        #         "observations": [
+        #           {"day": "SD0", "endpoint": "Body Weight", "value": "285.1", "terminal": false},
+        #           {"day": "SD5", "endpoint": "Body Weight", "value": "300.3", "terminal": true}
+        #         ]
+        #       }, ...
+        #     }
+        #   }
+        #
+        # The body weight table builder reads this to:
+        #   - Filter to Core Animals only (exclude Biosampling Animals)
+        #   - Compute mean±SE from raw animal values
+        #   - Generate attrition footnotes from terminal flags on non-SD5 days
+        #   - Include all dose groups (even those where all animals died)
+        if sex in sidecar_animals:
+            sidecar_path = os.path.splitext(out_path)[0] + ".sidecar.json"
+            sidecar_data = {
+                "source": os.path.basename(path),
+                "platform": platform,
+                "sex": sex,
+                "animals": {
+                    aid: rec
+                    for aid, rec in sidecar_animals[sex].items()
+                    if aid in info["animals"]
+                },
+            }
+            import json as json_mod
+            with open(sidecar_path, "w") as sf:
+                json_mod.dump(sidecar_data, sf, indent=2)
+            logger.info("Wrote sidecar: %s (%d animals)",
+                         os.path.basename(sidecar_path),
+                         len(sidecar_data["animals"]))
 
     return output_paths
 
@@ -614,6 +754,10 @@ def integrate_pool(
     bm2_paths: list[str] = []
     txt_paths: list[str] = []
     xlsx_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
+    # Clinical observation CSVs bypass Java integration entirely —
+    # they contain categorical findings (not numeric endpoints) and are
+    # processed into incidence tables at report time instead.
+    clinical_obs_files: list[str] = []
     source_files: dict[str, dict] = {}
 
     for platform_key, tiers in coverage_matrix.items():
@@ -696,6 +840,14 @@ def integrate_pool(
                 # comes from the .bm2 tier via BMDExpress's analysis pipeline.
                 if fp_data_type == "gene_expression":
                     continue
+                # Clinical observation CSVs contain categorical findings (Normal,
+                # Hunched, Discharge, etc.) — not numeric endpoints.  They have
+                # no endpoint columns that survive _META_COLS filtering, so Java
+                # integration would produce nothing.  Divert them to a separate
+                # list for incidence table processing at report time.
+                if cm_platform == "Clinical":
+                    clinical_obs_files.append(file_path)
+                    continue
                 # All txt/csv files should be wide-format by now — long-format
                 # CSVs were converted during fingerprint_and_store().
                 txt_paths.append(file_path)
@@ -724,11 +876,23 @@ def integrate_pool(
             txt_paths.extend(pivot_files)
 
     # --- Call Java to merge everything ---
+    # If the only files are clinical observation CSVs (categorical data),
+    # there's nothing for Java to integrate.  But clinical obs can still
+    # be processed into incidence tables — so we create a minimal shell.
     if not bm2_paths and not txt_paths:
-        logger.warning("No files to integrate for %s", dtxsid)
-        return {}
-
-    _run_integrate_java(bm2_paths, txt_paths, out_path)
+        if not clinical_obs_files:
+            logger.warning("No files to integrate for %s", dtxsid)
+            return {}
+        # Create a minimal BMDProject shell so the rest of the pipeline
+        # has something to attach _meta to.  The doseResponseExperiments
+        # list will be empty — only clinical obs incidence tables will
+        # appear in the final report.
+        logger.info("Only clinical obs files for %s — creating minimal shell", dtxsid)
+        import json as _json
+        with open(out_path, "w") as f:
+            _json.dump({"doseResponseExperiments": []}, f)
+    else:
+        _run_integrate_java(bm2_paths, txt_paths, out_path)
 
     # --- Read back the Java-produced JSON ---
     # IntegrateProject writes valid JSON (NaN→null) via Jackson.
@@ -749,6 +913,10 @@ def integrate_pool(
         "integrated_at": datetime.now(tz=timezone.utc).isoformat(),
         "source_files": source_files,
         "xlsx_rosters": xlsx_rosters,
+        # Clinical observation CSV paths — bypassed Java integration because
+        # they contain categorical findings, not numeric endpoints.  Processed
+        # into incidence tables at report time by build_clinical_obs_tables().
+        "clinical_obs_files": clinical_obs_files,
     }
 
     # --- Build category lookup via native Java API ---
