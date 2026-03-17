@@ -1481,10 +1481,14 @@ def _build_section_cards(
         }
         # Drop sex groups that have no responsive endpoints
         responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
-        if not responsive_rows:
-            continue
 
         # ── Body Weight: use sidecar builder when available ──────────────
+        # Body weight bypasses the responsive filter because the NIEHS
+        # reference ALWAYS includes Table 2 (body weights) regardless of
+        # whether the statistical gate passed.  The gate controls only
+        # the BMD column values (ND vs numeric), not table inclusion.
+        # When responsive_rows is empty (gate didn't pass), the sidecar
+        # builder still produces the full table with ND in BMD columns.
         # The sidecar JSON has per-animal metadata (Selection, Observation
         # Day, Terminal Flag) that the generic build_table_data path loses.
         # This produces correct N counts (Core Animals only), all dose
@@ -1524,8 +1528,13 @@ def _build_section_cards(
                 # (title, caption, table_data, footnotes, bmd_definition,
                 # etc.).  We need to reshape it to match the section card
                 # format expected by the UI.
+                # Use all rows (not just responsive) for narrative since
+                # body weight appears regardless of the gate.  If no rows
+                # are responsive, the narrative describes the non-significant
+                # findings.
+                narrative_rows = responsive_rows if responsive_rows else sex_rows
                 narrative = generate_results_narrative(
-                    responsive_rows, compound_name, dose_unit,
+                    narrative_rows, compound_name, dose_unit,
                 )
                 sections.append({
                     "platform": platform,
@@ -1545,6 +1554,12 @@ def _build_section_cards(
                     len(bw_result.get("footnotes", [])),
                 )
                 continue  # skip generic path below
+
+        # For non-body-weight platforms, skip if no responsive endpoints.
+        # (Body weight is handled above via the sidecar path and always
+        # appears regardless of the gate.)
+        if not responsive_rows:
+            continue
 
         tables_json = serialize_table_rows(responsive_rows)
         narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
