@@ -1159,7 +1159,11 @@ async function runProcessingPipeline() {
                 // Skip if already created (idempotent)
                 if (apicalSections[sectionId]) continue;
 
-                // Register in state
+                // Register in state.  Store all fields the server sends
+                // so the export payload and HTML preview can use them.
+                // Body weight sections include extra fields from the
+                // sidecar builder (footnotes, bmd_definition, etc.)
+                // that other platforms don't have.
                 apicalSections[sectionId] = {
                     fileId:            null,   // not tied to a single file
                     filename:          section.title,
@@ -1172,6 +1176,12 @@ async function runProcessingPipeline() {
                     // "incidence" for clinical obs tables (n/N cells),
                     // undefined for normal apical tables (mean±SE cells).
                     tableType:         section.table_type || null,
+                    // Body-weight-specific fields from sidecar builder.
+                    // These flow through to the export payload and Typst.
+                    footnotes:         section.footnotes || null,
+                    firstColHeader:    section.first_col_header || null,
+                    caption:           section.caption || null,
+                    bmdDefinition:     section.bmd_definition || null,
                 };
 
                 // Create the visual card and populate it — pass the platform

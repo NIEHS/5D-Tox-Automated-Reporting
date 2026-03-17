@@ -973,6 +973,13 @@ async function buildExportPayload({ includeCharts = true } = {}) {
             table_data: info.tableData || {},
             table_type: info.tableType || null,
         };
+        // Body-weight-specific fields from the sidecar builder.
+        // These pass through marshal_export_data to the Typst template
+        // for footnotes, BMD definition line, and Study Day header.
+        if (info.footnotes)      sectionEntry.footnotes = info.footnotes;
+        if (info.firstColHeader) sectionEntry.first_col_header = info.firstColHeader;
+        if (info.caption)        sectionEntry.caption = info.caption;
+        if (info.bmdDefinition)  sectionEntry.bmd_definition = info.bmdDefinition;
         if (tableNumber && !isNaN(tableNumber)) {
             sectionEntry.table_number = tableNumber;
         }
