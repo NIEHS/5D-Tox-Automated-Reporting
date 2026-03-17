@@ -942,10 +942,18 @@
   if male-data.len() > 0 or female-data.len() > 0 {
     // Caption — uses {compound} placeholder only (no {sex} since both
     // sexes are in one table).  Remove any leftover {sex} placeholder.
-    let caption-text = sec.at("caption", default: "")
+    // If table_number is present, prepend "Table N. " to match the NIEHS
+    // reference format: "Table 2. Summary of Body Weights of ..."
+    let raw-caption = sec.at("caption", default: "")
       .replace(" of {sex} Rats", " of Male and Female Rats")
       .replace("{sex}", "Male and Female")
       .replace("{compound}", ta-form("table_caption"))
+    let tbl-num = sec.at("table_number", default: none)
+    let caption-text = if tbl-num != none {
+      "Table " + str(tbl-num) + ". " + raw-caption
+    } else {
+      raw-caption
+    }
 
     // Use whichever sex has data for dose columns
     let ref-data = if male-data.len() > 0 { male-data } else { female-data }

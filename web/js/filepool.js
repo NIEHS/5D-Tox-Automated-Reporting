@@ -1688,6 +1688,12 @@ function createBm2Card(bm2Id, filename, platform) {
                     <label>Dose Unit</label>
                     <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
                 </div>
+                <div class="form-group">
+                    <label>Table Number</label>
+                    <input type="number" id="bm2-table-number-${bm2Id}"
+                        placeholder="e.g., 2" min="1" step="1"
+                        style="width: 80px">
+                </div>
             </div>
             <div class="bm2-narrative-label">Results Narrative</div>
             <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" rows="6"

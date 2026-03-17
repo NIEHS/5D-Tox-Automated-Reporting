@@ -954,7 +954,12 @@ async function buildExportPayload({ includeCharts = true } = {}) {
         const domain = info.domain || '';
         const fallbacks = _resolveBm2Defaults(info.filename, domain);
 
-        apicalPayload.push({
+        // Table number — optional, user-provided.  When present, the
+        // Typst template prepends "Table N. " to the caption.
+        const tableNumRaw = document.getElementById(`bm2-table-number-${sectionId}`)?.value;
+        const tableNumber = tableNumRaw ? parseInt(tableNumRaw, 10) : null;
+
+        const sectionEntry = {
             bm2_id: serverFileId,
             section_title: document.getElementById(`bm2-title-${sectionId}`)?.value?.trim()
                 || fallbacks.title,
@@ -967,7 +972,11 @@ async function buildExportPayload({ includeCharts = true } = {}) {
             narrative_paragraphs: narrativeParagraphs,
             table_data: info.tableData || {},
             table_type: info.tableType || null,
-        });
+        };
+        if (tableNumber && !isNaN(tableNumber)) {
+            sectionEntry.table_number = tableNumber;
+        }
+        apicalPayload.push(sectionEntry);
     }
 
     // Methods — include if generated (structured or flat)

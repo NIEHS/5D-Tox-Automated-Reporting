@@ -305,6 +305,8 @@ async function restoreSession(data) {
             if (compoundEl && section.compound_name) compoundEl.value = section.compound_name;
             const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
             if (unitEl && section.dose_unit) unitEl.value = section.dose_unit;
+            const tableNumEl = document.getElementById(`bm2-table-number-${sectionId}`);
+            if (tableNumEl && section.table_number) tableNumEl.value = section.table_number;
 
             const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
             if (narrativeEl && section.narrative) {

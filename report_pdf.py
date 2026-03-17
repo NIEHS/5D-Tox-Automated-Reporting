@@ -298,7 +298,7 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
             caption = (sec.get("caption")
                        or sec.get("table_caption_template", ""))
 
-            data["apical_sections"].append({
+            apical_entry = {
                 "title": section_title,
                 "caption": caption,
                 "compound": sec.get("compound_name", chemical_name),
@@ -314,7 +314,16 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 # footnotes as an unnumbered paragraph.  Only body weight
                 # tables include this (from body_weight_table.py builder).
                 "bmd_definition": sec.get("bmd_definition"),
-            })
+            }
+
+            # Table number — user-provided from the UI.  When present,
+            # the Typst template prepends "Table N. " to the caption,
+            # matching the NIEHS reference format (e.g., "Table 2.").
+            table_number = sec.get("table_number")
+            if table_number is not None:
+                apical_entry["table_number"] = table_number
+
+            data["apical_sections"].append(apical_entry)
 
     # Internal Dose Assessment
     internal_dose = body.get("internal_dose")
