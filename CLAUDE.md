@@ -18,6 +18,7 @@
 ### HIGH
 
 - [ ] **xlsx as source of truth (unified feature)** — Three interconnected customer action items (#2, #5, #6) merged into one feature. xlsx = source of truth for animal roster, dose assignments, missing animals. bm2 = source of truth for BMD/BMDL modeling. txt/csv = derived intermediates. Includes study file detection by internal sheet structure and footnotes for animals that didn't survive to terminal sacrifice.
+- [ ] **Split process-integrated cache into per-section units** — The monolithic `_processed_cache_{hash}.json` forces a full 10+ minute recompute (mostly BMDS modeling) when anything changes. Split into: NTP stats per platform (~5s), section cards per platform (<1s), BMDS modeling per endpoint (~8min total, the bottleneck), genomics extraction (~10s), BMD summary (<1s). Each unit has its own invalidation key so changing a narrative or footnote only rebuilds the affected section card, not the entire pipeline. BMDS only reruns when actual dose-response data changes.
 - [ ] **Verify pairwise statistics vs reference report** — Spot-checking showed some values match (T3, T4 hormones) but need thorough comparison across all endpoints against reference report.
 
 ### MEDIUM
