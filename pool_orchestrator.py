@@ -49,6 +49,7 @@ from llm_helpers import llm_generate_json as _llm_generate_json_imported
 
 from bmdx_pipe import (
     FileFingerprint,
+    TableRow,
     ValidationReport,
     fingerprint_file,
     validate_pool,
@@ -934,11 +935,13 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     # Cache in memory for the process-integrated endpoint
     _integrated_pool[dtxsid] = integrated
 
-    # Invalidate any stale processed-results caches from previous integration
-    # runs — the input data has changed, so cached NTP stats are stale.
-    for old_cache in _session_dir(dtxsid).glob("_processed_cache_*.json"):
-        old_cache.unlink(missing_ok=True)
-        logger.debug("Invalidated stale process cache: %s", old_cache.name)
+    # Invalidate all per-section caches from previous integration runs —
+    # the input data has changed, so all cached results are stale.
+    # Also clean up any leftover monolithic caches from the old format.
+    for pattern in ("_cache_*.json", "_processed_cache_*.json"):
+        for old_cache in _session_dir(dtxsid).glob(pattern):
+            old_cache.unlink(missing_ok=True)
+            logger.debug("Invalidated stale cache: %s", old_cache.name)
 
     # Return a lightweight summary instead of the full integrated JSON
     # (which can be 50+ MB and exceeds Cloud Run's 32 MiB response limit).
@@ -1149,59 +1152,257 @@ def _load_integrated(dtxsid: str) -> dict | None:
     return integrated
 
 
-def _check_processed_cache(
-    dtxsid: str,
-    integrated: dict,
+# ---------------------------------------------------------------------------
+# Per-section cache infrastructure
+# ---------------------------------------------------------------------------
+# Instead of one monolithic cache that invalidates on ANY parameter change,
+# each pipeline stage has its own cache file with its own hash key.  This
+# means changing compound_name only re-runs the ~1s section card builder,
+# not the ~8min BMDS modeling.
+#
+# Cache file naming: _cache_{unit}_{hash}.json
+# Units: ntp, sections, bmds, genomics, bmd_summary
+#
+# See the design table in CLAUDE.md (HIGH priority TODO) for the full
+# hash-input matrix showing which changes invalidate which caches.
+
+def _load_cache(dtxsid: str, unit: str, hash_val: str) -> dict | None:
+    """
+    Load a per-section cache file from disk.
+
+    Returns the cached data dict, or None on cache miss / corruption.
+    Uses orjson for fast deserialization (10-50x faster than json.loads
+    on the multi-MB NTP stats cache).
+
+    Args:
+        dtxsid:   Session identifier — cache lives in sessions/{dtxsid}/.
+        unit:     Cache unit name (ntp, sections, bmds, genomics, bmd_summary).
+        hash_val: 16-char hex hash of the inputs that affect this unit.
+    """
+    cache_path = _session_dir(dtxsid) / f"_cache_{unit}_{hash_val}.json"
+    if not cache_path.exists():
+        return None
+    try:
+        data = orjson.loads(cache_path.read_bytes())
+        logger.info("Cache hit: %s for %s (hash %s)", unit, dtxsid, hash_val)
+        return data
+    except Exception:
+        logger.warning("Corrupted %s cache for %s, recomputing", unit, dtxsid)
+        return None
+
+
+def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
+    """
+    Persist a per-section cache to disk, cleaning up old hashes for the
+    same unit.
+
+    Each unit keeps at most one cache file on disk.  When the hash changes
+    (because an input changed), the old file is deleted and the new one
+    written.  Errors are logged but not raised — caching is a performance
+    optimization, not a correctness requirement.
+
+    Args:
+        dtxsid:   Session identifier.
+        unit:     Cache unit name.
+        hash_val: 16-char hex hash of current inputs.
+        data:     The payload to cache (must be JSON-serializable).
+    """
+    session = _session_dir(dtxsid)
+    cache_path = session / f"_cache_{unit}_{hash_val}.json"
+    try:
+        # Remove stale caches for this unit (different hash = different inputs)
+        for old in session.glob(f"_cache_{unit}_*.json"):
+            if old != cache_path:
+                old.unlink(missing_ok=True)
+        cache_path.write_bytes(orjson.dumps(data))
+        logger.info("Cached %s for %s (%s)", unit, dtxsid, cache_path.name)
+    except Exception:
+        logger.warning("Failed to cache %s for %s", unit, dtxsid, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Per-unit hash functions
+# ---------------------------------------------------------------------------
+# Each returns a 16-char hex string.  The hash inputs are chosen so that
+# each unit only invalidates when its actual inputs change.  For example,
+# BMDS hashes the raw dose-response data (doses/means/SEs/Ns), NOT the
+# bmd_stat — so switching from "median" to "mean" doesn't re-run the
+# 8-minute pybmds session.
+
+def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
+    """
+    Hash inputs that affect NTP stats computation.
+
+    Inputs: integrated data identity (experiment names + count) and
+    the primary BMD statistic (affects category lookup → BMD/BMDL
+    values on TableRows).  xlsx_rosters are part of _meta and only
+    change on re-integration, which deletes all caches anyway.
+    """
+    experiments = integrated.get("doseResponseExperiments", [])
+    key = json.dumps({
+        "bmd_stat": bmd_stat,
+        "n_experiments": len(experiments),
+        "experiment_names": sorted(e.get("name", "") for e in experiments),
+    }, sort_keys=True)
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _hash_sections(ntp_hash: str, compound_name: str, dose_unit: str) -> str:
+    """
+    Hash inputs that affect section card building.
+
+    Depends on NTP stats output (via ntp_hash) plus display parameters
+    that affect narrative text.  dtxsid is implicit (cache directory).
+    """
+    key = json.dumps({
+        "ntp": ntp_hash,
+        "compound_name": compound_name,
+        "dose_unit": dose_unit,
+    }, sort_keys=True)
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _hash_bmds(bmds_inputs: list[dict]) -> str:
+    """
+    Hash the raw dose-response data for BMDS modeling.
+
+    Uses CONTENT of _bmds_input dicts (doses, means, SEs, Ns) — NOT the
+    ntp_hash.  This means BMDS stays cached even when bmd_stat changes,
+    because the underlying dose-response data hasn't changed.
+    """
+    # Sort by endpoint key for deterministic hashing
+    content = []
+    for inp in sorted(bmds_inputs, key=lambda x: x.get("key", "")):
+        content.append({
+            "key": inp.get("key", ""),
+            "doses": inp.get("doses", []),
+            "ns": inp.get("ns", []),
+            "means": inp.get("means", []),
+            "stdevs": inp.get("stdevs", []),
+        })
+    key = json.dumps(content, sort_keys=True)
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _hash_genomics(
     bmd_stats: list[str],
     go_pct: float,
     go_min_genes: int,
     go_max_genes: int,
     go_min_bmd: int,
-) -> tuple[dict | None, str, Path]:
+    ge_filename: str,
+) -> str:
     """
-    Check for a cached process-integrated result on disk.
+    Hash inputs that affect genomics extraction.
 
-    Computing NTP stats (Java Williams/Dunnett) + pybmds + genomics takes
-    30-60 seconds.  This caches the full response keyed by a hash of the
-    inputs that affect the output: integrated data identity + processing
-    settings.  On page refresh the client re-sends process-integrated with
-    the same settings, so we can return the cached result instantly.
-
-    Returns:
-        (cached_payload_or_None, cache_hash, cache_path)
-        If cached_payload is not None, the caller should return it immediately.
-        cache_hash and cache_path are needed by the caller to write the cache
-        after computation.
+    bmd_stats (the full array) matters because each stat gets its own
+    GO table.  GO filter cutoffs and the GE filename determine which
+    categories pass and from which file.
     """
-    cache_key_parts = json.dumps({
+    key = json.dumps({
         "bmd_stats": list(bmd_stats),
-        "go_pct": go_pct,
-        "go_min_genes": go_min_genes,
+        "ge_filename": ge_filename,
         "go_max_genes": go_max_genes,
         "go_min_bmd": go_min_bmd,
-        # Include a fingerprint of the integrated data so the cache
-        # invalidates if the user re-integrates with different files.
-        "n_experiments": len(integrated.get("doseResponseExperiments", [])),
-        "experiment_names": sorted(
-            e.get("name", "") for e in integrated.get("doseResponseExperiments", [])
-        ),
+        "go_min_genes": go_min_genes,
+        "go_pct": go_pct,
     }, sort_keys=True)
-    cache_hash = hashlib.sha256(cache_key_parts.encode()).hexdigest()[:16]
-    cache_path = _session_dir(dtxsid) / f"_processed_cache_{cache_hash}.json"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
 
-    if cache_path.exists():
-        try:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            logger.info(
-                "Returning cached processed results for %s (hash %s)",
-                dtxsid, cache_hash,
-            )
-            return cached, cache_hash, cache_path
-        except (json.JSONDecodeError, Exception):
-            # Corrupted cache — fall through to recompute
-            logger.warning("Corrupted process cache for %s, recomputing", dtxsid)
 
-    return None, cache_hash, cache_path
+def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
+    """
+    Hash inputs for the BMD summary tables.
+
+    Depends on NTP stats (apical BMD summary uses platform_tables) and
+    BMDS results (BMDS BMD summary merges pybmds output with TableRows).
+    """
+    key = f"{ntp_hash}:{bmds_hash}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+# ---------------------------------------------------------------------------
+# TableRow serialization for NTP cache
+# ---------------------------------------------------------------------------
+# The NTP stats cache stores platform_tables: {platform -> {sex -> [TableRow]}}.
+# TableRow is a dataclass, so we use asdict() for serialization.  Two wrinkles:
+#   1. Float dict keys (values_by_dose, n_by_dose, missing_animals_by_dose)
+#      must be converted to strings for JSON, then back to floats on load.
+#   2. _bmds_input is dynamically attached (not a dataclass field), so
+#      asdict() won't capture it — we handle it manually.
+
+def _serialize_platform_tables(platform_tables: dict[str, dict[str, list]]) -> dict:
+    """
+    Convert platform_tables ({platform -> {sex -> [TableRow]}}) to a
+    JSON-serializable dict for caching.
+
+    Preserves all TableRow fields plus the dynamically-attached _bmds_input
+    dict.  Float dict keys are converted to strings for JSON compatibility.
+
+    Args:
+        platform_tables: The partitioned NTP stats output.
+
+    Returns:
+        Nested dict structure safe for orjson serialization.
+    """
+    result = {}
+    for platform, sex_rows in platform_tables.items():
+        result[platform] = {}
+        for sex, rows in sex_rows.items():
+            serialized = []
+            for row in rows:
+                # asdict() handles all dataclass fields
+                d = asdict(row)
+                # Float keys → string keys for JSON roundtrip
+                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose"):
+                    if d.get(fk_field):
+                        d[fk_field] = {str(k): v for k, v in d[fk_field].items()}
+                # Preserve dynamically-attached _bmds_input (not a dataclass field)
+                if hasattr(row, "_bmds_input") and row._bmds_input:
+                    d["_bmds_input"] = row._bmds_input
+                serialized.append(d)
+            result[platform][sex] = serialized
+    return result
+
+
+def _deserialize_platform_tables(data: dict) -> dict[str, dict[str, list]]:
+    """
+    Reconstruct platform_tables from a cached dict back to
+    {platform -> {sex -> [TableRow]}} with proper types.
+
+    String dict keys are converted back to floats.  _bmds_input is
+    re-attached as a dynamic attribute.  Unknown keys (from future
+    schema changes) are filtered out to avoid TypeError.
+
+    Args:
+        data: The cached dict from _serialize_platform_tables().
+
+    Returns:
+        platform_tables with live TableRow objects.
+    """
+    # Known dataclass fields — filter out _bmds_input and any future extras
+    known_fields = {f.name for f in TableRow.__dataclass_fields__.values()}
+
+    result = {}
+    for platform, sex_rows in data.items():
+        result[platform] = {}
+        for sex, rows in sex_rows.items():
+            deserialized = []
+            for d in rows:
+                # Pop _bmds_input before constructing TableRow (not a field)
+                bmds_input = d.pop("_bmds_input", None)
+                # String keys → float keys
+                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose"):
+                    if d.get(fk_field):
+                        d[fk_field] = {float(k): v for k, v in d[fk_field].items()}
+                # Filter to known fields only (forward compat)
+                filtered = {k: v for k, v in d.items() if k in known_fields}
+                row = TableRow(**filtered)
+                if bmds_input:
+                    row._bmds_input = bmds_input
+                deserialized.append(row)
+            result[platform][sex] = deserialized
+    return result
 
 
 def _restore_category_lookup(integrated: dict, bmd_stat: str) -> dict[tuple[str, str], dict]:
@@ -1823,27 +2024,6 @@ def _build_bmds_bmd_summary(
     return summary
 
 
-def _cache_processed_result(dtxsid: str, cache_path: Path, payload: dict) -> None:
-    """
-    Persist the process-integrated result to disk so page refreshes are instant.
-
-    Also cleans up stale caches from previous settings combinations (different
-    hash).  Errors are logged but not raised — caching is a performance
-    optimization, not a correctness requirement.
-    """
-    try:
-        for old in _session_dir(dtxsid).glob("_processed_cache_*.json"):
-            if old != cache_path:
-                old.unlink(missing_ok=True)
-        cache_path.write_text(
-            json.dumps(payload, indent=2, default=str),
-            encoding="utf-8",
-        )
-        logger.info("Cached processed results for %s (%s)", dtxsid, cache_path.name)
-    except Exception:
-        logger.warning("Failed to cache processed results for %s", dtxsid, exc_info=True)
-
-
 @router.post("/api/process-integrated/{dtxsid}")
 async def api_process_integrated(dtxsid: str, request: Request):
     """
@@ -1900,61 +2080,62 @@ async def api_process_integrated(dtxsid: str, request: Request):
             status_code=400,
         )
 
-    # --- Check cache (instant return on hit) ---
-    cached, cache_hash, cache_path = _check_processed_cache(
-        dtxsid, integrated, bmd_stats, go_pct, go_min_genes, go_max_genes, go_min_bmd,
-    )
-    if cached:
-        return JSONResponse(cached)
+    # --- Migrate old monolithic cache files ---
+    # The old _processed_cache_{hash}.json format is replaced by per-section
+    # caches.  Delete any leftover monolithic files so they don't accumulate.
+    for old_cache in _session_dir(dtxsid).glob("_processed_cache_*.json"):
+        old_cache.unlink(missing_ok=True)
+        logger.info("Migrated old monolithic cache: %s", old_cache.name)
 
     try:
-        # --- Restore category lookup ---
-        cat_lookup = _restore_category_lookup(integrated, bmd_stat)
+        # ══════════════════════════════════════════════════════════════
+        # Layer 1 — NTP stats (depends only on integrated data + bmd_stat)
+        # ══════════════════════════════════════════════════════════════
+        # This is the foundation: category lookup → filter GE experiments →
+        # build_table_data (Java Williams/Dunnett/Jonckheere) → partition
+        # by platform → annotate missing animals.  ~5s on miss.
+        ntp_hash = _hash_ntp(integrated, bmd_stat)
+        ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
 
-        # --- Filter gene expression experiments ---
-        apical_integrated = _filter_gene_expression(integrated)
+        if ntp_cached:
+            platform_tables = _deserialize_platform_tables(ntp_cached)
+        else:
+            cat_lookup = _restore_category_lookup(integrated, bmd_stat)
+            apical_integrated = _filter_gene_expression(integrated)
 
-        # --- Run NTP stats (thread pool — Java subprocess) ---
-        loop = asyncio.get_running_loop()
-        table_data = await loop.run_in_executor(
-            None, build_table_data, apical_integrated, cat_lookup,
-        )
+            loop = asyncio.get_running_loop()
+            table_data = await loop.run_in_executor(
+                None, build_table_data, apical_integrated, cat_lookup,
+            )
 
-        # --- Partition by platform ---
-        source_files = integrated.get("_meta", {}).get("source_files", {})
-        platform_tables = _partition_by_platform(apical_integrated, source_files, table_data)
+            source_files = integrated.get("_meta", {}).get("source_files", {})
+            platform_tables = _partition_by_platform(
+                apical_integrated, source_files, table_data,
+            )
 
-        # --- Annotate missing animals from xlsx study file rosters ---
-        # Compare bm2 N counts against xlsx Core Animals roster to detect
-        # animals that died before terminal sacrifice.
-        xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
-        if xlsx_rosters:
-            annotate_missing_animals(platform_tables, xlsx_rosters)
-            # Backfill absent dose columns with "–" so every platform table
-            # shows the full study dose design (matching NIEHS reference
-            # report convention — dose columns never disappear, they show
-            # dashes when no animals survived for that measurement).
-            backfill_missing_doses(platform_tables, xlsx_rosters)
+            # Annotate missing animals from xlsx study file rosters —
+            # compare bm2 N counts against xlsx Core Animals roster to
+            # detect animals that died before terminal sacrifice.
+            xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
+            if xlsx_rosters:
+                annotate_missing_animals(platform_tables, xlsx_rosters)
+                # Backfill absent dose columns with "–" so every platform
+                # table shows the full study dose design (NIEHS convention).
+                backfill_missing_doses(platform_tables, xlsx_rosters)
 
-        # --- Build section cards with narratives ---
-        # Pass dtxsid so body weight sections can use sidecar data when
-        # available, producing correct N counts and all dose groups.
-        sections = _build_section_cards(
-            platform_tables, compound_name, dose_unit, dtxsid=dtxsid,
-        )
+            _save_cache(
+                dtxsid, "ntp", ntp_hash,
+                _serialize_platform_tables(platform_tables),
+            )
 
-        # --- Append clinical observations incidence table (if any) ---
-        # Clinical obs CSVs bypass Java integration (categorical data, not
-        # numeric).  Their paths are stored in _meta.clinical_obs_files
-        # during integrate_pool().  We build incidence tables here and
-        # append them as a special section card with table_type="incidence".
-        clin_obs_section = _build_clinical_obs_section(
-            integrated, compound_name, dose_unit,
-        )
-        if clin_obs_section:
-            sections.append(clin_obs_section)
+        # ══════════════════════════════════════════════════════════════
+        # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
+        # ══════════════════════════════════════════════════════════════
+        # These three units depend on Layer 1 output but NOT on each other,
+        # so they can run concurrently.  BMDS (~8min) is the bottleneck;
+        # sections (<1s) and genomics (~10s) finish quickly alongside it.
 
-        # --- Run BMDS modeling (thread pool — pybmds is CPU-bound) ---
+        # Collect _bmds_input dicts from all TableRows for BMDS modeling
         bmds_inputs = [
             row._bmds_input
             for sex_rows in platform_tables.values()
@@ -1962,27 +2143,112 @@ async def api_process_integrated(dtxsid: str, request: Request):
             for row in rows
             if hasattr(row, "_bmds_input") and row._bmds_input
         ]
-        bmds_results = {}
-        if bmds_inputs:
-            bmds_results = await loop.run_in_executor(
-                None, run_bmds_for_endpoints, bmds_inputs,
-            )
 
-        # --- Extract genomics ---
-        genomics_sections = await _extract_genomics(
-            dtxsid, integrated, bmd_stats,
-            go_pct, go_min_genes, go_max_genes, go_min_bmd,
+        # Compute per-unit hashes
+        sections_hash = _hash_sections(ntp_hash, compound_name, dose_unit)
+        bmds_hash = _hash_bmds(bmds_inputs) if bmds_inputs else "empty"
+
+        meta = integrated.get("_meta", {})
+        ge_source = meta.get("source_files", {}).get("gene_expression")
+        ge_filename = ge_source.get("filename", "") if ge_source else ""
+        genomics_hash = _hash_genomics(
+            bmd_stats, go_pct, go_min_genes, go_max_genes, go_min_bmd,
+            ge_filename,
         )
 
-        # --- Build BMD summaries ---
+        # Check each cache independently
+        sections_cached = _load_cache(dtxsid, "sections", sections_hash)
+        bmds_cached = _load_cache(dtxsid, "bmds", bmds_hash)
+        genomics_cached = _load_cache(dtxsid, "genomics", genomics_hash)
+
+        # --- Async wrappers: return cached data or compute + cache ---
+
+        async def _get_sections():
+            """Build section cards with narratives, or return cached."""
+            if sections_cached:
+                return sections_cached["sections"]
+            # _build_section_cards is sync (reads sidecar files, generates
+            # narratives from templates) — wrap in executor to avoid
+            # blocking the event loop during parallel execution.
+            loop = asyncio.get_running_loop()
+            sections = await loop.run_in_executor(
+                None,
+                lambda: _build_section_cards(
+                    platform_tables, compound_name, dose_unit, dtxsid=dtxsid,
+                ),
+            )
+            # Clinical obs tables bypass Java integration (categorical data).
+            # Built separately and appended as an incidence section card.
+            clin_obs = _build_clinical_obs_section(
+                integrated, compound_name, dose_unit,
+            )
+            if clin_obs:
+                sections.append(clin_obs)
+            _save_cache(dtxsid, "sections", sections_hash, {"sections": sections})
+            return sections
+
+        async def _get_bmds():
+            """Run pybmds modeling on all endpoints, or return cached."""
+            if bmds_cached:
+                return bmds_cached
+            if not bmds_inputs:
+                return {}
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(
+                None, run_bmds_for_endpoints, bmds_inputs,
+            )
+            _save_cache(dtxsid, "bmds", bmds_hash, results)
+            return results
+
+        async def _get_genomics():
+            """Extract gene expression + GO filtering, or return cached."""
+            if genomics_cached:
+                return genomics_cached
+            result = await _extract_genomics(
+                dtxsid, integrated, bmd_stats,
+                go_pct, go_min_genes, go_max_genes, go_min_bmd,
+            )
+            _save_cache(dtxsid, "genomics", genomics_hash, result)
+            return result
+
+        # Launch all three concurrently — cached units return instantly,
+        # uncached units run in parallel (BMDS in thread pool, genomics
+        # in thread pool via _extract_genomics, sections in thread pool).
+        sections, bmds_results, genomics_sections = await asyncio.gather(
+            _get_sections(), _get_bmds(), _get_genomics(),
+        )
+
+        # ══════════════════════════════════════════════════════════════
+        # Layer 3 — BMD summary (depends on NTP + BMDS)
+        # ══════════════════════════════════════════════════════════════
+        # Two summary tables: one from BMDExpress 3 results (apical) and
+        # one from pybmds results (BMDS).  Both need platform_tables +
+        # bmds_results, so they run after Layers 1 and 2 complete.
+        bmd_summary_hash = _hash_bmd_summary(ntp_hash, bmds_hash)
+        bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
+
+        if bmd_summary_cached:
+            apical_bmd_summary = bmd_summary_cached["apical"]
+            apical_bmd_summary_bmds = bmd_summary_cached["bmds"]
+        else:
+            apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
+            apical_bmd_summary_bmds = _build_bmds_bmd_summary(
+                platform_tables, bmds_results,
+            )
+            _save_cache(dtxsid, "bmd_summary", bmd_summary_hash, {
+                "apical": apical_bmd_summary,
+                "bmds": apical_bmd_summary_bmds,
+            })
+
+        # ══════════════════════════════════════════════════════════════
+        # Assembly — combine all results into response payload
+        # ══════════════════════════════════════════════════════════════
+        # Identical structure to the old monolithic response so the
+        # frontend doesn't need any changes.
         stat_labels = {
             s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
             for s in bmd_stats
         }
-        apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
-        apical_bmd_summary_bmds = _build_bmds_bmd_summary(platform_tables, bmds_results)
-
-        # --- Assemble and cache result ---
         result_payload = {
             "sections": sections,
             "genomics_sections": genomics_sections,
@@ -1991,7 +2257,6 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
         }
-        _cache_processed_result(dtxsid, cache_path, result_payload)
 
         return JSONResponse(result_payload)
 
