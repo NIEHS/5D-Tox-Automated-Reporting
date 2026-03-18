@@ -1764,9 +1764,93 @@ def _build_section_cards(
                 )
                 continue  # skip generic path below
 
-        # For non-body-weight platforms, skip if no responsive endpoints.
-        # (Body weight is handled above via the sidecar path and always
-        # appears regardless of the gate.)
+        # ── Clinical Pathology platforms (Tables 4/5/6): shared sidecar builder ─
+        # Clinical Chemistry, Hematology, and Hormones share identical table
+        # structure: sex-grouped rows, n-row, endpoint rows with mean±SE and
+        # significance markers, BMD/BMDL columns.  The sidecar provides correct
+        # Core Animals N counts; the NTP stats provide mean±SE with markers.
+        if platform in ("Clinical Chemistry", "Hematology", "Hormones") and dtxsid:
+            from table_builder_common import find_sidecar_paths as _find_sidecar
+            from clinical_pathology_table import build_clinical_pathology_table_from_sidecar
+
+            session_dir = str(_session_dir(dtxsid))
+            sidecar_paths = _find_sidecar(session_dir, platform=platform)
+
+            if sidecar_paths:
+                # All endpoints appear in the table (not just responsive).
+                # The responsive gate controls BMD column values (ND vs numeric),
+                # not row inclusion — matching the body weight pattern.
+                cp_result = build_clinical_pathology_table_from_sidecar(
+                    platform=platform,
+                    sidecar_paths=sidecar_paths,
+                    ntp_stats=sex_rows,
+                    compound_name=compound_name,
+                    dose_unit=dose_unit,
+                )
+
+                if cp_result.get("table_data"):
+                    narrative = generate_results_narrative(
+                        responsive_rows, compound_name, dose_unit,
+                    )
+                    sections.append({
+                        "platform": platform,
+                        "title": platform,
+                        "tables_json": cp_result["table_data"],
+                        "narrative": narrative,
+                        "first_col_header": cp_result.get("first_col_header"),
+                        "caption": cp_result.get("caption"),
+                        "footnotes": cp_result.get("footnotes"),
+                        "bmd_definition": cp_result.get("bmd_definition"),
+                    })
+                    logger.info(
+                        "%s section built from sidecar (%d sexes)",
+                        platform, len(cp_result["table_data"]),
+                    )
+                    continue
+
+        # ── Organ Weight (Table 3): sidecar builder with relative weights ──
+        # The organ weight builder computes absolute + relative (per-animal
+        # absolute/TBW × 1000) weights from raw sidecar data.  All organs
+        # appear; the responsive gate controls BMD column values only.
+        # Terminal Body Weight is always shown as a context row.
+        if platform == "Organ Weight" and dtxsid:
+            from table_builder_common import find_sidecar_paths as _find_sidecar
+            from organ_weight_table import build_organ_weight_table_from_sidecar
+
+            session_dir = str(_session_dir(dtxsid))
+            sidecar_paths = _find_sidecar(session_dir, platform="Organ Weight")
+
+            if sidecar_paths:
+                ow_result = build_organ_weight_table_from_sidecar(
+                    sidecar_paths=sidecar_paths,
+                    ntp_stats=sex_rows,
+                    compound_name=compound_name,
+                    dose_unit=dose_unit,
+                )
+
+                if ow_result and ow_result.get("table_data"):
+                    narrative = generate_results_narrative(
+                        responsive_rows, compound_name, dose_unit,
+                    )
+                    sections.append({
+                        "platform": platform,
+                        "title": platform,
+                        "tables_json": ow_result["table_data"],
+                        "narrative": narrative,
+                        "first_col_header": ow_result.get("first_col_header"),
+                        "caption": ow_result.get("caption"),
+                        "footnotes": ow_result.get("footnotes"),
+                        "bmd_definition": ow_result.get("bmd_definition"),
+                    })
+                    logger.info(
+                        "Organ Weight section built from sidecar (%d sexes)",
+                        len(ow_result["table_data"]),
+                    )
+                    continue
+
+        # ── Generic fallback for platforms without dedicated builders ───────
+        # Also handles cases where sidecar data isn't available (e.g., data
+        # uploaded as .bm2 without going through the integration pipeline).
         if not responsive_rows:
             continue
 
@@ -1916,6 +2000,127 @@ async def _extract_genomics(
         os.unlink(tmp_json.name)
 
     return genomics_sections
+
+
+def _inject_bmd_into_sections(
+    sections: list[dict],
+    bmds_results: dict,
+    platform_tables: dict[str, dict[str, list]],
+) -> None:
+    """
+    Post-process section cards to inject BMD/BMDL values from pybmds results.
+
+    Section cards are built in Layer 1 (before BMDS results are available),
+    so they initially have "ND" in all BMD/BMDL cells.  This function runs
+    after Layer 2 (BMDS) completes and fills in the correct values using the
+    NIEHS business rules:
+
+        - Endpoint not responsive (NTP gate failed) → "ND"
+        - Responsive but no BMDS result → "ND"
+        - Responsive + viable → numeric BMD/BMDL value (3 significant figures)
+        - Responsive + NVM → "NVM" (no viable model)
+        - Responsive + UREP → "UREP" (unreliable endpoint)
+        - Responsive + NR → "<{lowest_nonzero_dose/3}" (below response threshold)
+
+    Mutates sections in-place.  Only affects sections that have table_data
+    with rows containing "bmd" and "bmdl" keys (i.e., the rule-based builders).
+    The Body Weight section's BMD comes from the inferred .bm2 (separate path),
+    so it's not touched here.
+
+    Args:
+        sections:        The section cards list from _build_section_cards().
+        bmds_results:    {"{sex}::{label}": {status, bmd, bmdl, ...}} from pybmds.
+        platform_tables: {platform: {sex: [TableRow, ...]}} for NTP stats lookup
+                         (needed for responsive flag and dose list for NR format).
+    """
+    if not bmds_results:
+        return
+
+    # Build a lookup: (platform, sex, endpoint_label) → TableRow for
+    # responsive flag and dose info needed for NR formatting.
+    ntp_lookup: dict[tuple[str, str, str], object] = {}
+    for platform, sex_rows in platform_tables.items():
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                ntp_lookup[(platform, sex, row.label)] = row
+
+    for section in sections:
+        platform = section.get("platform", "")
+        table_data = section.get("tables_json", {})
+
+        # Skip sections without rule-based table data (e.g., generic sections
+        # or Body Weight which gets BMD from the inferred .bm2 path).
+        if platform == "Body Weight":
+            continue
+
+        # Skip sections that don't have bmd fields in rows
+        if not isinstance(table_data, dict):
+            continue
+
+        for sex, rows in table_data.items():
+            if not isinstance(rows, list):
+                continue
+
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                # Skip n-rows and context rows — they keep "NA" / "ND"
+                if row.get("is_n_row") or row.get("is_context_row"):
+                    continue
+                if "bmd" not in row:
+                    continue
+
+                # Extract the endpoint label.  Organ weight rows have labels
+                # like "Liver Absolute (g)" — strip the suffix to match BMDS
+                # keys which use the raw endpoint name ("Liver").
+                label = row.get("label", "")
+                # Strip " Absolute (g)" or " Relative (mg/g)" suffixes for
+                # organ weight endpoint matching.
+                raw_label = label
+                for suffix in (" Absolute (g)", " Relative (mg/g)"):
+                    if label.endswith(suffix):
+                        raw_label = label[: -len(suffix)]
+                        break
+
+                # Look up NTP stats for responsive flag
+                ntp_row = ntp_lookup.get((platform, sex, raw_label))
+                responsive = getattr(ntp_row, "responsive", False) if ntp_row else False
+
+                if not responsive:
+                    row["bmd"] = "ND"
+                    row["bmdl"] = "ND"
+                    continue
+
+                # Look up BMDS result
+                bmds_key = f"{sex}::{raw_label}"
+                bmds_res = bmds_results.get(bmds_key)
+
+                if not bmds_res:
+                    row["bmd"] = "ND"
+                    row["bmdl"] = "ND"
+                    continue
+
+                status = bmds_res.get("status", "")
+
+                if status == "viable" and bmds_res.get("bmd") is not None:
+                    row["bmd"] = f"{bmds_res['bmd']:.3g}"
+                    row["bmdl"] = f"{bmds_res['bmdl']:.3g}" if bmds_res.get("bmdl") else "ND"
+                elif status == "NR":
+                    # Below response threshold: show "<lowest_nonzero_dose/3"
+                    doses = list(getattr(ntp_row, "values_by_dose", {}).keys()) if ntp_row else []
+                    nonzero = [d for d in doses if d > 0]
+                    lnzd = min(nonzero) if nonzero else 0
+                    row["bmd"] = f"<{lnzd / 3:.3g}" if lnzd > 0 else "NR"
+                    row["bmdl"] = "\u2014"
+                elif status == "UREP":
+                    row["bmd"] = "UREP"
+                    row["bmdl"] = "UREP"
+                elif status == "NVM":
+                    row["bmd"] = "NVM"
+                    row["bmdl"] = "NVM"
+                else:
+                    row["bmd"] = "ND"
+                    row["bmdl"] = "ND"
 
 
 def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> list[dict]:
@@ -2196,6 +2401,43 @@ async def api_process_integrated(dtxsid: str, request: Request):
             if clin_obs:
                 sections.append(clin_obs)
 
+            # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
+            # Tissue Concentration data only exists for Biosampling Animals
+            # and is NOT processed through NTP stats or BMDExpress.  It has
+            # no entries in platform_tables, so it must be built separately
+            # from sidecar data (similar to Clinical Observations).
+            if dtxsid:
+                from table_builder_common import find_sidecar_paths as _find_sidecar
+                from tissue_concentration_table import build_tissue_concentration_table_from_sidecar
+
+                session_dir = str(_session_dir(dtxsid))
+                tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
+                if tc_sidecar_paths:
+                    tc_result = build_tissue_concentration_table_from_sidecar(
+                        sidecar_paths=tc_sidecar_paths,
+                        compound_name=compound_name,
+                        dose_unit=dose_unit,
+                    )
+                    if tc_result and tc_result.get("table_data"):
+                        narrative = (
+                            f"Plasma concentrations of {compound_name} were "
+                            f"measured in biosampling animals."
+                        )
+                        sections.append({
+                            "platform": "Tissue Concentration",
+                            "title": "Tissue Concentration",
+                            "tables_json": tc_result["table_data"],
+                            "narrative": narrative,
+                            "first_col_header": tc_result.get("first_col_header"),
+                            "caption": tc_result.get("caption"),
+                            "footnotes": tc_result.get("footnotes"),
+                            "table_type": tc_result.get("table_type"),
+                        })
+                        logger.info(
+                            "Tissue Concentration section built from sidecar (%d sexes)",
+                            len(tc_result["table_data"]),
+                        )
+
             # ── Unified cross-platform narratives ─────────────────────────
             # The NIEHS reference report groups narrative prose into two
             # unified sections that span multiple platforms, rather than
@@ -2303,6 +2545,15 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 "apical": apical_bmd_summary,
                 "bmds": apical_bmd_summary_bmds,
             })
+
+        # ══════════════════════════════════════════════════════════════
+        # Layer 4 — Inject BMD/BMDL into section card tables
+        # ══════════════════════════════════════════════════════════════
+        # Section cards were built in Layer 1 before BMDS results were
+        # available, so all BMD/BMDL cells are "ND".  Now that BMDS
+        # results are ready, inject the actual values using NIEHS
+        # business rules (viable → numeric, NVM, UREP, NR, etc.).
+        _inject_bmd_into_sections(sections, bmds_results, platform_tables)
 
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload

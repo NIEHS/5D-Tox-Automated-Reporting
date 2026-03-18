@@ -61,6 +61,15 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from table_builder_common import (
+    js_dose_key as _js_dose_key,
+    mean_se as _mean_se,
+    format_mean_se as _format_mean_se,
+    load_sidecar as _load_sidecar,
+    find_sidecar_paths,
+    BMD_DEFINITION,
+)
+
 
 # ---------------------------------------------------------------------------
 # Constants — NIEHS Table 2 fixed text
@@ -85,16 +94,8 @@ FOOTNOTE_STAT_METHOD = (
     "and Williams or Dunnett (pairwise) tests."
 )
 
-# The BMD/BMDL definition line that appears ABOVE the lettered footnotes.
-# It's not lettered — it's a standalone definition paragraph below the
-# table rule, before footnote (a).
-BMD_DEFINITION = (
-    "BMD\u2081Std = benchmark dose corresponding to a benchmark response "
-    "set to one standard deviation from the mean; "
-    "BMDL\u2081Std = benchmark dose lower confidence limit corresponding "
-    "to a benchmark response set to one standard deviation from the mean; "
-    "NA = not applicable; ND = not determined."
-)
+
+# BMD_DEFINITION is imported from table_builder_common.py.
 
 
 # ---------------------------------------------------------------------------
@@ -359,18 +360,9 @@ def build_body_weight_table(
     }
 
 
-def _js_dose_key(dose: float) -> str:
-    """
-    Format a dose float as a string matching JavaScript's String(number).
 
-    JavaScript's String(0.15) produces "0.15", String(0.0) produces "0",
-    String(1000.0) produces "1000".  Python's str(0.0) produces "0.0".
-    We need consistent keys between Python serialization and JavaScript
-    object property access.
-    """
-    if dose == int(dose):
-        return str(int(dose))
-    return str(dose)
+# _js_dose_key, _mean_se, _format_mean_se, _load_sidecar, find_sidecar_paths,
+# and BMD_DEFINITION are imported from table_builder_common.py.
 
 
 # ---------------------------------------------------------------------------
@@ -388,47 +380,8 @@ def _js_dose_key(dose: float) -> str:
 # (Selection, Observation Day, Terminal Flag) that the pivot discards.
 # It computes mean±SE directly from the raw Core Animals values.
 
-def _load_sidecar(path: str) -> dict:
-    """
-    Load a sidecar JSON file written by tox_study_csv_to_pivot_txt().
 
-    Returns the parsed dict: {source, platform, sex, animals: {aid: {...}}}.
-    Raises FileNotFoundError if the sidecar doesn't exist.
-    """
-    with open(path, "r") as f:
-        return json.load(f)
-
-
-def _mean_se(values: list[float]) -> tuple[float, float]:
-    """
-    Compute mean and standard error of the mean for a list of values.
-
-    SE = SD / sqrt(N), where SD = population-corrected (N-1 denominator).
-
-    Returns (mean, se).  If N < 2, SE is 0.0 (no variability estimable).
-    """
-    n = len(values)
-    if n == 0:
-        return (0.0, 0.0)
-    mean = sum(values) / n
-    if n < 2:
-        return (mean, 0.0)
-    variance = sum((v - mean) ** 2 for v in values) / (n - 1)
-    se = math.sqrt(variance) / math.sqrt(n)
-    return (mean, se)
-
-
-def _format_mean_se(mean: float, se: float, decimals: int = 1) -> str:
-    """
-    Format mean ± SE as a display string matching NIEHS reference style.
-
-    Example: "296.5\u00a0±\u00a04.4" (1 decimal for body weight in grams).
-    Uses non-breaking spaces (U+00A0) around the ± (U+00B1) so the value
-    never wraps across lines in the PDF table — "296.5 ± 4.4" stays on
-    one line regardless of column width.
-    """
-    # U+00A0 = non-breaking space, U+00B1 = ±
-    return f"{mean:.{decimals}f}\u00a0\u00b1\u00a0{se:.{decimals}f}"
+# _load_sidecar, _mean_se, _format_mean_se are imported from table_builder_common.py.
 
 
 def _detect_terminal_day(observations: list[dict]) -> str | None:
@@ -937,43 +890,5 @@ def build_body_weight_table_from_sidecar(
     }
 
 
-def find_sidecar_paths(session_dir: str, platform: str = "Body Weight") -> dict[str, str]:
-    """
-    Scan a session's files/ directory for body weight sidecar JSON files.
 
-    Sidecar files are named like `body_weight_truth_male.sidecar.json` and
-    are written by tox_study_csv_to_pivot_txt() alongside the pivot txt.
-
-    Args:
-        session_dir: Absolute path to the session directory (e.g.,
-                     sessions/DTXSID50469320/).
-        platform:    The platform name to match (default "Body Weight").
-
-    Returns:
-        {"Male": "/path/to/male.sidecar.json", "Female": "/path/to/female.sidecar.json"}
-        Only present sexes are included.  Empty dict if no sidecars found.
-    """
-    files_dir = os.path.join(session_dir, "files")
-    if not os.path.isdir(files_dir):
-        return {}
-
-    result: dict[str, str] = {}
-    for fname in os.listdir(files_dir):
-        if not fname.endswith(".sidecar.json"):
-            continue
-        sc_path = os.path.join(files_dir, fname)
-        try:
-            with open(sc_path, "r") as f:
-                sc = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
-
-        # Only match sidecars for the requested platform
-        if sc.get("platform") != platform:
-            continue
-
-        sex = sc.get("sex", "Unknown")
-        if sex in ("Male", "Female"):
-            result[sex] = sc_path
-
-    return result
+# find_sidecar_paths is imported from table_builder_common.py.
