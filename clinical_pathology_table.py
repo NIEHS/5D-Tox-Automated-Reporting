@@ -182,25 +182,26 @@ def build_clinical_pathology_table_from_sidecar(
                 bmd_str = stat_row.get("bmd_str", "\u2014")
                 bmdl_str = stat_row.get("bmdl_str", "\u2014")
                 trend_marker = stat_row.get("trend_marker", "")
-                responsive = stat_row.get("responsive", False)
             else:
                 label = stat_row.label
                 vbd = stat_row.values_by_dose
                 bmd_str = stat_row.bmd_str
                 bmdl_str = stat_row.bmdl_str
                 trend_marker = stat_row.trend_marker
-                responsive = stat_row.responsive
 
-            # BMD/BMDL display rules (same as body weight):
-            #   - Non-responsive endpoint → "ND" (gate didn't pass, BMD not computed)
-            #   - Responsive with numeric BMD → show the value
-            #   - Responsive but modeling failed → "ND"
-            if not responsive:
-                bmd_text = "ND"
-                bmdl_text = "ND"
-            else:
-                bmd_text = bmd_str if bmd_str and bmd_str != "\u2014" else "ND"
-                bmdl_text = bmdl_str if bmdl_str and bmdl_str != "\u2014" else "ND"
+            # BMD/BMDL display: pass through the .bm2-sourced values directly.
+            # BMDExpress 3 modeling and NTP statistical significance are
+            # INDEPENDENT concerns (see apical_report.py lines 810-816).
+            # The .bm2 bMDResult determines what appears in the BMD column:
+            #   "viable" → numeric BMD/BMDL
+            #   "NVM"    → "NVM" (no viable model)
+            #   "UREP"   → "UREP" (unreliable estimate)
+            #   "NR"     → "<LNZD/3" (not reportable)
+            #   None     → "—" (endpoint not modeled by BMDExpress 3)
+            # This is NOT gated by NTP responsiveness — an endpoint can
+            # have a viable BMD even if it's not NTP-significant.
+            bmd_text = bmd_str if bmd_str else "\u2014"
+            bmdl_text = bmdl_str if bmdl_str else "\u2014"
 
             # Build values dict with dose keys matching JS convention.
             # values_by_dose keys may be floats (TableRow objects from the

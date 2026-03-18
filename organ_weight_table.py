@@ -317,13 +317,11 @@ def build_organ_weight_table_from_sidecar(
             # Get NTP stats for BMD/BMDL (on the absolute weight endpoint)
             organ_ntp = sex_ntp.get(organ, {})
             if isinstance(organ_ntp, dict):
-                organ_responsive = organ_ntp.get("responsive", False)
                 organ_bmd = organ_ntp.get("bmd_str", "\u2014")
                 organ_bmdl = organ_ntp.get("bmdl_str", "\u2014")
                 organ_vbd = organ_ntp.get("values_by_dose", {})
                 organ_trend = organ_ntp.get("trend_marker", "")
             else:
-                organ_responsive = getattr(organ_ntp, "responsive", False)
                 organ_bmd = getattr(organ_ntp, "bmd_str", "\u2014")
                 organ_bmdl = getattr(organ_ntp, "bmdl_str", "\u2014")
                 organ_vbd = getattr(organ_ntp, "values_by_dose", {})
@@ -333,8 +331,10 @@ def build_organ_weight_table_from_sidecar(
             abs_values: dict[str, str] = {}
             for dose in sorted_doses:
                 dk = js_dose_key(dose)
-                # Try NTP stats first (has significance markers)
-                val = organ_vbd.get(str(dose), organ_vbd.get(str(float(dose)), None))
+                # Try float key (live TableRow), then string key (cached dict)
+                val = organ_vbd.get(dose)
+                if val is None:
+                    val = organ_vbd.get(str(dose), organ_vbd.get(str(float(dose))))
                 if val:
                     abs_values[dk] = val
                 elif abs_at_dose.get(dose):
@@ -345,15 +345,17 @@ def build_organ_weight_table_from_sidecar(
                 else:
                     abs_values[dk] = "\u2013"
 
-            bmd_text = organ_bmd if organ_bmd and organ_bmd != "\u2014" else "ND"
-            bmdl_text = organ_bmdl if organ_bmdl and organ_bmdl != "\u2014" else "ND"
+            # BMD/BMDL: pass through .bm2-sourced values directly.
+            # BMDExpress modeling is independent of NTP responsiveness.
+            bmd_text = organ_bmd if organ_bmd else "\u2014"
+            bmdl_text = organ_bmdl if organ_bmdl else "\u2014"
 
             abs_entry = {
                 "label": f"{organ} Absolute (g)",
                 "doses": sorted_doses,
                 "values": abs_values,
-                "bmd": bmd_text if organ_responsive else "ND",
-                "bmdl": bmdl_text if organ_responsive else "ND",
+                "bmd": bmd_text,
+                "bmdl": bmdl_text,
             }
             if organ_trend:
                 abs_entry["trend_marker"] = organ_trend

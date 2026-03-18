@@ -1,5 +1,27 @@
 # rlm-bmdx
 
+## Data Source Architecture
+
+The **integrated dataset** is the single source of truth for all report content. Nothing in the report should read from individual file pool files directly.
+
+Two artifacts comprise the integrated dataset:
+
+1. **`integrated.json`** (BMDProject format) — the merged .bm2 produced by `integrate_pool()`. Contains all dose-response experiments, BMDExpress 3 bMDResults, and probe responses. This is the source for:
+   - Mean ± SE per dose group (from probeResponses)
+   - BMD/BMDL values and NIEHS classification (from bMDResult: viable, NVM, UREP, NR)
+   - NTP statistics: Jonckheere trend, Williams/Dunnett pairwise (computed by `build_table_data()` from integrated experiments)
+   - Significance markers on dose group cells
+
+2. **Sidecar JSON files** (`*.sidecar.json`) — per-animal metadata written alongside pivots during integration by `tox_study_csv_to_pivot_txt()`. These preserve information the pivot discards:
+   - Animal Selection (Core Animals vs Biosampling Animals) — for correct N counts
+   - Observation Day / Removal Day / Phase+Day — for study day labels and attrition detection
+   - Terminal Flag — for identifying dead/moribund animals
+   - Raw per-animal values — for computing stats from scratch (body weight, organ weight relative weights)
+
+**Rule: No table builder or report generator should read from individual file pool .bm2 files, .txt pivots, or .csv source files.** Everything flows through `integrated.json` + sidecars. If data is missing from the integrated dataset, fix the integration step — don't add a bypass that reads raw files.
+
+BMDExpress 3 modeling (bMDResult) and NTP statistical significance (Jonckheere + Dunnett) are **independent concerns**. An endpoint can have a viable BMD without being NTP-significant, and vice versa. Both are shown in the tables — the BMD column reflects .bm2 modeling status, not the NTP gate.
+
 ## Master TODO
 
 ### CRITICAL
