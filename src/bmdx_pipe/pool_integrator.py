@@ -703,15 +703,15 @@ def tox_study_csv_to_pivot_txt(
         #   - Include all dose groups (even those where all animals died)
         if sex in sidecar_animals:
             sidecar_path = os.path.splitext(out_path)[0] + ".sidecar.json"
+            # Include ALL animals from the source CSV for this sex, not just
+            # those in the pivot.  Animals with all-NA values (sample not
+            # received, clotted, etc.) are excluded from the pivot but need
+            # to be in the sidecar for sample availability footnote generation.
             sidecar_data = {
                 "source": os.path.basename(path),
                 "platform": platform,
                 "sex": sex,
-                "animals": {
-                    aid: rec
-                    for aid, rec in sidecar_animals[sex].items()
-                    if aid in info["animals"]
-                },
+                "animals": dict(sidecar_animals[sex]),
             }
             import json as json_mod
             with open(sidecar_path, "w") as sf:
