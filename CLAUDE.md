@@ -22,6 +22,53 @@ Two artifacts comprise the integrated dataset:
 
 BMDExpress 3 modeling (bMDResult) and NTP statistical significance (Jonckheere + Dunnett) are **independent concerns**. An endpoint can have a viable BMD without being NTP-significant, and vice versa. Both are shown in the tables — the BMD column reflects .bm2 modeling status, not the NTP gate.
 
+## Table Business Rules (Tables 2-7)
+
+### Row inclusion
+- **All endpoints appear** in every table, not just responsive ones. The NTP statistical gate does NOT control row inclusion — it controls significance markers and the `responsive` flag only.
+- Body Weight: all study days (SD0, SD5) always appear.
+- Organ Weight: all organs in the data appear, each with Absolute (g) and Relative (mg/g) rows. Terminal Body Weight is a context row.
+- Clinical Chemistry, Hematology, Hormones: all measured endpoints appear for both sexes.
+- Tissue Concentration: all timepoints for Biosampling Animals only (no NTP stats, no BMD columns).
+- Clinical Observations: incidence table (separate builder, categorical data).
+
+### NTP statistical gatekeeper (`responsive` flag)
+Two tests must BOTH pass for an endpoint to be marked responsive:
+1. **Jonckheere trend test** — significant monotonic dose-response trend (p ≤ 0.01)
+2. **Dunnett pairwise test** — at least one dose group significantly different from control (p ≤ 0.05)
+
+The `responsive` flag controls:
+- Significance markers (`*` p ≤ 0.05, `**` p ≤ 0.01) on dose group cells
+- Direction (UP/DOWN) reported in the BMD summary
+- LOEL/NOEL determination
+
+The `responsive` flag does NOT control:
+- Whether the endpoint row appears in the table (always yes)
+- BMD/BMDL column values (independent — comes from .bm2 modeling)
+
+### BMD/BMDL column values (from integrated .bm2 bMDResult)
+BMDExpress 3 runs its own prefilter and dose-response modeling independently of NTP stats. The `bmd_str`/`bmdl_str` on each TableRow is populated from the integrated .bm2's `bMDResult` array via `_classify_bmd_result()`:
+
+| Classification | BMD column | BMDL column | Trigger |
+|---------------|-----------|------------|---------|
+| `viable` | Numeric value | Numeric value | Model succeeded, passed all quality checks |
+| `NVM` | "NVM" | "NVM" | Nonviable model — fit failed or r² < 0.1 |
+| `NR` | "<LNZD/3" | "—" | Not reportable — BMD below 1/3 lowest nonzero dose |
+| `UREP` | "UREP" | "UREP" | Unreliable estimate — BMDU/BMDL ratio > 40 or step function |
+| `failure` | "NVM" | "NVM" | Model did not complete |
+| `None` | "—" | "—" | Endpoint not modeled by BMDExpress 3 |
+
+### N-row
+- Shows Core Animals count per dose group (from sidecar, excludes Biosampling Animals).
+- BMD/BMDL = "NA" (not applicable — sample size is not a dose-response endpoint).
+- Dose groups where all animals died show "–" with attrition footnote marker.
+
+### Footnotes (standard set for Tables 2-7)
+- **BMD definition** (unnumbered paragraph above lettered footnotes): BMD₁Std and BMDL₁Std definitions, NA/ND legend.
+- **(a)** Data format: "Data are displayed as mean ± standard error of the mean" + unit-specific text.
+- **(b)** Statistical method: "Statistical analysis performed by the Jonckheere (trend) and Williams or Dunnett (pairwise) tests."
+- **(c, d, ...)** Animal attrition notes (dynamically generated from sidecar terminal flags).
+
 ## Master TODO
 
 ### CRITICAL
