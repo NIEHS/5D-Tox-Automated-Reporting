@@ -450,19 +450,45 @@ def tox_study_csv_to_pivot_txt(
     #   - Observation Day: split endpoints by study day (SD0, SD5 → separate rows)
     #   - Selection: Core Animals vs Biosampling Animals (for N-count filtering)
     #   - Terminal Flag: which measurement is the animal's last (for attrition)
+    #
+    # Different NTP platforms use different column names for the day:
+    #   - Body Weight, Clinical Chemistry, Hematology: "Observation Day"
+    #   - Organ Weight, Hormones: "Removal Day"
+    #   - Tissue Concentration: "Phase" + "Day" (combined as "{Phase}{Day}")
+    # We normalize all variants into a single obs_day_col so downstream code
+    # doesn't need platform-specific branching.
     obs_day_col = header_lower.index("observation day") if "observation day" in header_lower else None
+    removal_day_col = header_lower.index("removal day") if "removal day" in header_lower else None
+    phase_col = header_lower.index("phase") if "phase" in header_lower else None
+    day_col = header_lower.index("day") if "day" in header_lower else None
     selection_col = header_lower.index("selection") if "selection" in header_lower else None
     terminal_col = header_lower.index("terminal flag") if "terminal flag" in header_lower else None
 
-    # Whether we have observation-day data and should split endpoints by day.
+    # Whether we should SPLIT endpoints by day in the pivot output.
     # When True, "Body Weight" at SD0 becomes "SD0" and at SD5 becomes "SD5"
     # in the pivot — giving BMDExpress separate probes per study day.
+    #
+    # This splitting only applies to "Observation Day" columns (Body Weight,
+    # Clinical Chemistry, Hematology) where the SAME endpoint is measured on
+    # MULTIPLE study days.  "Removal Day" (Organ Weight, Hormones) and
+    # "Phase"+"Day" (Tissue Concentration) are NOT used for endpoint splitting
+    # — those platforms have one measurement per endpoint per animal, so the
+    # column name IS the endpoint.  The day information is still captured in
+    # the sidecar for the table builders to use.
     has_obs_day = obs_day_col is not None
 
-    # Endpoint columns: everything not in known metadata columns
+    # Note: obs_day is resolved per-row from whichever day column is present
+    # (Observation Day, Removal Day, or Phase+Day).  The sidecar guard
+    # `if obs_day or terminal` fires for ALL platforms that have any day info,
+    # even though has_obs_day only controls endpoint-label splitting in pivots.
+
+    # Endpoint columns: everything not in known metadata columns.
+    # Includes all day-column variants (observation day, removal day,
+    # phase, day) so they're excluded from the endpoint list.
     _META_COLS = {
         "ntp study number", "concentration", "animal id", "sex",
-        "selection", "observation day", "terminal flag",
+        "selection", "observation day", "removal day", "terminal flag",
+        "phase", "day",
         "observation", "site", "modifier", "severity",
     }
     endpoint_cols = [
@@ -516,10 +542,21 @@ def tox_study_csv_to_pivot_txt(
             if s:
                 sex = s.title()
 
-        # Read optional metadata columns
+        # Read optional metadata columns.
+        # Resolve the observation day from whichever column variant is present:
+        #   - "Observation Day" (Body Weight, Clinical Chemistry, Hematology)
+        #   - "Removal Day" (Organ Weight, Hormones)
+        #   - "Phase" + "Day" combined (Tissue Concentration: "SD" + "5" → "SD5")
         obs_day = ""
         if obs_day_col is not None and obs_day_col < len(row):
             obs_day = row[obs_day_col].strip()
+        elif removal_day_col is not None and removal_day_col < len(row):
+            obs_day = row[removal_day_col].strip()
+        elif phase_col is not None and day_col is not None:
+            phase_val = row[phase_col].strip() if phase_col < len(row) else ""
+            day_val = row[day_col].strip() if day_col < len(row) else ""
+            if phase_val or day_val:
+                obs_day = f"{phase_val}{day_val}"
 
         selection = ""
         if selection_col is not None and selection_col < len(row):
