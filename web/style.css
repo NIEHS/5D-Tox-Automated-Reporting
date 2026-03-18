@@ -2010,6 +2010,24 @@ header p {
     margin-bottom: 1.5rem;
 }
 
+/* Front matter / placeholder sections — title + hint text.
+   These are stub views that will be wired to real content later. */
+.front-matter-section {
+    padding: 2rem 0;
+}
+.front-matter-section h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--c-primary);
+    margin-bottom: 0.5rem;
+}
+.placeholder-hint {
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+    font-style: italic;
+    line-height: 1.5;
+}
+
 
 /* ----------------------------------------------------------------
    Validation panel — coverage matrix, issues, and conflict resolution
