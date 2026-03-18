@@ -1,0 +1,4759 @@
+{
+  "source": "clin_chem_truth_male.csv",
+  "platform": "Clinical Chemistry",
+  "sex": "Male",
+  "animals": {
+    "101": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "287",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "86",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "90",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "257",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "222",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "13.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "44",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "22",
+          "terminal": false
+        }
+      ]
+    },
+    "102": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "55",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "301",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "64",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "25",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "118",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "180",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "155",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "14",
+          "terminal": false
+        }
+      ]
+    },
+    "104": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "236",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "70",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "204",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "155",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "21.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "113",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "105": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "70",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "346",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "213",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "199",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "13.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "19",
+          "terminal": false
+        }
+      ]
+    },
+    "106": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "344",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "24",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "103",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "180",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "10.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "127",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "107": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "61",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "72",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "111",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "185",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "152",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "18",
+          "terminal": false
+        }
+      ]
+    },
+    "108": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "51",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "318",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "73",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "33",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "109",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "155",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "230",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "128",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "109": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "56",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "257",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "80",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "44",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "82",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "166",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "399",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "36",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "110": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "329",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "39",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "123",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "228",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "280",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "20",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "151": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "53",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "306",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "70",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "21",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "109",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "168",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "181",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "165",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "152": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "56",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "323",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "72",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "48",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "114",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "194",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "184",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "153": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "55",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "295",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "67",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "103",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "172",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "364",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "72",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "14",
+          "terminal": false
+        }
+      ]
+    },
+    "154": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "324",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "45",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "123",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "195",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "139",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "14.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "105",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "155": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "54",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "242",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "24",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "182",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "194",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "19",
+          "terminal": false
+        }
+      ]
+    },
+    "161": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "45",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "133",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "187",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "289",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "131",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "13",
+          "terminal": false
+        }
+      ]
+    },
+    "162": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "255",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "72",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "48",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "100",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "153",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "131",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "149",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "163": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "77",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "362",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "77",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "52",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "101",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "168",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "176",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "136",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "164": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "322",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "30",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "107",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "214",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "279",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "10.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "165": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "55",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "350",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "26",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "101",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "209",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "195",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "103",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "171": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "57",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "273",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "88",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "36",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "324",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "290",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "30.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "14",
+          "terminal": false
+        }
+      ]
+    },
+    "172": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "319",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "90",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "199",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "163",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "85",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "173": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "67",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "268",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "35",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "239",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "267",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "17.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "14",
+          "terminal": false
+        }
+      ]
+    },
+    "174": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "363",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "42",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "104",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "228",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "143",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "91",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "20",
+          "terminal": false
+        }
+      ]
+    },
+    "175": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "60",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "354",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "77",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "29",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "91",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "256",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "208",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "13.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "80",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "13",
+          "terminal": false
+        }
+      ]
+    },
+    "131": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "115",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "294",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "145",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "79",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "140",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "324",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "340",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "148",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "132": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "51",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "288",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "77",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "111",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "138",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "201",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "10.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "162",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "19",
+          "terminal": false
+        }
+      ]
+    },
+    "133": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "319",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "38",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "103",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "156",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "183",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "27.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "134": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "356",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "78",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "164",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "215",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "334",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "13.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "121",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "135": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "57",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "307",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "21",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "148",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "212",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "157",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "141": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "342",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "73",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "33",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "173",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "189",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "51",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "142": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "78",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "142",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "235",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "360",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "14.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "7.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "101",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "15",
+          "terminal": false
+        }
+      ]
+    },
+    "143": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "286",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "152",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "215",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "12.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "86",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "144": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "59",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "374",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "77",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "26",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "209",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "181",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "16.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "78",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "145": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "358",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "147",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "314",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "331",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "29.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "116",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "181": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "67",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "24",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "78",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "135",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "159",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "105",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "25",
+          "terminal": false
+        }
+      ]
+    },
+    "182": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "123",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "265",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "152",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "21",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "55",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "24",
+          "terminal": false
+        }
+      ]
+    },
+    "183": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "333",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "71",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "17",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "204",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "310",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "13.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "5.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "88",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "20",
+          "terminal": false
+        }
+      ]
+    },
+    "184": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "362",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "44",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "179",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "163",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "17.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "41",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "185": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "57",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "232",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "19",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "90",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "149",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "164",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "15.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "40",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "121": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "344",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "103",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "140",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "170",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "9.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "122",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "17",
+          "terminal": false
+        }
+      ]
+    },
+    "122": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "66",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "274",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "82",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "115",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "548",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "179",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "8.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "79",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    },
+    "123": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "359",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "47",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "105",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "186",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "294",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "14.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "115",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "18",
+          "terminal": false
+        }
+      ]
+    },
+    "124": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "67",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "354",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "50",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "91",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "174",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "173",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "11.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "88",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "13",
+          "terminal": false
+        }
+      ]
+    },
+    "125": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "64",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "335",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "50",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "133",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": ".4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "147",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "8.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "6.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "105",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "16",
+          "terminal": false
+        }
+      ]
+    }
+  }
+}

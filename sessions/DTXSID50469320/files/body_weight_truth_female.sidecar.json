@@ -1,0 +1,1105 @@
+{
+  "source": "body_weight_truth_female.csv",
+  "platform": "Body Weight",
+  "sex": "Female",
+  "animals": {
+    "111": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "215.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "219.6",
+          "terminal": true
+        }
+      ]
+    },
+    "112": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "209.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "210.9",
+          "terminal": true
+        }
+      ]
+    },
+    "113": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "239.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "247.2",
+          "terminal": true
+        }
+      ]
+    },
+    "114": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "190.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "213.6",
+          "terminal": true
+        }
+      ]
+    },
+    "115": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "199.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "211.2",
+          "terminal": true
+        }
+      ]
+    },
+    "116": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "206.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "210.8",
+          "terminal": true
+        }
+      ]
+    },
+    "117": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "190.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "202.4",
+          "terminal": true
+        }
+      ]
+    },
+    "118": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "195.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "206.8",
+          "terminal": true
+        }
+      ]
+    },
+    "119": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "232.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "243.5",
+          "terminal": true
+        }
+      ]
+    },
+    "120": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "222.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "243.7",
+          "terminal": true
+        }
+      ]
+    },
+    "156": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "230.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "238.5",
+          "terminal": true
+        }
+      ]
+    },
+    "157": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "196.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "204.0",
+          "terminal": true
+        }
+      ]
+    },
+    "158": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "226.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "230.0",
+          "terminal": true
+        }
+      ]
+    },
+    "159": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "198.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "200.1",
+          "terminal": true
+        }
+      ]
+    },
+    "160": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "212.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "222.4",
+          "terminal": true
+        }
+      ]
+    },
+    "544": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "206.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "220.9",
+          "terminal": true
+        }
+      ]
+    },
+    "545": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "214.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "215.9",
+          "terminal": true
+        }
+      ]
+    },
+    "546": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "195.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "205.7",
+          "terminal": true
+        }
+      ]
+    },
+    "166": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "200.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "207.0",
+          "terminal": true
+        }
+      ]
+    },
+    "167": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "210.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "221.8",
+          "terminal": true
+        }
+      ]
+    },
+    "168": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "200.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "202.4",
+          "terminal": true
+        }
+      ]
+    },
+    "169": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "220.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "237.5",
+          "terminal": true
+        }
+      ]
+    },
+    "170": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "203.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "212.6",
+          "terminal": true
+        }
+      ]
+    },
+    "176": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "210.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "213.0",
+          "terminal": true
+        }
+      ]
+    },
+    "177": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "207.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "213.5",
+          "terminal": true
+        }
+      ]
+    },
+    "178": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "215.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "220.8",
+          "terminal": true
+        }
+      ]
+    },
+    "179": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "191.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "188.6",
+          "terminal": true
+        }
+      ]
+    },
+    "180": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "193.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "205.3",
+          "terminal": true
+        }
+      ]
+    },
+    "550": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "223.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "236.5",
+          "terminal": true
+        }
+      ]
+    },
+    "551": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "201.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "210.7",
+          "terminal": true
+        }
+      ]
+    },
+    "552": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "216.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "233.7",
+          "terminal": true
+        }
+      ]
+    },
+    "136": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "220.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "226.8",
+          "terminal": true
+        }
+      ]
+    },
+    "137": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "206.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "208.6",
+          "terminal": true
+        }
+      ]
+    },
+    "138": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "200.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "207.0",
+          "terminal": true
+        }
+      ]
+    },
+    "139": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "198.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "206.3",
+          "terminal": true
+        }
+      ]
+    },
+    "140": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "207.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "206.5",
+          "terminal": true
+        }
+      ]
+    },
+    "146": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "195.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "202.5",
+          "terminal": true
+        }
+      ]
+    },
+    "147": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "201.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "207.3",
+          "terminal": true
+        }
+      ]
+    },
+    "148": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "220.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "238.5",
+          "terminal": true
+        }
+      ]
+    },
+    "149": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "206.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "207.1",
+          "terminal": true
+        }
+      ]
+    },
+    "150": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "202.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "209.5",
+          "terminal": true
+        }
+      ]
+    },
+    "186": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "205.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "208.0",
+          "terminal": true
+        }
+      ]
+    },
+    "187": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "202.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "208.1",
+          "terminal": true
+        }
+      ]
+    },
+    "188": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "210.0",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "222.8",
+          "terminal": true
+        }
+      ]
+    },
+    "189": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "219.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "222.9",
+          "terminal": true
+        }
+      ]
+    },
+    "190": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "196.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "204.3",
+          "terminal": true
+        }
+      ]
+    },
+    "196": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "205.7",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "190.8",
+          "terminal": true
+        }
+      ]
+    },
+    "197": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "194.4",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "190.6",
+          "terminal": true
+        }
+      ]
+    },
+    "198": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "206.7",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "197.0",
+          "terminal": true
+        }
+      ]
+    },
+    "199": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "219.9",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "199.2",
+          "terminal": true
+        }
+      ]
+    },
+    "200": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "197.8",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "182.5",
+          "terminal": true
+        }
+      ]
+    },
+    "126": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "207.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "216.8",
+          "terminal": true
+        }
+      ]
+    },
+    "127": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "190.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "199.4",
+          "terminal": true
+        }
+      ]
+    },
+    "128": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "203.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "201.4",
+          "terminal": true
+        }
+      ]
+    },
+    "129": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "230.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "241.2",
+          "terminal": true
+        }
+      ]
+    },
+    "130": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "214.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Body Weight",
+          "value": "218.1",
+          "terminal": true
+        }
+      ]
+    },
+    "206": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "196.4",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "188.7",
+          "terminal": true
+        }
+      ]
+    },
+    "207": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "194.0",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "188.3",
+          "terminal": true
+        }
+      ]
+    },
+    "208": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "219.6",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "203.7",
+          "terminal": true
+        }
+      ]
+    },
+    "209": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "202.1",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "192.6",
+          "terminal": true
+        }
+      ]
+    },
+    "210": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Body Weight",
+          "value": "205.8",
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Body Weight",
+          "value": "192.5",
+          "terminal": true
+        }
+      ]
+    }
+  }
+}

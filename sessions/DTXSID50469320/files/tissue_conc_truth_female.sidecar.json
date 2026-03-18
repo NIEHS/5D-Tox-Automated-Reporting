@@ -1,0 +1,331 @@
+{
+  "source": "tissue_conc_truth_female.csv",
+  "platform": "Tissue Concentration",
+  "sex": "Female",
+  "animals": {
+    "544": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "39.7",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "31.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    },
+    "545": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "58.2",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "42.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    },
+    "546": {
+      "dose": 4.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "41",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "40.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    },
+    "550": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "190",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "105",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    },
+    "551": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "182",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "104",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    },
+    "552": {
+      "dose": 37.0,
+      "selection": "Biosampling Animals",
+      "observations": [
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "180",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD4",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide Concentration",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 2 Hour Perfluorohexanesulfonamide LOQ",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide Concentration",
+          "value": "95.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Plasma 24 Hour Perfluorohexanesulfonamide LOQ",
+          "value": "1",
+          "terminal": false
+        }
+      ]
+    }
+  }
+}
