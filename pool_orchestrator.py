@@ -1801,6 +1801,8 @@ def _build_section_cards(
                         "caption": cp_result.get("caption"),
                         "footnotes": cp_result.get("footnotes"),
                         "bmd_definition": cp_result.get("bmd_definition"),
+                        "significance_explanation": cp_result.get("significance_explanation"),
+                        "significance_marker_legend": cp_result.get("significance_marker_legend"),
                     })
                     logger.info(
                         "%s section built from sidecar (%d sexes)",
@@ -1841,6 +1843,8 @@ def _build_section_cards(
                         "caption": ow_result.get("caption"),
                         "footnotes": ow_result.get("footnotes"),
                         "bmd_definition": ow_result.get("bmd_definition"),
+                        "significance_explanation": ow_result.get("significance_explanation"),
+                        "significance_marker_legend": ow_result.get("significance_marker_legend"),
                     })
                     logger.info(
                         "Organ Weight section built from sidecar (%d sexes)",

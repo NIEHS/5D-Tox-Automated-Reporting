@@ -219,6 +219,114 @@
         }
       ]
     },
+    "103": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Alanine aminotransferase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Albumin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Alkaline phosphatase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Aspartate Aminotransferase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Bile salts/acids",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Cholesterol",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatine kinase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Creatinine",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Direct Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Globulin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Glucose",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Indirect Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Sorbitol dehydrogenase",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Bilirubin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total protein",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triglycerides",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Urea Nitrogen",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "104": {
       "dose": 0.0,
       "selection": "Core Animals",

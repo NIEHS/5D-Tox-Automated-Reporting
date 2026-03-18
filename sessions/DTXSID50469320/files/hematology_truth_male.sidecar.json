@@ -219,6 +219,222 @@
         }
       ]
     },
+    "103": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
+    "104": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "105": {
       "dose": 0.0,
       "selection": "Core Animals",
@@ -323,6 +539,114 @@
           "day": "SD5",
           "endpoint": "Reticulocyte count",
           "value": "253.1",
+          "terminal": false
+        }
+      ]
+    },
+    "106": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
           "terminal": false
         }
       ]
@@ -539,6 +863,114 @@
           "day": "SD5",
           "endpoint": "Reticulocyte count",
           "value": "221.5",
+          "terminal": false
+        }
+      ]
+    },
+    "109": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
           "terminal": false
         }
       ]
@@ -1191,6 +1623,114 @@
         }
       ]
     },
+    "161": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "162": {
       "dose": 12.0,
       "selection": "Core Animals",
@@ -1407,6 +1947,114 @@
         }
       ]
     },
+    "164": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "165": {
       "dose": 12.0,
       "selection": "Core Animals",
@@ -1511,6 +2159,222 @@
           "day": "SD5",
           "endpoint": "Reticulocyte count",
           "value": "230.5",
+          "terminal": false
+        }
+      ]
+    },
+    "171": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
+    "172": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
           "terminal": false
         }
       ]
@@ -1727,6 +2591,222 @@
           "day": "SD5",
           "endpoint": "Reticulocyte count",
           "value": "232",
+          "terminal": false
+        }
+      ]
+    },
+    "175": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
+    "131": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
           "terminal": false
         }
       ]
@@ -2271,6 +3351,114 @@
         }
       ]
     },
+    "142": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "143": {
       "dose": 1.4,
       "selection": "Core Animals",
@@ -2811,6 +3999,114 @@
         }
       ]
     },
+    "183": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "184": {
       "dose": 111.0,
       "selection": "Core Animals",
@@ -3135,6 +4431,114 @@
         }
       ]
     },
+    "122": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
+          "terminal": false
+        }
+      ]
+    },
     "123": {
       "dose": 0.15,
       "selection": "Core Animals",
@@ -3347,6 +4751,114 @@
           "day": "SD5",
           "endpoint": "Reticulocyte count",
           "value": "300.7",
+          "terminal": false
+        }
+      ]
+    },
+    "125": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Basophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Eosinophil count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Erythrocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Large Unstained Cell count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Leukocyte Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Lymphocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Manual hematocrit",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Hemoglobin",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell HGB Concentration",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Mean Cell Volume",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Monocyte count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Neutrophil Count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "nRBC",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Platelet count",
+          "value": "NA",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Reticulocyte count",
+          "value": "NA",
           "terminal": false
         }
       ]

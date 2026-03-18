@@ -40,7 +40,6 @@ import math
 
 from table_builder_common import (
     BMD_DEFINITION,
-    FOOTNOTE_STAT_METHOD,
     js_dose_key,
     mean_se,
     format_mean_se,
@@ -62,9 +61,32 @@ CAPTION_TEMPLATE = (
 )
 
 FOOTNOTE_DATA_FORMAT = (
-    "Data are displayed as mean \u00b1 standard error of the mean. "
-    "Organ weight data are presented in grams (absolute) and milligrams "
-    "per gram body weight (relative)."
+    "Data are displayed as mean \u00b1 standard error of the mean."
+)
+
+# Organ weight uses parametric methods (Williams/Dunnett), same as body weight.
+FOOTNOTE_STAT_METHOD_ORGAN = (
+    "Statistical analysis performed by the Jonckheere (trend) "
+    "and Williams or Dunnett (pairwise) tests."
+)
+
+# Additional organ-weight-specific footnotes from the NIEHS reference:
+FOOTNOTE_RELATIVE_WEIGHT = (
+    "Relative organ weights (organ weight-to-body weight ratios) "
+    "are given as mg organ weight/g body weight."
+)
+
+# Significance explanation — same paragraph as clinical pathology
+SIGNIFICANCE_EXPLANATION = (
+    "Statistical significance for a dosed group indicates a significant "
+    "pairwise test compared to the vehicle control group. Statistical "
+    "significance for the vehicle control group indicates a significant "
+    "trend test."
+)
+
+# Organ weight tables in the reference only show ** (p ≤ 0.01)
+SIGNIFICANCE_MARKER_LEGEND = (
+    "**Statistically significant at p \u2264 0.01."
 )
 
 
@@ -159,7 +181,7 @@ def build_organ_weight_table_from_sidecar(
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             # Only Core Animals contribute to organ weight stats
-            if "core" not in selection.lower():
+            if "biosampling" in selection.lower():
                 continue
 
             dose = rec["dose"]
@@ -216,7 +238,7 @@ def build_organ_weight_table_from_sidecar(
         organ_animal_vals: dict[str, dict[float, list[tuple[str, float]]]] = {}
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
-            if "core" not in selection.lower():
+            if "biosampling" in selection.lower():
                 continue
             dose = rec["dose"]
             for obs in rec.get("observations", []):
@@ -388,10 +410,20 @@ def build_organ_weight_table_from_sidecar(
     if not serialized:
         return {}
 
+    # NIEHS reference footnote structure for organ weight (Table 3):
+    #   1. Significance explanation paragraph (unnumbered)
+    #   2. Significance marker legend (**p ≤ 0.01)
+    #   3. BMD definition paragraph
+    #   4. (a) Data format description
+    #   5. (b) Statistical method (Williams/Dunnett for organ weight)
+    #   6. (c,d,...) Attrition footnotes (dynamic)
+    #   7. (e) Relative weight definition
     footnotes = [
-        FOOTNOTE_DATA_FORMAT,       # (a)
-        FOOTNOTE_STAT_METHOD,       # (b)
+        FOOTNOTE_DATA_FORMAT,           # (a)
+        FOOTNOTE_STAT_METHOD_ORGAN,     # (b)
     ]
+    # Attrition footnotes would be inserted here as (c,d,...) if applicable
+    footnotes.append(FOOTNOTE_RELATIVE_WEIGHT)  # last lettered footnote
 
     return {
         "title": "Organ Weight",
@@ -402,4 +434,6 @@ def build_organ_weight_table_from_sidecar(
         "table_data": serialized,
         "footnotes": footnotes,
         "bmd_definition": BMD_DEFINITION,
+        "significance_explanation": SIGNIFICANCE_EXPLANATION,
+        "significance_marker_legend": SIGNIFICANCE_MARKER_LEGEND,
     }
