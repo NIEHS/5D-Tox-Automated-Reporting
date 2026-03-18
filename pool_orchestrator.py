@@ -1357,6 +1357,14 @@ def _serialize_platform_tables(platform_tables: dict[str, dict[str, list]]) -> d
                 for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose"):
                     if d.get(fk_field):
                         d[fk_field] = {str(k): v for k, v in d[fk_field].items()}
+                # Coerce numpy scalar types to native Python types so orjson
+                # can serialize them.  The Java stats pipeline (Williams/Dunnett)
+                # returns numpy.bool_ for the responsive flag and occasionally
+                # numpy.float64/numpy.int64 for other fields.  asdict() preserves
+                # these numpy types rather than converting them.
+                for key, val in d.items():
+                    if hasattr(val, "item"):  # numpy scalar → .item() → native
+                        d[key] = val.item()
                 # Preserve dynamically-attached _bmds_input (not a dataclass field)
                 if hasattr(row, "_bmds_input") and row._bmds_input:
                     d["_bmds_input"] = row._bmds_input
@@ -2164,9 +2172,12 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # --- Async wrappers: return cached data or compute + cache ---
 
         async def _get_sections():
-            """Build section cards with narratives, or return cached."""
+            """Build section cards with narratives + unified narratives, or return cached."""
             if sections_cached:
-                return sections_cached["sections"]
+                return (
+                    sections_cached["sections"],
+                    sections_cached.get("unified_narratives", {}),
+                )
             # _build_section_cards is sync (reads sidecar files, generates
             # narratives from templates) — wrap in executor to avoid
             # blocking the event loop during parallel execution.
@@ -2184,8 +2195,59 @@ async def api_process_integrated(dtxsid: str, request: Request):
             )
             if clin_obs:
                 sections.append(clin_obs)
-            _save_cache(dtxsid, "sections", sections_hash, {"sections": sections})
-            return sections
+
+            # ── Unified cross-platform narratives ─────────────────────────
+            # The NIEHS reference report groups narrative prose into two
+            # unified sections that span multiple platforms, rather than
+            # per-platform isolated narratives.  These are generated here
+            # alongside the per-card narratives (which are kept for backward
+            # compatibility with old approved sessions).
+            from unified_narrative import (
+                extract_mortality,
+                generate_apical_narrative,
+                generate_clinical_pathology_narrative,
+            )
+            from body_weight_table import find_sidecar_paths
+
+            # 1. Load mortality data from body weight sidecars
+            session_dir = str(_session_dir(dtxsid))
+            sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
+            sidecar_mortality = extract_mortality(sidecar_paths) if sidecar_paths else None
+
+            # 2. Load clinical obs incidence for the animal condition paragraph
+            meta = integrated.get("_meta", {})
+            csv_paths = meta.get("clinical_obs_files", [])
+            clin_obs_incidence = None
+            if csv_paths:
+                clin_obs_incidence = build_clinical_obs_tables(csv_paths)
+
+            # 3. Generate the two unified narratives
+            apical_narrative = generate_apical_narrative(
+                platform_tables, compound_name, dose_unit,
+                sidecar_mortality=sidecar_mortality,
+                clinical_obs_incidence=clin_obs_incidence,
+            )
+            clin_path_narrative = generate_clinical_pathology_narrative(
+                platform_tables, compound_name, dose_unit,
+            )
+
+            unified_narratives = {}
+            if apical_narrative:
+                unified_narratives["apical"] = {
+                    "title": "Animal Condition, Body Weights, and Organ Weights",
+                    "paragraphs": apical_narrative,
+                }
+            if clin_path_narrative:
+                unified_narratives["clinical_pathology"] = {
+                    "title": "Clinical Pathology",
+                    "paragraphs": clin_path_narrative,
+                }
+
+            _save_cache(dtxsid, "sections", sections_hash, {
+                "sections": sections,
+                "unified_narratives": unified_narratives,
+            })
+            return sections, unified_narratives
 
         async def _get_bmds():
             """Run pybmds modeling on all endpoints, or return cached."""
@@ -2214,9 +2276,11 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # Launch all three concurrently — cached units return instantly,
         # uncached units run in parallel (BMDS in thread pool, genomics
         # in thread pool via _extract_genomics, sections in thread pool).
-        sections, bmds_results, genomics_sections = await asyncio.gather(
+        # _get_sections returns a 2-tuple: (sections, unified_narratives).
+        sections_result, bmds_results, genomics_sections = await asyncio.gather(
             _get_sections(), _get_bmds(), _get_genomics(),
         )
+        sections, unified_narratives = sections_result
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3 — BMD summary (depends on NTP + BMDS)
@@ -2251,6 +2315,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         }
         result_payload = {
             "sections": sections,
+            "unified_narratives": unified_narratives,
             "genomics_sections": genomics_sections,
             "apical_bmd_summary": apical_bmd_summary,
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,

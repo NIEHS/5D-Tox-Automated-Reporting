@@ -25,6 +25,13 @@ Outputs:
 Integration:
   Called from pool_orchestrator.py's api_process_integrated() endpoint.
   Results returned as "apical_bmd_summary_bmds" in the JSON response.
+
+Performance:
+  Each endpoint takes ~1.2s to model (fitting ~12 continuous models with
+  numerical optimization).  With 106 apical endpoints, serial execution takes
+  ~128s.  Using ProcessPoolExecutor with 8 workers brings this down to ~16s.
+  ThreadPoolExecutor won't help because pybmds is CPU-bound (numpy/scipy
+  optimization) and Python's GIL blocks true thread parallelism.
 """
 
 # ---------------------------------------------------------------------------
@@ -32,6 +39,8 @@ Integration:
 # ---------------------------------------------------------------------------
 import logging
 import math
+import os
+from concurrent.futures import ProcessPoolExecutor
 
 import pybmds
 from pybmds.recommender.recommender import RecommenderResults
@@ -245,13 +254,42 @@ def _failure_result(reason: str) -> dict:
 # Batch endpoint modeling
 # ---------------------------------------------------------------------------
 
+def _run_single_endpoint(ep: dict) -> tuple[str, dict]:
+    """
+    Run BMDS modeling on a single endpoint.  Top-level function so it can be
+    pickled by ProcessPoolExecutor (lambdas and closures can't be pickled).
+
+    Args:
+        ep: Dict with key, doses, ns, means, stdevs.
+
+    Returns:
+        Tuple of (key, result_dict) for collection into the results map.
+    """
+    key = ep["key"]
+    result = run_bmds_session(
+        doses=ep["doses"],
+        ns=ep["ns"],
+        means=ep["means"],
+        stdevs=ep["stdevs"],
+    )
+    return key, result
+
+
+# Default number of parallel workers for BMDS modeling.  Each worker fits
+# ~12 models per endpoint using scipy optimization — fully CPU-bound.
+# os.cpu_count() returns logical cores; cap at 8 to leave headroom for
+# the web server and other concurrent tasks.
+_BMDS_MAX_WORKERS = min(os.cpu_count() or 4, 8)
+
+
 def run_bmds_for_endpoints(endpoint_data: list[dict]) -> dict[str, dict]:
     """
-    Run BMDS modeling on a batch of apical endpoints.
+    Run BMDS modeling on a batch of apical endpoints in parallel.
 
     Takes the dose-response summary statistics that build_table_data()
     computes (means, SEs, Ns per dose group) and runs a pybmds session
-    for each endpoint.
+    for each endpoint.  Uses ProcessPoolExecutor to parallelize across
+    CPU cores — each endpoint is independent (no shared state).
 
     Args:
         endpoint_data: List of dicts, each containing:
@@ -264,22 +302,27 @@ def run_bmds_for_endpoints(endpoint_data: list[dict]) -> dict[str, dict]:
     Returns:
         Dict mapping key → run_bmds_session() result dict.
     """
+    if not endpoint_data:
+        return {}
+
+    n_workers = min(_BMDS_MAX_WORKERS, len(endpoint_data))
+    logger.info(
+        "BMDS modeling %d endpoints with %d workers", len(endpoint_data), n_workers,
+    )
+
     results = {}
-    for ep in endpoint_data:
-        key = ep["key"]
-        result = run_bmds_session(
-            doses=ep["doses"],
-            ns=ep["ns"],
-            means=ep["means"],
-            stdevs=ep["stdevs"],
-        )
-        results[key] = result
-        if result["status"] == "viable":
-            logger.info(
-                "BMDS %s: %s BMD=%.3f BMDL=%.3f (%s)",
-                key, result["status"], result["bmd"],
-                result["bmdl"], result["model_name"],
-            )
-        else:
-            logger.info("BMDS %s: %s — %s", key, result["status"], result["notes"])
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        for key, result in pool.map(_run_single_endpoint, endpoint_data):
+            results[key] = result
+            if result["status"] == "viable":
+                logger.info(
+                    "BMDS %s: %s BMD=%.3f BMDL=%.3f (%s)",
+                    key, result["status"], result["bmd"],
+                    result["bmdl"], result["model_name"],
+                )
+            else:
+                logger.info(
+                    "BMDS %s: %s — %s", key, result["status"], result["notes"],
+                )
+
     return results
