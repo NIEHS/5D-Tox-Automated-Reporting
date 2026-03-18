@@ -189,9 +189,11 @@ function displayResult(result) {
     backgroundApproved = false;
     unlockSection(document.getElementById('output-section'));
 
-    // Show the data tab now that background is done
-    show('data-tab-section');
-    if (tabbedViewActive) buildTabBar();
+    // Show the data tab now that background is done — set the Alpine
+    // store flag so the Data section becomes visible via x-show.
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.data = true;
+    }
 
     // Generating background also confirms identity — enable
     // Process/Export buttons if they were still disabled
@@ -490,9 +492,10 @@ function bm2Slug(filename) {
  * is approved, so the user can generate M&M next).
  */
 function showMethodsSection() {
-    show('methods-section');
-    document.getElementById('methods-section').classList.add('visible');
-    if (tabbedViewActive) buildTabBar();
+    // Set the Alpine store flag so the Methods section becomes visible
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.methods = true;
+    }
 }
 
 /**
@@ -895,9 +898,10 @@ function retryMethods() {
  * one results section is approved).
  */
 function showSummarySection() {
-    show('summary-section');
-    document.getElementById('summary-section').classList.add('visible');
-    if (tabbedViewActive) buildTabBar();
+    // Set the Alpine store flag so the Summary section becomes visible
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.summary = true;
+    }
 }
 
 /**
@@ -1091,9 +1095,9 @@ async function runProcessingPipeline() {
 
     showBlockingSpinner('Processing integrated data...');
 
-    // Show the results sections so cards have a container to land in
-    show('bm2-results-section');
-    if (tabbedViewActive) buildTabBar();
+    // Note: results sections are shown reactively via Alpine store
+    // flags — getPlatformContainer() sets ready.animalCondition,
+    // ready.clinicalPath, etc. when cards are created.
 
     // --- Apical endpoint processing: single integrated call ---
     // Instead of processing each .bm2 file individually, call the
@@ -1230,21 +1234,38 @@ async function runProcessingPipeline() {
             // --- Apical BMD summary (Table 8 equivalent) ---
             // The process-integrated endpoint now returns apical_bmd_summary
             // with BMD, BMDL, LOEL, NOEL, direction for all modeled endpoints.
-            // This replaces the separate /api/bmd-summary call for apical data.
             if (result.apical_bmd_summary && result.apical_bmd_summary.length > 0) {
                 bmdSummaryEndpoints = result.apical_bmd_summary;
                 renderBmdSummaryTable(bmdSummaryEndpoints);
-                show('bmd-summary-section');
-                document.getElementById('bmd-summary-section').classList.add('visible');
+                if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                    Alpine.store('app').ready.bmdSummary = true;
+                }
                 markReportDirty();
             }
 
             // --- BMDS summary (pybmds — EPA BMDS methodology) ---
             if (result.apical_bmd_summary_bmds && result.apical_bmd_summary_bmds.length > 0) {
                 renderBmdSummaryTableBmds(result.apical_bmd_summary_bmds);
-                show('bmd-summary-bmds-section');
-                document.getElementById('bmd-summary-bmds-section').classList.add('visible');
+                if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                    Alpine.store('app').ready.bmdSummaryBmds = true;
+                }
                 markReportDirty();
+            }
+
+            // --- Unified narratives ---
+            // Populate group-level narrative textareas from the server response.
+            // These are cross-platform narratives (e.g., one narrative covering
+            // all of Clinical Pathology rather than per-endpoint).
+            if (result.unified_narratives) {
+                if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                    Alpine.store('app').unifiedNarratives = result.unified_narratives;
+                }
+                for (const [key, data] of Object.entries(result.unified_narratives)) {
+                    const ta = document.getElementById(`narrative-${key}`);
+                    if (ta && data.paragraphs) {
+                        ta.value = data.paragraphs.join('\n\n');
+                    }
+                }
             }
         } else {
             const err = await resp.json().catch(e => { console.error('JSON parse failed:', e); return {}; });
@@ -1254,17 +1275,16 @@ async function runProcessingPipeline() {
         showToast('Integrated processing failed: ' + e.message);
     }
 
-    // Show the genomics section if any genomics results were created
-    if (Object.keys(genomicsResults).length > 0) {
-        show('genomics-results-section');
-        show('genomics-charts-section');
+    // Show genomics sections if any genomics results were created
+    if (Object.keys(genomicsResults).length > 0 && typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.geneSets = true;
+        Alpine.store('app').ready.geneBmd = true;
+        Alpine.store('app').ready.charts = true;
     }
 
     // Show the summary section now that sections exist
     showSummarySection();
 
-    // Rebuild tabs to include any newly-created sections
-    if (tabbedViewActive) buildTabBar();
     updateExportButton();
     hideBlockingSpinner();
 }

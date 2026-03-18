@@ -209,9 +209,10 @@ async function applySettings() {
         const result = await resp.json();
 
         // --- Rebuild apical section cards ---
-        // Clear the cards container and state, then recreate from response
-        const bm2Cards = document.getElementById('bm2-cards');
-        if (bm2Cards) bm2Cards.innerHTML = '';
+        // Clear the platform containers and state, then recreate from response
+        for (const pc of document.querySelectorAll('.platform-container')) {
+            pc.querySelectorAll('.bm2-card').forEach(c => c.remove());
+        }
         for (const secId of Object.keys(apicalSections)) {
             delete apicalSections[secId];
         }
@@ -240,13 +241,19 @@ async function applySettings() {
 
             renderBm2Results(sectionId, section.tables_json, section.narrative, section.table_type);
         }
-        show('bm2-results-section');
+        // Note: Alpine store readiness flags are set by getPlatformContainer()
+        // when cards are created — no explicit show() needed here.
 
         // --- Rebuild genomics cards ---
-        const genomicsSubTabs = document.getElementById('genomics-sub-tabs');
-        if (genomicsSubTabs) { genomicsSubTabs.innerHTML = ''; genomicsSubTabs.classList.remove('visible'); }
-        const genomicsCards = document.getElementById('genomics-cards');
-        if (genomicsCards) genomicsCards.innerHTML = '';
+        // Clear the genomics card containers and TOC children
+        const geneSetCards = document.getElementById('genomics-gene-set-cards');
+        if (geneSetCards) geneSetCards.innerHTML = '';
+        const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
+        if (geneBmdCards) geneBmdCards.innerHTML = '';
+        const tocGeneSets = document.getElementById('toc-gene-set-children');
+        if (tocGeneSets) tocGeneSets.innerHTML = '';
+        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
+        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
         for (const key of Object.keys(genomicsResults)) {
             delete genomicsResults[key];
         }
@@ -258,28 +265,30 @@ async function applySettings() {
                 createGenomicsCard(key, gData, gData.organ, gData.sex, statLabelsMap);
             }
         }
-        if (Object.keys(genomicsResults).length > 0) {
-            show('genomics-results-section');
-            show('genomics-charts-section');
+        if (Object.keys(genomicsResults).length > 0 && typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.geneSets = true;
+            Alpine.store('app').ready.geneBmd = true;
+            Alpine.store('app').ready.charts = true;
         }
 
         // --- Rebuild BMD summary from apical_bmd_summary ---
         if (result.apical_bmd_summary && result.apical_bmd_summary.length > 0) {
             bmdSummaryEndpoints = result.apical_bmd_summary;
             renderBmdSummaryTable(bmdSummaryEndpoints);
-            show('bmd-summary-section');
-            document.getElementById('bmd-summary-section').classList.add('visible');
+            if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                Alpine.store('app').ready.bmdSummary = true;
+            }
         }
 
         // --- Rebuild BMDS summary (pybmds) ---
         if (result.apical_bmd_summary_bmds && result.apical_bmd_summary_bmds.length > 0) {
             renderBmdSummaryTableBmds(result.apical_bmd_summary_bmds);
-            show('bmd-summary-bmds-section');
-            document.getElementById('bmd-summary-bmds-section').classList.add('visible');
+            if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                Alpine.store('app').ready.bmdSummaryBmds = true;
+            }
         }
 
-        // Refresh tabs and export button
-        if (tabbedViewActive) buildTabBar();
+        // Refresh export button
         updateExportButton();
         markReportDirty();
 

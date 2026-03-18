@@ -460,17 +460,23 @@ async function confirmResetPool() {
         if (intPreviewContent) intPreviewContent.innerHTML = '';
         integratedPoolData = null;
 
-        // Clear apical domain sub-tabs and panels
-        const subTabBar = document.getElementById('apical-sub-tabs');
-        if (subTabBar) { subTabBar.innerHTML = ''; subTabBar.classList.remove('visible'); }
-        const bm2Cards = document.getElementById('bm2-cards');
-        if (bm2Cards) bm2Cards.innerHTML = '';
+        // Clear platform containers — remove cards from each static container
+        for (const pc of document.querySelectorAll('.platform-container')) {
+            // Only remove child .bm2-card elements, keep the <h3> header
+            pc.querySelectorAll('.bm2-card').forEach(c => c.remove());
+        }
 
-        // Clear genomics organ×sex sub-tabs and panels
-        const genomicsSubTabs = document.getElementById('genomics-sub-tabs');
-        if (genomicsSubTabs) { genomicsSubTabs.innerHTML = ''; genomicsSubTabs.classList.remove('visible'); }
-        const genomicsCards = document.getElementById('genomics-cards');
-        if (genomicsCards) genomicsCards.innerHTML = '';
+        // Clear genomics card containers
+        const geneSetCards = document.getElementById('genomics-gene-set-cards');
+        if (geneSetCards) geneSetCards.innerHTML = '';
+        const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
+        if (geneBmdCards) geneBmdCards.innerHTML = '';
+
+        // Clear dynamic TOC children in the sidebar
+        const tocGeneSets = document.getElementById('toc-gene-set-children');
+        if (tocGeneSets) tocGeneSets.innerHTML = '';
+        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
+        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
 
         // Clear charts sub-tabs and chart containers
         const chartsSubTabs = document.getElementById('charts-sub-tabs');
@@ -480,26 +486,29 @@ async function confirmResetPool() {
         const clusterChart = document.getElementById('cluster-chart');
         if (clusterChart) clusterChart.innerHTML = '';
 
-        // Hide apical results section and clear its content
-        const apicalSection = document.getElementById('apical-results');
-        if (apicalSection) apicalSection.style.display = 'none';
-        const apicalContent = document.getElementById('apical-content');
-        if (apicalContent) apicalContent.innerHTML = '';
-
-        // Hide genomics results section and clear its content
-        const genomicsSection = document.getElementById('genomics-results');
-        if (genomicsSection) genomicsSection.style.display = 'none';
-        const genomicsContent = document.getElementById('genomics-content');
-        if (genomicsContent) genomicsContent.innerHTML = '';
+        // Clear unified narrative textareas
+        for (const ta of document.querySelectorAll('.unified-narrative')) {
+            ta.value = '';
+        }
 
         // Hide metadata review section
         const metadataSection = document.getElementById('metadata-review-section');
         if (metadataSection) metadataSection.style.display = 'none';
 
-        // Hide methods, BMD summary, and summary sections
-        for (const secId of ['methods-section', 'bmd-summary-section', 'summary-section']) {
-            const sec = document.getElementById(secId);
-            if (sec) sec.style.display = 'none';
+        // Reset all section readiness flags via Alpine store
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            const ready = Alpine.store('app').ready;
+            ready.animalCondition = false;
+            ready.clinicalPath = false;
+            ready.internalDose = false;
+            ready.bmdSummary = false;
+            ready.bmdSummaryBmds = false;
+            ready.geneSets = false;
+            ready.geneBmd = false;
+            ready.charts = false;
+            ready.methods = false;
+            ready.summary = false;
+            Alpine.store('app').unifiedNarratives = {};
         }
 
         // Reset file pool summary and buttons
@@ -577,18 +586,42 @@ async function confirmResetSession() {
         const vBody = document.getElementById('validation-body');
         if (vBody) vBody.style.display = 'none';
 
-        // Hide all result sections
-        for (const secId of [
-            'apical-results', 'genomics-results', 'metadata-review-section',
-            'methods-section', 'bmd-summary-section', 'summary-section'
-        ]) {
-            const sec = document.getElementById(secId);
-            if (sec) sec.style.display = 'none';
+        // Clear platform containers and genomics cards
+        for (const pc of document.querySelectorAll('.platform-container')) {
+            pc.querySelectorAll('.bm2-card').forEach(c => c.remove());
         }
-        const apicalContent = document.getElementById('apical-content');
-        if (apicalContent) apicalContent.innerHTML = '';
-        const genomicsContent = document.getElementById('genomics-content');
-        if (genomicsContent) genomicsContent.innerHTML = '';
+        const geneSetCards = document.getElementById('genomics-gene-set-cards');
+        if (geneSetCards) geneSetCards.innerHTML = '';
+        const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
+        if (geneBmdCards) geneBmdCards.innerHTML = '';
+        const tocGeneSets = document.getElementById('toc-gene-set-children');
+        if (tocGeneSets) tocGeneSets.innerHTML = '';
+        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
+        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
+        for (const ta of document.querySelectorAll('.unified-narrative')) {
+            ta.value = '';
+        }
+
+        // Hide metadata review section
+        const metadataSection = document.getElementById('metadata-review-section');
+        if (metadataSection) metadataSection.style.display = 'none';
+
+        // Reset all Alpine store readiness flags
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            const ready = Alpine.store('app').ready;
+            ready.data = false;
+            ready.animalCondition = false;
+            ready.clinicalPath = false;
+            ready.internalDose = false;
+            ready.bmdSummary = false;
+            ready.bmdSummaryBmds = false;
+            ready.geneSets = false;
+            ready.geneBmd = false;
+            ready.charts = false;
+            ready.methods = false;
+            ready.summary = false;
+            Alpine.store('app').unifiedNarratives = {};
+        }
 
         // Also clear background section — this is what distinguishes
         // Session Reset from Pool Reset
@@ -1451,13 +1484,28 @@ const _PLATFORM_DEFAULTS = {
 };
 
 /**
- * Canonical ordering of apical platform sub-tabs.
- * Uses platform strings directly — no suffix stripping needed.
+ * Map platform names to their parent results-group Alpine store ready flag.
+ * When a card is placed into a platform container, the corresponding
+ * Alpine store flag is set to true so the parent section becomes visible.
+ *
+ * This replaces the old _PLATFORM_SUB_TAB_ORDER and ensureDomainSubTab
+ * pattern — instead of creating sub-tabs dynamically, cards are routed
+ * into static platform containers defined in index.html.
  */
-const _PLATFORM_SUB_TAB_ORDER = [
-    'Body Weight', 'Organ Weights', 'Clinical Chemistry',
-    'Hematology', 'Hormones', 'Tissue Concentration',
-];
+// Platform strings must match exactly what the server returns in
+// section.platform from /api/process-integrated.  The server uses
+// singular "Organ Weight" (not "Organ Weights").
+const PLATFORM_TO_READY = {
+    'Body Weight':              'animalCondition',
+    'Organ Weight':             'animalCondition',
+    'Organ Weights':            'animalCondition',   // legacy compat
+    'Clinical Chemistry':       'clinicalPath',
+    'Hematology':               'clinicalPath',
+    'Hormones':                 'clinicalPath',
+    'Tissue Concentration':     'internalDose',
+    'Clinical Observations':    'animalCondition',   // incidence tables
+    'Clinical':                 'animalCondition',   // legacy compat
+};
 
 /**
  * Pass-through for backward compatibility.  Platform strings no longer
@@ -1471,93 +1519,36 @@ function _baseDomain(platform) {
 }
 
 /**
- * Ensure a platform sub-tab and its card container exist.
- * Called by createBm2Card() the first time a card for a platform is added.
- * Creates the sub-tab button and the panel div inside #bm2-cards.
+ * Get the container element for a given platform.
  *
- * The sub-tab bar becomes visible once at least one platform has cards.
- * Sub-tabs are inserted in _PLATFORM_SUB_TAB_ORDER so the order is
- * stable regardless of which platform gets cards first.
+ * Looks up the platform in the static HTML containers defined by
+ * data-platform attributes.  Also sets the Alpine store readiness
+ * flag so the parent section becomes visible via x-show.
  *
- * @param {string} platform — platform key (e.g. "Body Weight")
- * @returns {HTMLElement} — the panel div to append cards into
+ * Falls back to #section-animal-condition if the platform is unknown.
+ *
+ * @param {string} platform — platform key (e.g. "Body Weight", "Hormones")
+ * @returns {HTMLElement} — the container div to append cards into
  */
-function ensureDomainSubTab(platform) {
-    const panelId = `apical-domain-${platform}`;
-    let panel = document.getElementById(panelId);
-    if (panel) return panel;
-
-    const tabBar = document.getElementById('apical-sub-tabs');
-    const container = document.getElementById('bm2-cards');
-
-    // Create the panel — a container for this platform's cards
-    panel = document.createElement('div');
-    panel.id = panelId;
-    panel.className = 'apical-domain-panel';
-    panel.setAttribute('data-domain', platform);
-
-    // Insert panel in canonical order among existing panels
-    const myIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(platform);
-    let inserted = false;
-    for (const existing of container.children) {
-        const existDomain = existing.getAttribute('data-domain');
-        const existIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(existDomain);
-        if (existIdx > myIdx) {
-            container.insertBefore(panel, existing);
-            inserted = true;
-            break;
+function getPlatformContainer(platform) {
+    // Look up by data-platform attribute — matches the static containers
+    // defined in index.html (e.g., <div data-platform="Body Weight">)
+    const el = document.querySelector(`[data-platform="${platform}"]`);
+    if (el) {
+        // Ensure parent group is visible by setting the Alpine store flag
+        const readyKey = PLATFORM_TO_READY[platform];
+        if (readyKey && typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready[readyKey] = true;
         }
-    }
-    if (!inserted) container.appendChild(panel);
-
-    // Create the sub-tab button — inserted in canonical order.
-    // Platform strings are already human-readable, so use directly.
-    const btn = document.createElement('button');
-    btn.textContent = platform;
-    btn.setAttribute('data-domain', platform);
-    btn.onclick = () => activateDomainSubTab(platform);
-
-    const btnIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(platform);
-    let btnInserted = false;
-    for (const existBtn of tabBar.children) {
-        const existBtnDomain = existBtn.getAttribute('data-domain');
-        const existBtnIdx = _PLATFORM_SUB_TAB_ORDER.indexOf(existBtnDomain);
-        if (existBtnIdx > btnIdx) {
-            tabBar.insertBefore(btn, existBtn);
-            btnInserted = true;
-            break;
-        }
-    }
-    if (!btnInserted) tabBar.appendChild(btn);
-
-    // Show the sub-tab bar now that we have at least one platform
-    tabBar.classList.add('visible');
-
-    // If this is the first platform, activate it
-    if (tabBar.children.length === 1) {
-        activateDomainSubTab(platform);
+        return el;
     }
 
-    return panel;
-}
-
-/**
- * Switch the active platform sub-tab — show that platform's panel,
- * hide all others, and update button active states.
- *
- * @param {string} platform — platform key to activate
- */
-function activateDomainSubTab(platform) {
-    // Toggle panels
-    document.querySelectorAll('.apical-domain-panel').forEach(p => {
-        p.classList.toggle('active', p.getAttribute('data-domain') === platform);
-    });
-
-    // Toggle button states
-    const tabBar = document.getElementById('apical-sub-tabs');
-    tabBar.querySelectorAll('button').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-domain') === platform);
-    });
+    // Fallback for unexpected platforms — dump into the animal condition
+    // section so cards don't disappear.  Also ensure it's visible.
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.animalCondition = true;
+    }
+    return document.getElementById('section-animal-condition') || document.body;
 }
 
 /**
@@ -1615,14 +1606,14 @@ function _resolveBm2Defaults(filename, platform) {
  *                               NIEHS-style title and caption defaults
  */
 function createBm2Card(bm2Id, filename, platform) {
-    // Route the card into the correct platform sub-tab panel.
-    // If the platform is known and in the sub-tab order, ensure its
-    // sub-tab exists and append the card there.  Otherwise fall back
-    // to the flat #bm2-cards container (legacy path for manually
-    // uploaded files).
-    const container = (platform && _PLATFORM_SUB_TAB_ORDER.includes(platform))
-        ? ensureDomainSubTab(platform)
-        : document.getElementById('bm2-cards');
+    // Route the card into the correct platform container.
+    // The container is a static <div data-platform="..."> in index.html.
+    // getPlatformContainer also sets the Alpine store readiness flag
+    // so the parent section becomes visible.  Falls back to
+    // #section-animal-condition for unknown platforms.
+    const container = platform
+        ? getPlatformContainer(platform)
+        : (document.getElementById('section-animal-condition') || document.body);
 
     // Resolve section title and caption from the platform (preferred)
     // or filename (fallback for manually uploaded files).
@@ -1667,47 +1658,33 @@ function createBm2Card(bm2Id, filename, platform) {
                 </button>
             </div>
         </div>
-        <details class="card-config-collapse">
-            <summary>Section Config &amp; Narrative</summary>
-            <div class="card-fields">
-                <div class="form-group">
-                    <label>Section Title</label>
-                    <input type="text" id="bm2-title-${bm2Id}"
-                        value="${escapeHtml(defaultTitle)}">
-                </div>
-                <div class="form-group">
-                    <label>Table Caption</label>
-                    <input type="text" id="bm2-caption-${bm2Id}"
-                        value="${escapeHtml(defaultCaption)}">
-                </div>
-                <div class="form-group">
-                    <label>Compound Name</label>
-                    <input type="text" id="bm2-compound-${bm2Id}"
-                        placeholder="e.g., PFHxSAm"
-                        value="${escapeHtml(currentIdentity?.name || '')}">
-                </div>
-                <div class="form-group">
-                    <label>Dose Unit</label>
-                    <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
-                </div>
-                <div class="form-group">
-                    <label>Table Number</label>
-                    <input type="number" id="bm2-table-number-${bm2Id}"
-                        placeholder="e.g., 2" min="1" step="1"
-                        style="width: 80px">
-                </div>
+        <!-- Table config — inline, no collapse needed -->
+        <div class="card-fields">
+            <div class="form-group">
+                <label>Caption</label>
+                <input type="text" id="bm2-caption-${bm2Id}"
+                    value="${escapeHtml(defaultCaption)}">
             </div>
-            <div class="bm2-narrative-label">Results Narrative</div>
-            <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" rows="6"
-                placeholder="Results narrative will be auto-generated after processing. You can edit it here before exporting."></textarea>
-            <div style="margin-top: 8px;">
-                <button class="btn-small primary" id="btn-update-pdf-${bm2Id}"
-                    onclick="refreshSectionPdf('apical')" style="display:none"
-                    title="Recompile the PDF preview with current config settings">
-                    Update PDF
-                </button>
+            <div class="form-group">
+                <label>Compound</label>
+                <input type="text" id="bm2-compound-${bm2Id}"
+                    placeholder="e.g., PFHxSAm"
+                    value="${escapeHtml(currentIdentity?.name || '')}">
             </div>
-        </details>
+            <div class="form-group">
+                <label>Dose Unit</label>
+                <input type="text" id="bm2-unit-${bm2Id}" value="mg/kg">
+            </div>
+            <div class="form-group">
+                <label>Table #</label>
+                <input type="number" id="bm2-table-number-${bm2Id}"
+                    placeholder="e.g., 2" min="1" step="1"
+                    style="width: 80px">
+            </div>
+        </div>
+        <!-- Hidden fields consumed by export — title kept for payload compat -->
+        <input type="hidden" id="bm2-title-${bm2Id}" value="${escapeHtml(defaultTitle)}">
+        <textarea class="bm2-narrative" id="bm2-narrative-${bm2Id}" style="display:none"></textarea>
         <div class="table-preview" id="bm2-preview-${bm2Id}"></div>
     `;
 
@@ -2072,9 +2049,11 @@ function removeBm2(bm2Id) {
     const card = document.getElementById(`bm2-card-${bm2Id}`);
     if (card) card.remove();
 
-    // Hide the results section if no cards remain
-    if (Object.keys(apicalSections).length === 0) {
-        hide('bm2-results-section');
+    // Hide the results sections if no cards remain
+    if (Object.keys(apicalSections).length === 0 && typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').ready.animalCondition = false;
+        Alpine.store('app').ready.clinicalPath = false;
+        Alpine.store('app').ready.internalDose = false;
     }
 }
 

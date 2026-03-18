@@ -16,76 +16,81 @@
 //                  unlockSection, setButtons, showSummarySection, apiFetch
 
 /* ----------------------------------------------------------------
- * Genomics sub-tabs — one tab per organ×sex combination
+ * Genomics section containers — one per organ×sex combination
  *
- * Mirrors the apical sub-tab pattern (ensureDomainSubTab in
- * filepool.js).  Each genomics card is placed inside a panel
- * keyed by its organ_sex string; a sub-tab bar lets the user
- * switch between them.
+ * In the sidebar layout, genomics results are split into two
+ * document-level sections: Gene Set BMD Analysis and Gene BMD
+ * Analysis.  Each organ×sex combination gets a container in both
+ * sections, and a child node in the sidebar TOC.
+ *
+ * All containers are visible at once (no sub-tab switching) —
+ * the user scrolls through them like a continuous document.
  * ---------------------------------------------------------------- */
 
 /**
- * Ensure a sub-tab panel exists for the given organ×sex key.
- * Creates the panel and tab button on first call; returns the
- * panel div so the caller can append cards into it.
+ * Ensure containers exist for the given organ×sex key in both the
+ * Gene Set and Gene BMD sections.  Creates the containers on first
+ * call; returns the gene-set container for card appending.
  *
- * @param {string} key      — organ_sex key (e.g. "liver_male")
- * @param {string} organ    — organ name
- * @param {string} sex      — sex string
- * @returns {HTMLElement} the panel div for this key
+ * Also adds dynamic child nodes to the sidebar TOC so the user
+ * can navigate directly to a specific organ×sex combination.
+ *
+ * @param {string} key   — organ_sex key (e.g. "liver_male")
+ * @param {string} organ — organ name
+ * @param {string} sex   — sex string
+ * @returns {HTMLElement} the gene-set container for this key
  */
-function ensureGenomicsSubTab(key, organ, sex) {
-    const panelId = `genomics-panel-${key}`;
-    let panel = document.getElementById(panelId);
-    if (panel) return panel;
+function ensureGenomicsContainers(key, organ, sex) {
+    const geneSetPanelId = `genomics-gene-set-${key}`;
+    let geneSetPanel = document.getElementById(geneSetPanelId);
 
-    const tabBar = document.getElementById('genomics-sub-tabs');
-    const container = document.getElementById('genomics-cards');
+    if (!geneSetPanel) {
+        const organTitle = organ.charAt(0).toUpperCase() + organ.slice(1);
+        const sexTitle = sex.charAt(0).toUpperCase() + sex.slice(1);
+        const label = `${organTitle} — ${sexTitle}`;
 
-    // Create the panel — a container for this organ×sex's cards
-    panel = document.createElement('div');
-    panel.id = panelId;
-    panel.className = 'genomics-organ-panel';
-    panel.setAttribute('data-genomics-key', key);
-    container.appendChild(panel);
+        // --- Gene Set container ---
+        geneSetPanel = document.createElement('div');
+        geneSetPanel.id = geneSetPanelId;
+        geneSetPanel.className = 'genomics-organ-panel';
+        geneSetPanel.setAttribute('data-toc-id', `gene-set-${key}`);
+        geneSetPanel.innerHTML = `<h3>${label}</h3>`;
+        const geneSetCards = document.getElementById('genomics-gene-set-cards');
+        if (geneSetCards) geneSetCards.appendChild(geneSetPanel);
 
-    // Create the sub-tab button
-    const organTitle = organ.charAt(0).toUpperCase() + organ.slice(1);
-    const sexTitle = sex.charAt(0).toUpperCase() + sex.slice(1);
-    const btn = document.createElement('button');
-    btn.textContent = `${organTitle} — ${sexTitle}`;
-    btn.setAttribute('data-genomics-key', key);
-    btn.onclick = () => activateGenomicsSubTab(key);
-    tabBar.appendChild(btn);
+        // --- Gene BMD container ---
+        const geneBmdPanel = document.createElement('div');
+        geneBmdPanel.id = `genomics-gene-bmd-${key}`;
+        geneBmdPanel.className = 'genomics-organ-panel';
+        geneBmdPanel.setAttribute('data-toc-id', `gene-bmd-${key}`);
+        geneBmdPanel.innerHTML = `<h3>${label}</h3>`;
+        const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
+        if (geneBmdCards) geneBmdCards.appendChild(geneBmdPanel);
 
-    // Show the sub-tab bar now that we have at least one entry
-    tabBar.classList.add('visible');
+        // --- Sidebar TOC children ---
+        // Add clickable leaf nodes for this organ×sex under the
+        // Gene Set and Gene BMD parent nodes in the sidebar.
+        const tocGeneSetList = document.getElementById('toc-gene-set-children');
+        if (tocGeneSetList) {
+            const li = document.createElement('li');
+            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-set-${key}')">${label}</a>`;
+            tocGeneSetList.appendChild(li);
+        }
+        const tocGeneBmdList = document.getElementById('toc-gene-bmd-children');
+        if (tocGeneBmdList) {
+            const li = document.createElement('li');
+            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-bmd-${key}')">${label}</a>`;
+            tocGeneBmdList.appendChild(li);
+        }
 
-    // If this is the first panel, activate it
-    if (tabBar.children.length === 1) {
-        activateGenomicsSubTab(key);
+        // Set Alpine store flags so sections become visible
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.geneSets = true;
+            Alpine.store('app').ready.geneBmd = true;
+        }
     }
 
-    return panel;
-}
-
-/**
- * Switch the active genomics sub-tab — show that key's panel,
- * hide all others, and update button active states.
- *
- * @param {string} key — organ_sex key to activate
- */
-function activateGenomicsSubTab(key) {
-    // Toggle panels
-    document.querySelectorAll('.genomics-organ-panel').forEach(p => {
-        p.classList.toggle('active', p.getAttribute('data-genomics-key') === key);
-    });
-
-    // Toggle button states
-    const tabBar = document.getElementById('genomics-sub-tabs');
-    tabBar.querySelectorAll('button').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-genomics-key') === key);
-    });
+    return geneSetPanel;
 }
 
 /* ----------------------------------------------------------------
@@ -147,10 +152,12 @@ async function processCsv(fileId, organ, sex) {
         }
         createGenomicsCard(key, result, organ, sex, csvLabels);
 
-        // Show genomics results section
-        show('genomics-results-section');
-        show('genomics-charts-section');
-        if (tabbedViewActive) buildTabBar();
+        // Show genomics results sections via Alpine store
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.geneSets = true;
+            Alpine.store('app').ready.geneBmd = true;
+            Alpine.store('app').ready.charts = true;
+        }
         markReportDirty();
 
         // Also show the summary section now that we have genomics
@@ -178,8 +185,10 @@ function _fmtNum(val, decimals = 3) {
 }
 
 function createGenomicsCard(key, data, organ, sex, statLabels) {
-    // Route the card into the correct organ×sex sub-tab panel
-    const panel = ensureGenomicsSubTab(key, organ, sex);
+    // Route the card into the correct organ×sex container in the
+    // Gene Set BMD section.  Gene BMD cards (top genes table) are
+    // rendered separately below.
+    const panel = ensureGenomicsContainers(key, organ, sex);
 
     // Remove existing card for same key if re-processing
     const existing = document.getElementById(`genomics-card-${key}`);
@@ -532,9 +541,9 @@ async function loadBmdSummary() {
         if (result.endpoints && result.endpoints.length > 0) {
             bmdSummaryEndpoints = result.endpoints;
             renderBmdSummaryTable(result.endpoints);
-            show('bmd-summary-section');
-            document.getElementById('bmd-summary-section').classList.add('visible');
-            if (tabbedViewActive) buildTabBar();
+            if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                Alpine.store('app').ready.bmdSummary = true;
+            }
             markReportDirty();
         }
     } catch (e) {

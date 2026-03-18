@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=6">
+    <link rel="stylesheet" href="/style.css?v=7">
+    <!-- Alpine.js — lightweight reactive framework for sidebar TOC navigation.
+         Loaded via CDN with defer so it initializes after our state.js registers
+         the Alpine store via 'alpine:init' event.  No build step needed.
+         Alpine.js Collapse plugin enables smooth expand/collapse transitions
+         on the TOC tree children (x-collapse directive). -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <!-- Login gate — ALWAYS shown on page load.  Contains the deployment
@@ -249,8 +256,154 @@
         </div>
     </div>
 
-    <div class="container" id="app-container" style="display:none;">
-        <!-- Header — renamed from "Background Section Generator" -->
+    <!-- App layout — flex container with sidebar + content pane.
+         The sidebar provides TOC-based navigation mirroring the NIEHS
+         reference report structure.  Alpine.js drives the sidebar's
+         reactive state (collapse, active node, section readiness). -->
+    <div class="app-layout" id="app-container" style="display:none;">
+
+        <!-- ================================================================
+             Sidebar TOC Navigation — document-first navigation tree.
+             Mirrors the output document's table of contents.
+             Sections gray out when not yet ready (no data).
+             Persists collapsed state to localStorage.
+             ================================================================ -->
+        <nav class="sidebar" x-data :class="{ 'collapsed': $store.app.sidebarCollapsed }">
+            <div class="sidebar-header">
+                <span class="sidebar-title" x-show="!$store.app.sidebarCollapsed">5dToxReport</span>
+                <button @click="$store.app.toggleSidebar()" class="sidebar-toggle"
+                        x-text="$store.app.sidebarCollapsed ? '▶' : '◀'"></button>
+            </div>
+
+            <div class="sidebar-body" x-show="!$store.app.sidebarCollapsed">
+                <!-- Non-document tools — Chemical ID and Data management -->
+                <div class="sidebar-section">
+                    <a class="toc-node" :class="{ active: $store.app.activeSection === 'chem-id' }"
+                       @click="navigateToNode('chem-id')">Chemical ID</a>
+                    <a class="toc-node" :class="{ active: $store.app.activeSection === 'data',
+                                                   disabled: !$store.app.ready.data }"
+                       @click="$store.app.ready.data && navigateToNode('data')">Data</a>
+                </div>
+
+                <hr class="sidebar-divider">
+
+                <!-- Document TOC tree — mirrors the NIEHS report structure.
+                     "Results" is a collapsible parent with table-level children.
+                     Genomics children are populated dynamically by genomics.js. -->
+                <ul class="toc-tree">
+                    <li>
+                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'background' }"
+                           @click="navigateToNode('background')">Background</a>
+                    </li>
+                    <li>
+                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'methods',
+                                                       disabled: !$store.app.ready.methods }"
+                           @click="$store.app.ready.methods && navigateToNode('methods')">Materials and Methods</a>
+                    </li>
+                    <!-- Results — collapsible parent with subsections -->
+                    <li x-data="{ expanded: true }">
+                        <a class="toc-node toc-parent" @click="expanded = !expanded">
+                            <span class="chevron" :class="{ expanded }">▸</span> Results
+                        </a>
+                        <ul x-show="expanded" x-collapse>
+                            <li>
+                                <a class="toc-node" :class="{ active: ['animal-condition','table-body-weight','table-organ-weight','table-clinical-obs'].includes($store.app.activeSection),
+                                                               disabled: !$store.app.ready.animalCondition }"
+                                   @click="$store.app.ready.animalCondition && navigateToNode('animal-condition')">
+                                    Animal Condition, Body Weights, and Organ Weights
+                                </a>
+                                <!-- Table-level children — each is its own independent view -->
+                                <ul>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-body-weight',
+                                                                       disabled: !$store.app.ready.animalCondition }"
+                                           @click="$store.app.ready.animalCondition && navigateToNode('table-body-weight')">Table 2: Body Weights</a></li>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-organ-weight',
+                                                                       disabled: !$store.app.ready.animalCondition }"
+                                           @click="$store.app.ready.animalCondition && navigateToNode('table-organ-weight')">Table 3: Organ Weights</a></li>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-clinical-obs',
+                                                                       disabled: !$store.app.ready.animalCondition }"
+                                           @click="$store.app.ready.animalCondition && navigateToNode('table-clinical-obs')">Clinical Observations</a></li>
+                                </ul>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: ['clinical-path','table-clin-chem','table-hematology','table-hormones'].includes($store.app.activeSection),
+                                                               disabled: !$store.app.ready.clinicalPath }"
+                                   @click="$store.app.ready.clinicalPath && navigateToNode('clinical-path')">
+                                    Clinical Pathology
+                                </a>
+                                <ul>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-clin-chem',
+                                                                       disabled: !$store.app.ready.clinicalPath }"
+                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-clin-chem')">Table 4: Clinical Chemistry</a></li>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-hematology',
+                                                                       disabled: !$store.app.ready.clinicalPath }"
+                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-hematology')">Table 5: Hematology</a></li>
+                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-hormones',
+                                                                       disabled: !$store.app.ready.clinicalPath }"
+                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-hormones')">Table 6: Hormones</a></li>
+                                </ul>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: ['internal-dose','table-tissue-conc'].includes($store.app.activeSection),
+                                                               disabled: !$store.app.ready.internalDose }"
+                                   @click="$store.app.ready.internalDose && navigateToNode('internal-dose')">
+                                    Internal Dose Assessment
+                                </a>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'bmd-summary',
+                                                               disabled: !$store.app.ready.bmdSummary }"
+                                   @click="$store.app.ready.bmdSummary && navigateToNode('bmd-summary')">
+                                    Apical Endpoint BMD Summary
+                                </a>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'gene-sets',
+                                                               disabled: !$store.app.ready.geneSets }"
+                                   @click="$store.app.ready.geneSets && navigateToNode('gene-sets')">
+                                    Gene Set BMD Analysis
+                                </a>
+                                <!-- Dynamic children populated by genomics.js after processing -->
+                                <ul id="toc-gene-set-children"></ul>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'gene-bmd',
+                                                               disabled: !$store.app.ready.geneBmd }"
+                                   @click="$store.app.ready.geneBmd && navigateToNode('gene-bmd')">
+                                    Gene BMD Analysis
+                                </a>
+                                <ul id="toc-gene-bmd-children"></ul>
+                            </li>
+                            <li>
+                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'charts',
+                                                               disabled: !$store.app.ready.charts }"
+                                   @click="$store.app.ready.charts && navigateToNode('charts')">
+                                    Genomics Charts
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'summary',
+                                                       disabled: !$store.app.ready.summary }"
+                           @click="$store.app.ready.summary && navigateToNode('summary')">Summary</a>
+                    </li>
+                </ul>
+
+                <hr class="sidebar-divider">
+                <a class="toc-node" :class="{ active: $store.app.activeSection === 'report' }"
+                   @click="navigateToNode('report')">Report Preview</a>
+            </div>
+        </nav>
+
+        <!-- ================================================================
+             Content Pane — scrollable main area with all report sections.
+             Sections use x-show bound to Alpine store readiness flags
+             for automatic show/hide.
+             ================================================================ -->
+        <div class="content-pane">
+
+        <!-- Header — app title and settings gear -->
         <header>
             <div class="header-row">
                 <div>
@@ -360,23 +513,19 @@
             </div>
         </div>
 
-        <!-- View controls — Collapse All / Expand All / Tabbed View toggle -->
+        <!-- View controls — Collapse All / Expand All + session reset -->
         <div class="view-controls" id="view-controls">
             <span class="collapse-btns">
                 <button onclick="collapseAll()">Collapse All</button>
                 <button onclick="expandAll()">Expand All</button>
             </span>
-            <span class="separator"></span>
-            <button id="btn-tabbed-view" onclick="toggleTabbedView()">Tabbed View</button>
             <span style="flex:1"></span>
             <button class="btn-small danger" id="btn-reset-session" onclick="confirmResetSession()" style="display:none" title="Delete all session data and start over">&#x2622; Reset</button>
         </div>
 
-        <!-- Tab bar — horizontal tab buttons, hidden until Tabbed View is activated -->
-        <div class="tab-bar" id="tab-bar"></div>
-
-        <!-- Chemical ID Form (unchanged from original) -->
-        <div class="form-section" id="chem-id-section" data-collapsible data-tab-section="Chemical ID">
+        <!-- Chemical ID Form -->
+        <div class="form-section" id="chem-id-section" data-collapsible data-toc-id="chem-id"
+             x-data x-show="$store.app.activeSection === 'chem-id'">
             <h2 class="section-toggle" onclick="toggleSection(this)">Chemical Identification</h2>
             <div class="section-body">
             <div class="form-grid">
@@ -421,7 +570,8 @@
         </div>
 
         <!-- Output panel — background paragraphs + references -->
-        <div class="output-section" id="output-section" data-collapsible data-tab-section="Background">
+        <div class="output-section" id="output-section" data-collapsible data-toc-id="background"
+             x-data x-show="$store.app.activeSection === 'background'">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Generated Background</h2>
                 <div class="output-actions">
@@ -455,7 +605,7 @@
         <!-- Style Preferences panel — shows learned writing style rules from
              user edits.  Hidden when no rules exist; auto-shown after the
              first style learning event. -->
-        <div id="style-panel" style="display:none;" data-collapsible data-tab-section="Style">
+        <div id="style-panel" style="display:none;" data-collapsible>
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Style Preferences <span id="style-count">(0 rules)</span></h2>
                 <div class="output-actions">
@@ -470,9 +620,9 @@
         </div>
 
         <!-- Data tab — integrated data previewer + collapsible data pool.
-             Hidden until background section is generated so the user completes
-             chemical identity first. -->
-        <div id="data-tab-section" style="display:none;" data-tab-section="Data">
+             Hidden until chemical identity is resolved.  Alpine x-show
+             drives visibility from the store's ready.data flag. -->
+        <div id="data-tab-section" data-toc-id="data" x-data x-show="$store.app.activeSection === 'data'" style="display:none;">
 
             <!-- Integrated Data Previewer — shows the fully integrated dataset
                  at a glance: experiments, domains, probe counts, gene expression
@@ -578,26 +728,33 @@
             </div>
         </div>
 
-        <!-- Genomics Results Cards (hidden until genomics processed) -->
-        <div class="bm2-section" id="genomics-results-section" style="display:none;" data-tab-section="Genomics">
-            <h2>Genomics Analysis</h2>
-            <!-- Sub-tab bar — one tab per organ×sex, shown dynamically.
-                 PDF Preview button is a fixed sibling. -->
-            <div class="sub-tab-row">
-                <div class="sub-tab-bar" id="genomics-sub-tabs"></div>
-                <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')">PDF Preview</button>
-            </div>
-            <div id="genomics-cards"></div>
+        <!-- Gene Set BMD Analysis — GO Biological Process tables per organ×sex.
+             Split from the old monolithic "Genomics" tab into its own
+             document-structure section.  Per-organ containers are created
+             dynamically by genomics.js after processing. -->
+        <div class="results-group" id="section-gene-sets" data-toc-id="gene-sets"
+             x-data x-show="$store.app.activeSection === 'gene-sets'" style="display:none;">
+            <h2>Gene Set Benchmark Dose Analysis</h2>
+            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')" style="margin-bottom:0.5rem">PDF Preview</button>
+            <!-- Per-organ×sex card containers created dynamically by genomics.js -->
+            <div id="genomics-gene-set-cards"></div>
 
-            <!-- Section PDF Preview — compiles just the genomics gene set
-                 and gene tables with GO/gene descriptions into a focused
-                 PDF.  Hidden until the user clicks "PDF Preview". -->
+            <!-- Section PDF Preview — genomics gene set tables in NIEHS format -->
             <div class="section-pdf-preview" id="genomics-pdf-preview" style="display:none;">
                 <div class="pdf-toolbar">
                     <button onclick="refreshSectionPdf('genomics')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
                 </div>
                 <iframe id="genomics-pdf-frame" class="section-pdf-frame"></iframe>
             </div>
+        </div>
+
+        <!-- Gene BMD Analysis — individual gene tables per organ×sex.
+             The second half of the old "Genomics" tab, now its own section
+             in the document TOC. -->
+        <div class="results-group" id="section-gene-bmd" data-toc-id="gene-bmd"
+             x-data x-show="$store.app.activeSection === 'gene-bmd'" style="display:none;">
+            <h2>Gene Benchmark Dose Analysis</h2>
+            <div id="genomics-gene-bmd-cards"></div>
         </div>
 
         <!-- Genomics Charts — interactive Plotly visualizations of GO category
@@ -607,7 +764,8 @@
                2. UMAP Scatter Plot — GO terms projected into 2D semantic space
              Both charts are also rendered server-side for inclusion in the
              exported PDF/DOCX report. -->
-        <div class="bm2-section" id="genomics-charts-section" style="display:none;" data-tab-section="Charts">
+        <div class="bm2-section" id="genomics-charts-section" data-toc-id="charts"
+             x-data x-show="$store.app.activeSection === 'charts'" style="display:none;">
             <h2>Genomics Charts</h2>
             <!-- Organ×sex sub-tabs — switches which experiment's data
                  is visualized in the chart panels below -->
@@ -665,26 +823,44 @@
             </div>
         </div>
 
-        <!-- .bm2 file cards — processing and report (hidden until files uploaded) -->
-        <div class="bm2-section" id="bm2-results-section" style="display:none;" data-tab-section="Apical">
-            <h2>Apical Endpoint Results</h2>
-            <!-- Sub-tab bar — one tab per apical domain, shown dynamically.
-                 The PDF Preview button is a fixed sibling outside the dynamic
-                 bar so it survives innerHTML clears during pool reset. -->
-            <div class="sub-tab-row">
-                <div class="sub-tab-bar" id="apical-sub-tabs"></div>
-                <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('apical')">PDF Preview</button>
-            </div>
-            <!-- Per-domain card containers — created dynamically by
-                 ensureDomainSubTab() when the first card for a domain
-                 is added.  Each container is a div with
-                 id="apical-domain-{domain}" and class="apical-domain-panel". -->
-            <div id="bm2-cards"></div>
+        <!-- ================================================================
+             Apical Endpoint Results — split into 3 grouped sections that
+             mirror the NIEHS reference report TOC structure.  Each group
+             contains platform-specific containers where createBm2Card()
+             inserts cards.  Alpine x-show drives visibility.
+             ================================================================ -->
 
-            <!-- Section PDF Preview — compiles just the apical dose-response
-                 tables and narrative into a focused PDF using the same
-                 NIEHS Typst template as the full report.  Hidden until the
-                 user clicks "PDF Preview" in the sub-tab bar. -->
+        <!-- Animal Condition, Body Weights, and Organ Weights
+             Visible when activeSection is the group OR any of its table children.
+             Each platform container is independently visible when its specific
+             table ID is the activeSection. -->
+        <div class="results-group" id="section-animal-condition" data-toc-id="animal-condition"
+             x-data x-show="['animal-condition','table-body-weight','table-organ-weight','table-clinical-obs'].includes($store.app.activeSection)" style="display:none;">
+            <!-- Group header + narrative only visible when viewing the whole group -->
+            <h2 x-show="$store.app.activeSection === 'animal-condition'">Animal Condition, Body Weights, and Organ Weights</h2>
+            <textarea class="unified-narrative" id="narrative-apical" rows="6"
+                x-show="$store.app.activeSection === 'animal-condition'"
+                placeholder="Unified narrative populated after processing..."></textarea>
+            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('apical')"
+                x-show="$store.app.activeSection === 'animal-condition'" style="margin-bottom:0.5rem">PDF Preview</button>
+            <div class="platform-container" data-toc-id="table-body-weight" data-platform="Body Weight"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-body-weight'">
+                <h3>Table 2: Body Weights</h3>
+            </div>
+            <div class="platform-container" data-toc-id="table-organ-weight" data-platform="Organ Weight"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-organ-weight'">
+                <h3>Table 3: Organ Weights</h3>
+            </div>
+            <!-- Fallback container for "Organ Weights" (plural, legacy compat) -->
+            <div class="platform-container" data-platform="Organ Weights" style="display:none;"></div>
+            <div class="platform-container" data-toc-id="table-clinical-obs" data-platform="Clinical Observations"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-clinical-obs'">
+                <h3>Clinical Observations</h3>
+            </div>
+            <!-- Fallback for "Clinical" (legacy key) -->
+            <div class="platform-container" data-platform="Clinical" style="display:none;"></div>
+
+            <!-- Section PDF Preview — apical tables in NIEHS format -->
             <div class="section-pdf-preview" id="apical-pdf-preview" style="display:none;">
                 <div class="pdf-toolbar">
                     <button onclick="refreshSectionPdf('apical')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
@@ -693,54 +869,91 @@
             </div>
         </div>
 
-        <!-- BMD Summary Table — BMDExpress 3 native results -->
-        <div class="output-section collapsed" id="bmd-summary-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDExpress)">
-            <div class="output-header" onclick="toggleSection(this)">
-                <h2>Apical Endpoint BMD Summary (BMDExpress 3)</h2>
-                <div class="output-actions">
-                    <button class="btn-action approve" id="btn-approve-bmd-summary" onclick="event.stopPropagation(); approveSection('bmd_summary')">Approve</button>
-                    <span class="approved-badge" id="badge-bmd-summary" style="display:none">Approved</span>
-                </div>
+        <!-- Clinical Pathology -->
+        <div class="results-group" id="section-clinical-path" data-toc-id="clinical-path"
+             x-data x-show="['clinical-path','table-clin-chem','table-hematology','table-hormones'].includes($store.app.activeSection)" style="display:none;">
+            <h2 x-show="$store.app.activeSection === 'clinical-path'">Clinical Pathology</h2>
+            <textarea class="unified-narrative" id="narrative-clinical_pathology" rows="6"
+                x-show="$store.app.activeSection === 'clinical-path'"
+                placeholder="Unified narrative populated after processing..."></textarea>
+            <div class="platform-container" data-toc-id="table-clin-chem" data-platform="Clinical Chemistry"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-clin-chem'">
+                <h3>Table 4: Clinical Chemistry</h3>
             </div>
-            <div class="section-body">
-            <div class="table-preview" id="bmd-summary-table"></div>
-            <!-- Section PDF Preview — BMD summary table in NIEHS format -->
-            <div class="section-pdf-preview" id="bmd_summary-pdf-preview" style="display:none;">
-                <div class="pdf-toolbar">
-                    <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                    <button onclick="toggleSectionPdfPreview('bmd_summary')" class="btn-small">Back to Table</button>
-                </div>
-                <iframe id="bmd_summary-pdf-frame" class="section-pdf-frame"></iframe>
+            <div class="platform-container" data-toc-id="table-hematology" data-platform="Hematology"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hematology'">
+                <h3>Table 5: Hematology</h3>
             </div>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary')" style="margin-top:0.5rem">PDF Preview</button>
-            </div><!-- /section-body -->
+            <div class="platform-container" data-toc-id="table-hormones" data-platform="Hormones"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hormones'">
+                <h3>Table 6: Hormones</h3>
+            </div>
         </div>
 
-        <!-- BMD Summary Table — BMDS (pybmds) results matching NIEHS methodology -->
-        <div class="output-section collapsed" id="bmd-summary-bmds-section" style="display:none;" data-collapsible data-tab-section="BMD Summary (BMDS)">
-            <div class="output-header" onclick="toggleSection(this)">
-                <h2>Apical Endpoint BMD Summary (BMDS)</h2>
-                <div class="output-actions">
-                    <button class="btn-action approve" id="btn-approve-bmd-summary-bmds" onclick="event.stopPropagation(); approveSection('bmd_summary_bmds')">Approve</button>
-                    <span class="approved-badge" id="badge-bmd-summary-bmds" style="display:none">Approved</span>
+        <!-- Internal Dose Assessment -->
+        <div class="results-group" id="section-internal-dose" data-toc-id="internal-dose"
+             x-data x-show="['internal-dose','table-tissue-conc'].includes($store.app.activeSection)" style="display:none;">
+            <h2 x-show="$store.app.activeSection === 'internal-dose'">Internal Dose Assessment</h2>
+            <div class="platform-container" data-toc-id="table-tissue-conc" data-platform="Tissue Concentration"
+                 x-show="$store.app.activeSection === 'internal-dose' || $store.app.activeSection === 'table-tissue-conc'">
+                <h3>Table 7: Tissue Concentration</h3>
+            </div>
+        </div>
+
+        <!-- BMD Summary — merged section with both BMDExpress 3 and BMDS tables.
+             Alpine x-show on each sub-section allows them to appear independently. -->
+        <div class="results-group" id="section-bmd-summary" data-toc-id="bmd-summary"
+             x-data x-show="$store.app.activeSection === 'bmd-summary'" style="display:none;">
+            <h2>Apical Endpoint Benchmark Dose Summary</h2>
+
+            <!-- BMDExpress 3 native results -->
+            <div id="bmd-summary-section" x-data x-show="$store.app.ready.bmdSummary" data-collapsible>
+                <div class="output-header" onclick="toggleSection(this)">
+                    <h3>BMDExpress 3</h3>
+                    <div class="output-actions">
+                        <button class="btn-action approve" id="btn-approve-bmd-summary" onclick="event.stopPropagation(); approveSection('bmd_summary')">Approve</button>
+                        <span class="approved-badge" id="badge-bmd-summary" style="display:none">Approved</span>
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="table-preview" id="bmd-summary-table"></div>
+                    <div class="section-pdf-preview" id="bmd_summary-pdf-preview" style="display:none;">
+                        <div class="pdf-toolbar">
+                            <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                            <button onclick="toggleSectionPdfPreview('bmd_summary')" class="btn-small">Back to Table</button>
+                        </div>
+                        <iframe id="bmd_summary-pdf-frame" class="section-pdf-frame"></iframe>
+                    </div>
+                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary')" style="margin-top:0.5rem">PDF Preview</button>
                 </div>
             </div>
-            <div class="section-body">
-            <div class="table-preview" id="bmd-summary-bmds-table"></div>
-            <!-- Section PDF Preview — BMDS BMD summary table in NIEHS format -->
-            <div class="section-pdf-preview" id="bmd_summary_bmds-pdf-preview" style="display:none;">
-                <div class="pdf-toolbar">
-                    <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                    <button onclick="toggleSectionPdfPreview('bmd_summary_bmds')" class="btn-small">Back to Table</button>
+
+            <!-- BMDS (pybmds) results matching NIEHS methodology -->
+            <div id="bmd-summary-bmds-section" x-data x-show="$store.app.ready.bmdSummaryBmds" data-collapsible>
+                <div class="output-header" onclick="toggleSection(this)">
+                    <h3>BMDS (pybmds)</h3>
+                    <div class="output-actions">
+                        <button class="btn-action approve" id="btn-approve-bmd-summary-bmds" onclick="event.stopPropagation(); approveSection('bmd_summary_bmds')">Approve</button>
+                        <span class="approved-badge" id="badge-bmd-summary-bmds" style="display:none">Approved</span>
+                    </div>
                 </div>
-                <iframe id="bmd_summary_bmds-pdf-frame" class="section-pdf-frame"></iframe>
+                <div class="section-body">
+                    <div class="table-preview" id="bmd-summary-bmds-table"></div>
+                    <div class="section-pdf-preview" id="bmd_summary_bmds-pdf-preview" style="display:none;">
+                        <div class="pdf-toolbar">
+                            <button onclick="refreshSectionPdf('bmd_summary')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
+                            <button onclick="toggleSectionPdfPreview('bmd_summary_bmds')" class="btn-small">Back to Table</button>
+                        </div>
+                        <iframe id="bmd_summary_bmds-pdf-frame" class="section-pdf-frame"></iframe>
+                    </div>
+                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary_bmds')" style="margin-top:0.5rem">PDF Preview</button>
+                </div>
             </div>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary_bmds')" style="margin-top:0.5rem">PDF Preview</button>
-            </div><!-- /section-body -->
         </div>
 
         <!-- Materials and Methods section (hidden until background approved) -->
-        <div class="output-section collapsed" id="methods-section" style="display:none;" data-collapsible data-tab-section="Methods">
+        <div class="output-section collapsed" id="methods-section" data-toc-id="methods"
+             x-data x-show="$store.app.activeSection === 'methods'" style="display:none;" data-collapsible>
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Materials and Methods</h2>
                 <div class="output-actions">
@@ -758,7 +971,8 @@
         </div>
 
         <!-- Summary section (hidden until other sections approved) -->
-        <div class="output-section collapsed" id="summary-section" style="display:none;" data-collapsible data-tab-section="Summary">
+        <div class="output-section collapsed" id="summary-section" data-toc-id="summary"
+             x-data x-show="$store.app.activeSection === 'summary'" style="display:none;" data-collapsible>
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Summary</h2>
                 <div class="output-actions">
@@ -779,7 +993,8 @@
              one section is approved; shown as a tab in the tab bar.  Content is
              lazily rendered by renderReportTab() in main.js when the tab is
              activated, and re-rendered when approval state changes. -->
-        <section data-tab-section="Report" id="report-view-section">
+        <section data-toc-id="report" id="report-view-section"
+                 x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
                 <button onclick="exportDocument()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
                 <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
@@ -790,7 +1005,7 @@
                  native PDF renderer (Chrome/Edge/Firefox all have one).
                  The viewer container is collapsible and resizable via the
                  drag handle on its bottom edge. -->
-            <div id="report-pdf-container" class="report-pdf-container">
+            <div id="report-pdf-container" class="report-pdf-container collapsed">
                 <!-- Resize handle — drag to change viewer height -->
                 <div id="report-resize-handle" class="report-resize-handle" title="Drag to resize"></div>
                 <div id="report-empty" class="report-empty-state">
@@ -814,7 +1029,8 @@
             <strong>Notes:</strong>
             <ul id="notes-list"></ul>
         </div>
-    </div>
+        </div><!-- /.content-pane -->
+    </div><!-- /.app-layout -->
 
     <!-- Toast notification -->
     <div class="toast" id="toast"></div>
@@ -878,17 +1094,17 @@
            sections.js   → section generation/approval workflows (depends on state, utils, export, genomics, filepool, versions)
            chemical.js   → identity resolution, session restore, init code (MUST BE LAST — calls restoreChemId on load)
     -->
-    <script src="/js/state.js?v=7"></script>
-    <script src="/js/utils.js?v=7"></script>
+    <script src="/js/state.js?v=8"></script>
+    <script src="/js/utils.js?v=8"></script>
     <script src="/js/login.js?v=1"></script>
-    <script src="/js/settings.js?v=1"></script>
-    <script src="/js/layout.js?v=1"></script>
+    <script src="/js/settings.js?v=2"></script>
+    <script src="/js/layout.js?v=2"></script>
     <script src="/js/versions.js?v=1"></script>
     <script src="/js/export.js?v=1"></script>
-    <script src="/js/genomics.js?v=1"></script>
+    <script src="/js/genomics.js?v=2"></script>
     <script src="/js/genomics_charts.js?v=1"></script>
-    <script src="/js/filepool.js?v=1"></script>
-    <script src="/js/sections.js?v=1"></script>
-    <script src="/js/chemical.js?v=1"></script>
+    <script src="/js/filepool.js?v=2"></script>
+    <script src="/js/sections.js?v=2"></script>
+    <script src="/js/chemical.js?v=2"></script>
 </body>
 </html>

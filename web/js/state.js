@@ -48,11 +48,67 @@ window.fetch = function(input, init) {
 };
 
 
-// --- UI mode ---
-// Whether the tabbed (vs. stacked) layout is active.
-// Defaults to true — tabs are the primary layout.  The user can
-// toggle back to the stacked (scrollable) view via the toolbar button.
-let tabbedViewActive = true;
+// --- Alpine.js store initialization ---
+// The Alpine store is the single source of truth for section visibility
+// and sidebar state.  Existing globals (apicalSections, genomicsResults,
+// currentIdentity, etc.) stay as-is — they hold complex nested data that
+// doesn't need reactivity.  Only the visibility flags and sidebar state
+// go into the Alpine store because those are what the UI needs to react to.
+//
+// Alpine is loaded from CDN before this script runs (via <script defer>).
+// We use document.addEventListener('alpine:init', ...) to register the
+// store — this fires before Alpine processes x-data directives, so the
+// store is available when the DOM initializes.
+document.addEventListener('alpine:init', () => {
+    Alpine.store('app', {
+        // --- Sidebar collapse state (persisted to localStorage) ---
+        // When true, the sidebar is hidden; when false, it's visible.
+        sidebarCollapsed: JSON.parse(localStorage.getItem('5dtox-sidebar') || 'false'),
+
+        /**
+         * Toggle the sidebar open/closed and persist the choice.
+         * Called from the sidebar toggle button via @click.
+         */
+        toggleSidebar() {
+            this.sidebarCollapsed = !this.sidebarCollapsed;
+            localStorage.setItem('5dtox-sidebar', JSON.stringify(this.sidebarCollapsed));
+        },
+
+        // --- Section readiness flags ---
+        // Each flag indicates whether a section has data and should be visible.
+        // Sidebar TOC nodes bind to these to toggle .disabled styling.
+        // Content sections bind via x-show for automatic show/hide.
+        ready: {
+            chemId:          true,   // always visible — the identity form
+            background:      true,   // always visible (may be empty initially)
+            data:            false,  // shown after chemical resolved
+            methods:         false,  // shown after background approved
+            animalCondition: false,  // shown after process-integrated (body weight, organ weight)
+            clinicalPath:    false,  // shown after process-integrated (clin chem, hematology, hormones)
+            internalDose:    false,  // shown after process-integrated (tissue concentration)
+            bmdSummary:      false,  // shown after BMD summary loaded
+            bmdSummaryBmds:  false,  // shown after BMDS summary loaded
+            geneSets:        false,  // shown after genomics processed
+            geneBmd:         false,  // shown after genomics processed
+            charts:          false,  // shown after genomics charts rendered
+            summary:         false,  // shown after other sections exist
+            report:          true,   // always in DOM (lazy-rendered on navigate)
+        },
+
+        // --- Currently active section ---
+        // Only the section matching this ID is visible in the content pane.
+        // Set by navigateToNode() on sidebar click.  Sidebar TOC nodes
+        // bind to this for .active highlighting.  Defaults to 'chem-id'
+        // so the Chemical ID form is visible on page load.
+        activeSection: 'chem-id',
+
+        // --- Unified narratives ---
+        // Populated from the process-integrated response.  Keyed by section
+        // name (e.g. "apical", "clinical_pathology"), values are
+        // {paragraphs: [...]} objects from the server.
+        unifiedNarratives: {},
+    });
+});
 
 
 // --- Chemical identity ---

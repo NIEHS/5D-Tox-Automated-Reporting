@@ -496,7 +496,6 @@ function renderStyleRules(rules) {
     }
 
     panel.style.display = '';
-    if (tabbedViewActive) buildTabBar();
     countEl.textContent = `(${rules.length} rule${rules.length !== 1 ? 's' : ''})`;
 
     listEl.innerHTML = '';

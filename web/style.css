@@ -60,6 +60,13 @@
 }
 
 /* ----------------------------------------------------------------
+ * Alpine.js cloak — hides elements with x-data until Alpine has
+ * processed them.  Prevents flash of unstyled/unhidden content
+ * before Alpine's x-show directives take effect.
+ * ---------------------------------------------------------------- */
+[x-cloak] { display: none !important; }
+
+/* ----------------------------------------------------------------
  * Base styles — clean, minimal, professional light theme
  * ---------------------------------------------------------------- */
 * {
@@ -79,10 +86,12 @@ body {
 /* ----------------------------------------------------------------
  * Layout — centered column with header, form, output
  * ---------------------------------------------------------------- */
+/* .container is now replaced by .app-layout > .content-pane.
+   Kept for backward compatibility with any remaining references. */
 .container {
     max-width: 100%;
     margin: 0 auto;
-    padding: 2rem 1.5rem;
+    padding: 0;
 }
 
 header {
@@ -1751,85 +1760,206 @@ header p {
 }
 
 /* ----------------------------------------------------------------
- * Tabbed view — when .container has .tabbed-view, sections become
- * tab panels controlled by a tab bar.  Only the active tab's
- * section is visible.
+ * App layout — sidebar TOC + scrollable content pane.
+ * Replaces the old tabbed view.  The sidebar provides document-first
+ * navigation mirroring the NIEHS reference report TOC.  Alpine.js
+ * drives the sidebar's reactive state (collapse, active node,
+ * section readiness).
  * ---------------------------------------------------------------- */
 
-/* Tab bar — horizontal strip of tab buttons */
-.tab-bar {
-    display: none;        /* hidden in normal (stacked) mode */
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    margin-bottom: 1rem;
-    padding: 0.4rem;
-    background: var(--c-bg-hover);
-    border: 1px solid var(--c-border);
-    border-radius: var(--r-xl);
-}
-
-/* Show tab bar when tabbed view is active */
-.tabbed-view .tab-bar {
+/* Flex container — sidebar + content side by side */
+.app-layout {
     display: flex;
+    min-height: 100vh;
 }
 
-.tab-bar button {
-    padding: 0.35rem 0.75rem;
-    border: 1px solid transparent;
-    border-radius: var(--r-md);
-    background: transparent;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--c-text-muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-
-.tab-bar button:hover {
-    background: #e9ecef;
-    color: var(--c-text-secondary);
-}
-
-.tab-bar button.active {
+/* Sidebar — fixed-width navigation panel that sticks to the viewport */
+.sidebar {
+    width: 280px;
+    min-width: 280px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
     background: var(--c-bg-white);
-    color: var(--c-primary);
-    border-color: var(--c-border);
+    border-right: 1px solid var(--c-border);
+    padding: 0;
+    transition: width 0.2s, min-width 0.2s, padding 0.2s;
+    font-size: 0.85rem;
+    z-index: 10;
+}
+
+/* Collapsed sidebar — thin strip showing only the ▶ toggle button.
+   40px is just enough for the button; the title and TOC body are
+   hidden via x-show in the HTML so they don't need overflow:hidden. */
+.sidebar.collapsed {
+    width: 40px;
+    min-width: 40px;
+}
+
+/* Sidebar header — title + toggle button.
+   When collapsed, the title is hidden (x-show) and the button
+   centers itself in the 40px-wide strip. */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid var(--c-border);
+}
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 1rem 0.25rem;
+}
+
+.sidebar-title {
     font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    color: var(--c-primary);
+    font-size: 1rem;
 }
 
-/* In tabbed mode, hide all tabbed sections by default and
-   show only the one matching the active tab */
-.tabbed-view [data-tab-section] {
-    display: none;
+/* Toggle button — plain arrow, no border */
+.sidebar-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--c-text-muted);
+    padding: 0.25rem;
+    border-radius: var(--r-sm);
+    transition: color 0.15s, background 0.15s;
+}
+.sidebar-toggle:hover {
+    color: var(--c-primary);
+    background: var(--c-bg-hover);
 }
 
-.tabbed-view [data-tab-section].tab-active {
+/* Sidebar body — scrollable TOC content area */
+.sidebar-body {
+    padding: 0.5rem 0;
+}
+
+/* Content pane — fills remaining width, scrollable */
+.content-pane {
+    flex: 1;
+    padding: 2rem 1.5rem;
+    max-width: 100%;
+    overflow-x: hidden;
+    min-width: 0; /* prevent flex child from overflowing */
+}
+
+/* TOC tree — nested list structure for navigation */
+.toc-tree, .toc-tree ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* Nested TOC levels get left indentation */
+.toc-tree ul {
+    padding-left: 1rem;
+}
+
+/* TOC node — clickable navigation item */
+.toc-node, .toc-leaf {
     display: block;
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    border-radius: var(--r-md);
+    color: var(--c-text);
+    text-decoration: none;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
 }
 
-/* In tabbed mode, all sections remain collapsible — the tab bar
-   controls which tab is visible, but within each tab the user can
-   still collapse/expand individual sections via their headers. */
-
-/* In tabbed mode, hide view-controls collapse/expand buttons
-   since they don't apply */
-.tabbed-view .view-controls .collapse-btns {
-    display: none;
+/* Hover state — light background highlight */
+.toc-node:hover, .toc-leaf:hover {
+    background: var(--c-bg-hover);
 }
 
+/* Active state — highlighted when section is in view */
+.toc-node.active, .toc-leaf.active {
+    color: var(--c-primary);
+    font-weight: 600;
+    background: var(--c-bg-neutral);
+}
+
+/* Disabled state — grayed out when section has no data yet */
+.toc-node.disabled, .toc-leaf.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* TOC leaf — smaller text, extra left padding for table-level children */
+.toc-leaf {
+    font-size: 0.8rem;
+    padding-left: 1.5rem;
+}
+
+/* Chevron arrow — rotates 90° when expanded */
+.chevron {
+    display: inline-block;
+    width: 1em;
+    transition: transform 0.15s;
+}
+.chevron.expanded {
+    transform: rotate(90deg);
+}
+
+/* Divider between TOC sections */
+.sidebar-divider {
+    border: none;
+    border-top: 1px solid var(--c-border);
+    margin: 0.5rem 0.75rem;
+}
+
+/* Sidebar section — non-document tool group (Chemical ID, Data) */
+.sidebar-section {
+    padding: 0.25rem 0;
+}
 
 /* ----------------------------------------------------------------
-   Sub-tab bar — domain sub-tabs inside the Apical section
-   ----------------------------------------------------------------
-   Reuses the top-level tab-bar styling but scoped to a single
-   section.  Each domain (Body Weight, Organ Weights, etc.) gets
-   its own sub-tab.  Only the active domain's cards are visible.
+   Results group — container for grouped apical/genomics sections.
+   Replaces the old sub-tab panels with a flat scrollable layout
+   where all platform tables are visible at once.
    ---------------------------------------------------------------- */
+.results-group {
+    margin-bottom: 2rem;
+}
 
+/* Platform container — holds cards for one experimental platform
+   (e.g., "Body Weight", "Clinical Chemistry").  The data-platform
+   attribute is used by getPlatformContainer() to route cards. */
+.platform-container {
+    margin-bottom: 1.5rem;
+}
+.platform-container > h3 {
+    font-size: 1rem;
+    color: var(--c-text-secondary);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--c-border-light);
+}
+
+/* Unified narrative — group-level textarea for narrative text.
+   Populated from the process-integrated response. */
+.unified-narrative {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    margin-bottom: 1rem;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+/* Sub-tab bar — kept for genomics charts organ×sex switcher
+   and chart-type tabs (UMAP / Cluster / PDF Preview).
+   In the sidebar layout, these are the only remaining sub-tabs. */
 .sub-tab-bar {
-    display: none;        /* hidden until at least 2 domains exist */
+    display: none;
     flex-wrap: wrap;
     gap: 0.2rem;
     margin-bottom: 0.75rem;
@@ -1838,11 +1968,9 @@ header p {
     border: 1px solid var(--c-border);
     border-radius: var(--r-lg);
 }
-
 .sub-tab-bar.visible {
     display: flex;
 }
-
 .sub-tab-bar button {
     padding: 0.25rem 0.6rem;
     border: 1px solid transparent;
@@ -1855,12 +1983,10 @@ header p {
     transition: all 0.15s;
     white-space: nowrap;
 }
-
 .sub-tab-bar button:hover {
     background: #e9ecef;
     color: var(--c-text-secondary);
 }
-
 .sub-tab-bar button.active {
     background: var(--c-bg-white);
     color: var(--c-primary);
@@ -1869,17 +1995,19 @@ header p {
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-/* Domain / organ / chart-type panels — only the active one is visible */
-.apical-domain-panel,
-.genomics-organ-panel,
+/* Chart-type panels — only the active one is visible
+   (kept for genomics charts which still use this pattern) */
 .chart-type-panel {
     display: none;
 }
-
-.apical-domain-panel.active,
-.genomics-organ-panel.active,
 .chart-type-panel.active {
     display: block;
+}
+
+/* Genomics organ panel — always visible in the new layout
+   (no more sub-tab switching, all organs shown at once) */
+.genomics-organ-panel {
+    margin-bottom: 1.5rem;
 }
 
 
@@ -2431,10 +2559,15 @@ header p {
 /* Fixed to the bottom of the viewport so it grows UPWARD when the
    user drags the top-edge resize handle.  Default height fills below
    the toolbar (~102px from top).  Dragging up can fill the full viewport. */
+/* The PDF viewer sits fixed at the bottom of the viewport.
+   left: 280px offsets it past the sidebar (matches .sidebar width).
+   When the sidebar is collapsed, JS or a CSS variable could adjust
+   this, but 280px is fine as a static default — the sidebar is
+   rarely collapsed while viewing the report. */
 .report-pdf-container {
     position: fixed;
     bottom: 0;
-    left: 0;
+    left: 280px;
     right: 0;
     display: flex;
     flex-direction: column;
@@ -2546,17 +2679,7 @@ header p {
     background: #525659;
 }
 
-/* Row wrapper for dynamic sub-tab bar + fixed PDF Preview button.
-   The sub-tab bar grows to fill available space; the PDF Preview
-   button stays pinned to the right. */
-.sub-tab-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.sub-tab-row .sub-tab-bar {
-    flex: 1;
-}
+/* (sub-tab-row removed — sidebar navigation replaces sub-tabs) */
 
 /* PDF Preview toggle button in the sub-tab row — styled to match
    the sub-tab buttons visually but slightly smaller and muted

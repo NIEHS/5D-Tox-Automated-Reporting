@@ -1236,8 +1236,8 @@ function toggleSectionPdfPreview(sectionFilter) {
     // For BMD summary sections, it's the table-preview div inside the
     // collapsible section body.
     const contentMap = {
-        apical: 'bm2-cards',
-        genomics: 'genomics-cards',
+        apical: 'section-animal-condition',
+        genomics: 'genomics-gene-set-cards',
         bmd_summary: 'bmd-summary-table',
         bmd_summary_bmds: 'bmd-summary-bmds-table',
     };

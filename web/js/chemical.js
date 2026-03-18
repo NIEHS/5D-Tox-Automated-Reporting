@@ -130,8 +130,9 @@ async function onFieldBlur(fieldId) {
         // Show the data tab immediately — file upload and pool management
         // should be available as soon as a chemical is resolved, without
         // waiting for background generation.
-        show('data-tab-section');
-        if (tabbedViewActive) buildTabBar();
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+        }
 
         // Show Reset Session button now that a chemical is resolved
         const btnResetSession = document.getElementById('btn-reset-session');
@@ -253,8 +254,9 @@ async function restoreSession(data) {
     const poolWillReprocess = !!data.animal_report;
 
     if (data.bm2_sections && Object.keys(data.bm2_sections).length > 0) {
-        show('data-tab-section');
-        show('bm2-results-section');
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+        }
 
         for (const [slug, section] of Object.entries(data.bm2_sections)) {
             const sectionId = 'restored-' + slug;
@@ -333,9 +335,11 @@ async function restoreSession(data) {
     // pending_files.  We add them to the file pool so the user can
     // assign them to sections without re-uploading.
     if (data.pending_files && data.pending_files.length > 0) {
-        // Make sure the file pool and animal report are visible
-        // so the user can assign pending files to report sections.
-        show('data-tab-section');
+        // Make sure the data section is visible so the user can
+        // assign pending files to report sections.
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+        }
 
 
 
@@ -411,8 +415,9 @@ async function restoreSession(data) {
         bmdSummaryEndpoints = summary.endpoints || [];
         if (bmdSummaryEndpoints.length > 0) {
             renderBmdSummaryTable(bmdSummaryEndpoints);
-            show('bmd-summary-section');
-            document.getElementById('bmd-summary-section').classList.add('visible');
+            if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                Alpine.store('app').ready.bmdSummary = true;
+            }
             bmdSummaryApproved = true;
             lockSection(document.getElementById('bmd-summary-section'));
             setButtons('bmd-summary', 'approved');
@@ -424,11 +429,12 @@ async function restoreSession(data) {
     // entry (type='csv', restored: true), render a greyed file pool item,
     // create a genomicsResults entry, and create the results card.
     if (data.genomics_sections && Object.keys(data.genomics_sections).length > 0) {
-        show('data-tab-section');
-
-
-        show('genomics-results-section');
-        show('genomics-charts-section');
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+            Alpine.store('app').ready.geneSets = true;
+            Alpine.store('app').ready.geneBmd = true;
+            Alpine.store('app').ready.charts = true;
+        }
 
         for (const [slug, section] of Object.entries(data.genomics_sections)) {
             const organ = section.organ || '';
@@ -517,9 +523,6 @@ async function restoreSession(data) {
 
     updateExportButton();
 
-    // Rebuild the tab bar so any newly-revealed sections get tabs
-    if (tabbedViewActive) buildTabBar();
-
     const name = data.meta?.name || data.identity?.name || currentIdentity?.dtxsid;
     showToast(`Restored session for ${name}`);
 }
@@ -585,8 +588,9 @@ async function restoreChemId() {
 
             // Show the data tab immediately — file upload and pool
             // management should not wait for background generation.
-            show('data-tab-section');
-            if (tabbedViewActive) buildTabBar();
+            if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+                Alpine.store('app').ready.data = true;
+            }
 
             // Show Reset Session button
             const btnResetSession = document.getElementById('btn-reset-session');
@@ -621,21 +625,14 @@ CHEM_ID_FIELDS.forEach(id => {
 loadSettings();
 restoreChemId();
 
-// Apply the default tabbed layout on page load.
-// tabbedViewActive is true by default in state.js, so we need to
-// set up the DOM to match: add the .tabbed-view class, mark the
-// toggle button as active, expand all sections, and build the tab bar.
-{
-    const container = document.querySelector('.container');
-    container.classList.add('tabbed-view');
-    const btn = document.getElementById('btn-tabbed-view');
-    btn.classList.add('active');
-    btn.textContent = 'Stacked View';
-    document.querySelectorAll('[data-collapsible]').forEach(
-        s => s.classList.remove('collapsed')
-    );
-    buildTabBar();
-}
+// Initialize the sidebar TOC scroll spy after Alpine has had a chance
+// to initialize.  The scroll spy observes [data-toc-id] elements and
+// highlights the corresponding sidebar node when a section scrolls
+// into view.  We defer this slightly to ensure Alpine has processed
+// the x-show directives first.
+requestAnimationFrame(() => {
+    initScrollSpy();
+});
 
 // Load the style profile on page init so existing rules are
 // visible immediately (e.g., after a page refresh)
