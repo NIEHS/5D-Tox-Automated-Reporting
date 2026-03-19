@@ -1025,6 +1025,21 @@ async function buildExportPayload({ includeCharts = true } = {}) {
         chartImages = await captureGenomicsChartImages();
     }
 
+    // Unified narratives — group-level prose that spans multiple platform
+    // tables.  Read from the visible textareas (narrative-apical, etc.)
+    // which were populated by the processing pipeline.  These are separate
+    // from per-card narratives — the NIEHS reference uses one narrative for
+    // the whole "Animal Condition" group, one for "Clinical Pathology", etc.
+    const unifiedNarratives = {};
+    for (const key of ['apical', 'clinical_pathology']) {
+        const ta = document.getElementById(`narrative-${key}`);
+        if (ta && ta.value.trim()) {
+            unifiedNarratives[key] = {
+                paragraphs: ta.value.trim().split(/\n\s*\n/).map(p => p.trim()).filter(Boolean),
+            };
+        }
+    }
+
     return {
         paragraphs,
         references,
@@ -1032,6 +1047,7 @@ async function buildExportPayload({ includeCharts = true } = {}) {
         casrn,
         dtxsid,
         apical_sections: apicalPayload,
+        unified_narratives: unifiedNarratives,
         methods_data: methodsPayload,
         methods_paragraphs: methodsParas,
         bmd_summary_endpoints: bmdSummaryEps,

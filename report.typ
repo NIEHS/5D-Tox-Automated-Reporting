@@ -911,21 +911,82 @@
 
 
 // --- Apical endpoint sections ---
-// NIEHS pattern: narrative on portrait page, then each wide dose-response
-// table gets its own landscape page.  Tables with many dose columns (≥5)
-// are too wide for portrait orientation.  The NIEHS PDF (NBK589955) uses
-// landscape for Tables 2-6 (body weights, liver weights, clinical chem,
-// hematology, hormones) and portrait for narrower tables (Table 7 plasma
-// concentrations, Table 8 BMD summary).
-//
-// We reproduce this by:
-//   1. Emitting narrative paragraphs in portrait mode
-//   2. For each sex's dose-response table: landscape → table → portrait
-//   3. The landscape threshold is ≥5 dose groups (matching NIEHS behavior)
-#for sec in data.at("apical_sections", default: ()) {
-  heading(level: 2, sec.at("title", default: "Apical Endpoints"))
+// NIEHS structure groups apical sections under two H2 headings:
+//   1. "Animal Condition, Body Weights, and Organ Weights" — BW, OW, ClinObs
+//   2. "Clinical Pathology" — Clin Chem, Hematology, Hormones
+// Each heading has a unified narrative (spanning multiple tables), followed
+// by per-table sections.  The unified narrative comes from the user-editable
+// textarea in the UI.
 
-  // Narrative paragraphs — always portrait
+// Pre-compute group membership for each apical section so we can emit
+// NIEHS TOC group headings (H2) and unified narratives at the right
+// transition points during the single iteration over apical_sections.
+//
+// The sections array is ordered by the server (BW, OW, ClinObs, CC, Hem,
+// Hormones) so group transitions happen naturally.  We detect transitions
+// by comparing each section's group key to the previous one.
+
+#let _unified = data.at("unified_narratives", default: (:))
+
+#let _group-for-platform = (
+  "Body Weight": "animal_condition",
+  "Organ Weight": "animal_condition",
+  "Clinical Observations": "animal_condition",
+  "Clinical": "animal_condition",
+  "Clinical Chemistry": "clinical_pathology",
+  "Hematology": "clinical_pathology",
+  "Hormones": "clinical_pathology",
+)
+
+#let _group-titles = (
+  "animal_condition": "Animal Condition, Body Weights, and Organ Weights",
+  "clinical_pathology": "Clinical Pathology",
+)
+
+// Build an array of (group-key, section) pairs, then iterate with index
+// to detect group transitions.
+#let _apical-with-groups = data.at("apical_sections", default: ()).map(sec => {
+  let p = sec.at("platform", default: sec.at("title", default: ""))
+  let g = _group-for-platform.at(p, default: none)
+  (g, sec)
+})
+
+// Track which groups we've already emitted headings for.
+// Since Typst for-loops can't mutate outer variables, we pre-compute
+// which indices are "first in group" before the loop.
+#let _first-in-group = {
+  let seen = ()
+  let result = ()
+  for (g, _sec) in _apical-with-groups {
+    if g != none and g not in seen {
+      result.push(true)
+      seen.push(g)
+    } else {
+      result.push(false)
+    }
+  }
+  result
+}
+
+#for (idx, pair) in _apical-with-groups.enumerate() {
+  let (group-key, sec) = pair
+
+  // Emit group H2 heading + unified narrative at group transitions
+  if _first-in-group.at(idx, default: false) {
+    let group-title = _group-titles.at(group-key, default: "")
+    if group-title != "" {
+      heading(level: 2, group-title)
+    }
+    for para in _unified.at(group-key, default: ()) {
+      [#para]
+      parbreak()
+    }
+  }
+
+  // Per-table heading (H3 level)
+  heading(level: 3, sec.at("title", default: "Apical Endpoints"))
+
+  // Per-table narrative paragraphs (if any)
   for para in sec.at("narrative", default: ()) {
     [#para]
     parbreak()

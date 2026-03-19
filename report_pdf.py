@@ -328,6 +328,29 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
 
             data["apical_sections"].append(apical_entry)
 
+    # Unified narratives — group-level prose spanning multiple platform tables.
+    # The NIEHS reference has one narrative for "Animal Condition, Body Weights,
+    # and Organ Weights" and one for "Clinical Pathology", rendered before their
+    # respective table groups.
+    # Unified narratives — map from JS keys (apical, clinical_pathology)
+    # to Typst template group keys (animal_condition, clinical_pathology).
+    # The JS uses "apical" for the Animal Condition group because that was
+    # the original key before the TOC restructure.
+    _UNIFIED_KEY_MAP = {
+        "apical": "animal_condition",
+        "clinical_pathology": "clinical_pathology",
+    }
+    unified_narr = body.get("unified_narratives", {})
+    if unified_narr:
+        data["unified_narratives"] = {}
+        for key, narr_data in unified_narr.items():
+            paras = narr_data.get("paragraphs", []) if isinstance(narr_data, dict) else []
+            if isinstance(narr_data, list):
+                paras = narr_data
+            if paras:
+                typst_key = _UNIFIED_KEY_MAP.get(key, key)
+                data["unified_narratives"][typst_key] = paras
+
     # Internal Dose Assessment
     internal_dose = body.get("internal_dose")
     if internal_dose:
