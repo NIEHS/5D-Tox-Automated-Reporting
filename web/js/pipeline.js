@@ -360,50 +360,60 @@ async function runProcessingPipeline() {
             const result = await resp.json();
             const sections = result.sections || [];
 
-            // Create a section card for each platform returned by the server
+            // Create a section card for each platform returned by the server.
+            // Each card is wrapped in try/catch so one bad section doesn't
+            // prevent unified narratives and BMD summary from rendering.
             for (const section of sections) {
-                const sectionId = 'integrated-' + section.platform;
+                try {
+                    const sectionId = 'integrated-' + section.platform;
 
-                // Skip if already created (idempotent)
-                if (apicalSections[sectionId]) continue;
+                    // Skip if already created (idempotent)
+                    if (apicalSections[sectionId]) continue;
 
-                // Register in state.  Store all fields the server sends
-                // so the export payload and HTML preview can use them.
-                // Body weight sections include extra fields from the
-                // sidecar builder (footnotes, bmd_definition, etc.)
-                // that other platforms don't have.
-                apicalSections[sectionId] = {
-                    fileId:            null,   // not tied to a single file
-                    filename:          section.title,
-                    processed:         true,
-                    approved:          false,
-                    tableData:         section.tables_json,
-                    narrative:         section.narrative,
-                    originalNarrative: (section.narrative || []).join('\n\n'),
-                    platform:          section.platform,
-                    // "incidence" for clinical obs tables (n/N cells),
-                    // undefined for normal apical tables (mean±SE cells).
-                    tableType:         section.table_type || null,
-                    // Body-weight-specific fields from sidecar builder.
-                    // These flow through to the export payload and Typst.
-                    footnotes:         section.footnotes || null,
-                    firstColHeader:    section.first_col_header || null,
-                    caption:           section.caption || null,
-                    bmdDefinition:     section.bmd_definition || null,
-                };
+                    // Register in state.  Store all fields the server sends
+                    // so the export payload and HTML preview can use them.
+                    // Body weight sections include extra fields from the
+                    // sidecar builder (footnotes, bmd_definition, etc.)
+                    // that other platforms don't have.
+                    apicalSections[sectionId] = {
+                        fileId:            null,   // not tied to a single file
+                        filename:          section.title,
+                        processed:         true,
+                        approved:          false,
+                        tableData:         section.tables_json,
+                        narrative:         section.narrative,
+                        originalNarrative: Array.isArray(section.narrative)
+                        ? section.narrative.join('\n\n')
+                        : (section.narrative || ''),
+                        platform:          section.platform,
+                        // "incidence" for clinical obs tables (n/N cells),
+                        // undefined for normal apical tables (mean±SE cells).
+                        tableType:         section.table_type || null,
+                        // Rule-based builder fields (footnotes, caption, etc.)
+                        // These flow through to the export payload and Typst.
+                        footnotes:               section.footnotes || null,
+                        firstColHeader:          section.first_col_header || null,
+                        caption:                 section.caption || null,
+                        bmdDefinition:           section.bmd_definition || null,
+                        significanceExplanation:  section.significance_explanation || null,
+                        significanceMarkerLegend: section.significance_marker_legend || null,
+                    };
 
-                // Create the visual card and populate it — pass the platform
-                // so the card picks the correct NIEHS-style title/caption.
-                createBm2Card(sectionId, section.title, section.platform);
+                    // Create the visual card and populate it — pass the platform
+                    // so the card picks the correct NIEHS-style title/caption.
+                    createBm2Card(sectionId, section.title, section.platform);
 
-                // Pre-fill the dose unit and compound fields
-                const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
-                if (unitEl) unitEl.value = doseUnit;
-                const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
-                if (compoundEl) compoundEl.value = compoundName;
+                    // Pre-fill the dose unit and compound fields
+                    const unitEl = document.getElementById(`bm2-unit-${sectionId}`);
+                    if (unitEl) unitEl.value = doseUnit;
+                    const compoundEl = document.getElementById(`bm2-compound-${sectionId}`);
+                    if (compoundEl) compoundEl.value = compoundName;
 
-                // Render the table data and narrative directly (no processBm2 call)
-                renderBm2Results(sectionId, section.tables_json, section.narrative, section.table_type);
+                    // Render the table data and narrative directly (no processBm2 call)
+                    renderBm2Results(sectionId, section.tables_json, section.narrative, section.table_type);
+                } catch (cardErr) {
+                    console.error(`Failed to create card for ${section.platform}:`, cardErr);
+                }
             }
 
             // --- Gene expression: extracted from the integrated .bm2 ---

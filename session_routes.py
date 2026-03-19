@@ -115,9 +115,14 @@ async def api_bmd_summary(dtxsid: str):
                 bmd_str = row.get("bmd", "ND")
                 bmdl_str = row.get("bmdl", "ND")
 
-                # Skip endpoints without a valid BMD (not dose-responsive
-                # by the NTP dual-significance criterion)
-                if bmd_str == "ND":
+                # Skip endpoints without a numeric BMD.  Non-numeric values:
+                #   "ND"   — not determined (gate not passed or modeling failed)
+                #   "—"    — endpoint not modeled by BMDExpress 3
+                #   "NVM"  — no viable model
+                #   "UREP" — unreliable estimate of potency
+                #   "NA"   — not applicable (n-row, context rows)
+                # Only numeric values and "<LNZD/3" (NR) are included.
+                if bmd_str in ("ND", "\u2014", "NVM", "UREP", "NA", ""):
                     continue
 
                 label = row.get("label", "")
@@ -193,10 +198,14 @@ async def api_bmd_summary(dtxsid: str):
                     "sex": sex,
                 })
 
-    # Sort by BMD ascending (numeric sort; "ND" already filtered out)
-    endpoints.sort(
-        key=lambda e: float(e["bmd"]) if e["bmd"] != "ND" else 9999,
-    )
+    # Sort by BMD ascending (numeric sort; non-numeric values filtered above,
+    # but NR entries like "<0.05" may remain — parse the numeric part).
+    def _bmd_sort_key(e):
+        try:
+            return float(e["bmd"].lstrip("<"))
+        except (ValueError, TypeError):
+            return 9999
+    endpoints.sort(key=_bmd_sort_key)
 
     return JSONResponse({
         "endpoints": endpoints,
