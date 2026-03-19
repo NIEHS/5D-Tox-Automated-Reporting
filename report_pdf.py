@@ -314,6 +314,9 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 # footnotes as an unnumbered paragraph.  Only body weight
                 # tables include this (from body_weight_table.py builder).
                 "bmd_definition": sec.get("bmd_definition"),
+                # Platform identifier — used by _apply_section_filter()
+                # to filter sections for per-subsection PDF previews.
+                "platform": sec.get("platform", section_title),
             }
 
             # Table number — user-provided from the UI.  When present,
@@ -896,10 +899,16 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     # "genomics" keeps gene set/gene tables + their narrative descriptions.
     # "charts" keeps the genomics chart images (UMAP + cluster scatter).
     keep_map = {
-        "apical":      {"apical_sections"},
-        "bmd_summary": {"bmd_summary"},
-        "genomics":    {"genomics_sections", "gene_set_narrative", "gene_narrative"},
-        "charts":      {"genomics_charts"},
+        # Full apical: all dose-response tables (legacy — kept for backward compat)
+        "apical":            {"apical_sections"},
+        # Split previews matching NIEHS TOC subsections:
+        "animal_condition":  {"apical_sections"},  # filtered below to BW/OW/ClinObs
+        "clinical_path":     {"apical_sections"},  # filtered below to CC/Hem/Hormones
+        "internal_dose":     {"apical_sections"},  # filtered below to Tissue Concentration
+        "bmd_summary":       {"bmd_summary"},
+        "bmd_summary_bmds":  {"bmd_summary"},
+        "genomics":          {"genomics_sections", "gene_set_narrative", "gene_narrative"},
+        "charts":            {"genomics_charts"},
     }
     keep = keep_map.get(section_filter, set())
 
@@ -916,6 +925,24 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     }
     for key in all_body - keep:
         data.pop(key, None)
+
+    # --- Sub-filter apical_sections by platform for split previews ---
+    # The NIEHS TOC splits apical data into three subsections:
+    #   "Animal Condition, Body Weights, and Organ Weights" — BW, OW, ClinObs
+    #   "Clinical Pathology" — Clinical Chemistry, Hematology, Hormones
+    #   "Internal Dose Assessment" — Tissue Concentration
+    # When a sub-filter is active, keep only the matching platforms.
+    platform_filter_map = {
+        "animal_condition": {"Body Weight", "Organ Weight", "Clinical Observations", "Clinical"},
+        "clinical_path":    {"Clinical Chemistry", "Hematology", "Hormones"},
+        "internal_dose":    {"Tissue Concentration"},
+    }
+    platform_keep = platform_filter_map.get(section_filter)
+    if platform_keep and "apical_sections" in data:
+        data["apical_sections"] = [
+            s for s in data["apical_sections"]
+            if s.get("platform") in platform_keep
+        ]
 
 
 def _build_missing_animal_footnotes(

@@ -972,6 +972,9 @@ async function buildExportPayload({ includeCharts = true } = {}) {
             narrative_paragraphs: narrativeParagraphs,
             table_data: info.tableData || {},
             table_type: info.tableType || null,
+            // Platform identifier — used by server-side section_filter
+            // to select sections for per-subsection PDF previews.
+            platform: info.platform || null,
         };
         // Body-weight-specific fields from the sidecar builder.
         // These pass through marshal_export_data to the Typst template
@@ -1232,11 +1235,16 @@ function toggleSectionPdfPreview(sectionFilter) {
     const isShowing = preview.style.display !== 'none';
 
     // Map section filter → the HTML content container to show/hide.
-    // For top-level tabs (apical, genomics), this is the cards container.
+    // For top-level tabs (apical, genomics), this is the cards wrapper
+    // INSIDE the section group (not the group itself — hiding the group
+    // would also hide the PDF preview which is a sibling).
     // For BMD summary sections, it's the table-preview div inside the
     // collapsible section body.
     const contentMap = {
-        apical: 'section-animal-condition',
+        animal_condition: 'animal_condition-cards-content',
+        clinical_path: 'clinical_path-cards-content',
+        internal_dose: 'internal_dose-cards-content',
+        apical: 'apical-cards-content',  // legacy compat
         genomics: 'genomics-gene-set-cards',
         bmd_summary: 'bmd-summary-table',
         bmd_summary_bmds: 'bmd-summary-bmds-table',
