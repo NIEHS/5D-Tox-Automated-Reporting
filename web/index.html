@@ -989,39 +989,22 @@
             <textarea class="unified-narrative" id="narrative-apical" rows="6"
                 x-show="$store.app.activeSection === 'animal-condition'"
                 placeholder="Unified narrative populated after processing..."></textarea>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('animal_condition')"
-                x-show="$store.app.activeSection === 'animal-condition'" style="margin-bottom:0.5rem">PDF Preview</button>
-
-            <!-- Cards content — hidden when PDF preview is active.
-                 toggleSectionPdfPreview('animal_condition') hides THIS div
-                 and shows the sibling pdf-preview div. -->
-            <div id="animal_condition-cards-content">
-                <div class="platform-container" data-toc-id="table-body-weight" data-platform="Body Weight"
-                     x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-body-weight'">
-                    <h3>Table 2: Body Weights</h3>
-                </div>
-                <div class="platform-container" data-toc-id="table-organ-weight" data-platform="Organ Weight"
-                     x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-organ-weight'">
-                    <h3>Table 3: Organ Weights</h3>
-                </div>
-                <!-- Fallback container for "Organ Weights" (plural, legacy compat) -->
-                <div class="platform-container" data-platform="Organ Weights" style="display:none;"></div>
-                <div class="platform-container" data-toc-id="table-clinical-obs" data-platform="Clinical Observations"
-                     x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-clinical-obs'">
-                    <h3>Clinical Observations</h3>
-                </div>
-                <!-- Fallback for "Clinical" (legacy key) -->
-                <div class="platform-container" data-platform="Clinical" style="display:none;"></div>
+            <div class="platform-container" data-toc-id="table-body-weight" data-platform="Body Weight"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-body-weight'">
+                <h3>Table 2: Body Weights</h3>
             </div>
-
-            <!-- Section PDF Preview — Animal Condition tables only.
-                 Sibling of cards-content, NOT nested inside it. -->
-            <div class="section-pdf-preview" id="animal_condition-pdf-preview" style="display:none;">
-                <div class="pdf-toolbar">
-                    <button onclick="refreshSectionPdf('animal_condition')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                </div>
-                <iframe id="animal_condition-pdf-frame" class="section-pdf-frame"></iframe>
+            <div class="platform-container" data-toc-id="table-organ-weight" data-platform="Organ Weight"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-organ-weight'">
+                <h3>Table 3: Organ Weights</h3>
             </div>
+            <!-- Fallback container for "Organ Weights" (plural, legacy compat) -->
+            <div class="platform-container" data-platform="Organ Weights" style="display:none;"></div>
+            <div class="platform-container" data-toc-id="table-clinical-obs" data-platform="Clinical Observations"
+                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-clinical-obs'">
+                <h3>Clinical Observations</h3>
+            </div>
+            <!-- Fallback for "Clinical" (legacy key) -->
+            <div class="platform-container" data-platform="Clinical" style="display:none;"></div>
         </div>
 
         <!-- Clinical Pathology -->
@@ -1031,29 +1014,17 @@
             <textarea class="unified-narrative" id="narrative-clinical_pathology" rows="6"
                 x-show="$store.app.activeSection === 'clinical-path'"
                 placeholder="Unified narrative populated after processing..."></textarea>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('clinical_path')"
-                x-show="$store.app.activeSection === 'clinical-path'" style="margin-bottom:0.5rem">PDF Preview</button>
-
-            <div id="clinical_path-cards-content">
-                <div class="platform-container" data-toc-id="table-clin-chem" data-platform="Clinical Chemistry"
-                     x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-clin-chem'">
-                    <h3>Table 4: Clinical Chemistry</h3>
-                </div>
-                <div class="platform-container" data-toc-id="table-hematology" data-platform="Hematology"
-                     x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hematology'">
-                    <h3>Table 5: Hematology</h3>
-                </div>
-                <div class="platform-container" data-toc-id="table-hormones" data-platform="Hormones"
-                     x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hormones'">
-                    <h3>Table 6: Hormones</h3>
-                </div>
+            <div class="platform-container" data-toc-id="table-clin-chem" data-platform="Clinical Chemistry"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-clin-chem'">
+                <h3>Table 4: Clinical Chemistry</h3>
             </div>
-
-            <div class="section-pdf-preview" id="clinical_path-pdf-preview" style="display:none;">
-                <div class="pdf-toolbar">
-                    <button onclick="refreshSectionPdf('clinical_path')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                </div>
-                <iframe id="clinical_path-pdf-frame" class="section-pdf-frame"></iframe>
+            <div class="platform-container" data-toc-id="table-hematology" data-platform="Hematology"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hematology'">
+                <h3>Table 5: Hematology</h3>
+            </div>
+            <div class="platform-container" data-toc-id="table-hormones" data-platform="Hormones"
+                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hormones'">
+                <h3>Table 6: Hormones</h3>
             </div>
         </div>
 
@@ -1061,21 +1032,9 @@
         <div class="results-group" id="section-internal-dose" data-toc-id="internal-dose"
              x-data x-show="['internal-dose','table-tissue-conc'].includes($store.app.activeSection)" style="display:none;">
             <h2 x-show="$store.app.activeSection === 'internal-dose'">Internal Dose Assessment</h2>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('internal_dose')"
-                x-show="$store.app.activeSection === 'internal-dose'" style="margin-bottom:0.5rem">PDF Preview</button>
-
-            <div id="internal_dose-cards-content">
-                <div class="platform-container" data-toc-id="table-tissue-conc" data-platform="Tissue Concentration"
-                     x-show="$store.app.activeSection === 'internal-dose' || $store.app.activeSection === 'table-tissue-conc'">
-                    <h3>Table 7: Tissue Concentration</h3>
-                </div>
-            </div>
-
-            <div class="section-pdf-preview" id="internal_dose-pdf-preview" style="display:none;">
-                <div class="pdf-toolbar">
-                    <button onclick="refreshSectionPdf('internal_dose')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                </div>
-                <iframe id="internal_dose-pdf-frame" class="section-pdf-frame"></iframe>
+            <div class="platform-container" data-toc-id="table-tissue-conc" data-platform="Tissue Concentration"
+                 x-show="$store.app.activeSection === 'internal-dose' || $store.app.activeSection === 'table-tissue-conc'">
+                <h3>Table 7: Tissue Concentration</h3>
             </div>
         </div>
 
@@ -1292,6 +1251,34 @@
             <ul id="notes-list"></ul>
         </div>
         </div><!-- /.content-pane -->
+
+        <!-- ================================================================
+             PDF Preview Pane — persistent, auto-compiles for the active TOC node.
+             Lives as a sibling of content-pane.  Collapsible: click the tab
+             to expand/collapse.  When collapsed, shows a thin vertical tab
+             labeled "PDF Preview ▶".  When expanded, shows the toolbar +
+             iframe with the compiled PDF.
+             ================================================================ -->
+        <div class="preview-pane" id="preview-pane" x-data
+             :class="{ collapsed: !$store.app.previewVisible }">
+            <!-- Collapse tab — always visible, even when collapsed.
+                 Clicking it toggles the pane open/closed. -->
+            <div class="preview-collapse-tab" onclick="togglePreviewPane()">
+                <span x-text="$store.app.previewVisible ? '▶' : '◀'"></span>
+                <span class="preview-collapse-label"
+                      x-show="!$store.app.previewVisible">PDF Preview</span>
+            </div>
+            <!-- Expandable content — hidden when collapsed -->
+            <div class="preview-body" x-show="$store.app.previewVisible">
+                <div class="preview-toolbar">
+                    <span class="preview-title" id="preview-title">PDF Preview</span>
+                    <button class="btn-small" onclick="recompilePreview()">Recompile</button>
+                </div>
+                <div class="preview-status" id="preview-status"></div>
+                <iframe id="preview-pdf-frame" class="preview-pdf-frame"></iframe>
+            </div>
+        </div>
+
     </div><!-- /.app-layout -->
 
     <!-- Toast notification -->

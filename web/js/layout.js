@@ -94,6 +94,34 @@ function navigateToNode(tocId) {
     // Scroll the content pane to the top when switching views
     const pane = document.querySelector('.content-pane');
     if (pane) pane.scrollTop = 0;
+
+    // --- Auto-compile PDF preview for the active TOC node ---
+    // Skip non-document nodes (chem-id, data) — they have no PDF content.
+    // For all document sections, compile a preview in the background.
+    const NON_PREVIEW_NODES = new Set(['chem-id', 'data', 'report']);
+    if (!NON_PREVIEW_NODES.has(tocId) && typeof compilePreviewForNode === 'function') {
+        compilePreviewForNode(tocId);
+    }
+}
+
+
+/**
+ * Toggle the persistent PDF preview pane visibility.
+ */
+function togglePreviewPane() {
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').previewVisible = !Alpine.store('app').previewVisible;
+    }
+}
+
+/**
+ * Recompile the preview for the current active section.
+ */
+function recompilePreview() {
+    const tocId = Alpine?.store('app')?.activeSection;
+    if (tocId && typeof compilePreviewForNode === 'function') {
+        compilePreviewForNode(tocId, /* force */ true);
+    }
 }
 
 /* ================================================================

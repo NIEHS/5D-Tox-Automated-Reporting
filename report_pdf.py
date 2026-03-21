@@ -884,83 +884,136 @@ def _ensure_paragraphs(obj) -> dict:
 
 def _apply_section_filter(data: dict, section_filter: str) -> None:
     """
-    Strip all report sections except the requested one for per-tab PDF preview.
+    Strip all report sections except the requested one for PDF preview.
 
-    Modifies `data` in place.  Removes front matter (title pages, TOC,
-    foreword, etc.) and all body sections that don't belong to the
-    requested filter.  The Typst template naturally skips empty/missing
-    sections, so the resulting PDF contains only the filtered content.
+    Every TOC node ID maps to a document slice.  Modifies `data` in place:
+    sets section_only=True (skips front matter structural pages), then
+    removes all body keys not relevant to the requested node.
 
-    This is used by the per-tab "PDF Preview" feature — each results tab
-    (Apical, Genomics, Charts) can compile a focused section PDF without
-    duplicating the Typst template.
+    The Typst template naturally skips empty/missing sections, so the
+    resulting PDF contains only the filtered content.
 
     Args:
         data: The full report data dict (modified in place).
-        section_filter: Which section to keep.  One of:
-            "apical"   — dose-response tables, narrative, BMD summary
-            "genomics" — gene set/gene tables, GO/gene descriptions
-            "charts"   — UMAP + cluster scatter figures
+        section_filter: Any TOC node ID (e.g., "animal-condition",
+                        "table-body-weight", "background", "foreword").
     """
     # --- Signal the Typst template to skip structural pages ---
-    # The cover page, inner title page, and TOC are unconditionally
-    # rendered in the template.  This flag tells the template to skip
-    # them entirely, producing a body-content-only PDF.
     data["section_only"] = True
 
-    # --- Remove front matter ---
-    # Section PDFs don't need title pages, TOC, or boilerplate preamble.
-    # Stripping these produces a clean, content-only PDF.
-    for key in ("foreword", "about_report", "peer_review", "publication_details",
-                "acknowledgments", "abstract", "table_of_contents"):
+    # All body-level data keys that can be removed independently.
+    ALL_BODY = {
+        "background", "methods", "apical_sections", "unified_narratives",
+        "internal_dose", "bmd_summary", "genomics_sections",
+        "gene_set_narrative", "gene_narrative", "genomics_charts",
+        "summary", "references",
+    }
+
+    # All front-matter keys (removed for body-content previews).
+    ALL_FRONT = {
+        "foreword", "about_report", "peer_review", "publication_details",
+        "acknowledgments", "abstract", "table_of_contents",
+    }
+
+    # --- Map each TOC node ID to the data keys it needs ---
+    # Group nodes: keep the relevant body key(s).
+    # Leaf nodes: keep the parent body key, then sub-filter to one platform.
+    # Front-matter nodes: keep their specific key, remove body.
+
+    # Front-matter nodes — keep only the specific front-matter key
+    FRONT_MATTER_NODES = {
+        "foreword", "tables-list", "about", "peer-review",
+        "publication", "acknowledgments", "abstract",
+    }
+
+    # Body section nodes → which data keys to keep
+    BODY_KEEP_MAP = {
+        # Background
+        "background":       {"background"},
+        # Materials and Methods — full section or subsections
+        "methods":          {"methods"},
+        "mm-study-design":  {"methods"},
+        "mm-dose-rationale": {"methods"},
+        "mm-chemistry":     {"methods"},
+        "mm-clin-obs":      {"methods"},
+        "mm-body-organ-wt": {"methods"},
+        "mm-clin-path":     {"methods"},
+        "mm-internal-dose": {"methods"},
+        "mm-tx-sample":     {"methods"},
+        "mm-tx-rna":        {"methods"},
+        "mm-tx-processing": {"methods"},
+        "mm-tx-qc":         {"methods"},
+        "mm-tx-norm":       {"methods"},
+        "mm-stat-apical":   {"methods"},
+        "mm-bmd-apical":    {"methods"},
+        "mm-bmd-tx":        {"methods"},
+        "mm-fdr":           {"methods"},
+        "mm-data-access":   {"methods"},
+        # Results — Animal Condition group and its children
+        "animal-condition":   {"apical_sections", "unified_narratives"},
+        "table-body-weight":  {"apical_sections"},
+        "table-organ-weight": {"apical_sections"},
+        "table-clinical-obs": {"apical_sections"},
+        # Results — Clinical Pathology group and its children
+        "clinical-path":      {"apical_sections", "unified_narratives"},
+        "table-clin-chem":    {"apical_sections"},
+        "table-hematology":   {"apical_sections"},
+        "table-hormones":     {"apical_sections"},
+        # Results — Internal Dose
+        "internal-dose":      {"apical_sections"},
+        "table-tissue-conc":  {"apical_sections"},
+        # Results — BMD Summary
+        "bmd-summary":        {"bmd_summary"},
+        # Results — Genomics
+        "gene-sets":          {"genomics_sections", "gene_set_narrative"},
+        "gene-bmd":           {"genomics_sections", "gene_narrative"},
+        # Charts
+        "charts":             {"genomics_charts"},
+        # Summary and References
+        "summary":            {"summary"},
+        "references":         {"references"},
+        # Legacy compat
+        "apical":             {"apical_sections", "unified_narratives"},
+        "genomics":           {"genomics_sections", "gene_set_narrative", "gene_narrative"},
+        "bmd_summary":        {"bmd_summary"},
+        "bmd_summary_bmds":   {"bmd_summary"},
+    }
+
+    if section_filter in FRONT_MATTER_NODES:
+        # Front-matter preview: keep only front-matter, remove all body
+        for key in ALL_BODY:
+            data.pop(key, None)
+        # The Typst template will render only the front-matter sections
+        # that still have data.  We don't strip other front-matter keys
+        # because some (like foreword) are always present.
+        return
+
+    # Body content preview: remove front matter, then keep only relevant body keys
+    for key in ALL_FRONT:
         data.pop(key, None)
 
-    # --- Map of filter → data keys to KEEP ---
-    # Each filter preserves only the sections relevant to that tab.
-    # "apical" keeps dose-response tables + BMD summary (which summarizes
-    #   apical endpoints).
-    # "genomics" keeps gene set/gene tables + their narrative descriptions.
-    # "charts" keeps the genomics chart images (UMAP + cluster scatter).
-    keep_map = {
-        # Full apical: all dose-response tables (legacy — kept for backward compat)
-        "apical":            {"apical_sections"},
-        # Split previews matching NIEHS TOC subsections:
-        "animal_condition":  {"apical_sections"},  # filtered below to BW/OW/ClinObs
-        "clinical_path":     {"apical_sections"},  # filtered below to CC/Hem/Hormones
-        "internal_dose":     {"apical_sections"},  # filtered below to Tissue Concentration
-        "bmd_summary":       {"bmd_summary"},
-        "bmd_summary_bmds":  {"bmd_summary"},
-        "genomics":          {"genomics_sections", "gene_set_narrative", "gene_narrative"},
-        "charts":            {"genomics_charts"},
-    }
-    keep = keep_map.get(section_filter, set())
-
-    # --- Remove all body sections NOT in the keep set ---
-    # We pop (delete) the keys entirely rather than setting to None,
-    # because the Typst template uses `data.at("key", default: (:))` in
-    # some fallback paths — if the key exists with value null, the default
-    # isn't used and `.at()` is called on null, causing a compile error.
-    # Deleting the key ensures the default kicks in cleanly.
-    all_body = {
-        "background", "methods", "apical_sections", "internal_dose",
-        "bmd_summary", "genomics_sections", "gene_set_narrative",
-        "gene_narrative", "genomics_charts", "summary", "references",
-    }
-    for key in all_body - keep:
+    keep = BODY_KEEP_MAP.get(section_filter, set())
+    for key in ALL_BODY - keep:
         data.pop(key, None)
 
-    # --- Sub-filter apical_sections by platform for split previews ---
-    # The NIEHS TOC splits apical data into three subsections:
-    #   "Animal Condition, Body Weights, and Organ Weights" — BW, OW, ClinObs
-    #   "Clinical Pathology" — Clinical Chemistry, Hematology, Hormones
-    #   "Internal Dose Assessment" — Tissue Concentration
-    # When a sub-filter is active, keep only the matching platforms.
-    platform_filter_map = {
-        "animal_condition": {"Body Weight", "Organ Weight", "Clinical Observations", "Clinical"},
-        "clinical_path":    {"Clinical Chemistry", "Hematology", "Hormones"},
-        "internal_dose":    {"Tissue Concentration"},
+    # --- Sub-filter apical_sections by platform for leaf nodes ---
+    # When a specific table or group is requested, filter to only the
+    # platforms that belong to that TOC node.
+    PLATFORM_FILTER = {
+        # Group nodes — multiple platforms
+        "animal-condition":   {"Body Weight", "Organ Weight", "Clinical Observations", "Clinical"},
+        "clinical-path":      {"Clinical Chemistry", "Hematology", "Hormones"},
+        "internal-dose":      {"Tissue Concentration"},
+        # Leaf nodes — single platform
+        "table-body-weight":  {"Body Weight"},
+        "table-organ-weight": {"Organ Weight"},
+        "table-clinical-obs": {"Clinical Observations", "Clinical"},
+        "table-clin-chem":    {"Clinical Chemistry"},
+        "table-hematology":   {"Hematology"},
+        "table-hormones":     {"Hormones"},
+        "table-tissue-conc":  {"Tissue Concentration"},
     }
-    platform_keep = platform_filter_map.get(section_filter)
+    platform_keep = PLATFORM_FILTER.get(section_filter)
     if platform_keep and "apical_sections" in data:
         data["apical_sections"] = [
             s for s in data["apical_sections"]

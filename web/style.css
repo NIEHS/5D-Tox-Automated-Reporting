@@ -1848,6 +1848,103 @@ header p {
     min-width: 0; /* prevent flex child from overflowing */
 }
 
+/* --- Persistent PDF Preview Pane ---
+   Third column in the .app-layout flex row.  Collapsible: when expanded
+   it shows the PDF iframe; when collapsed it shrinks to a thin vertical
+   tab with a "PDF Preview" label that the user can click to reopen. */
+.preview-pane {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-left: 1px solid var(--c-border);
+    background: var(--c-bg-light);
+    display: flex;
+    flex-direction: row;
+    transition: width 0.2s, min-width 0.2s;
+    /* Expanded state */
+    width: 50%;
+    min-width: 400px;
+    max-width: 700px;
+}
+
+/* Collapsed state — just the vertical tab strip */
+.preview-pane.collapsed {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+}
+
+/* Vertical collapse tab — always visible.  A thin clickable strip
+   on the left edge of the preview pane.  Shows ◀/▶ arrow and
+   rotated "PDF Preview" label when collapsed. */
+.preview-collapse-tab {
+    width: 32px;
+    min-width: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 0.75rem;
+    cursor: pointer;
+    background: var(--c-bg-white);
+    border-right: 1px solid var(--c-border);
+    font-size: 0.8rem;
+    color: var(--c-text-muted);
+    user-select: none;
+}
+
+.preview-collapse-tab:hover {
+    background: var(--c-bg-light);
+    color: var(--c-text);
+}
+
+/* Rotated label — reads vertically when collapsed */
+.preview-collapse-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+/* Body — the expandable part with toolbar + iframe */
+.preview-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--c-border);
+    background: var(--c-bg-white);
+    font-size: 0.8rem;
+}
+
+.preview-title {
+    flex: 1;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview-status {
+    padding: 0 0.75rem;
+    font-size: 0.75rem;
+    color: var(--c-text-muted);
+}
+
+.preview-pdf-frame {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
 /* TOC tree — nested list structure for navigation */
 .toc-tree, .toc-tree ul {
     list-style: none;

@@ -1139,157 +1139,79 @@ const _sectionPdfBlobUrls = {};
 
 
 /**
- * Compile a section-filtered PDF and return a blob URL for iframe display.
+ * Compile a PDF preview for a specific TOC node and display it in the
+ * persistent preview pane.
  *
- * Builds a payload scoped to the currently active sub-tab within the
- * requested section.  For example, if the Apical tab's "Clinical Pathology"
- * sub-tab is active, only that domain's dose-response tables are included.
- * The backend section_filter strips everything else (front matter, other
- * body sections), so the resulting PDF shows exactly one document section.
+ * Called by navigateToNode() whenever the active section changes.
+ * Builds the full export payload, sets section_filter to the TOC node ID,
+ * and sends it to /api/export-pdf.  The server strips everything except
+ * the content belonging to that node.
  *
- * Sub-tab context is read from the DOM:
- *   - Apical: active button in #apical-sub-tabs → data-domain attribute
- *   - Genomics: active button in #genomics-sub-tabs → data-key attribute
- *   - Charts: always includes all chart images (no sub-filtering)
+ * Caches compiled PDFs by node ID so re-visiting a node doesn't recompile.
+ * Pass force=true to bypass the cache (e.g., after editing content).
  *
- * Args:
- *   sectionFilter: "apical", "genomics", or "charts"
- *
- * Returns:
- *   Blob URL string if successful, null on error.
+ * @param {string} tocId — the TOC node ID (e.g., "animal-condition",
+ *                         "table-body-weight", "foreword")
+ * @param {boolean} force — if true, recompile even if cached
  */
-async function compileSectionPdf(sectionFilter) {
-    // Only capture chart images when the Charts tab needs them
-    const needCharts = sectionFilter === 'charts';
-    const payload = await buildExportPayload({ includeCharts: needCharts });
-    payload.section_filter = sectionFilter;
-
-    const resp = await fetch('/api/export-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    });
-
-    if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: 'Section PDF compilation failed' }));
-        showError(err.error || 'Section PDF compilation failed');
-        return null;
-    }
-
-    const blob = await resp.blob();
-
-    // Revoke previous blob URL for this section to free memory
-    if (_sectionPdfBlobUrls[sectionFilter]) {
-        URL.revokeObjectURL(_sectionPdfBlobUrls[sectionFilter]);
-    }
-    const blobUrl = URL.createObjectURL(blob);
-    _sectionPdfBlobUrls[sectionFilter] = blobUrl;
-
-    return blobUrl;
-}
-
-
-/**
- * Compile and display a section-specific PDF preview in a tab's iframe.
- *
- * Called by the "Compile PDF" button in each tab's PDF preview container.
- * Shows the preview container, clears the old iframe content, compiles
- * the section PDF on the server, and loads the result into the iframe.
- *
- * Args:
- *   sectionFilter: "apical", "genomics", or "charts"
- */
-async function refreshSectionPdf(sectionFilter) {
-    const frameId = `${sectionFilter}-pdf-frame`;
-    const previewId = `${sectionFilter}-pdf-preview`;
-    const frame = document.getElementById(frameId);
-    const btn = document.querySelector(`#${previewId} .btn-compile-section-pdf`);
-
+async function compilePreviewForNode(tocId, force = false) {
+    const frame = document.getElementById('preview-pdf-frame');
+    const status = document.getElementById('preview-status');
+    const title = document.getElementById('preview-title');
     if (!frame) return;
 
-    // Show the preview container and clear old content
-    show(previewId);
-    frame.src = '';
+    // Update title to show which section is being previewed.
+    // Don't force the pane open — the user controls visibility via the
+    // collapse tab.  We compile in the background so the PDF is ready
+    // when they do open it.
+    if (title) title.textContent = `Preview: ${tocId}`;
 
-    // Disable button and show compiling state
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Compiling...';
+    // Check cache — reuse existing blob URL if available
+    if (!force && _sectionPdfBlobUrls[tocId]) {
+        frame.src = _sectionPdfBlobUrls[tocId];
+        if (status) status.textContent = '';
+        return;
     }
+
+    // Show compiling status
+    if (status) status.textContent = 'Compiling...';
 
     try {
-        const blobUrl = await compileSectionPdf(sectionFilter);
-        if (blobUrl) {
-            frame.src = blobUrl;
+        const needCharts = tocId === 'charts';
+        const payload = await buildExportPayload({ includeCharts: needCharts });
+        payload.section_filter = tocId;
+
+        const resp = await fetch('/api/export-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            if (status) status.textContent = err.error || 'Compilation failed';
+            return;
         }
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Compile PDF';
+
+        const blob = await resp.blob();
+
+        // Revoke previous blob URL for this node to free memory
+        if (_sectionPdfBlobUrls[tocId]) {
+            URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
         }
+        const blobUrl = URL.createObjectURL(blob);
+        _sectionPdfBlobUrls[tocId] = blobUrl;
+
+        frame.src = blobUrl;
+        if (status) status.textContent = '';
+    } catch (e) {
+        if (status) status.textContent = `Error: ${e.message}`;
     }
 }
 
-
-/**
- * Toggle the section PDF preview for Apical or Genomics tabs.
- *
- * Hides the HTML card content and shows the PDF preview container
- * (or vice versa).  For Charts, this is handled by activateChartTypeTab()
- * since the PDF preview is a chart-type panel.
- *
- * The toggle button gets an "active" class when the PDF preview is visible,
- * matching the visual style of other sub-tab buttons.
- *
- * @param {string} sectionFilter — "apical" or "genomics"
- */
-function toggleSectionPdfPreview(sectionFilter) {
-    const previewId = `${sectionFilter}-pdf-preview`;
-    const preview = document.getElementById(previewId);
-    if (!preview) return;
-
-    const isShowing = preview.style.display !== 'none';
-
-    // Map section filter → the HTML content container to show/hide.
-    // For top-level tabs (apical, genomics), this is the cards wrapper
-    // INSIDE the section group (not the group itself — hiding the group
-    // would also hide the PDF preview which is a sibling).
-    // For BMD summary sections, it's the table-preview div inside the
-    // collapsible section body.
-    const contentMap = {
-        animal_condition: 'animal_condition-cards-content',
-        clinical_path: 'clinical_path-cards-content',
-        internal_dose: 'internal_dose-cards-content',
-        apical: 'apical-cards-content',  // legacy compat
-        genomics: 'genomics-gene-set-cards',
-        bmd_summary: 'bmd-summary-table',
-        bmd_summary_bmds: 'bmd-summary-bmds-table',
-    };
-    const contentId = contentMap[sectionFilter];
-    const content = contentId ? document.getElementById(contentId) : null;
-
-    // Toggle the PDF preview button's active state.
-    // Look in the closest section container (bm2-section or output-section).
-    const tabBtn = (preview.closest('.bm2-section') || preview.closest('.section-body'))
-        ?.querySelector('.section-pdf-tab-btn');
-
-    if (isShowing) {
-        // Hide PDF preview, show HTML cards
-        preview.style.display = 'none';
-        if (content) content.style.display = '';
-        if (tabBtn) tabBtn.classList.remove('active');
-    } else {
-        // Show PDF preview, hide HTML cards
-        preview.style.display = '';
-        if (content) content.style.display = 'none';
-        if (tabBtn) tabBtn.classList.add('active');
-        // Auto-compile if the iframe is empty (first time)
-        const frame = document.getElementById(`${sectionFilter}-pdf-frame`);
-        if (frame && !frame.src) {
-            refreshSectionPdf(sectionFilter);
-        }
-    }
-}
+// Legacy compat stubs — these are still referenced by some remaining HTML
+function toggleSectionPdfPreview(f) { compilePreviewForNode(f); }
+function refreshSectionPdf(f) { compilePreviewForNode(f, true); }
 
 
 /**

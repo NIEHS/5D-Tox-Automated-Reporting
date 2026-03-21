@@ -102,6 +102,10 @@ document.addEventListener('alpine:init', () => {
         // so the Chemical ID form is visible on page load.
         activeSection: 'chem-id',
 
+        // --- PDF preview pane visibility ---
+        // Starts collapsed; user clicks the tab or navigates to open it.
+        previewVisible: false,
+
         // --- Unified narratives ---
         // Populated from the process-integrated response.  Keyed by section
         // name (e.g. "apical", "clinical_pathology"), values are
