@@ -419,6 +419,14 @@
 // suitable for embedding in a per-tab PDF preview iframe.
 #let section-only = data.at("section_only", default: false)
 
+// In section-only mode, suppress headers and footers entirely.
+// The global #set page() above defines them with page-number checks,
+// but for previews we want clean content with no chrome.
+// Uses content block [ ] so the set rule applies to all subsequent content.
+#if section-only [
+  #set page(header: none, footer: none)
+]
+
 
 // =====================================================================
 // FRONT MATTER — roman numeral pages
@@ -788,14 +796,17 @@
 // We switch the footer display format to arabic and reset the counter.
 // =====================================================================
 
-// Reset to arabic numbering starting at page 1
-#set page(
-  footer: context {
-    set text(size: 12pt, font: "Liberation Serif")
-    align(center, counter(page).display("1"))
-  },
-)
-#counter(page).update(1)
+// Reset to arabic numbering starting at page 1.
+// In section-only mode, skip entirely — no page numbering setup needed.
+#if not section-only [
+  #set page(
+    footer: context {
+      set text(size: 12pt, font: "Liberation Serif")
+      align(center, counter(page).display("1"))
+    },
+  )
+  #counter(page).update(1)
+]
 
 
 // --- Background ---
@@ -895,8 +906,17 @@
 //           └── Gene descriptions (UniProt/Entrez)
 // =====================================================================
 
-// Compute whether we have any results content.  This variable is
-// used below to conditionally emit the "Results" H1 heading.
+// Determine whether this is a leaf preview (single table, no unified
+// narratives — render only the table, no headings) vs a group preview
+// (section with headings + narrative, rendered as in the full report).
+#let _is-leaf-preview = (
+  section-only
+  and data.at("apical_sections", default: ()).len() <= 1
+  and data.at("unified_narratives", default: (:)).keys().len() == 0
+)
+#let _skip-headings = _is-leaf-preview
+
+// Compute whether we have any results content.
 #let has-results = (
   data.at("apical_sections", default: ()).len() > 0 or
   data.at("internal_dose", default: none) != none or
@@ -904,8 +924,14 @@
   data.at("genomics_sections", default: ()).len() > 0
 )
 
-#if has-results {
-  pagebreak()
+// Emit the "Results" H1 heading.
+// - Full report: pagebreak + H1
+// - Group preview (section-only, multiple tables): H1 only (no pagebreak)
+// - Leaf preview (single table): skip entirely (no headings at all)
+#if has-results and not _is-leaf-preview {
+  if not section-only {
+    pagebreak()
+  }
   heading(level: 1, "Results")
 }
 
@@ -971,25 +997,21 @@
 #for (idx, pair) in _apical-with-groups.enumerate() {
   let (group-key, sec) = pair
 
-  // Emit group H2 heading + unified narrative at group transitions
-  if _first-in-group.at(idx, default: false) {
-    let group-title = _group-titles.at(group-key, default: "")
-    if group-title != "" {
-      heading(level: 2, group-title)
+  // In section-only mode (leaf preview), skip all headings and narratives —
+  // render only the table content.  In full-report mode, emit group H2
+  // headings with unified narratives at group transitions.
+  if not _skip-headings {
+    if _first-in-group.at(idx, default: false) {
+      let group-title = _group-titles.at(group-key, default: "")
+      if group-title != "" {
+        heading(level: 2, group-title)
+      }
+      for para in _unified.at(group-key, default: ()) {
+        [#para]
+        parbreak()
+      }
     }
-    for para in _unified.at(group-key, default: ()) {
-      [#para]
-      parbreak()
-    }
-  }
 
-  // Per-table heading (H3 level)
-  heading(level: 3, sec.at("title", default: "Apical Endpoints"))
-
-  // Per-table narrative paragraphs (if any)
-  for para in sec.at("narrative", default: ()) {
-    [#para]
-    parbreak()
   }
 
   // Data table — single table with Male/Female sex-group separator rows,
