@@ -906,14 +906,10 @@
 //           └── Gene descriptions (UniProt/Entrez)
 // =====================================================================
 
-// Determine whether this is a leaf preview (single table, no unified
-// narratives — render only the table, no headings) vs a group preview
-// (section with headings + narrative, rendered as in the full report).
-#let _is-leaf-preview = (
-  section-only
-  and data.at("apical_sections", default: ()).len() <= 1
-  and data.at("unified_narratives", default: (:)).keys().len() == 0
-)
+// Whether this is a leaf preview (single table, no headings — just the table)
+// vs a group preview (section with headings + narrative, as in the full report).
+// Set by marshal_export_data() based on the document tree node type.
+#let _is-leaf-preview = data.at("leaf_preview", default: false)
 #let _skip-headings = _is-leaf-preview
 
 // Compute whether we have any results content.
