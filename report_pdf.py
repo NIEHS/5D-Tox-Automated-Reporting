@@ -583,6 +583,41 @@ def build_test_article_forms(
     }
 
 
+def _build_methods_sections_from_tree() -> list[dict]:
+    """
+    Walk the "methods" node in the document tree and build a flat list
+    of {"level": N, "heading": "...", "paragraphs": []} dicts matching
+    the format expected by the Typst template's methods rendering.
+
+    This replaces a hardcoded 20-entry list — the tree is the single
+    source of truth for the M&M heading hierarchy.  If a section is
+    added or reordered in document_tree.py, the scaffold PDF picks
+    it up automatically.
+    """
+    from document_tree import find_node
+
+    methods_node = find_node("methods")
+    if not methods_node or not methods_node.children:
+        return []
+
+    sections: list[dict] = []
+
+    def _walk(nodes: list) -> None:
+        for node in nodes:
+            # Skip the "methods" heading-only parent — its children are
+            # the actual H2/H3 sections we want.
+            sections.append({
+                "level": node.level,
+                "heading": node.title,
+                "paragraphs": [],
+            })
+            if node.children:
+                _walk(node.children)
+
+    _walk(methods_node.children)
+    return sections
+
+
 def scaffold_report_data(
     chemical_name: str = "Test Article",
     casrn: str = "000-00-0",
@@ -702,33 +737,12 @@ def scaffold_report_data(
     ]
 
     # --- Materials and Methods (structured H2/H3 hierarchy) ---
-    # Mirrors the exact NIEHS Report 10 section structure.
-    # --- Materials and Methods: heading-only scaffold ---
-    # Full H2/H3 hierarchy matching NIEHS Report 10 TOC (pages iii-iv).
-    # Paragraph content is empty — just the heading structure so the TOC
-    # shows the complete expected layout.
-    methods_sections = [
-        {"level": 2, "heading": "Study Design", "paragraphs": []},
-        {"level": 2, "heading": "Dose Selection Rationale", "paragraphs": []},
-        {"level": 2, "heading": "Chemistry", "paragraphs": []},
-        {"level": 2, "heading": "Clinical Examinations and Sample Collection", "paragraphs": []},
-        {"level": 3, "heading": "Clinical Observations", "paragraphs": []},
-        {"level": 3, "heading": "Body and Organ Weights", "paragraphs": []},
-        {"level": 3, "heading": "Clinical Pathology", "paragraphs": []},
-        {"level": 3, "heading": "Internal Dose Assessment", "paragraphs": []},
-        {"level": 2, "heading": "Transcriptomics", "paragraphs": []},
-        {"level": 3, "heading": "Sample Collection for Transcriptomics", "paragraphs": []},
-        {"level": 3, "heading": "RNA Isolation, Library Creation, and Sequencing", "paragraphs": []},
-        {"level": 3, "heading": "Sequence Data Processing", "paragraphs": []},
-        {"level": 3, "heading": "Sequencing Quality Checks and Outlier Removal", "paragraphs": []},
-        {"level": 3, "heading": "Data Normalization", "paragraphs": []},
-        {"level": 2, "heading": "Data Analysis", "paragraphs": []},
-        {"level": 3, "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology", "paragraphs": []},
-        {"level": 3, "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology", "paragraphs": []},
-        {"level": 3, "heading": "Benchmark Dose Analysis of Transcriptomics Data", "paragraphs": []},
-        {"level": 3, "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling", "paragraphs": []},
-        {"level": 2, "heading": "Data Accessibility", "paragraphs": []},
-    ]
+    # DERIVED FROM THE DOCUMENT TREE — not hardcoded.
+    # Walks the "methods" node's children recursively to build the same
+    # {"level": N, "heading": "..."} dicts from the tree.  This means
+    # adding/removing/reordering M&M subsections in document_tree.py
+    # automatically updates the scaffold PDF without touching this file.
+    methods_sections = _build_methods_sections_from_tree()
 
     # ================================================================
     # ASSEMBLE THE COMPLETE SCAFFOLD

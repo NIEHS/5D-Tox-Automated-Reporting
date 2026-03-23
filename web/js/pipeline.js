@@ -662,10 +662,13 @@ function renderAnimalReport(report) {
 
     // --- D. Animal Roster (full per-animal table, collapsed by default) ---
     if (report.animals && Object.keys(report.animals).length > 0) {
-        const domainOrder = [
-            'Body Weight', 'Organ Weights', 'Clinical Chemistry', 'Hematology',
-            'Hormones', 'Tissue Concentration', 'Clinical', 'Gene Expression',
-        ];
+        // Platform ordering derived from the document tree (single source
+        // of truth) rather than a hardcoded array.  Falls back to a static
+        // list if the tree hasn't loaded yet.
+        const domainOrder = (typeof collectPlatformOrder === 'function' && collectPlatformOrder().length > 0)
+            ? [...collectPlatformOrder(), 'Gene Expression']  // Gene Expression not in tree (genomics section, not a table)
+            : ['Body Weight', 'Organ Weights', 'Clinical Chemistry', 'Hematology',
+               'Hormones', 'Tissue Concentration', 'Clinical', 'Gene Expression'];
         const domainShort = {
             'Body Weight': 'BW', 'Organ Weights': 'OW', 'Clinical Chemistry': 'CC',
             'Hematology': 'Hem', 'Hormones': 'Horm', 'Tissue Concentration': 'TC',

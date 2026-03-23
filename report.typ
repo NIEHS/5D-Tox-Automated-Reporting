@@ -1250,9 +1250,12 @@
 // NIEHS page 30 (body 18): narrative about plasma concentrations and
 // half-lives, followed by Table 7 (narrow, 3-column portrait table with
 // 2-hour and 24-hour postdose concentrations for 4 and 37 mg/kg groups).
+// Heading text and level derived from the document tree (node "internal-dose")
+// so changes in document_tree.py propagate automatically.
+#let _idose-info = _group-info.at("internal-dose", default: (title: "Internal Dose Assessment", level: 2))
 #if data.at("internal_dose", default: none) != none {
   let idose = data.internal_dose
-  heading(level: 2, "Internal Dose Assessment")
+  heading(level: _idose-info.level, _idose-info.title)
 
   // Narrative paragraphs
   for para in idose.at("paragraphs", default: ()) {
@@ -1278,12 +1281,14 @@
 // NIEHS page 31 (body 19): Table 8 — sex-grouped 6-column portrait table
 // showing BMD, BMDL, LOEL, NOEL, and direction for each endpoint.
 // Preceded by a brief narrative paragraph.
+// Heading text and level derived from the document tree (node "bmd-summary").
+#let _bmd-summary-info = _group-info.at("bmd-summary", default: (title: "Apical Endpoint Benchmark Dose Summary", level: 2))
 #if data.at("bmd_summary", default: none) != none {
   let bmd = data.bmd_summary
   let endpoints = bmd.at("endpoints", default: ())
   if endpoints.len() > 0 {
     pagebreak()
-    heading(level: 2, "Apical Endpoint Benchmark Dose Summary")
+    heading(level: _bmd-summary-info.level, _bmd-summary-info.title)
 
     // Optional narrative before the table
     for para in bmd.at("paragraphs", default: ()) {
@@ -1346,11 +1351,16 @@
   // behavior of rendering everything under a single "Transcriptomic BMD Analysis" heading.
   let has-typed-sections = gene-set-sections.len() > 0 or gene-sections.len() > 0
 
+  // Heading text and level derived from the document tree for both
+  // genomics sections — "gene-sets" and "gene-bmd" nodes.
+  let _gene-sets-info = _group-info.at("gene-sets", default: (title: "Gene Set Benchmark Dose Analysis", level: 2))
+  let _gene-bmd-info = _group-info.at("gene-bmd", default: (title: "Gene Benchmark Dose Analysis", level: 2))
+
   if has-typed-sections {
     // --- Gene Set BMD Analysis (H2) ---
     if gene-set-sections.len() > 0 {
       pagebreak()
-      heading(level: 2, "Gene Set Benchmark Dose Analysis")
+      heading(level: _gene-sets-info.level, _gene-sets-info.title)
 
       // Shared narrative for gene set analysis
       let gs-narrative = data.at("gene_set_narrative", default: none)
@@ -1415,10 +1425,11 @@
     }
 
     // --- Gene BMD Analysis (H2) ---
-    // NIEHS page 38 (body 26): starts on a new page
+    // NIEHS page 38 (body 26): starts on a new page.
+    // Heading derived from document tree node "gene-bmd".
     if gene-sections.len() > 0 {
       pagebreak()
-      heading(level: 2, "Gene Benchmark Dose Analysis")
+      heading(level: _gene-bmd-info.level, _gene-bmd-info.title)
 
       // Shared narrative for gene analysis
       let gene-narrative = data.at("gene_narrative", default: none)

@@ -287,219 +287,12 @@
 
                 <hr class="sidebar-divider">
 
-                <!-- Complete NIEHS Report 10 TOC — every section, subsection,
-                     table, and appendix from the reference document. -->
-                <ul class="toc-tree">
-
-                    <!-- ===== Front Matter ===== -->
-                    <li x-data="{ expanded: false }">
-                        <a class="toc-node toc-parent" @click="expanded = !expanded">
-                            <span class="chevron" :class="{ expanded }">▸</span> Front Matter
-                        </a>
-                        <ul x-show="expanded" x-collapse>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'cover' }"
-                                   @click="navigateToNode('cover')">Cover Page</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'title-page' }"
-                                   @click="navigateToNode('title-page')">Title Page</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'foreword' }"
-                                   @click="navigateToNode('foreword')">Foreword</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'tables-list' }"
-                                   @click="navigateToNode('tables-list')">Tables</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'about' }"
-                                   @click="navigateToNode('about')">About This Report</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'peer-review' }"
-                                   @click="navigateToNode('peer-review')">Peer Review</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'publication' }"
-                                   @click="navigateToNode('publication')">Publication Details</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'acknowledgments' }"
-                                   @click="navigateToNode('acknowledgments')">Acknowledgments</a></li>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'abstract' }"
-                                   @click="navigateToNode('abstract')">Abstract</a></li>
-                        </ul>
-                    </li>
-
-                    <!-- ===== Body ===== -->
-                    <li>
-                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'background' }"
-                           @click="navigateToNode('background')">Background</a>
-                    </li>
-
-                    <!-- Materials and Methods — deep hierarchy -->
-                    <li x-data="{ expanded: false }">
-                        <a class="toc-node toc-parent" :class="{ disabled: !$store.app.ready.methods }"
-                           @click="expanded = !expanded">
-                            <span class="chevron" :class="{ expanded }">▸</span> Materials and Methods
-                        </a>
-                        <ul x-show="expanded" x-collapse>
-                            <li><a class="toc-node" :class="{ active: $store.app.activeSection === 'methods', disabled: !$store.app.ready.methods }"
-                                   @click="$store.app.ready.methods && navigateToNode('methods')">Full Section</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-study-design' }"
-                                   @click="navigateToNode('mm-study-design')">Study Design</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-dose-rationale' }"
-                                   @click="navigateToNode('mm-dose-rationale')">Dose Selection Rationale</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-chemistry' }"
-                                   @click="navigateToNode('mm-chemistry')">Chemistry</a></li>
-                            <li x-data="{ ex: false }">
-                                <a class="toc-leaf toc-parent" @click="ex = !ex">
-                                    <span class="chevron" :class="{ expanded: ex }">▸</span> Clinical Examinations and Sample Collection</a>
-                                <ul x-show="ex" x-collapse>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-clin-obs' }"
-                                           @click="navigateToNode('mm-clin-obs')">Clinical Observations</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-body-organ-wt' }"
-                                           @click="navigateToNode('mm-body-organ-wt')">Body and Organ Weights</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-clin-path' }"
-                                           @click="navigateToNode('mm-clin-path')">Clinical Pathology</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-internal-dose' }"
-                                           @click="navigateToNode('mm-internal-dose')">Internal Dose Assessment</a></li>
-                                </ul>
-                            </li>
-                            <li x-data="{ ex: false }">
-                                <a class="toc-leaf toc-parent" @click="ex = !ex">
-                                    <span class="chevron" :class="{ expanded: ex }">▸</span> Transcriptomics</a>
-                                <ul x-show="ex" x-collapse>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-tx-sample' }"
-                                           @click="navigateToNode('mm-tx-sample')">Sample Collection</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-tx-rna' }"
-                                           @click="navigateToNode('mm-tx-rna')">RNA Isolation, Library Creation, and Sequencing</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-tx-processing' }"
-                                           @click="navigateToNode('mm-tx-processing')">Sequence Data Processing</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-tx-qc' }"
-                                           @click="navigateToNode('mm-tx-qc')">Sequencing Quality Checks and Outlier Removal</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-tx-norm' }"
-                                           @click="navigateToNode('mm-tx-norm')">Data Normalization</a></li>
-                                </ul>
-                            </li>
-                            <li x-data="{ ex: false }">
-                                <a class="toc-leaf toc-parent" @click="ex = !ex">
-                                    <span class="chevron" :class="{ expanded: ex }">▸</span> Data Analysis</a>
-                                <ul x-show="ex" x-collapse>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-stat-apical' }"
-                                           @click="navigateToNode('mm-stat-apical')">Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-bmd-apical' }"
-                                           @click="navigateToNode('mm-bmd-apical')">Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-bmd-tx' }"
-                                           @click="navigateToNode('mm-bmd-tx')">Benchmark Dose Analysis of Transcriptomics Data</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-fdr' }"
-                                           @click="navigateToNode('mm-fdr')">Empirical False Discovery Rate Determination</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'mm-data-access' }"
-                                           @click="navigateToNode('mm-data-access')">Data Accessibility</a></li>
-                                </ul>
-                            </li>
-                        </ul>
-                    </li>
-
-                    <!-- Results -->
-                    <li x-data="{ expanded: true }">
-                        <a class="toc-node toc-parent" @click="expanded = !expanded">
-                            <span class="chevron" :class="{ expanded }">▸</span> Results
-                        </a>
-                        <ul x-show="expanded" x-collapse>
-                            <li>
-                                <a class="toc-node" :class="{ active: ['animal-condition','table-body-weight','table-organ-weight','table-clinical-obs'].includes($store.app.activeSection),
-                                                               disabled: !$store.app.ready.animalCondition }"
-                                   @click="$store.app.ready.animalCondition && navigateToNode('animal-condition')">
-                                    Animal Condition, Body Weights, and Organ Weights
-                                </a>
-                                <ul>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-body-weight',
-                                                                       disabled: !$store.app.ready.animalCondition }"
-                                           @click="$store.app.ready.animalCondition && navigateToNode('table-body-weight')">Table 2: Body Weights</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-organ-weight',
-                                                                       disabled: !$store.app.ready.animalCondition }"
-                                           @click="$store.app.ready.animalCondition && navigateToNode('table-organ-weight')">Table 3: Organ Weights</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-clinical-obs',
-                                                                       disabled: !$store.app.ready.animalCondition }"
-                                           @click="$store.app.ready.animalCondition && navigateToNode('table-clinical-obs')">Clinical Observations</a></li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: ['clinical-path','table-clin-chem','table-hematology','table-hormones'].includes($store.app.activeSection),
-                                                               disabled: !$store.app.ready.clinicalPath }"
-                                   @click="$store.app.ready.clinicalPath && navigateToNode('clinical-path')">
-                                    Clinical Pathology
-                                </a>
-                                <ul>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-clin-chem',
-                                                                       disabled: !$store.app.ready.clinicalPath }"
-                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-clin-chem')">Table 4: Clinical Chemistry</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-hematology',
-                                                                       disabled: !$store.app.ready.clinicalPath }"
-                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-hematology')">Table 5: Hematology</a></li>
-                                    <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'table-hormones',
-                                                                       disabled: !$store.app.ready.clinicalPath }"
-                                           @click="$store.app.ready.clinicalPath && navigateToNode('table-hormones')">Table 6: Hormones</a></li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: ['internal-dose','table-tissue-conc'].includes($store.app.activeSection),
-                                                               disabled: !$store.app.ready.internalDose }"
-                                   @click="$store.app.ready.internalDose && navigateToNode('internal-dose')">
-                                    Internal Dose Assessment
-                                </a>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'bmd-summary',
-                                                               disabled: !$store.app.ready.bmdSummary }"
-                                   @click="$store.app.ready.bmdSummary && navigateToNode('bmd-summary')">
-                                    Apical Endpoint BMD Summary
-                                </a>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'gene-sets',
-                                                               disabled: !$store.app.ready.geneSets }"
-                                   @click="$store.app.ready.geneSets && navigateToNode('gene-sets')">
-                                    Gene Set BMD Analysis
-                                </a>
-                                <ul id="toc-gene-set-children"></ul>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'gene-bmd',
-                                                               disabled: !$store.app.ready.geneBmd }"
-                                   @click="$store.app.ready.geneBmd && navigateToNode('gene-bmd')">
-                                    Gene BMD Analysis
-                                </a>
-                                <ul id="toc-gene-bmd-children"></ul>
-                            </li>
-                            <li>
-                                <a class="toc-node" :class="{ active: $store.app.activeSection === 'charts',
-                                                               disabled: !$store.app.ready.charts }"
-                                   @click="$store.app.ready.charts && navigateToNode('charts')">
-                                    Genomics Charts
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-
-                    <li>
-                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'summary',
-                                                       disabled: !$store.app.ready.summary }"
-                           @click="$store.app.ready.summary && navigateToNode('summary')">Summary</a>
-                    </li>
-                    <li>
-                        <a class="toc-node" :class="{ active: $store.app.activeSection === 'references' }"
-                           @click="navigateToNode('references')">References</a>
-                    </li>
-
-                    <!-- ===== Appendices ===== -->
-                    <li x-data="{ expanded: false }">
-                        <a class="toc-node toc-parent" @click="expanded = !expanded">
-                            <span class="chevron" :class="{ expanded }">▸</span> Appendices
-                        </a>
-                        <ul x-show="expanded" x-collapse>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-a' }"
-                                   @click="navigateToNode('appendix-a')">A. Internal Dose Assessment</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-b' }"
-                                   @click="navigateToNode('appendix-b')">B. Animal Identifiers</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-c' }"
-                                   @click="navigateToNode('appendix-c')">C. Transcriptomic QC and Empirical FDR</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-d' }"
-                                   @click="navigateToNode('appendix-d')">D. BMD Model Recommendation and Selection</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-e' }"
-                                   @click="navigateToNode('appendix-e')">E. Organ Weight Descriptions</a></li>
-                            <li><a class="toc-leaf" :class="{ active: $store.app.activeSection === 'appendix-f' }"
-                                   @click="navigateToNode('appendix-f')">F. Supplemental Data</a></li>
-                        </ul>
-                    </li>
+                <!-- TOC tree — generated dynamically from the document tree
+                     by renderTocFromTree() in layout.js.  This replaces ~210
+                     lines of hardcoded HTML with a single container.  The tree
+                     is fetched from /api/document-tree on page load. -->
+                <ul class="toc-tree" id="toc-tree-container">
+                    <!-- Populated by renderTocFromTree() after tree fetch -->
                 </ul>
 
                 <hr class="sidebar-divider">
@@ -998,70 +791,19 @@
         </div>
 
         <!-- ================================================================
-             Apical Endpoint Results — split into 3 grouped sections that
-             mirror the NIEHS reference report TOC structure.  Each group
-             contains platform-specific containers where createBm2Card()
-             inserts cards.  Alpine x-show drives visibility.
+             Apical Endpoint Results — narrative+tables groups.
+             Generated dynamically from the document tree by
+             renderResultsFromTree() in layout.js.  Each group gets:
+               - results-group div with x-show for group+child IDs
+               - h2 heading (visible only at group level)
+               - unified narrative textarea (visible only at group level)
+               - platform-container divs for each child table node
+             BMD summary, genomics, and charts sections stay as static HTML
+             because they have complex internal UI (approve buttons, PDF
+             preview frames, dynamic card containers).
              ================================================================ -->
-
-        <!-- Animal Condition, Body Weights, and Organ Weights
-             Visible when activeSection is the group OR any of its table children.
-             Each platform container is independently visible when its specific
-             table ID is the activeSection. -->
-        <div class="results-group" id="section-animal-condition" data-toc-id="animal-condition"
-             x-data x-show="['animal-condition','table-body-weight','table-organ-weight','table-clinical-obs'].includes($store.app.activeSection)" style="display:none;">
-            <!-- Group header + narrative only visible when viewing the whole group -->
-            <h2 x-show="$store.app.activeSection === 'animal-condition'">Animal Condition, Body Weights, and Organ Weights</h2>
-            <textarea class="unified-narrative" id="narrative-apical" rows="6"
-                x-show="$store.app.activeSection === 'animal-condition'"
-                placeholder="Unified narrative populated after processing..."></textarea>
-            <div class="platform-container" data-toc-id="table-body-weight" data-platform="Body Weight"
-                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-body-weight'">
-                <h3>Table 2: Body Weights</h3>
-            </div>
-            <div class="platform-container" data-toc-id="table-organ-weight" data-platform="Organ Weight"
-                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-organ-weight'">
-                <h3>Table 3: Organ Weights</h3>
-            </div>
-            <!-- Fallback container for "Organ Weights" (plural, legacy compat) -->
-            <div class="platform-container" data-platform="Organ Weights" style="display:none;"></div>
-            <div class="platform-container" data-toc-id="table-clinical-obs" data-platform="Clinical Observations"
-                 x-show="$store.app.activeSection === 'animal-condition' || $store.app.activeSection === 'table-clinical-obs'">
-                <h3>Clinical Observations</h3>
-            </div>
-            <!-- Fallback for "Clinical" (legacy key) -->
-            <div class="platform-container" data-platform="Clinical" style="display:none;"></div>
-        </div>
-
-        <!-- Clinical Pathology -->
-        <div class="results-group" id="section-clinical-path" data-toc-id="clinical-path"
-             x-data x-show="['clinical-path','table-clin-chem','table-hematology','table-hormones'].includes($store.app.activeSection)" style="display:none;">
-            <h2 x-show="$store.app.activeSection === 'clinical-path'">Clinical Pathology</h2>
-            <textarea class="unified-narrative" id="narrative-clinical_pathology" rows="6"
-                x-show="$store.app.activeSection === 'clinical-path'"
-                placeholder="Unified narrative populated after processing..."></textarea>
-            <div class="platform-container" data-toc-id="table-clin-chem" data-platform="Clinical Chemistry"
-                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-clin-chem'">
-                <h3>Table 4: Clinical Chemistry</h3>
-            </div>
-            <div class="platform-container" data-toc-id="table-hematology" data-platform="Hematology"
-                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hematology'">
-                <h3>Table 5: Hematology</h3>
-            </div>
-            <div class="platform-container" data-toc-id="table-hormones" data-platform="Hormones"
-                 x-show="$store.app.activeSection === 'clinical-path' || $store.app.activeSection === 'table-hormones'">
-                <h3>Table 6: Hormones</h3>
-            </div>
-        </div>
-
-        <!-- Internal Dose Assessment -->
-        <div class="results-group" id="section-internal-dose" data-toc-id="internal-dose"
-             x-data x-show="['internal-dose','table-tissue-conc'].includes($store.app.activeSection)" style="display:none;">
-            <h2 x-show="$store.app.activeSection === 'internal-dose'">Internal Dose Assessment</h2>
-            <div class="platform-container" data-toc-id="table-tissue-conc" data-platform="Tissue Concentration"
-                 x-show="$store.app.activeSection === 'internal-dose' || $store.app.activeSection === 'table-tissue-conc'">
-                <h3>Table 7: Tissue Concentration</h3>
-            </div>
+        <div id="results-apical-container">
+            <!-- Populated by renderResultsFromTree() after tree fetch -->
         </div>
 
         <!-- BMD Summary — merged section with both BMDExpress 3 and BMDS tables.
@@ -1134,60 +876,13 @@
             </div><!-- /section-body -->
         </div>
 
-        <!-- ================================================================
-             Materials and Methods — individual subsection views.
-             Each maps to an H2/H3 in the NIEHS report.  Titles only for now.
-             ================================================================ -->
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-study-design'">
-            <h2>Study Design</h2>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-dose-rationale'">
-            <h2>Dose Selection Rationale</h2>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-chemistry'">
-            <h2>Chemistry</h2>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-clin-obs'">
-            <h3>Clinical Observations</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-body-organ-wt'">
-            <h3>Body and Organ Weights</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-clin-path'">
-            <h3>Clinical Pathology</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-internal-dose'">
-            <h3>Internal Dose Assessment</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-tx-sample'">
-            <h3>Sample Collection for Transcriptomics</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-tx-rna'">
-            <h3>RNA Isolation, Library Creation, and Sequencing</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-tx-processing'">
-            <h3>Sequence Data Processing</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-tx-qc'">
-            <h3>Sequencing Quality Checks and Outlier Removal</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-tx-norm'">
-            <h3>Data Normalization</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-stat-apical'">
-            <h3>Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-bmd-apical'">
-            <h3>Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-bmd-tx'">
-            <h3>Benchmark Dose Analysis of Transcriptomics Data</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-fdr'">
-            <h3>Empirical False Discovery Rate Determination for Genomic Dose-Response Modeling</h3>
-        </div>
-        <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'mm-data-access'">
-            <h3>Data Accessibility</h3>
+        <!-- Materials and Methods — individual subsection views.
+             Generated dynamically from the document tree by
+             renderMethodsSubsectionsFromTree() in layout.js.
+             Each subsection shows its heading when navigated to
+             via the TOC sidebar. -->
+        <div id="methods-subsections-container">
+            <!-- Populated by renderMethodsSubsectionsFromTree() -->
         </div>
 
         <!-- Summary section (hidden until other sections approved) -->

@@ -47,24 +47,42 @@ const _PLATFORM_DEFAULTS = {
  * When a card is placed into a platform container, the corresponding
  * Alpine store flag is set to true so the parent section becomes visible.
  *
- * This replaces the old _PLATFORM_SUB_TAB_ORDER and ensureDomainSubTab
- * pattern — instead of creating sub-tabs dynamically, cards are routed
- * into static platform containers defined in index.html.
+ * DERIVED FROM THE DOCUMENT TREE — not hardcoded.  buildPlatformToReady()
+ * (in layout.js) walks the Results subtree and maps each child platform
+ * to its parent group's ready_key.  This getter lazy-builds and caches
+ * the map on first access (after the tree is fetched).
+ *
+ * Falls back to a minimal map if the tree isn't loaded yet (e.g., during
+ * session restore that runs before the fetch completes).
  */
-// Platform strings must match exactly what the server returns in
-// section.platform from /api/process-integrated.  The server uses
-// singular "Organ Weight" (not "Organ Weights").
-const PLATFORM_TO_READY = {
-    'Body Weight':              'animalCondition',
-    'Organ Weight':             'animalCondition',
-    'Organ Weights':            'animalCondition',   // legacy compat
-    'Clinical Chemistry':       'clinicalPath',
-    'Hematology':               'clinicalPath',
-    'Hormones':                 'clinicalPath',
-    'Tissue Concentration':     'internalDose',
-    'Clinical Observations':    'animalCondition',   // incidence tables
-    'Clinical':                 'animalCondition',   // legacy compat
-};
+// Cache stored on window so layout.js can invalidate it when the
+// document tree loads (the tree may not be available on first access).
+window._platformToReadyCache = null;
+function getPlatformToReady() {
+    if (window._platformToReadyCache) return window._platformToReadyCache;
+    if (typeof buildPlatformToReady === 'function') {
+        const map = buildPlatformToReady();
+        // Only cache if the tree was actually loaded (non-empty map)
+        if (Object.keys(map).length > 0) {
+            window._platformToReadyCache = map;
+            return map;
+        }
+    }
+    // Minimal fallback for code that runs before tree fetch completes
+    return {
+        'Body Weight': 'animalCondition', 'Organ Weight': 'animalCondition',
+        'Organ Weights': 'animalCondition', 'Clinical Chemistry': 'clinicalPath',
+        'Hematology': 'clinicalPath', 'Hormones': 'clinicalPath',
+        'Tissue Concentration': 'internalDose',
+        'Clinical Observations': 'animalCondition', 'Clinical': 'animalCondition',
+    };
+}
+// Backward-compatible constant-like accessor for existing code
+// that reads PLATFORM_TO_READY[platform] directly.
+const PLATFORM_TO_READY = new Proxy({}, {
+    get: (_, key) => getPlatformToReady()[key],
+    has: (_, key) => key in getPlatformToReady(),
+});
 
 /**
  * Pass-through for backward compatibility.  Platform strings no longer

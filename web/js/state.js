@@ -115,7 +115,27 @@ document.addEventListener('alpine:init', () => {
         // name (e.g. "apical", "clinical_pathology"), values are
         // {paragraphs: [...]} objects from the server.
         unifiedNarratives: {},
+
+        // --- Document structure tree ---
+        // Injected by the server as window.__DOCUMENT_TREE__ in <head>.
+        // This is the serialized form of document_tree.py's DOCUMENT_TREE
+        // — the single source of truth for the report's organization.
+        // The frontend derives TOC sidebar, Results containers, platform-
+        // to-section routing, and domain ordering from this tree instead
+        // of hardcoding them.
+        documentTree: window.__DOCUMENT_TREE__ || [],
     });
+
+    // --- Generate DOM from the document tree ---
+    // Must run inside alpine:init (BEFORE Alpine processes x-data
+    // directives) so the dynamically created elements with Alpine
+    // directives (x-show, x-data, :class, @click, x-collapse) get
+    // processed naturally by Alpine's first DOM walk.
+    // The tree is available synchronously via window.__DOCUMENT_TREE__
+    // (injected by the server in <head>).
+    if (typeof initDocumentTree === 'function') {
+        initDocumentTree();
+    }
 });
 
 

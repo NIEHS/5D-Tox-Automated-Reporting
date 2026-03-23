@@ -148,14 +148,63 @@ async def serve_ui():
 
     The HTML file contains the full single-page application with chemical
     ID form, .bm2 upload area, output panels, and copy/export buttons.
+
+    The document tree JSON is injected as a global variable so it's
+    available synchronously before Alpine processes the DOM.  This
+    avoids the async fetch + Alpine.initTree race condition where
+    dynamically added elements with Alpine directives don't get
+    processed by Alpine's initial DOM walk.
     """
+    import json
+
     html_path = Path(__file__).parent / "web" / "index.html"
     if not html_path.exists():
         return HTMLResponse(
             "<h1>Error</h1><p>web/index.html not found</p>",
             status_code=404,
         )
-    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    html = html_path.read_text(encoding="utf-8")
+
+    # Inject the document tree as a global variable before any other
+    # scripts run.  The tree is static (computed at module load), so
+    # this adds no per-request cost beyond string interpolation.
+    # Placed right before </head> so it's available when state.js and
+    # layout.js execute.
+    tree_json = json.dumps(_SERIALIZED_TREE)
+    tree_script = (
+        f'<script>window.__DOCUMENT_TREE__ = {tree_json};</script>\n'
+    )
+    html = html.replace('</head>', tree_script + '</head>')
+
+    return HTMLResponse(html)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/document-tree — serialized document structure tree
+# ---------------------------------------------------------------------------
+# Returns the NIEHS report document structure as JSON so the frontend
+# can derive the TOC sidebar, platform maps, and Results containers
+# from the single source of truth (document_tree.py) instead of
+# hardcoding them in HTML/JS.
+
+from document_tree import serialize_tree, compute_table_numbers, DOCUMENT_TREE
+
+# Ensure table numbers are computed before serializing
+compute_table_numbers()
+_SERIALIZED_TREE = serialize_tree()
+
+
+@app.get("/api/document-tree")
+async def get_document_tree():
+    """
+    Return the full document structure tree as JSON.
+
+    The tree includes node IDs, titles, levels, types, platform mappings,
+    narrative keys, table numbers, and ready_key flags — everything the
+    frontend needs to generate the TOC sidebar, Results containers, and
+    platform routing without any hardcoded document structure.
+    """
+    return JSONResponse(_SERIALIZED_TREE)
 
 
 # ---------------------------------------------------------------------------
