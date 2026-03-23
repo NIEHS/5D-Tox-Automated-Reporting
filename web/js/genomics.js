@@ -335,6 +335,8 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
     const defaultCaption = `Summary of Gene Expression Findings in ${organTitle} of {sex} Rats Administered {compound} for Five Days`;
     const compoundName = currentIdentity?.name || '';
 
+    // --- Gene Set card (goes into the Gene Set BMD section) ---
+    // Contains: GO category tables + GO term descriptions + config/narrative
     card.innerHTML = `
         <div class="card-header">
             <span class="filename">${escapeHtml(organTitle)} \u2014 ${escapeHtml(sexTitle)}
@@ -385,11 +387,32 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
         <div class="table-preview">
             ${geneSetHtml}
             ${goDescHtml}
-            ${genesHtml}
-            ${geneDescHtml}
         </div>
     `;
     panel.appendChild(card);
+
+    // --- Gene BMD card (goes into the Gene BMD section) ---
+    // Contains: top genes table + gene descriptions.
+    // This is a separate card in a separate section, matching the NIEHS
+    // report structure where Gene Set BMD Analysis and Gene BMD Analysis
+    // are distinct H2 sections.
+    const geneBmdPanel = document.getElementById(`genomics-gene-bmd-${key}`);
+    if (geneBmdPanel) {
+        const geneBmdCard = document.createElement('div');
+        geneBmdCard.className = 'bm2-card';
+        geneBmdCard.id = `genomics-gene-bmd-card-${key}`;
+        geneBmdCard.innerHTML = `
+            <div class="card-header">
+                <span class="filename">${escapeHtml(organTitle)} \u2014 ${escapeHtml(sexTitle)}
+                    — Gene BMD</span>
+            </div>
+            <div class="table-preview">
+                ${genesHtml}
+                ${geneDescHtml}
+            </div>
+        `;
+        geneBmdPanel.appendChild(geneBmdCard);
+    }
 
     // Auto-resize the narrative textarea if it has content
     const narrativeEl = document.getElementById(`genomics-narrative-${key}`);
