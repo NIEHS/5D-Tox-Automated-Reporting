@@ -319,12 +319,25 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 "platform": sec.get("platform", section_title),
             }
 
-            # Table number — user-provided from the UI.  When present,
-            # the Typst template prepends "Table N. " to the caption,
-            # matching the NIEHS reference format (e.g., "Table 2.").
-            table_number = sec.get("table_number")
-            if table_number is not None:
-                apical_entry["table_number"] = table_number
+            # Table number — derived from the document structure tree.
+            # The tree assigns numbers by position (Table 2 = Body Weight,
+            # Table 3 = Organ Weight, etc.).  Overrides any user-provided
+            # table_number from the UI.
+            from document_tree import find_node, DOCUMENT_TREE
+            platform = apical_entry["platform"]
+            # Search the tree for a table node matching this platform
+            def _find_table_number(nodes, plat):
+                for n in nodes:
+                    if n.platform == plat and n.table_number is not None:
+                        return n.table_number
+                    if n.children:
+                        result = _find_table_number(n.children, plat)
+                        if result is not None:
+                            return result
+                return None
+            tree_table_num = _find_table_number(DOCUMENT_TREE, platform)
+            if tree_table_num is not None:
+                apical_entry["table_number"] = tree_table_num
 
             data["apical_sections"].append(apical_entry)
 

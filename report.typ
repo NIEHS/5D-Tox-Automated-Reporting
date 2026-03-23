@@ -933,49 +933,67 @@
 
 
 // --- Apical endpoint sections ---
-// NIEHS structure groups apical sections under two H2 headings:
-//   1. "Animal Condition, Body Weights, and Organ Weights" — BW, OW, ClinObs
-//   2. "Clinical Pathology" — Clin Chem, Hematology, Hormones
-// Each heading has a unified narrative (spanning multiple tables), followed
-// by per-table sections.  The unified narrative comes from the user-editable
-// textarea in the UI.
-
-// Pre-compute group membership for each apical section so we can emit
-// NIEHS TOC group headings (H2) and unified narratives at the right
-// transition points during the single iteration over apical_sections.
-//
-// The sections array is ordered by the server (BW, OW, ClinObs, CC, Hem,
-// Hormones) so group transitions happen naturally.  We detect transitions
-// by comparing each section's group key to the previous one.
+// Driven by the document_tree: walk the Results subtree to find group
+// nodes (narrative+tables) and their child table nodes.  Group headings,
+// unified narratives, and table numbering all come from the tree — no
+// hardcoded platform maps.
 
 #let _unified = data.at("unified_narratives", default: (:))
+#let _doc-tree = data.at("document_tree", default: ())
 
-#let _group-for-platform = (
-  "Body Weight": "animal_condition",
-  "Organ Weight": "animal_condition",
-  "Clinical Observations": "animal_condition",
-  "Clinical": "animal_condition",
-  "Clinical Chemistry": "clinical_pathology",
-  "Hematology": "clinical_pathology",
-  "Hormones": "clinical_pathology",
-)
+// Build group membership from the document tree.
+// Walk the tree to find Results > children (groups) > children (tables).
+// This replaces the hardcoded _group-for-platform and _group-titles maps.
+#let _group-for-platform = {
+  let m = (:)
+  // Find the "results" node in the tree
+  for top-node in _doc-tree {
+    if top-node.at("id", default: "") == "results" {
+      for group in top-node.at("children", default: ()) {
+        let gid = group.at("id", default: "")
+        let narrative-key = group.at("narrative_key", default: none)
+        if narrative-key != none or group.at("type", default: "") == "narrative+tables" {
+          for child in group.at("children", default: ()) {
+            let platform = child.at("platform", default: none)
+            if platform != none {
+              m.insert(platform, gid)
+              // Legacy compat: "Clinical Observations" also matches "Clinical"
+              if platform == "Clinical Observations" {
+                m.insert("Clinical", gid)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  m
+}
 
-#let _group-titles = (
-  "animal_condition": "Animal Condition, Body Weights, and Organ Weights",
-  "clinical_pathology": "Clinical Pathology",
-)
+#let _group-info = {
+  let m = (:)
+  for top-node in _doc-tree {
+    if top-node.at("id", default: "") == "results" {
+      for group in top-node.at("children", default: ()) {
+        let gid = group.at("id", default: "")
+        m.insert(gid, (
+          title: group.at("title", default: ""),
+          level: group.at("level", default: 2),
+          narrative_key: group.at("narrative_key", default: none),
+        ))
+      }
+    }
+  }
+  m
+}
 
-// Build an array of (group-key, section) pairs, then iterate with index
-// to detect group transitions.
+// Build (group-key, section) pairs and first-in-group flags
 #let _apical-with-groups = data.at("apical_sections", default: ()).map(sec => {
   let p = sec.at("platform", default: sec.at("title", default: ""))
   let g = _group-for-platform.at(p, default: none)
   (g, sec)
 })
 
-// Track which groups we've already emitted headings for.
-// Since Typst for-loops can't mutate outer variables, we pre-compute
-// which indices are "first in group" before the loop.
 #let _first-in-group = {
   let seen = ()
   let result = ()
@@ -993,21 +1011,23 @@
 #for (idx, pair) in _apical-with-groups.enumerate() {
   let (group-key, sec) = pair
 
-  // In section-only mode (leaf preview), skip all headings and narratives —
-  // render only the table content.  In full-report mode, emit group H2
-  // headings with unified narratives at group transitions.
+  // In leaf preview mode, skip all headings and narratives —
+  // render only the table content.
   if not _skip-headings {
     if _first-in-group.at(idx, default: false) {
-      let group-title = _group-titles.at(group-key, default: "")
-      if group-title != "" {
-        heading(level: 2, group-title)
-      }
-      for para in _unified.at(group-key, default: ()) {
-        [#para]
-        parbreak()
+      let info = _group-info.at(group-key, default: none)
+      if info != none {
+        heading(level: info.level, info.title)
+        // Unified narrative for this group
+        let narr-key = info.narrative_key
+        if narr-key != none {
+          for para in _unified.at(narr-key, default: ()) {
+            [#para]
+            parbreak()
+          }
+        }
       }
     }
-
   }
 
   // Data table — single table with Male/Female sex-group separator rows,
