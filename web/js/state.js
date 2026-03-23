@@ -103,8 +103,12 @@ document.addEventListener('alpine:init', () => {
         activeSection: 'chem-id',
 
         // --- PDF preview pane visibility ---
-        // Starts collapsed; user clicks the tab or navigates to open it.
-        previewVisible: false,
+        // Starts expanded (open by default).
+        previewVisible: true,
+
+        // --- Content pane visibility ---
+        // Always visible — the content pane is the primary editing surface.
+        contentVisible: true,
 
         // --- Unified narratives ---
         // Populated from the process-integrated response.  Keyed by section

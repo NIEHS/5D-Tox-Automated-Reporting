@@ -115,6 +115,15 @@ function togglePreviewPane() {
 }
 
 /**
+ * Toggle the HTML content pane visibility.
+ */
+function toggleContentPane() {
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').contentVisible = !Alpine.store('app').contentVisible;
+    }
+}
+
+/**
  * Recompile the preview for the current active section.
  */
 function recompilePreview() {

@@ -1168,7 +1168,7 @@ async function compilePreviewForNode(tocId, force = false) {
 
     // Check cache — reuse existing blob URL if available
     if (!force && _sectionPdfBlobUrls[tocId]) {
-        frame.src = _sectionPdfBlobUrls[tocId];
+        frame.src = _sectionPdfBlobUrls[tocId] + '#zoom=75';
         if (status) status.textContent = '';
         return;
     }
@@ -1202,7 +1202,9 @@ async function compilePreviewForNode(tocId, force = false) {
         const blobUrl = URL.createObjectURL(blob);
         _sectionPdfBlobUrls[tocId] = blobUrl;
 
-        frame.src = blobUrl;
+        // Set 75% zoom via PDF viewer URL fragment.
+        // Most browsers' built-in PDF viewers respect #zoom=N.
+        frame.src = blobUrl + '#zoom=75';
         if (status) status.textContent = '';
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;

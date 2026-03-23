@@ -513,6 +513,32 @@
              Sections use x-show bound to Alpine store readiness flags
              for automatic show/hide.
              ================================================================ -->
+        <!-- ================================================================
+             PDF Preview Pane — persistent, auto-compiles for active TOC node.
+             Positioned between sidebar and content drawer.  Open by default.
+             ================================================================ -->
+        <div class="preview-pane" id="preview-pane" x-data
+             :class="{ collapsed: !$store.app.previewVisible }">
+            <div class="preview-body" x-show="$store.app.previewVisible">
+                <div class="preview-toolbar">
+                    <span class="preview-title" id="preview-title">PDF Preview</span>
+                    <button class="btn-small" onclick="recompilePreview()">Recompile</button>
+                </div>
+                <div class="preview-status" id="preview-status"></div>
+                <iframe id="preview-pdf-frame" class="preview-pdf-frame"></iframe>
+            </div>
+            <!-- Collapse tab on the RIGHT edge of the preview pane -->
+            <div class="preview-collapse-tab" onclick="togglePreviewPane()">
+                <span x-text="$store.app.previewVisible ? '◀' : '▶'"></span>
+                <span class="preview-collapse-label"
+                      x-show="!$store.app.previewVisible">PDF</span>
+            </div>
+        </div>
+
+        <!-- ================================================================
+             Content Pane — always visible, scrollable editing surface.
+             Contains narratives, data tables, upload forms, etc.
+             ================================================================ -->
         <div class="content-pane">
 
         <!-- Header — app title and settings gear -->
@@ -1251,33 +1277,6 @@
             <ul id="notes-list"></ul>
         </div>
         </div><!-- /.content-pane -->
-
-        <!-- ================================================================
-             PDF Preview Pane — persistent, auto-compiles for the active TOC node.
-             Lives as a sibling of content-pane.  Collapsible: click the tab
-             to expand/collapse.  When collapsed, shows a thin vertical tab
-             labeled "PDF Preview ▶".  When expanded, shows the toolbar +
-             iframe with the compiled PDF.
-             ================================================================ -->
-        <div class="preview-pane" id="preview-pane" x-data
-             :class="{ collapsed: !$store.app.previewVisible }">
-            <!-- Collapse tab — always visible, even when collapsed.
-                 Clicking it toggles the pane open/closed. -->
-            <div class="preview-collapse-tab" onclick="togglePreviewPane()">
-                <span x-text="$store.app.previewVisible ? '▶' : '◀'"></span>
-                <span class="preview-collapse-label"
-                      x-show="!$store.app.previewVisible">PDF Preview</span>
-            </div>
-            <!-- Expandable content — hidden when collapsed -->
-            <div class="preview-body" x-show="$store.app.previewVisible">
-                <div class="preview-toolbar">
-                    <span class="preview-title" id="preview-title">PDF Preview</span>
-                    <button class="btn-small" onclick="recompilePreview()">Recompile</button>
-                </div>
-                <div class="preview-status" id="preview-status"></div>
-                <iframe id="preview-pdf-frame" class="preview-pdf-frame"></iframe>
-            </div>
-        </div>
 
     </div><!-- /.app-layout -->
 

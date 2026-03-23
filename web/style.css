@@ -1848,38 +1848,15 @@ header p {
     min-width: 0; /* prevent flex child from overflowing */
 }
 
-/* --- Persistent PDF Preview Pane ---
-   Third column in the .app-layout flex row.  Collapsible: when expanded
-   it shows the PDF iframe; when collapsed it shrinks to a thin vertical
-   tab with a "PDF Preview" label that the user can click to reopen. */
-.preview-pane {
-    height: 100vh;
-    position: sticky;
-    top: 0;
-    border-left: 1px solid var(--c-border);
-    background: var(--c-bg-light);
-    display: flex;
-    flex-direction: row;
-    transition: width 0.2s, min-width 0.2s;
-    /* Expanded state */
-    width: 50%;
-    min-width: 400px;
-    max-width: 700px;
-}
+/* --- Collapsible drawer shared styles ---
+   Both the preview pane and content pane are collapsible drawers
+   in the .app-layout flex row.  Each has a thin collapse tab on
+   its edge and an expandable body. */
 
-/* Collapsed state — just the vertical tab strip */
-.preview-pane.collapsed {
-    width: 32px;
-    min-width: 32px;
-    max-width: 32px;
-}
-
-/* Vertical collapse tab — always visible.  A thin clickable strip
-   on the left edge of the preview pane.  Shows ◀/▶ arrow and
-   rotated "PDF Preview" label when collapsed. */
+/* Collapse tab — thin vertical strip, always visible */
 .preview-collapse-tab {
-    width: 32px;
-    min-width: 32px;
+    width: 28px;
+    min-width: 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1887,7 +1864,6 @@ header p {
     padding-top: 0.75rem;
     cursor: pointer;
     background: var(--c-bg-white);
-    border-right: 1px solid var(--c-border);
     font-size: 0.8rem;
     color: var(--c-text-muted);
     user-select: none;
@@ -1907,7 +1883,32 @@ header p {
     letter-spacing: 0.05em;
 }
 
-/* Body — the expandable part with toolbar + iframe */
+/* --- PDF Preview Pane ---
+   Second column (between sidebar and content).  Open by default.
+   Collapse tab on its RIGHT edge. */
+.preview-pane {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-right: 1px solid var(--c-border);
+    background: var(--c-bg-light);
+    display: flex;
+    flex-direction: row;
+    transition: flex 0.2s, min-width 0.2s;
+    flex: 1;
+    min-width: 400px;
+}
+
+.preview-pane.collapsed {
+    flex: 0;
+    min-width: 28px;
+    max-width: 28px;
+}
+
+.preview-collapse-tab {
+    border-left: 1px solid var(--c-border);
+}
+
 .preview-body {
     flex: 1;
     display: flex;
@@ -1943,6 +1944,20 @@ header p {
     flex: 1;
     width: 100%;
     border: none;
+}
+
+/* --- Content Pane ---
+   Third column (right of preview).  Always visible, scrollable.
+   Contains narratives, data tables, upload forms. */
+.content-pane {
+    flex: 1;
+    min-width: 350px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    padding: 2rem 1.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 /* TOC tree — nested list structure for navigation */
