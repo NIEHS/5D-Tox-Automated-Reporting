@@ -22,6 +22,25 @@ Two artifacts comprise the integrated dataset:
 
 BMDExpress 3 modeling (bMDResult) and NTP statistical significance (Jonckheere + Dunnett) are **independent concerns**. An endpoint can have a viable BMD without being NTP-significant, and vice versa. Both are shown in the tables — the BMD column reflects .bm2 modeling status, not the NTP gate.
 
+## Document Structure Architecture
+
+The **document structure tree** (`document_tree.py`) is the single source of truth for the report's organization. The NIEHS report is defined as a tree of `DocNode` objects specifying heading hierarchy, section ordering, table numbering, node types, and platform-to-section mappings.
+
+**Rule: No part of the system should hardcode document structure.** The tree drives everything:
+
+- **Typst template** (`report.typ`): reads the tree from JSON (`data.document_tree`), walks it to emit headings at the correct level, render narratives, and number tables. Group headings, narrative keys, and platform membership are all derived from the tree at render time — not from hardcoded maps in the template.
+- **PDF preview filter** (`report_pdf._apply_section_filter`): given a TOC node ID, uses `find_node()` + `collect_data_keys()` + `collect_platforms()` to determine which data to keep. No hardcoded filter maps.
+- **Table numbering**: auto-assigned by `compute_table_numbers()` walking the tree in document order. Table numbers are never user-provided or hardcoded — position in the tree determines the number.
+- **TOC sidebar**: should be generated from the serialized tree, not hardcoded HTML.
+- **Figure/chart numbering**: same principle — position in tree determines number.
+
+**The user's only editorial input is narrative content.** Everything structural (headings, table numbers, section ordering, footnote lettering) is determined by the tree and the data.
+
+When adding a new section or table type:
+1. Add a `DocNode` to the tree in `document_tree.py`
+2. The Typst template, preview filter, table numbering, and TOC all pick it up automatically
+3. Do NOT add hardcoded `if platform == "..."` checks in the template or filter
+
 ## Table Business Rules (Tables 2-7)
 
 ### Row inclusion
