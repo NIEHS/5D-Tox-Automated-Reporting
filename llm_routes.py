@@ -16,8 +16,10 @@ Endpoints:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -30,6 +32,7 @@ from chem_resolver import ChemicalIdentity
 from data_gatherer import gather_all
 from background_writer import generate_background
 from server_state import get_pool_fingerprints
+from interpret import build_genomics_interpretation
 
 logger = logging.getLogger(__name__)
 
@@ -625,15 +628,21 @@ async def api_generate_genomics_narrative(request: Request):
     Generate narrative paragraphs for the genomics Results section.
 
     Takes gene set and gene ranking data (from /api/process-genomics)
-    and produces LLM-generated narrative for each subsection.
+    and produces LLM-generated narrative for each subsection.  When a
+    dtxsid is provided, runs the full interpretation pipeline from
+    interpret.py — pathway enrichment, GO enrichment, BMD ordering,
+    organ signatures, per-gene literature evidence — so the LLM prompt
+    is grounded in actual biological context rather than just raw tables.
 
     Input JSON:
       {
+        "dtxsid": "DTXSID50469320",          (optional, enables enrichment)
         "identity": {ChemicalIdentity fields},
         "organ": "liver",
         "sex": "male",
         "gene_sets": [{go_id, go_term, bmd_median, n_genes, direction}, ...],
         "top_genes": [{gene_symbol, bmd, bmdl, fold_change, direction}, ...],
+        "all_genes": [{gene_symbol, bmd, bmdl, direction, fold_change}, ...],
         "total_responsive_genes": 150,
         "dose_unit": "mg/kg"
       }
@@ -642,41 +651,118 @@ async def api_generate_genomics_narrative(request: Request):
       {
         "gene_set_narrative": ["paragraph1", "paragraph2"],
         "gene_narrative": ["paragraph1", "paragraph2"],
-        "model_used": "claude-sonnet-4-6"
+        "model_used": "claude-sonnet-4-6",
+        "enrichment_available": true
       }
     """
     body = await request.json()
     identity = body.get("identity", {})
+    dtxsid = body.get("dtxsid", "")
     organ = body.get("organ", "")
     sex = body.get("sex", "")
     gene_sets = body.get("gene_sets", [])
     top_genes = body.get("top_genes", [])
+    all_genes = body.get("all_genes", [])
     total_responsive = body.get("total_responsive_genes", 0)
     dose_unit = body.get("dose_unit", "mg/kg")
 
     compound = identity.get("name", "the test article")
 
-    # --- Build gene set table as text for the prompt ---
-    gs_lines = []
-    for gs in gene_sets[:10]:
-        gs_lines.append(
-            f"  {gs.get('go_term', '')} (GO:{gs.get('go_id', '')}): "
-            f"median BMD = {gs.get('bmd_median', 'N/A')} {dose_unit}, "
-            f"{gs.get('n_genes', 0)} genes, direction = {gs.get('direction', 'N/A')}"
-        )
-    gs_table = "\n".join(gs_lines) if gs_lines else "(no gene sets)"
+    # --- Attempt enrichment analysis via interpret.py pipeline ---
+    # The enrichment pipeline queries bmdx.duckdb for pathway/GO/literature
+    # evidence, producing a ~200-line structured context block that gives the
+    # LLM real biological grounding instead of just raw gene/GO tables.
+    context_text = ""
+    enrichment_available = False
 
-    # --- Build gene table as text for the prompt ---
-    gene_lines = []
-    for g in top_genes[:10]:
-        gene_lines.append(
-            f"  {g.get('gene_symbol', '')}: "
-            f"BMD = {g.get('bmd', 'N/A')} {dose_unit}, "
-            f"BMDL = {g.get('bmdl', 'N/A')} {dose_unit}, "
-            f"fold change = {g.get('fold_change', 'N/A')}, "
-            f"direction = {g.get('direction', 'N/A')}"
-        )
-    gene_table = "\n".join(gene_lines) if gene_lines else "(no genes)"
+    # Build a synthetic genomics_section dict for build_genomics_interpretation().
+    # The function accepts the same shape that _extract_genomics() produces.
+    genomics_section = {
+        "all_genes": all_genes,
+        "top_genes": top_genes,
+        "organ": organ,
+        "sex": sex,
+        "total_responsive_genes": total_responsive,
+    }
+
+    # Only attempt enrichment if we have genes to analyze and the DB exists.
+    has_genes = bool(all_genes or top_genes)
+    db_path = Path("bmdx.duckdb")
+    if has_genes and db_path.exists():
+        # --- Check interpretation cache (Phase 4) ---
+        # Cache key is a hash of the gene list — if the genes haven't changed
+        # (same integration run), reuse the cached enrichment result instead of
+        # re-running the 2-5s DuckDB + Fisher's exact pipeline.
+        gene_list_for_hash = all_genes or top_genes
+        gene_hash = hashlib.md5(
+            json.dumps(gene_list_for_hash, sort_keys=True).encode()
+        ).hexdigest()[:16]
+        cache_path = None
+        if dtxsid:
+            # Sanitize organ/sex for filename (e.g. "liver_female")
+            organ_key = organ.lower().replace(" ", "_")
+            sex_key = sex.lower().replace(" ", "_")
+            cache_path = (
+                SESSIONS_DIR / dtxsid
+                / f"_cache_interpretation_{organ_key}_{sex_key}_{gene_hash}.json"
+            )
+
+        cached = None
+        if cache_path and cache_path.exists():
+            try:
+                cached = json.loads(cache_path.read_text())
+                logger.info(
+                    "Interpretation cache hit: %s/%s for %s",
+                    organ, sex, dtxsid,
+                )
+            except Exception:
+                logger.warning("Corrupted interpretation cache, recomputing")
+                cached = None
+
+        if cached and cached.get("context_text"):
+            # Cache hit — use the previously computed enrichment context.
+            context_text = cached["context_text"]
+            enrichment_available = True
+        else:
+            # Cache miss — run the full enrichment pipeline.
+            try:
+                interp = await asyncio.to_thread(
+                    build_genomics_interpretation,
+                    genomics_section,
+                    str(db_path),
+                )
+                context_text = interp.get("context_text", "")
+                enrichment_available = bool(context_text)
+
+                # Persist to cache so regenerations are instant.
+                if cache_path and context_text:
+                    try:
+                        # Clean up old caches for this organ×sex (different hash
+                        # means different gene list from a re-integration).
+                        cache_dir = cache_path.parent
+                        prefix = f"_cache_interpretation_{organ_key}_{sex_key}_"
+                        for old in cache_dir.glob(f"{prefix}*.json"):
+                            if old != cache_path:
+                                old.unlink(missing_ok=True)
+                        cache_path.write_text(json.dumps(interp))
+                        logger.info(
+                            "Cached interpretation: %s/%s for %s",
+                            organ, sex, dtxsid,
+                        )
+                    except Exception:
+                        # Caching is optional — don't fail the request.
+                        logger.warning(
+                            "Failed to cache interpretation", exc_info=True,
+                        )
+
+            except Exception:
+                # Enrichment failed — fall back to the basic prompt below.
+                # This keeps the endpoint functional even if bmdx.duckdb has
+                # schema issues or interpret.py raises on unusual data.
+                logger.warning(
+                    "Enrichment pipeline failed, falling back to basic prompt",
+                    exc_info=True,
+                )
 
     # --- Load style rules for consistent voice ---
     style_rules = ""
@@ -690,7 +776,59 @@ async def api_generate_genomics_narrative(request: Request):
     except Exception:
         pass  # Style learning is optional
 
-    prompt = f"""Generate narrative paragraphs for the genomics Results section of an
+    # --- Build the LLM prompt ---
+    # When enrichment is available, the prompt includes pathway enrichment,
+    # GO enrichment, BMD-ordered pathways, organ signatures, and per-gene
+    # literature evidence assembled by interpret.py.  When enrichment is not
+    # available (no DB, no genes, or pipeline failure), fall back to the
+    # basic gene/GO table format.
+    if enrichment_available:
+        prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
+NIEHS/NTP 5-day study technical report on {compound}.
+
+The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
+A total of {total_responsive} genes had significant dose-responsive changes.
+
+{context_text}
+
+Return a JSON object with two keys:
+1. "gene_set_narrative": 2–3 paragraphs covering biological processes, pathway \
+enrichment, BMD ordering, and organ predictions. Ground claims in the pathway \
+and GO enrichment results above. Note mechanism of action and whether responses \
+are adaptive or adverse.
+
+2. "gene_narrative": 2–3 paragraphs covering individual gene sensitivity, literature \
+support (consensus vs single-study genes), and confidence assessment.
+
+Use passive voice, formal scientific register matching NIEHS report style.
+Do NOT include table data in the narrative — the tables are presented separately.
+{style_rules}
+
+Return ONLY valid JSON, no markdown formatting."""
+    else:
+        # Fallback: basic gene/GO tables (original behavior for sessions
+        # without bmdx.duckdb or with enrichment failures).
+        gs_lines = []
+        for gs in gene_sets[:10]:
+            gs_lines.append(
+                f"  {gs.get('go_term', '')} (GO:{gs.get('go_id', '')}): "
+                f"median BMD = {gs.get('bmd_median', 'N/A')} {dose_unit}, "
+                f"{gs.get('n_genes', 0)} genes, direction = {gs.get('direction', 'N/A')}"
+            )
+        gs_table = "\n".join(gs_lines) if gs_lines else "(no gene sets)"
+
+        gene_lines = []
+        for g in top_genes[:10]:
+            gene_lines.append(
+                f"  {g.get('gene_symbol', '')}: "
+                f"BMD = {g.get('bmd', 'N/A')} {dose_unit}, "
+                f"BMDL = {g.get('bmdl', 'N/A')} {dose_unit}, "
+                f"fold change = {g.get('fold_change', 'N/A')}, "
+                f"direction = {g.get('direction', 'N/A')}"
+            )
+        gene_table = "\n".join(gene_lines) if gene_lines else "(no genes)"
+
+        prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
 NIEHS/NTP 5-day study technical report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
@@ -722,7 +860,9 @@ Return ONLY valid JSON, no markdown formatting."""
     system = (
         "You are a toxicology report writer specializing in NTP/NIEHS-style "
         "technical reports. Write concise, data-driven narrative for the genomics "
-        "Results section. Return ONLY valid JSON with no markdown formatting."
+        "Results section. Ground your interpretation in the pathway enrichment, "
+        "GO term analysis, organ signatures, and literature evidence provided. "
+        "Return ONLY valid JSON with no markdown formatting."
     )
 
     try:
@@ -743,6 +883,7 @@ Return ONLY valid JSON, no markdown formatting."""
             "gene_set_narrative": gs_narr,
             "gene_narrative": gene_narr,
             "model_used": "claude-sonnet-4-6",
+            "enrichment_available": enrichment_available,
         })
 
     except Exception as e:

@@ -1223,6 +1223,93 @@ def build_interpretation_context(
 
 
 # ---------------------------------------------------------------------------
+# build_genomics_interpretation — bridge from web app genomics_sections format
+# ---------------------------------------------------------------------------
+
+def build_genomics_interpretation(
+    genomics_section: dict,
+    db_path: str = "bmdx.duckdb",
+    fdr_cutoff: float = 0.05,
+) -> dict:
+    """
+    Run the full interpretation pipeline on one organ×sex genomics section.
+
+    Converts a genomics_section dict (as produced by _extract_genomics() in
+    pool_orchestrator.py) into a DataFrame and runs the analyze() pipeline
+    against bmdx.duckdb to produce pathway enrichment, GO enrichment,
+    BMD-ordered pathways, organ signatures, and per-gene literature evidence.
+
+    Uses 'all_genes' when available (full responsive gene list, better for
+    Fisher's exact enrichment tests), falls back to 'top_genes' for backward
+    compatibility with cached sessions that predate the all_genes addition.
+
+    Args:
+        genomics_section: One entry from genomics_sections dict, containing
+            at minimum 'top_genes' (list of gene dicts with gene_symbol, bmd,
+            bmdl, direction, fold_change) and optionally 'all_genes'.
+        db_path: Path to the bmdx.duckdb knowledge base file.
+        fdr_cutoff: FDR threshold for pathway/GO enrichment significance.
+
+    Returns:
+        dict with keys:
+            context_text: Formatted multi-section text block for the LLM prompt
+                (~200 lines covering pathway enrichment, GO enrichment,
+                BMD ordering, organ signature, and literature context).
+            analysis_result: Serializable subset of the AnalysisResult —
+                pw_enriched, go_enriched, bmd_ordered, organ_sig,
+                gene_literature lists/dicts for caching and inspection.
+    """
+    # Prefer all_genes (full list) over top_genes (truncated to 20) because
+    # Fisher's exact test needs the complete responsive gene set to compute
+    # meaningful enrichment p-values. top_genes alone would under-power the
+    # test and miss real pathway signals.
+    gene_list = genomics_section.get("all_genes") or genomics_section.get("top_genes", [])
+
+    if not gene_list:
+        return {
+            "context_text": "(No responsive genes available for enrichment analysis.)",
+            "analysis_result": {},
+        }
+
+    # Build the DataFrame that analyze() expects: gene_symbol, bmd, bmdl,
+    # direction, fold_change columns.  Missing values are fine — analyze()
+    # handles NaN BMDs gracefully for genes that passed prefilter but had
+    # model failures.
+    df = pd.DataFrame(gene_list)
+
+    # analyze() requires at minimum a 'gene_symbol' column.  Rename if the
+    # key happens to differ (defensive — current format already uses gene_symbol).
+    if "gene_symbol" not in df.columns and "symbol" in df.columns:
+        df = df.rename(columns={"symbol": "gene_symbol"})
+
+    kb = ToxKBQuerier(db_path)
+    try:
+        result = analyze(df, kb, fdr_cutoff)
+    finally:
+        # ToxKBQuerier opens a duckdb connection — ensure it's closed even
+        # if analyze() raises, to avoid leaking file handles.
+        kb.close()
+
+    # Return the formatted context text plus a serializable snapshot of the
+    # raw enrichment results.  The snapshot enables caching without re-running
+    # the full pipeline and lets the frontend inspect enrichment details.
+    return {
+        "context_text": result.context_text,
+        "analysis_result": {
+            "n_responsive": len(result.responsive_genes),
+            "bmd_range": [result.bmd_min, result.bmd_max],
+            "n_up": result.n_up,
+            "n_down": result.n_down,
+            "pw_enriched": result.pw_enriched,
+            "go_enriched": result.go_enriched,
+            "bmd_ordered": result.bmd_ordered,
+            "organ_sig": result.organ_sig,
+            "gene_literature": result.gene_literature,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # LLM Synthesis
 # ---------------------------------------------------------------------------
 

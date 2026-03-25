@@ -375,6 +375,7 @@ async function restoreSession(data) {
         // Files exist but no validation report — show the panel with
         // gray dots so the user knows validation is available.
         showValidationPanel();
+        AppStore.dispatch('pool.transition', 'UPLOADED');
     }
 
     // --- Restore Materials and Methods section ---
@@ -497,7 +498,7 @@ async function restoreSession(data) {
         animalReportData = data.animal_report;
         animalReportApproved = true;
         renderAnimalReport(animalReportData);
-        setButtons('pool', 'approved');
+        AppStore.dispatch('pool.transition', 'APPROVED');
 
         // Fetch the lightweight integrated data summary for the previewer.
         // This avoids loading the full 60MB+ integrated.json into the browser.

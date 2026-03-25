@@ -1986,6 +1986,7 @@ async def _extract_genomics(
                 "total_probes": exp.get("total_probes", 0),
                 "total_responsive_genes": len(genes),
                 "gene_sets_by_stat": gene_sets_by_stat,
+                # top_genes: ranked subset (top 20) shown in the UI gene table.
                 "top_genes": [
                     {
                         "rank": i + 1,
@@ -1998,6 +1999,19 @@ async def _extract_genomics(
                         "r_squared": g.get("r_squared"),
                     }
                     for i, g in enumerate(genes[:20])
+                ],
+                # all_genes: full responsive gene list for pathway/GO enrichment
+                # in build_genomics_interpretation(). Kept lean (no rank/r²/bmdu)
+                # because these are only used for enrichment input, not display.
+                "all_genes": [
+                    {
+                        "gene_symbol": g["gene_symbol"],
+                        "bmd": g.get("bmd"),
+                        "bmdl": g.get("bmdl"),
+                        "direction": g.get("direction", ""),
+                        "fold_change": g.get("fold_change"),
+                    }
+                    for g in genes  # full list, not genes[:20]
                 ],
             }
     finally:

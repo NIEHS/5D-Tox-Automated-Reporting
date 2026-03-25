@@ -246,6 +246,21 @@ async def api_session_load(dtxsid: str):
     if not d.exists():
         return JSONResponse({"exists": False})
 
+    # Build reverse lookup: file path → existing file_id for both upload
+    # dicts.  This prevents re-registering the same file with a new UUID
+    # on every page reload / session restore, which would cause
+    # ensure_fingerprints() to create duplicate fingerprint entries.
+    _bm2_paths = {
+        entry.get("temp_path"): fid
+        for fid, entry in _bm2_uploads.items()
+        if entry.get("temp_path")
+    }
+    _data_paths = {
+        entry.get("temp_path"): fid
+        for fid, entry in _data_uploads.items()
+        if entry.get("temp_path")
+    }
+
     # Helper: read a JSON file if it exists, else return None
     def _read_json(name: str):
         p = d / name
@@ -268,16 +283,22 @@ async def api_session_load(dtxsid: str):
         # Re-register the .bm2 file in _bm2_uploads if it exists on disk.
         # This makes the file fully functional (preview, process, export)
         # without needing the user to re-upload it.
+        # Reuse existing file_id if the path is already registered (avoids
+        # accumulating duplicate entries on repeated page reloads).
         original_filename = section.get("filename", "")
         bm2_on_disk = files_dir / original_filename if original_filename else None
         if bm2_on_disk and bm2_on_disk.exists():
-            file_id = str(uuid.uuid4())
-            _bm2_uploads[file_id] = {
-                "filename": original_filename,
-                "temp_path": str(bm2_on_disk),
-                "table_data": None,   # will be populated on first preview/process
-                "bm2_json": None,     # will be populated on first preview/process
-            }
+            disk_path = str(bm2_on_disk)
+            file_id = _bm2_paths.get(disk_path)
+            if not file_id:
+                file_id = str(uuid.uuid4())
+                _bm2_uploads[file_id] = {
+                    "filename": original_filename,
+                    "temp_path": disk_path,
+                    "table_data": None,   # will be populated on first preview/process
+                    "bm2_json": None,     # will be populated on first preview/process
+                }
+                _bm2_paths[disk_path] = file_id
             # Tell the client what server-side file_id to use
             section["server_file_id"] = file_id
 
@@ -302,14 +323,20 @@ async def api_session_load(dtxsid: str):
             if ext == ".bm2":
                 if data_file.name in approved_filenames:
                     continue  # already handled above as an approved section
-                # Unapproved .bm2 file — register in _bm2_uploads
-                file_id = str(uuid.uuid4())
-                _bm2_uploads[file_id] = {
-                    "filename": data_file.name,
-                    "temp_path": str(data_file),
-                    "table_data": None,
-                    "bm2_json": None,
-                }
+                # Unapproved .bm2 file — register in _bm2_uploads.
+                # Reuse existing file_id if already registered (repeated
+                # session loads would otherwise pile up duplicate entries).
+                disk_path = str(data_file)
+                file_id = _bm2_paths.get(disk_path)
+                if not file_id:
+                    file_id = str(uuid.uuid4())
+                    _bm2_uploads[file_id] = {
+                        "filename": data_file.name,
+                        "temp_path": disk_path,
+                        "table_data": None,
+                        "bm2_json": None,
+                    }
+                    _bm2_paths[disk_path] = file_id
                 pending_files.append({
                     "id": file_id,
                     "filename": data_file.name,
@@ -335,13 +362,18 @@ async def api_session_load(dtxsid: str):
                 # Raw data file (dose-response experimental data or
                 # spreadsheet).  Register in _data_uploads so the
                 # preview endpoint can serve it.
+                # Reuse existing file_id if already registered.
                 file_type = ext.lstrip(".")
-                file_id = str(uuid.uuid4())
-                _data_uploads[file_id] = {
-                    "filename": data_file.name,
-                    "temp_path": str(data_file),
-                    "type": file_type,
-                }
+                disk_path = str(data_file)
+                file_id = _data_paths.get(disk_path)
+                if not file_id:
+                    file_id = str(uuid.uuid4())
+                    _data_uploads[file_id] = {
+                        "filename": data_file.name,
+                        "temp_path": disk_path,
+                        "type": file_type,
+                    }
+                    _data_paths[disk_path] = file_id
                 pending_files.append({
                     "id": file_id,
                     "filename": data_file.name,

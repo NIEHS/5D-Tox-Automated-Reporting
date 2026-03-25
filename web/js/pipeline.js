@@ -204,9 +204,7 @@ async function approvePool() {
         return;
     }
 
-    const btn = document.getElementById('btn-approve-pool');
-    btn.disabled = true;
-    btn.textContent = 'Generating report...';
+    AppStore.dispatch('pool.transition', 'APPROVING');
 
     showBlockingSpinner('Generating animal report...');
     try {
@@ -218,6 +216,8 @@ async function approvePool() {
 
         if (result.error) {
             showError(result.error);
+            // Fall back to INTEGRATED so user can retry
+            AppStore.dispatch('pool.transition', 'INTEGRATED');
             return;
         }
 
@@ -225,7 +225,7 @@ async function approvePool() {
         animalReportApproved = true;
         renderAnimalReport(result);
 
-        setButtons('pool', 'approved');
+        AppStore.dispatch('pool.transition', 'APPROVED');
 
         showToast('Pool approved — animal report generated');
         updateExportButton();
@@ -235,10 +235,10 @@ async function approvePool() {
 
     } catch (e) {
         showError('Animal report generation failed: ' + e.message);
+        // Fall back to INTEGRATED so user can retry
+        AppStore.dispatch('pool.transition', 'INTEGRATED');
     } finally {
         hideBlockingSpinner();
-        btn.disabled = false;
-        btn.textContent = 'Approve';
     }
 }
 
@@ -297,7 +297,7 @@ async function runProcessingPipeline() {
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
     if (!dtxsid) return;
 
-    showBlockingSpinner('Processing integrated data...');
+    showBlockingSpinner('Integrating metadata...');
 
     // Note: results sections are shown reactively via Alpine store
     // flags — getPlatformContainer() sets ready.animalCondition,

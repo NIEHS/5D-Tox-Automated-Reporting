@@ -311,7 +311,8 @@
              Positioned between sidebar and content drawer.  Open by default.
              ================================================================ -->
         <div class="preview-pane" id="preview-pane" x-data
-             :class="{ collapsed: !$store.app.previewVisible }">
+             :class="{ collapsed: !$store.app.previewVisible }"
+             style="display:none">
             <div class="preview-body" x-show="$store.app.previewVisible">
                 <div class="preview-toolbar">
                     <span class="preview-title" id="preview-title">PDF Preview</span>
@@ -646,19 +647,23 @@
                      present and the user clicks "Validate & Integrate". -->
                 <div id="validation-panel" style="display:none;">
                     <div class="validation-header" onclick="toggleValidationPanel()">
-                        <span class="validation-chevron">▸</span>
+                        <span class="validation-chevron">&#x25b8;</span>
                         <span>Pool Validation</span>
                         <span class="validation-summary" id="validation-summary"></span>
-                        <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()">
+                        <!-- Pool workflow buttons — state managed by pool_state.js.
+                             All visibility/enabled/text is controlled by the pool
+                             phase machine via AppStore dispatch.  Do NOT manually
+                             show/hide these — call AppStore.dispatch('pool.transition', phase). -->
+                        <button class="btn-small primary" id="btn-validate" onclick="event.stopPropagation(); runPoolValidation()" disabled>
                             Validate
                         </button>
-                        <button class="btn-small primary" id="btn-integrate" onclick="event.stopPropagation(); runPoolIntegration()" style="display:none" disabled>
+                        <button class="btn-small primary" id="btn-integrate" onclick="event.stopPropagation(); runPoolIntegration()" disabled>
                             Integrate
                         </button>
                         <button class="btn-small approve" id="btn-approve-pool" onclick="event.stopPropagation(); approvePool()" style="display:none">
                             Approve
                         </button>
-                        <span class="approved-badge" id="badge-pool" style="display:none">Approved</span>
+                        <span class="pool-badge badge-waiting" id="badge-pool">Waiting for Approval</span>
                     </div>
                     <div class="validation-body" id="validation-body" style="display:none;">
                         <div id="coverage-matrix"></div>
@@ -1037,7 +1042,9 @@
            sections.js   → section generation/approval workflows (depends on state, utils, export, genomics, filepool, versions)
            chemical.js   → identity resolution, session restore, init code (MUST BE LAST — calls restoreChemId on load)
     -->
-    <script src="/js/state.js?v=8"></script>
+    <script src="/js/app_store.js?v=5"></script>
+    <script src="/js/pool_state.js?v=8"></script>
+    <script src="/js/state.js?v=9"></script>
     <script src="/js/utils.js?v=8"></script>
     <script src="/js/login.js?v=1"></script>
     <script src="/js/settings.js?v=2"></script>
@@ -1047,13 +1054,13 @@
     <script src="/js/genomics.js?v=2"></script>
     <script src="/js/genomics_charts.js?v=1"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->
-    <script src="/js/upload.js?v=1"></script>
-    <script src="/js/cards.js?v=1"></script>
-    <script src="/js/validation.js?v=1"></script>
+    <script src="/js/upload.js?v=8"></script>
+    <script src="/js/cards.js?v=2"></script>
+    <script src="/js/validation.js?v=3"></script>
     <!-- sections.js split into background.js, methods_summary.js, pipeline.js -->
     <script src="/js/background.js?v=1"></script>
     <script src="/js/methods_summary.js?v=1"></script>
-    <script src="/js/pipeline.js?v=1"></script>
-    <script src="/js/chemical.js?v=2"></script>
+    <script src="/js/pipeline.js?v=2"></script>
+    <script src="/js/chemical.js?v=3"></script>
 </body>
 </html>

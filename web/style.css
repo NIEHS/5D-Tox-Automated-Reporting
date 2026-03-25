@@ -40,6 +40,12 @@
   --c-warn-bg:         #fffbeb;
   --c-warn-border:     #fde68a;
 
+  /* --- Colors: workflow states --- */
+  --c-state-approved:  #22c55e;   /* green — matches --c-success */
+  --c-state-waiting:   #9a3412;   /* warm brown — action needed */
+  --c-state-error:     #991b1b;   /* red — matches --c-error */
+  --c-state-progress:  #92400e;   /* amber — in-flight operation */
+
   /* --- Colors: disabled --- */
   --c-disabled:        #94a3b8;
 
@@ -1409,8 +1415,43 @@ header p {
 .approved-badge {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--c-success);
+    color: var(--c-state-approved);
     padding: 0.3rem 0.6rem;
+}
+
+/* Pool badge — always visible, color changes with workflow phase.
+   Managed by pool_state.js renderer; do NOT toggle display manually. */
+.pool-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.badge-waiting {
+    color: var(--c-state-waiting);
+    background: none;
+    border: none;
+}
+.badge-error {
+    color: var(--c-state-error);
+    background: none;
+    border: none;
+}
+.badge-progress {
+    color: var(--c-state-progress);
+    background: none;
+    border: none;
+}
+.badge-ready {
+    color: var(--c-state-approved);
+    background: none;
+    border: none;
+}
+.badge-approved {
+    color: var(--c-state-approved);
+    background: none;
+    border: none;
 }
 
 /* Approve button styling — green tint to distinguish from other actions */

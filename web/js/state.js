@@ -103,7 +103,9 @@ document.addEventListener('alpine:init', () => {
         activeSection: 'chem-id',
 
         // --- PDF preview pane visibility ---
-        // Starts expanded (open by default).
+        // Starts expanded.  Auto-collapsed when viewing Chemical ID or
+        // Data sections (no PDF to preview there), auto-expanded on
+        // navigation to any results section.  See layout.js navigateToNode().
         previewVisible: true,
 
         // --- Content pane visibility ---
@@ -125,6 +127,15 @@ document.addEventListener('alpine:init', () => {
         // of hardcoding them.
         documentTree: window.__DOCUMENT_TREE__ || [],
     });
+
+    // If a chemical identity was already restored from localStorage
+    // (by restoreChemId in chemical.js, which runs before Alpine init),
+    // the Data tab should be visible.  restoreChemId's own ready.data=true
+    // was a no-op because Alpine wasn't alive yet — fix that here.
+    // Phase 3 will eliminate this race by moving visibility into the store.
+    if (typeof currentIdentity !== 'undefined' && currentIdentity?.dtxsid) {
+        Alpine.store('app').ready.data = true;
+    }
 
     // --- Generate DOM from the document tree ---
     // Must run inside alpine:init (BEFORE Alpine processes x-data

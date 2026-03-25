@@ -456,6 +456,9 @@ async function generateGenomicsNarrative(key) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
+                // dtxsid enables server-side caching of enrichment results
+                // per organ×sex in the session directory.
+                dtxsid: currentIdentity?.dtxsid || '',
                 identity: currentIdentity,
                 organ: data.organ,
                 sex: data.sex,
@@ -464,6 +467,9 @@ async function generateGenomicsNarrative(key) {
                 // Use the first stat's list, or fall back to legacy gene_sets.
                 gene_sets: _flattenGeneSets(data),
                 top_genes: data.top_genes,
+                // all_genes: full responsive gene list for pathway/GO enrichment.
+                // Falls back to top_genes on the server if absent (older sessions).
+                all_genes: data.all_genes || [],
                 total_responsive_genes: data.total_responsive_genes,
                 dose_unit: 'mg/kg',
             }),

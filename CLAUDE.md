@@ -41,6 +41,41 @@ When adding a new section or table type:
 2. The Typst template, preview filter, table numbering, and TOC all pick it up automatically
 3. Do NOT add hardcoded `if platform == "..."` checks in the template or filter
 
+## UI State Management Architecture
+
+The **AppStore** (`web/js/app_store.js`) is the single source of truth for all UI state. State is organized into slices (pool, sections, genomics, export), each with a phase registry, a reducer, and a renderer.
+
+**Rule: No code should directly manipulate pool workflow buttons, badges, or status indicators.** All UI state changes go through `AppStore.dispatch('slice.verb', payload)`. The renderer subscribes to state changes and applies DOM updates atomically.
+
+### Pool workflow state machine (`web/js/pool_state.js`)
+
+The pool workflow progresses linearly. Each phase defines the exact enabled/disabled/visible state of every control:
+
+```
+EMPTY → UPLOADED → VALIDATING → VALIDATED → INTEGRATING → INTEGRATED → APPROVING → APPROVED
+```
+
+Each step unlocks exactly the next step — no skipping ahead:
+- **EMPTY**: all buttons visible but disabled (visual workflow cue)
+- **UPLOADED**: only Validate is enabled
+- **VALIDATED**: only Integrate is enabled (Re-validate is NOT active — user just validated)
+- **INTEGRATED**: Re-validate and Approve are enabled (user previews data, decides)
+- **APPROVED**: all locked except Reset Pool
+
+The `POOL_PHASES` registry in `pool_state.js` is the authoritative definition. When adding a new button or badge to the pool workflow:
+1. Add its element ID to every phase in `POOL_PHASES`
+2. The renderer applies it automatically
+3. Do NOT add `getElementById` + `show/hide/disabled` calls in validation.js, pipeline.js, or upload.js
+
+### Migration status
+
+- **Phase 1 (pool slice)**: implemented — pool workflow buttons driven by `AppStore.dispatch('pool.transition', phase)`
+- **Phase 2 (section approval slice)**: not started — will replace `backgroundApproved`, `methodsApproved`, etc. booleans and `setButtons()` calls
+- **Phase 3 (visibility slice)**: not started — will replace Alpine `$store.app.ready.*` flags with store-driven rendering
+- **Phase 4 (lifecycle slice)**: not started — will replace scattered card creation/destruction with state-driven renderers
+
+Until Phases 2–4 are complete, some Alpine `ready.*` flag manipulation remains as bridge code (marked with `// Phase N` comments). Do not add new `ready.*` toggles — file an issue for the relevant phase instead.
+
 ## Table Business Rules (Tables 2-7)
 
 ### Row inclusion

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI State Management — Architecture Plan</title>
+<style>
+  :root {
+    --bg: #fafbfc;
+    --card: #fff;
+    --border: #e1e4e8;
+    --accent: #0366d6;
+    --red: #d73a49;
+    --green: #28a745;
+    --orange: #e36209;
+    --gray: #586069;
+    --code-bg: #f6f8fa;
+    --heading: #24292e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: #24292e;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; color: var(--heading); }
+  h2 { font-size: 1.5rem; margin: 2.5rem 0 1rem; color: var(--heading); border-bottom: 2px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.15rem; margin: 1.5rem 0 0.75rem; color: var(--heading); }
+  p { margin-bottom: 1rem; }
+  .subtitle { color: var(--gray); font-size: 1rem; margin-bottom: 2rem; }
+
+  /* Cards for pain points */
+  .pain-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--red);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .pain-card h3 { margin-top: 0; color: var(--red); }
+  .pain-card .where { font-size: 0.85rem; color: var(--gray); margin-bottom: 0.5rem; }
+
+  .exec-summary {
+    background: #f0f4ff;
+    border: 1px solid #becdeb;
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2.5rem;
+  }
+  .exec-summary h2 {
+    font-size: 1.25rem;
+    margin: 0 0 1rem;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+  }
+  .exec-summary p { font-size: 0.95rem; }
+  .exec-summary ul { font-size: 0.95rem; margin: 0.5rem 0 1rem 1.5rem; }
+  .exec-summary li { margin-bottom: 0.4rem; }
+  .exec-summary .bottom-line {
+    font-weight: 600;
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+  }
+
+  .solution-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--green);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .solution-card h3 { margin-top: 0; color: var(--green); }
+
+  .phase-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .phase-card h3 { margin-top: 0; color: var(--accent); }
+  .phase-card .effort { font-size: 0.85rem; color: var(--gray); }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0.75rem 0 1rem;
+  }
+  code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.88em;
+  }
+  :not(pre) > code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+
+  .stat { display: inline-block; background: var(--code-bg); border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.85rem; margin-right: 0.5rem; }
+  .stat-red { background: #ffeef0; color: var(--red); }
+  .stat-green { background: #dcffe4; color: var(--green); }
+
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin: 1rem 0;
+    font-family: monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .callout {
+    background: #fff8c5;
+    border: 1px solid #d4a72c;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.92rem;
+  }
+
+  ul { margin: 0.5rem 0 1rem 1.5rem; }
+  li { margin-bottom: 0.3rem; }
+  ol { margin: 0.5rem 0 1rem 1.5rem; }
+</style>
+</head>
+<body>
+
+<h1>UI State Management</h1>
+<p class="subtitle">Architecture plan for 5dToxReport &mdash; from ad-hoc DOM manipulation to a centralized store</p>
+
+<!-- ================================================================== -->
+<div class="exec-summary">
+<h2>Executive Summary</h2>
+
+<p>The 5dToxReport web interface has reached a point where adding features or fixing UI
+glitches creates new problems elsewhere. Buttons appear when they shouldn't, the "Approved"
+badge shows up alongside an "Approve" button, clicking Validate twice duplicates the file
+list, and resetting the workspace sometimes leaves behind stale controls. These aren't
+isolated bugs &mdash; they're symptoms of the same root cause.</p>
+
+<p><strong>What's happening:</strong> The app's user interface tracks its state (which step
+the user is on, which sections are approved, which tabs should be visible) in over 30
+independent variables spread across 5 different files. When the user clicks a button, the
+code has to manually find and update each of those variables and each piece of the screen
+in the right order. As the app has grown from a simple uploader to a multi-step analysis
+pipeline, this approach has become fragile &mdash; every new feature has to remember to
+update all the right places, and inevitably some get missed.</p>
+
+<p><strong>What we're going to do:</strong> Consolidate all of that scattered state into a
+single, centralized "store" &mdash; one place that knows the current state of the entire
+workflow. Instead of each button managing itself, the store tells every button and badge
+what to show based on the current step. The result:</p>
+
+<ul>
+<li><strong>Buttons always match the workflow step.</strong> If the pool hasn't been
+validated yet, Integrate is grayed out &mdash; guaranteed, not dependent on which code
+path ran.</li>
+<li><strong>Resetting the workspace is reliable.</strong> Instead of 143 lines that manually
+clear 25+ screen elements (and sometimes miss one), a reset tells the store "go back to
+the beginning" and every part of the screen updates automatically.</li>
+<li><strong>New features are safer to add.</strong> Adding a new section or button means
+defining its behavior once in the store, rather than editing 3&ndash;5 files and hoping
+nothing was missed.</li>
+<li><strong>No framework migration required.</strong> This is an internal reorganization of
+existing code, not a rewrite. The app looks and works the same from the outside &mdash;
+it just stops having phantom UI glitches.</li>
+</ul>
+
+<p class="bottom-line">We'll roll this out in four increments, starting with the Data tab
+buttons (the most visible pain point) and expanding to cover section approval, sidebar
+visibility, and card lifecycle. Each increment is independently testable and deployable.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2>The Problem</h2>
+
+<p>The 5dToxReport web app has grown from a simple file-upload-and-preview tool into a
+multi-step data processing pipeline with 10+ interconnected sections, each with their own
+lifecycle (creation, approval, editing, export). The UI state management hasn't kept pace
+with this complexity.</p>
+
+<p>The codebase is <span class="stat">3,969 LOC</span> across 5 JS files that collectively
+manage UI state through <span class="stat stat-red">20+ global booleans</span>,
+<span class="stat stat-red">14 Alpine.js ready flags</span>, and
+<span class="stat stat-red">25+ manual DOM element resets</span> scattered across
+independent code paths.</p>
+
+<!-- ================================================================== -->
+<h2>Growing Pains</h2>
+
+<div class="pain-card">
+<h3>1. Scattered button manipulation</h3>
+<div class="where">validation.js, pipeline.js &mdash; 5+ independent code paths per button</div>
+<p>The <code>btn-integrate</code> button alone is queried and updated in
+<strong>five different places</strong>, each with its own visibility and disabled logic:</p>
+<pre>
+// Path 1: validation.js line 73 — initial state
+btnIntegrate.disabled = true;
+btnIntegrate.style.display = 'none';
+
+// Path 2: validation.js line 120 — after validation with errors
+btnIntegrate.style.display = 'none';
+btnIntegrate.disabled = true;
+
+// Path 3: validation.js line 148 — during integration
+btn.disabled = true;
+btn.textContent = 'Integrating...';
+
+// Path 4: validation.js line 176 — after integration
+btn.disabled = false;
+btn.textContent = 'Integrate';
+
+// Path 5: validation.js line 802 — restored validation report
+btnIntegrate.style.display = '';
+btnIntegrate.disabled = errorCount > 0;</pre>
+<p>Each path queries the element fresh via <code>getElementById</code> and applies its own
+visibility/disabled logic. No single source of truth defines what the button looks like in
+any given workflow state. When an error occurs in one path, the button may be left in an
+inconsistent state by another path that doesn't account for it.</p>
+<p><strong>Concrete symptom:</strong> After a session restore with a previously approved pool,
+the "Approve" button and green "Approved" badge both appear simultaneously &mdash; one says
+"click me", the other says "already done."</p>
+</div>
+
+<div class="pain-card">
+<h3>2. Ready flags set in three independent places</h3>
+<div class="where">pipeline.js, genomics.js, cards.js &mdash; no single authority</div>
+<p>The <code>Alpine.store('app').ready.geneSets</code> flag (which controls whether the
+"Gene Set BMD Analysis" tab appears in the TOC sidebar) is set to <code>true</code> in
+<strong>three uncoordinated locations</strong>:</p>
+<pre>
+// Location 1: pipeline.js line 494
+Alpine.store('app').ready.geneSets = true;
+
+// Location 2: genomics.js line 87 (inside ensureGenomicsContainers)
+Alpine.store('app').ready.geneSets = true;
+
+// Location 3: genomics.js line 156 (inside processCsv)
+Alpine.store('app').ready.geneSets = true;</pre>
+<p>Which one is authoritative? What if they execute out of order? If a reset clears the
+flag and then a stale callback from Location 2 fires, the tab reappears in the sidebar
+with no content behind it.</p>
+</div>
+
+<div class="pain-card">
+<h3>3. Manual DOM cleanup duplicated across two 100+ line functions</h3>
+<div class="where">upload.js &mdash; confirmResetPool() and confirmResetSession()</div>
+<p>Resetting the pool requires manually clearing 25+ DOM elements, 12 Alpine flags,
+3 global dictionaries, and several approval booleans. This logic is written
+<strong>twice</strong> &mdash; once in <code>confirmResetPool()</code> (lines 381&ndash;524)
+and again in <code>confirmResetSession()</code> (lines 536&ndash;653), with near-identical
+code:</p>
+<pre>
+// confirmResetPool() — 143 lines of manual cleanup:
+for (const id of Object.keys(uploadedFiles)) delete uploadedFiles[id];
+const fileList = document.getElementById('file-pool-list');
+if (fileList) fileList.innerHTML = '';
+const validationPanel = document.getElementById('validation-panel');
+if (validationPanel) validationPanel.style.display = 'none';
+for (const innerId of ['coverage-matrix', 'validation-issues',
+    'animal-report-content', 'file-metadata-table', 'validation-body']) {
+    const el = document.getElementById(innerId);
+    if (el && innerId !== 'validation-body') el.innerHTML = '';
+    if (el && innerId === 'validation-body') el.style.display = 'none';
+}
+// ... 25 more elements ...
+ready.geneSets = false;
+ready.geneBmd = false;
+// ... 10 more flags ...</pre>
+<p>Every new section or sub-tab added to the app requires updates in <strong>both</strong>
+reset functions. The inevitable result: new features are forgotten in one path, leading to
+orphaned DOM elements and stale state after a reset.</p>
+</div>
+
+<div class="pain-card">
+<h3>4. Uncoordinated state &mdash; three systems, no agreement</h3>
+<div class="where">state.js, Alpine store, DOM attributes</div>
+<p>The app tracks section readiness through three independent mechanisms that don't
+coordinate:</p>
+<table>
+<tr><th>Mechanism</th><th>What it tracks</th><th>Where defined</th><th>Count</th></tr>
+<tr><td>Global booleans</td><td>Approval locks</td><td><code>state.js</code></td><td>5 variables</td></tr>
+<tr><td>Alpine <code>ready.*</code></td><td>Section visibility</td><td><code>state.js</code> (store init)</td><td>14 flags</td></tr>
+<tr><td>DOM state</td><td>Button visibility, badge text</td><td>Scattered</td><td>~20 elements</td></tr>
+</table>
+<p>Example sync gap: approving a section sets <code>methodsApproved = true</code> but
+does <strong>not</strong> set <code>ready.methods = true</code>. Those are managed by
+different code paths in different files. If a reset clears the ready flag without
+clearing the approval boolean, the section disappears from the sidebar but still
+thinks it's approved.</p>
+</div>
+
+<div class="pain-card">
+<h3>5. Card creation with hidden side effects</h3>
+<div class="where">cards.js, genomics.js &mdash; DOM creation silently mutates global state</div>
+<p><code>createGenomicsCard()</code> calls <code>ensureGenomicsContainers()</code>, which as a
+side effect sets <code>Alpine.store('app').ready.geneSets = true</code>. There's no indication
+from the function name or call site that creating a card also flips a global visibility flag.
+This makes the code hard to reason about &mdash; you can't grep for "where does geneSets get
+enabled" without reading the internals of seemingly unrelated card creation functions.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2>The Solution: Centralized App Store</h2>
+
+<p>Replace the ad-hoc state scattered across globals, Alpine flags, and DOM attributes with
+a single <strong>AppStore</strong> &mdash; a plain JavaScript object with a publish/subscribe
+pattern. Like a simplified Redux, but without React, without a build step, and without a
+framework migration.</p>
+
+<div class="solution-card">
+<h3>Core idea</h3>
+<p>Every piece of UI state lives in one place. Changing state triggers renderers that update the DOM.
+No code outside the store directly manipulates buttons, badges, or visibility flags.</p>
+</div>
+
+<div class="diagram">
+                        dispatch('pool.transition', 'VALIDATED')
+                                       |
+                                       v
+  +-------------------------------------------------+
+  |                   AppStore                       |
+  |                                                  |
+  |  pool:     { state: 'VALIDATED', files: [...] }  |
+  |  sections: { body_weight: 'approved', ... }      |
+  |  genomics: { liver_male: 'pending', ... }        |
+  |  export:   { ready: false, dirty: true }         |
+  |                                                  |
+  |  subscribe(slice, callback)                      |
+  |  dispatch(action, payload)                       |
+  +-----+----------+----------+----------+----------+
+        |          |          |          |
+        v          v          v          v
+   renderPool  renderTOC  renderCards  renderExport
+   Controls()  Sidebar()  ()           Button()
+</div>
+
+<h3>Store infrastructure (<code>app_store.js</code>, ~60 lines)</h3>
+<pre>
+/**
+ * Minimal reactive store — single source of truth for all UI state.
+ *
+ * State is organized into "slices" (pool, sections, genomics, export).
+ * Subscribers register for a slice and are called whenever that slice
+ * changes.  Actions are dispatched as (name, payload) pairs and
+ * processed by reducer functions that return new slice state.
+ *
+ * This replaces: 5 global booleans, 14 Alpine ready flags, ~20 manual
+ * DOM element manipulations spread across 5 files.
+ */
+const AppStore = (() => {
+    // The state tree.  Each top-level key is a "slice."
+    const state = {
+        pool:     { phase: 'EMPTY', files: [], errorCount: 0 },
+        sections: {},    // sectionId -> 'pending' | 'editing' | 'approved'
+        genomics: {},    // organ_sex  -> 'pending' | 'editing' | 'approved'
+        export:   { ready: false, dirty: false },
+    };
+
+    // Subscribers: slice name -> Set of callbacks
+    const subs = {};
+
+    function subscribe(slice, fn) {
+        if (!subs[slice]) subs[slice] = new Set();
+        subs[slice].add(fn);
+        // Fire immediately so the subscriber gets current state
+        fn(state[slice]);
+        return () => subs[slice].delete(fn);
+    }
+
+    function notify(slice) {
+        for (const fn of (subs[slice] || [])) fn(state[slice]);
+    }
+
+    function dispatch(action, payload) {
+        const [slice, verb] = action.split('.');
+        if (!reducers[slice]) return;
+        state[slice] = reducers[slice](state[slice], verb, payload);
+        notify(slice);
+    }
+
+    function getState(slice) {
+        return slice ? state[slice] : state;
+    }
+
+    // Reducers — pure functions: (oldState, verb, payload) -> newState
+    const reducers = { /* registered per-slice */ };
+
+    function registerReducer(slice, fn) {
+        reducers[slice] = fn;
+    }
+
+    return { subscribe, dispatch, getState, registerReducer };
+})();</pre>
+
+<h3>Pool slice &mdash; the workflow state machine</h3>
+<pre>
+/**
+ * Pool workflow phases.  Each phase defines the exact UI configuration
+ * for every control in the validation panel.  Adding a new button or
+ * badge means adding one key to each phase object — impossible to
+ * forget a state.
+ *
+ * Phases progress linearly:
+ *   EMPTY -> UPLOADED -> VALIDATING -> VALIDATED -> CONFIRMING
+ *         -> INTEGRATING -> INTEGRATED -> APPROVING -> APPROVED
+ *
+ * Reset returns to EMPTY (or UPLOADED if files still exist).
+ */
+const POOL_PHASES = {
+    EMPTY: {
+        'btn-validate':    { visible: true,  enabled: false, text: 'Validate' },
+        'btn-integrate':   { visible: true,  enabled: false, text: 'Integrate' },
+        'btn-reset-pool':  { visible: true,  enabled: false },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+        'file-metadata-review': { visible: false },
+    },
+    UPLOADED: {
+        'btn-validate':    { visible: true,  enabled: true,  text: 'Validate' },
+        'btn-integrate':   { visible: true,  enabled: false, text: 'Integrate' },
+        'btn-reset-pool':  { visible: true,  enabled: true },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+        'file-metadata-review': { visible: false },
+    },
+    VALIDATING: {
+        'btn-validate':    { visible: true,  enabled: false, text: 'Validating...' },
+        'btn-integrate':   { visible: true,  enabled: false },
+        'btn-reset-pool':  { visible: true,  enabled: false },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+    },
+    VALIDATED: {
+        'btn-validate':    { visible: true,  enabled: true,  text: 'Re-validate' },
+        'btn-integrate':   { visible: true,  enabled: false, text: 'Integrate' },
+        'btn-reset-pool':  { visible: true,  enabled: true },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+        'file-metadata-review': { visible: true },
+    },
+    METADATA_CONFIRMED: {
+        'btn-validate':    { visible: true,  enabled: true,  text: 'Re-validate' },
+        'btn-integrate':   { visible: true,  enabled: true,  text: 'Integrate' },
+        'btn-reset-pool':  { visible: true,  enabled: true },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+    },
+    INTEGRATING: {
+        'btn-validate':    { visible: true,  enabled: false },
+        'btn-integrate':   { visible: true,  enabled: false, text: 'Integrating...' },
+        'btn-reset-pool':  { visible: true,  enabled: false },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Waiting for Approval' },
+    },
+    INTEGRATED: {
+        'btn-validate':    { visible: true,  enabled: true,  text: 'Re-validate' },
+        'btn-integrate':   { visible: true,  enabled: true,  text: 'Re-integrate' },
+        'btn-reset-pool':  { visible: true,  enabled: true },
+        'badge-pool':      { visible: true,  className: 'badge-waiting',
+                             text: 'Ready for Approval' },
+    },
+    APPROVING: {
+        'btn-validate':    { visible: true,  enabled: false },
+        'btn-integrate':   { visible: true,  enabled: false },
+        'btn-reset-pool':  { visible: true,  enabled: false },
+        'badge-pool':      { visible: true,  className: 'badge-progress',
+                             text: 'Generating report...' },
+    },
+    APPROVED: {
+        'btn-validate':    { visible: true,  enabled: false },
+        'btn-integrate':   { visible: true,  enabled: false },
+        'btn-reset-pool':  { visible: true,  enabled: true },
+        'badge-pool':      { visible: true,  className: 'badge-approved',
+                             text: 'Approved' },
+    },
+};</pre>
+<p>The renderer is a single function that reads from the phase definition and applies DOM
+changes.  Every button, badge, and panel is updated atomically &mdash; no path can leave
+the UI in a half-updated state:</p>
+<pre>
+/**
+ * Apply a pool phase to the DOM.  Reads the phase definition from
+ * POOL_PHASES and updates every registered element.
+ *
+ * This replaces 5 independent getElementById-and-mutate code paths
+ * with one declarative lookup.
+ */
+function renderPoolControls(poolState) {
+    const config = POOL_PHASES[poolState.phase];
+    if (!config) return;
+
+    for (const [id, props] of Object.entries(config)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if ('visible'   in props) el.style.display = props.visible ? '' : 'none';
+        if ('enabled'   in props) el.disabled = !props.enabled;
+        if ('text'      in props) el.textContent = props.text;
+        if ('className' in props) el.className = props.className;
+    }
+}
+
+// Wire up: whenever pool state changes, re-render controls
+AppStore.subscribe('pool', renderPoolControls);</pre>
+
+<div class="callout">
+<strong>Key insight:</strong> Every state transition in the codebase becomes a single
+<code>dispatch()</code> call.  <code>runPoolValidation()</code> dispatches
+<code>'pool.transition', 'VALIDATING'</code> at the start and
+<code>'pool.transition', 'VALIDATED'</code> on success.  No manual button manipulation.
+The renderer handles everything.
+</div>
+
+<!-- ================================================================== -->
+<h2>Migration Plan</h2>
+
+<p>Each phase is independently shippable and testable.  The store coexists with existing
+code &mdash; no big-bang rewrite.</p>
+
+<div class="phase-card">
+<h3>Phase 1: Store + Pool Slice</h3>
+<p class="effort">~120 LOC new, ~80 LOC removed &mdash; net reduction</p>
+<p>Create <code>app_store.js</code> and <code>pool_state.js</code>.  Define the pool
+phase machine and renderer.  Replace all button manipulations in
+<code>validation.js</code> and <code>pipeline.js</code> with
+<code>AppStore.dispatch('pool.transition', phase)</code> calls.</p>
+<p>Fixes the immediate UX issues: correct button states on load, on reset, on
+re-validation, and on error recovery.</p>
+</div>
+
+<div class="phase-card">
+<h3>Phase 2: Section Approval Slice</h3>
+<p class="effort">~60 LOC new, ~100 LOC removed</p>
+<p>Replace the five global <code>*Approved</code> booleans and the per-section
+<code>setButtons()</code> calls with a <code>sections</code> slice.  Each section
+(background, methods, body_weight, etc.) has a state:
+<code>pending</code> | <code>editing</code> | <code>approved</code>.</p>
+<p>A single renderer updates approve/edit/badge controls for all sections.
+<code>confirmResetPool()</code> becomes <code>dispatch('sections.resetAll')</code>
+&mdash; one line instead of 30.</p>
+</div>
+
+<div class="phase-card">
+<h3>Phase 3: Visibility Slice (replace Alpine ready flags)</h3>
+<p class="effort">~40 LOC new, ~60 LOC removed</p>
+<p>Merge the 14 Alpine <code>ready.*</code> flags into the store.  The TOC sidebar
+renderer reads from the store's section and genomics slices to determine which tabs
+are visible.  Eliminates the three-way redundancy in <code>geneSets</code> flag
+setting.</p>
+<p>Alpine <code>x-show</code> directives in <code>index.html</code> are replaced
+with store-driven class toggles, or the renderer directly manages
+<code>style.display</code>.</p>
+</div>
+
+<div class="phase-card">
+<h3>Phase 4: Lifecycle Slice (card creation/destruction)</h3>
+<p class="effort">~80 LOC new, ~130 LOC removed</p>
+<p>Card creation and destruction become reactions to state changes.  When
+<code>genomics.liver_male</code> transitions from <code>null</code> to
+<code>pending</code>, a renderer creates the card.  When it returns to
+<code>null</code> (on reset), the renderer removes it.</p>
+<p>The two 100+ line reset functions (<code>confirmResetPool()</code> and
+<code>confirmResetSession()</code>) collapse to 10&ndash;15 lines each &mdash; they
+dispatch reset actions and the renderers handle all DOM cleanup.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2>Before and After</h2>
+
+<h3>Dispatching a validation success (before)</h3>
+<pre>
+// validation.js — runPoolValidation() success handler
+// 20+ lines touching 5 DOM elements independently
+
+const btnValidate = document.getElementById('btn-validate');
+if (btnValidate) {
+    btnValidate.disabled = false;
+    btnValidate.textContent = 'Validate';
+}
+const btnIntegrate = document.getElementById('btn-integrate');
+if (btnIntegrate) {
+    btnIntegrate.style.display = 'none';
+    btnIntegrate.disabled = errorCount > 0;
+}
+if (errorCount === 0) {
+    renderFileMetadataReview(report.fingerprints || {});
+    showToast('Validation passed — confirm file metadata to integrate');
+} else {
+    const metaPanel = document.getElementById('file-metadata-review');
+    if (metaPanel) metaPanel.style.display = 'none';
+    showToast(`${errorCount} error(s)`);
+}</pre>
+
+<h3>Dispatching a validation success (after)</h3>
+<pre>
+// validation.js — runPoolValidation() success handler
+// 3 lines — all DOM updates happen in the renderer
+
+if (errorCount === 0) {
+    AppStore.dispatch('pool.transition', 'VALIDATED');
+    renderFileMetadataReview(report.fingerprints || {});
+    showToast('Validation passed — confirm file metadata to integrate');
+} else {
+    AppStore.dispatch('pool.transition', 'UPLOADED');  // back to pre-validation
+    showToast(`${errorCount} error(s)`);
+}</pre>
+
+<h3>Resetting the pool (before)</h3>
+<pre>
+// upload.js — confirmResetPool()
+// 143 lines of manual DOM cleanup...
+
+for (const id of Object.keys(uploadedFiles)) delete uploadedFiles[id];
+const fileList = document.getElementById('file-pool-list');
+if (fileList) fileList.innerHTML = '';
+const validationPanel = document.getElementById('validation-panel');
+if (validationPanel) validationPanel.style.display = 'none';
+// ... 25+ more elements cleared ...
+ready.animalCondition = false;
+ready.clinicalPath = false;
+// ... 10 more flags ...</pre>
+
+<h3>Resetting the pool (after)</h3>
+<pre>
+// upload.js — confirmResetPool()
+// All DOM cleanup is handled by renderers reacting to state changes
+
+AppStore.dispatch('pool.transition', 'EMPTY');
+AppStore.dispatch('sections.resetAll');
+AppStore.dispatch('genomics.resetAll');
+AppStore.dispatch('export.reset');
+showToast('Pool reset');</pre>
+
+<!-- ================================================================== -->
+<h2>Why Not React?</h2>
+
+<p>The app is 3,969 LOC of working vanilla JS + Alpine.js.  A React migration would mean:</p>
+<ul>
+<li>A build step (Vite/webpack) where none exists today</li>
+<li>Rewriting every DOM manipulation as JSX components</li>
+<li>Replacing Alpine.js directives with React state hooks</li>
+<li>Learning curve for contributors familiar with the current codebase</li>
+<li>Weeks of work for the same end result</li>
+</ul>
+<p>The store pattern gives us 80% of React's benefits (centralized state,
+predictable updates, easy debugging) with 5% of the migration cost.  If the app
+eventually needs component-level reactivity (virtual DOM, fine-grained re-renders),
+the store's <code>dispatch</code>/<code>subscribe</code> API maps directly onto
+React's <code>useReducer</code>/<code>useEffect</code> &mdash; the migration path
+is clear, and the state logic transfers unchanged.</p>
+
+<!-- ================================================================== -->
+<h2>Summary</h2>
+
+<table>
+<tr><th>Metric</th><th>Current</th><th>After Phase 4</th></tr>
+<tr><td>Global state variables</td><td>20+ booleans, 14 Alpine flags</td><td>1 store object, 4 slices</td></tr>
+<tr><td>Places <code>btn-integrate</code> is manipulated</td><td>5</td><td>0 (renderer only)</td></tr>
+<tr><td>Places <code>ready.geneSets</code> is set</td><td>3</td><td>1 (reducer only)</td></tr>
+<tr><td>Lines in <code>confirmResetPool()</code></td><td>143</td><td>~10</td></tr>
+<tr><td>Files that manipulate button state</td><td>5</td><td>1 (<code>pool_state.js</code>)</td></tr>
+<tr><td>New dependencies</td><td>&mdash;</td><td>None</td></tr>
+</table>
+
+</body>
+</html>

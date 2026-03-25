@@ -62,17 +62,7 @@ async function runPoolValidation() {
         return;
     }
 
-    const btnValidate = document.getElementById('btn-validate');
-    const btnIntegrate = document.getElementById('btn-integrate');
-    if (btnValidate) {
-        btnValidate.disabled = true;
-        btnValidate.textContent = 'Validating...';
-    }
-    // Hide/disable Integrate until we know the result
-    if (btnIntegrate) {
-        btnIntegrate.disabled = true;
-        btnIntegrate.style.display = 'none';
-    }
+    AppStore.dispatch('pool.transition', 'VALIDATING');
 
     showBlockingSpinner('Validating file pool...');
     try {
@@ -80,6 +70,7 @@ async function runPoolValidation() {
         if (!resp.ok) {
             const err = await resp.json();
             showToast(err.error || 'Validation failed');
+            AppStore.dispatch('pool.transition', 'UPLOADED');
             return;
         }
         const report = await resp.json();
@@ -98,36 +89,23 @@ async function runPoolValidation() {
         updateValidationSummary(report);
         updateFileStatusDots(report);
 
-        // Count errors — show file metadata review if no errors
+        // Count errors — transition to appropriate phase
         const errorCount = (report.issues || []).filter(
             i => i.severity === 'error'
         ).length;
 
         if (errorCount === 0) {
-            // Show file metadata confirmation table — user must confirm
-            // before integration is allowed.
-            renderFileMetadataReview(report.fingerprints || {});
-            showToast('Validation passed — confirm file metadata to integrate');
+            AppStore.dispatch('pool.transition', 'VALIDATED');
+            showToast('Validation passed — click Integrate to proceed');
         } else {
-            // Hide metadata review and disable integrate
-            const metaPanel = document.getElementById('file-metadata-review');
-            if (metaPanel) metaPanel.style.display = 'none';
+            AppStore.dispatch('pool.transition', 'VALIDATION_ERRORS');
             showToast(`${errorCount} error(s) found — fix the file pool and re-validate`);
-        }
-
-        // Integrate button starts hidden — shown only after metadata confirmed
-        if (btnIntegrate) {
-            btnIntegrate.style.display = 'none';
-            btnIntegrate.disabled = true;
         }
     } catch (e) {
         showToast('Validation request failed: ' + e.message);
+        AppStore.dispatch('pool.transition', 'UPLOADED');
     } finally {
         hideBlockingSpinner();
-        if (btnValidate) {
-            btnValidate.disabled = false;
-            btnValidate.textContent = 'Validate';
-        }
     }
 }
 
@@ -143,11 +121,7 @@ async function runPoolIntegration() {
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
     if (!dtxsid) return;
 
-    const btn = document.getElementById('btn-integrate');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Integrating...';
-    }
+    AppStore.dispatch('pool.transition', 'INTEGRATING');
 
     showBlockingSpinner('Integrating files...');
     try {
@@ -159,23 +133,19 @@ async function runPoolIntegration() {
         if (intResp.ok) {
             integratedPoolData = await intResp.json();
             renderIntegratedDataPreview(integratedPoolData);
-            showToast('Integration complete');
-
-            // Show the Approve button so the user can sign off on the
-            // pool and trigger animal report generation.
-            show('btn-approve-pool');
+            AppStore.dispatch('pool.transition', 'INTEGRATED');
+            showToast('Integration complete — approve to proceed');
         } else {
             const intErr = await intResp.json().catch(() => ({}));
             showToast(intErr.error || 'Integration failed');
+            // Fall back to VALIDATED so user can retry or re-validate
+            AppStore.dispatch('pool.transition', 'VALIDATED');
         }
     } catch (e) {
         showToast('Integration failed: ' + e.message);
+        AppStore.dispatch('pool.transition', 'VALIDATED');
     } finally {
         hideBlockingSpinner();
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Integrate';
-        }
     }
 }
 
@@ -793,14 +763,16 @@ function restoreValidationReport(report) {
     updateValidationSummary(report);
     updateFileStatusDots(report);
 
-    // Show Integrate button if validation had zero errors
+    // Set pool phase based on validation result.
+    // The session restore in chemical.js will override this to APPROVED
+    // if the pool was already approved.  This just sets the baseline.
     const errorCount = (report.issues || []).filter(
         i => i.severity === 'error'
     ).length;
-    const btnIntegrate = document.getElementById('btn-integrate');
-    if (btnIntegrate) {
-        btnIntegrate.style.display = '';
-        btnIntegrate.disabled = errorCount > 0;
+    if (errorCount > 0) {
+        AppStore.dispatch('pool.transition', 'VALIDATION_ERRORS');
+    } else {
+        AppStore.dispatch('pool.transition', 'VALIDATED');
     }
 }
 
@@ -1131,7 +1103,7 @@ async function approveMetadata() {
     }
 
     try {
-        showBlockingSpinner('Saving metadata and exporting .bm2...');
+        showBlockingSpinner('Integrating metadata...');
 
         const resp = await fetch(`/api/experiment-metadata/${dtxsid}`, {
             method: 'POST',

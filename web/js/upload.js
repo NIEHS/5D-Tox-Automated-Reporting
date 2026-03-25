@@ -211,6 +211,13 @@ async function uploadFiles(fileList) {
         updateClearFilesButton();
         // Show the validation panel so user knows validation is available
         showValidationPanel();
+        // Transition to UPLOADED so Validate button becomes enabled.
+        // Only transition if we're in EMPTY — don't regress from a later
+        // phase (e.g., user uploads more files after validation).
+        const poolPhase = AppStore.getState('pool')?.phase;
+        if (!poolPhase || poolPhase === 'EMPTY') {
+            AppStore.dispatch('pool.transition', 'UPLOADED');
+        }
     }
     } finally { hideBlockingSpinner(); }
 }
@@ -354,6 +361,11 @@ function clearAllFiles() {
     }
     updateClearFilesButton();
     updateFilePoolSummary();
+
+    // If no files remain, transition back to EMPTY
+    if (Object.keys(uploadedFiles).length === 0) {
+        AppStore.dispatch('pool.transition', 'EMPTY');
+    }
 }
 
 /**
@@ -514,6 +526,10 @@ async function confirmResetPool() {
         updateFilePoolSummary();
         updateClearFilesButton();
 
+        // Reset pool workflow state — buttons, badge, metadata review
+        // all return to initial configuration via the pool state machine.
+        AppStore.dispatch('pool.transition', 'EMPTY');
+
         const deleted = data.deleted || [];
         showToast(`Pool reset: ${deleted.length} items removed. Ready for fresh uploads.`);
         console.info('Pool reset complete:', deleted);
@@ -605,10 +621,13 @@ async function confirmResetSession() {
         const metadataSection = document.getElementById('metadata-review-section');
         if (metadataSection) metadataSection.style.display = 'none';
 
-        // Reset all Alpine store readiness flags
+        // Reset Alpine store readiness flags for results sections.
+        // Explicitly re-set ready.data = true FIRST because the chemical
+        // is still resolved and the user needs the Data tab to re-upload.
+        // Phase 3 will eliminate this — all visibility will be store-driven.
         if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
             const ready = Alpine.store('app').ready;
-            ready.data = false;
+            ready.data = true;  // Phase 3: move to visibility slice
             ready.animalCondition = false;
             ready.clinicalPath = false;
             ready.internalDose = false;
@@ -643,6 +662,20 @@ async function confirmResetSession() {
 
         updateFilePoolSummary();
         updateClearFilesButton();
+
+        // Reset pool workflow state machine
+        AppStore.dispatch('pool.transition', 'EMPTY');
+
+        // Data tab stays accessible — the chemical is still resolved,
+        // the user just cleared the pool contents.  This will move to
+        // the visibility slice (Phase 3) when Alpine ready flags are
+        // absorbed into the store.
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+        }
+
+        // Nuclear reset enabled/disabled is driven by the pool store
+        // subscriber — dispatching EMPTY automatically disables it.
 
         showToast('Session reset. All data for ' + name + ' has been deleted.');
         console.info('Session reset complete for', dtxsid);

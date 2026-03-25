@@ -586,7 +586,13 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
  * @param {string[]} narrative — array of auto-generated paragraph strings
  */
 function renderBm2Results(sectionId, tablesJson, narrative, tableType) {
-    // Populate the narrative textarea
+    // Populate the narrative textarea.
+    // Normalize: narrative may arrive as a string (e.g. Tissue Concentration)
+    // instead of the expected string[].  Wrap scalars in an array so .join()
+    // always works.
+    if (narrative && !Array.isArray(narrative)) {
+        narrative = [narrative];
+    }
     const narrativeEl = document.getElementById(`bm2-narrative-${sectionId}`);
     if (narrativeEl && narrative && narrative.length > 0) {
         narrativeEl.value = narrative.join('\n\n');

@@ -64,6 +64,14 @@ function navigateToNode(tocId) {
         Alpine.store('app').activeSection = tocId;
     }
 
+    // Hide the entire PDF preview pane on sections that have no
+    // document content (Chemical ID, Data).  Show it on everything else.
+    const noPreviewSections = ['chem-id', 'data'];
+    const previewPane = document.getElementById('preview-pane');
+    if (previewPane) {
+        previewPane.style.display = noPreviewSections.includes(tocId) ? 'none' : '';
+    }
+
     // --- Report PDF viewer ---
     // The PDF viewer is position:fixed and covers the viewport.
     // Expand it only when navigating to the Report section;
