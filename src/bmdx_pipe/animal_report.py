@@ -353,8 +353,11 @@ def _extract_animals_from_txt_csv(
         logger.warning("Could not read %s: %s", filename, e)
         return animals
 
-    # Strip trailing whitespace and skip empty lines
-    lines = [ln.rstrip("\n\r") for ln in lines if ln.strip()]
+    # Strip trailing whitespace, skip empty lines and comment lines
+    # (comment lines start with # and are written by the metadata
+    # confirmation step: "# Provider:", "# Platform:", "# Data Type:")
+    lines = [ln.rstrip("\n\r") for ln in lines
+             if ln.strip() and not ln.lstrip().startswith("#")]
     if len(lines) < 2:
         return animals
 
@@ -568,6 +571,16 @@ def build_animal_report(
             domain = "Gene Expression"
         if not domain:
             continue  # skip files with no detected platform
+
+        # Clinical Observations (platform="Clinical") use a tall/long CSV
+        # format with categorical incidence data — NOT the pivot format
+        # that _extract_animals_from_txt_csv expects.  Parsing them as
+        # pivots would misread column headers ("Concentration", "Animal ID",
+        # "Observation", etc.) as animal IDs.  Skip them here; clinical
+        # obs animal data comes from the animal_id column in the CSV,
+        # which needs its own extraction logic (not yet implemented).
+        if platform == "Clinical" and file_type in ("csv", "txt"):
+            continue
 
         path = os.path.join(files_dir, filename)
         if not os.path.exists(path):
