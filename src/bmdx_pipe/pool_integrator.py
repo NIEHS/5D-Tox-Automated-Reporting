@@ -956,6 +956,60 @@ def integrate_pool(
         "clinical_obs_files": clinical_obs_files,
     }
 
+    # --- Enrich source_files with per-platform experiment counts ---
+    # The integrated JSON now has doseResponseExperiments from Java.
+    # Match each experiment to a platform using bidirectional substring
+    # matching: check if the normalized platform name is in the experiment
+    # name, or if they share a long common prefix (handles abbreviations
+    # like "tissue_conc" → "Tissue Concentration").
+    all_experiments = integrated.get("doseResponseExperiments", [])
+    if all_experiments and source_files:
+        # Build normalized base platform → list of original keys mapping.
+        # Multiple compound keys can share a base (e.g., "Hematology|tox_study"
+        # and "Hematology|inferred" both normalize to "hematology").
+        _plat_norm: dict[str, list[str]] = {}
+        for plat_key in source_files:
+            base = plat_key.split("|")[0] if "|" in plat_key else plat_key
+            normalized = base.lower().replace(" ", "").replace("_", "")
+            _plat_norm.setdefault(normalized, []).append(plat_key)
+
+        # Count experiments per base platform
+        base_counts: dict[str, int] = {}
+        for exp in all_experiments:
+            exp_name = (exp.get("name") or "").lower().replace("_", "")
+            matched = False
+            for norm_key in _plat_norm:
+                if norm_key in exp_name:
+                    base_counts[norm_key] = base_counts.get(norm_key, 0) + 1
+                    matched = True
+                    break
+                # Common-prefix check for abbreviated experiment names
+                # (e.g., "tissueconc" vs "tissueconcentration")
+                prefix_len = 0
+                for a, b in zip(norm_key, exp_name):
+                    if a == b:
+                        prefix_len += 1
+                    else:
+                        break
+                if prefix_len >= min(6, len(norm_key)):
+                    base_counts[norm_key] = base_counts.get(norm_key, 0) + 1
+                    matched = True
+                    break
+            if not matched:
+                # Check augmented ExperimentDescription metadata
+                desc = exp.get("experimentDescription") or {}
+                aug = desc.get("_augmented") or {}
+                exp_platform = aug.get("platform", "")
+                if exp_platform:
+                    norm_aug = exp_platform.lower().replace(" ", "").replace("_", "")
+                    if norm_aug in _plat_norm:
+                        base_counts[norm_aug] = base_counts.get(norm_aug, 0) + 1
+
+        # Apply counts to all compound keys sharing the same base platform
+        for norm_key, count in base_counts.items():
+            for orig_key in _plat_norm.get(norm_key, []):
+                source_files[orig_key]["experiment_count"] = count
+
     # --- Build category lookup via native Java API ---
     # ExportCategories.java reads CategoryAnalysisResults directly from the
     # BMDProject — no DataCombinerService, no TSV.  This replaces the broken
