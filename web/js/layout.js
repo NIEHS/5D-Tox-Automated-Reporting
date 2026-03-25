@@ -462,7 +462,10 @@ function _buildResultsTocNode(node) {
                 :class="{ active: ${activeExpr}${readyExpr ? ', disabled: ' + readyExpr : ''} }"
                 @click="${clickGuard}">${_escToc(child.title)}</a>`;
 
-            // Child table nodes
+            // Child table nodes — each checks per-platform availability
+            // so only tables with actual data are clickable.  If the
+            // node has a `platform` field, use ready.platform['X'];
+            // otherwise fall back to the group's ready_key.
             const childUl = document.createElement('ul');
             for (const tableNode of child.children) {
                 const tableLi = document.createElement('li');
@@ -470,11 +473,23 @@ function _buildResultsTocNode(node) {
                 const tableLabel = tableNode.table_number
                     ? `Table ${tableNode.table_number}: ${tableNode.title}`
                     : tableNode.title;
-                const tReadyExpr = tableNode.ready_key
-                    ? `, disabled: !$store.app.ready.${tableNode.ready_key}` : '';
-                const tClickGuard = tableNode.ready_key
-                    ? `$store.app.ready.${tableNode.ready_key} && navigateToNode('${tableNode.id}')`
-                    : `navigateToNode('${tableNode.id}')`;
+
+                // Per-platform check: prefer platform-specific flag over
+                // group-level ready_key.  This ensures that uploading
+                // Hematology alone doesn't enable Clinical Chemistry.
+                let tReadyExpr, tClickGuard;
+                if (tableNode.platform) {
+                    // Platform names may contain spaces (e.g., "Body Weight")
+                    // so we use bracket notation for the Alpine expression.
+                    tReadyExpr = `, disabled: !$store.app.ready.platform['${tableNode.platform}']`;
+                    tClickGuard = `$store.app.ready.platform['${tableNode.platform}'] && navigateToNode('${tableNode.id}')`;
+                } else if (tableNode.ready_key) {
+                    tReadyExpr = `, disabled: !$store.app.ready.${tableNode.ready_key}`;
+                    tClickGuard = `$store.app.ready.${tableNode.ready_key} && navigateToNode('${tableNode.id}')`;
+                } else {
+                    tReadyExpr = '';
+                    tClickGuard = `navigateToNode('${tableNode.id}')`;
+                }
 
                 tableLi.innerHTML = `<a class="toc-leaf"
                     :class="{ active: $store.app.activeSection === '${tableNode.id}'${tReadyExpr} }"

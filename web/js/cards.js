@@ -117,6 +117,13 @@ function getPlatformContainer(platform) {
         if (readyKey && typeof Alpine !== 'undefined' && Alpine.store('app')) {
             Alpine.store('app').ready[readyKey] = true;
         }
+        // Track this platform in the pool state machine so the TOC
+        // can enable/disable individual table nodes.  This covers
+        // both the normal processing path and session restore (which
+        // creates cards directly without going through validation).
+        if (typeof AppStore !== 'undefined') {
+            AppStore.dispatch('pool.addPlatform', platform);
+        }
         return el;
     }
 

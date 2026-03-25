@@ -299,16 +299,24 @@ function openPreviewModal(fileId) {
         return;
     }
 
-    // Non-restored files: fetch preview data from the server
+    // Non-restored files: fetch preview data from the server.
+    // If the response is not JSON (e.g., HTML error page), catch
+    // the parse failure and show the raw status instead.
     fetch(`/api/preview/${fileId}`)
         .then(res => {
             if (!res.ok) throw new Error(`Server returned ${res.status}`);
             return res.json();
         })
         .then(data => {
+            // Log non-table responses so "Binary file" messages
+            // are easier to diagnose from the browser console.
+            if (data.type !== 'table' && data.type !== 'bm2_json' && data.type !== 'xlsx_table') {
+                console.warn('[preview]', fileId, data);
+            }
             _renderPreviewResponse(data, body);
         })
         .catch(err => {
+            console.warn('[preview] fetch failed:', fileId, err);
             body.innerHTML = `
                 <div class="modal-info-card">
                     <div class="info-icon">\u26a0\ufe0f</div>
@@ -355,16 +363,19 @@ function _renderPreviewResponse(data, body) {
             break;
 
         case 'info':
-            // XLSX or fallback — show file metadata
+            // XLSX or fallback — show file metadata.
+            // Server sends either `message` (expected info) or `error`
+            // (parse failure).  Show whichever is available, falling
+            // back to a generic label only when neither is set.
             let sizeText = '';
             if (data.size_bytes != null) {
                 const kb = (data.size_bytes / 1024).toFixed(1);
                 sizeText = `<div class="info-size">${kb} KB</div>`;
             }
-            const msg = data.message || `Binary file \u2014 preview not available.`;
+            const msg = data.message || data.error || `Binary file \u2014 preview not available.`;
             body.innerHTML = `
                 <div class="modal-info-card">
-                    <div class="info-icon">\ud83d\udcc4</div>
+                    <div class="info-icon">${data.error ? '\u26a0\ufe0f' : '\ud83d\udcc4'}</div>
                     <div class="info-text">${msg}</div>
                     ${sizeText}
                 </div>`;

@@ -89,6 +89,20 @@ async function runPoolValidation() {
         updateValidationSummary(report);
         updateFileStatusDots(report);
 
+        // --- Extract detected platforms from the coverage matrix ---
+        // Coverage matrix keys are compound: "Body Weight|tox_study",
+        // "gene_expression", etc.  We split on '|' to get the human-
+        // readable platform name, and filter out "gene_expression"
+        // (genomics has its own ready flags, not per-platform).
+        // This tells the pool state machine exactly what data types
+        // are in the pool, so the TOC can enable/disable table nodes.
+        const detectedPlatforms = [...new Set(
+            Object.keys(report.coverage_matrix || {})
+                .map(key => key.includes('|') ? key.split('|')[0] : key)
+                .filter(p => p !== 'gene_expression')
+        )];
+        AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
+
         // Count errors — transition to appropriate phase
         const errorCount = (report.issues || []).filter(
             i => i.severity === 'error'
@@ -762,6 +776,18 @@ function restoreValidationReport(report) {
     renderValidationIssues(report);
     updateValidationSummary(report);
     updateFileStatusDots(report);
+
+    // --- Restore platform set from coverage matrix ---
+    // Same extraction as runPoolValidation(): split compound keys on '|',
+    // filter out gene_expression.  This ensures the pool state machine
+    // knows which platforms have data immediately on session restore,
+    // before autoProcessPool() re-creates cards.
+    const detectedPlatforms = [...new Set(
+        Object.keys(report.coverage_matrix || {})
+            .map(key => key.includes('|') ? key.split('|')[0] : key)
+            .filter(p => p !== 'gene_expression')
+    )];
+    AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
 
     // Set pool phase based on validation result.
     // The session restore in chemical.js will override this to APPROVED

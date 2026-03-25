@@ -93,6 +93,34 @@ document.addEventListener('alpine:init', () => {
             charts:          false,  // shown after genomics charts rendered
             summary:         false,  // shown after other sections exist
             report:          true,   // always in DOM (lazy-rendered on navigate)
+
+            // --- Per-platform availability flags ---
+            // Drives individual TOC table node enable/disable.  Synced
+            // from the pool slice's `platforms` Set by a subscriber in
+            // pool_state.js.  Pre-populated here with all known platform
+            // strings set to false so Alpine can track them reactively
+            // (dynamic key addition doesn't trigger Alpine's proxy).
+            //
+            // Keys match the `platform` field on DocNode table nodes in
+            // document_tree.py (e.g., "Body Weight", "Hematology").
+            // The pool_state subscriber sets each to true/false based on
+            // whether the pool contains data for that platform.
+            platform: (() => {
+                // Walk the server-injected document tree to discover all
+                // platform strings.  This runs at alpine:init time, before
+                // the first DOM walk, so the keys are available for the
+                // first reactive pass.
+                const flags = {};
+                const tree = window.__DOCUMENT_TREE__ || [];
+                function walk(nodes) {
+                    for (const n of nodes) {
+                        if (n.platform) flags[n.platform] = false;
+                        if (n.children) walk(n.children);
+                    }
+                }
+                walk(tree);
+                return flags;
+            })(),
         },
 
         // --- Currently active section ---

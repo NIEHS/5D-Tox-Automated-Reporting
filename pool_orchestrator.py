@@ -952,6 +952,17 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     # expects: _meta.source_files for the platform table, plus top-level counts.
     meta = integrated.get("_meta", {})
     experiments = integrated.get("doseResponseExperiments", [])
+
+    # Backfill experiment_count per platform if integrate_pool() didn't
+    # populate it (shouldn't happen with current bmdx-pipe, but safety net).
+    source_files = meta.get("source_files", {})
+    if source_files and experiments:
+        needs_backfill = any(
+            "experiment_count" not in info for info in source_files.values()
+        )
+        if needs_backfill:
+            _enrich_source_experiment_counts(source_files, experiments)
+
     return JSONResponse({
         "ok": True,
         "_meta": meta,
@@ -1011,6 +1022,18 @@ async def api_integrated_summary(dtxsid: str):
     experiments = integrated.get("doseResponseExperiments", [])
     bmd_results = integrated.get("bMDResult", [])
     cat_results = integrated.get("categoryAnalysisResults", [])
+
+    # --- Backfill experiment_count per platform if missing ---
+    # Sessions saved before the enrichment was added to integrate_pool()
+    # won't have experiment_count in source_files.  Compute it on the fly
+    # using the same name-matching heuristic so the preview table shows
+    # correct values instead of 0.
+    source_files = meta.get("source_files", {})
+    needs_backfill = source_files and any(
+        "experiment_count" not in info for info in source_files.values()
+    )
+    if needs_backfill and experiments:
+        _enrich_source_experiment_counts(source_files, experiments)
 
     # Build experiment summaries (name + probe count only -- no response data)
     exp_summaries = []
@@ -1108,6 +1131,79 @@ def _pick_go_stat(go_entry: dict, metric: str, stat: str):
     if stat == "median":
         return go_entry.get(f"{metric}_median")
     return None
+
+
+def _enrich_source_experiment_counts(
+    source_files: dict[str, dict],
+    experiments: list[dict],
+) -> None:
+    """
+    Backfill experiment_count on each source_files entry.
+
+    Uses bidirectional substring matching: checks if the normalized platform
+    name is in the experiment name OR vice versa (handles abbreviations like
+    "tissue_conc" matching "Tissue Concentration").  Falls back to augmented
+    ExperimentDescription metadata.  When multiple source_files entries share
+    the same base platform (e.g., "Hematology|tox_study" and
+    "Hematology|inferred"), both get the count.
+
+    Mutates source_files entries in place — adds 'experiment_count' key.
+
+    Why this exists: integrate_pool() in bmdx-pipe now writes experiment_count
+    at integration time, but sessions saved before that change have source_files
+    entries without it.  The summary endpoint calls this to backfill on the fly
+    so the integrated dataset preview table shows correct counts instead of 0.
+    """
+    # Build normalized base platform → list of original keys mapping.
+    # Multiple compound keys can share a base (e.g., "Hematology|tox_study"
+    # and "Hematology|inferred" both normalize to "hematology").
+    plat_norm: dict[str, list[str]] = {}
+    for plat_key in source_files:
+        base = plat_key.split("|")[0] if "|" in plat_key else plat_key
+        normalized = base.lower().replace(" ", "").replace("_", "")
+        plat_norm.setdefault(normalized, []).append(plat_key)
+
+    # Count experiments per base platform
+    base_counts: dict[str, int] = {}
+    for exp in experiments:
+        exp_name = (exp.get("name") or "").lower().replace("_", "")
+        matched = False
+        for norm_key in plat_norm:
+            # Bidirectional substring: platform name in experiment name
+            # (e.g., "hematology" in "hematologytruthfemale") OR a long
+            # shared prefix (handles abbreviations like "tissueconc" from
+            # experiment "tissue_conc_truth_male" vs "tissueconcentration"
+            # from platform "Tissue Concentration").  Prefix must be at
+            # least 6 chars to avoid false positives.
+            if norm_key in exp_name:
+                base_counts[norm_key] = base_counts.get(norm_key, 0) + 1
+                matched = True
+                break
+            # Common-prefix check for abbreviated experiment names
+            prefix_len = 0
+            for a, b in zip(norm_key, exp_name):
+                if a == b:
+                    prefix_len += 1
+                else:
+                    break
+            if prefix_len >= min(6, len(norm_key)):
+                base_counts[norm_key] = base_counts.get(norm_key, 0) + 1
+                matched = True
+                break
+        if not matched:
+            # Check augmented ExperimentDescription metadata
+            desc = exp.get("experimentDescription") or {}
+            aug = desc.get("_augmented") or {}
+            exp_platform = aug.get("platform", "")
+            if exp_platform:
+                norm_aug = exp_platform.lower().replace(" ", "").replace("_", "")
+                if norm_aug in plat_norm:
+                    base_counts[norm_aug] = base_counts.get(norm_aug, 0) + 1
+
+    # Apply counts to all compound keys sharing the same base platform
+    for norm_key, count in base_counts.items():
+        for orig_key in plat_norm.get(norm_key, []):
+            source_files[orig_key]["experiment_count"] = count
 
 
 def _load_integrated(dtxsid: str) -> dict | None:

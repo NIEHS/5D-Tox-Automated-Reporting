@@ -416,6 +416,18 @@ async function runProcessingPipeline() {
                 }
             }
 
+            // --- Confirm platforms in pool state from actual sections ---
+            // The server may produce a slightly different platform set
+            // than validation predicted (e.g., clinical obs only appears
+            // if categorical data was detected).  Update the pool state
+            // with the confirmed set so the TOC stays accurate.
+            const processedPlatforms = sections
+                .map(s => s.platform)
+                .filter(Boolean);
+            if (processedPlatforms.length > 0) {
+                AppStore.dispatch('pool.setPlatforms', processedPlatforms);
+            }
+
             // --- Gene expression: extracted from the integrated .bm2 ---
             // The process-integrated endpoint also returns genomics_sections
             // if a gene expression .bm2 was included in the integration.

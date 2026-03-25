@@ -180,8 +180,21 @@ const POOL_PHASES = {
  * Pool reducer.  Pure function: (state, verb, payload) -> newState.
  *
  * Verbs:
- *   'init'       — return default state
- *   'transition' — payload is the new phase name (string)
+ *   'init'          — return default state
+ *   'transition'    — payload is the new phase name (string).
+ *                     Transitioning to EMPTY also clears platforms.
+ *   'setPlatforms'  — payload is string[] of platform names.
+ *                     Replaces the current platform set entirely.
+ *   'addPlatform'   — payload is a single platform string.
+ *                     Adds it to the set (idempotent).
+ *   'clearPlatforms'— clears the platform set without changing phase.
+ *
+ * The `platforms` Set tracks which data types (e.g., "Body Weight",
+ * "Hematology") have been detected in the uploaded file pool.  It's
+ * populated at validation time (from coverage_matrix), confirmed at
+ * processing time (from actual sections), and cleared on reset.
+ * An AppStore subscriber syncs these into Alpine's ready.platform
+ * flags so the TOC can enable/disable individual table nodes.
  *
  * @param {Object} state   — Current pool slice state
  * @param {string} verb    — Action verb
@@ -192,7 +205,7 @@ function poolReducer(state, verb, payload) {
     // Default state for initialization (called by registerReducer
     // with state=undefined, verb='init').
     if (state === undefined || verb === 'init') {
-        return { phase: 'EMPTY' };
+        return { phase: 'EMPTY', platforms: new Set() };
     }
 
     switch (verb) {
@@ -202,8 +215,38 @@ function poolReducer(state, verb, payload) {
                 console.warn(`[pool] unknown phase: ${phase}`);
                 return state;
             }
+            // Transitioning to EMPTY means the pool was cleared —
+            // platforms go with it.
+            if (phase === 'EMPTY') {
+                return { ...state, phase, platforms: new Set() };
+            }
             return { ...state, phase };
         }
+
+        case 'setPlatforms': {
+            // payload: string[] — replace the platform set wholesale.
+            // Used after validation (from coverage_matrix) and after
+            // processing (from actual section platforms).
+            const platforms = new Set(Array.isArray(payload) ? payload : []);
+            return { ...state, platforms };
+        }
+
+        case 'addPlatform': {
+            // payload: single platform string.  Idempotent — safe to
+            // call from getPlatformContainer() on every card creation
+            // (including session restore).
+            if (!payload || state.platforms.has(payload)) return state;
+            const platforms = new Set(state.platforms);
+            platforms.add(payload);
+            return { ...state, platforms };
+        }
+
+        case 'clearPlatforms': {
+            // Explicit clear without changing phase — used by reset
+            // flows that dispatch this before the EMPTY transition.
+            return { ...state, platforms: new Set() };
+        }
+
         default:
             console.warn(`[pool] unknown verb: ${verb}`);
             return state;
@@ -273,8 +316,29 @@ AppStore.subscribe('pool', (poolState) => {
     if (btn) btn.disabled = poolState.phase === 'EMPTY';
 });
 
-// Debug: show current pool phase in a small overlay at the bottom-left.
-// Lets the user verify that what they see matches the declared state.
+// --- Sync pool platforms → Alpine ready.platform flags ---
+// This subscriber bridges the AppStore (source of truth for which
+// platforms have data) to the Alpine store (reactive UI bindings).
+// TOC table nodes bind to $store.app.ready.platform['Body Weight']
+// to enable/disable themselves individually.  Group-level ready.*
+// flags (animalCondition, clinicalPath, etc.) are unchanged — they
+// still drive the x-show on group containers.
+AppStore.subscribe('pool', (poolState) => {
+    if (typeof Alpine === 'undefined' || !Alpine.store('app')) return;
+    const platformFlags = Alpine.store('app').ready.platform;
+    if (!platformFlags) return;
+
+    // Set every known platform key based on whether it's in the
+    // pool's platform set.  Keys were pre-populated as false in
+    // state.js during alpine:init, so Alpine can track them reactively.
+    for (const key of Object.keys(platformFlags)) {
+        platformFlags[key] = poolState.platforms.has(key);
+    }
+});
+
+// Debug: show current pool phase and platform count in a small
+// overlay at the bottom-left.  Lets the user verify that what they
+// see matches the declared state.
 // Remove or hide via CSS (.pool-debug-overlay { display:none }) for production.
 AppStore.subscribe('pool', (poolState) => {
     let el = document.getElementById('pool-debug-overlay');
@@ -284,7 +348,10 @@ AppStore.subscribe('pool', (poolState) => {
         el.className = 'pool-debug-overlay';
         document.body.appendChild(el);
     }
-    el.textContent = `pool: ${poolState.phase}`;
+    const platCount = poolState.platforms ? poolState.platforms.size : 0;
+    const platList = poolState.platforms ? [...poolState.platforms].join(', ') : '';
+    el.textContent = `pool: ${poolState.phase} · ${platCount} platform${platCount !== 1 ? 's' : ''}`;
+    el.title = platList || '(none)';
 });
 
 // Minimal inline style so it works without a CSS file change

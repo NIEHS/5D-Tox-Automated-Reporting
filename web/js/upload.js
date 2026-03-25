@@ -519,6 +519,10 @@ async function confirmResetPool() {
             ready.charts = false;
             ready.methods = false;
             ready.summary = false;
+            // Clear per-platform flags so TOC table nodes disable
+            for (const key of Object.keys(ready.platform || {})) {
+                ready.platform[key] = false;
+            }
             Alpine.store('app').unifiedNarratives = {};
         }
 
@@ -528,6 +532,8 @@ async function confirmResetPool() {
 
         // Reset pool workflow state — buttons, badge, metadata review
         // all return to initial configuration via the pool state machine.
+        // The transition to EMPTY also clears the pool's platforms Set,
+        // and the subscriber syncs that to Alpine's ready.platform flags.
         AppStore.dispatch('pool.transition', 'EMPTY');
 
         const deleted = data.deleted || [];
@@ -638,6 +644,10 @@ async function confirmResetSession() {
             ready.charts = false;
             ready.methods = false;
             ready.summary = false;
+            // Clear per-platform flags so TOC table nodes disable
+            for (const key of Object.keys(ready.platform || {})) {
+                ready.platform[key] = false;
+            }
             Alpine.store('app').unifiedNarratives = {};
         }
 
