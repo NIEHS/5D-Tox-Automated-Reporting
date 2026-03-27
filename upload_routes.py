@@ -34,6 +34,7 @@ from bmdx_pipe import bm2_cache
 from session_store import session_dir
 from pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, serialize_table_rows,
+    remove_old_file_entries, invalidate_pool_artifacts, pool_has_progressed,
 )
 from server_state import (
     get_bm2_uploads,
@@ -98,12 +99,25 @@ async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
         persist_dir = session_dir(dtxsid) / "files"
         persist_dir.mkdir(exist_ok=True)
 
+    # Check whether the pool has already been validated/integrated — if so,
+    # uploading new files will require invalidation of downstream artifacts.
+    needs_invalidation = dtxsid and pool_has_progressed(dtxsid)
+    pool_invalidated = False
+
     results = []
 
     for upload in files:
         bm2_id = str(uuid.uuid4())
         safe_name = os.path.basename(upload.filename or "upload.bm2")
         content = await upload.read()
+
+        # If a file with the same name already exists, remove its old
+        # fingerprint and upload dict entry before registering the new one.
+        # The file on disk will be overwritten by the write below.
+        if dtxsid:
+            old_id = remove_old_file_entries(dtxsid, safe_name)
+            if old_id:
+                logger.info("Replacing existing file %s (old_id=%s)", safe_name, old_id)
 
         if persist_dir:
             # Save to the session's files/ directory for persistence
@@ -140,7 +154,20 @@ async def api_upload_bm2(request: Request, files: list[UploadFile] = File(...)):
             "validation_issues": validation_issues,
         })
 
-    return JSONResponse(results)
+    # Invalidate downstream artifacts if the pool had already progressed.
+    # Done once after all files are processed (not per-file) to avoid
+    # redundant cleanup when uploading multiple files at once.
+    if needs_invalidation and not pool_invalidated:
+        inv_summary = invalidate_pool_artifacts(dtxsid)
+        pool_invalidated = True
+        logger.info("Pool invalidated after bm2 upload: %s", inv_summary)
+
+    # Include pool_invalidated flag so the frontend knows to regress the
+    # pool state machine back to UPLOADED.
+    return JSONResponse({
+        "files": results,
+        "pool_invalidated": pool_invalidated,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -278,6 +305,11 @@ async def api_upload_csv(
     # Optional DTXSID for persistence and fingerprinting
     dtxsid = request.query_params.get("dtxsid", "")
 
+    # Check whether the pool has already been validated/integrated — if so,
+    # uploading new files will require invalidation of downstream artifacts.
+    needs_invalidation = dtxsid and pool_has_progressed(dtxsid)
+    pool_invalidated = False
+
     results = []
 
     for upload in files:
@@ -285,6 +317,13 @@ async def api_upload_csv(
         safe_name = os.path.basename(upload.filename or "upload.csv")
         ext = os.path.splitext(safe_name)[1].lower()
         file_type = ext.lstrip(".")  # "csv" or "txt"
+
+        # If a file with the same name already exists, remove its old
+        # fingerprint and upload dict entry before registering the new one.
+        if dtxsid:
+            old_id = remove_old_file_entries(dtxsid, safe_name)
+            if old_id:
+                logger.info("Replacing existing file %s (old_id=%s)", safe_name, old_id)
 
         # Persist to session directory if DTXSID is available,
         # otherwise save to a temp directory (lost on restart).
@@ -324,7 +363,16 @@ async def api_upload_csv(
             "validation_issues": v_issues,
         })
 
-    return JSONResponse(results)
+    # Invalidate downstream artifacts if the pool had already progressed.
+    if needs_invalidation and not pool_invalidated:
+        inv_summary = invalidate_pool_artifacts(dtxsid)
+        pool_invalidated = True
+        logger.info("Pool invalidated after csv upload: %s", inv_summary)
+
+    return JSONResponse({
+        "files": results,
+        "pool_invalidated": pool_invalidated,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +439,11 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
         persist_dir = session_dir(dtxsid) / "files"
         persist_dir.mkdir(exist_ok=True)
 
+    # Check whether the pool has already been validated/integrated — if so,
+    # uploading new files will require invalidation of downstream artifacts.
+    needs_invalidation = dtxsid and pool_has_progressed(dtxsid)
+    pool_invalidated = False
+
     bm2_results = []
     other_results = []  # csv, txt, xlsx — raw data files
     skipped = []
@@ -412,6 +465,13 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
                 continue
 
             safe_name = os.path.basename(basename)
+
+            # If a file with the same name already exists, remove its old
+            # fingerprint and upload dict entry before registering the new one.
+            if dtxsid:
+                old_id = remove_old_file_entries(dtxsid, safe_name)
+                if old_id:
+                    logger.info("Zip: replacing existing file %s (old_id=%s)", safe_name, old_id)
 
             if persist_dir:
                 # Persist to session files/ directory so the file survives
@@ -489,6 +549,12 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
     # own temp dirs and persist until the server shuts down)
     shutil.rmtree(zip_tmp_dir, ignore_errors=True)
 
+    # Invalidate downstream artifacts if the pool had already progressed.
+    if needs_invalidation and not pool_invalidated:
+        inv_summary = invalidate_pool_artifacts(dtxsid)
+        pool_invalidated = True
+        logger.info("Pool invalidated after zip upload: %s", inv_summary)
+
     # Collect all validation issues from individual file fingerprints
     # into a flat list for the response — the client shows these as
     # immediate feedback after zip extraction.
@@ -501,6 +567,7 @@ async def api_upload_zip(request: Request, file: UploadFile = File(...)):
         "other_files": other_results,
         "skipped": skipped,
         "validation_issues": all_validation_issues,
+        "pool_invalidated": pool_invalidated,
     })
 
 

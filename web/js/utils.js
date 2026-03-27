@@ -135,19 +135,22 @@ function unlockSection(sectionEl) {
  *   'generating' — all buttons hidden (spinner is showing)
  *   'result'     — show Approve + Edit + Retry (fresh generation result)
  *   'approved'   — hide Approve, show Edit + Retry, show badge
+ *   'stale'      — like approved, but show stale badge instead (data changed)
  *   'editing'    — show Approve + Retry, hide Edit
  *   'hidden'     — hide all buttons AND badge
  */
 function setButtons(prefix, state) {
-    const approve = document.getElementById(`btn-approve-${prefix}`);
-    const edit    = document.getElementById(`btn-edit-${prefix}`);
-    const retry   = document.getElementById(`btn-retry-${prefix}`);
-    const badge   = document.getElementById(`badge-${prefix}`);
+    const approve    = document.getElementById(`btn-approve-${prefix}`);
+    const edit       = document.getElementById(`btn-edit-${prefix}`);
+    const retry      = document.getElementById(`btn-retry-${prefix}`);
+    const badge      = document.getElementById(`badge-${prefix}`);
+    const staleBadge = document.getElementById(`stale-badge-${prefix}`);
 
     // Default: hide everything
-    if (approve) approve.style.display = 'none';
-    if (edit)    edit.style.display    = 'none';
-    if (retry)   retry.style.display   = 'none';
+    if (approve)    approve.style.display    = 'none';
+    if (edit)       edit.style.display       = 'none';
+    if (retry)      retry.style.display      = 'none';
+    if (staleBadge) staleBadge.style.display = 'none';
 
     switch (state) {
         case 'result':
@@ -162,6 +165,16 @@ function setButtons(prefix, state) {
             if (retry) retry.style.display = '';
             if (badge) badge.style.display = '';
             break;
+        case 'stale':
+            // Data changed after approval — show stale warning badge instead
+            // of green Approved.  User can still edit or retry, but the badge
+            // tells them the underlying data may have changed and they should
+            // re-process.
+            if (edit)       edit.style.display       = '';
+            if (retry)      retry.style.display      = '';
+            if (staleBadge) staleBadge.style.display = '';
+            if (badge)      badge.style.display      = 'none';
+            break;
         case 'editing':
             // Unlocked for editing — can re-approve or retry
             if (approve) approve.style.display = '';
@@ -170,7 +183,8 @@ function setButtons(prefix, state) {
         case 'generating':
         case 'hidden':
             // All hidden (default state above already handles this)
-            if (badge) badge.style.display = 'none';
+            if (badge)      badge.style.display      = 'none';
+            if (staleBadge) staleBadge.style.display = 'none';
             break;
     }
 }

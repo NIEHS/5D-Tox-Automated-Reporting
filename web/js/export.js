@@ -1177,6 +1177,38 @@ async function compilePreviewForNode(tocId, force = false) {
     // when they do open it.
     if (title) title.textContent = `Preview: ${tocId}`;
 
+    // --- Completeness gate ---
+    // Check whether this node has all required data sources before
+    // attempting to compile a PDF.  Incomplete sections (e.g., missing
+    // .bm2 for BMD columns) show a message instead of a broken PDF.
+    const poolState = AppStore.getState('pool');
+    const completeness = poolState?.completeness;
+    const docTree = (typeof Alpine !== 'undefined' && Alpine.store('app'))
+        ? Alpine.store('app').documentTree
+        : null;
+
+    if (completeness && completeness.size > 0 && docTree) {
+        const nodeStatus = isNodeComplete(tocId, completeness, docTree);
+        if (!nodeStatus.complete) {
+            // Clear cached PDF for this node (data changed)
+            if (_sectionPdfBlobUrls[tocId]) {
+                URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
+                delete _sectionPdfBlobUrls[tocId];
+            }
+            // Show the missing-data message in the preview pane
+            frame.src = 'about:blank';
+            if (status) {
+                const reasons = nodeStatus.missing.map(m => `<li>${m}</li>`).join('');
+                status.innerHTML =
+                    '<div class="preview-incomplete">' +
+                    '<strong>Preview unavailable — incomplete data</strong>' +
+                    `<ul>${reasons}</ul>` +
+                    '</div>';
+            }
+            return;
+        }
+    }
+
     // Check cache — reuse existing blob URL if available
     if (!force && _sectionPdfBlobUrls[tocId]) {
         frame.src = _sectionPdfBlobUrls[tocId] + '#zoom=75';

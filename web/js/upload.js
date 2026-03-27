@@ -53,6 +53,9 @@ unifiedFileInput.addEventListener('change', () => {
  */
 async function uploadFiles(fileList) {
     showBlockingSpinner('Uploading files...');
+    // Track whether any upload triggered pool invalidation (i.e., the pool
+    // had already been validated/integrated and new files changed it).
+    let poolWasInvalidated = false;
     try {
     // Partition files by extension — zip files are handled separately
     // because the server extracts them and returns individual file entries.
@@ -95,7 +98,10 @@ async function uploadFiles(fileList) {
                 const err = await resp.json();
                 showError(err.error || 'BM2 upload failed');
             } else {
-                const results = await resp.json();
+                const data = await resp.json();
+                // Response shape: { files: [...], pool_invalidated: bool }
+                const results = data.files || data;  // fallback for compat
+                if (data.pool_invalidated) poolWasInvalidated = true;
                 for (const item of results) {
                     uploadedFiles[item.id] = {
                         id: item.id,
@@ -134,7 +140,10 @@ async function uploadFiles(fileList) {
                 const err = await resp.json();
                 showError(err.error || 'CSV upload failed');
             } else {
-                const results = await resp.json();
+                const data = await resp.json();
+                // Response shape: { files: [...], pool_invalidated: bool }
+                const results = data.files || data;  // fallback for compat
+                if (data.pool_invalidated) poolWasInvalidated = true;
                 for (const item of results) {
                     uploadedFiles[item.id] = {
                         id: item.id,
@@ -171,6 +180,7 @@ async function uploadFiles(fileList) {
                 continue;
             }
             const result = await resp.json();
+            if (result.pool_invalidated) poolWasInvalidated = true;
 
             // Register extracted .bm2 files (BMDExpress output)
             for (const item of (result.bm2_files || [])) {
@@ -207,16 +217,29 @@ async function uploadFiles(fileList) {
     }
 
     if (totalUploaded > 0) {
-        showToast(`Uploaded ${totalUploaded} file(s)`);
         updateClearFilesButton();
         // Show the validation panel so user knows validation is available
         showValidationPanel();
-        // Transition to UPLOADED so Validate button becomes enabled.
-        // Only transition if we're in EMPTY — don't regress from a later
-        // phase (e.g., user uploads more files after validation).
-        const poolPhase = AppStore.getState('pool')?.phase;
-        if (!poolPhase || poolPhase === 'EMPTY') {
-            AppStore.dispatch('pool.transition', 'UPLOADED');
+
+        // Derive the correct phase from artifact state.  If the server
+        // invalidated downstream artifacts (pool_invalidated), validation
+        // report is gone → derivePoolPhase returns UPLOADED.  If this was
+        // a first upload (from EMPTY), same result: UPLOADED.
+        // We don't guess — we derive.
+        const phase = derivePoolPhase({
+            hasFiles:             Object.keys(uploadedFiles).length > 0,
+            hasStale:             poolWasInvalidated,
+            validationReport:     poolWasInvalidated ? null : lastValidationReport,
+            hasValidationErrors:  false,
+            hasIntegrated:        poolWasInvalidated ? false : !!integratedPoolData,
+            hasAnimalReport:      poolWasInvalidated ? false : animalReportApproved,
+        });
+        AppStore.dispatch('pool.transition', phase);
+
+        if (poolWasInvalidated) {
+            showToast(`Uploaded ${totalUploaded} file(s) — pool changed, re-validation required`, 'warning');
+        } else {
+            showToast(`Uploaded ${totalUploaded} file(s)`);
         }
     }
     } finally { hideBlockingSpinner(); }
@@ -362,10 +385,16 @@ function clearAllFiles() {
     updateClearFilesButton();
     updateFilePoolSummary();
 
-    // If no files remain, transition back to EMPTY
-    if (Object.keys(uploadedFiles).length === 0) {
-        AppStore.dispatch('pool.transition', 'EMPTY');
-    }
+    // Derive phase — if no files remain, this returns EMPTY
+    const phase = derivePoolPhase({
+        hasFiles:             Object.keys(uploadedFiles).length > 0,
+        hasStale:             false,
+        validationReport:     lastValidationReport,
+        hasValidationErrors:  false,
+        hasIntegrated:        !!integratedPoolData,
+        hasAnimalReport:      animalReportApproved,
+    });
+    AppStore.dispatch('pool.transition', phase);
 }
 
 /**
@@ -534,7 +563,11 @@ async function confirmResetPool() {
         // all return to initial configuration via the pool state machine.
         // The transition to EMPTY also clears the pool's platforms Set,
         // and the subscriber syncs that to Alpine's ready.platform flags.
-        AppStore.dispatch('pool.transition', 'EMPTY');
+        // After a full reset, all artifacts are gone → derives to EMPTY.
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: false, hasStale: false, validationReport: null,
+            hasValidationErrors: false, hasIntegrated: false, hasAnimalReport: false,
+        }));
 
         const deleted = data.deleted || [];
         showToast(`Pool reset: ${deleted.length} items removed. Ready for fresh uploads.`);
@@ -673,8 +706,11 @@ async function confirmResetSession() {
         updateFilePoolSummary();
         updateClearFilesButton();
 
-        // Reset pool workflow state machine
-        AppStore.dispatch('pool.transition', 'EMPTY');
+        // Reset pool workflow state machine — all artifacts wiped → EMPTY.
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: false, hasStale: false, validationReport: null,
+            hasValidationErrors: false, hasIntegrated: false, hasAnimalReport: false,
+        }));
 
         // Data tab stays accessible — the chemical is still resolved,
         // the user just cleared the pool contents.  This will move to

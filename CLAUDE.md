@@ -67,6 +67,27 @@ The `POOL_PHASES` registry in `pool_state.js` is the authoritative definition. W
 2. The renderer applies it automatically
 3. Do NOT add `getElementById` + `show/hide/disabled` calls in validation.js, pipeline.js, or upload.js
 
+### State derivation — phase is a function of artifact state
+
+**Rule: Pool phase is derived, never imperatively set.** The function `derivePoolPhase()` examines what artifacts exist (files, validation report, integrated data, animal report, stale flags) and returns the correct phase. All code that needs to set the phase calls this function and dispatches the result.
+
+```
+derivePoolPhase(artifacts) → phase string
+```
+
+The derivation logic (evaluated top to bottom, first match wins):
+- No files in pool → `EMPTY`
+- Has stale sections (pool mutated after approval) → `UPLOADED`
+- No validation report → `UPLOADED`
+- Validation report has errors → `VALIDATION_ERRORS`
+- No integrated data → `VALIDATED`
+- No animal report (pool not yet approved) → `INTEGRATED`
+- All present → `APPROVED`
+
+**Exception:** Transient in-flight phases (`VALIDATING`, `INTEGRATING`, `APPROVING`) are set imperatively because they represent async operations, not artifact state on disk. When the operation completes, the result handler calls `derivePoolPhase()` to determine the settled phase.
+
+**Do NOT** write `AppStore.dispatch('pool.transition', 'APPROVED')` or similar by guessing the phase. Always derive it. This principle applies to all future AppStore slices (Phases 2–4).
+
 ### Migration status
 
 - **Phase 1 (pool slice)**: implemented — pool workflow buttons driven by `AppStore.dispatch('pool.transition', phase)`

@@ -350,6 +350,8 @@ function createGenomicsCard(key, data, organ, sex, statLabels) {
                         onclick="retryGenomics('${key}')" style="display:none">Try Again</button>
                 <span class="approved-badge" id="badge-genomics-${key}"
                       style="display:none">Approved</span>
+                <span class="stale-badge" id="stale-badge-genomics-${key}"
+                      style="display:none">Data Changed — Re-process</span>
             </div>
         </div>
         <details class="card-config-collapse">

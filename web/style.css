@@ -1470,6 +1470,18 @@ header p {
     color: #2563eb;
 }
 
+/* Amber badge shown when pool data changed after approval — the section's
+   narrative edits are preserved but the underlying table data may be stale.
+   Tells the user to re-process before relying on the numbers. */
+.stale-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #92400e;
+    background: #fef3c7;
+    padding: 0.2em 0.6em;
+    border-radius: 4px;
+}
+
 /* ----------------------------------------------------------------
  * Version history — dropdown for browsing/restoring past approved versions.
  * Appears next to the approved badge after a section is approved.
@@ -1979,6 +1991,68 @@ header p {
     padding: 0 0.75rem;
     font-size: 0.75rem;
     color: var(--c-text-muted);
+}
+
+/* Message shown in the preview pane when a section can't render as PDF
+   because required data sources are missing (e.g., no .bm2 for BMD columns).
+   Styled to be clearly a warning, not an error — the data can be uploaded. */
+/* Banner shown at the top of a section card when required data sources
+   are missing (e.g., no .bm2 for BMD columns, no study data for NTP stats).
+   Uses the same amber palette as .stale-badge for visual consistency. */
+.data-gap-banner {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    color: #92400e;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+.data-gap-banner strong {
+    display: block;
+    margin-bottom: 0.3rem;
+}
+.data-gap-banner ul {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+.data-gap-banner li {
+    margin-bottom: 0.15rem;
+}
+
+/* Table cells and headers for columns where the data source is absent.
+   Distinct from "—" (not applicable) or "ND" (not determined) — these
+   cells communicate that the computation CAN'T run without the missing
+   data source.  Grayed background with italic text. */
+td.data-gap, th.data-gap {
+    background: #f3f4f6;
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+.preview-incomplete {
+    padding: 1rem;
+    margin: 0.5rem;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    color: #92400e;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+.preview-incomplete strong {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+.preview-incomplete ul {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+.preview-incomplete li {
+    margin-bottom: 0.25rem;
 }
 
 .preview-pdf-frame {

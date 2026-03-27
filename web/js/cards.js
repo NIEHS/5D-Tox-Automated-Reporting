@@ -229,6 +229,7 @@ function createBm2Card(bm2Id, filename, platform) {
                     Try Again
                 </button>
                 <span class="approved-badge" id="badge-${bm2Id}" style="display:none">Approved</span>
+                <span class="stale-badge" id="stale-badge-${bm2Id}" style="display:none">Data Changed — Re-process</span>
                 <span class="version-history" id="version-history-${bm2Id}" style="display:none">
                     <button class="version-btn" onclick="toggleVersionHistory('bm2', '${bm2Id}')"
                         title="View and restore previous versions of this section">
@@ -368,6 +369,28 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
     const previewEl = document.getElementById(`bm2-preview-${bm2Id}`);
     previewEl.innerHTML = '';
 
+    // --- Data completeness banner ---
+    // Check whether this section's platform has all required data sources.
+    // If not, show a banner explaining what's missing.  The banner appears
+    // above the table so the user sees it immediately.
+    const sectionInfo = apicalSections[bm2Id];
+    const sectionPlatform = sectionInfo?.platform;
+    const poolState = AppStore.getState('pool');
+    const completeness = poolState?.completeness;
+    let platformStatus = null;
+
+    if (completeness && sectionPlatform) {
+        platformStatus = completeness.get(sectionPlatform);
+        if (platformStatus && !platformStatus.complete) {
+            const banner = document.createElement('div');
+            banner.className = 'data-gap-banner';
+            banner.innerHTML =
+                '<strong>Incomplete data — PDF preview unavailable</strong>' +
+                '<ul>' + platformStatus.missing.map(m => `<li>${m}</li>`).join('') + '</ul>';
+            previewEl.appendChild(banner);
+        }
+    }
+
     const sectionTitle = document.getElementById(`bm2-title-${bm2Id}`).value.trim();
     const caption = document.getElementById(`bm2-caption-${bm2Id}`).value.trim();
     const compound = document.getElementById(`bm2-compound-${bm2Id}`).value.trim() || 'Test Compound';
@@ -413,7 +436,13 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
                 (dose === Math.floor(dose) ? `${Math.floor(dose)} ${doseUnit}` : `${dose} ${doseUnit}`);
             headerRow.innerHTML += `<th>${label}</th>`;
         }
-        headerRow.innerHTML += `<th>BMD₁Std (${doseUnit})</th><th>BMDL₁Std (${doseUnit})</th>`;
+        // BMD column headers — mark as unavailable when .bm2 is missing
+        const bm2Missing = platformStatus && !platformStatus.hasBm2;
+        if (bm2Missing) {
+            headerRow.innerHTML += '<th class="data-gap">BMD₁Std</th><th class="data-gap">BMDL₁Std</th>';
+        } else {
+            headerRow.innerHTML += `<th>BMD₁Std (${doseUnit})</th><th>BMDL₁Std (${doseUnit})</th>`;
+        }
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
@@ -446,8 +475,16 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
                         tr.innerHTML += `<td>${val}</td>`;
                     }
                 }
-                // BMD/BMDL columns
-                tr.innerHTML += `<td>${row.bmd || ''}</td><td>${row.bmdl || ''}</td>`;
+                // BMD/BMDL columns — show a distinct "missing data" indicator
+                // when .bm2 files are absent (instead of plain "ND" or "—"
+                // which could be mistaken for a computed result).
+                const bmdMissing = platformStatus && !platformStatus.hasBm2;
+                if (bmdMissing && !row.is_n_row) {
+                    tr.innerHTML += '<td class="data-gap" title="Requires .bm2 for BMD modeling">No .bm2</td>';
+                    tr.innerHTML += '<td class="data-gap" title="Requires .bm2 for BMD modeling">No .bm2</td>';
+                } else {
+                    tr.innerHTML += `<td>${row.bmd || ''}</td><td>${row.bmdl || ''}</td>`;
+                }
                 tbody.appendChild(tr);
             }
         }

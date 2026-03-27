@@ -324,7 +324,9 @@ async function restoreSession(data) {
             const card = document.getElementById(`bm2-card-${sectionId}`);
             lockSection(card);
             hide(`btn-process-${sectionId}`);
-            setButtons(sectionId, 'approved');
+            // If the pool changed after this section was approved, the server
+            // marks it stale — show amber badge instead of green Approved.
+            setButtons(sectionId, section.stale ? 'stale' : 'approved');
             showVersionHistory('bm2', section.version || 1, sectionId);
         }
     }
@@ -375,7 +377,6 @@ async function restoreSession(data) {
         // Files exist but no validation report — show the panel with
         // gray dots so the user knows validation is available.
         showValidationPanel();
-        AppStore.dispatch('pool.transition', 'UPLOADED');
     }
 
     // --- Restore Materials and Methods section ---
@@ -470,7 +471,7 @@ async function restoreSession(data) {
             const card = document.getElementById(`genomics-card-${key}`);
             if (card) {
                 lockSection(card);
-                setButtons(`genomics-${key}`, 'approved');
+                setButtons(`genomics-${key}`, section.stale ? 'stale' : 'approved');
             }
         }
     }
@@ -498,7 +499,6 @@ async function restoreSession(data) {
         animalReportData = data.animal_report;
         animalReportApproved = true;
         renderAnimalReport(animalReportData);
-        AppStore.dispatch('pool.transition', 'APPROVED');
 
         // Fetch the lightweight integrated data summary for the previewer.
         // This avoids loading the full 60MB+ integrated.json into the browser.
@@ -510,6 +510,26 @@ async function restoreSession(data) {
             }
         } catch (_) { /* non-critical — previewer just stays hidden */ }
     }
+
+    // --- Derive pool phase from artifact state ---
+    // Phase is a function of what exists, not a variable we set.  This
+    // single derivation replaces scattered imperative dispatch calls that
+    // were fragile on restore (e.g., setting APPROVED without checking
+    // whether the pool had been invalidated by new uploads).
+    const hasStale = Object.values(data.bm2_sections || {}).some(s => s.stale)
+        || Object.values(data.genomics_sections || {}).some(s => s.stale);
+    const hasValidationErrors = (data.validation_report?.issues || [])
+        .some(i => i.severity === 'error');
+
+    const restoredPhase = derivePoolPhase({
+        hasFiles:             Object.keys(uploadedFiles).length > 0,
+        hasStale:             hasStale,
+        validationReport:     data.validation_report,
+        hasValidationErrors:  hasValidationErrors,
+        hasIntegrated:        !!data.animal_report,  // animal_report implies integration succeeded
+        hasAnimalReport:      !!data.animal_report,
+    });
+    AppStore.dispatch('pool.transition', restoredPhase);
 
     // --- Re-run integrated pipeline if pool was approved ---
     // Always re-run autoProcessPool on restore when the pool is approved,

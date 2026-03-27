@@ -103,21 +103,39 @@ async function runPoolValidation() {
         )];
         AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
 
-        // Count errors — transition to appropriate phase
+        // Compute per-platform section completeness from coverage matrix.
+        // This tells the preview system which sections can render as PDF
+        // (both data sources present) and which are incomplete.
+        const completeness = computeSectionCompleteness(report.coverage_matrix);
+        AppStore.dispatch('pool.setCompleteness', completeness);
+
+        // Derive the settled phase from artifact state after validation
         const errorCount = (report.issues || []).filter(
             i => i.severity === 'error'
         ).length;
 
+        const phase = derivePoolPhase({
+            hasFiles:             true,
+            hasStale:             false,   // just validated — stale is cleared
+            validationReport:     report,
+            hasValidationErrors:  errorCount > 0,
+            hasIntegrated:        false,   // validation doesn't produce integrated data
+            hasAnimalReport:      false,
+        });
+        AppStore.dispatch('pool.transition', phase);
+
         if (errorCount === 0) {
-            AppStore.dispatch('pool.transition', 'VALIDATED');
             showToast('Validation passed — click Integrate to proceed');
         } else {
-            AppStore.dispatch('pool.transition', 'VALIDATION_ERRORS');
             showToast(`${errorCount} error(s) found — fix the file pool and re-validate`);
         }
     } catch (e) {
         showToast('Validation request failed: ' + e.message);
-        AppStore.dispatch('pool.transition', 'UPLOADED');
+        // Validation failed — no report exists, derive phase (→ UPLOADED)
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: true, hasStale: false, validationReport: null,
+            hasValidationErrors: false, hasIntegrated: false, hasAnimalReport: false,
+        }));
     } finally {
         hideBlockingSpinner();
     }
@@ -147,17 +165,27 @@ async function runPoolIntegration() {
         if (intResp.ok) {
             integratedPoolData = await intResp.json();
             renderIntegratedDataPreview(integratedPoolData);
-            AppStore.dispatch('pool.transition', 'INTEGRATED');
+            // Integration succeeded — derive phase (→ INTEGRATED)
+            AppStore.dispatch('pool.transition', derivePoolPhase({
+                hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+                hasValidationErrors: false, hasIntegrated: true, hasAnimalReport: false,
+            }));
             showToast('Integration complete — approve to proceed');
         } else {
             const intErr = await intResp.json().catch(() => ({}));
             showToast(intErr.error || 'Integration failed');
-            // Fall back to VALIDATED so user can retry or re-validate
-            AppStore.dispatch('pool.transition', 'VALIDATED');
+            // Integration failed — no integrated data, derive phase (→ VALIDATED)
+            AppStore.dispatch('pool.transition', derivePoolPhase({
+                hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+                hasValidationErrors: false, hasIntegrated: false, hasAnimalReport: false,
+            }));
         }
     } catch (e) {
         showToast('Integration failed: ' + e.message);
-        AppStore.dispatch('pool.transition', 'VALIDATED');
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+            hasValidationErrors: false, hasIntegrated: false, hasAnimalReport: false,
+        }));
     } finally {
         hideBlockingSpinner();
     }
@@ -789,17 +817,16 @@ function restoreValidationReport(report) {
     )];
     AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
 
-    // Set pool phase based on validation result.
-    // The session restore in chemical.js will override this to APPROVED
-    // if the pool was already approved.  This just sets the baseline.
-    const errorCount = (report.issues || []).filter(
-        i => i.severity === 'error'
-    ).length;
-    if (errorCount > 0) {
-        AppStore.dispatch('pool.transition', 'VALIDATION_ERRORS');
-    } else {
-        AppStore.dispatch('pool.transition', 'VALIDATED');
-    }
+    // Compute per-platform section completeness from coverage matrix
+    // so the preview system knows which sections can render as PDF.
+    const completeness = computeSectionCompleteness(report.coverage_matrix);
+    AppStore.dispatch('pool.setCompleteness', completeness);
+
+    // Phase is NOT set here — the caller (chemical.js session restore)
+    // derives the correct phase from the full artifact state via
+    // derivePoolPhase() after all restore data is loaded.  Setting phase
+    // here would be premature since later artifacts (integrated data,
+    // animal report, stale flags) can change it.
 }
 
 

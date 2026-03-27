@@ -502,8 +502,11 @@ async def api_session_approve(request: Request):
         meta["casrn"] = identity.get("casrn", "")
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-    # Stamp the data with the approval time
+    # Stamp the data with the approval time and clear any stale flag
+    # (stale is set by invalidate_pool_artifacts when the file pool changes
+    # after a section was already approved — re-approval clears it)
     data["approved_at"] = now_iso()
+    data.pop("stale", None)
 
     if section_type == "background":
         save_section(dtxsid, "background", data)

@@ -205,7 +205,7 @@ function poolReducer(state, verb, payload) {
     // Default state for initialization (called by registerReducer
     // with state=undefined, verb='init').
     if (state === undefined || verb === 'init') {
-        return { phase: 'EMPTY', platforms: new Set() };
+        return { phase: 'EMPTY', platforms: new Set(), completeness: new Map() };
     }
 
     switch (verb) {
@@ -216,9 +216,16 @@ function poolReducer(state, verb, payload) {
                 return state;
             }
             // Transitioning to EMPTY means the pool was cleared —
-            // platforms go with it.
+            // platforms and completeness go with it.
             if (phase === 'EMPTY') {
-                return { ...state, phase, platforms: new Set() };
+                return { ...state, phase, platforms: new Set(), completeness: new Map() };
+            }
+            // Regression to UPLOADED means the pool was mutated (new files
+            // added or replaced after validation/integration).  Platforms
+            // and completeness are cleared because the coverage matrix is
+            // now stale — re-validation will re-populate them.
+            if (phase === 'UPLOADED') {
+                return { ...state, phase, platforms: new Set(), completeness: new Map() };
             }
             return { ...state, phase };
         }
@@ -247,10 +254,243 @@ function poolReducer(state, verb, payload) {
             return { ...state, platforms: new Set() };
         }
 
+        case 'setCompleteness': {
+            // payload: Map<string, {hasToxStudy, hasBm2, complete, missing}>
+            // Derived from coverage matrix via computeSectionCompleteness().
+            // Set after validation and updated after processing.
+            return { ...state, completeness: payload instanceof Map ? payload : new Map() };
+        }
+
         default:
             console.warn(`[pool] unknown verb: ${verb}`);
             return state;
     }
+}
+
+
+// ===================================================================
+// Phase derivation — the settled pool phase is a function of artifact
+// state, not a variable you set.
+//
+// derivePoolPhase() examines what artifacts exist and returns the
+// correct phase.  All code that needs to set the settled pool phase
+// calls this function and dispatches the result.
+//
+// Transient in-flight phases (VALIDATING, INTEGRATING, APPROVING)
+// are the one exception — they represent async operations and are
+// set imperatively.  When the operation completes, the result handler
+// calls derivePoolPhase() to determine the settled phase.
+// ===================================================================
+
+/**
+ * Derive the correct pool phase from the current artifact state.
+ *
+ * This is the single source of truth for "what phase should the pool
+ * be in?"  Evaluated top-to-bottom, first match wins.
+ *
+ * @param {Object} artifacts — Artifact presence flags:
+ *   @param {boolean} hasFiles           — files exist in the pool
+ *   @param {boolean} hasStale           — any approved section is stale
+ *                                         (pool mutated after approval)
+ *   @param {Object|null} validationReport — the validation report object,
+ *                                           or null if not yet validated
+ *   @param {boolean} hasValidationErrors — validation found errors
+ *   @param {boolean} hasIntegrated       — integrated.json exists
+ *   @param {boolean} hasAnimalReport     — pool was approved (animal report
+ *                                           generated)
+ * @returns {string} The phase name (e.g., 'EMPTY', 'UPLOADED', 'VALIDATED')
+ */
+function derivePoolPhase(artifacts) {
+    // No files → nothing to do
+    if (!artifacts.hasFiles)              return 'EMPTY';
+
+    // Pool was mutated after approval (stale sections exist) or after
+    // validation (validation report was deleted) → must re-validate.
+    // This handles both: new files added AND files replaced.
+    if (artifacts.hasStale)               return 'UPLOADED';
+
+    // Files exist but haven't been validated yet
+    if (!artifacts.validationReport)      return 'UPLOADED';
+
+    // Validation ran but found errors
+    if (artifacts.hasValidationErrors)    return 'VALIDATION_ERRORS';
+
+    // Validated but not yet integrated
+    if (!artifacts.hasIntegrated)         return 'VALIDATED';
+
+    // Integrated but not yet approved
+    if (!artifacts.hasAnimalReport)       return 'INTEGRATED';
+
+    // All present — fully approved
+    return 'APPROVED';
+}
+
+
+// ===================================================================
+// Section completeness — derived from the coverage matrix.
+//
+// Each platform needs specific data sources to produce a complete
+// report section.  "Complete" means the section can render as PDF
+// with all required columns populated (not "—" placeholders).
+//
+// Completeness requirements per platform:
+//   - Apical (Body Weight, Organ Weight, Clin Chem, Hematology,
+//     Hormones): need BOTH tox_study data (txt/csv for NTP stats)
+//     AND .bm2 (for BMD/BMDL columns).
+//   - Tissue Concentration: needs xlsx sidecar (Biosampling Animals).
+//     No BMD columns, so .bm2 not required.
+//   - Clinical Observations: needs CSV files (incidence data).
+//     No BMD columns, so .bm2 not required.
+//   - BMD Summary: needs .bm2 (IS the BMD data).
+//   - Gene Sets / Gene BMD: needs .bm2 with gene_expression data.
+//
+// The coverage matrix from validation provides the tier information.
+// ===================================================================
+
+/**
+ * Platforms that require both tox_study (txt/csv) and .bm2 data to
+ * be complete.  These are the apical endpoint tables with BMD columns.
+ */
+const APICAL_PLATFORMS = new Set([
+    'Body Weight', 'Organ Weight', 'Clinical Chemistry',
+    'Hematology', 'Hormones',
+]);
+
+/**
+ * Derive per-platform completeness from the coverage matrix.
+ *
+ * Returns a Map of platform name → completeness object:
+ *   {
+ *     hasToxStudy: boolean,  // txt/csv or xlsx data present
+ *     hasBm2: boolean,       // .bm2 modeling data present
+ *     complete: boolean,     // all required sources present
+ *     missing: string[],     // human-readable list of what's missing
+ *   }
+ *
+ * @param {Object} coverageMatrix — The coverage_matrix from validation
+ *   report, with compound keys like "Body Weight|tox_study".
+ * @returns {Map<string, Object>} Per-platform completeness
+ */
+function computeSectionCompleteness(coverageMatrix) {
+    if (!coverageMatrix) return new Map();
+
+    // Collapse compound keys ("Body Weight|tox_study") into per-platform
+    // presence, same logic as renderCoverageMatrix in validation.js.
+    const collapsed = {};
+    for (const key of Object.keys(coverageMatrix)) {
+        const platform = key.includes('|') ? key.split('|')[0] : key;
+        if (!collapsed[platform]) {
+            collapsed[platform] = { xlsx: false, txtCsvCount: 0, bm2: false };
+        }
+        const tiers = coverageMatrix[key];
+        if (tiers.xlsx) collapsed[platform].xlsx = true;
+        const txtArr = tiers.txt_csv || [];
+        collapsed[platform].txtCsvCount += Array.isArray(txtArr) ? txtArr.length : (txtArr ? 1 : 0);
+        if (tiers.bm2) collapsed[platform].bm2 = true;
+    }
+
+    const result = new Map();
+
+    for (const [platform, tiers] of Object.entries(collapsed)) {
+        const hasToxStudy = tiers.xlsx || tiers.txtCsvCount > 0;
+        const hasBm2 = tiers.bm2;
+        const missing = [];
+
+        if (APICAL_PLATFORMS.has(platform)) {
+            // Apical tables need both NTP stats data AND BMD modeling
+            if (!hasToxStudy) missing.push('Requires study data (.txt/.csv) for NTP statistics');
+            if (!hasBm2) missing.push('Requires .bm2 for BMD/BMDL values');
+        } else if (platform === 'Tissue Concentration') {
+            // Tissue concentration needs xlsx sidecar only — no BMD columns
+            if (!tiers.xlsx) missing.push('Requires .xlsx with Biosampling Animal data');
+        } else if (platform === 'Clinical Observations') {
+            // Clinical observations needs CSV incidence data
+            if (!hasToxStudy) missing.push('Requires clinical observation CSV data');
+        } else if (platform === 'gene_expression' || platform === 'Gene Expression') {
+            // Genomics needs .bm2 with gene expression experiments
+            if (!hasBm2) missing.push('Requires .bm2 with gene expression data');
+        }
+
+        result.set(platform, {
+            hasToxStudy,
+            hasBm2,
+            complete: missing.length === 0,
+            missing,
+        });
+    }
+
+    return result;
+}
+
+/**
+ * Check whether a document tree node is complete for PDF preview.
+ *
+ * A leaf table node is complete if its platform is complete.
+ * A group node (narrative+tables) is complete only if ALL its child
+ * table nodes are complete.
+ *
+ * @param {string} nodeId       — The TOC node ID (e.g., "animal-condition",
+ *                                "table-body-weight")
+ * @param {Map} completeness    — Per-platform completeness from
+ *                                computeSectionCompleteness()
+ * @param {Object} documentTree — Serialized document tree (array of nodes
+ *                                with children)
+ * @returns {{ complete: boolean, missing: string[] }}
+ */
+function isNodeComplete(nodeId, completeness, documentTree) {
+    if (!completeness || completeness.size === 0) {
+        return { complete: false, missing: ['No completeness data — validate the pool first'] };
+    }
+
+    const node = _findNodeInTree(nodeId, documentTree);
+    if (!node) return { complete: true, missing: [] };  // non-data node (e.g., background)
+
+    // Leaf table node — check its platform
+    if (node.platform) {
+        const status = completeness.get(node.platform);
+        if (!status) return { complete: false, missing: [`No data for platform: ${node.platform}`] };
+        return { complete: status.complete, missing: status.missing };
+    }
+
+    // Group node — complete only if ALL child table nodes are complete
+    if (node.children && node.children.length > 0) {
+        const allMissing = [];
+        for (const child of node.children) {
+            if (child.platform) {
+                const status = completeness.get(child.platform);
+                if (!status || !status.complete) {
+                    const label = child.title || child.platform;
+                    const reasons = status ? status.missing : [`No data for ${child.platform}`];
+                    allMissing.push(`${label}: ${reasons.join('; ')}`);
+                }
+            }
+        }
+        return { complete: allMissing.length === 0, missing: allMissing };
+    }
+
+    // Non-table node (narrative, front matter, etc.) — always complete
+    return { complete: true, missing: [] };
+}
+
+/**
+ * Find a node by ID in the serialized document tree (recursive search).
+ *
+ * @param {string} nodeId — The node ID to find
+ * @param {Array|Object} tree — The document tree (array of root nodes or
+ *   a single node with children)
+ * @returns {Object|null} The matching node, or null
+ */
+function _findNodeInTree(nodeId, tree) {
+    if (!tree) return null;
+    const nodes = Array.isArray(tree) ? tree : [tree];
+    for (const node of nodes) {
+        if (node.id === nodeId) return node;
+        if (node.children) {
+            const found = _findNodeInTree(nodeId, node.children);
+            if (found) return found;
+        }
+    }
+    return null;
 }
 
 

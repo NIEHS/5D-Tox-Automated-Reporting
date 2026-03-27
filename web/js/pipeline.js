@@ -204,6 +204,7 @@ async function approvePool() {
         return;
     }
 
+    // Transient in-flight phase — set imperatively (not derived)
     AppStore.dispatch('pool.transition', 'APPROVING');
 
     showBlockingSpinner('Generating animal report...');
@@ -216,8 +217,11 @@ async function approvePool() {
 
         if (result.error) {
             showError(result.error);
-            // Fall back to INTEGRATED so user can retry
-            AppStore.dispatch('pool.transition', 'INTEGRATED');
+            // Approve failed — no animal report, derive phase (→ INTEGRATED)
+            AppStore.dispatch('pool.transition', derivePoolPhase({
+                hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+                hasValidationErrors: false, hasIntegrated: true, hasAnimalReport: false,
+            }));
             return;
         }
 
@@ -225,7 +229,11 @@ async function approvePool() {
         animalReportApproved = true;
         renderAnimalReport(result);
 
-        AppStore.dispatch('pool.transition', 'APPROVED');
+        // Approve succeeded — derive phase (→ APPROVED)
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+            hasValidationErrors: false, hasIntegrated: true, hasAnimalReport: true,
+        }));
 
         showToast('Pool approved — animal report generated');
         updateExportButton();
@@ -235,8 +243,11 @@ async function approvePool() {
 
     } catch (e) {
         showError('Animal report generation failed: ' + e.message);
-        // Fall back to INTEGRATED so user can retry
-        AppStore.dispatch('pool.transition', 'INTEGRATED');
+        // Approve failed — derive phase (→ INTEGRATED)
+        AppStore.dispatch('pool.transition', derivePoolPhase({
+            hasFiles: true, hasStale: false, validationReport: lastValidationReport,
+            hasValidationErrors: false, hasIntegrated: true, hasAnimalReport: false,
+        }));
     } finally {
         hideBlockingSpinner();
     }
