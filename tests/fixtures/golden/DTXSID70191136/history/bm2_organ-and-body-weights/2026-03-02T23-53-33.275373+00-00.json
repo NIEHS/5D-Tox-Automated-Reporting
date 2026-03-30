@@ -1,0 +1,438 @@
+{
+  "bm2_id": "e417cfc8-c1a8-47b5-bef0-44aaf469c8c6",
+  "filename": "P3MP-Organ and Body Weights.bm2",
+  "section_title": "Animal Condition, Body Weights, and Organ Weights",
+  "table_caption": "Summary of Body Weights and Organ Weights of {sex} Rats Administered {compound} for Five Days",
+  "compound_name": "377-73-1",
+  "dose_unit": "mg/kg",
+  "narrative": "Terminal body weight was significantly increased in male rats at \u22650.1 mg/kg with a positive trend (Table 1). The BMD and BMDL were 0.00255 and 0.0025 mg/kg, respectively. Terminal body weight was significantly increased in male rats at \u22650.1 mg/kg with a positive trend (Table 1). The BMD and BMDL were 0.00266 and 0.00146 mg/kg, respectively. Terminal body weight was significantly increased in female rats at \u22650.1 mg/kg with a positive trend (Table 2). The BMD and BMDL were 0.000374 and 4.28e-05 mg/kg, respectively. Terminal body weight was significantly increased in female rats at \u22650.1 mg/kg with a positive trend (Table 2). The BMD and BMDL were 0.00143 and 0.000179 mg/kg, respectively.\n\nIn male rats at study termination (Table 1), Liver relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.000242 and 2.97e-05 mg/kg (relative weight), respectively. Lung relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00171 and 0.00169 mg/kg (relative weight), respectively. Kidney-Left absolute weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00199 and 0.00195 mg/kg (absolute weight), respectively.\n\nIn female rats at study termination (Table 2), Liver relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00679 and 0.00161 mg/kg (relative weight), respectively. Lung relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00143 and 0.000179 mg/kg (relative weight), respectively. Kidney-Left absolute weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00143 and 0.000179 mg/kg (absolute weight), respectively.",
+  "tables_json": {
+    "Female": [
+      {
+        "label": "SD5",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "100.0**",
+          "1": "260.0 \u00b1 10.0**",
+          "3": "310.0 \u00b1 10.0**",
+          "10": "360.0 \u00b1 10.0**",
+          "30": "420.0 \u00b1 12.2**",
+          "100": "450.0**",
+          "300": "450.0**",
+          "0.01": "110.0 \u00b1 10.0",
+          "0.1": "160.0 \u00b1 10.0**",
+          "0.3": "210.0 \u00b1 10.0**"
+        },
+        "n": {
+          "0": 8,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 5,
+          "100": 5,
+          "300": 3,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.000374",
+        "bmdl": "4.28e-05",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Body Weight Gain",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "210.0 \u00b1 10.0**",
+          "3": "260.0 \u00b1 10.0**",
+          "10": "310.0 \u00b1 10.0**",
+          "30": "370.0 \u00b1 12.2**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "80.0 \u00b1 5.0",
+          "0.1": "110.0 \u00b1 10.0**",
+          "0.3": "160.0 \u00b1 10.0**"
+        },
+        "n": {
+          "0": 8,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 5,
+          "100": 5,
+          "300": 3,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00143",
+        "bmdl": "0.000179",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Liver Weight Relative",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "100.0**",
+          "1": "260.0 \u00b1 10.0**",
+          "3": "310.0 \u00b1 10.0**",
+          "10": "360.0 \u00b1 10.0**",
+          "30": "420.0 \u00b1 12.2**",
+          "100": "450.0**",
+          "300": "450.0**",
+          "0.01": "110.0 \u00b1 10.0",
+          "0.1": "160.0 \u00b1 10.0**",
+          "0.3": "210.0 \u00b1 10.0**"
+        },
+        "n": {
+          "0": 8,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 5,
+          "100": 5,
+          "300": 3,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00679",
+        "bmdl": "0.00161",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Lung Weight Relative",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "210.0 \u00b1 10.0**",
+          "3": "260.0 \u00b1 10.0**",
+          "10": "310.0 \u00b1 10.0**",
+          "30": "370.0 \u00b1 12.2**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "80.0 \u00b1 5.0",
+          "0.1": "110.0 \u00b1 10.0**",
+          "0.3": "160.0 \u00b1 10.0**"
+        },
+        "n": {
+          "0": 8,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 5,
+          "100": 5,
+          "300": 3,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00143",
+        "bmdl": "0.000179",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Kidney-Left Absolute",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "210.0 \u00b1 10.0**",
+          "3": "260.0 \u00b1 10.0**",
+          "10": "310.0 \u00b1 10.0**",
+          "30": "370.0 \u00b1 12.2**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "80.0 \u00b1 5.0",
+          "0.1": "110.0 \u00b1 10.0**",
+          "0.3": "160.0 \u00b1 10.0**"
+        },
+        "n": {
+          "0": 8,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 5,
+          "100": 5,
+          "300": 3,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00143",
+        "bmdl": "0.000179",
+        "trend_marker": "**"
+      }
+    ],
+    "Male": [
+      {
+        "label": "SD5",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "100.0**",
+          "1": "250.0**",
+          "3": "300.0**",
+          "10": "350.0**",
+          "30": "400.0**",
+          "100": "450.0**",
+          "300": "450.0**",
+          "0.01": "100.0",
+          "0.1": "150.0**",
+          "0.3": "200.0**"
+        },
+        "n": {
+          "0": 7,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 4,
+          "100": 5,
+          "300": 5,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00255",
+        "bmdl": "0.0025",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Body Weight Gain",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "200.0**",
+          "3": "250.0**",
+          "10": "300.0**",
+          "30": "350.0**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "75.0",
+          "0.1": "100.0**",
+          "0.3": "150.0**"
+        },
+        "n": {
+          "0": 7,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 4,
+          "100": 5,
+          "300": 5,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00266",
+        "bmdl": "0.00146",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Liver Weight Relative",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "100.0**",
+          "1": "250.0**",
+          "3": "300.0**",
+          "10": "350.0**",
+          "30": "400.0**",
+          "100": "450.0**",
+          "300": "450.0**",
+          "0.01": "100.0",
+          "0.1": "150.0**",
+          "0.3": "200.0**"
+        },
+        "n": {
+          "0": 7,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 4,
+          "100": 5,
+          "300": 5,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.000242",
+        "bmdl": "2.97e-05",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Lung Weight Relative",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "200.0**",
+          "3": "250.0**",
+          "10": "300.0**",
+          "30": "350.0**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "75.0",
+          "0.1": "100.0**",
+          "0.3": "150.0**"
+        },
+        "n": {
+          "0": 7,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 4,
+          "100": 5,
+          "300": 5,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00171",
+        "bmdl": "0.00169",
+        "trend_marker": "**"
+      },
+      {
+        "label": "Kidney-Left Absolute",
+        "doses": [
+          0,
+          0.01,
+          0.1,
+          0.3,
+          1,
+          3,
+          10,
+          30,
+          100,
+          300
+        ],
+        "values": {
+          "0": "75.0**",
+          "1": "200.0**",
+          "3": "250.0**",
+          "10": "300.0**",
+          "30": "350.0**",
+          "100": "400.0**",
+          "300": "400.0**",
+          "0.01": "75.0",
+          "0.1": "100.0**",
+          "0.3": "150.0**"
+        },
+        "n": {
+          "0": 7,
+          "1": 5,
+          "3": 5,
+          "10": 5,
+          "30": 4,
+          "100": 5,
+          "300": 5,
+          "0.01": 5,
+          "0.1": 5,
+          "0.3": 5
+        },
+        "bmd": "0.00199",
+        "bmdl": "0.00195",
+        "trend_marker": "**"
+      }
+    ]
+  },
+  "original_narrative": "Terminal body weight was significantly increased in male rats at \u22650.1 mg/kg with a positive trend (Table 1). The BMD and BMDL were 0.00255 and 0.0025 mg/kg, respectively. Terminal body weight was significantly increased in male rats at \u22650.1 mg/kg with a positive trend (Table 1). The BMD and BMDL were 0.00266 and 0.00146 mg/kg, respectively. Terminal body weight was significantly increased in female rats at \u22650.1 mg/kg with a positive trend (Table 2). The BMD and BMDL were 0.000374 and 4.28e-05 mg/kg, respectively. Terminal body weight was significantly increased in female rats at \u22650.1 mg/kg with a positive trend (Table 2). The BMD and BMDL were 0.00143 and 0.000179 mg/kg, respectively.\n\nIn male rats at study termination (Table 1), Liver relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.000242 and 2.97e-05 mg/kg (relative weight), respectively. Lung relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00171 and 0.00169 mg/kg (relative weight), respectively. Kidney-Left absolute weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00199 and 0.00195 mg/kg (absolute weight), respectively.\n\nIn female rats at study termination (Table 2), Liver relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00679 and 0.00161 mg/kg (relative weight), respectively. Lung relative weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00143 and 0.000179 mg/kg (relative weight), respectively. Kidney-Left absolute weight was significantly increased at \u22650.1 mg/kg with a positive trend. The BMD and BMDL were 0.00143 and 0.000179 mg/kg (absolute weight), respectively.",
+  "approved_at": "2026-03-02T23:53:33.275373+00:00",
+  "version": 1
+}

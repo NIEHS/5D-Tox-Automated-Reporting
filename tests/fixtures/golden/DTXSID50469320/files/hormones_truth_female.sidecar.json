@@ -1,0 +1,1207 @@
+{
+  "source": "hormones_truth_female.csv",
+  "platform": "Hormones",
+  "sex": "Female",
+  "animals": {
+    "111": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "11.31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "49.1",
+          "terminal": false
+        }
+      ]
+    },
+    "112": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "2.87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "56.5",
+          "terminal": false
+        }
+      ]
+    },
+    "114": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "5.78",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "55.4",
+          "terminal": false
+        }
+      ]
+    },
+    "115": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "6.63",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "57.3",
+          "terminal": false
+        }
+      ]
+    },
+    "116": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "4.15",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.41",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "48.2",
+          "terminal": false
+        }
+      ]
+    },
+    "117": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "10.93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "47.3",
+          "terminal": false
+        }
+      ]
+    },
+    "118": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "6.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.61",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "53.6",
+          "terminal": false
+        }
+      ]
+    },
+    "119": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "4.45",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.26",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "59.5",
+          "terminal": false
+        }
+      ]
+    },
+    "120": {
+      "dose": 0.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "5.25",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.52",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "53.5",
+          "terminal": false
+        }
+      ]
+    },
+    "156": {
+      "dose": 4.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "6.75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "3.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.57",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "49.8",
+          "terminal": false
+        }
+      ]
+    },
+    "157": {
+      "dose": 4.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "14.95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "75.9",
+          "terminal": false
+        }
+      ]
+    },
+    "158": {
+      "dose": 4.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.82",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "44.4",
+          "terminal": false
+        }
+      ]
+    },
+    "160": {
+      "dose": 4.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "14.58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.27",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "67.6",
+          "terminal": false
+        }
+      ]
+    },
+    "166": {
+      "dose": 12.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "10.64",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.55",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "53.1",
+          "terminal": false
+        }
+      ]
+    },
+    "168": {
+      "dose": 12.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "10.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.36",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "57.8",
+          "terminal": false
+        }
+      ]
+    },
+    "169": {
+      "dose": 12.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "49.1",
+          "terminal": false
+        }
+      ]
+    },
+    "170": {
+      "dose": 12.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "5.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.13",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "68.2",
+          "terminal": false
+        }
+      ]
+    },
+    "176": {
+      "dose": 37.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "5.32",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.39",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "57.9",
+          "terminal": false
+        }
+      ]
+    },
+    "177": {
+      "dose": 37.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "5.9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.52",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "49.4",
+          "terminal": false
+        }
+      ]
+    },
+    "179": {
+      "dose": 37.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "8.57",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "3.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "56.9",
+          "terminal": false
+        }
+      ]
+    },
+    "180": {
+      "dose": 37.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "10.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.37",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "51.3",
+          "terminal": false
+        }
+      ]
+    },
+    "136": {
+      "dose": 0.5,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.49",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "64.9",
+          "terminal": false
+        }
+      ]
+    },
+    "137": {
+      "dose": 0.5,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "6.76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.43",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "55",
+          "terminal": false
+        }
+      ]
+    },
+    "138": {
+      "dose": 0.5,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "4.93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "4.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.37",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "63.8",
+          "terminal": false
+        }
+      ]
+    },
+    "139": {
+      "dose": 0.5,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.39",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "56.7",
+          "terminal": false
+        }
+      ]
+    },
+    "140": {
+      "dose": 0.5,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.51",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "4.12",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "66.4",
+          "terminal": false
+        }
+      ]
+    },
+    "146": {
+      "dose": 1.4,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "8.65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "4.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "72.7",
+          "terminal": false
+        }
+      ]
+    },
+    "147": {
+      "dose": 1.4,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.58",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "68.1",
+          "terminal": false
+        }
+      ]
+    },
+    "148": {
+      "dose": 1.4,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "10.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.59",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "72.5",
+          "terminal": false
+        }
+      ]
+    },
+    "149": {
+      "dose": 1.4,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.83",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.79",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "61.5",
+          "terminal": false
+        }
+      ]
+    },
+    "150": {
+      "dose": 1.4,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "11.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "58.1",
+          "terminal": false
+        }
+      ]
+    },
+    "186": {
+      "dose": 111.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "4.99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "8.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "48.7",
+          "terminal": false
+        }
+      ]
+    },
+    "187": {
+      "dose": 111.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": ".75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "28.1",
+          "terminal": false
+        }
+      ]
+    },
+    "188": {
+      "dose": 111.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "3.76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "37.4",
+          "terminal": false
+        }
+      ]
+    },
+    "189": {
+      "dose": 111.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7.64",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "7.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "43.6",
+          "terminal": false
+        }
+      ]
+    },
+    "190": {
+      "dose": 111.0,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "6.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": ".86",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "35.1",
+          "terminal": false
+        }
+      ]
+    },
+    "126": {
+      "dose": 0.15,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "8.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.5",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.73",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "56.4",
+          "terminal": false
+        }
+      ]
+    },
+    "128": {
+      "dose": 0.15,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "14.74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "1.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "2.75",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "55.8",
+          "terminal": false
+        }
+      ]
+    },
+    "129": {
+      "dose": 0.15,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.34",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": "2.6",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "3.48",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "57.2",
+          "terminal": false
+        }
+      ]
+    },
+    "130": {
+      "dose": 0.15,
+      "selection": "Unknown",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Free Thyroxine",
+          "value": "9.29",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Thyroid Stimulating Hormone",
+          "value": ".8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Total Thyroxine",
+          "value": "1.98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Triiodothyronine",
+          "value": "58.4",
+          "terminal": false
+        }
+      ]
+    }
+  }
+}

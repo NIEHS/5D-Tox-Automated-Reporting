@@ -1927,15 +1927,16 @@ def _build_section_cards(
     """
     sections = []
     for platform, sex_rows in sorted(platform_tables.items()):
-        # Business rule: only responsive endpoints (both Jonckheere trend AND
-        # Dunnett pairwise significant) appear in main body platform tables
-        # (Tables 2-7).  Non-responsive endpoints are excluded here but still
-        # available in the BMD summary (Table 8) which has its own gate.
+        # All endpoints appear in every table (CLAUDE.md business rule).
+        # The NTP responsive gate does NOT control row inclusion — it
+        # controls significance markers and the BMD summary only.
+        # responsive_rows is kept as a convenience for the narrative
+        # generator, which describes only the significant findings.
         responsive_rows = {
             sex: [r for r in rows if r.responsive]
             for sex, rows in sex_rows.items()
         }
-        # Drop sex groups that have no responsive endpoints
+        # Drop sex groups that have no responsive endpoints (for narrative only)
         responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
 
         # ── Body Weight: use sidecar builder when available ──────────────
@@ -2102,10 +2103,13 @@ def _build_section_cards(
         # ── Generic fallback for platforms without dedicated builders ───────
         # Also handles cases where sidecar data isn't available (e.g., data
         # uploaded as .bm2 without going through the integration pipeline).
-        if not responsive_rows:
+        # All endpoints appear in the table (business rule) — sex_rows has
+        # every row, not just responsive ones.  The narrative uses
+        # responsive_rows so it only describes significant findings.
+        if not sex_rows:
             continue
 
-        tables_json = serialize_table_rows(responsive_rows)
+        tables_json = serialize_table_rows(sex_rows)
         narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
         sections.append({
             "platform": platform,

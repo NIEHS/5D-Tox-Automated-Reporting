@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rlm-bmdx Automated Test Suite: Domain Analysis and Initial Results</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #2c5282;
+    --accent-light: #ebf4ff;
+    --border: #d1d5db;
+    --success: #065f46;
+    --success-bg: #ecfdf5;
+    --warn: #92400e;
+    --warn-bg: #fffbeb;
+    --danger: #991b1b;
+    --danger-bg: #fef2f2;
+    --code-bg: #f4f4f5;
+    --table-stripe: #f9fafb;
+    --serif: "Georgia", "Times New Roman", serif;
+    --mono: "Fira Code", "Source Code Pro", "Consolas", monospace;
+    --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.7;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    font-size: 1.05rem;
+    color: #555;
+    margin-bottom: 2.5rem;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #333;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #444;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  p { margin-bottom: 1rem; }
+  ul, ol { margin-bottom: 1rem; padding-left: 1.75rem; }
+  li { margin-bottom: 0.35rem; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+  }
+  pre {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+    line-height: 1.55;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.93rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border);
+  }
+  th {
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .callout {
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid;
+  }
+  .callout-info { background: var(--accent-light); border-color: var(--accent); }
+  .callout-success { background: var(--success-bg); border-color: var(--success); }
+  .callout-warn { background: var(--warn-bg); border-color: var(--warn); }
+  .callout-danger { background: var(--danger-bg); border-color: var(--danger); }
+  .callout strong { display: block; margin-bottom: 0.25rem; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--accent-light);
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .stat-card .number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+  }
+  .stat-card .label {
+    font-size: 0.85rem;
+    color: #555;
+    margin-top: 0.25rem;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    border-radius: 4px;
+    font-size: 0.82em;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+  .badge-pass { background: var(--success-bg); color: var(--success); }
+  .badge-fail { background: var(--danger-bg); color: var(--danger); }
+  .badge-unit { background: #ede9fe; color: #5b21b6; }
+  .badge-integration { background: #fef3c7; color: #92400e; }
+  .badge-e2e { background: #dbeafe; color: #1e40af; }
+  .pipeline-diagram {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 1.5rem 0;
+  }
+  .pipeline-step {
+    background: var(--accent-light);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--accent);
+  }
+  .pipeline-arrow {
+    font-size: 1.2rem;
+    color: var(--accent);
+  }
+  .toc {
+    background: var(--table-stripe);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  .toc h3 { margin-top: 0; color: var(--accent); }
+  .toc ol { margin-bottom: 0; padding-left: 1.5rem; }
+  .toc li { margin-bottom: 0.3rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .finding-box {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .finding-box h4 { margin-top: 0; }
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: #888;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Automated Test Suite for a Regulatory Toxicology Report Generator</h1>
+<p class="subtitle">
+  Domain analysis, architectural justification, and initial results for
+  the rlm-bmdx project &mdash; a web application that generates
+  NIEHS-format 5-day genomic dose-response study reports.
+  <br>March 30, 2026
+</p>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#domain">The Domain: Computational Toxicology Report Generation</a></li>
+    <li><a href="#architecture">System Architecture and Sources of Truth</a></li>
+    <li><a href="#refactor">The Domain Model Refactor</a></li>
+    <li><a href="#why-testing">Why Automated Testing Is Necessary</a></li>
+    <li><a href="#test-design">Test Suite Design</a></li>
+    <li><a href="#results">Initial Results</a></li>
+    <li><a href="#findings">Key Findings</a></li>
+    <li><a href="#coverage-gaps">Coverage Gaps and Next Steps</a></li>
+    <li><a href="#conclusion">Conclusion</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="domain">1. The Domain: Computational Toxicology Report Generation</h2>
+
+<p>
+  The National Institute of Environmental Health Sciences (NIEHS) publishes
+  standardized reports characterizing the biological potency of chemicals
+  through 5-day genomic dose-response studies. These reports follow a rigid
+  template: animal condition data (body weights, organ weights), clinical
+  pathology endpoints (clinical chemistry, hematology, hormones), internal
+  dose assessment (tissue concentrations), and transcriptomic benchmark dose
+  analysis &mdash; all organized into numbered tables, narrative sections,
+  and statistical summaries that must match an established reference format.
+</p>
+
+<p>
+  Generating one of these reports is labor-intensive. The data arrives in
+  heterogeneous formats: BMDExpress 3 binary <code>.bm2</code> files
+  containing dose-response model results, NTP-format CSV and TXT files
+  with per-animal measurements, Excel workbooks with study rosters, and
+  gene expression matrices with thousands of probes. Each file type carries
+  different metadata, uses different conventions, and represents a different
+  tier in a hierarchy of data provenance:
+</p>
+
+<ul>
+  <li><strong>Tier 1 (.bm2)</strong> &mdash; BMDExpress 3 modeling results with benchmark dose estimates, model fit statistics, and NIEHS classification (viable, NVM, NR, UREP)</li>
+  <li><strong>Tier 2 (.txt/.csv)</strong> &mdash; Pivoted dose-response tables with mean &plusmn; SE per dose group, derived from raw animal data</li>
+  <li><strong>Tier 3 (.xlsx)</strong> &mdash; Raw study files with individual animal measurements, dose assignments, and selection metadata</li>
+</ul>
+
+<p>
+  The rlm-bmdx application automates this report generation pipeline:
+  upload heterogeneous study files, validate and cross-reference them,
+  merge into a unified data structure, run NTP-mandated statistical tests
+  (Jonckheere trend, Williams/Dunnett pairwise), compute benchmark doses
+  via the EPA&rsquo;s recommended model selection algorithm, generate
+  narrative prose, and export the final report as a tagged PDF matching
+  the NIEHS reference layout.
+</p>
+
+<h3>The Statistical Pipeline</h3>
+
+<p>
+  Two independent statistical systems operate on the integrated data, and
+  their independence is a critical business rule:
+</p>
+
+<table>
+  <tr>
+    <th>System</th>
+    <th>Purpose</th>
+    <th>Implementation</th>
+    <th>Output</th>
+  </tr>
+  <tr>
+    <td>NTP Statistical Gate</td>
+    <td>Determine if an endpoint shows a significant dose-response trend</td>
+    <td>Jonckheere trend test (Python) + Williams/Dunnett pairwise (Java via sciome-commons-math)</td>
+    <td><code>responsive</code> flag, significance markers (* / **), LOEL/NOEL</td>
+  </tr>
+  <tr>
+    <td>BMD Modeling</td>
+    <td>Estimate the benchmark dose for each endpoint</td>
+    <td>BMDExpress 3 (.bm2 prefilter) + pybmds (15 continuous models, EPA algorithm)</td>
+    <td>BMD, BMDL, BMDU, model name, NIEHS classification</td>
+  </tr>
+</table>
+
+<p>
+  An endpoint can be NTP-significant without having a viable BMD (model
+  failed), and it can have a viable BMD without passing the NTP gate
+  (the statistical trend test didn't reach significance). Both results
+  appear in the tables &mdash; the BMD column reflects modeling status,
+  not the NTP gate.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="architecture">2. System Architecture and Sources of Truth</h2>
+
+<p>
+  The system is a FastAPI web application (Python 3.12) with a JavaScript
+  frontend (Alpine.js). It is built around three canonical sources of truth,
+  each enforced by architectural rules documented in the project&rsquo;s
+  <code>CLAUDE.md</code>:
+</p>
+
+<h3>Source 1: The Integrated Dataset</h3>
+<p>
+  <code>integrated.json</code> (BMDProject format) is the merged output of
+  all uploaded files, produced by the <code>integrate_pool()</code> function
+  which calls BMDExpress 3&rsquo;s Java-based <code>IntegrateProject</code>
+  tool. Supplemented by <code>*.sidecar.json</code> files that preserve
+  per-animal metadata the pivot step discards (observation day, selection
+  group, terminal flag).
+  <strong>Rule:</strong> No table builder or report generator reads from
+  individual file pool files.
+</p>
+
+<h3>Source 2: The Document Structure Tree</h3>
+<p>
+  <code>document_tree.py</code> defines the complete NIEHS report structure
+  as a tree of <code>DocNode</code> objects. Heading hierarchy, section
+  ordering, table numbering, TOC navigation, and PDF preview filtering
+  all derive from this tree.
+  <strong>Rule:</strong> No part of the system hardcodes document structure.
+</p>
+
+<h3>Source 3: The AppStore State Machine</h3>
+<p>
+  <code>web/js/app_store.js</code> centralizes all UI state. The pool
+  workflow progresses through a linear state machine:
+</p>
+
+<div class="pipeline-diagram">
+  <span class="pipeline-step">EMPTY</span>
+  <span class="pipeline-arrow">&rarr;</span>
+  <span class="pipeline-step">UPLOADED</span>
+  <span class="pipeline-arrow">&rarr;</span>
+  <span class="pipeline-step">VALIDATED</span>
+  <span class="pipeline-arrow">&rarr;</span>
+  <span class="pipeline-step">INTEGRATED</span>
+  <span class="pipeline-arrow">&rarr;</span>
+  <span class="pipeline-step">APPROVED</span>
+</div>
+
+<p>
+  Phase is derived from artifact state (what files and reports exist on
+  disk), never set imperatively. The function <code>derivePoolPhase()</code>
+  examines artifacts and returns the correct phase.
+</p>
+
+<h3>Codebase Profile</h3>
+
+<table>
+  <tr><th>Module</th><th>Lines</th><th>Responsibility</th></tr>
+  <tr><td><code>pool_orchestrator.py</code></td><td>2,785</td><td>File pool lifecycle, NTP stats pipeline, section card generation</td></tr>
+  <tr><td><code>session_routes.py</code></td><td>1,200</td><td>Session persistence: load, approve, unapprove, history, restore, BMD summary</td></tr>
+  <tr><td><code>upload_routes.py</code></td><td>900</td><td>File uploads (.bm2, .csv, .zip), processing, preview</td></tr>
+  <tr><td><code>llm_routes.py</code></td><td>893</td><td>LLM generation: background, methods, summary, genomics narrative</td></tr>
+  <tr><td><code>document_tree.py</code></td><td>515</td><td>Declarative report structure tree</td></tr>
+  <tr><td><code>background_server.py</code></td><td>357</td><td>FastAPI app shell, middleware, admin endpoints</td></tr>
+  <tr><td><code>export_routes.py</code></td><td>329</td><td>PDF/DOCX export, style profiles</td></tr>
+  <tr><td><code>apical_bmds.py</code></td><td>328</td><td>pybmds modeling (15 continuous models, EPA algorithm)</td></tr>
+  <tr><td><code>session_store.py</code></td><td>174</td><td>Disk persistence and version history</td></tr>
+  <tr><td><code>server_state.py</code></td><td>59</td><td>Shared in-memory upload dicts</td></tr>
+  <tr><td><strong>Total</strong></td><td><strong>7,540</strong></td><td></td></tr>
+</table>
+
+<h3>External Dependencies</h3>
+<p>
+  The system orchestrates calls across multiple runtimes and external services:
+</p>
+<table>
+  <tr><th>Dependency</th><th>Nature</th><th>Latency</th></tr>
+  <tr><td>BMDExpress 3 (Java)</td><td>6 CLI tools invoked via <code>subprocess</code></td><td>3&ndash;15s per call</td></tr>
+  <tr><td>pybmds (scipy)</td><td>CPU-bound BMD modeling, 15 models per endpoint</td><td>~8 min for full study</td></tr>
+  <tr><td>Claude API (Anthropic)</td><td>LLM narrative generation via SDK</td><td>5&ndash;30s per call</td></tr>
+  <tr><td>PubChem, EPA CompTox, ATSDR, Semantic Scholar</td><td>HTTP REST APIs</td><td>1&ndash;5s each</td></tr>
+  <tr><td>LMDB</td><td>On-disk mmap cache for .bm2 deserialization</td><td>&lt;10ms</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="refactor">3. The Domain Model Refactor</h2>
+
+<p>
+  On March 15, 2026, a major refactor was committed across five sequential
+  commits that replaced the system&rsquo;s entire file classification scheme.
+  Previously, files were identified by a single monolithic <em>domain string</em>
+  (e.g., <code>"body_weight_inferred"</code>, <code>"clinical_chemistry_tox_study"</code>).
+  This was brittle &mdash; the same string encoded three orthogonal concerns,
+  making it impossible to distinguish a raw animal data file from a
+  BMDExpress modeling result for the same measurement platform without
+  parsing the string.
+</p>
+
+<h3>The New Taxonomy</h3>
+
+<table>
+  <tr><th>Axis</th><th>Values</th><th>Semantics</th></tr>
+  <tr>
+    <td><strong>Provider</strong></td>
+    <td><code>Apical</code>, <code>Observations</code></td>
+    <td>Top-level grouping: continuous dose-response vs. categorical event data</td>
+  </tr>
+  <tr>
+    <td><strong>Platform</strong></td>
+    <td>Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones, Tissue Concentration, Clinical</td>
+    <td>The measurement domain &mdash; what biological system is being assessed</td>
+  </tr>
+  <tr>
+    <td><strong>dataType</strong></td>
+    <td><code>tox_study</code>, <code>inferred</code>, <code>gene_expression</code></td>
+    <td>The provenance tier &mdash; raw animal data, BMDExpress model results, or transcriptomic probes</td>
+  </tr>
+</table>
+
+<h3>What Changed</h3>
+<ul>
+  <li><code>FileFingerprint.domain</code> &rarr; <code>.platform</code> + <code>.data_type</code></li>
+  <li>Coverage matrix keys: <code>"Body Weight"</code> &rarr; <code>"Body Weight|tox_study"</code> (compound keys)</li>
+  <li>Java <code>ExperimentDescription.domain</code> &rarr; <code>.dataType</code>; providers <code>"Study"</code>/<code>"Clinical Endpoint"</code> &rarr; <code>"Apical"</code>/<code>"Observations"</code></li>
+  <li>New metadata confirmation gate: user must confirm platform + dataType per file before integration</li>
+  <li>Long-format CSV conversion moved to upload time (originals preserved in <code>_originals/</code>)</li>
+  <li>UI: new <code>PLATFORM_LABELS</code>, coverage matrix collapses compound keys</li>
+</ul>
+
+<div class="callout callout-danger">
+  <strong>Critical gap:</strong>
+  The refactor was committed on March 15 but had received zero end-to-end
+  validation by March 30 &mdash; a 15-day window during which 30+ additional
+  commits were built on top of it. Manual testing through the browser was
+  the only validation available, and it had not been performed.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="why-testing">4. Why Automated Testing Is Necessary</h2>
+
+<h3>4.1 The Manual Testing Bottleneck</h3>
+
+<p>
+  Prior to this test suite, the only way to verify the application worked
+  was to start the server, open a browser, upload files, click through
+  each workflow step, and visually inspect the results. A single manual
+  walkthrough of the 9-point validation checklist took 30&ndash;60 minutes
+  (not counting the ~10-minute processing time for BMD modeling). When
+  something broke &mdash; which it frequently did after refactors &mdash;
+  diagnosing the failure often consumed an entire conversation session
+  (1&ndash;2 hours) of iterative debugging.
+</p>
+
+<p>
+  This is unsustainable for a system with 87 commits in 30 days and 7,500+
+  lines of Python spanning 10 key modules, 6 Java helper tools, and 5
+  external API integrations.
+</p>
+
+<h3>4.2 The Regulatory Context</h3>
+
+<p>
+  The reports this system generates are used in regulatory toxicology
+  &mdash; they inform decisions about chemical safety, exposure limits,
+  and public health policy. Errors in the statistical pipeline (wrong
+  Jonckheere p-value, misclassified BMD status, inflated N counts from
+  including Biosampling Animals in Core Animal statistics) produce
+  incorrect conclusions in the final report. A test suite that validates
+  these computations against known-good outputs is not a luxury; it is
+  a prerequisite for using this tool in a professional setting.
+</p>
+
+<h3>4.3 The Domain Model Refactor Risk</h3>
+
+<p>
+  The provider/platform/dataType refactor touched <em>every layer</em>
+  of the system:
+</p>
+
+<ul>
+  <li>Python data structures (<code>FileFingerprint</code>, coverage matrix, experiment descriptions)</li>
+  <li>Java interop (BMDExpress <code>ExperimentDescription</code> field names)</li>
+  <li>File I/O (metadata headers prepended to CSV/TXT, filename-based platform detection)</li>
+  <li>UI rendering (coverage matrix display, platform labels, metadata confirmation modal)</li>
+  <li>Session persistence (fingerprint format, validation report structure)</li>
+</ul>
+
+<p>
+  Any of these touchpoints could silently break while appearing to work
+  in the others. The old <code>.domain</code> field might still appear
+  in a serialized validation report; an experiment might be assigned to
+  the wrong platform; the coverage matrix might use old-format keys that
+  the UI doesn&rsquo;t recognize. Without automated assertions, these
+  regressions can only be discovered by manually exercising each path.
+</p>
+
+<h3>4.4 The Shared Mutable State Problem</h3>
+
+<p>
+  The server maintains five module-level dictionaries that accumulate state
+  across HTTP requests:
+</p>
+
+<pre>_pool_fingerprints: dict[str, dict[str, FileFingerprint]]  # dtxsid -> file_id -> fingerprint
+_integrated_pool:   dict[str, dict]                         # dtxsid -> merged BMDProject
+_data_uploads:      dict[str, dict]                         # file_id -> {filename, path, type}
+_bm2_uploads:       dict[str, dict]                         # bm2_id -> {filename, path, table_data, ...}
+_csv_uploads:       dict[str, dict]                         # csv_id -> {filename, path, df}</pre>
+
+<p>
+  Without explicit state isolation, tests that exercise these dicts in
+  sequence will see each other&rsquo;s side effects. The <code>conftest.py</code>
+  fixture strategy &mdash; clearing all five dicts and patching
+  <code>SESSIONS_DIR</code> across six modules &mdash; was essential
+  to make tests independent.
+</p>
+
+<h3>4.5 The External Dependency Wall</h3>
+
+<p>
+  The pipeline calls six Java CLI tools, the Claude API, five HTTP APIs,
+  an LMDB database, and a CPU-bound scipy modeling library that takes 8+
+  minutes per full run. Any test that accidentally invokes these
+  dependencies is either slow, flaky, or requires network access and
+  API keys. The mock architecture must be comprehensive:
+</p>
+
+<table>
+  <tr><th>Mocked At</th><th>What It Blocks</th><th>Why</th></tr>
+  <tr><td><code>pool_orchestrator.integrate_pool</code></td><td>IntegrateProject.java</td><td>JVM startup + file merging</td></tr>
+  <tr><td><code>pool_orchestrator.build_table_data</code></td><td>RunPrefilter.java</td><td>Williams/Dunnett tests</td></tr>
+  <tr><td><code>pool_orchestrator.export_genomics</code></td><td>ExportGenomics.java</td><td>Gene expression extraction</td></tr>
+  <tr><td><code>pool_orchestrator.generate_results_narrative</code></td><td>ExportCategories.java</td><td>BMD category lookup</td></tr>
+  <tr><td><code>pool_orchestrator.run_bmds_for_endpoints</code></td><td>pybmds (scipy)</td><td>8-minute CPU-bound modeling</td></tr>
+  <tr><td><code>requests.Session.send</code></td><td>All HTTP</td><td>PubChem, EPA, ATSDR, Semantic Scholar</td></tr>
+  <tr><td><code>bm2_cache</code> (3 modules)</td><td>LMDB</td><td>Persistent .bm2 deserialization cache</td></tr>
+</table>
+
+<div class="callout callout-info">
+  <strong>Design decision:</strong> Mocks are applied at the <em>import site</em>
+  (e.g., <code>pool_orchestrator.integrate_pool</code>) rather than globally
+  patching <code>subprocess.run</code>. This makes each test&rsquo;s external
+  dependencies explicit and ensures new Java tools don&rsquo;t silently
+  escape the mock boundary.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="test-design">5. Test Suite Design</h2>
+
+<h3>5.1 Directory Structure</h3>
+<pre>tests/
+  conftest.py                      # State isolation, fixtures, mocks
+  fixtures/
+    golden/
+      DTXSID50469320/              # 12 data files + sidecars + reports
+      DTXSID70191136/              # 2 .bm2 files + approved sections
+  unit/
+    test_pure_functions.py         # Serialization, hashing, dose key formatting
+    test_session_store.py          # Disk persistence, slug generation
+    test_document_tree.py          # Tree structure, table numbering
+    test_partition.py              # Platform partitioning, GE filtering
+  integration/
+    test_pool_validate.py          # Fingerprinting + cross-validation
+    test_pool_integrate.py         # Pool merging (mocked Java)
+    test_process_integrated.py     # Section card generation (mocked NTP stats)
+    test_session_lifecycle.py      # Approve/unapprove/history/restore
+    test_upload_routes.py          # File uploads and preview
+  e2e/
+    test_full_pipeline.py          # Upload -> validate -> integrate -> process -> approve -> restore</pre>
+
+<h3>5.2 Fixture Strategy</h3>
+
+<p>
+  Every test receives isolated state through four layers:
+</p>
+
+<ol>
+  <li><strong>Fresh <code>tmp_path</code></strong> (pytest built-in) &mdash; unique temp directory per test, auto-cleaned</li>
+  <li><strong>Patched <code>SESSIONS_DIR</code></strong> &mdash; redirected in <code>session_store</code> and every module that imports it (6 total: <code>session_store</code>, <code>session_routes</code>, <code>llm_routes</code>, <code>background_server</code>, <code>style_learning</code>, <code>export_routes</code>)</li>
+  <li><strong>Cleared shared state</strong> &mdash; all 5 module-level dicts emptied between tests</li>
+  <li><strong>Golden session data</strong> &mdash; real study data copied into <code>tmp_path</code> via <code>shutil.copytree</code></li>
+</ol>
+
+<div class="callout callout-warn">
+  <strong>SESSIONS_DIR pitfall:</strong>
+  <code>session_store.SESSIONS_DIR</code> is a module-level <code>Path</code>
+  computed at import time from an environment variable. Setting <code>SESSIONS_DIR</code>
+  via <code>monkeypatch.setenv</code> alone is insufficient because the module
+  has already been imported. The conftest must use <code>monkeypatch.setattr</code>
+  on the module attribute directly, and must do so in every module that
+  imported it by name.
+</div>
+
+<h3>5.3 Test Layers</h3>
+
+<table>
+  <tr><th>Layer</th><th>What</th><th>I/O</th><th>Mocking</th><th>Target Time</th></tr>
+  <tr>
+    <td><span class="badge badge-unit">UNIT</span></td>
+    <td>Pure functions imported directly</td>
+    <td>None (fixture files only)</td>
+    <td>None needed</td>
+    <td>&lt;2s</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>FastAPI TestClient with endpoint calls</td>
+    <td>Disk (tmp_path)</td>
+    <td>Java, pybmds, HTTP, LLM</td>
+    <td>&lt;2s</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-e2e">E2E</span></td>
+    <td>Full pipeline walkthrough</td>
+    <td>Disk (tmp_path)</td>
+    <td>Java, pybmds only</td>
+    <td>&lt;3s</td>
+  </tr>
+</table>
+
+<h3>5.4 What Is NOT Mocked</h3>
+
+<p>
+  A critical design decision: several <code>bmdx_pipe</code> functions
+  are <em>not</em> mocked because they are pure Python and safe to exercise
+  with real data:
+</p>
+
+<ul>
+  <li><code>fingerprint_file()</code> &mdash; reads file headers, detects platform/dataType from column names and metadata headers. This is the <em>primary assertion target</em> for the domain model refactor.</li>
+  <li><code>validate_pool()</code> &mdash; cross-checks fingerprints for dose consistency, sex coverage, redundancy. Pure Python.</li>
+  <li><code>lightweight_validate()</code> &mdash; quick validation of a new file against existing pool. Pure Python.</li>
+  <li><code>build_clinical_obs_tables()</code> &mdash; parses categorical CSV data into incidence rows. Pure Python.</li>
+</ul>
+
+<p>
+  Leaving <code>fingerprint_file()</code> unmocked is what makes
+  <code>test_pool_validate.py</code> the highest-value test: it exercises
+  the real fingerprinting logic against real study files, producing real
+  <code>platform</code> and <code>data_type</code> values that the test
+  asserts against. This is a genuine integration test, not a mock roundtrip.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="results">6. Initial Results</h2>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <span class="number">125</span>
+    <span class="label">Tests</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">125</span>
+    <span class="label">Passing</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">0</span>
+    <span class="label">Failing</span>
+  </div>
+  <div class="stat-card">
+    <span class="number">2.3s</span>
+    <span class="label">Total Runtime</span>
+  </div>
+</div>
+
+<h3>6.1 Detailed Test Counts</h3>
+
+<table>
+  <tr>
+    <th>File</th>
+    <th>Layer</th>
+    <th>Tests</th>
+    <th>Status</th>
+    <th>Coverage Focus</th>
+  </tr>
+  <tr>
+    <td><code>test_pure_functions.py</code></td>
+    <td><span class="badge badge-unit">UNIT</span></td>
+    <td>42</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Dose key formatting, BMD value coercion, serialization, cache hashing</td>
+  </tr>
+  <tr>
+    <td><code>test_document_tree.py</code></td>
+    <td><span class="badge badge-unit">UNIT</span></td>
+    <td>25</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Report structure, table numbering, node lookup, tree serialization</td>
+  </tr>
+  <tr>
+    <td><code>test_session_store.py</code></td>
+    <td><span class="badge badge-unit">UNIT</span></td>
+    <td>17</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Slug generation, filename sanitization, save/load/delete round-trip</td>
+  </tr>
+  <tr>
+    <td><code>test_partition.py</code></td>
+    <td><span class="badge badge-unit">UNIT</span></td>
+    <td>8</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Platform partitioning (new domain model), gene expression filtering</td>
+  </tr>
+  <tr>
+    <td><code>test_session_lifecycle.py</code></td>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>12</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Session load, approve, unapprove, version history, restore</td>
+  </tr>
+  <tr>
+    <td><code>test_process_integrated.py</code></td>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>6</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Section cards per platform, tables_json structure, BMD summary</td>
+  </tr>
+  <tr>
+    <td><code>test_pool_validate.py</code></td>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>5</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Fingerprinting with platform/data_type, coverage matrix</td>
+  </tr>
+  <tr>
+    <td><code>test_pool_integrate.py</code></td>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>5</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Integration endpoint, in-memory caching, error handling</td>
+  </tr>
+  <tr>
+    <td><code>test_upload_routes.py</code></td>
+    <td><span class="badge badge-integration">INTEGRATION</span></td>
+    <td>4</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>File upload (.bm2, .csv, .txt), preview</td>
+  </tr>
+  <tr>
+    <td><code>test_full_pipeline.py</code></td>
+    <td><span class="badge badge-e2e">E2E</span></td>
+    <td>1</td>
+    <td><span class="badge badge-pass">PASS</span></td>
+    <td>Full 9-point refactor checklist in single walkthrough</td>
+  </tr>
+  <tr>
+    <td><strong>Total</strong></td>
+    <td></td>
+    <td><strong>125</strong></td>
+    <td><span class="badge badge-pass">ALL PASS</span></td>
+    <td></td>
+  </tr>
+</table>
+
+<h3>6.2 Runtime Profile</h3>
+
+<pre>$ uv run pytest -m unit          # 92 tests   0.9s
+$ uv run pytest -m integration   # 32 tests   1.4s
+$ uv run pytest -m e2e           #  1 test    2.1s
+$ uv run pytest                  # 125 tests  2.3s</pre>
+
+<p>
+  The entire suite runs in 2.3 seconds &mdash; three orders of magnitude
+  faster than a single manual walkthrough. The integration and E2E tests
+  are only marginally slower than unit tests because the mocking strategy
+  eliminates all Java subprocess calls, HTTP requests, and CPU-bound
+  modeling.
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="findings">7. Key Findings</h2>
+
+<p>
+  The process of writing tests exposed three categories of insights:
+  confirmed behaviors, discovered bugs, and architectural lessons.
+</p>
+
+<h3>7.1 Domain Model Refactor: Confirmed Working</h3>
+
+<div class="callout callout-success">
+  <strong>Fingerprinting produces correct platform/data_type fields.</strong>
+  The pool validation integration test exercises the real <code>fingerprint_file()</code>
+  function against 12 golden session files. All fingerprints carry
+  <code>platform</code> and <code>data_type</code> fields; the old
+  <code>domain</code> field does not appear. Five expected platforms
+  (Body Weight, Organ Weight, Clinical Chemistry, Hormones, Tissue
+  Concentration) are covered. Clinical Observations files are correctly
+  classified under the <code>Clinical</code> platform with no false
+  positives from the apical platform matcher.
+</div>
+
+<div class="callout callout-success">
+  <strong>Platform partitioning uses the new field.</strong>
+  <code>_partition_by_platform()</code> reads
+  <code>experimentDescription.platform</code> as its primary signal,
+  falling back to the old <code>.domain</code> field only for legacy
+  sessions. The unit tests confirm that when both fields are present,
+  <code>platform</code> takes precedence.
+</div>
+
+<div class="callout callout-success">
+  <strong>Session restore works with the new format.</strong>
+  The E2E test clears all in-memory state after approval, then reloads
+  the session from disk. Approved sections, pending files, and chemical
+  identity all restore correctly.
+</div>
+
+<h3>7.2 Discovered Issues</h3>
+
+<div class="finding-box">
+  <h4>Finding 1: The <code>responsive</code> flag defaults to <code>False</code></h4>
+  <p>
+    <code>TableRow.responsive</code> defaults to <code>False</code>, meaning
+    that <code>_build_section_cards()</code> &mdash; which filters to only
+    responsive rows for non-Body-Weight platforms &mdash; produces <em>empty</em>
+    section cards unless the NTP statistical pipeline explicitly sets
+    <code>responsive=True</code>. Body Weight bypasses this filter (the
+    NIEHS reference always includes Table 2 regardless of significance).
+  </p>
+  <p>
+    <strong>Impact:</strong> If any code path creates TableRow objects
+    without running the full NTP stats pipeline, the resulting section cards
+    will be empty for all platforms except Body Weight. This would surface
+    as missing tables in the report with no error message.
+  </p>
+</div>
+
+<div class="finding-box">
+  <h4>Finding 2: <code>integrated.json</code> is written by bmdx_pipe, not the endpoint</h4>
+  <p>
+    The <code>api_pool_integrate</code> endpoint&rsquo;s docstring says it
+    persists to <code>sessions/{dtxsid}/integrated.json</code>, but the
+    actual disk write happens inside <code>bmdx_pipe.integrate_pool()</code>
+    (the Java-backed function). The endpoint only stores the result in the
+    in-memory <code>_integrated_pool</code> dict. This means the in-memory
+    cache is the primary artifact; the disk file is a side effect of the
+    external dependency.
+  </p>
+  <p>
+    <strong>Impact:</strong> If <code>integrate_pool()</code> changes its
+    file-writing behavior, the process-integrated endpoint would silently
+    lose disk persistence. Tests that mock <code>integrate_pool</code>
+    must check the in-memory dict, not the disk file.
+  </p>
+</div>
+
+<div class="finding-box">
+  <h4>Finding 3: Golden test data lacks Hematology</h4>
+  <p>
+    The DTXSID50469320 test session has Clinical Chemistry files
+    (<code>clin_chem_truth_*.txt</code>) but no Hematology files.
+    The initial test assumed all 6 apical platforms would be present;
+    in reality, the golden session covers only 5 (plus Clinical
+    Observations). This reflects the actual study design for this
+    chemical &mdash; not all studies measure all endpoints.
+  </p>
+  <p>
+    <strong>Impact:</strong> Tests must assert against the actual
+    content of golden fixtures, not against an idealized schema. The
+    fix was to remove Hematology from the expected platforms set.
+  </p>
+</div>
+
+<h3>7.3 Architectural Lessons</h3>
+
+<div class="finding-box">
+  <h4>Module-level <code>SESSIONS_DIR</code> requires multi-site patching</h4>
+  <p>
+    Python&rsquo;s <code>from X import Y</code> creates a new name binding
+    in the importing module. Patching <code>X.Y</code> doesn&rsquo;t affect
+    modules that already imported <code>Y</code> by name. In this codebase,
+    <code>SESSIONS_DIR</code> is imported by 6 modules; the conftest must
+    patch all 6 to achieve true isolation. This is a common pitfall in
+    Python testing that cost 30+ minutes of debugging during test development.
+  </p>
+</div>
+
+<div class="finding-box">
+  <h4>Hash functions are the cache&rsquo;s correctness boundary</h4>
+  <p>
+    The per-section cache system (<code>_cache_ntp_*.json</code>,
+    <code>_cache_sections_*.json</code>, etc.) relies on hash functions
+    to detect when cached results are stale. The unit tests verify that
+    these hashes are deterministic (same input &rarr; same hash) and
+    sensitive (different inputs &rarr; different hashes). An unsound hash
+    function would serve stale results silently &mdash; one of the hardest
+    bugs to diagnose in production.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="coverage-gaps">8. Coverage Gaps and Next Steps</h2>
+
+<p>
+  The initial suite provides a solid foundation but leaves significant
+  areas untested:
+</p>
+
+<table>
+  <tr><th>Gap</th><th>Risk</th><th>Remedy</th></tr>
+  <tr>
+    <td>Export pipeline (PDF/DOCX)</td>
+    <td>Typst template rendering could silently break</td>
+    <td>Add <code>test_export_routes.py</code> with mocked Typst compiler, assert PDF size &gt; 0</td>
+  </tr>
+  <tr>
+    <td>LLM narrative generation</td>
+    <td>Prompt changes could produce unparseable JSON</td>
+    <td>Add <code>test_llm_routes.py</code> with canned Claude responses, assert JSON structure</td>
+  </tr>
+  <tr>
+    <td>Clinical observations (end-to-end)</td>
+    <td>Categorical CSV parsing &rarr; incidence tables not tested via API</td>
+    <td>Add integration test calling process-integrated with clinical obs CSV in golden data</td>
+  </tr>
+  <tr>
+    <td>Genomics pipeline</td>
+    <td>GO enrichment, gene BMD ranking, interpretation</td>
+    <td>Requires golden .bm2 with gene expression data (not in current fixtures)</td>
+  </tr>
+  <tr>
+    <td>.bm2 file fingerprinting</td>
+    <td>Java-backed; currently bypassed by mocking <code>bm2_cache</code></td>
+    <td>Add unit test for <code>detect_platform_and_type_from_bm2()</code> with known filenames</td>
+  </tr>
+  <tr>
+    <td>NTP statistics correctness</td>
+    <td>Jonckheere/Williams/Dunnett values not verified against reference</td>
+    <td>Requires known-answer test data with independently computed p-values</td>
+  </tr>
+  <tr>
+    <td>Body weight sidecar builder</td>
+    <td>Sidecar-based table builder for NIEHS Table 2 not exercised</td>
+    <td>Add integration test that processes golden body weight sidecars</td>
+  </tr>
+</table>
+
+<h3>Prioritized Roadmap</h3>
+
+<ol>
+  <li><strong>NTP statistics verification</strong> (HIGH) &mdash; Create a small known-answer dataset with independently computed Jonckheere, Williams, and Dunnett p-values. Run through <code>build_table_data()</code> (real, not mocked) and assert the results match. This is the highest-value test not yet written.</li>
+  <li><strong>Export smoke test</strong> (MEDIUM) &mdash; Call the PDF export endpoint with mocked Typst, assert the response is non-empty. Catches template syntax errors.</li>
+  <li><strong>Clinical observations integration</strong> (MEDIUM) &mdash; The golden data includes <code>clinical_obs_truth_*.csv</code> files. Add a process-integrated test that verifies incidence tables appear in the output.</li>
+  <li><strong>Genomics fixture data</strong> (LOW) &mdash; Add a golden .bm2 file with gene expression data to test the genomics extraction and interpretation pipeline.</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="conclusion">9. Conclusion</h2>
+
+<p>
+  This test suite transforms a system that could only be validated through
+  30&ndash;60 minute manual browser sessions into one that can be verified
+  in 2.3 seconds. The 125 tests span four layers of the architecture:
+</p>
+
+<ul>
+  <li><strong>92 unit tests</strong> validate pure functions (serialization, hashing, slug generation, tree operations, platform partitioning) with no I/O or mocking</li>
+  <li><strong>32 integration tests</strong> exercise the FastAPI endpoints through a TestClient with mocked external dependencies, verifying request/response contracts, disk persistence, and state management</li>
+  <li><strong>1 end-to-end test</strong> walks the complete pipeline (session load &rarr; validate &rarr; integrate &rarr; process &rarr; approve &rarr; restore), covering all 9 points of the domain model refactor validation checklist</li>
+</ul>
+
+<p>
+  The most significant result is the confirmed correctness of the domain
+  model refactor&rsquo;s fingerprinting layer. The pool validation integration
+  test exercises the real <code>fingerprint_file()</code> function against
+  12 real study files and confirms that every fingerprint carries the new
+  <code>platform</code> and <code>data_type</code> fields. This was the
+  highest-risk untested assertion &mdash; the entire downstream pipeline
+  (partitioning, section card generation, table numbering, narrative
+  grouping) depends on these fields being correct.
+</p>
+
+<p>
+  Three bugs were discovered during test development, none critical but
+  all instructive: a default <code>responsive=False</code> that silently
+  empties section cards, a docstring/behavior mismatch on disk persistence,
+  and a golden data assumption that didn&rsquo;t match reality. These are
+  exactly the kinds of issues that manual testing misses because they
+  produce <em>empty results</em> rather than error messages &mdash; the
+  UI renders nothing, and the tester has to notice the absence.
+</p>
+
+<p>
+  The test suite is a foundation, not a finish line. The NTP statistics
+  pipeline, export rendering, and genomics interpretation remain untested
+  against known-answer datasets. But the infrastructure is now in place:
+  state isolation, mock architecture, golden fixtures, and pytest markers
+  that let developers run the full suite in 2 seconds or target a specific
+  layer in under 1 second. Future tests are incremental additions to a
+  working framework, not a cold start.
+</p>
+
+<footer>
+  Generated for the rlm-bmdx project &mdash; March 30, 2026
+  <br>
+  125 tests &middot; 2.3s runtime &middot; 10 test files &middot; 7,540 lines of application code
+</footer>
+
+</body>
+</html>

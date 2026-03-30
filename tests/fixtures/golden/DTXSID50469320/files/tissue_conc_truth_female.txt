@@ -1,0 +1,9 @@
+# Provider: Apical
+# Platform: Tissue Concentration
+# Data Type: tox_study
+TissueConcentrationFemale	544	545	546	550	551	552
+Dose	4.0	4.0	4.0	37.0	37.0	37.0
+Plasma 2 Hour Perfluorohexanesulfonamide Concentration	39.7	58.2	41.0	190.0	182.0	180.0
+Plasma 2 Hour Perfluorohexanesulfonamide LOQ	1.0	1.0	1.0	1.0	1.0	1.0
+Plasma 24 Hour Perfluorohexanesulfonamide Concentration	31.5	42.5	40.3	105.0	104.0	95.3
+Plasma 24 Hour Perfluorohexanesulfonamide LOQ	1.0	1.0	1.0	1.0	1.0	1.0

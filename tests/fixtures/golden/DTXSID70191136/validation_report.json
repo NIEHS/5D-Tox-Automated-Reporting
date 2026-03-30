@@ -1,0 +1,79 @@
+{
+  "dtxsid": "DTXSID70191136",
+  "run_at": "2026-03-07T15:27:08.574557+00:00",
+  "file_count": 2,
+  "fingerprints": {
+    "scan-P3MP-Clinical Pathology.bm2": {
+      "file_id": "scan-P3MP-Clinical Pathology.bm2",
+      "filename": "P3MP-Clinical Pathology.bm2",
+      "file_type": "bm2",
+      "tier": 3,
+      "ts_added": "2026-03-07T15:27:08.574169+00:00",
+      "ts_filesystem": "2026-03-02T23:52:56.639342+00:00",
+      "ts_internal": null,
+      "study_number": null,
+      "species": null,
+      "sexes": [],
+      "dose_groups": [],
+      "dose_unit": null,
+      "domain": null,
+      "endpoint_names": [],
+      "animal_ids": [],
+      "n_animals_by_dose": {},
+      "organ": null,
+      "gene_count": null
+    },
+    "scan-P3MP-Organ and Body Weights.bm2": {
+      "file_id": "scan-P3MP-Organ and Body Weights.bm2",
+      "filename": "P3MP-Organ and Body Weights.bm2",
+      "file_type": "bm2",
+      "tier": 3,
+      "ts_added": "2026-03-07T15:27:08.574515+00:00",
+      "ts_filesystem": "2026-03-02T23:52:56.639398+00:00",
+      "ts_internal": null,
+      "study_number": null,
+      "species": null,
+      "sexes": [],
+      "dose_groups": [],
+      "dose_unit": null,
+      "domain": "body_weight",
+      "endpoint_names": [],
+      "animal_ids": [],
+      "n_animals_by_dose": {},
+      "organ": null,
+      "gene_count": null
+    }
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "domain": "body_weight",
+      "issue_type": "missing_tier",
+      "message": "body_weight: no xlsx (study team raw data) found",
+      "files_involved": [
+        "scan-P3MP-Organ and Body Weights.bm2"
+      ],
+      "suggested_precedence": null,
+      "details": {}
+    },
+    {
+      "severity": "warning",
+      "domain": "body_weight",
+      "issue_type": "missing_tier",
+      "message": "body_weight: no txt/csv (BMDExpress input) found",
+      "files_involved": [
+        "scan-P3MP-Organ and Body Weights.bm2"
+      ],
+      "suggested_precedence": null,
+      "details": {}
+    }
+  ],
+  "coverage_matrix": {
+    "body_weight": {
+      "xlsx": null,
+      "txt_csv": [],
+      "bm2": "scan-P3MP-Organ and Body Weights.bm2"
+    }
+  },
+  "is_complete": false
+}

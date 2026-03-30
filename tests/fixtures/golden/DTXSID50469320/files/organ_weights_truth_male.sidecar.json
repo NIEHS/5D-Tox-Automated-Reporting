@@ -1,0 +1,1987 @@
+{
+  "source": "organ_weights_truth_male.csv",
+  "platform": "Organ Weight",
+  "sex": "Male",
+  "animals": {
+    "101": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.72",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "300.3",
+          "terminal": false
+        }
+      ]
+    },
+    "102": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.15",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.83",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "315.1",
+          "terminal": false
+        }
+      ]
+    },
+    "103": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.03",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "296.2",
+          "terminal": false
+        }
+      ]
+    },
+    "104": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "308.6",
+          "terminal": false
+        }
+      ]
+    },
+    "105": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".88",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.25",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "288.2",
+          "terminal": false
+        }
+      ]
+    },
+    "106": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.23",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.12",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "329.4",
+          "terminal": false
+        }
+      ]
+    },
+    "107": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.15",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.56",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "337.4",
+          "terminal": false
+        }
+      ]
+    },
+    "108": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".86",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.62",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "325.6",
+          "terminal": false
+        }
+      ]
+    },
+    "109": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "294.5",
+          "terminal": false
+        }
+      ]
+    },
+    "110": {
+      "dose": 0.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.31",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.01",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314.5",
+          "terminal": false
+        }
+      ]
+    },
+    "151": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.56",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314.5",
+          "terminal": false
+        }
+      ]
+    },
+    "152": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.04",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.51",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314.5",
+          "terminal": false
+        }
+      ]
+    },
+    "153": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".82",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".88",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.41",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "297",
+          "terminal": false
+        }
+      ]
+    },
+    "154": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.05",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.81",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "317",
+          "terminal": false
+        }
+      ]
+    },
+    "155": {
+      "dose": 4.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".87",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".91",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.69",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "297.8",
+          "terminal": false
+        }
+      ]
+    },
+    "161": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "328",
+          "terminal": false
+        }
+      ]
+    },
+    "162": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.03",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.76",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "318.4",
+          "terminal": false
+        }
+      ]
+    },
+    "163": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": ".98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.11",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "316.3",
+          "terminal": false
+        }
+      ]
+    },
+    "164": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.01",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.64",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "324.1",
+          "terminal": false
+        }
+      ]
+    },
+    "165": {
+      "dose": 12.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.4",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "14.24",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "342.9",
+          "terminal": false
+        }
+      ]
+    },
+    "171": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".85",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.03",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "303.4",
+          "terminal": false
+        }
+      ]
+    },
+    "172": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.07",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.01",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.8",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314.9",
+          "terminal": false
+        }
+      ]
+    },
+    "173": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.09",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".94",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "310.8",
+          "terminal": false
+        }
+      ]
+    },
+    "174": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.36",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "295.1",
+          "terminal": false
+        }
+      ]
+    },
+    "175": {
+      "dose": 37.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.01",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.34",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "318.6",
+          "terminal": false
+        }
+      ]
+    },
+    "131": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.25",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".91",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.74",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "313.7",
+          "terminal": false
+        }
+      ]
+    },
+    "132": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".98",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "313.2",
+          "terminal": false
+        }
+      ]
+    },
+    "133": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314",
+          "terminal": false
+        }
+      ]
+    },
+    "134": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.21",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.19",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "320.6",
+          "terminal": false
+        }
+      ]
+    },
+    "135": {
+      "dose": 0.5,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.07",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.68",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "315.9",
+          "terminal": false
+        }
+      ]
+    },
+    "141": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.02",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.36",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "318",
+          "terminal": false
+        }
+      ]
+    },
+    "142": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.28",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "309.1",
+          "terminal": false
+        }
+      ]
+    },
+    "143": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.05",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "320.7",
+          "terminal": false
+        }
+      ]
+    },
+    "144": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "337.6",
+          "terminal": false
+        }
+      ]
+    },
+    "145": {
+      "dose": 1.4,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.15",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.03",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "315.3",
+          "terminal": false
+        }
+      ]
+    },
+    "181": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.07",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".93",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "14.3",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "318",
+          "terminal": false
+        }
+      ]
+    },
+    "182": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.16",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.04",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "13.99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "306.9",
+          "terminal": false
+        }
+      ]
+    },
+    "183": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".96",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "14.42",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "309",
+          "terminal": false
+        }
+      ]
+    },
+    "184": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.05",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".9",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".95",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "14.65",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "295.1",
+          "terminal": false
+        }
+      ]
+    },
+    "185": {
+      "dose": 111.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.12",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.07",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "14.2",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "314",
+          "terminal": false
+        }
+      ]
+    },
+    "191": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "254.4",
+          "terminal": false
+        }
+      ]
+    },
+    "192": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "263.2",
+          "terminal": false
+        }
+      ]
+    },
+    "193": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "299.2",
+          "terminal": false
+        }
+      ]
+    },
+    "194": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "276.8",
+          "terminal": false
+        }
+      ]
+    },
+    "195": {
+      "dose": 333.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "274.6",
+          "terminal": false
+        }
+      ]
+    },
+    "121": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.18",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.05",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.05",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.66",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "309.5",
+          "terminal": false
+        }
+      ]
+    },
+    "122": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.06",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "10.85",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "304.1",
+          "terminal": false
+        }
+      ]
+    },
+    "123": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.39",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": ".97",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.7",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "313.7",
+          "terminal": false
+        }
+      ]
+    },
+    "124": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.15",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": ".99",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.01",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "11.89",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "309.2",
+          "terminal": false
+        }
+      ]
+    },
+    "125": {
+      "dose": 0.15,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD5",
+          "endpoint": "Heart",
+          "value": "1.14",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Left",
+          "value": "1.08",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Kidney-Right",
+          "value": "1.1",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Liver",
+          "value": "12.92",
+          "terminal": false
+        },
+        {
+          "day": "SD5",
+          "endpoint": "Terminal Body Weight",
+          "value": "333.4",
+          "terminal": false
+        }
+      ]
+    },
+    "201": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "251.3",
+          "terminal": false
+        }
+      ]
+    },
+    "202": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "267.6",
+          "terminal": false
+        }
+      ]
+    },
+    "203": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD0",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD0",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD0",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD0",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD0",
+          "endpoint": "Terminal Body Weight",
+          "value": "290.7",
+          "terminal": false
+        }
+      ]
+    },
+    "204": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "269",
+          "terminal": false
+        }
+      ]
+    },
+    "205": {
+      "dose": 1000.0,
+      "selection": "Core Animals",
+      "observations": [
+        {
+          "day": "SD1",
+          "endpoint": "Heart",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Left",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Kidney-Right",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Liver",
+          "value": null,
+          "terminal": false
+        },
+        {
+          "day": "SD1",
+          "endpoint": "Terminal Body Weight",
+          "value": "283.3",
+          "terminal": false
+        }
+      ]
+    }
+  }
+}
