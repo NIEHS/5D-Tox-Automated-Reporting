@@ -30,12 +30,58 @@
  */
 
 import java.io.*;
+import java.util.Iterator;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.sciome.bmdexpress2.mvp.model.BMDProject;
 
 public class JsonToBm2 {
+
+    /**
+     * Recursively walk a JSON tree and replace null entries inside
+     * "responses" arrays with NaN.
+     *
+     * When the Python pivot writes "NaN" for missing animal measurements,
+     * Jackson serializes it as JSON null (since JSON has no NaN literal).
+     * On deserialization, ProbeResponse.setResponses(List<Float>) receives
+     * a list containing Java null entries, and calling floatValue() on them
+     * throws a NullPointerException.
+     *
+     * This pre-processing step converts nulls in "responses" arrays to the
+     * JSON number NaN (which Jackson deserializes as Float.NaN), so the
+     * setResponses() call succeeds.  The NaN values propagate through to
+     * the .bm2 file where BMDExpress 3 treats them as missing data.
+     */
+    private static int sanitizeNulls(JsonNode node) {
+        int replaced = 0;
+        if (node.isObject()) {
+            // If this object has a "responses" array, replace nulls with NaN
+            JsonNode responses = node.get("responses");
+            if (responses != null && responses.isArray()) {
+                ArrayNode arr = (ArrayNode) responses;
+                for (int i = 0; i < arr.size(); i++) {
+                    if (arr.get(i).isNull()) {
+                        arr.set(i, new DoubleNode(Double.NaN));
+                        replaced++;
+                    }
+                }
+            }
+            // Recurse into all child fields
+            Iterator<JsonNode> children = node.elements();
+            while (children.hasNext()) {
+                replaced += sanitizeNulls(children.next());
+            }
+        } else if (node.isArray()) {
+            for (JsonNode child : node) {
+                replaced += sanitizeNulls(child);
+            }
+        }
+        return replaced;
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
@@ -52,8 +98,18 @@ public class JsonToBm2 {
         ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+        // Pre-process: read as tree first, replace null values in "responses"
+        // arrays with NaN so ProbeResponse.setResponses() doesn't NPE.
+        // This handles NaN values from the pivot (animals missing measurements
+        // on certain study days, or animals that died before terminal sacrifice).
         System.out.println("  Reading JSON: " + jsonPath);
-        BMDProject project = mapper.readValue(new File(jsonPath), BMDProject.class);
+        JsonNode tree = mapper.readTree(new File(jsonPath));
+        int nullsReplaced = sanitizeNulls(tree);
+        if (nullsReplaced > 0) {
+            System.out.println("  Sanitized " + nullsReplaced + " null→NaN in responses arrays");
+        }
+
+        BMDProject project = mapper.treeToValue(tree, BMDProject.class);
 
         System.out.println("  Deserialized: " +
             project.getDoseResponseExperiments().size() + " experiments, " +
