@@ -2417,7 +2417,12 @@ async def api_process_integrated(dtxsid: str, request: Request):
       11. Cache and return
     """
     # --- Parse request parameters ---
-    body = await request.json()
+    # Tolerate empty or missing request bodies — the UI sometimes sends
+    # POST with no content (e.g., from a simple fetch without JSON body).
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
     compound_name = body.get("compound_name", "Test Compound")
     dose_unit = body.get("dose_unit", "mg/kg")
 

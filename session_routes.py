@@ -805,7 +805,10 @@ async def api_session_restore(dtxsid: str, request: Request):
     The restored data gets a fresh approved_at timestamp and an incremented
     version number.
     """
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
     section_key = body.get("section_key", "")
     target_version = body.get("version", 0)
 
