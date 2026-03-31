@@ -1077,8 +1077,12 @@ def fingerprint_txt_csv(
         logger.warning("Could not read %s: %s", filename, e)
         return fp
 
-    # Strip trailing whitespace and skip empty lines
-    lines = [ln.rstrip("\n\r") for ln in lines if ln.strip()]
+    # Strip trailing whitespace, skip empty lines, and skip metadata comment
+    # lines (# Provider:, # Platform:, # Data Type:) prepended by the pivot
+    # conversion step.  These headers are for Java's ExperimentDescriptionParser
+    # — they must not be treated as data rows during fingerprinting.
+    lines = [ln.rstrip("\n\r") for ln in lines
+             if ln.strip() and not ln.startswith("#")]
     if len(lines) < 2:
         return fp
 

@@ -606,11 +606,20 @@ def tox_study_csv_to_pivot_txt(
                 # in the sidecar for the table builder.
                 continue
 
-            # When Observation Day is present, use the day tag as the endpoint
-            # label in the pivot.  "Body Weight" at "SD0" → endpoint "SD0",
-            # at "SD5" → endpoint "SD5".  This gives BMDExpress separate
-            # probes per study day, matching the inferred .bm2 structure.
-            if has_obs_day and obs_day:
+            # When Observation Day is present AND there is only one endpoint
+            # column (e.g., Body Weight), use the day tag as the endpoint
+            # label: "Body Weight" at "SD0" → endpoint "SD0", at "SD5" →
+            # "SD5".  This gives BMDExpress separate probes per study day,
+            # matching how the inferred .bm2 files encode them.
+            #
+            # When there are MULTIPLE endpoint columns (e.g., Clinical
+            # Chemistry with ALT, Albumin, ALP, ..., all measured on the
+            # same observation day "SD5"), using the day tag alone would
+            # collapse every column onto the same dict key and silently
+            # discard all but the last.  In that case, keep the original
+            # column name as the endpoint label — the observation day is
+            # still captured in the sidecar for table builders.
+            if has_obs_day and obs_day and len(endpoint_cols) == 1:
                 endpoint_label = obs_day
             else:
                 endpoint_label = col_name
@@ -654,9 +663,16 @@ def tox_study_csv_to_pivot_txt(
         ]))
         # Row 3+: endpoints.  Sort endpoint keys so study days appear in
         # natural order (SD0 before SD1 before SD5).
+        #
+        # Animals missing from a given endpoint (e.g., no SD1 body weight
+        # for low-dose animals, or no organ weight for animals that died
+        # before terminal sacrifice) are written as "NaN".  Java's
+        # ExperimentFileUtil rejects empty cells ("") as non-numeric, but
+        # handles NaN as a missing-value marker that BMDExpress can skip
+        # during modeling.
         for endpoint in sorted(info["endpoints"].keys()):
             animal_vals = info["endpoints"][endpoint]
-            values = [str(animal_vals.get(a, "")) for a in animals]
+            values = [str(animal_vals.get(a, "NaN")) for a in animals]
             lines.append("\t".join([endpoint] + values))
 
         # Output filename = source filename with .txt extension.
