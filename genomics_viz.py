@@ -452,6 +452,43 @@ def render_chart_images(
             hovertemplate="%{text}<extra></extra>",
         ))
 
+    # Subtle horizontal bands behind each cluster's jitter range,
+    # tinted with a low-alpha version of the cluster's own color so
+    # the band visually ties to its markers.
+    #
+    # For gene-overlap clusters that contain points from multiple UMAP
+    # clusters, pick the dominant UMAP cluster's color (most points).
+    # Compute dominant UMAP cluster per gene-overlap cluster.
+    gc_umap_counts: dict[int, dict[int, int]] = {}
+    for p in all_points:
+        gc = p["gene_cluster"]
+        uc = p["umap_cluster"]
+        gc_umap_counts.setdefault(gc, {})
+        gc_umap_counts[gc][uc] = gc_umap_counts[gc].get(uc, 0) + 1
+
+    def _gc_band_color(gc: int) -> str:
+        """Return a low-alpha rgba string for this gene-overlap cluster."""
+        counts = gc_umap_counts.get(gc, {})
+        if not counts:
+            return "rgba(200,200,200,0.15)"
+        dominant_uc = max(counts, key=counts.get)
+        hex_color = get_cluster_color(dominant_uc)
+        # Convert hex (#rrggbb) to rgba with low alpha
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        return f"rgba({r},{g},{b},0.12)"
+
+    for gc, y_pos in cluster_y_rank.items():
+        fig_cluster.add_shape(
+            type="rect",
+            xref="paper", x0=0, x1=1,
+            yref="y", y0=y_pos - 0.35, y1=y_pos + 0.35,
+            fillcolor=_gc_band_color(gc),
+            line_width=0,
+            layer="below",
+        )
+
     # Determine chart height based on number of gene-overlap clusters
     unique_gene_clusters = set(p["gene_cluster"] for p in all_points)
     n_gene_clusters = len(unique_gene_clusters) if all_points else 1
