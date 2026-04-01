@@ -306,19 +306,9 @@ function renderTocFromTree(tree) {
         container.appendChild(groupLi);
     }
 
-    // --- Extra non-tree nodes ---
-    // "Genomics Charts" — not in the document tree (it's a UI-only section)
-    // Add it after Results if the charts ready flag exists
-    const chartsLi = document.createElement('li');
-    chartsLi.id = 'toc-charts-node';
-    chartsLi.innerHTML = `<a class="toc-node"
-        :class="{ active: $store.app.activeSection === 'charts', disabled: !$store.app.ready.charts }"
-        @click="$store.app.ready.charts && navigateToNode('charts')">Genomics Charts</a>`;
-    // Insert after the Results <li> (which should be the last body node with children)
-    const resultsLi = container.querySelector('[data-toc-group="results"]');
-    if (resultsLi && resultsLi.nextSibling) {
-        container.insertBefore(chartsLi, resultsLi.nextSibling);
-    }
+    // "Genomics Charts" is now in the document tree (charts DocNode under
+    // Results) — renderTocFromTree() generates its TOC entry automatically.
+    // No hardcoded extra node needed.
 }
 
 /**

@@ -423,8 +423,18 @@
 // The global #set page() above defines them with page-number checks,
 // but for previews we want clean content with no chrome.
 // Uses content block [ ] so the set rule applies to all subsequent content.
+//
+// Also emit a hidden level-1 heading to satisfy PDF/UA-1's requirement
+// that the first heading in the document be level 1.  Full reports get
+// this from the cover/title pages, but section previews skip those.
+// In section-only mode, emit hidden headings at levels 1 and 2 to satisfy
+// PDF/UA-1's requirement that heading levels don't skip.  Full reports get
+// these from the cover page and "Results" heading, but section previews
+// skip those structural pages.
 #if section-only [
   #set page(header: none, footer: none)
+  #heading(level: 1)[Section Preview]
+  #heading(level: 2)[\ ]
 ]
 
 

@@ -396,6 +396,11 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     genomics = body.get("genomics_sections", [])
     if genomics:
         data["genomics_sections"] = genomics
+        # Placeholder for chart images — the actual PNGs are injected later
+        # by build_report_pdf(), but the key must exist here so
+        # _apply_section_filter() doesn't strip it when section_filter="charts".
+        if any(s.get("type") == "gene_set" for s in genomics):
+            data["genomics_charts"] = []
 
     gene_set_narrative = body.get("gene_set_narrative")
     if gene_set_narrative:
