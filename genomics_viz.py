@@ -286,15 +286,43 @@ def render_chart_images(
             hovertemplate="%{text}<extra></extra>",
         ))
 
+    # Compute a shared axis range so the plot is square in data space.
+    # Pad by 5% so edge points aren't clipped by markers.
+    all_x = ref_x + [p["x"] for pts in analysis_by_cluster.values() for p in pts]
+    all_y = ref_y + [p["y"] for pts in analysis_by_cluster.values() for p in pts]
+    lo = min(min(all_x), min(all_y))
+    hi = max(max(all_x), max(all_y))
+    pad = (hi - lo) * 0.05
+    axis_range = [lo - pad, hi + pad]
+
     fig_umap.update_layout(
-        width=1000, height=700,
-        margin=dict(l=60, r=30, t=40, b=60),
+        # Square aspect ratio — same pixel width and height
+        width=900, height=900,
+        margin=dict(l=20, r=20, t=20, b=20),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#fafafa",
-        xaxis=dict(title="UMAP 1", showgrid=True, gridcolor="#e8e8e8", zeroline=False),
-        yaxis=dict(title="UMAP 2", showgrid=True, gridcolor="#e8e8e8", zeroline=False),
+        # No axis titles, tick labels, or tick marks — UMAP coordinates
+        # are arbitrary and labels would just be noise.
+        xaxis=dict(
+            showgrid=True, gridcolor="#e8e8e8", zeroline=False,
+            showticklabels=False, title="",
+            range=axis_range, scaleanchor="y", scaleratio=1,
+        ),
+        yaxis=dict(
+            showgrid=True, gridcolor="#e8e8e8", zeroline=False,
+            showticklabels=False, title="",
+            range=axis_range,
+        ),
         hovermode="closest",
-        legend=dict(font=dict(size=10)),
+        # Legend inside the plot area, top-right corner with a
+        # semi-transparent background so it doesn't obscure markers.
+        legend=dict(
+            font=dict(size=9),
+            x=1, y=1,
+            xanchor="right", yanchor="top",
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="#ccc", borderwidth=1,
+        ),
     )
 
     # ── Cluster scatter plot ───────────────────────────────────────────
@@ -357,7 +385,32 @@ def render_chart_images(
             "direction": gs.get("direction", ""),
         })
 
-    # Compute per-gene-cluster jitter offsets
+    # --- Compute y-axis positions based on cluster minimum BMD ---
+    # Clusters are ordered vertically by their minimum BMD value:
+    # lowest min-BMD at the top (highest y), descending downward.
+    # The outlier cluster (-1) is always pinned to the bottom.
+
+    # Step 1: find the minimum BMD per gene-overlap cluster
+    cluster_min_bmd: dict[int, float] = {}
+    for p in all_points:
+        gc = p["gene_cluster"]
+        if gc not in cluster_min_bmd or p["bmd"] < cluster_min_bmd[gc]:
+            cluster_min_bmd[gc] = p["bmd"]
+
+    # Step 2: rank non-outlier clusters by min BMD ascending —
+    # then reverse so lowest min-BMD gets the highest y-position (top).
+    non_outlier = sorted(
+        (gc for gc in cluster_min_bmd if gc != -1),
+        key=lambda gc: cluster_min_bmd[gc],
+    )
+    # Assign y-positions: top of chart = len(non_outlier), descending.
+    # Outlier cluster gets y=0 (bottom).
+    cluster_y_rank: dict[int, int] = {}
+    for rank, gc in enumerate(non_outlier):
+        cluster_y_rank[gc] = len(non_outlier) - rank  # highest rank = top
+    cluster_y_rank[-1] = 0  # outlier pinned to bottom
+
+    # Step 3: compute per-cluster jitter offsets using ranked positions
     gene_cluster_counts: dict[int, int] = {}
     gene_cluster_index: dict[str, int] = {}
     for p in all_points:
@@ -366,10 +419,11 @@ def render_chart_images(
 
     for p in all_points:
         gc = p["gene_cluster"]
+        base_y = cluster_y_rank.get(gc, 0)
         idx = gene_cluster_index[p["go_id"]]
         count = gene_cluster_counts[gc]
         spread = min(count, 10)
-        p["y_jittered"] = gc + (idx / max(spread, 1) - 0.5) * 0.5
+        p["y_jittered"] = base_y + (idx / max(spread, 1) - 0.5) * 0.5
 
     # Group by UMAP semantic cluster for traces — each trace gets one
     # color, matching the UMAP scatter chart's legend exactly.
@@ -403,6 +457,14 @@ def render_chart_images(
     n_gene_clusters = len(unique_gene_clusters) if all_points else 1
     chart_height = max(400, n_gene_clusters * 80 + 150)
 
+    # Build custom y-axis tick labels showing the original cluster ID
+    # at each ranked position.  Outlier (-1) is labeled "Outlier".
+    tick_vals = []
+    tick_text = []
+    for gc, y_pos in sorted(cluster_y_rank.items(), key=lambda kv: kv[1]):
+        tick_vals.append(y_pos)
+        tick_text.append("Outlier" if gc == -1 else str(gc))
+
     fig_cluster.update_layout(
         width=1000, height=chart_height,
         margin=dict(l=80, r=30, t=40, b=60),
@@ -410,8 +472,11 @@ def render_chart_images(
         plot_bgcolor="#fafafa",
         xaxis=dict(title=f"BMD ({dose_unit})", type="log",
                    showgrid=True, gridcolor="#e8e8e8"),
-        yaxis=dict(title="Gene-Overlap Cluster", showgrid=True,
-                   gridcolor="#e8e8e8", dtick=1),
+        yaxis=dict(
+            title="Gene-Overlap Cluster",
+            showgrid=True, gridcolor="#e8e8e8",
+            tickvals=tick_vals, ticktext=tick_text,
+        ),
         hovermode="closest",
         legend=dict(font=dict(size=10)),
     )
