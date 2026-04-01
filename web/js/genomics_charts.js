@@ -206,23 +206,12 @@ function activateChartTypeTab(type) {
         btn.classList.toggle('active', btn.getAttribute('data-chart-type') === type);
     });
 
-    // For Plotly chart panels, tell Plotly to recalculate layout
-    // after making it visible (it renders to zero-size when hidden).
-    // Skip for the PDF preview panel which has no Plotly chart.
-    if (type === 'pdf-preview') {
-        // Auto-compile the section PDF if the iframe is empty (first time).
-        // The Charts PDF preview uses the "charts" section filter, which
-        // keeps only the genomics_charts data (UMAP + cluster scatter PNGs).
-        const frame = document.getElementById('charts-pdf-frame');
-        if (frame && !frame.src) {
-            refreshSectionPdf('charts');
-        }
-    } else {
-        const chartId = type === 'umap' ? 'umap-chart' : 'cluster-chart';
-        const chartEl = document.getElementById(chartId);
-        if (chartEl && typeof Plotly !== 'undefined') {
-            requestAnimationFrame(() => Plotly.Plots.resize(chartEl));
-        }
+    // Tell Plotly to recalculate layout after making the panel visible
+    // (it renders to zero-size when hidden).
+    const chartId = type === 'umap' ? 'umap-chart' : 'cluster-chart';
+    const chartEl = document.getElementById(chartId);
+    if (chartEl && typeof Plotly !== 'undefined') {
+        requestAnimationFrame(() => Plotly.Plots.resize(chartEl));
     }
 }
 

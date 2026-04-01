@@ -743,14 +743,13 @@
                  is visualized in the chart panels below -->
             <div class="sub-tab-bar" id="charts-sub-tabs"></div>
 
-            <!-- Chart type sub-tabs — switches between UMAP, Cluster, and PDF Preview -->
+            <!-- Chart type sub-tabs — switches between UMAP and Cluster views.
+                 PDF preview uses the shared preview pane (like all other sections). -->
             <div class="sub-tab-bar visible" id="chart-type-tabs">
                 <button class="active" data-chart-type="umap"
                         onclick="activateChartTypeTab('umap')">Semantic Map (UMAP)</button>
                 <button data-chart-type="cluster"
                         onclick="activateChartTypeTab('cluster')">Cluster Scatter</button>
-                <button data-chart-type="pdf-preview"
-                        onclick="activateChartTypeTab('pdf-preview')">PDF Preview</button>
             </div>
 
             <!-- UMAP Scatter Plot panel -->
@@ -781,18 +780,6 @@
                 </div>
             </div>
 
-            <!-- Charts PDF Preview panel — compiles just the UMAP and
-                 cluster scatter chart images into a focused PDF with
-                 NIEHS-styled figure captions.  Activated via the
-                 "PDF Preview" chart-type tab. -->
-            <div class="chart-type-panel" id="chart-panel-pdf-preview">
-                <div class="section-pdf-preview" id="charts-pdf-preview">
-                    <div class="pdf-toolbar">
-                        <button onclick="refreshSectionPdf('charts')" class="btn-small primary btn-compile-section-pdf">Compile PDF</button>
-                    </div>
-                    <iframe id="charts-pdf-frame" class="section-pdf-frame"></iframe>
-                </div>
-            </div>
         </div>
 
         <!-- ================================================================

@@ -54,24 +54,25 @@ import typst
 _TEMPLATE_PATH = str(Path(__file__).parent / "report.typ")
 
 
-def build_report_pdf(data: dict, chart_images: dict | None = None) -> bytes:
+def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> bytes:
     """
     Compile the NIEHS-styled report to PDF/UA-1.
 
     Serializes `data` to JSON, passes it to the Typst template via
     sys.inputs, and compiles with the ua-1 PDF standard.
 
-    If chart_images is provided (dict with umap_png/cluster_png as
-    base64 strings), the PNGs are written to temp files and their
-    paths injected into the data dict so the Typst template can
-    embed them as figures.
+    If chart_images is provided (list of dicts, one per organ×sex combo,
+    each with umap_png/cluster_png as base64 strings), the PNGs are
+    written to indexed temp files and their paths injected into the data
+    dict so the Typst template can embed them as figures.
 
     Args:
         data: Report data dictionary matching the report.typ JSON schema.
               All top-level keys are optional — missing sections are
               simply omitted from the output.
-        chart_images: Optional dict with base64-encoded PNG chart images
-                      and caption strings.
+        chart_images: Optional list of dicts, each with base64-encoded PNG
+                      chart images, caption strings, and a label
+                      (e.g., "Liver (Male)").
 
     Returns:
         The compiled PDF as raw bytes, ready to write to a file or
@@ -92,31 +93,45 @@ def build_report_pdf(data: dict, chart_images: dict | None = None) -> bytes:
     # Write chart images to temp files so Typst can reference them.
     # The temp files are created in the same directory as the template
     # so Typst's file resolution finds them relative to the root.
+    # Each organ×sex combo produces one UMAP + one cluster scatter
+    # pair, written as indexed files (chart_umap_0.png, etc.).
     temp_files = []
     if chart_images:
         template_dir = Path(_TEMPLATE_PATH).parent
-        chart_data = {}
+        charts_list = []
 
-        for key, filename in [("umap_png", "chart_umap.png"), ("cluster_png", "chart_cluster.png")]:
-            b64 = chart_images.get(key)
-            if not b64:
-                continue
-            try:
-                png_bytes = base64.b64decode(b64)
-                img_path = template_dir / filename
-                img_path.write_bytes(png_bytes)
-                temp_files.append(img_path)
-                chart_data[key.replace("_png", "_path")] = filename
-            except Exception:
-                pass
+        for i, entry in enumerate(chart_images):
+            entry_data = {
+                "label": entry.get("label", f"Chart {i + 1}"),
+            }
 
-        # Pass captions through
-        for cap_key in ("umap_caption", "cluster_caption"):
-            if chart_images.get(cap_key):
-                chart_data[cap_key] = chart_images[cap_key]
+            for key, filename in [
+                ("umap_png", f"chart_umap_{i}.png"),
+                ("cluster_png", f"chart_cluster_{i}.png"),
+            ]:
+                b64 = entry.get(key)
+                if not b64:
+                    continue
+                try:
+                    png_bytes = base64.b64decode(b64)
+                    img_path = template_dir / filename
+                    img_path.write_bytes(png_bytes)
+                    temp_files.append(img_path)
+                    # Map "umap_png" → "umap_path", etc.
+                    entry_data[key.replace("_png", "_path")] = filename
+                except Exception:
+                    pass
 
-        if chart_data:
-            data["genomics_charts"] = chart_data
+            # Pass captions through
+            for cap_key in ("umap_caption", "cluster_caption"):
+                if entry.get(cap_key):
+                    entry_data[cap_key] = entry[cap_key]
+
+            if "umap_path" in entry_data or "cluster_path" in entry_data:
+                charts_list.append(entry_data)
+
+        if charts_list:
+            data["genomics_charts"] = charts_list
 
     try:
         pdf_bytes = typst.compile(

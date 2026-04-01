@@ -337,6 +337,17 @@ DOCUMENT_TREE: list[DocNode] = [
                 narrative_key="gene_narrative",
                 ready_key="geneBmd",
             ),
+            # Genomics Charts — UMAP semantic maps and cluster scatter
+            # plots, one pair per organ×sex combo.  Rendered server-side
+            # so the PDF includes all combos, not just the active tab.
+            DocNode(
+                id="charts",
+                title="Genomics Charts",
+                level=2,
+                node_type="genomics-charts",
+                data_key="genomics_charts",
+                ready_key="charts",
+            ),
         ],
     ),
 
@@ -440,11 +451,19 @@ def collect_data_keys(node: DocNode) -> set[str]:
     Used by the preview filter to determine which report data keys
     to keep when rendering a specific subtree.
     """
+    # Genomics narrative keys (gene_set_narrative, gene_narrative) are
+    # top-level report data keys, not sub-keys of unified_narratives.
+    # We must add them directly so _apply_section_filter() keeps them.
+    _TOP_LEVEL_NARRATIVE_KEYS = {"gene_set_narrative", "gene_narrative"}
+
     keys: set[str] = set()
     if node.data_key:
         keys.add(node.data_key)
     if node.narrative_key:
-        keys.add("unified_narratives")
+        if node.narrative_key in _TOP_LEVEL_NARRATIVE_KEYS:
+            keys.add(node.narrative_key)
+        else:
+            keys.add("unified_narratives")
     for child in node.children:
         keys.update(collect_data_keys(child))
     return keys

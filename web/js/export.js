@@ -147,7 +147,7 @@ async function exportDocument() {
 
     showBlockingSpinner('Generating PDF...');
     try {
-        const payload = await buildExportPayload({ includeCharts: true });
+        const payload = await buildExportPayload();
         const chemicalName = payload.chemical_name || 'Chemical';
 
         const resp = await fetch('/api/export-pdf', {
@@ -926,14 +926,14 @@ async function renderReportTab() {
  * Used by both compilePdfPreview() (full report) and compileSectionPdf()
  * (per-tab filtered preview) to avoid duplicating the payload assembly.
  *
- * Args:
- *   options.includeCharts: Whether to capture and include genomics
- *       chart images (base64 PNGs).  Default true.  Set to false for
- *       section previews that don't need charts (avoids Plotly overhead).
+ * Chart images are rendered server-side — the server calls
+ * render_chart_images() in genomics_viz.py for all organ×sex combos
+ * found in the genomics_sections payload.
+ *
  * Returns:
  *   Object with all export fields matching the /api/export-pdf schema.
  */
-async function buildExportPayload({ includeCharts = true } = {}) {
+async function buildExportPayload() {
     const chemicalName = currentIdentity?.name || 'Chemical';
     const casrn = currentIdentity?.casrn || '';
     const dtxsid = currentIdentity?.dtxsid || '';
@@ -1029,12 +1029,9 @@ async function buildExportPayload({ includeCharts = true } = {}) {
     const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
     const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
-    // Capture genomics chart images for report embedding (optional —
-    // skipped for section previews that don't need them)
-    let chartImages = null;
-    if (includeCharts && typeof captureGenomicsChartImages === 'function') {
-        chartImages = await captureGenomicsChartImages();
-    }
+    // Chart images are rendered server-side for all organ×sex combos —
+    // no client capture needed.  The server calls render_chart_images()
+    // in genomics_viz.py using the genomics_sections data.
 
     // Unified narratives — group-level prose that spans multiple platform
     // tables.  Read from the visible textareas (narrative-apical, etc.)
@@ -1066,7 +1063,6 @@ async function buildExportPayload({ includeCharts = true } = {}) {
         gene_set_narrative: { paragraphs: allGsNarr },
         gene_narrative: { paragraphs: allGeneNarr },
         summary_paragraphs: summaryParas,
-        genomics_chart_images: chartImages,
     };
 }
 
@@ -1092,7 +1088,7 @@ async function compilePdfPreview() {
 
     try {
         // Build the shared export payload (all sections, with charts)
-        const payload = await buildExportPayload({ includeCharts: true });
+        const payload = await buildExportPayload();
 
         // --- POST to server for Typst compilation ---
         const resp = await fetch('/api/export-pdf', {
@@ -1220,8 +1216,7 @@ async function compilePreviewForNode(tocId, force = false) {
     if (status) status.textContent = 'Compiling...';
 
     try {
-        const needCharts = tocId === 'charts';
-        const payload = await buildExportPayload({ includeCharts: needCharts });
+        const payload = await buildExportPayload();
         payload.section_filter = tocId;
 
         const resp = await fetch('/api/export-pdf', {

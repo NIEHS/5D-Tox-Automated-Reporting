@@ -1590,32 +1590,35 @@
 
 
 // --- Genomics Charts ---
-// Client-captured Plotly visualizations embedded as figures.
-// These appear after all genomics tables and before References.
-// Each chart has a heading, the image, and an italic caption below.
+// Server-rendered UMAP and cluster scatter charts, one pair per organ×sex
+// combination.  The data dict contains a list of entries, each with temp
+// PNG filenames (relative to this template's directory), captions, and a
+// label like "Liver (Male)".
 //
-// The chart images are written to temp PNG files alongside this template
-// by build_report_pdf() in report_pdf.py.  The data dict contains their
-// filenames (relative to this template's directory) and caption strings.
+// Chart images are rendered by render_chart_images() in genomics_viz.py
+// and written to indexed temp files by build_report_pdf() in report_pdf.py.
 #let charts = data.at("genomics_charts", default: none)
 #if charts != none {
-  // UMAP Scatter Plot — no # prefix inside code blocks (already in code mode)
-  let umap-path = charts.at("umap_path", default: none)
-  if umap-path != none {
-    heading(level: 2, "GO Term Semantic Map (UMAP)")
-    figure(
-      image(umap-path, width: 90%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster"),
-      caption: text(size: 9pt, style: "italic", charts.at("umap_caption", default: "")),
-    )
-  }
-  // Cluster Scatter Plot
-  let cluster-path = charts.at("cluster_path", default: none)
-  if cluster-path != none {
-    heading(level: 2, "GO Category Cluster Scatter")
-    figure(
-      image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity and colored by semantic cluster"),
-      caption: text(size: 9pt, style: "italic", charts.at("cluster_caption", default: "")),
-    )
+  for entry in charts {
+    let label = entry.at("label", default: "")
+    // UMAP Scatter Plot for this organ×sex combo
+    let umap-path = entry.at("umap_path", default: none)
+    if umap-path != none {
+      heading(level: 3, "GO Term Semantic Map (UMAP) — " + label)
+      figure(
+        image(umap-path, width: 90%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster — " + label),
+        caption: text(size: 9pt, style: "italic", entry.at("umap_caption", default: "")),
+      )
+    }
+    // Cluster Scatter Plot for this organ×sex combo
+    let cluster-path = entry.at("cluster_path", default: none)
+    if cluster-path != none {
+      heading(level: 3, "GO Category Cluster Scatter — " + label)
+      figure(
+        image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity — " + label),
+        caption: text(size: 9pt, style: "italic", entry.at("cluster_caption", default: "")),
+      )
+    }
   }
 }
 

@@ -131,9 +131,6 @@ async def api_export_pdf(request: Request):
             if upload and upload.get("narrative"):
                 sec["narrative_paragraphs"] = upload["narrative"]
 
-    # Extract client-captured chart images (base64 PNGs) for embedding
-    chart_images = body.get("genomics_chart_images")
-
     # Optional section filter for per-tab PDF previews.
     # When set to "apical", "genomics", or "charts", the marshalled data
     # is stripped down to only that section — producing a focused PDF
@@ -149,6 +146,58 @@ async def api_export_pdf(request: Request):
             len(asecs),
             [(s.get("section_title", "?"), list(s.get("table_data", {}).keys())) for s in asecs],
         )
+
+    # --- Server-side chart rendering for all organ×sex combos ---
+    # Instead of relying on client-captured screenshots of the active
+    # Plotly tab, render charts server-side so the PDF includes every
+    # organ×sex combination.  Iterates genomics_sections from the
+    # payload, groups gene_set entries by organ×sex, and calls
+    # render_chart_images() for each group.
+    chart_images = None
+    genomics_secs = body.get("genomics_sections", [])
+    gene_set_secs = [s for s in genomics_secs if s.get("type") == "gene_set"]
+    if gene_set_secs:
+        from genomics_viz import render_chart_images
+
+        # Group gene_set sections by organ×sex — each group produces
+        # one UMAP + one cluster scatter chart pair.
+        by_organ_sex: dict[str, dict] = {}
+        for sec in gene_set_secs:
+            organ = sec.get("organ", "")
+            sex = sec.get("sex", "")
+            key = f"{organ}_{sex}"
+            if key not in by_organ_sex:
+                by_organ_sex[key] = {
+                    "organ": organ,
+                    "sex": sex,
+                    "dose_unit": sec.get("dose_unit", "mg/kg"),
+                    "gene_sets": [],
+                }
+            by_organ_sex[key]["gene_sets"].extend(sec.get("gene_sets", []))
+
+        # Render chart images for each organ×sex combo
+        chart_images = []
+        for key, group in by_organ_sex.items():
+            if not group["gene_sets"]:
+                continue
+            try:
+                result = render_chart_images(
+                    gene_sets=group["gene_sets"],
+                    organ=group["organ"],
+                    sex=group["sex"],
+                    dose_unit=group["dose_unit"],
+                )
+                organ_title = group["organ"].capitalize() or "Unknown"
+                sex_title = group["sex"].capitalize() or ""
+                result["label"] = f"{organ_title} ({sex_title})"
+                chart_images.append(result)
+            except Exception as e:
+                logger.warning(
+                    "Chart rendering failed for %s: %s", key, e,
+                )
+
+        if not chart_images:
+            chart_images = None
 
     try:
         # Marshal the DOCX-format payload into the Typst template schema

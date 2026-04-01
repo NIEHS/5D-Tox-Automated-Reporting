@@ -200,48 +200,36 @@ async def api_genomics_clusters(request: Request):
 # POST /api/genomics-chart-images — render chart PNGs for report embedding
 # ---------------------------------------------------------------------------
 
-@router.post("/api/genomics-chart-images")
-async def api_genomics_chart_images(request: Request):
+def render_chart_images(
+    gene_sets: list[dict],
+    organ: str,
+    sex: str,
+    dose_unit: str = "mg/kg",
+    clusters: dict | None = None,
+) -> dict:
     """
-    Render the UMAP scatter and cluster scatter charts as PNG images.
+    Render UMAP scatter and cluster scatter charts as base64 PNG images.
 
-    Used by the DOCX and PDF export pipelines to embed static chart
-    images into the report.  The charts are rendered server-side using
-    plotly.py so they match the interactive frontend versions.
+    Pure function (no HTTP) so it can be called from both the API endpoint
+    and the PDF export pipeline.  Builds two Plotly figures — one UMAP
+    semantic map and one BMD×cluster scatter — renders them to PNG via
+    kaleido, and returns base64-encoded strings with captions.
 
-    Input JSON:
-        {
-            "gene_sets": [
-                {"go_id": "GO:...", "go_term": "...", "bmd": 1.5,
-                 "n_genes_with_bmd": 12, "direction": "up", "genes": "a;b;c"},
-                ...
-            ],
-            "organ": "liver",
-            "sex": "male",
-            "dose_unit": "mg/kg",
-            "clusters": {"GO:...": 0, ...}    // optional pre-computed clusters
-        }
+    Args:
+        gene_sets:  List of gene set dicts, each with go_id, go_term, bmd,
+                    n_genes_with_bmd, direction, genes (semicolon-separated).
+        organ:      Organ name (e.g., "liver").
+        sex:        Sex (e.g., "male").
+        dose_unit:  Dose unit for axis labels (default "mg/kg").
+        clusters:   Optional pre-computed {go_id: cluster_id} mapping.
+                    If None, gene-overlap clusters are computed inline.
 
-    Returns JSON:
-        {
-            "umap_png": "<base64-encoded PNG>",
-            "cluster_png": "<base64-encoded PNG>",
-            "umap_caption": "Figure N. ...",
-            "cluster_caption": "Figure N. ..."
-        }
+    Returns:
+        Dict with keys: umap_png, cluster_png, umap_caption, cluster_caption.
+        PNG values are base64-encoded strings (no data: prefix).
     """
     import base64
     import plotly.graph_objects as go
-
-    body = await request.json()
-    gene_sets = body.get("gene_sets", [])
-    organ = body.get("organ", "")
-    sex = body.get("sex", "")
-    dose_unit = body.get("dose_unit", "mg/kg")
-    pre_clusters = body.get("clusters")
-
-    if not gene_sets:
-        return JSONResponse({"error": "No gene_sets provided"}, status_code=400)
 
     # Ensure reference data is loaded
     _load_umap_reference()
@@ -312,9 +300,7 @@ async def api_genomics_chart_images(request: Request):
     # ── Cluster scatter plot ───────────────────────────────────────────
 
     # Get or compute cluster assignments
-    if pre_clusters:
-        clusters = pre_clusters
-    else:
+    if not clusters:
         # Compute inline (same logic as the /api/genomics-clusters endpoint)
         from scipy.cluster.hierarchy import linkage as _linkage, fcluster as _fcluster
         from scipy.spatial.distance import squareform as _squareform
@@ -431,15 +417,8 @@ async def api_genomics_chart_images(request: Request):
     )
 
     # ── Render to PNG ──────────────────────────────────────────────────
-    try:
-        umap_bytes = fig_umap.to_image(format="png", scale=2)
-        cluster_bytes = fig_cluster.to_image(format="png", scale=2)
-    except Exception as e:
-        logger.exception("Chart image rendering failed")
-        return JSONResponse(
-            {"error": f"Chart rendering failed: {e}"},
-            status_code=500,
-        )
+    umap_bytes = fig_umap.to_image(format="png", scale=2)
+    cluster_bytes = fig_cluster.to_image(format="png", scale=2)
 
     umap_b64 = base64.b64encode(umap_bytes).decode()
     cluster_b64 = base64.b64encode(cluster_bytes).decode()
@@ -458,9 +437,56 @@ async def api_genomics_chart_images(request: Request):
         f"are clustered on the y-axis by Jaccard similarity of their gene sets."
     )
 
-    return JSONResponse({
+    return {
         "umap_png": umap_b64,
         "cluster_png": cluster_b64,
         "umap_caption": umap_caption,
         "cluster_caption": cluster_caption,
-    })
+    }
+
+
+@router.post("/api/genomics-chart-images")
+async def api_genomics_chart_images(request: Request):
+    """
+    Render the UMAP scatter and cluster scatter charts as PNG images.
+
+    Thin wrapper around render_chart_images() for direct API calls.
+    Used by the DOCX export pipeline and for debugging.
+
+    Input JSON:
+        {
+            "gene_sets": [...],
+            "organ": "liver",
+            "sex": "male",
+            "dose_unit": "mg/kg",
+            "clusters": {"GO:...": 0, ...}    // optional
+        }
+
+    Returns JSON:
+        {
+            "umap_png": "<base64>",
+            "cluster_png": "<base64>",
+            "umap_caption": "...",
+            "cluster_caption": "..."
+        }
+    """
+    body = await request.json()
+    gene_sets = body.get("gene_sets", [])
+    if not gene_sets:
+        return JSONResponse({"error": "No gene_sets provided"}, status_code=400)
+
+    try:
+        result = render_chart_images(
+            gene_sets=gene_sets,
+            organ=body.get("organ", ""),
+            sex=body.get("sex", ""),
+            dose_unit=body.get("dose_unit", "mg/kg"),
+            clusters=body.get("clusters"),
+        )
+        return JSONResponse(result)
+    except Exception as e:
+        logger.exception("Chart image rendering failed")
+        return JSONResponse(
+            {"error": f"Chart rendering failed: {e}"},
+            status_code=500,
+        )
