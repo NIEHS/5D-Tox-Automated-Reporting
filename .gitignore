@@ -12,5 +12,8 @@ wheels/
 # Logs (regenerable)
 *.log
 
+# Playwright E2E test artifacts (screenshots captured during step-through)
+tests/screenshots/
+
 # SSH artifacts
 svobodadl@*

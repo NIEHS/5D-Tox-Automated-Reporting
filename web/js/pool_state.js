@@ -371,6 +371,15 @@ const APICAL_PLATFORMS = new Set([
  *   report, with compound keys like "Body Weight|tox_study".
  * @returns {Map<string, Object>} Per-platform completeness
  */
+// Normalize platform names from the fingerprinter to match the document
+// tree's canonical names.  The fingerprinter (bmdx-pipe) returns short
+// names like "Clinical" but the document tree uses "Clinical Observations".
+// Without this mapping, isNodeComplete() can't find the platform in the
+// completeness map and shows "No data for platform: Clinical Observations".
+const PLATFORM_ALIASES = {
+    'Clinical': 'Clinical Observations',
+};
+
 function computeSectionCompleteness(coverageMatrix) {
     if (!coverageMatrix) return new Map();
 
@@ -378,7 +387,8 @@ function computeSectionCompleteness(coverageMatrix) {
     // presence, same logic as renderCoverageMatrix in validation.js.
     const collapsed = {};
     for (const key of Object.keys(coverageMatrix)) {
-        const platform = key.includes('|') ? key.split('|')[0] : key;
+        const raw = key.includes('|') ? key.split('|')[0] : key;
+        const platform = PLATFORM_ALIASES[raw] || raw;
         if (!collapsed[platform]) {
             collapsed[platform] = { xlsx: false, txtCsvCount: 0, bm2: false };
         }

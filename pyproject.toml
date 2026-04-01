@@ -44,5 +44,8 @@ bmdx-pipe = { path = "../bmdx-pipe", editable = true }
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "playwright>=1.58.0",
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-playwright>=0.7.2",
 ]

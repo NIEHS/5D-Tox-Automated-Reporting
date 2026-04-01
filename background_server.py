@@ -314,6 +314,19 @@ async def sessions_summary():
 
 
 # ---------------------------------------------------------------------------
+# Dev no-cache middleware — prevent stale JS/CSS during development.
+# Forces the browser to re-fetch scripts on every load so you never
+# have to manually bump ?v= query strings or hard-refresh.
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def no_cache_dev_assets(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.endswith((".js", ".css")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# ---------------------------------------------------------------------------
 # Static file serving — CSS, JS, and other assets under web/
 # ---------------------------------------------------------------------------
 # Mounted AFTER all explicit @app routes so that named endpoints (like GET /)

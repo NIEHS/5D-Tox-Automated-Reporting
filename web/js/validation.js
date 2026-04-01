@@ -99,6 +99,7 @@ async function runPoolValidation() {
         const detectedPlatforms = [...new Set(
             Object.keys(report.coverage_matrix || {})
                 .map(key => key.includes('|') ? key.split('|')[0] : key)
+                .map(p => PLATFORM_ALIASES[p] || p)
                 .filter(p => p !== 'gene_expression')
         )];
         AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
@@ -813,6 +814,7 @@ function restoreValidationReport(report) {
     const detectedPlatforms = [...new Set(
         Object.keys(report.coverage_matrix || {})
             .map(key => key.includes('|') ? key.split('|')[0] : key)
+            .map(p => PLATFORM_ALIASES[p] || p)
             .filter(p => p !== 'gene_expression')
     )];
     AppStore.dispatch('pool.setPlatforms', detectedPlatforms);
@@ -907,6 +909,17 @@ async function loadMetadataReview() {
 
             // Auto-proceed: metadata was already approved in a prior session
             await runProcessingPipeline();
+        } else {
+            // Explicitly reset to unapproved state.  Without this, a
+            // prior render (or race between autoProcessPool calls) can
+            // leave stale "Approved" styling on the section, hiding the
+            // Approve button and blocking the user from proceeding.
+            const section = document.getElementById('metadata-review-section');
+            section.classList.remove('approved');
+            show('btn-approve-metadata');
+            const badge = document.getElementById('badge-metadata');
+            badge.style.display = 'none';
+            badge.textContent = '';
         }
     } catch (e) {
         console.error('Failed to load metadata:', e);
