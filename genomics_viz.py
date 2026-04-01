@@ -444,7 +444,7 @@ def render_chart_images(
             mode="markers",
             marker=dict(size=sizes, color=color, opacity=0.8,
                         line=dict(width=0.5, color="#fff")),
-            name=f"Cluster {umap_cid}" if umap_cid >= 0 else "Outlier",
+            name=str(umap_cid) if umap_cid >= 0 else "Outlier",
             text=[f"{p['go_term']}<br>BMD: {p['bmd']:.3g} {dose_unit}<br>"
                   f"Genes: {p['n_genes']}<br>Direction: {p['direction']}<br>"
                   f"Semantic cluster: {p['umap_cluster']}"
@@ -452,39 +452,15 @@ def render_chart_images(
             hovertemplate="%{text}<extra></extra>",
         ))
 
-    # Subtle horizontal bands behind each cluster's jitter range,
-    # tinted with a low-alpha version of the cluster's own color so
-    # the band visually ties to its markers.
-    #
-    # For gene-overlap clusters that contain points from multiple UMAP
-    # clusters, pick the dominant UMAP cluster's color (most points).
-    # Compute dominant UMAP cluster per gene-overlap cluster.
-    gc_umap_counts: dict[int, dict[int, int]] = {}
-    for p in all_points:
-        gc = p["gene_cluster"]
-        uc = p["umap_cluster"]
-        gc_umap_counts.setdefault(gc, {})
-        gc_umap_counts[gc][uc] = gc_umap_counts[gc].get(uc, 0) + 1
-
-    def _gc_band_color(gc: int) -> str:
-        """Return a low-alpha rgba string for this gene-overlap cluster."""
-        counts = gc_umap_counts.get(gc, {})
-        if not counts:
-            return "rgba(200,200,200,0.15)"
-        dominant_uc = max(counts, key=counts.get)
-        hex_color = get_cluster_color(dominant_uc)
-        # Convert hex (#rrggbb) to rgba with low alpha
-        r = int(hex_color[1:3], 16)
-        g = int(hex_color[3:5], 16)
-        b = int(hex_color[5:7], 16)
-        return f"rgba({r},{g},{b},0.12)"
-
+    # Subtle horizontal bands behind each cluster's jitter range.
+    # Uniform pale parchment color — neutral enough to not compete
+    # with the multi-colored markers within each band.
     for gc, y_pos in cluster_y_rank.items():
         fig_cluster.add_shape(
             type="rect",
             xref="paper", x0=0, x1=1,
             yref="y", y0=y_pos - 0.35, y1=y_pos + 0.35,
-            fillcolor=_gc_band_color(gc),
+            fillcolor="rgba(245,238,228,0.3)",
             line_width=0,
             layer="below",
         )
@@ -504,7 +480,7 @@ def render_chart_images(
 
     fig_cluster.update_layout(
         width=1000, height=chart_height,
-        margin=dict(l=80, r=30, t=40, b=60),
+        margin=dict(l=80, r=30, t=90, b=60),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#fafafa",
         xaxis=dict(title=f"BMD ({dose_unit})", type="log",
@@ -515,7 +491,24 @@ def render_chart_images(
             tickvals=tick_vals, ticktext=tick_text,
         ),
         hovermode="closest",
-        legend=dict(font=dict(size=10)),
+        legend=dict(
+            font=dict(size=12),
+            orientation="h",
+            x=0.5, y=1.02,
+            xanchor="center", yanchor="bottom",
+            itemwidth=45,
+        ),
+    )
+
+    # Legend header as a centered annotation — Plotly's legend.title
+    # doesn't center properly with horizontal orientation.
+    fig_cluster.add_annotation(
+        text="<b>GO Term Semantic Cluster</b>",
+        xref="paper", yref="paper",
+        x=0.5, y=1.08,
+        xanchor="center", yanchor="bottom",
+        showarrow=False,
+        font=dict(size=13),
     )
 
     # ── Render to PNG ──────────────────────────────────────────────────

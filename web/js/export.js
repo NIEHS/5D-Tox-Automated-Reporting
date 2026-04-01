@@ -1212,8 +1212,9 @@ async function compilePreviewForNode(tocId, force = false) {
         return;
     }
 
-    // Show compiling status
-    if (status) status.textContent = 'Compiling...';
+    // Use the same blocking spinner overlay as validate/integrate/approve.
+    showBlockingSpinner('Compiling PDF preview\u2026');
+    if (status) status.textContent = '';
 
     try {
         const payload = await buildExportPayload();
@@ -1246,6 +1247,8 @@ async function compilePreviewForNode(tocId, force = false) {
         if (status) status.textContent = '';
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
+    } finally {
+        hideBlockingSpinner();
     }
 }
 

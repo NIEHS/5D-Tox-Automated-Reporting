@@ -438,28 +438,49 @@ function _renderUmapChart(geneSets, data) {
     const umapWidth = umapEl.clientWidth || 600;
     const umapHeight = umapEl.clientHeight || umapWidth;
 
+    // Compute a shared axis range so the plot is square in data space.
+    const allX = _umapRefData.map(p => p.x);
+    const allY = _umapRefData.map(p => p.y);
+    const lo = Math.min(Math.min(...allX), Math.min(...allY));
+    const hi = Math.max(Math.max(...allX), Math.max(...allY));
+    const pad = (hi - lo) * 0.05;
+    const axisRange = [lo - pad, hi + pad];
+
     const layout = {
         autosize: false,
         width: umapWidth,
         height: umapHeight,
-        margin: { l: 60, r: 30, t: 30, b: 50 },
+        margin: { l: 20, r: 20, t: 20, b: 20 },
         paper_bgcolor: '#fff',
         plot_bgcolor: '#fafafa',
+        // No axis titles or tick labels — UMAP coordinates are arbitrary.
         xaxis: {
-            title: { text: 'UMAP 1' },
             showgrid: true,
             gridcolor: '#e8e8e8',
             zeroline: false,
+            showticklabels: false,
+            title: '',
+            range: axisRange,
+            scaleanchor: 'y',
+            scaleratio: 1,
         },
         yaxis: {
-            title: { text: 'UMAP 2' },
             showgrid: true,
             gridcolor: '#e8e8e8',
             zeroline: false,
-            scaleanchor: 'x',
+            showticklabels: false,
+            title: '',
+            range: axisRange,
         },
         hovermode: 'closest',
-        legend: { font: { size: 10 } },
+        // Legend inside the plot area, top-right with semi-transparent bg.
+        legend: {
+            font: { size: 9 },
+            x: 1, y: 1,
+            xanchor: 'right', yanchor: 'top',
+            bgcolor: 'rgba(255,255,255,0.8)',
+            bordercolor: '#ccc', borderwidth: 1,
+        },
     };
 
     const config = {
@@ -603,9 +624,28 @@ function _renderClusterChart(geneSets, data, clusters) {
         byUmapCluster[key].push(p);
     }
 
-    // Compute per-gene-cluster jitter offsets.  Points within the same
-    // gene-overlap cluster band are spread vertically so they don't overlap.
-    // We need to count how many points land in each gene cluster first.
+    // --- Y-axis ordering by cluster minimum BMD ---
+    // Clusters are ordered vertically by their minimum BMD: lowest at top
+    // (highest y), descending.  Outlier cluster (-1) pinned to bottom.
+    const clusterMinBmd = {};
+    for (const p of points) {
+        if (!(p.geneCluster in clusterMinBmd) || p.bmd < clusterMinBmd[p.geneCluster]) {
+            clusterMinBmd[p.geneCluster] = p.bmd;
+        }
+    }
+
+    const nonOutlier = Object.keys(clusterMinBmd)
+        .map(Number)
+        .filter(gc => gc !== -1)
+        .sort((a, b) => clusterMinBmd[a] - clusterMinBmd[b]);
+
+    const clusterYRank = {};
+    for (let i = 0; i < nonOutlier.length; i++) {
+        clusterYRank[nonOutlier[i]] = nonOutlier.length - i;  // top = highest
+    }
+    clusterYRank[-1] = 0;  // outlier at bottom
+
+    // Compute per-gene-cluster jitter offsets using ranked positions.
     const geneClusterCounts = {};
     const geneClusterIndex = {};
     for (const p of points) {
@@ -614,6 +654,20 @@ function _renderClusterChart(geneSets, data, clusters) {
     }
 
     const traces = [];
+
+    // Parchment bands behind each cluster's jitter range.
+    const shapes = [];
+    for (const gc of Object.keys(clusterYRank).map(Number)) {
+        const yPos = clusterYRank[gc];
+        shapes.push({
+            type: 'rect',
+            xref: 'paper', x0: 0, x1: 1,
+            yref: 'y', y0: yPos - 0.35, y1: yPos + 0.35,
+            fillcolor: 'rgba(245,238,228,0.3)',
+            line: { width: 0 },
+            layer: 'below',
+        });
+    }
 
     // Sort UMAP cluster IDs: numeric ascending, outliers (-1) last
     const sortedUmapCids = Object.keys(byUmapCluster).map(Number).sort((a, b) => {
@@ -625,14 +679,14 @@ function _renderClusterChart(geneSets, data, clusters) {
     for (const umapCid of sortedUmapCids) {
         const pts = byUmapCluster[umapCid];
         const color = _clusterColor(umapCid);
-        const name = umapCid >= 0 ? `Cluster ${umapCid}` : 'Outlier';
+        const name = umapCid >= 0 ? String(umapCid) : 'Outlier';
 
-        // Compute jittered y positions based on gene-overlap cluster
         const jittered_y = pts.map(p => {
+            const baseY = clusterYRank[p.geneCluster] ?? 0;
             const count = geneClusterCounts[p.geneCluster];
             const idx = geneClusterIndex[p.go_id];
             const spread = Math.min(count, 10);
-            return p.geneCluster + (idx / Math.max(spread, 1) - 0.5) * 0.5;
+            return baseY + (idx / Math.max(spread, 1) - 0.5) * 0.5;
         });
 
         const sizes = pts.map(p => Math.max(6, Math.min(30, p.n_genes * 0.5 + 5)));
@@ -663,8 +717,15 @@ function _renderClusterChart(geneSets, data, clusters) {
     const uniqueGeneClusters = new Set(points.map(p => p.geneCluster));
     const nGeneClusters = uniqueGeneClusters.size;
 
-    // Compute dimensions from the CSS aspect-ratio container (1.25:1 = wider than tall).
-    // The container's aspect-ratio is set in HTML; we read actual dimensions.
+    // Custom y-axis tick labels at ranked positions.
+    const tickVals = [];
+    const tickText = [];
+    for (const [gc, yPos] of Object.entries(clusterYRank).sort((a, b) => a[1] - b[1])) {
+        tickVals.push(yPos);
+        tickText.push(Number(gc) === -1 ? 'Outlier' : gc);
+    }
+
+    // Compute dimensions from the CSS aspect-ratio container.
     const clusterEl = document.getElementById('cluster-chart');
     const clusterWidth = clusterEl.clientWidth || 600;
     const clusterHeight = clusterEl.clientHeight || Math.round(clusterWidth / 1.25);
@@ -673,9 +734,10 @@ function _renderClusterChart(geneSets, data, clusters) {
         autosize: false,
         width: clusterWidth,
         height: clusterHeight,
-        margin: { l: 80, r: 30, t: 30, b: 60 },
+        margin: { l: 80, r: 30, t: 90, b: 60 },
         paper_bgcolor: '#fff',
         plot_bgcolor: '#fafafa',
+        shapes: shapes,
         xaxis: {
             title: { text: `BMD (${doseUnit})` },
             type: 'log',
@@ -686,10 +748,25 @@ function _renderClusterChart(geneSets, data, clusters) {
             title: { text: 'Gene-Overlap Cluster' },
             showgrid: true,
             gridcolor: '#e8e8e8',
-            dtick: 1,
+            tickvals: tickVals,
+            ticktext: tickText,
         },
         hovermode: 'closest',
-        legend: { font: { size: 10 } },
+        legend: {
+            font: { size: 12 },
+            orientation: 'h',
+            x: 0.5, y: 1.02,
+            xanchor: 'center', yanchor: 'bottom',
+            itemwidth: 45,
+        },
+        annotations: [{
+            text: '<b>GO Term Semantic Cluster</b>',
+            xref: 'paper', yref: 'paper',
+            x: 0.5, y: 1.08,
+            xanchor: 'center', yanchor: 'bottom',
+            showarrow: false,
+            font: { size: 13 },
+        }],
     };
 
     const config = {
