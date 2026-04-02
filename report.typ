@@ -1629,6 +1629,30 @@
         caption: text(size: 9pt, style: "italic", entry.at("cluster_caption", default: "")),
       )
     }
+
+    // Cluster biology summary table — maps each gene-overlap cluster
+    // to its top GO terms, ordered to match the y-axis of the scatter plot.
+    let summary = entry.at("cluster_summary", default: none)
+    if summary != none and summary.len() > 0 {
+      v(0.5em)
+      text(size: 9pt, weight: "bold")[Cluster Biology Summary — #label]
+      v(0.3em)
+      table(
+        columns: (auto, 1fr),
+        stroke: 0.5pt + luma(200),
+        inset: 5pt,
+        table.header(
+          text(size: 8pt, weight: "bold")[Cluster],
+          text(size: 8pt, weight: "bold")[Representative GO Biological Process Terms],
+        ),
+        ..for row in summary {
+          (
+            text(size: 8pt)[#row.at("cluster", default: "")],
+            text(size: 8pt)[#row.at("terms", default: ()).join("; ")],
+          )
+        }
+      )
+    }
   }
 }
 

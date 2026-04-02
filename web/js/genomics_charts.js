@@ -794,4 +794,42 @@ function _renderClusterChart(geneSets, data, clusters) {
             `Categories are clustered on the y-axis by Jaccard similarity of their gene sets ` +
             `(${nGeneClusters} cluster${nGeneClusters !== 1 ? 's' : ''}).`;
     }
+
+    // --- Cluster biology summary table ---
+    // Shows up to 5 representative GO terms per gene-overlap cluster,
+    // ordered to match the y-axis (top cluster first, outlier last).
+    const byGeneCluster = {};
+    for (const p of points) {
+        if (!byGeneCluster[p.geneCluster]) byGeneCluster[p.geneCluster] = [];
+        byGeneCluster[p.geneCluster].push(p);
+    }
+
+    // Sort clusters by y-rank descending (top of chart first)
+    const rankedClusters = Object.keys(clusterYRank)
+        .map(Number)
+        .sort((a, b) => clusterYRank[b] - clusterYRank[a]);
+
+    let summaryHtml = '<table class="cluster-summary-table">' +
+        '<thead><tr><th>Cluster</th><th>Representative GO Biological Process Terms</th></tr></thead>' +
+        '<tbody>';
+    for (const gc of rankedClusters) {
+        const clusterPts = (byGeneCluster[gc] || [])
+            .slice()
+            .sort((a, b) => a.bmd - b.bmd);
+        const topTerms = clusterPts.slice(0, 5).map(p => p.go_term);
+        const label = gc === -1 ? 'Outlier' : String(gc);
+        summaryHtml += `<tr><td>${label}</td><td>${topTerms.join('; ')}</td></tr>`;
+    }
+    summaryHtml += '</tbody></table>';
+
+    // Insert or replace the summary table after the cluster chart
+    let summaryEl = document.getElementById('cluster-summary');
+    if (!summaryEl) {
+        summaryEl = document.createElement('div');
+        summaryEl.id = 'cluster-summary';
+        // Place after the chart container within the cluster panel
+        const panel = document.getElementById('chart-panel-cluster');
+        if (panel) panel.appendChild(summaryEl);
+    }
+    summaryEl.innerHTML = summaryHtml;
 }

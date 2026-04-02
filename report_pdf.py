@@ -122,10 +122,10 @@ def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> byte
                 except Exception:
                     pass
 
-            # Pass captions through
-            for cap_key in ("umap_caption", "cluster_caption"):
-                if entry.get(cap_key):
-                    entry_data[cap_key] = entry[cap_key]
+            # Pass captions and cluster summary through
+            for pass_key in ("umap_caption", "cluster_caption", "cluster_summary"):
+                if entry.get(pass_key):
+                    entry_data[pass_key] = entry[pass_key]
 
             if "umap_path" in entry_data or "cluster_path" in entry_data:
                 charts_list.append(entry_data)

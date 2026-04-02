@@ -3450,6 +3450,35 @@ td.data-gap, th.data-gap {
     line-height: 1.4;
 }
 
+/* Cluster biology summary table — shows representative GO terms per
+   gene-overlap cluster, matching the y-axis order of the scatter plot. */
+.cluster-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin: 0.75rem 0 1rem;
+}
+.cluster-summary-table th {
+    text-align: left;
+    padding: 6px 10px;
+    background: var(--c-bg-section);
+    border-bottom: 2px solid var(--c-border-light);
+    font-weight: 600;
+    color: var(--c-text);
+}
+.cluster-summary-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--c-border-light);
+    color: var(--c-text-muted);
+    line-height: 1.4;
+}
+.cluster-summary-table td:first-child {
+    white-space: nowrap;
+    font-weight: 600;
+    color: var(--c-text);
+    width: 60px;
+}
+
 /* Organ/sex picker for charts tab */
 #charts-organ-picker select {
     padding: 4px 8px;

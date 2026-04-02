@@ -532,11 +532,40 @@ def render_chart_images(
         f"are clustered on the y-axis by Jaccard similarity of their gene sets."
     )
 
+    # --- Cluster biology summary ---
+    # For each gene-overlap cluster, list up to 5 representative GO terms
+    # sorted by BMD (lowest = most sensitive first).  This tells the reader
+    # what biology each horizontal band in the scatter plot represents.
+    # Ordered to match the y-axis: top cluster first, outlier last.
+    by_gene_cluster: dict[int, list] = {}
+    for p in all_points:
+        by_gene_cluster.setdefault(p["gene_cluster"], []).append(p)
+
+    # Sort clusters by y-rank descending (top of chart first)
+    ranked_clusters = sorted(
+        cluster_y_rank.keys(),
+        key=lambda gc: cluster_y_rank[gc],
+        reverse=True,
+    )
+
+    cluster_summary = []
+    for gc in ranked_clusters:
+        pts = by_gene_cluster.get(gc, [])
+        # Sort by BMD ascending — most sensitive terms first
+        pts_sorted = sorted(pts, key=lambda p: p["bmd"])
+        top_terms = [p["go_term"] for p in pts_sorted[:5]]
+        cluster_summary.append({
+            "cluster": "Outlier" if gc == -1 else str(gc),
+            "terms": top_terms,
+            "n_total": len(pts),
+        })
+
     return {
         "umap_png": umap_b64,
         "cluster_png": cluster_b64,
         "umap_caption": umap_caption,
         "cluster_caption": cluster_caption,
+        "cluster_summary": cluster_summary,
     }
 
 
