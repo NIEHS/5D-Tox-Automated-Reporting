@@ -342,6 +342,12 @@ async function renderGenomicsCharts() {
     // Draw both charts
     _renderUmapChart(geneSets, data);
     _renderClusterChart(geneSets, data, clusters);
+
+    // Fire off Enrichr enrichment for the cluster summary table.
+    // This runs asynchronously — the table initially shows internal GO
+    // terms (rendered by _renderClusterChart above), then gets replaced
+    // with Enrichr-sourced terms when the API call completes.
+    _fetchEnrichrClusterSummary(geneSets, clusters);
 }
 
 
@@ -796,8 +802,12 @@ function _renderClusterChart(geneSets, data, clusters) {
     }
 
     // --- Cluster biology summary table ---
-    // Shows up to 5 representative GO terms per gene-overlap cluster,
-    // ordered to match the y-axis (top cluster first, outlier last).
+    // Client-side fallback: shows our own GO terms per gene-overlap cluster.
+    // The server-side render (PDF/DOCX) calls Enrichr for independent
+    // enrichment analysis per cluster — that richer version flows through
+    // cluster_summary in the report data.  For the web preview we use
+    // internal terms since calling Enrichr client-side would add latency
+    // and CORS complexity.
     const byGeneCluster = {};
     for (const p of points) {
         if (!byGeneCluster[p.geneCluster]) byGeneCluster[p.geneCluster] = [];
@@ -809,8 +819,26 @@ function _renderClusterChart(geneSets, data, clusters) {
         .map(Number)
         .sort((a, b) => clusterYRank[b] - clusterYRank[a]);
 
+    // Count unique genes per cluster for the "Genes" column
+    const clusterGeneCounts = {};
+    for (const gc of rankedClusters) {
+        const clusterPts = byGeneCluster[gc] || [];
+        const geneSet = new Set();
+        for (const p of clusterPts) {
+            // Find the original gene_sets entry to get gene symbols
+            const gs = geneSets.find(g => g.go_id === p.go_id);
+            if (gs && gs.genes) {
+                for (const g of gs.genes.split(';')) {
+                    const trimmed = g.trim();
+                    if (trimmed) geneSet.add(trimmed.toUpperCase());
+                }
+            }
+        }
+        clusterGeneCounts[gc] = geneSet.size;
+    }
+
     let summaryHtml = '<table class="cluster-summary-table">' +
-        '<thead><tr><th>Cluster</th><th>Representative GO Biological Process Terms</th></tr></thead>' +
+        '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms</th></tr></thead>' +
         '<tbody>';
     for (const gc of rankedClusters) {
         const clusterPts = (byGeneCluster[gc] || [])
@@ -818,7 +846,8 @@ function _renderClusterChart(geneSets, data, clusters) {
             .sort((a, b) => a.bmd - b.bmd);
         const topTerms = clusterPts.slice(0, 5).map(p => p.go_term);
         const label = gc === -1 ? 'Outlier' : String(gc);
-        summaryHtml += `<tr><td>${label}</td><td>${topTerms.join('; ')}</td></tr>`;
+        const nGenes = clusterGeneCounts[gc] || 0;
+        summaryHtml += `<tr><td>${label}</td><td>${nGenes}</td><td>${topTerms.join('; ')}</td></tr>`;
     }
     summaryHtml += '</tbody></table>';
 
@@ -832,4 +861,87 @@ function _renderClusterChart(geneSets, data, clusters) {
         if (panel) panel.appendChild(summaryEl);
     }
     summaryEl.innerHTML = summaryHtml;
+}
+
+
+/* ================================================================
+ * Enrichr cluster enrichment — async enhancement for summary table
+ *
+ * After the cluster scatter plot renders with internal GO terms,
+ * this function calls the server endpoint which submits each cluster's
+ * pooled genes to the Enrichr web service.  When results arrive,
+ * the summary table is replaced with Enrichr-sourced enriched terms.
+ *
+ * The table shows a loading indicator while the API call is in flight
+ * so the user knows something is happening (Enrichr calls take a few
+ * seconds per cluster).
+ * ================================================================ */
+
+/**
+ * Fetch Enrichr enrichment for each gene-overlap cluster and replace
+ * the summary table with the results.
+ *
+ * @param {Array} geneSets   - gene_sets from genomicsResults
+ * @param {Object} clusters  - go_id → cluster_id mapping
+ */
+async function _fetchEnrichrClusterSummary(geneSets, clusters) {
+    const summaryEl = document.getElementById('cluster-summary');
+    if (!summaryEl) return;
+
+    // Show loading state — preserve existing table but add indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'cluster-enrichr-loading';
+    loadingDiv.innerHTML = '<span class="enrichr-spinner"></span> Running Enrichr enrichment analysis...';
+    summaryEl.insertBefore(loadingDiv, summaryEl.firstChild);
+
+    try {
+        const resp = await fetch('/api/genomics-cluster-enrichment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                gene_sets: geneSets.map(gs => ({
+                    go_id: gs.go_id,
+                    go_term: gs.go_term || '',
+                    genes: gs.genes || '',
+                    bmd: gs.bmd,
+                })),
+                clusters: clusters,
+            }),
+        });
+
+        if (!resp.ok) {
+            console.warn('[genomics_charts] Enrichr cluster enrichment failed:', resp.status);
+            loadingDiv.remove();
+            return;
+        }
+
+        const data = await resp.json();
+        const summary = data.cluster_summary || [];
+
+        if (summary.length === 0) {
+            loadingDiv.remove();
+            return;
+        }
+
+        // Replace the entire summary table with Enrichr results
+        let html = '<table class="cluster-summary-table">' +
+            '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
+            '<tbody>';
+        for (const row of summary) {
+            const source = row.source === 'enrichr' ? '' : ' <em>(internal)</em>';
+            html += `<tr>` +
+                `<td>${row.cluster}</td>` +
+                `<td>${row.n_genes || 0}</td>` +
+                `<td>${row.terms.join('; ')}${source}</td>` +
+                `</tr>`;
+        }
+        html += '</tbody></table>';
+
+        summaryEl.innerHTML = html;
+
+    } catch (e) {
+        console.warn('[genomics_charts] Enrichr cluster enrichment error:', e);
+        // Remove loading indicator, keep the internal-terms table
+        loadingDiv.remove();
+    }
 }

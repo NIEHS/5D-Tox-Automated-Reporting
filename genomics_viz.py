@@ -197,6 +197,166 @@ async def api_genomics_clusters(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/genomics-cluster-enrichment — Enrichr enrichment per cluster
+# ---------------------------------------------------------------------------
+
+@router.post("/api/genomics-cluster-enrichment")
+async def api_genomics_cluster_enrichment(request: Request):
+    """
+    Run Enrichr enrichment analysis for each gene-overlap cluster.
+
+    Pools unique genes per cluster, submits each to the Enrichr web service,
+    and returns top enriched GO Biological Process terms per cluster.  This
+    gives an independent, cross-validated description of what biology each
+    horizontal band in the cluster scatter plot represents.
+
+    Input JSON:
+        {
+            "gene_sets": [
+                {"go_id": "GO:...", "genes": "acox1;cyp2b1;...", "bmd": 1.5, ...},
+                ...
+            ],
+            "clusters": {"GO:...": 0, "GO:...": 1, ...}
+        }
+
+    Returns JSON:
+        {
+            "cluster_summary": [
+                {
+                    "cluster": "0",
+                    "terms": ["SREBP Signaling Pathway (GO:0032933)", ...],
+                    "adj_p_values": [0.0003, ...],
+                    "n_genes": 10,
+                    "n_categories": 4,
+                    "source": "enrichr"
+                },
+                ...
+            ]
+        }
+    """
+    body = await request.json()
+    gene_sets = body.get("gene_sets", [])
+    clusters = body.get("clusters", {})
+
+    if not gene_sets or not clusters:
+        return JSONResponse(
+            {"error": "gene_sets and clusters are required"}, status_code=400
+        )
+
+    # Build go_id → gene set lookup
+    go_id_to_genes: dict[str, set[str]] = {}
+    for gs in gene_sets:
+        genes_str = gs.get("genes", "")
+        gene_set = set(
+            g.strip().upper() for g in genes_str.split(";") if g.strip()
+        )
+        go_id_to_genes[gs.get("go_id", "")] = gene_set
+
+    # Group gene_sets by cluster, compute BMD for ordering
+    by_cluster: dict[int, list] = {}
+    for gs in gene_sets:
+        go_id = gs.get("go_id", "")
+        cid = clusters.get(go_id, -1)
+        by_cluster.setdefault(cid, []).append(gs)
+
+    # Compute cluster min BMD for y-axis ordering (same logic as charts)
+    cluster_min_bmd: dict[int, float] = {}
+    for cid, gs_list in by_cluster.items():
+        for gs in gs_list:
+            bmd = gs.get("bmd")
+            if bmd is not None:
+                if cid not in cluster_min_bmd or float(bmd) < cluster_min_bmd[cid]:
+                    cluster_min_bmd[cid] = float(bmd)
+
+    # Rank: lowest min-BMD first (top of chart), outlier last
+    non_outlier = sorted(
+        (c for c in cluster_min_bmd if c != -1),
+        key=lambda c: cluster_min_bmd[c],
+    )
+    cluster_y_rank: dict[int, int] = {}
+    for rank, c in enumerate(non_outlier):
+        cluster_y_rank[c] = len(non_outlier) - rank
+    cluster_y_rank[-1] = 0
+
+    ranked_clusters = sorted(
+        cluster_y_rank.keys(),
+        key=lambda c: cluster_y_rank[c],
+        reverse=True,
+    )
+
+    # Run Enrichr per cluster
+    cluster_summary = []
+    try:
+        from enrichr_client import enrichr_enrich_genes
+
+        for cid in ranked_clusters:
+            gs_list = by_cluster.get(cid, [])
+            label = "Outlier" if cid == -1 else str(cid)
+
+            # Pool unique genes across all GO categories in this cluster
+            cluster_genes = set()
+            for gs in gs_list:
+                cluster_genes |= go_id_to_genes.get(gs.get("go_id", ""), set())
+
+            if len(cluster_genes) < 3:
+                # Too few genes for meaningful enrichment — fall back
+                sorted_gs = sorted(gs_list, key=lambda g: g.get("bmd", 999))
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [g.get("go_term", "") for g in sorted_gs[:5]],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(gs_list),
+                    "source": "internal",
+                })
+                continue
+
+            desc = f"Cluster {label} — {len(cluster_genes)} genes"
+            enrichment = enrichr_enrich_genes(
+                list(cluster_genes), description=desc, top_n=5,
+            )
+
+            lib_results = list(enrichment.get("results", {}).values())
+            top_terms = lib_results[0] if lib_results else []
+
+            if top_terms:
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [t["term"] for t in top_terms],
+                    "adj_p_values": [t["adj_p_value"] for t in top_terms],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(gs_list),
+                    "source": "enrichr",
+                })
+            else:
+                sorted_gs = sorted(gs_list, key=lambda g: g.get("bmd", 999))
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [g.get("go_term", "") for g in sorted_gs[:5]],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(gs_list),
+                    "source": "internal",
+                })
+
+    except Exception as e:
+        logger.warning("Enrichr cluster enrichment failed: %s", e)
+        for cid in ranked_clusters:
+            gs_list = by_cluster.get(cid, [])
+            sorted_gs = sorted(gs_list, key=lambda g: g.get("bmd", 999))
+            cluster_genes = set()
+            for gs in gs_list:
+                cluster_genes |= go_id_to_genes.get(gs.get("go_id", ""), set())
+            cluster_summary.append({
+                "cluster": "Outlier" if cid == -1 else str(cid),
+                "terms": [g.get("go_term", "") for g in sorted_gs[:5]],
+                "n_genes": len(cluster_genes),
+                "n_categories": len(gs_list),
+                "source": "internal",
+            })
+
+    return JSONResponse({"cluster_summary": cluster_summary})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/genomics-chart-images — render chart PNGs for report embedding
 # ---------------------------------------------------------------------------
 
@@ -532,14 +692,28 @@ def render_chart_images(
         f"are clustered on the y-axis by Jaccard similarity of their gene sets."
     )
 
-    # --- Cluster biology summary ---
-    # For each gene-overlap cluster, list up to 5 representative GO terms
-    # sorted by BMD (lowest = most sensitive first).  This tells the reader
-    # what biology each horizontal band in the scatter plot represents.
-    # Ordered to match the y-axis: top cluster first, outlier last.
+    # --- Cluster biology summary via Enrichr ---
+    # For each gene-overlap cluster, pool all unique genes across the GO
+    # categories in that cluster, then submit them to the Enrichr web service
+    # for independent enrichment analysis.  This tells the reader what biology
+    # each horizontal band represents — validated by an external service rather
+    # than just echoing our own GO terms back.
+    #
+    # Falls back to listing our own GO terms if Enrichr is unreachable or the
+    # cluster has too few genes for meaningful enrichment.
     by_gene_cluster: dict[int, list] = {}
     for p in all_points:
         by_gene_cluster.setdefault(p["gene_cluster"], []).append(p)
+
+    # Build a lookup from go_id → gene set (parsed from the input gene_sets)
+    # so we can pool genes per cluster.
+    go_id_to_genes: dict[str, set[str]] = {}
+    for gs in gene_sets:
+        genes_str = gs.get("genes", "")
+        gene_set = set(
+            g.strip().upper() for g in genes_str.split(";") if g.strip()
+        )
+        go_id_to_genes[gs.get("go_id", "")] = gene_set
 
     # Sort clusters by y-rank descending (top of chart first)
     ranked_clusters = sorted(
@@ -548,17 +722,80 @@ def render_chart_images(
         reverse=True,
     )
 
+    # Attempt Enrichr enrichment per cluster
     cluster_summary = []
-    for gc in ranked_clusters:
-        pts = by_gene_cluster.get(gc, [])
-        # Sort by BMD ascending — most sensitive terms first
-        pts_sorted = sorted(pts, key=lambda p: p["bmd"])
-        top_terms = [p["go_term"] for p in pts_sorted[:5]]
-        cluster_summary.append({
-            "cluster": "Outlier" if gc == -1 else str(gc),
-            "terms": top_terms,
-            "n_total": len(pts),
-        })
+    try:
+        from enrichr_client import enrichr_enrich_genes
+
+        for gc in ranked_clusters:
+            pts = by_gene_cluster.get(gc, [])
+
+            # Pool all unique genes across GO categories in this cluster
+            cluster_genes = set()
+            for p in pts:
+                cluster_genes |= go_id_to_genes.get(p["go_id"], set())
+
+            label = "Outlier" if gc == -1 else str(gc)
+
+            # Need at least 3 genes for meaningful enrichment
+            if len(cluster_genes) < 3:
+                # Fall back to our own GO terms for tiny clusters
+                pts_sorted = sorted(pts, key=lambda p: p["bmd"])
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [p["go_term"] for p in pts_sorted[:5]],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(pts),
+                    "source": "internal",
+                })
+                continue
+
+            desc = f"Cluster {label} — {len(cluster_genes)} genes"
+            enrichment = enrichr_enrich_genes(
+                list(cluster_genes), description=desc, top_n=5,
+            )
+
+            # Extract top Enrichr terms from the default library results
+            lib_results = list(enrichment.get("results", {}).values())
+            top_terms = lib_results[0] if lib_results else []
+
+            if top_terms:
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [t["term"] for t in top_terms],
+                    "adj_p_values": [t["adj_p_value"] for t in top_terms],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(pts),
+                    "source": "enrichr",
+                })
+            else:
+                # Enrichr returned nothing — fall back
+                pts_sorted = sorted(pts, key=lambda p: p["bmd"])
+                cluster_summary.append({
+                    "cluster": label,
+                    "terms": [p["go_term"] for p in pts_sorted[:5]],
+                    "n_genes": len(cluster_genes),
+                    "n_categories": len(pts),
+                    "source": "internal",
+                })
+
+    except Exception as e:
+        # Enrichr unavailable — fall back entirely to internal GO terms
+        logger.warning("Enrichr enrichment failed, using internal terms: %s", e)
+        cluster_summary = []
+        for gc in ranked_clusters:
+            pts = by_gene_cluster.get(gc, [])
+            pts_sorted = sorted(pts, key=lambda p: p["bmd"])
+            cluster_genes = set()
+            for p in pts:
+                cluster_genes |= go_id_to_genes.get(p["go_id"], set())
+            cluster_summary.append({
+                "cluster": "Outlier" if gc == -1 else str(gc),
+                "terms": [p["go_term"] for p in pts_sorted[:5]],
+                "n_genes": len(cluster_genes),
+                "n_categories": len(pts),
+                "source": "internal",
+            })
 
     return {
         "umap_png": umap_b64,
