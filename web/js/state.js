@@ -223,6 +223,12 @@ let apicalSectionCounter = 0;
 // Genomics results: maps "organ_sex" → {gene_sets, top_genes, approved, fileId}
 const genomicsResults = {};
 
+// Pre-rendered chart images from process-integrated (Layer 2.5).
+// Array of dicts per organ×sex, each with umap_png, cluster_png, captions,
+// cluster_summary.  Set during process-integrated, passed through to
+// /api/export-pdf so the export never re-renders charts or calls Enrichr.
+let chartImagesCache = null;
+
 
 // --- Form field config ---
 // The six chemical identity fields in the form, and how each maps

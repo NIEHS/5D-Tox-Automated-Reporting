@@ -439,6 +439,13 @@ async function runProcessingPipeline() {
                 AppStore.dispatch('pool.setPlatforms', processedPlatforms);
             }
 
+            // --- Pre-rendered chart images (Layer 2.5 of pipeline) ---
+            // Cached server-side during process-integrated so PDF previews
+            // and exports never re-render Plotly charts or call Enrichr.
+            if (result.chart_images) {
+                chartImagesCache = result.chart_images;
+            }
+
             // --- Gene expression: extracted from the integrated .bm2 ---
             // The process-integrated endpoint also returns genomics_sections
             // if a gene expression .bm2 was included in the integration.

@@ -259,6 +259,9 @@ async function applySettings() {
         }
 
         const statLabelsMap = result.bmd_stat_labels || null;
+        if (result.chart_images) {
+            chartImagesCache = result.chart_images;
+        }
         if (result.genomics_sections) {
             for (const [key, gData] of Object.entries(result.genomics_sections)) {
                 genomicsResults[key] = { ...gData, approved: false };

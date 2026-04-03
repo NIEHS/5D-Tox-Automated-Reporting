@@ -1029,9 +1029,9 @@ async function buildExportPayload() {
     const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
     const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
 
-    // Chart images are rendered server-side for all organ×sex combos —
-    // no client capture needed.  The server calls render_chart_images()
-    // in genomics_viz.py using the genomics_sections data.
+    // Chart images — pre-rendered during process-integrated (Layer 2.5).
+    // Passed through to the server so exports never re-render Plotly
+    // charts or call Enrichr.  Null if no genomics data was processed.
 
     // Unified narratives — group-level prose that spans multiple platform
     // tables.  Read from the visible textareas (narrative-apical, etc.)
@@ -1060,6 +1060,7 @@ async function buildExportPayload() {
         methods_paragraphs: methodsParas,
         bmd_summary_endpoints: bmdSummaryEps,
         genomics_sections: genomicsSecs,
+        chart_images: chartImagesCache,
         gene_set_narrative: { paragraphs: allGsNarr },
         gene_narrative: { paragraphs: allGeneNarr },
         summary_paragraphs: summaryParas,

@@ -2679,6 +2679,61 @@ async def api_process_integrated(dtxsid: str, request: Request):
         sections, unified_narratives = sections_result
 
         # ══════════════════════════════════════════════════════════════
+        # Layer 2.5 — Charts + Enrichr (depends on genomics output)
+        # ══════════════════════════════════════════════════════════════
+        # Server-side Plotly rendering of UMAP scatter and cluster scatter
+        # charts, plus Enrichr enrichment analysis for each gene-overlap
+        # cluster.  Cached as _cache_charts_{hash}.json so that PDF
+        # previews and exports never re-render charts or re-call Enrichr.
+        #
+        # The hash is the same as genomics (same inputs determine the
+        # gene sets that feed the charts).  Chart images are base64 PNGs.
+        chart_images = []
+        if genomics_sections:
+            charts_hash = genomics_hash  # same inputs → same cache lifetime
+            charts_cached = _load_cache(dtxsid, "charts", charts_hash)
+
+            if charts_cached:
+                chart_images = charts_cached
+            else:
+                from genomics_viz import render_chart_images
+
+                loop = asyncio.get_running_loop()
+                for key, gen_data in genomics_sections.items():
+                    # Use the primary BMD stat's gene_sets for chart rendering
+                    gs_by_stat = gen_data.get("gene_sets_by_stat", {})
+                    gene_sets = gs_by_stat.get(bmd_stat, [])
+                    if not gene_sets:
+                        continue
+
+                    organ = gen_data.get("organ", "")
+                    sex = gen_data.get("sex", "")
+                    organ_title = organ.capitalize() or "Unknown"
+                    sex_title = sex.capitalize() or ""
+
+                    try:
+                        result = await loop.run_in_executor(
+                            None,
+                            lambda gs=gene_sets, o=organ, s=sex: render_chart_images(
+                                gene_sets=gs,
+                                organ=o,
+                                sex=s,
+                                dose_unit=dose_unit,
+                            ),
+                        )
+                        result["label"] = f"{organ_title} ({sex_title})"
+                        result["organ"] = organ
+                        result["sex"] = sex
+                        chart_images.append(result)
+                    except Exception as e:
+                        logger.warning(
+                            "Chart rendering failed for %s: %s", key, e,
+                        )
+
+                if chart_images:
+                    _save_cache(dtxsid, "charts", charts_hash, chart_images)
+
+        # ══════════════════════════════════════════════════════════════
         # Layer 3 — BMD summary (depends on NTP + BMDS)
         # ══════════════════════════════════════════════════════════════
         # Two summary tables: one from BMDExpress 3 results (apical) and
@@ -2713,6 +2768,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "sections": sections,
             "unified_narratives": unified_narratives,
             "genomics_sections": genomics_sections,
+            "chart_images": chart_images if chart_images else None,
             "apical_bmd_summary": apical_bmd_summary,
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
             "bmd_stats": list(bmd_stats),
