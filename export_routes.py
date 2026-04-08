@@ -147,17 +147,28 @@ async def api_export_pdf(request: Request):
             [(s.get("section_title", "?"), list(s.get("table_data", {}).keys())) for s in asecs],
         )
 
-    # --- Chart images: read from pre-computed cache ---
+    # --- Chart images: read from server-side cache ---
     # Charts (UMAP scatter, cluster scatter, Enrichr cluster summaries)
     # are pre-rendered during process-integrated and cached as
-    # _cache_charts_{hash}.json.  The client passes them through in the
-    # export payload as chart_images — no rendering at export time.
+    # _cache_charts_{hash}.json.  Read directly from disk to avoid
+    # round-tripping large base64 PNGs through the client payload.
     #
-    # This eliminates the Plotly rendering + Enrichr API call cost from
-    # every preview and export.  Charts only update when the user
-    # re-runs process-integrated (which is the correct behavior — charts
-    # should reflect the processed state).
-    chart_images = body.get("chart_images") or None
+    # Falls back to chart_images in the payload if the cache file
+    # doesn't exist (e.g., no genomics data, or cache was cleared).
+    chart_images = None
+    dtxsid = body.get("dtxsid", "")
+    if dtxsid:
+        session_dir = Path("sessions") / dtxsid
+        charts_files = list(session_dir.glob("_cache_charts_*.json"))
+        if charts_files:
+            try:
+                import orjson
+                chart_images = orjson.loads(charts_files[0].read_bytes())
+                logger.info("Loaded chart images from cache: %s", charts_files[0].name)
+            except Exception:
+                logger.warning("Failed to read charts cache, checking payload")
+    if chart_images is None:
+        chart_images = body.get("chart_images") or None
 
     try:
         # Marshal the DOCX-format payload into the Typst template schema

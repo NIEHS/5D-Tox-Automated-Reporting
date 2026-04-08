@@ -1,14 +1,10 @@
 """
-enrichr_analysis.py — Call the Enrichr web service to run gene set enrichment
-analysis on genes from a rlm-bmdx genomics session file.
+enrichr_analysis.py — CLI tool for running Enrichr enrichment analysis on
+genes from a rlm-bmdx genomics session file.
 
-Two-step workflow mirrors the Enrichr REST API:
-  1. POST /addList  — submit a newline-separated gene list, get back a userListId
-  2. GET  /enrich   — fetch enrichment results for that list against one or more
-                       Enrichr gene-set libraries (e.g. GO_Biological_Process_2023)
-
-The assembled data object is written to stdout as JSON so the caller can inspect
-the shape before deciding what to do with it.
+Standalone script for ad-hoc exploration.  Uses enrichr_client.py for the
+actual API calls — this file only handles CLI argument parsing, session
+file reading, and output formatting.
 
 Usage:
     uv run enrichr_analysis.py [--session PATH] [--libraries LIB1,LIB2,...]
@@ -21,15 +17,12 @@ import argparse
 import json
 import sys
 import time
-import urllib.request
-import urllib.parse
+
+from enrichr_client import enrichr_submit, enrichr_fetch, API_DELAY
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-
-# Enrichr REST API base URL (Ma'ayan Lab, Mount Sinai)
-ENRICHR_BASE = "https://maayanlab.cloud/Enrichr"
 
 # Default gene-set libraries to query — chosen for toxicogenomics relevance.
 # Full catalog: https://maayanlab.cloud/Enrichr/#libraries
@@ -45,74 +38,6 @@ DEFAULT_LIBRARIES = [
 
 # How many top terms to keep per library (by combined score)
 TOP_N = 20
-
-
-# ---------------------------------------------------------------------------
-# Enrichr API helpers
-# ---------------------------------------------------------------------------
-
-def enrichr_add_list(gene_symbols: list[str], description: str) -> dict:
-    """
-    Submit a gene list to Enrichr.  Returns the JSON response which includes
-    'userListId' (int) and 'shortId' (str) — both needed for subsequent queries.
-
-    Enrichr requires multipart/form-data with 'list' and 'description' fields.
-    We build the multipart body manually since urllib has no native multipart
-    support and we don't want to pull in requests as a dependency.
-    """
-    import uuid
-    boundary = uuid.uuid4().hex
-
-    # Build multipart body by hand — two fields: 'list' and 'description'
-    parts = []
-    for field_name, field_value in [
-        ("list", "\n".join(gene_symbols)),
-        ("description", description),
-    ]:
-        parts.append(f"--{boundary}".encode())
-        parts.append(
-            f'Content-Disposition: form-data; name="{field_name}"'.encode()
-        )
-        parts.append(b"")  # blank line separates headers from value
-        parts.append(field_value.encode("utf-8"))
-    parts.append(f"--{boundary}--".encode())
-
-    payload = b"\r\n".join(parts)
-
-    req = urllib.request.Request(
-        f"{ENRICHR_BASE}/addList",
-        data=payload,
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-
-    if "userListId" not in body:
-        raise RuntimeError(f"Enrichr /addList failed: {body}")
-
-    return body
-
-
-def enrichr_enrich(user_list_id: int, library: str) -> list[list]:
-    """
-    Fetch enrichment results for a previously submitted gene list against a
-    single Enrichr library.
-
-    Returns a list of term rows.  Each row is a list:
-        [rank, term_name, p_value, z_score, combined_score,
-         overlapping_genes, adj_p_value, old_p_value, old_adj_p_value]
-    """
-    url = (
-        f"{ENRICHR_BASE}/enrich"
-        f"?userListId={user_list_id}"
-        f"&backgroundType={urllib.parse.quote(library)}"
-    )
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-
-    # Response shape: { "LibraryName": [ [row], [row], ... ] }
-    return body.get(library, [])
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +80,7 @@ def extract_genes(session_path: str) -> tuple[list[str], dict]:
 
 
 # ---------------------------------------------------------------------------
-# Assemble enrichment analysis data object
+# Run enrichment against multiple libraries
 # ---------------------------------------------------------------------------
 
 def run_enrichment(
@@ -165,72 +90,52 @@ def run_enrichment(
     top_n: int = TOP_N,
 ) -> dict:
     """
-    Run the full Enrichr workflow:
-      1. Submit gene list
-      2. Query each library
+    Run the full Enrichr workflow using enrichr_client.py:
+      1. Submit gene list via enrichr_submit()
+      2. Query each library via enrichr_fetch()
       3. Parse and rank results by combined score
 
-    Returns a structured data object with all results.
+    Returns a structured data object with all results, including the
+    Enrichr viewer URL for interactive exploration.
     """
     # Step 1: submit gene list
     print(f"  Submitting {len(gene_symbols)} genes to Enrichr...", file=sys.stderr)
-    add_resp = enrichr_add_list(gene_symbols, description)
-    user_list_id = add_resp["userListId"]
-    short_id = add_resp.get("shortId", "")
-    print(
-        f"  Got userListId={user_list_id}, shortId={short_id}",
-        file=sys.stderr,
-    )
+    user_list_id = enrichr_submit(gene_symbols, description)
+    print(f"  Got userListId={user_list_id}", file=sys.stderr)
 
     # Step 2: query each library
     library_results = {}
-    for lib in libraries:
+    for i, lib in enumerate(libraries):
+        if i > 0:
+            time.sleep(API_DELAY)
+
         print(f"  Querying library: {lib}...", file=sys.stderr)
         try:
-            raw_terms = enrichr_enrich(user_list_id, lib)
+            # enrichr_fetch returns parsed dicts, not raw arrays
+            terms = enrichr_fetch(user_list_id, lib)
         except Exception as e:
             print(f"    ERROR querying {lib}: {e}", file=sys.stderr)
             library_results[lib] = {"error": str(e), "terms": []}
             continue
 
-        # Parse each term row into a readable dict and sort by combined score
-        # descending (higher = more significant)
-        parsed = []
-        for row in raw_terms:
-            parsed.append({
-                "rank": row[0],
-                "term": row[1],
-                "p_value": row[2],
-                "z_score": row[3],
-                "combined_score": row[4],
-                "genes": row[5],            # list of overlapping gene symbols
-                "adj_p_value": row[6],
-                "old_p_value": row[7],
-                "old_adj_p_value": row[8],
-            })
-
         # Sort by combined score descending, take top N
-        parsed.sort(key=lambda t: t["combined_score"], reverse=True)
-        top = parsed[:top_n]
+        terms.sort(key=lambda t: t["combined_score"], reverse=True)
+        top = terms[:top_n]
 
         library_results[lib] = {
-            "total_terms": len(parsed),
+            "total_terms": len(terms),
             "top_n": len(top),
             "terms": top,
         }
         print(
-            f"    {len(parsed)} terms total, keeping top {len(top)}",
+            f"    {len(terms)} terms total, keeping top {len(top)}",
             file=sys.stderr,
         )
-
-        # Be polite to the public API — small delay between requests
-        time.sleep(0.3)
 
     # Step 3: assemble the final data object
     return {
         "enrichr_user_list_id": user_list_id,
-        "enrichr_short_id": short_id,
-        "enrichr_url": f"https://maayanlab.cloud/Enrichr/enrich?dataset={short_id}",
+        "enrichr_url": f"https://maayanlab.cloud/Enrichr/enrich?userListId={user_list_id}",
         "input_genes": gene_symbols,
         "n_input_genes": len(gene_symbols),
         "libraries_queried": libraries,

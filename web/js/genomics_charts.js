@@ -343,11 +343,16 @@ async function renderGenomicsCharts() {
     _renderUmapChart(geneSets, data);
     _renderClusterChart(geneSets, data, clusters);
 
-    // Fire off Enrichr enrichment for the cluster summary table.
-    // This runs asynchronously — the table initially shows internal GO
-    // terms (rendered by _renderClusterChart above), then gets replaced
-    // with Enrichr-sourced terms when the API call completes.
-    _fetchEnrichrClusterSummary(geneSets, clusters);
+    // Use cached Enrichr cluster summary if available (from process-integrated).
+    // This ensures the web UI table matches the PDF exactly and avoids
+    // redundant Enrichr API calls on every Charts tab switch.
+    // Falls back to the live endpoint only if no cache exists.
+    const cachedCharts = _findCachedChartImages(data.organ, data.sex);
+    if (cachedCharts && cachedCharts.cluster_summary) {
+        _renderCachedClusterSummary(cachedCharts.cluster_summary);
+    } else {
+        _fetchEnrichrClusterSummary(geneSets, clusters);
+    }
 }
 
 
@@ -944,4 +949,47 @@ async function _fetchEnrichrClusterSummary(geneSets, clusters) {
         // Remove loading indicator, keep the internal-terms table
         loadingDiv.remove();
     }
+}
+
+
+/**
+ * Find cached chart images for a given organ/sex from chartImagesCache
+ * (populated during process-integrated).
+ *
+ * @param {string} organ - e.g. "kidney"
+ * @param {string} sex   - e.g. "female"
+ * @returns {Object|null} The matching chart image dict, or null
+ */
+function _findCachedChartImages(organ, sex) {
+    if (!chartImagesCache || !Array.isArray(chartImagesCache)) return null;
+    return chartImagesCache.find(
+        c => c.organ === organ && c.sex === sex
+    ) || null;
+}
+
+
+/**
+ * Render a cluster summary table from cached data (no API call needed).
+ * Same HTML structure as the Enrichr fetch path for visual consistency.
+ *
+ * @param {Array} summary - cluster_summary from cached chart images
+ */
+function _renderCachedClusterSummary(summary) {
+    const summaryEl = document.getElementById('cluster-summary');
+    if (!summaryEl || !summary || summary.length === 0) return;
+
+    let html = '<table class="cluster-summary-table">' +
+        '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
+        '<tbody>';
+    for (const row of summary) {
+        const source = row.source === 'enrichr' ? '' : ' <em>(internal)</em>';
+        html += `<tr>` +
+            `<td>${row.cluster}</td>` +
+            `<td>${row.n_genes || 0}</td>` +
+            `<td>${row.terms.join('; ')}${source}</td>` +
+            `</tr>`;
+    }
+    html += '</tbody></table>';
+
+    summaryEl.innerHTML = html;
 }

@@ -1656,6 +1656,11 @@
         }
       )
     }
+
+    // Page break after each organ×sex chart group so the next
+    // UMAP/cluster pair starts on a fresh page — prevents the
+    // cluster summary table from crowding into the next group.
+    pagebreak()
   }
 }
 
