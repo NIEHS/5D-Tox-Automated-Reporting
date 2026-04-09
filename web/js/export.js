@@ -1171,6 +1171,8 @@ async function compilePreviewForNode(tocId, force = false) {
     // collapse tab.  We compile in the background so the PDF is ready
     // when they do open it.
     if (title) title.textContent = `Preview: ${tocId}`;
+    // Clear any previous error message immediately on navigation
+    if (status) status.textContent = '';
 
     // --- Completeness gate ---
     // Check whether this node has all required data sources before

@@ -200,7 +200,38 @@ function onIdentityResolved() {
     // Update export button state — it's now gated on all sections
     // being approved, not just on identity being resolved.
     updateExportButton();
+
+    // Update front matter sections that contain the test article name.
+    // The peer review boilerplate inserts the full title dynamically.
+    updateFrontMatterIdentity();
 }
+
+
+/**
+ * Update front matter HTML sections that reference the test article.
+ *
+ * The peer review section contains a .ta-insert span that shows the
+ * full report title.  This function fills it with the resolved chemical
+ * name + CASRN + strain, matching what the Typst template produces.
+ */
+function updateFrontMatterIdentity() {
+    if (!currentIdentity) return;
+
+    const name = currentIdentity.name || 'the test article';
+    const casrn = currentIdentity.casrn || '';
+    const strain = '(Hsd:Sprague Dawley\u00ae SD\u00ae)';
+
+    // Build the italicized full title for peer review insertion
+    let fullTitle = `In Vivo Repeat Dose Biological Potency Study of ${name}`;
+    if (casrn) fullTitle += ` (CASRN ${casrn})`;
+    fullTitle += ` in Sprague Dawley ${strain} Rats (Gavage Studies)`;
+
+    // Update all .ta-insert spans in front matter
+    for (const el of document.querySelectorAll('.ta-insert')) {
+        el.textContent = fullTitle;
+    }
+}
+
 
 /**
  * Restore a previously-saved session for the current chemical.

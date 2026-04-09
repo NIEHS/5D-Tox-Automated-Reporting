@@ -2269,6 +2269,52 @@ td.data-gap, th.data-gap {
     color: var(--c-primary);
     margin-bottom: 0.5rem;
 }
+.front-matter-section h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+.front-matter-section h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.25rem;
+}
+/* Read-only boilerplate content displayed for reference */
+.front-matter-content {
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--c-text);
+    max-width: 720px;
+}
+.front-matter-content p {
+    margin-bottom: 0.75rem;
+}
+/* Informational note for auto-generated sections */
+.front-matter-note {
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+    font-style: italic;
+    line-height: 1.5;
+}
+/* Editable textareas for study-specific front matter */
+.front-matter-textarea {
+    width: 100%;
+    max-width: 720px;
+    font-family: inherit;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    padding: 0.5rem;
+    border: 1px solid var(--c-border);
+    border-radius: 4px;
+    resize: vertical;
+}
+/* Test article name placeholder in boilerplate text */
+.ta-insert {
+    font-weight: 600;
+    color: var(--c-primary);
+}
 .placeholder-hint {
     font-size: 0.9rem;
     color: var(--c-text-muted);

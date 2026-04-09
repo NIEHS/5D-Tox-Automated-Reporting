@@ -465,30 +465,64 @@
              ================================================================ -->
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'cover'">
             <h1>Cover Page</h1>
+            <p class="front-matter-note">The cover page is auto-generated from chemical identity and report metadata. See the PDF preview for the full layout.</p>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'title-page'">
             <h1>Title Page</h1>
+            <p class="front-matter-note">The inner title page is auto-generated from chemical identity. See the PDF preview for the full layout.</p>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'foreword'">
             <h1>Foreword</h1>
+            <div class="front-matter-content" id="foreword-content">
+                <p>The National Institute of Environmental Health Sciences (NIEHS) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.</p>
+                <p>The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the Division of Translational Toxicology (DTT) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.</p>
+                <p>NIEHS reports are available free of charge on the NIEHS/DTT website and cataloged in PubMed, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).</p>
+            </div>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'tables-list'">
             <h1>Tables</h1>
+            <p class="front-matter-note">The table of contents and tables list are auto-generated from the report structure. See the PDF preview.</p>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'about'">
             <h1>About This Report</h1>
+            <h2>Authors</h2>
+            <textarea id="about-authors" class="front-matter-textarea" rows="6" placeholder="Author names with affiliations (e.g., Scott S. Auerbach¹, Jeff D. Ballin², ...)"></textarea>
+            <h2>Contributors</h2>
+            <textarea id="about-contributors" class="front-matter-textarea" rows="6" placeholder="Contributor names organized by institution and role"></textarea>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'peer-review'">
             <h1>Peer Review</h1>
+            <div class="front-matter-content" id="peer-review-content">
+                <p>This report was modeled after the <em>NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)</em> (<a href="https://doi.org/10.22427/NTP-RR-8">https://doi.org/10.22427/NTP-RR-8</a>), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the <em>NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of <span class="ta-insert">the test article</span></em> was not subjected to further external peer review.</p>
+            </div>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'publication'">
             <h1>Publication Details</h1>
+            <div class="front-matter-content" id="publication-content">
+                <p>Publisher: National Institute of Environmental Health Sciences</p>
+                <p>Publishing Location: Research Triangle Park, NC</p>
+                <p>ISSN: 2768-5632</p>
+                <p>Report Series: NIEHS Report Series</p>
+            </div>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'acknowledgments'">
             <h1>Acknowledgments</h1>
+            <div class="front-matter-content" id="acknowledgments-content">
+                <p>This work was supported by the Intramural Research Program at the National Institute of Environmental Health Sciences (NIEHS), National Institutes of Health and performed for NIEHS under contract.</p>
+            </div>
         </div>
         <div class="front-matter-section" x-data x-show="$store.app.activeSection === 'abstract'">
             <h1>Abstract</h1>
+            <div class="abstract-sections">
+                <h3>Background</h3>
+                <textarea id="abstract-background" class="front-matter-textarea" rows="4" placeholder="Background context for the study..."></textarea>
+                <h3>Methods</h3>
+                <textarea id="abstract-methods" class="front-matter-textarea" rows="4" placeholder="Methods used in the study..."></textarea>
+                <h3>Results</h3>
+                <textarea id="abstract-results" class="front-matter-textarea" rows="4" placeholder="Key results and findings..."></textarea>
+                <h3>Summary</h3>
+                <textarea id="abstract-summary" class="front-matter-textarea" rows="4" placeholder="Summary and conclusions..."></textarea>
+            </div>
         </div>
 
         <!-- Chemical ID Form -->

@@ -96,7 +96,10 @@ def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> byte
     # Each organ×sex combo produces one UMAP + one cluster scatter
     # pair, written as indexed files (chart_umap_0.png, etc.).
     temp_files = []
-    if chart_images:
+    # Skip chart image injection for front-matter previews — the body
+    # content (including the genomics H2 parent heading) has been stripped,
+    # so chart H3 headings would cause a PDF/UA-1 heading level skip.
+    if chart_images and data.get("preview_mode") is None:
         template_dir = Path(_TEMPLATE_PATH).parent
         charts_list = []
 
@@ -958,9 +961,6 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     """
     from document_tree import find_node, collect_data_keys, collect_platforms
 
-    # --- Signal the Typst template to skip structural pages ---
-    data["section_only"] = True
-
     # All data keys that can be independently removed
     ALL_BODY = {
         "background", "methods", "apical_sections", "unified_narratives",
@@ -978,13 +978,49 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
 
     if node is None:
         # Unknown node ID — strip everything as a safe fallback
+        data["section_only"] = True
         return
 
-    # Front-matter nodes: keep front matter, remove all body
+    # --- Signal the Typst template which preview mode to use ---
+    # Front-matter nodes strip all body content and set preview_mode so
+    # the Typst template renders only the appropriate structural pages.
+    #
+    # Three sub-modes:
+    #   "cover"        — render only the cover page (full-bleed green)
+    #   "title-page"   — render only the inner title page (centered text)
+    #   "front-matter" — render inner title + one front matter section
+    #
+    # For individual front-matter sections (foreword, peer-review, etc.),
+    # we strip all OTHER front matter keys so only the selected section
+    # renders — otherwise every front matter page shows up.
     if node.node_type in ("front-matter", "tables-list", "cover", "title-page"):
         for key in ALL_BODY:
             data.pop(key, None)
+
+        if node.node_type == "cover":
+            data["preview_mode"] = "cover"
+        elif node.node_type == "title-page":
+            data["preview_mode"] = "title-page"
+        elif node.node_type == "tables-list":
+            # TOC/tables-list preview: strip all front matter content
+            # sections but keep body data so the TOC outline has entries.
+            data["preview_mode"] = "tables-list"
+            for key in ALL_FRONT:
+                data.pop(key, None)
+            # Restore body keys so outline() can enumerate headings
+            # (they were already stripped above — re-marshal from scaffold)
+        else:
+            data["preview_mode"] = "front-matter"
+            # Keep only the selected front-matter section's data key.
+            keep_key = getattr(node, "data_key", None)
+            if keep_key:
+                for key in ALL_FRONT:
+                    if key != keep_key:
+                        data.pop(key, None)
         return
+
+    # Body content: skip front matter and structural pages
+    data["section_only"] = True
 
     # Body content: remove front matter, keep only data keys referenced
     # by this node's subtree

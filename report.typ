@@ -114,19 +114,15 @@
   // by checking the absolute page counter.  Front matter and body pages
   // all show the running header.
   header: context {
-    // Suppress header on the first two physical pages (cover + inner title).
-    // counter(page) tracks the logical page number, but the cover page uses
-    // page() which creates its own scope.  We use the physical page counter
-    // (here.page()) which counts from 1 regardless of counter resets.
-    // Page 1 = cover (has its own header: none), page 2 = inner title.
-    if here().page() > 2 {
+    // Suppress header on pages that precede the first content page.
+    let pm = data.at("preview_mode", default: none)
+    // Cover/title-page previews have no running header
+    if pm == "cover" or pm == "title-page" { return }
+    // Front-matter preview: no cover → title is page 1, content starts page 2
+    // Full report: cover + title occupy pages 1-2, content starts page 3
+    let min-page = if pm == "front-matter" { 2 } else { 3 }
+    if here().page() >= min-page {
       set text(size: 12pt, font: "Liberation Serif")
-      // Constrain header text to ~270pt wide box, centered on page.
-      // The NIEHS PDF header wraps at ~261pt text width (line 1: 242.6pt,
-      // line 2: 260.9pt), so a 270pt box reproduces the same line breaks.
-      //
-      // Uses data.running_header (which is built from ta.forms.running_header
-      // — the full name, never abbreviated).
       align(center, box(width: 270pt, align(center, data.at("running_header", default: ""))))
     }
   },
@@ -137,9 +133,11 @@
   // body pages use arabic numerals (1, 2, 3, ...).
   // The first page (title) has no footer.
   footer: context {
-    // Suppress footer on cover (page 1) and inner title (page 2).
-    // Same physical page check as the header.
-    if here().page() > 2 {
+    // Same suppression logic as header
+    let pm = data.at("preview_mode", default: none)
+    if pm == "cover" or pm == "title-page" { return }
+    let min-page = if pm == "front-matter" { 2 } else { 3 }
+    if here().page() >= min-page {
       set text(size: 12pt, font: "Liberation Serif")
       align(center, counter(page).display())
     }
@@ -411,32 +409,36 @@
 #let report-date = data.at("report_date", default: "")
 #let report-series = data.at("report_series", default: "NIEHS Report Series")
 
-// --- Section-only mode ---
-// When section_only is true (set by _apply_section_filter in report_pdf.py),
-// the template skips the cover page, inner title page, and all front matter
-// (foreword, TOC, tables list, about, peer review, publication details,
-// acknowledgments, abstract).  The result is a body-content-only PDF
-// suitable for embedding in a per-tab PDF preview iframe.
-#let section-only = data.at("section_only", default: false)
-
-// In section-only mode, suppress headers and footers entirely.
-// The global #set page() above defines them with page-number checks,
-// but for previews we want clean content with no chrome.
-// Uses content block [ ] so the set rule applies to all subsequent content.
+// --- Preview modes ---
+// _apply_section_filter() in report_pdf.py sets preview_mode to control
+// which structural blocks render:
 //
-// Also emit a hidden level-1 heading to satisfy PDF/UA-1's requirement
-// that the first heading in the document be level 1.  Full reports get
-// this from the cover/title pages, but section previews skip those.
-// In section-only mode, emit hidden headings at levels 1 and 2 to satisfy
-// PDF/UA-1's requirement that heading levels don't skip.  Full reports get
-// these from the cover page and "Results" heading, but section previews
-// skip those structural pages.
+//   section_only = true         — body-section preview: skip cover, title,
+//                                  and all front matter; no header/footer.
+//
+//   preview_mode = "cover"      — render only the cover page.
+//   preview_mode = "title-page" — render only the inner title page.
+//   preview_mode = "front-matter" — render inner title + the selected
+//                                    front matter section (server strips
+//                                    all other front matter and body keys).
+//
+// When neither is set, the full report renders.
+#let section-only = data.at("section_only", default: false)
+#let preview-mode = data.at("preview_mode", default: none)
+#let is-cover-preview = preview-mode == "cover"
+#let is-title-preview = preview-mode == "title-page"
+#let is-fm-preview = preview-mode == "front-matter"
+// Any front-matter-related preview (cover, title, TOC, or individual section)
+#let any-fm-preview = is-cover-preview or is-title-preview or is-fm-preview or preview-mode == "tables-list"
+
+// In body-section-only mode, suppress headers/footers and emit hidden
+// headings to satisfy PDF/UA-1's requirement that the first heading
+// in the document be level 1 and levels don't skip.
 #if section-only [
   #set page(header: none, footer: none)
   #heading(level: 1)[Section Preview]
   #heading(level: 2)[\ ]
 ]
-
 
 // =====================================================================
 // FRONT MATTER — roman numeral pages
@@ -477,9 +479,18 @@
 
 // Use page() function to create a single custom page without affecting
 // subsequent pages' settings.  The zero margins give a full-bleed effect.
-// Skipped in section-only mode (per-tab PDF preview).
-#if not section-only [
+// Render cover page for: full report and cover-only preview.
+// Skip for: body-section preview, title-page preview, front-matter preview.
+#if not section-only and (is-cover-preview or not any-fm-preview) [
 #page(margin: 0pt, header: none, footer: none)[
+
+  // Hidden H1 for PDF/UA-1 compliance in cover-only preview.
+  // The cover page has no structural headings, but PDF/UA-1 requires
+  // at least one.  Placed inside the cover page so it doesn't create
+  // a blank page before it.
+  #if is-cover-preview {
+    place(top + left, block(height: 0pt, clip: true, heading(level: 1, "Report Preview")))
+  }
 
   // --- White header band ---
   // Contains the institution name (no NIH logo — we use text only).
@@ -560,7 +571,7 @@
     #data.at("report_date", default: "")
   ])
 ]
-] // end: if not section-only (cover page)
+] // end: cover page guard
 
 
 // =====================================================================
@@ -578,14 +589,19 @@
 // The global header checks counter(page) > 1 to suppress on page 1.
 // Since the cover added a page, we reset the counter so the inner
 // title page is page 1 again (matching the original header suppression).
-// In section-only mode, the inner title page, front matter pages,
-// and roman numeral pagination are all skipped — we jump straight
-// to body content.
-#if not section-only {
+// Reset page counter after cover page (it added a physical page).
+// Only needed when cover was actually rendered (full report or cover preview).
+#if not section-only and not any-fm-preview {
   counter(page).update(1)
 }
 
-#if not section-only [
+// Inner title page renders for: full report and title-page preview only.
+// Skipped for: all other previews (body-section, cover, front-matter, tables-list).
+#if (not section-only and not any-fm-preview) or is-title-preview [
+// Hidden H1 for PDF/UA-1 compliance in title-page-only preview.
+#if is-title-preview {
+  block(height: 0pt, clip: true, heading(level: 1, "Report Preview"))
+}
 #align(center)[
   #block(below: 18pt, above: 72pt)[
     #set text(font: "Liberation Sans", size: 20pt, weight: "bold")
@@ -645,22 +661,30 @@
 // =====================================================================
 
 // Start roman numbering at ii (title page was conceptually "i")
-// Skipped in section-only mode — body content uses arabic numbering.
-#if not section-only [
-#set page(
-  footer: context {
-    set text(size: 12pt, font: "Liberation Serif")
-    align(center, counter(page).display("i"))
-  },
-)
-#counter(page).update(2)
+// Render front matter for: full report and front-matter section preview.
+// Skip for: body-section preview, cover-only preview, title-page-only preview.
+#let render-fm = not section-only and not is-cover-preview and not is-title-preview
+#if render-fm [
+
+// In full-report mode, set up roman numeral footer and start at "ii".
+// In front-matter preview, skip this — the #set page() inside a content
+// block triggers a page break which creates an unwanted blank first page.
+#if not is-fm-preview and preview-mode != "tables-list" [
+  #set page(
+    footer: context {
+      set text(size: 12pt, font: "Liberation Serif")
+      align(center, counter(page).display("i"))
+    },
+  )
+  #counter(page).update(2)
+]
 
 
 // --- Foreword ---
 // NIEHS page 3 (ii): boilerplate about the NIEHS mission and report series.
 // Provided as data.foreword (paragraphs array) or omitted.
 #if data.at("foreword", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   heading(level: 1, "Foreword")
   for para in data.foreword.at("paragraphs", default: ()) {
     [#para]
@@ -671,31 +695,31 @@
 
 // --- Table of Contents ---
 // NIEHS pages 4-5 (iii-iv): auto-generated from heading hierarchy.
-// The outline() function generates a linked TOC from all headings.
-#pagebreak()
-#heading(level: 1, outlined: false, "Table of Contents")
-#outline(
-  title: none,    // We already placed the heading above
-  indent: 1.5em,  // Indent sub-sections
-  depth: 3,       // Show H1, H2, H3
-)
+// Skipped in front-matter section preview (only meaningful for full report
+// or tables-list preview where body headings exist).
+// TOC and tables list: render for full report and tables-list preview.
+// Skipped for individual front-matter section previews.
+#let is-toc-preview = preview-mode == "tables-list"
+#if not is-fm-preview {
+  pagebreak(weak: true)
+  heading(level: 1, outlined: false, "Table of Contents")
+  outline(
+    title: none,    // We already placed the heading above
+    indent: 1.5em,  // Indent sub-sections
+    depth: 3,       // Show H1, H2, H3
+  )
 
-// --- Tables list ---
-// NIEHS page 5 (iv): list of all tables by number.
-// We use Typst's built-in figure outline for tables.
-// Tables are wrapped in figure() calls with kind: "table" for this to work.
-// For now, we emit a "Tables" heading; the list will populate automatically
-// if/when tables are converted to figure() wrappers in a future iteration.
-#v(24pt)
-#heading(level: 1, outlined: false, "Tables")
-#context {
-  // Show outline of table figures if any exist
-  let table-figs = query(figure.where(kind: table))
-  if table-figs.len() > 0 {
-    outline(title: none, target: figure.where(kind: table))
-  } else {
-    // Placeholder — table numbering is currently inline in captions
-    text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+  // --- Tables list ---
+  // NIEHS page 5 (iv): list of all tables by number.
+  v(24pt)
+  heading(level: 1, outlined: false, "Tables")
+  context {
+    let table-figs = query(figure.where(kind: table))
+    if table-figs.len() > 0 {
+      outline(title: none, target: figure.where(kind: table))
+    } else {
+      text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+    }
   }
 }
 
@@ -705,7 +729,7 @@
 // contributor roles organized by institution.  Data arrives as
 // data.about_report with "authors" and "contributors" arrays.
 #if data.at("about_report", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   let about = data.about_report
   heading(level: 1, "About This Report")
 
@@ -734,7 +758,7 @@
 // --- Peer Review ---
 // NIEHS page 9 (viii): brief statement about the peer review process.
 #if data.at("peer_review", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   heading(level: 1, "Peer Review")
   for para in data.peer_review.at("paragraphs", default: ()) {
     [#para]
@@ -746,7 +770,7 @@
 // --- Publication Details ---
 // NIEHS page 10 (ix): publisher, ISSN, DOI, official citation.
 #if data.at("publication_details", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   let pub = data.publication_details
   heading(level: 1, "Publication Details")
   for para in pub.at("paragraphs", default: ()) {
@@ -774,7 +798,7 @@
 // paragraph.  The Abstract is the last front-matter section before the
 // page counter resets to arabic.
 #if data.at("abstract", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   heading(level: 1, "Abstract")
 
   let abs = data.abstract
@@ -807,8 +831,9 @@
 // =====================================================================
 
 // Reset to arabic numbering starting at page 1.
-// In section-only mode, skip entirely — no page numbering setup needed.
-#if not section-only [
+// Skipped in all preview modes (body preview has no pagination,
+// front-matter/cover/title previews don't have body content).
+#if not section-only and not any-fm-preview [
   #set page(
     footer: context {
       set text(size: 12pt, font: "Liberation Serif")
