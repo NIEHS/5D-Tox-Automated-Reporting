@@ -669,7 +669,7 @@ def render_chart_images(
     # Determine chart height based on number of gene-overlap clusters
     unique_gene_clusters = set(p["gene_cluster"] for p in all_points)
     n_gene_clusters = len(unique_gene_clusters) if all_points else 1
-    chart_height = max(250, n_gene_clusters * 40 + 100)
+    chart_height = max(180, n_gene_clusters * 29 + 72)
 
     # Build custom y-axis tick labels showing the original cluster ID
     # at each ranked position.  Outlier (-1) is labeled "Outlier".

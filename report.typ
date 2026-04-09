@@ -1616,7 +1616,7 @@
     if umap-path != none {
       heading(level: 3, "GO Term Semantic Map (UMAP) — " + label)
       figure(
-        image(umap-path, width: 90%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster — " + label),
+        image(umap-path, width: 51%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster — " + label),
         caption: text(size: 9pt, style: "italic", entry.at("umap_caption", default: "")),
       )
     }
@@ -1629,6 +1629,10 @@
         caption: text(size: 9pt, style: "italic", entry.at("cluster_caption", default: "")),
       )
     }
+
+    // Page break after cluster scatter so the summary table and next
+    // organ×sex group start on a fresh page.
+    pagebreak()
 
     // Cluster biology summary table — maps each gene-overlap cluster
     // to its top enriched terms from Enrichr (or internal GO terms as
@@ -1657,9 +1661,8 @@
       )
     }
 
-    // Page break after each organ×sex chart group so the next
-    // UMAP/cluster pair starts on a fresh page — prevents the
-    // cluster summary table from crowding into the next group.
+    // Page break after the summary table so each organ×sex group
+    // is fully separated from the next.
     pagebreak()
   }
 }
