@@ -423,6 +423,14 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     from document_tree import serialize_tree, find_node, is_leaf_table
     data["document_tree"] = serialize_tree()
 
+    # Build manual TOC entries from the document tree BEFORE the section
+    # filter strips content.  This lets the tables-list preview render a
+    # complete Table of Contents with ready/placeholder styling, even
+    # though the body headings are stripped from the compiled document.
+    toc_entries, table_entries = _build_toc_entries(data)
+    data["toc_entries"] = toc_entries
+    data["table_entries"] = table_entries
+
     # Apply section filter for PDF previews.
     # Uses the document tree to determine which data keys and platforms
     # belong to the requested TOC node — no hardcoded maps.
@@ -939,6 +947,201 @@ def _ensure_paragraphs(obj) -> dict:
     if isinstance(obj, str):
         return {"paragraphs": [obj]}
     return {"paragraphs": []}
+
+
+# ---------------------------------------------------------------------------
+# TOC entries builder — walks the document tree to build a manual Table of
+# Contents for the tables-list preview mode.  The preview strips all body
+# content so Typst's outline() has no headings to collect.  Instead, we
+# pre-compute the TOC entries here and pass them as data, so the template
+# can render a manual TOC with placeholder styling for incomplete sections.
+# ---------------------------------------------------------------------------
+
+def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
+    """
+    Walk the document tree and build two arrays for the Typst template:
+
+      toc_entries:   [{title, level, ready, id}, ...]
+                     Every heading (level 1-3) in the document tree.
+                     "ready" is True when the section has real content
+                     (not just the scaffold placeholder).
+
+      table_entries: [{title, table_number, ready}, ...]
+                     Every numbered table in the Results section.
+                     "ready" is True when the table's platform has data
+                     in apical_sections or elsewhere.
+
+    "Ready" determination:
+      - Front matter sections (foreword, about, peer review, etc.) are
+        always ready because the scaffold provides boilerplate.
+      - Body sections check whether the corresponding data_key in the
+        report data dict has been overlaid with real content.  The
+        scaffold sets empty stubs ({paragraphs: []} or empty arrays),
+        so we check for non-empty content.
+      - Apical table nodes check whether any apical_section entry
+        matches the node's platform AND has non-empty table_data.
+      - Genomics nodes check genomics_sections for matching entries.
+
+    Args:
+        data: The full report data dict (after overlay, before filter).
+
+    Returns:
+        (toc_entries, table_entries) — both are lists of dicts.
+    """
+    from document_tree import DOCUMENT_TREE, compute_table_numbers
+
+    # Ensure table numbers are computed before we walk
+    compute_table_numbers()
+
+    toc_entries = []
+    table_entries = []
+
+    # --- Readiness checks for each data_key ---
+    # Front matter keys are always "ready" (scaffold provides boilerplate).
+    _FRONT_KEYS = {
+        "foreword", "about_report", "peer_review",
+        "publication_details", "acknowledgments", "abstract",
+        "table_of_contents",
+    }
+
+    def _is_ready(node) -> bool:
+        """
+        Check whether a node's content is real (not scaffold placeholder).
+
+        Front matter is always ready (boilerplate).  Body sections check
+        for non-empty content under their data_key.  Table nodes check
+        for platform-matching apical_sections with table_data.  Genomics
+        nodes check genomics_sections for matching organ/type entries.
+        """
+        dk = getattr(node, "data_key", None)
+
+        # Front matter — always ready (boilerplate content)
+        if dk in _FRONT_KEYS:
+            return True
+
+        # Table nodes — check apical_sections for matching platform data
+        if node.node_type == "table" or node.node_type == "incidence-table":
+            platform = getattr(node, "platform", None)
+            if platform:
+                for sec in data.get("apical_sections", []):
+                    if sec.get("platform") == platform and sec.get("table_data"):
+                        return True
+            return False
+
+        # BMD summary — check for non-placeholder endpoints
+        if node.node_type == "bmd-summary":
+            bmd = data.get("bmd_summary", {})
+            endpoints = bmd.get("endpoints", [])
+            # Scaffold has one placeholder row with endpoint "—"
+            if len(endpoints) > 1:
+                return True
+            if len(endpoints) == 1 and endpoints[0].get("endpoint") != "—":
+                return True
+            return False
+
+        # Genomics sections — check for gene_set/gene entries with data
+        if node.node_type == "genomics-section":
+            gs = data.get("genomics_sections", [])
+            nk = getattr(node, "narrative_key", None)
+            if nk == "gene_set_narrative":
+                return any(s.get("type") == "gene_set" and s.get("gene_sets") for s in gs)
+            elif nk == "gene_narrative":
+                return any(s.get("type") == "gene" and s.get("top_genes") for s in gs)
+            return bool(gs)
+
+        # Genomics charts — check for cached chart images
+        if node.node_type == "genomics-charts":
+            return bool(data.get("genomics_charts"))
+
+        # Narrative / heading-only nodes — check data_key for content
+        if dk:
+            val = data.get(dk)
+            if val is None:
+                return False
+            if isinstance(val, dict):
+                # Check for non-empty paragraphs or sections
+                paras = val.get("paragraphs", [])
+                secs = val.get("sections", [])
+                return bool(paras) or bool(secs)
+            if isinstance(val, list):
+                return bool(val)
+            return bool(val)
+
+        # Heading-only nodes with children — ready if any child is ready
+        if node.children:
+            return any(_is_ready(c) for c in node.children)
+
+        return False
+
+    # Narrative+tables nodes (animal condition, clinical path) — ready if
+    # they have a unified narrative OR any child table has data
+    def _is_narrative_tables_ready(node) -> bool:
+        """
+        Check readiness for narrative+tables nodes (e.g., Animal Condition,
+        Clinical Pathology).  Ready if unified narrative exists OR any
+        child table node has platform data in apical_sections.
+        """
+        nk = getattr(node, "narrative_key", None)
+        if nk:
+            un = data.get("unified_narratives", {})
+            if un.get(nk):
+                return True
+        # Check child tables
+        return any(_is_ready(c) for c in node.children)
+
+    def _walk(nodes: list, skip_level_0: bool = False):
+        """
+        Recursively walk tree nodes, emitting toc_entries for headings
+        (level >= 1) and table_entries for table nodes with numbers.
+        """
+        for node in nodes:
+            # Skip structural pages (cover, title) — they're not TOC entries
+            if node.node_type in ("cover", "title-page"):
+                continue
+
+            # Tables list node — skip (it IS the TOC, not an entry in it)
+            if node.node_type == "tables-list":
+                continue
+
+            # Appendix nodes — always show as placeholders in the TOC
+            if node.node_type == "appendix":
+                toc_entries.append({
+                    "title": node.title,
+                    "level": node.level,
+                    "ready": False,
+                    "id": node.id,
+                })
+                continue
+
+            # Heading entries (level >= 1) go into the TOC
+            if node.level >= 1:
+                if node.node_type == "narrative+tables":
+                    ready = _is_narrative_tables_ready(node)
+                else:
+                    ready = _is_ready(node)
+                toc_entries.append({
+                    "title": node.title,
+                    "level": node.level,
+                    "ready": ready,
+                    "id": node.id,
+                })
+
+            # Table entries (numbered tables) go into the Tables list
+            if node.table_number is not None:
+                ready = _is_ready(node)
+                table_entries.append({
+                    "title": node.title,
+                    "table_number": node.table_number,
+                    "ready": ready,
+                })
+
+            # Recurse into children
+            if node.children:
+                _walk(node.children)
+
+    _walk(DOCUMENT_TREE)
+
+    return toc_entries, table_entries
 
 
 def _apply_section_filter(data: dict, section_filter: str) -> None:

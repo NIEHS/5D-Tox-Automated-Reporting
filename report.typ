@@ -703,22 +703,76 @@
 #if not is-fm-preview {
   pagebreak(weak: true)
   heading(level: 1, outlined: false, "Table of Contents")
-  outline(
-    title: none,    // We already placed the heading above
-    indent: 1.5em,  // Indent sub-sections
-    depth: 3,       // Show H1, H2, H3
-  )
+
+  // Two rendering paths:
+  //
+  //   1. Full report: use Typst's outline() — it collects all real headings
+  //      in the compiled document and renders them with accurate page numbers.
+  //
+  //   2. Tables-list preview: body content is stripped, so outline() has
+  //      nothing to collect.  Instead, render a manual TOC from toc_entries
+  //      (pre-computed from the document tree in report_pdf.py).  Sections
+  //      with real content render normally; incomplete sections render in
+  //      gray italic as placeholders.
+  if is-toc-preview {
+    // --- Manual TOC from pre-computed entries ---
+    // Each entry has: title (string), level (int 1-3), ready (bool), id (string).
+    let toc = data.at("toc_entries", default: ())
+    for entry in toc {
+      // Indent: 0 for H1, 1.5em per sub-level
+      let indent-amount = (entry.level - 1) * 1.5em
+      let is-ready = entry.at("ready", default: false)
+
+      block(spacing: 0.55em, {
+        h(indent-amount)
+        if is-ready {
+          text(entry.title)
+        } else {
+          text(fill: luma(140), style: "italic", entry.title)
+        }
+      })
+    }
+  } else {
+    // --- Full report: auto-generated outline ---
+    outline(
+      title: none,
+      indent: 1.5em,
+      depth: 3,
+    )
+  }
 
   // --- Tables list ---
-  // NIEHS page 5 (iv): list of all tables by number.
   v(24pt)
   heading(level: 1, outlined: false, "Tables")
-  context {
-    let table-figs = query(figure.where(kind: table))
-    if table-figs.len() > 0 {
-      outline(title: none, target: figure.where(kind: table))
+
+  if is-toc-preview {
+    // --- Manual tables list from pre-computed entries ---
+    let tables = data.at("table_entries", default: ())
+    if tables.len() > 0 {
+      for entry in tables {
+        let is-ready = entry.at("ready", default: false)
+        block(spacing: 0.55em, {
+          if is-ready {
+            text("Table " + str(entry.table_number) + ". " + entry.title)
+          } else {
+            text(fill: luma(140), style: "italic",
+              "Table " + str(entry.table_number) + ". " + entry.title)
+          }
+        })
+      }
     } else {
-      text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+      text(style: "italic", size: 10pt,
+        "(No tables defined yet.)")
+    }
+  } else {
+    // --- Full report: auto-generated tables outline ---
+    context {
+      let table-figs = query(figure.where(kind: table))
+      if table-figs.len() > 0 {
+        outline(title: none, target: figure.where(kind: table))
+      } else {
+        text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+      }
     }
   }
 }
