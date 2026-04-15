@@ -437,8 +437,10 @@ async function restoreSession(data) {
         lockSection(document.getElementById('methods-section'));
         hide('btn-generate-methods');
         setButtons('methods', 'approved');
-    } else if (backgroundApproved) {
-        // Show methods section even if not yet generated
+    } else if (backgroundApproved || Object.keys(apicalSections).length > 0) {
+        // Show methods section even if not yet generated — unlocked by
+        // background approval OR by processing pipeline having run
+        // (which means data exists for the LLM to use).
         showMethodsSection();
     }
 

@@ -45,7 +45,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from session_store import session_dir as _session_dir_imported
-from llm_helpers import llm_generate_json as _llm_generate_json_imported
+from llm_helpers import (
+    llm_generate_json as _llm_generate_json_imported,
+    llm_generate_json_async as _llm_generate_json_async,
+)
 
 from bmdx_pipe import (
     FileFingerprint,
@@ -1568,6 +1571,24 @@ def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+def _hash_methods(dtxsid: str, fingerprints: dict) -> str:
+    """
+    Hash inputs for the Materials and Methods section.
+
+    Depends on the DTXSID (chemical identity) and fingerprint keys
+    (which files are in the pool determines which M&M subsections
+    appear — e.g., Transcriptomics only if gene expression exists).
+    Content of fingerprints matters too (dose groups, endpoints, etc.
+    feed into the LLM prompt), so we hash the full fingerprint dict.
+    """
+    fp_key = json.dumps(
+        {k: str(v) for k, v in sorted(fingerprints.items())},
+        sort_keys=True,
+    )
+    key = f"methods:{dtxsid}:{fp_key}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
 # ---------------------------------------------------------------------------
 # TableRow serialization for NTP cache
 # ---------------------------------------------------------------------------
@@ -2669,13 +2690,143 @@ async def api_process_integrated(dtxsid: str, request: Request):
             _save_cache(dtxsid, "genomics", genomics_hash, result)
             return result
 
-        # Launch all three concurrently — cached units return instantly,
+        # --- Materials and Methods (LLM-generated, cached) ---
+        # Uses fingerprints + .bm2 metadata + animal report to extract
+        # study context, then calls the LLM to produce structured prose
+        # for each M&M subsection.  Runs in parallel with the other
+        # Layer 2 tasks since it has no dependency on NTP stats output.
+
+        # Collect fingerprints as plain dicts for the methods context extractor
+        _fps_for_methods = {}
+        session_fps = _pool_fingerprints.get(dtxsid, {})
+        for fid, fp in session_fps.items():
+            if hasattr(fp, "__dataclass_fields__"):
+                _fps_for_methods[fid] = {
+                    k: getattr(fp, k) for k in fp.__dataclass_fields__
+                }
+            else:
+                _fps_for_methods[fid] = fp
+
+        methods_hash = _hash_methods(dtxsid, _fps_for_methods)
+        methods_cached = _load_cache(dtxsid, "methods", methods_hash)
+
+        async def _get_methods():
+            """
+            Generate Materials and Methods via LLM, or return cached.
+
+            Extracts study metadata from fingerprints, animal report, and
+            .bm2 caches (dose groups, sample sizes, BMDExpress parameters),
+            then calls the LLM to produce structured prose for each NIEHS
+            M&M subsection.  The result is cached so subsequent calls
+            (page reloads, PDF exports) return instantly.
+            """
+            if methods_cached:
+                return methods_cached
+
+            from methods_report import (
+                MethodsReport,
+                MethodsSection,
+                build_methods_prompt,
+                build_subsection_skeleton,
+                build_table1_data,
+                extract_methods_context,
+            )
+            from bmdx_pipe import bm2_cache as _bm2_cache
+
+            # Load identity from session (chemical name, casrn, dtxsid)
+            identity = {"dtxsid": dtxsid}
+            identity_path = _session_dir(dtxsid) / "identity.json"
+            if identity_path.exists():
+                try:
+                    identity = json.loads(identity_path.read_text())
+                except Exception:
+                    pass
+
+            # Collect .bm2 JSON caches for BMDExpress metadata extraction
+            bm2_jsons = {}
+            session_files_dir = _session_dir(dtxsid) / "files"
+            if session_files_dir.exists():
+                for bm2_path in session_files_dir.glob("*.bm2"):
+                    try:
+                        cached = _bm2_cache.get_json(str(bm2_path))
+                        if cached:
+                            bm2_jsons[bm2_path.stem] = cached
+                    except Exception:
+                        pass
+
+            # Load animal report from session
+            animal_report_data = None
+            ar_path = _session_dir(dtxsid) / "animal_report.json"
+            if ar_path.exists():
+                try:
+                    animal_report_data = json.loads(ar_path.read_text())
+                except Exception:
+                    pass
+
+            # Default study params — the NIEHS 5-day gavage protocol
+            study_params = {
+                "vehicle": "corn oil",
+                "route": "gavage",
+                "duration_days": 5,
+                "species": "Sprague Dawley",
+            }
+
+            # Extract structured context from all data sources
+            ctx = extract_methods_context(
+                identity=identity,
+                fingerprints=_fps_for_methods,
+                animal_report=animal_report_data,
+                study_params=study_params,
+                bm2_jsons=bm2_jsons,
+            )
+
+            # Build and call the LLM
+            system, prompt = build_methods_prompt(ctx)
+            try:
+                subsection_texts = await _llm_generate_json_async(
+                    "methods-generator", prompt, system,
+                )
+            except Exception as e:
+                logger.warning("Methods LLM generation failed: %s", e)
+                return None
+
+            # Assemble into structured sections
+            skeleton = build_subsection_skeleton(ctx)
+            sections = []
+            for key, heading, level in skeleton:
+                text = subsection_texts.get(key, "")
+                if not text:
+                    continue
+                paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+                sections.append(MethodsSection(
+                    heading=heading,
+                    level=level,
+                    key=key,
+                    paragraphs=paragraphs,
+                ))
+
+            table1 = build_table1_data(ctx)
+            report = MethodsReport(sections=sections, context=ctx)
+            report_dict = report.to_dict()
+
+            if table1:
+                report_dict["table1"] = table1
+
+            report_dict["section_key"] = "methods"
+            report_dict["model_used"] = "claude-sonnet-4-6"
+
+            _save_cache(dtxsid, "methods", methods_hash, report_dict)
+            return report_dict
+
+        # Launch all four concurrently — cached units return instantly,
         # uncached units run in parallel (BMDS in thread pool, genomics
-        # in thread pool via _extract_genomics, sections in thread pool).
+        # in thread pool via _extract_genomics, sections in thread pool,
+        # methods via async LLM call).
         # _get_sections returns a 2-tuple: (sections, unified_narratives).
-        sections_result, bmds_results, genomics_sections = await asyncio.gather(
-            _get_sections(), _get_bmds(), _get_genomics(),
-        )
+        sections_result, bmds_results, genomics_sections, methods_result = \
+            await asyncio.gather(
+                _get_sections(), _get_bmds(), _get_genomics(), _get_methods(),
+            )
         sections, unified_narratives = sections_result
 
         # ══════════════════════════════════════════════════════════════
@@ -2773,6 +2924,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
+            # Materials and Methods — LLM-generated structured sections.
+            # Included so the frontend can auto-populate the M&M section
+            # without requiring a separate generate button click.
+            "methods": methods_result,
         }
 
         return JSONResponse(result_payload)

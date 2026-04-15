@@ -96,10 +96,24 @@ def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> byte
     # Each organ×sex combo produces one UMAP + one cluster scatter
     # pair, written as indexed files (chart_umap_0.png, etc.).
     temp_files = []
-    # Skip chart image injection for front-matter previews — the body
-    # content (including the genomics H2 parent heading) has been stripped,
-    # so chart H3 headings would cause a PDF/UA-1 heading level skip.
-    if chart_images and data.get("preview_mode") is None:
+    # Chart image injection guard.  Two cases where we skip:
+    #
+    #   1. Front-matter previews — the genomics H2 parent has been stripped,
+    #      so chart H3 headings would cause a PDF/UA-1 heading level skip.
+    #
+    #   2. Body-section previews that DON'T belong to the charts subtree —
+    #      _apply_section_filter strips genomics_charts from the data dict,
+    #      but without this guard we'd re-inject them here, leaking charts
+    #      into unrelated section previews (Background, M&M, etc.).
+    #
+    # We detect case 2 by checking whether data.genomics_charts key was
+    # stripped (will be missing) — if stripped, this is a non-charts section
+    # preview and we should not re-inject.
+    is_fm_preview = data.get("preview_mode") is not None
+    is_stripped_body_preview = (
+        data.get("section_only") and "genomics_charts" not in data
+    )
+    if chart_images and not is_fm_preview and not is_stripped_body_preview:
         template_dir = Path(_TEMPLATE_PATH).parent
         charts_list = []
 
