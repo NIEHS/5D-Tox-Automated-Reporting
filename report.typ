@@ -431,13 +431,15 @@
 // Any front-matter-related preview (cover, title, TOC, or individual section)
 #let any-fm-preview = is-cover-preview or is-title-preview or is-fm-preview or preview-mode == "tables-list"
 
-// In body-section-only mode, suppress headers/footers and emit hidden
-// headings to satisfy PDF/UA-1's requirement that the first heading
-// in the document be level 1 and levels don't skip.
+// In body-section-only mode, suppress headers/footers.  Previously we
+// emitted hidden "Section Preview" H1/H2 headings here to satisfy
+// PDF/UA-1, but they created a visible leader page before the real
+// content.  Body sections render their own H1 (e.g., "Materials and
+// Methods", "Background", "Results"), which satisfies the first-heading
+// requirement naturally.  For leaf table previews that lack an H1,
+// the leaf_preview branch handles heading emission separately.
 #if section-only [
   #set page(header: none, footer: none)
-  #heading(level: 1)[Section Preview]
-  #heading(level: 2)[\ ]
 ]
 
 // =====================================================================
@@ -920,7 +922,11 @@
 // Table 1 (Final Sample Counts) appears inline within the Transcriptomics
 // subsection on page 17.
 #if data.at("methods", default: none) != none {
-  pagebreak()
+  // Weak pagebreak: in section-only mode the preview has no prior
+  // content, so a hard pagebreak would create a blank leader page
+  // before the real content.  pagebreak(weak: true) is a no-op when
+  // the current page is empty.
+  pagebreak(weak: true)
   let methods = data.methods
   heading(level: 1, "Materials and Methods")
 
@@ -1669,7 +1675,7 @@
 // --- Summary ---
 // NIEHS page 47 (body 35): concluding paragraphs synthesizing all results.
 #if data.at("summary", default: none) != none {
-  pagebreak()
+  pagebreak(weak: true)
   heading(level: 1, "Summary")
   for para in data.summary.at("paragraphs", default: ()) {
     [#para]
@@ -1761,7 +1767,7 @@
   refs = data.at("background", default: (:)).at("references", default: ())
 }
 #if refs.len() > 0 {
-  pagebreak()
+  pagebreak(weak: true)
   heading(level: 1, "References")
   set text(size: 10pt)
   set par(hanging-indent: 2em)  // Hanging indent for reference entries

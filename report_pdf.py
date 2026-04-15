@@ -1176,7 +1176,9 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
         section_filter: Any TOC node ID (e.g., "animal-condition",
                         "table-body-weight", "background", "foreword").
     """
-    from document_tree import find_node, collect_data_keys, collect_platforms
+    from document_tree import (
+        find_node, collect_data_keys, collect_platforms, collect_methods_keys,
+    )
 
     # All data keys that can be independently removed
     ALL_BODY = {
@@ -1260,6 +1262,21 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
             s for s in data["apical_sections"]
             if s.get("platform") in platforms
         ]
+
+    # Sub-filter methods.sections by selected M&M subsection.
+    # Each M&M subnode (mm-study-design, mm-clin-exam, etc.) has a methods_key
+    # that maps to a key in data.methods.sections.  For heading-only parents
+    # (mm-clin-exam, mm-transcriptomics, mm-data-analysis), we collect the
+    # parent's key plus all children's keys so the preview shows the whole
+    # subtree under that parent heading.  The root "methods" node has no
+    # methods_key of its own but its subtree covers every section.
+    methods_keys = collect_methods_keys(node)
+    if methods_keys and "methods" in data:
+        methods_data = data["methods"]
+        sections = methods_data.get("sections", [])
+        filtered = [s for s in sections if s.get("key") in methods_keys]
+        if filtered:
+            data["methods"] = {**methods_data, "sections": filtered}
 
 
 def _build_missing_animal_footnotes(

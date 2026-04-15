@@ -61,6 +61,11 @@ class DocNode:
         figure_number:  Auto-assigned by compute_figure_numbers().  None until computed.
         ready_key:      Alpine store ready flag name (for TOC enable/disable).
                         None if always enabled.
+        methods_key:    For M&M subsection nodes — the key in data["methods"]["sections"]
+                        that holds this subsection's prose.  Matches SUBSECTION_SKELETON
+                        keys in methods_report.py (e.g., "study_design", "clinical_obs").
+                        Used by _apply_section_filter() to render only the selected
+                        subsection in M&M previews.
     """
     id: str
     title: str
@@ -73,6 +78,7 @@ class DocNode:
     table_number: int | None = None
     figure_number: int | None = None
     ready_key: str | None = None
+    methods_key: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -167,26 +173,34 @@ DOCUMENT_TREE: list[DocNode] = [
         data_key="methods",
         children=[
             DocNode(id="mm-study-design", title="Study Design", level=2,
-                    node_type="narrative", data_key="methods"),
+                    node_type="narrative", data_key="methods",
+                    methods_key="study_design"),
             DocNode(id="mm-dose-rationale", title="Dose Selection Rationale", level=2,
-                    node_type="narrative", data_key="methods"),
+                    node_type="narrative", data_key="methods",
+                    methods_key="dose_selection"),
             DocNode(id="mm-chemistry", title="Chemistry", level=2,
-                    node_type="narrative", data_key="methods"),
+                    node_type="narrative", data_key="methods",
+                    methods_key="chemistry"),
             DocNode(
                 id="mm-clin-exam",
                 title="Clinical Examinations and Sample Collection",
                 level=2,
                 node_type="heading-only",
                 data_key="methods",
+                methods_key="clinical_exams",
                 children=[
                     DocNode(id="mm-clin-obs", title="Clinical Observations", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="clinical_obs"),
                     DocNode(id="mm-body-organ-wt", title="Body and Organ Weights", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="body_organ_weights"),
                     DocNode(id="mm-clin-path", title="Clinical Pathology", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="clinical_pathology"),
                     DocNode(id="mm-internal-dose", title="Internal Dose Assessment", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="internal_dose"),
                 ],
             ),
             DocNode(
@@ -195,17 +209,23 @@ DOCUMENT_TREE: list[DocNode] = [
                 level=2,
                 node_type="heading-only",
                 data_key="methods",
+                methods_key="transcriptomics",
                 children=[
                     DocNode(id="mm-tx-sample", title="Sample Collection for Transcriptomics", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="txomics_sample"),
                     DocNode(id="mm-tx-rna", title="RNA Isolation, Library Creation, and Sequencing", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="txomics_rna"),
                     DocNode(id="mm-tx-processing", title="Sequence Data Processing", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="txomics_seq_processing"),
                     DocNode(id="mm-tx-qc", title="Sequencing Quality Checks and Outlier Removal", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="txomics_qc"),
                     DocNode(id="mm-tx-norm", title="Data Normalization", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="txomics_normalization"),
                 ],
             ),
             DocNode(
@@ -214,21 +234,27 @@ DOCUMENT_TREE: list[DocNode] = [
                 level=2,
                 node_type="heading-only",
                 data_key="methods",
+                methods_key="data_analysis",
                 children=[
                     DocNode(id="mm-stat-apical",
                             title="Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
-                            level=3, node_type="narrative", data_key="methods"),
+                            level=3, node_type="narrative", data_key="methods",
+                            methods_key="stat_analysis"),
                     DocNode(id="mm-bmd-apical",
                             title="Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
-                            level=3, node_type="narrative", data_key="methods"),
+                            level=3, node_type="narrative", data_key="methods",
+                            methods_key="bmd_apical"),
                     DocNode(id="mm-bmd-tx",
                             title="Benchmark Dose Analysis of Transcriptomics Data",
-                            level=3, node_type="narrative", data_key="methods"),
+                            level=3, node_type="narrative", data_key="methods",
+                            methods_key="bmd_genomics"),
                     DocNode(id="mm-fdr",
                             title="Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
-                            level=3, node_type="narrative", data_key="methods"),
+                            level=3, node_type="narrative", data_key="methods",
+                            methods_key="efdr"),
                     DocNode(id="mm-data-access", title="Data Accessibility", level=3,
-                            node_type="narrative", data_key="methods"),
+                            node_type="narrative", data_key="methods",
+                            methods_key="data_accessibility"),
                 ],
             ),
         ],
@@ -485,6 +511,23 @@ def collect_platforms(node: DocNode) -> set[str]:
     for child in node.children:
         platforms.update(collect_platforms(child))
     return platforms
+
+
+def collect_methods_keys(node: DocNode) -> set[str]:
+    """
+    Collect all methods_key values from a node and its descendants.
+
+    Used by the preview filter to restrict data.methods.sections to
+    only the subsections belonging to the selected M&M node.  A parent
+    node like "Clinical Examinations and Sample Collection" yields its
+    own key plus all its children's keys.
+    """
+    keys: set[str] = set()
+    if node.methods_key:
+        keys.add(node.methods_key)
+    for child in node.children:
+        keys.update(collect_methods_keys(child))
+    return keys
 
 
 def is_leaf_table(node: DocNode) -> bool:
