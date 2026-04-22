@@ -1382,7 +1382,14 @@
   let bmd = data.bmd_summary
   let endpoints = bmd.at("endpoints", default: ())
   if endpoints.len() > 0 {
-    pagebreak()
+    // Skip the pagebreak in section-only previews — the "Results" H1
+    // was just emitted as the parent heading and would otherwise sit
+    // alone on a leader page before the actual BMD summary content.
+    // In a full report, the pagebreak preserves NIEHS layout where each
+    // major H2 starts on a fresh page.
+    if not section-only {
+      pagebreak()
+    }
     heading(level: _bmd-summary-info.level, _bmd-summary-info.title)
 
     // Optional narrative before the table

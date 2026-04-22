@@ -2304,23 +2304,32 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
 
     Only includes endpoints that have a BMD result OR significant trend/pairwise
     findings (LOEL exists).  Endpoints with neither are uninteresting.
+
+    Anomalous BMDs (curve-fit values implausibly lower than the statistical
+    NOEL/LOEL — model artifacts) are replaced with "UREP" (Unreliable
+    Extrapolation) markers in the BMD/BMDL columns and the direction is
+    blanked.  This matches NIEHS Report 10's Table 8 convention: keep the
+    row so the LOEL/NOEL columns are still informative, but flag that the
+    curve-fit BMD shouldn't be trusted.
+
+    Sort order matches the reference report: rows with reliable numeric
+    BMDs first (ascending by BMD), then unreliable rows (UREP/NVM) sorted
+    by LOEL ascending — "Sorted by BMD or LOEL from Low to High".
     """
-    summary = []
+    # Import the anomaly heuristic from methods_report — same threshold
+    # the abstract Results uses to drop endpoints from the "effects
+    # included..." list, so the body table and abstract stay in sync.
+    from methods_report import _is_anomalous_bmd
+
+    raw_entries: list[dict] = []
     for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
-            # Sort within each sex group by BMDL (ascending).
-            # Numeric BMDL values first; non-numeric statuses (NVM, UREP, "—")
-            # sort to the end so the most potent endpoints appear at top.
-            sorted_rows = sorted(
-                rows,
-                key=lambda r: _safe_float_from_bmdl(r.bmdl_str),
-            )
-            for row in sorted_rows:
+            for row in rows:
                 has_bmd = row.bmd_status is not None
                 has_loel = row.loel is not None
                 if not has_bmd and not has_loel:
                     continue
-                summary.append({
+                raw_entries.append({
                     "endpoint": row.label,
                     "sex": sex,
                     "platform": platform,
@@ -2331,6 +2340,50 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
                     "noel": row.noel,
                     "direction": row.direction,
                 })
+
+    # --- Apply UREP marking ---
+    # An endpoint becomes UREP when the BMD parses as a finite number but
+    # falls implausibly far below the statistically-observed NOEL/LOEL.
+    # The original numeric values are preserved on the entry as
+    # bmd_original / bmdl_original in case downstream consumers want them.
+    for entry in raw_entries:
+        if _is_anomalous_bmd(entry):
+            entry["bmd_original"] = entry["bmd"]
+            entry["bmdl_original"] = entry["bmdl"]
+            entry["bmd"] = "UREP"
+            entry["bmdl"] = "UREP"
+            entry["direction"] = "–"  # en dash — matches reference Table 8
+            entry["anomalous"] = True
+
+    # --- Sort: reliable BMDs first (ascending), then by LOEL ascending ---
+    # Reliable = numeric, parseable, non-empty bmd string.  Reference
+    # Table 8 caption: "Sorted by BMD or LOEL from Low to High".
+    def _sort_key(e: dict) -> tuple[int, float]:
+        bmd_raw = e.get("bmd")
+        try:
+            bmd_f = float(str(bmd_raw).strip()) if bmd_raw is not None else float("inf")
+            # NaN / inf → treat as non-reliable so they sort by LOEL
+            import math as _math
+            if _math.isnan(bmd_f) or _math.isinf(bmd_f):
+                raise ValueError
+            return (0, bmd_f)  # bucket 0: reliable BMDs
+        except (TypeError, ValueError):
+            loel = e.get("loel")
+            try:
+                loel_f = float(loel) if loel is not None else float("inf")
+            except (TypeError, ValueError):
+                loel_f = float("inf")
+            return (1, loel_f)  # bucket 1: unreliable, sorted by LOEL
+
+    summary: list[dict] = []
+    # Sort within each sex independently so the table groups by sex,
+    # with each sex's rows sorted by the BMD-or-LOEL rule.  Sex order
+    # itself is fixed (Male, Female) per NIEHS convention.
+    for sex in ("Male", "Female"):
+        sex_entries = [e for e in raw_entries if e.get("sex") == sex]
+        sex_entries.sort(key=_sort_key)
+        summary.extend(sex_entries)
+
     return summary
 
 
