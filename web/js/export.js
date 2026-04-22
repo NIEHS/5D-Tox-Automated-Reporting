@@ -850,11 +850,19 @@ let reportDirty = true;
 /**
  * Mark the report as needing a re-render.  Called from every
  * approve/unapprove action so the next tab switch picks up changes.
+ *
+ * Also invalidates the per-section PDF preview blob cache.  Without
+ * this, navigating to a section after a content change (e.g., Try Again
+ * on Background) returns the stale blob from the previous compile —
+ * the user sees outdated content until they hit "Recompile" manually.
+ * Revoking the blob URLs also frees the underlying memory.
  */
 function markReportDirty() {
     reportDirty = true;
-    // Don't auto-refresh the PDF preview on every change — it requires
-    // a server round-trip to compile.  The user clicks "Refresh" to update.
+    for (const tocId of Object.keys(_sectionPdfBlobUrls)) {
+        URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
+        delete _sectionPdfBlobUrls[tocId];
+    }
 }
 
 /**

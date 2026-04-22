@@ -253,34 +253,8 @@ PARAGRAPH 7 — Study Purpose
 - Do NOT invent data — only use what is provided above
 - Match the formal, regulatory-focused tone of the style reference
 
-After the References section, emit a separate, clearly-delimited block
-containing the Abstract → Background distillation:
-
-=== ABSTRACT BACKGROUND ===
-
-Write exactly 2 sentences in this structural template, drawing facts ONLY
-from the body Background you just wrote (do not introduce new claims):
-
-  Sentence 1: "{{Full chemical name}} ({{Abbreviation if any}}) is a member
-              of the {{chemical class name}} class of compounds to which
-              {{1-clause exposure context}}."
-  Sentence 2: "Toxicological information on {{this class | this compound}}
-              is {{sparse | limited | well-characterized}}."
-
-Rules:
-- Use no inline reference markers in this block.
-- Use the same chemical class name and exposure framing established in
-  Paragraph 1 of the body Background.  The two must be consistent.
-- The knowledge-state assessment in Sentence 2 must be consistent with
-  the data-gap analysis in Paragraph 6 — say "sparse" when significant
-  regulatory/mechanistic gaps exist, "limited" for moderate gaps,
-  "well-characterized" only when comprehensive assessments exist.
-- Do NOT include a study-purpose sentence — the system appends a
-  deterministic boilerplate sentence after this block.
-
-Output the 7 body paragraphs, then "References" with the citation list,
-then "=== ABSTRACT BACKGROUND ===" followed by exactly 2 sentences.  No
-preamble, no commentary, no markdown headers.
+Output ONLY the 7 paragraphs followed by the References section. No preamble,
+no commentary, no markdown headers (just paragraph text and a "References" label).
 """
 
     return prompt
@@ -571,9 +545,22 @@ def generate_background(data: BackgroundData,
     if not response:
         raise RuntimeError(f"LLM ({model_used}) returned empty response")
 
-    # Parse the response into paragraphs, references, and the abstract
-    # background distillation.
-    paragraphs, references, abstract_background = _parse_response(response)
+    # Parse the response into paragraphs and references.
+    paragraphs, references = _parse_response(response)
+
+    # Second pass: distill the body into a 2-sentence Abstract Background.
+    # This is a separate focused LLM call rather than a tail block in the
+    # main response, because the body-generation prompt is too dense for
+    # the model to reliably emit a delimited abstract section.  Failure
+    # here is non-fatal — the export pipeline falls back to the
+    # deterministic study-purpose sentence alone.
+    chemical_display_name = data.identity.name or "the test article"
+    abstract_background = distill_abstract_background(
+        body_text=response,
+        chemical_name=chemical_display_name,
+        use_ollama=use_ollama,
+        model=model,
+    )
 
     return {
         "text": response,
@@ -608,40 +595,15 @@ def _get_ollama_endpoint(model: str = "") -> OllamaEndpoint | None:
     return None
 
 
-def _parse_response(text: str) -> tuple[list[str], list[str], str]:
+def _parse_response(text: str) -> tuple[list[str], list[str]]:
     """
-    Parse the LLM response into paragraphs, references, and the abstract
-    background distillation.
+    Parse the LLM response into paragraphs and references.
 
-    Expected format (in order):
-      1. 7 body paragraphs separated by double newlines
-      2. "References" header followed by [N] entries
-      3. "=== ABSTRACT BACKGROUND ===" delimiter followed by 2 sentences
-
-    Returns (paragraphs, references, abstract_background).  The abstract
-    string is empty when the LLM omits or malformats the abstract block —
-    the rest of the report still works.
+    Expected format: 7 body paragraphs separated by double newlines,
+    followed by a "References" header and [N] citation entries.
     """
-    # First, peel off the abstract background block if present.
-    # Matches "=== ABSTRACT BACKGROUND ===" with flexible whitespace and
-    # optional leading/trailing punctuation.
-    abstract_split = re.split(
-        r'\n\s*={3,}\s*ABSTRACT\s+BACKGROUND\s*={3,}\s*\n',
-        text, flags=re.IGNORECASE,
-    )
-    main_text = abstract_split[0]
-    abstract_background = ""
-    if len(abstract_split) > 1:
-        # Take everything after the delimiter as the abstract; strip any
-        # trailing markdown fences or stray "References" repetition.
-        abstract_raw = abstract_split[1].strip()
-        # Clean up: drop any trailing "References" / "==" markers
-        abstract_raw = re.split(r'\n\s*={3,}', abstract_raw)[0]
-        abstract_raw = re.split(r'\n\s*References?\s*\n', abstract_raw, flags=re.IGNORECASE)[0]
-        abstract_background = abstract_raw.strip()
-
-    # Find the references section in the main text
-    ref_split = re.split(r'\n\s*References?\s*\n', main_text, flags=re.IGNORECASE)
+    # Find the references section
+    ref_split = re.split(r'\n\s*References?\s*\n', text, flags=re.IGNORECASE)
 
     prose_text = ref_split[0].strip()
     ref_text = ref_split[1].strip() if len(ref_split) > 1 else ""
@@ -659,7 +621,101 @@ def _parse_response(text: str) -> tuple[list[str], list[str], str]:
             if line and (line[0] == '[' or line[0].isdigit()):
                 references.append(line)
 
-    return paragraphs, references, abstract_background
+    return paragraphs, references
+
+
+def distill_abstract_background(
+    body_text: str,
+    chemical_name: str,
+    use_ollama: bool = False,
+    model: str = "",
+) -> str:
+    """
+    Second-pass LLM call: distill the body Background into a 2-sentence
+    Abstract → Background block.
+
+    Why a second pass? The body generation prompt is too dense for the LLM
+    to reliably emit a delimited side-block — it focuses on the 7 paragraphs
+    and tends to ignore tail-end format requirements.  A focused second
+    call with a tight JSON schema is much more reliable.
+
+    The deterministic study-purpose sentence ("A short-term, in vivo
+    transcriptomic study was used to assess...") is appended LATER by the
+    export pipeline using MethodsContext, so this function returns ONLY
+    the chemistry/exposure + knowledge-state sentences.
+
+    Args:
+        body_text:     The full LLM response from generate_background (the
+                       7 paragraphs + References section as one string).
+        chemical_name: Test article name for use in the distillation.
+        use_ollama:    If True, route to local Ollama instead of Claude.
+        model:         Optional model override.
+
+    Returns:
+        Two-sentence string, or "" if the distillation fails (non-fatal —
+        the export pipeline still emits the deterministic boilerplate).
+    """
+    if not body_text or not body_text.strip():
+        return ""
+
+    system = (
+        "You distill long technical regulatory prose into precise, "
+        "fact-grounded abstract sentences.  Return ONLY valid JSON."
+    )
+
+    prompt = f"""Below is the body Background section of a NIEHS toxicology report.
+Distill it into a 2-sentence Abstract → Background block.
+
+=== BODY BACKGROUND ===
+{body_text}
+=== END BODY BACKGROUND ===
+
+Return ONLY a JSON object of this exact shape:
+
+{{"abstract_background": "<sentence 1> <sentence 2>"}}
+
+Sentence 1 template (chemistry / exposure):
+  "{chemical_name} ([abbreviation if mentioned in body]) is a member of
+   the [chemical class verbatim from body Paragraph 1] of compounds to
+   which [1-clause exposure context — humans, environment, occupational]."
+
+Sentence 2 template (knowledge state):
+  "Toxicological information on [this class | this compound] is
+   [sparse | limited | well-characterized]."
+
+Rules:
+- Use ONLY facts that appear in the body Background.  Do not introduce
+  new claims, doses, mechanisms, or regulatory citations.
+- The chemical class wording must match what Paragraph 1 of the body says.
+- The knowledge-state word must be consistent with the data-gap paragraph
+  (Paragraph 6).  Use "sparse" when significant regulatory/mechanistic
+  gaps exist, "limited" for moderate gaps, "well-characterized" only when
+  comprehensive ATSDR/IRIS-style assessments exist.
+- Do NOT include any inline reference markers like [1], [2].
+- Do NOT add a study-purpose sentence — the system appends one separately.
+- Both sentences in one string, separated by a single space.
+"""
+
+    try:
+        # Reuse the centralized JSON-mode helper.  Default model matches
+        # the body Background generator (claude-sonnet-4-6) — distillation
+        # doesn't need the strongest model.
+        from llm_helpers import llm_generate_json
+        kwargs = {"max_tokens": 1024, "temperature": 0.1}
+        if model:
+            kwargs["model"] = model
+        result = llm_generate_json(
+            "abstract-background-distiller", prompt, system, **kwargs,
+        )
+    except Exception as e:
+        logger.warning("Abstract Background distillation failed: %s", e)
+        return ""
+
+    if isinstance(result, dict):
+        text = result.get("abstract_background", "")
+        if isinstance(text, str):
+            return text.strip()
+    return ""
 
 
 # ---------------------------------------------------------------------------

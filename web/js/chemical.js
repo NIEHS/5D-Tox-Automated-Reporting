@@ -264,10 +264,19 @@ async function restoreSession(data) {
         // file pool via displayResult)
         displayResult(fakeResult);
 
-        // Now lock it as approved — disable editing and add green border
-        backgroundApproved = true;
-        lockSection(document.getElementById('output-section'));
-        setButtons('bg', 'approved');
+        // Lock state is determined by the persisted 'approved' flag —
+        // disk persistence is decoupled from approval (auto-save happens
+        // at generation time; approval is a separate UI lock action).
+        const isApproved = bg.approved === true;
+        backgroundApproved = isApproved;
+        if (isApproved) {
+            lockSection(document.getElementById('output-section'));
+            setButtons('bg', 'approved');
+        } else {
+            // Saved but not approved — keep editor unlocked, show the
+            // approve/retry buttons rather than the approved state.
+            setButtons('bg', 'result');
+        }
 
         // Show version history with the version from the saved data
         showVersionHistory('background', bg.version || 1);

@@ -502,9 +502,12 @@ async def api_session_approve(request: Request):
         meta["casrn"] = identity.get("casrn", "")
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-    # Stamp the data with the approval time and clear any stale flag
-    # (stale is set by invalidate_pool_artifacts when the file pool changes
-    # after a section was already approved — re-approval clears it)
+    # Stamp the data with the approval time + flag and clear any stale flag.
+    # The 'approved' boolean is the source of truth for the editor lock state;
+    # 'approved_at' is a human-readable timestamp.  ('stale' is set by
+    # invalidate_pool_artifacts when the file pool changes after a section
+    # was already approved — re-approval clears it.)
+    data["approved"] = True
     data["approved_at"] = now_iso()
     data.pop("stale", None)
 
@@ -631,65 +634,160 @@ async def api_session_approve(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/session/unapprove — unapprove (delete) a report section
+# Section key resolver — shared by save / unapprove / delete endpoints
+# ---------------------------------------------------------------------------
+
+def _resolve_section_key(body: dict) -> tuple[str | None, str | None]:
+    """
+    Map a request body's (section_type, plus optional bm2_slug or organ/sex)
+    onto the on-disk filename used by save_section / load_section.
+
+    Returns (section_key, error_message).  Exactly one of the two will be
+    None: the caller dispatches accordingly.
+    """
+    section_type = body.get("section_type", "")
+    if section_type == "background":
+        return ("background", None)
+    if section_type == "methods":
+        return ("methods", None)
+    if section_type == "bmd_summary":
+        return ("bmd_summary", None)
+    if section_type == "summary":
+        return ("summary", None)
+    if section_type == "bm2":
+        slug = body.get("bm2_slug", "")
+        if not slug:
+            return (None, "bm2_slug is required for bm2 sections")
+        return (f"bm2_{slug}", None)
+    if section_type == "genomics":
+        organ = body.get("organ", "").lower().replace(" ", "_")
+        sex = body.get("sex", "").lower().replace(" ", "_")
+        if not organ or not sex:
+            return (None, "organ and sex are required for genomics sections")
+        return (f"genomics_{organ}_{sex}", None)
+    return (None, f"Unknown section_type: {section_type}")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/save-section — auto-save without changing approval
+# ---------------------------------------------------------------------------
+
+@router.post("/api/session/save-section")
+async def api_session_save_section(request: Request):
+    """
+    Persist a report section to disk WITHOUT changing its approval state.
+
+    Used to auto-save freshly-generated content (e.g., when the LLM
+    finishes producing the body Background) so it survives a page reload
+    without requiring the user to click Approve.  Approval is a separate
+    concern — it locks the editor and applies style learning.
+
+    Input JSON:
+      {
+        "dtxsid": "DTXSID...",
+        "section_type": "background" | "methods" | ...,
+        "data": {...},        // the section payload (paragraphs, references, etc.)
+        "approved": false,    // optional; defaults to false for fresh saves
+        "bm2_slug": "...",    // required for bm2 sections
+        "organ": "...",       // required for genomics sections
+        "sex": "..."          // required for genomics sections
+      }
+
+    The save uses 'archive=False' so it does NOT create a new history
+    entry — only approve actions bump the version count.
+    """
+    body = await request.json()
+    dtxsid = body.get("dtxsid", "")
+    if not dtxsid:
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
+
+    section_key, err = _resolve_section_key(body)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    data = dict(body.get("data") or {})
+    # Stamp the approval state (default False — fresh generations are
+    # unapproved until the user explicitly clicks Approve).
+    data["approved"] = bool(body.get("approved", False))
+    data.setdefault("saved_at", now_iso())
+
+    save_section(dtxsid, section_key, data, archive=False)
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/unapprove — flip approved=False (does NOT delete data)
 # ---------------------------------------------------------------------------
 
 @router.post("/api/session/unapprove")
 async def api_session_unapprove(request: Request):
     """
-    Unapprove a report section by deleting its JSON file from disk.
+    Mark a report section as not-approved while preserving its content.
+
+    Approval is a UI lock state; unapproving simply unlocks the editor
+    so the user can revise.  The on-disk content remains intact — they
+    can re-approve without regenerating.
 
     Input JSON:
       {
-        "dtxsid": "DTXSID6020430",
-        "section_type": "background" | "bm2" | "methods" | "bmd_summary"
-                        | "genomics" | "summary",
-        "bm2_slug": "organ-and-body-weights",  // required for bm2 only
-        "organ": "liver",                       // required for genomics only
-        "sex": "male"                           // required for genomics only
+        "dtxsid": "DTXSID...",
+        "section_type": "background" | "bm2" | "methods" | ...,
+        "bm2_slug": "...",  // required for bm2
+        "organ": "...",     // required for genomics
+        "sex": "..."        // required for genomics
       }
 
-    The .bm2 file and CSV in files/ are NOT deleted — they're still useful
-    for reprocessing without re-uploading.
+    No-op if the section file doesn't exist.  Returns ok regardless so
+    the caller can always rely on a successful response.
     """
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
-    section_type = body.get("section_type", "")
-    bm2_slug_val = body.get("bm2_slug", "")
-
     if not dtxsid:
         return JSONResponse({"error": "dtxsid is required"}, status_code=400)
 
-    if section_type == "background":
-        delete_section(dtxsid, "background")
-    elif section_type == "bm2":
-        if not bm2_slug_val:
-            return JSONResponse(
-                {"error": "bm2_slug is required for bm2 sections"},
-                status_code=400,
-            )
-        delete_section(dtxsid, f"bm2_{bm2_slug_val}")
-    elif section_type == "methods":
-        delete_section(dtxsid, "methods")
-    elif section_type == "bmd_summary":
-        delete_section(dtxsid, "bmd_summary")
-    elif section_type == "genomics":
-        organ = body.get("organ", "").lower().replace(" ", "_")
-        sex = body.get("sex", "").lower().replace(" ", "_")
-        if not organ or not sex:
-            return JSONResponse(
-                {"error": "organ and sex are required for genomics sections"},
-                status_code=400,
-            )
-        delete_section(dtxsid, f"genomics_{organ}_{sex}")
-    elif section_type == "summary":
-        delete_section(dtxsid, "summary")
-    else:
-        return JSONResponse(
-            {"error": f"Unknown section_type: {section_type}"},
-            status_code=400,
-        )
+    section_key, err = _resolve_section_key(body)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
 
+    section_path = session_dir(dtxsid) / f"{section_key}.json"
+    if section_path.exists():
+        try:
+            data = json.loads(section_path.read_text(encoding="utf-8"))
+            data["approved"] = False
+            # Don't archive — flag flip isn't a content change worth
+            # keeping in history.
+            save_section(dtxsid, section_key, data, archive=False)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Failed to flip approved flag for %s/%s: %s",
+                           dtxsid, section_key, e)
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/discard-section — delete a section's content from disk
+# ---------------------------------------------------------------------------
+
+@router.post("/api/session/discard-section")
+async def api_session_discard_section(request: Request):
+    """
+    Permanently delete a section's JSON file (and abandon its history).
+
+    Use this for explicit user-initiated discards — e.g., a "Reset this
+    section" action.  Distinct from unapprove, which preserves content.
+
+    Input JSON: same shape as save-section.
+    """
+    body = await request.json()
+    dtxsid = body.get("dtxsid", "")
+    if not dtxsid:
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
+
+    section_key, err = _resolve_section_key(body)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
+
+    delete_section(dtxsid, section_key)
     return JSONResponse({"ok": True})
 
 

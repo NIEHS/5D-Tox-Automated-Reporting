@@ -106,45 +106,66 @@ def safe_filename(name: str) -> str:
 # Section persistence — write/read/delete session JSON files
 # ---------------------------------------------------------------------------
 
-def save_section(dtxsid: str, section_key: str, data: dict) -> None:
+def save_section(
+    dtxsid: str,
+    section_key: str,
+    data: dict,
+    archive: bool = True,
+) -> None:
     """
-    Write data as JSON to sessions/{dtxsid}/{section_key}.json, archiving the
-    previous version first so we keep full history.
+    Write data as JSON to sessions/{dtxsid}/{section_key}.json.
+
+    By default ('archive=True'), the previous version is copied into
+    history/ before being overwritten and the new save gets an
+    incremented version number — appropriate for approve actions and
+    significant content updates.
+
+    Pass 'archive=False' for in-place updates that should NOT create a
+    new history entry (e.g., flipping the 'approved' flag, auto-save
+    on generation).  In that mode the existing version number is
+    preserved and no history file is written.
 
     Version history layout:
         sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json
     The current file ({section_key}.json) is always the latest version.
-    Before overwriting, the existing current is copied into history/ using
-    its approved_at timestamp as the filename.
-
-    Also stamps the data with an incrementing "version" number (v1, v2, ...)
-    and updates meta.json's updated_at timestamp.
     """
     d = session_dir(dtxsid)
     current_path = d / f"{section_key}.json"
     history_dir = d / "history" / section_key
 
-    # --- Archive the current version before overwriting (if it exists) ---
-    # This preserves every previously-approved version as a timestamped file
-    # in the history/ subdirectory.  First-ever approve has no file to archive.
-    if current_path.exists():
-        existing = json.loads(current_path.read_text(encoding="utf-8"))
-        # Use the existing file's approved_at as the archive filename
-        # so timestamps reflect when that version was actually approved
-        ts = existing.get("approved_at", now_iso())
-        # Replace colons with hyphens so the filename is filesystem-safe
-        # (ISO 8601 timestamps contain colons, e.g. "2026-03-02T19:23:59+00:00")
-        safe_ts = ts.replace(":", "-")
-        history_dir.mkdir(parents=True, exist_ok=True)
-        (history_dir / f"{safe_ts}.json").write_text(
-            json.dumps(existing, indent=2, default=str), encoding="utf-8",
-        )
+    if archive:
+        # --- Archive the current version before overwriting (if it exists) ---
+        # Preserves every previously-approved version as a timestamped file
+        # in the history/ subdirectory.  First-ever approve has no file to archive.
+        if current_path.exists():
+            existing = json.loads(current_path.read_text(encoding="utf-8"))
+            # Use the existing file's approved_at as the archive filename
+            # so timestamps reflect when that version was actually approved
+            ts = existing.get("approved_at", now_iso())
+            # Replace colons with hyphens so the filename is filesystem-safe
+            # (ISO 8601 timestamps contain colons, e.g. "2026-03-02T19:23:59+00:00")
+            safe_ts = ts.replace(":", "-")
+            history_dir.mkdir(parents=True, exist_ok=True)
+            (history_dir / f"{safe_ts}.json").write_text(
+                json.dumps(existing, indent=2, default=str), encoding="utf-8",
+            )
 
-    # --- Compute the version number for this new save ---
-    # Count existing history files (previous versions) and add 1 for the
-    # new version.  First approve = 0 history files → version 1.
-    version_count = len(list(history_dir.glob("*.json"))) if history_dir.exists() else 0
-    data["version"] = version_count + 1
+        # --- Compute the version number for this new save ---
+        # Count existing history files (previous versions) and add 1 for the
+        # new version.  First approve = 0 history files → version 1.
+        version_count = len(list(history_dir.glob("*.json"))) if history_dir.exists() else 0
+        data["version"] = version_count + 1
+    else:
+        # In-place update: keep the version number from the prior file if
+        # one exists; otherwise stamp version=1.  No history entry written.
+        if current_path.exists():
+            try:
+                existing = json.loads(current_path.read_text(encoding="utf-8"))
+                data.setdefault("version", existing.get("version", 1))
+            except (json.JSONDecodeError, OSError):
+                data.setdefault("version", 1)
+        else:
+            data.setdefault("version", 1)
 
     # --- Write the new version as the canonical current file ---
     current_path.write_text(

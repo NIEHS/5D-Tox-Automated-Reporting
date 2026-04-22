@@ -97,6 +97,10 @@ async function generateBackground() {
                         displayResult(currentResult);
                         hideProgress();
                         markReportDirty();
+                        // Auto-save to disk so the generation survives a
+                        // page reload without requiring the user to click
+                        // Approve.  Approval remains a separate UI lock.
+                        autoSaveBackground(currentResult);
                     } else if (eventType === 'error') {
                         const data = JSON.parse(eventData);
                         showError(data.error);
@@ -117,6 +121,44 @@ async function generateBackground() {
         btn.textContent = 'Generate Background';
     }
 }
+
+/* ================================================================
+ * Auto-save (no approval) — persist generated content to disk
+ * ================================================================ */
+
+/**
+ * Write the freshly-generated background to disk with approved=false.
+ *
+ * Called from the SSE complete handler so a page reload always restores
+ * the latest content even if the user hasn't approved yet.  Approval
+ * is a separate UI concern: it locks the editor and applies style
+ * learning; persistence happens automatically.
+ */
+async function autoSaveBackground(result) {
+    if (!currentIdentity?.dtxsid) return;
+    try {
+        await fetch('/api/session/save-section', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dtxsid: currentIdentity.dtxsid,
+                section_type: 'background',
+                approved: false,
+                data: {
+                    paragraphs: result.paragraphs || [],
+                    references: result.references || [],
+                    abstract_background: result.abstract_background || '',
+                    model_used: result.model_used || '',
+                    notes: result.notes || [],
+                    raw_data: result.raw_data || null,
+                },
+            }),
+        });
+    } catch (e) {
+        console.warn('Auto-save background failed:', e);
+    }
+}
+
 
 /* ================================================================
  * Display the generated result
