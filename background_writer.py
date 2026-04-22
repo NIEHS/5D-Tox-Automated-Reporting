@@ -253,8 +253,34 @@ PARAGRAPH 7 — Study Purpose
 - Do NOT invent data — only use what is provided above
 - Match the formal, regulatory-focused tone of the style reference
 
-Output ONLY the 7 paragraphs followed by the References section. No preamble,
-no commentary, no markdown headers (just paragraph text and a "References" label).
+After the References section, emit a separate, clearly-delimited block
+containing the Abstract → Background distillation:
+
+=== ABSTRACT BACKGROUND ===
+
+Write exactly 2 sentences in this structural template, drawing facts ONLY
+from the body Background you just wrote (do not introduce new claims):
+
+  Sentence 1: "{{Full chemical name}} ({{Abbreviation if any}}) is a member
+              of the {{chemical class name}} class of compounds to which
+              {{1-clause exposure context}}."
+  Sentence 2: "Toxicological information on {{this class | this compound}}
+              is {{sparse | limited | well-characterized}}."
+
+Rules:
+- Use no inline reference markers in this block.
+- Use the same chemical class name and exposure framing established in
+  Paragraph 1 of the body Background.  The two must be consistent.
+- The knowledge-state assessment in Sentence 2 must be consistent with
+  the data-gap analysis in Paragraph 6 — say "sparse" when significant
+  regulatory/mechanistic gaps exist, "limited" for moderate gaps,
+  "well-characterized" only when comprehensive assessments exist.
+- Do NOT include a study-purpose sentence — the system appends a
+  deterministic boilerplate sentence after this block.
+
+Output the 7 body paragraphs, then "References" with the citation list,
+then "=== ABSTRACT BACKGROUND ===" followed by exactly 2 sentences.  No
+preamble, no commentary, no markdown headers.
 """
 
     return prompt
@@ -502,8 +528,13 @@ def generate_background(data: BackgroundData,
     Returns:
         Dict with keys:
           - "text": The full generated background text
-          - "paragraphs": List of 6 paragraph strings
+          - "paragraphs": List of 7 paragraph strings (body)
           - "references": Extracted reference list
+          - "abstract_background": 2-sentence distillation for the
+            Abstract section (the deterministic study-purpose sentence
+            is appended later by the export pipeline; this is just the
+            chemical-class + knowledge-state sentences).  Empty string
+            when the LLM omits the block.
           - "model_used": Which LLM model was used
           - "prompt_tokens_approx": Approximate input token count
     """
@@ -540,13 +571,15 @@ def generate_background(data: BackgroundData,
     if not response:
         raise RuntimeError(f"LLM ({model_used}) returned empty response")
 
-    # Parse the response into paragraphs and references
-    paragraphs, references = _parse_response(response)
+    # Parse the response into paragraphs, references, and the abstract
+    # background distillation.
+    paragraphs, references, abstract_background = _parse_response(response)
 
     return {
         "text": response,
         "paragraphs": paragraphs,
         "references": references,
+        "abstract_background": abstract_background,
         "model_used": model_used,
         "prompt_tokens_approx": prompt_tokens_approx,
     }
@@ -575,16 +608,40 @@ def _get_ollama_endpoint(model: str = "") -> OllamaEndpoint | None:
     return None
 
 
-def _parse_response(text: str) -> tuple[list[str], list[str]]:
+def _parse_response(text: str) -> tuple[list[str], list[str], str]:
     """
-    Parse the LLM response into separate paragraphs and a reference list.
+    Parse the LLM response into paragraphs, references, and the abstract
+    background distillation.
 
-    The expected format is 6 paragraphs of prose followed by a "References"
-    section. We split on double newlines for paragraphs and detect the
-    references section by keyword.
+    Expected format (in order):
+      1. 7 body paragraphs separated by double newlines
+      2. "References" header followed by [N] entries
+      3. "=== ABSTRACT BACKGROUND ===" delimiter followed by 2 sentences
+
+    Returns (paragraphs, references, abstract_background).  The abstract
+    string is empty when the LLM omits or malformats the abstract block —
+    the rest of the report still works.
     """
-    # Find the references section
-    ref_split = re.split(r'\n\s*References?\s*\n', text, flags=re.IGNORECASE)
+    # First, peel off the abstract background block if present.
+    # Matches "=== ABSTRACT BACKGROUND ===" with flexible whitespace and
+    # optional leading/trailing punctuation.
+    abstract_split = re.split(
+        r'\n\s*={3,}\s*ABSTRACT\s+BACKGROUND\s*={3,}\s*\n',
+        text, flags=re.IGNORECASE,
+    )
+    main_text = abstract_split[0]
+    abstract_background = ""
+    if len(abstract_split) > 1:
+        # Take everything after the delimiter as the abstract; strip any
+        # trailing markdown fences or stray "References" repetition.
+        abstract_raw = abstract_split[1].strip()
+        # Clean up: drop any trailing "References" / "==" markers
+        abstract_raw = re.split(r'\n\s*={3,}', abstract_raw)[0]
+        abstract_raw = re.split(r'\n\s*References?\s*\n', abstract_raw, flags=re.IGNORECASE)[0]
+        abstract_background = abstract_raw.strip()
+
+    # Find the references section in the main text
+    ref_split = re.split(r'\n\s*References?\s*\n', main_text, flags=re.IGNORECASE)
 
     prose_text = ref_split[0].strip()
     ref_text = ref_split[1].strip() if len(ref_split) > 1 else ""
@@ -602,7 +659,7 @@ def _parse_response(text: str) -> tuple[list[str], list[str]]:
             if line and (line[0] == '[' or line[0].isdigit()):
                 references.append(line)
 
-    return paragraphs, references
+    return paragraphs, references, abstract_background
 
 
 # ---------------------------------------------------------------------------

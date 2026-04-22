@@ -2771,13 +2771,18 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 "species": "Sprague Dawley",
             }
 
-            # Extract structured context from all data sources
+            # Extract structured context from all data sources.
+            # Pass session_dir so biosampling dose groups can be scanned
+            # from sidecar files, and integrated so the genomics assay
+            # (e.g., TempO-Seq) can be identified from chip metadata.
             ctx = extract_methods_context(
                 identity=identity,
                 fingerprints=_fps_for_methods,
                 animal_report=animal_report_data,
                 study_params=study_params,
                 bm2_jsons=bm2_jsons,
+                session_dir=str(_session_dir(dtxsid)),
+                integrated=integrated,
             )
 
             # Build and call the LLM

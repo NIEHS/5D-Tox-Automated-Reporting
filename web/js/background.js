@@ -231,6 +231,10 @@ async function approveBackground() {
             original_references: currentResult?.originalReferences || [],
             model_used: currentResult?.model_used || '',
             notes: currentResult?.notes || [],
+            // Persist the LLM-generated Abstract Background distillation
+            // so the abstract section survives session reloads and flows
+            // into PDF/DOCX exports without re-running the LLM.
+            abstract_background: currentResult?.abstract_background || '',
         },
     );
     if (!result) return;

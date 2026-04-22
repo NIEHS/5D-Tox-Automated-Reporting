@@ -252,6 +252,16 @@ async def api_generate_methods(request: Request):
             except Exception:
                 pass
 
+    # --- Load integrated data for genomics assay identification ---
+    integrated_data = None
+    if dtxsid:
+        int_path = SESSIONS_DIR / dtxsid / "integrated.json"
+        if int_path.exists():
+            try:
+                integrated_data = json.loads(int_path.read_text())
+            except Exception:
+                pass
+
     # --- Extract structured context from all data sources ---
     ctx = extract_methods_context(
         identity=identity,
@@ -259,6 +269,8 @@ async def api_generate_methods(request: Request):
         animal_report=animal_report_data,
         study_params=study_params,
         bm2_jsons=bm2_jsons,
+        session_dir=str(SESSIONS_DIR / dtxsid) if dtxsid else None,
+        integrated=integrated_data,
     )
 
     # --- Build the structured LLM prompt ---

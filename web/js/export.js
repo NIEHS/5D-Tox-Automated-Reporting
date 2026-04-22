@@ -1062,6 +1062,11 @@ async function buildExportPayload() {
         gene_set_narrative: { paragraphs: allGsNarr },
         gene_narrative: { paragraphs: allGeneNarr },
         summary_paragraphs: summaryParas,
+        // Abstract Background — LLM-generated alongside the body Background
+        // by background_writer.py (delimited "=== ABSTRACT BACKGROUND ===" block).
+        // The export pipeline appends a deterministic study-purpose sentence
+        // to produce the full Abstract Background section.
+        abstract_background: currentResult?.abstract_background || '',
     };
 }
 

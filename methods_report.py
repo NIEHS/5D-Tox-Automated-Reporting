@@ -142,6 +142,45 @@ class MethodsContext:
     # Organs with gene expression data (e.g. ["Liver", "Kidney"])
     ge_organs: list[str] = field(default_factory=list)
 
+    # --- Biosampling / pharmacokinetic context (for Abstract-Methods) ---
+    # Dose groups that had biosampling animals dedicated to internal dose
+    # assessment (blood/plasma collection).  Extracted from sidecar files
+    # (tissue_conc or body_weight) by scanning for rows with selection
+    # containing "biosampling".  Reference report writes e.g.:
+    #   "Blood was collected from animals dedicated for internal dose
+    #    assessment in the 4 and 37 mg/kg groups."
+    biosampling_doses: list[float] = field(default_factory=list)
+
+    # --- Pharmacokinetics (for Abstract-Results PK sentence) ---
+    # Aggregated plasma concentration means per sex × dose × timepoint,
+    # plus calculated half-lives per sex × dose.  Built from tissue
+    # concentration sidecars (the only domain that uses biosampling
+    # animals).  Half-lives use the standard two-point formula:
+    #   t½ = ln(2) × Δt / ln(C₁/C₂)
+    # where C₁ is the early timepoint concentration and C₂ the later one.
+    # Reference report writes:
+    #   "Average PFHxSAm plasma concentrations at 2 and 24 hours postdose
+    #    were lower in male rats than in female rats. Half-lives ... were
+    #    78.2 and 25.6 hours for the 4 and 37 mg/kg groups, respectively..."
+    #
+    # Schema:
+    #   pk_concentrations: {sex: {dose: {hour: mean_value}}}
+    #   pk_half_lives:     {sex: {dose: hours_float}}
+    #   pk_timepoints:     sorted list of timepoints in hours (e.g., [2, 24])
+    pk_concentrations: dict | None = None
+    pk_half_lives: dict | None = None
+    pk_timepoints: list[int] = field(default_factory=list)
+
+    # --- Genomics assay identification (for Abstract-Methods) ---
+    # Human-readable assay name (e.g., "TempO-Seq", "Affymetrix", "RNA-seq")
+    # and the chip/probe-set name (e.g., "S1500+").  Extracted from the
+    # integrated BMDProject's gene-expression experiments via chip.name
+    # and chip.chipId — S1500 in the chip name implies TempO-Seq.
+    # Reference report writes e.g.:
+    #   "...assayed in gene expression studies using the TempO-Seq assay."
+    genomics_assay: str | None = None
+    genomics_chip: str | None = None
+
     # --- BMDExpress / BMDS metadata (from .bm2 analysisInfo.notes) ---
     bmdexpress_version: str | None = None
     bmds_version: str | None = None
@@ -364,6 +403,8 @@ def extract_methods_context(
     animal_report: dict | None = None,
     study_params: dict | None = None,
     bm2_jsons: dict | None = None,
+    session_dir: str | None = None,
+    integrated: dict | None = None,
 ) -> MethodsContext:
     """
     Build a MethodsContext from all available data sources.
@@ -380,6 +421,11 @@ def extract_methods_context(
         study_params:  Optional user-provided overrides: vehicle, route, duration_days, species.
         bm2_jsons:     Optional dict of {file_id: bm2_json_dict} for extracting BMDExpress
                        analysis metadata from analysisInfo.notes.
+        session_dir:   Optional path to the session directory.  Used to scan sidecar files
+                       for biosampling dose groups (animals with selection="biosampling").
+        integrated:    Optional integrated BMDProject dict.  Used to extract the genomics
+                       assay/chip from doseResponseExperiments[].chip — e.g., chip name
+                       containing "S1500" identifies TempO-Seq.
 
     Returns:
         Populated MethodsContext with all available study metadata.
@@ -534,7 +580,237 @@ def extract_methods_context(
             fingerprints, ctx.dose_groups,
         )
 
+    # --- Biosampling dose groups (for Abstract-Methods) ---
+    # Scan sidecar files for rows where selection contains "biosampling".
+    # The reference report writes: "Blood was collected from animals
+    # dedicated for internal dose assessment in the 4 and 37 mg/kg groups."
+    if session_dir:
+        ctx.biosampling_doses = _extract_biosampling_doses(session_dir)
+
+    # --- Pharmacokinetics (for Abstract-Results) ---
+    # Aggregate plasma concentrations + half-lives from tissue conc
+    # sidecars.  Used by build_abstract_results_pk() to produce the
+    # cross-sex comparison sentence (e.g., "Half-lives ... were 78.2
+    # and 25.6 hours for the 4 and 37 mg/kg groups...").
+    if session_dir:
+        concs, t_half, timepoints = _extract_pk_data(session_dir)
+        if concs:
+            ctx.pk_concentrations = concs
+        if t_half:
+            ctx.pk_half_lives = t_half
+        if timepoints:
+            ctx.pk_timepoints = timepoints
+
+    # --- Genomics assay and chip (for Abstract-Methods) ---
+    # Extract from integrated.doseResponseExperiments[].chip.  The chip name
+    # or ID identifies the assay — "S1500" implies TempO-Seq, "HG_U133" implies
+    # Affymetrix, etc.
+    if integrated and ctx.has_gene_expression:
+        assay, chip = _extract_genomics_assay(integrated)
+        ctx.genomics_assay = assay
+        ctx.genomics_chip = chip
+
     return ctx
+
+
+def _extract_biosampling_doses(session_dir: str) -> list[float]:
+    """
+    Scan session sidecar JSON files for biosampling animals and collect
+    the set of dose groups they belong to.
+
+    Biosampling animals are tagged in sidecar data via the per-animal
+    `selection` field containing "biosampling".  Usually only 2 of the
+    study's 10 doses have biosampling animals (the two chosen for
+    pharmacokinetic/internal dose assessment).
+
+    Returns a sorted list of dose values.  Empty list if no biosampling
+    animals are found.
+    """
+    import os
+    import json
+
+    doses: set[float] = set()
+    files_dir = os.path.join(session_dir, "files")
+    if not os.path.isdir(files_dir):
+        return []
+
+    for fname in os.listdir(files_dir):
+        if not fname.endswith(".sidecar.json"):
+            continue
+        try:
+            with open(os.path.join(files_dir, fname)) as f:
+                sc = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        for _aid, rec in sc.get("animals", {}).items():
+            selection = str(rec.get("selection", ""))
+            if "biosampling" in selection.lower():
+                dose = rec.get("dose")
+                if dose is not None:
+                    try:
+                        doses.add(float(dose))
+                    except (TypeError, ValueError):
+                        pass
+
+    return sorted(doses)
+
+
+def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
+    """
+    Extract pharmacokinetic data from tissue concentration sidecars.
+
+    Reads any tissue_conc_*.sidecar.json files in the session, scans
+    biosampling animal records, and aggregates plasma concentrations
+    by (sex, dose, timepoint).  Then computes per-(sex, dose) plasma
+    half-lives using the standard two-point formula:
+
+        t½ = ln(2) × Δt / ln(C_early / C_late)
+
+    Half-life is only computed when:
+      - Exactly two timepoints exist with positive mean concentrations
+      - The early concentration is greater than the late concentration
+        (monotonic decay — required for the log-linear assumption)
+
+    Returns:
+        (concentrations, half_lives, timepoints)
+        concentrations: {sex: {dose: {hour_int: mean_value}}}
+        half_lives:     {sex: {dose: hours_float}}
+        timepoints:     sorted list of unique hour integers seen across
+                        all observations (e.g., [2, 24])
+    """
+    import os
+    import json
+    import math
+    import re
+
+    files_dir = os.path.join(session_dir, "files")
+    if not os.path.isdir(files_dir):
+        return {}, {}, []
+
+    # Per (sex, dose, hour) → list of concentration values
+    raw_values: dict[tuple[str, float, int], list[float]] = {}
+    timepoints_seen: set[int] = set()
+
+    # Pattern to extract the timepoint hours from endpoint names like
+    # "Plasma 2 Hour Perfluorohexanesulfonamide Concentration".
+    _HOUR_RE = re.compile(r"Plasma\s+(\d+)\s+Hour", re.IGNORECASE)
+
+    for fname in os.listdir(files_dir):
+        if not fname.startswith("tissue_conc") or not fname.endswith(".sidecar.json"):
+            continue
+        try:
+            with open(os.path.join(files_dir, fname)) as f:
+                sc = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        # The sidecar's "sex" field carries the per-file sex (e.g., "Male"),
+        # which we trust over per-animal sex (often None in tissue conc).
+        sex = sc.get("sex") or ""
+        if not sex:
+            continue
+
+        for _aid, rec in sc.get("animals", {}).items():
+            selection = str(rec.get("selection", ""))
+            if "biosampling" not in selection.lower():
+                continue
+            dose = rec.get("dose")
+            if dose is None:
+                continue
+            try:
+                dose = float(dose)
+            except (TypeError, ValueError):
+                continue
+
+            for obs in rec.get("observations", []):
+                ep = obs.get("endpoint", "")
+                if "Concentration" not in ep:
+                    continue  # skip LOQ rows
+                m = _HOUR_RE.search(ep)
+                if not m:
+                    continue
+                hour = int(m.group(1))
+                val = obs.get("value")
+                if val is None:
+                    continue
+                try:
+                    v = float(val)
+                except (TypeError, ValueError):
+                    continue
+                raw_values.setdefault((sex, dose, hour), []).append(v)
+                timepoints_seen.add(hour)
+
+    # Aggregate to means
+    concentrations: dict[str, dict[float, dict[int, float]]] = {}
+    for (sex, dose, hour), vs in raw_values.items():
+        if not vs:
+            continue
+        mean = sum(vs) / len(vs)
+        concentrations.setdefault(sex, {}).setdefault(dose, {})[hour] = mean
+
+    # Compute half-lives where we have two-timepoint monotonic decay
+    half_lives: dict[str, dict[float, float]] = {}
+    for sex, by_dose in concentrations.items():
+        for dose, by_hour in by_dose.items():
+            tps = sorted(by_hour.keys())
+            if len(tps) < 2:
+                continue
+            # Use the first and last available timepoints
+            t_early, t_late = tps[0], tps[-1]
+            c_early = by_hour[t_early]
+            c_late = by_hour[t_late]
+            if c_early <= 0 or c_late <= 0 or c_early <= c_late:
+                continue  # require monotonic decay for log-linear half-life
+            try:
+                t_half = math.log(2) * (t_late - t_early) / math.log(c_early / c_late)
+            except (ValueError, ZeroDivisionError):
+                continue
+            half_lives.setdefault(sex, {})[dose] = t_half
+
+    return concentrations, half_lives, sorted(timepoints_seen)
+
+
+def _extract_genomics_assay(integrated: dict) -> tuple[str | None, str | None]:
+    """
+    Identify the genomics assay platform from the integrated BMDProject.
+
+    Scans doseResponseExperiments for gene-expression experiments (those with
+    a non-generic chip) and reads chip.name / chip.chipId.  Maps known chip
+    identifiers to their canonical assay names:
+
+      - "S1500", "S1500+"        → TempO-Seq
+      - "BioSpyder"              → TempO-Seq
+      - "HG-U133", "HT_MG_..."   → Affymetrix GeneChip
+      - "Illumina"               → Illumina BeadChip / RNA-seq
+
+    Returns (assay_name, chip_name) tuple — either may be None if not
+    identifiable.  For unknown chips, returns (None, chip.name) so the
+    caller can at least report the raw chip identifier.
+    """
+    experiments = integrated.get("doseResponseExperiments", [])
+    for e in experiments:
+        chip = e.get("chip")
+        # Skip refs (int) and None — we need a full dict with name/chipId
+        if not isinstance(chip, dict):
+            continue
+        chip_id = str(chip.get("chipId", "") or "")
+        chip_name = str(chip.get("name", "") or "")
+        # Skip placeholder "generic" chips attached to apical experiments
+        if chip_id.lower() in ("generic", "") and chip_name.lower() in ("generic", ""):
+            continue
+        # Compare case-insensitively against known signatures
+        probe = (chip_id + " " + chip_name).lower()
+        if "s1500" in probe or "tempo" in probe or "biospyder" in probe:
+            return ("TempO-Seq", chip_name or chip_id)
+        if "affy" in probe or "hg-u133" in probe or "ht_mg" in probe:
+            return ("Affymetrix GeneChip", chip_name or chip_id)
+        if "illumina" in probe:
+            return ("Illumina", chip_name or chip_id)
+        # Unknown real chip — return its name so the caller can still report it
+        return (None, chip_name or chip_id)
+
+    return (None, None)
 
 
 def _build_genomics_sample_counts(
@@ -938,6 +1214,1214 @@ def build_table1_data(ctx: MethodsContext) -> dict | None:
         "rows": rows,
         "footnotes": [],
     }
+
+
+# ---------------------------------------------------------------------------
+# Abstract → Methods paragraph builder
+# ---------------------------------------------------------------------------
+# The Abstract section has 4 labeled paragraphs (Background, Methods, Results,
+# Summary).  The Methods paragraph is deterministic — every fact it reports is
+# already in MethodsContext, so we can generate it from a template without an
+# LLM call.  This keeps the abstract methods faithful to the data and fast.
+
+def _format_dose_list(doses: list[float], dose_unit: str) -> str:
+    """
+    Format a list of dose values into a NIEHS-style comma-separated string.
+
+    Per NIEHS Report 10 convention:
+      - Preserve the exact dose values (including leading zero and decimals)
+      - Separate with commas, with "and" before the last value
+      - Append "mg/kg body weight [mg/kg]" style unit annotation
+
+    Examples:
+      _format_dose_list([0, 0.15, 0.5], "mg/kg")
+        → "0, 0.15, and 0.5"
+      _format_dose_list([4, 37], "mg/kg")
+        → "4 and 37"
+    """
+    if not doses:
+        return "(doses not specified)"
+
+    # Format each dose: strip trailing ".0" for integers (with NIEHS-style
+    # thousand-separator comma for >=1000), keep decimals otherwise.
+    def _fmt(d: float) -> str:
+        if d == int(d):
+            return f"{int(d):,}"
+        return f"{d:g}"
+
+    formatted = [_fmt(d) for d in doses]
+
+    if len(formatted) == 1:
+        return formatted[0]
+    if len(formatted) == 2:
+        return f"{formatted[0]} and {formatted[1]}"
+    return ", ".join(formatted[:-1]) + ", and " + formatted[-1]
+
+
+def _format_organ_list(organs: list[str]) -> str:
+    """
+    Format a list of organ names (e.g., ["Liver", "Kidney"]) into natural
+    English: "liver and kidney" (two), "liver, kidney, and spleen" (three+),
+    "liver" (one).  Lowercases organ names since they appear mid-sentence.
+    """
+    lc = [o.lower() for o in organs]
+    if not lc:
+        return ""
+    if len(lc) == 1:
+        return lc[0]
+    if len(lc) == 2:
+        return f"{lc[0]} and {lc[1]}"
+    return ", ".join(lc[:-1]) + ", and " + lc[-1]
+
+
+def build_abstract_methods(ctx: MethodsContext) -> str:
+    """
+    Build the Abstract → Methods paragraph from a MethodsContext.
+
+    Mirrors the structure of NIEHS Report 10's Abstract-Methods paragraph:
+
+      A short-term in vivo biological potency study on {TA} in adult {sexes}
+      {Species} (Strain) rats was conducted.  {TA} was formulated in
+      {vehicle} and administered once daily for {duration} consecutive days
+      by {route} (study days 0–{duration-1}).  {TA} was administered at
+      {N_doses} doses ({dose_list} {dose_unit}).  Blood was collected from
+      animals dedicated for internal dose assessment in the
+      {biosampling_doses} {dose_unit} groups.  On study day {duration}, the
+      day after the final dose was administered, animals were euthanized,
+      standard toxicological measures were assessed, and the {ge_organs}
+      were assayed in gene expression studies using the {assay} assay.
+      Modeling was conducted to identify the benchmark doses (BMDs)
+      associated with apical toxicological endpoints and transcriptional
+      changes in the {ge_organs}.  A benchmark response of {bmr} was used
+      to model all endpoints.
+
+    All data comes from MethodsContext — no LLM call.  Conditional clauses
+    are omitted when the corresponding data isn't present (e.g., no
+    biosampling animals → skip the blood collection sentence; no gene
+    expression → skip the transcriptomics clauses).
+    """
+    # --- Test article display name ---
+    # Use abbreviation if present, else full name
+    ta_name = ctx.chemical_name or "the test article"
+
+    # --- Sexes ("adult male and female") ---
+    sexes = [s.lower() for s in ctx.sexes] if ctx.sexes else ["male", "female"]
+    sexes_str = " and ".join(sexes)
+
+    # --- Species ("Sprague Dawley (Hsd:Sprague Dawley® SD®)") ---
+    # If the species string contains the strain in parens, use as-is;
+    # otherwise fall back to "Sprague Dawley".
+    species = ctx.species or "Sprague Dawley"
+
+    # --- Vehicle ---
+    vehicle = ctx.vehicle or "corn oil"
+
+    # --- Duration + study days range ---
+    duration = ctx.duration_days or 5
+    last_day = duration - 1
+    sacrifice_day = duration
+
+    # --- Route ---
+    route = ctx.route or "gavage"
+
+    # --- Dose list ---
+    n_doses = len(ctx.dose_groups)
+    dose_list = _format_dose_list(ctx.dose_groups, ctx.dose_unit)
+    # NIEHS convention: "mg/kg body weight [mg/kg]" on first mention
+    dose_unit_full = f"{ctx.dose_unit} body weight [{ctx.dose_unit}]"
+
+    # --- Biosampling sentence (conditional) ---
+    biosampling_sentence = ""
+    if ctx.biosampling_doses:
+        bio_list = _format_dose_list(ctx.biosampling_doses, ctx.dose_unit)
+        biosampling_sentence = (
+            f" Blood was collected from animals dedicated for internal "
+            f"dose assessment in the {bio_list} {ctx.dose_unit} groups."
+        )
+
+    # --- Transcriptomics clauses (conditional) ---
+    assay_clause = ""
+    bmd_clause = (
+        " Modeling was conducted to identify the benchmark doses (BMDs) "
+        "associated with apical toxicological endpoints"
+    )
+    if ctx.has_gene_expression and ctx.ge_organs:
+        organs_str = _format_organ_list(ctx.ge_organs)
+        assay_name = ctx.genomics_assay or "gene expression"
+        assay_clause = (
+            f", and the {organs_str} were assayed in gene expression "
+            f"studies using the {assay_name} assay"
+        )
+        bmd_clause += f" and transcriptional changes in the {organs_str}"
+    bmd_clause += "."
+
+    # --- BMR description ---
+    # Default to NIEHS protocol: "one standard deviation"
+    bmr_desc = "one standard deviation"
+    if ctx.bmr_factor is not None and ctx.bmr_type:
+        # e.g., bmr_factor=1.0, bmr_type="Std. Dev." → "one standard deviation"
+        factor_words = {1.0: "one", 2.0: "two", 0.5: "one half of"}
+        word = factor_words.get(ctx.bmr_factor, str(ctx.bmr_factor))
+        type_clean = ctx.bmr_type.lower().replace("std. dev.", "standard deviation").strip()
+        bmr_desc = f"{word} {type_clean}" if word else type_clean
+
+    # --- Assemble the paragraph ---
+    paragraph = (
+        f"A short-term in vivo biological potency study on {ta_name} in "
+        f"adult {sexes_str} {species} rats was conducted. "
+        f"{ta_name} was formulated in {vehicle} and administered once "
+        f"daily for {duration} consecutive days by {route} (study days "
+        f"0–{last_day}). "
+        f"{ta_name} was administered at {n_doses} doses "
+        f"({dose_list} {dose_unit_full})."
+        f"{biosampling_sentence}"
+        f" On study day {sacrifice_day}, the day after the final dose "
+        f"was administered, animals were euthanized, standard "
+        f"toxicological measures were assessed{assay_clause}."
+        f"{bmd_clause}"
+        f" A benchmark response of {bmr_desc} was used to model all "
+        f"endpoints."
+    )
+
+    return paragraph
+
+
+# ---------------------------------------------------------------------------
+# Abstract → Results paragraph builder
+# ---------------------------------------------------------------------------
+# The Abstract → Results paragraph summarizes the apical-endpoint findings
+# (significant changes + BMD/BMDL values) per sex.  Like the Methods
+# paragraph, every fact is already in the BMD summary, so we generate it
+# deterministically without an LLM.  Genomics and pharmacokinetics sub-
+# paragraphs follow the same pattern and can be added in future iterations.
+
+# Direction words used to convert UP/DOWN flags into adjectives that read
+# naturally when prefixed to an endpoint name.
+_DIRECTION_WORDS = {
+    "UP":   "increased",
+    "DOWN": "decreased",
+    "":     "altered",  # fallback if direction wasn't recorded
+}
+
+
+def _is_reliable_bmd(entry: dict) -> bool:
+    """
+    Decide whether a BMD summary entry has a reliable, parseable BMD.
+
+    NIEHS reference convention: report "no reliable BMD" when the value
+    is missing, the dash placeholder ("—"), an explicit failure marker
+    ("NVM" = no viable model), or when bmd_status is something other
+    than "viable".
+    """
+    bmd = entry.get("bmd")
+    if bmd is None:
+        return False
+    s = str(bmd).strip()
+    if s in ("", "—", "NVM", "ND", "NA"):
+        return False
+    # Must be parseable as float
+    try:
+        float(s)
+    except (TypeError, ValueError):
+        return False
+    if entry.get("bmd_status") and entry["bmd_status"] != "viable":
+        return False
+    return True
+
+
+# Threshold for the anomalous-BMD heuristic.  When the curve-fit BMD is
+# this many times lower than the statistically-observed NOEL/LOEL, the
+# BMD is treated as a model artifact rather than a true potency estimate.
+#
+# The NIEHS reference report quantifies the anomaly callouts as
+# "approximately 75- to 230-fold", "140- to 430-fold", and "25- to
+# 80-fold" lower than NOEL/LOEL — implying the threshold for excluding
+# from the Abstract effects list is somewhere around 10× (any larger
+# discrepancy would be reported in the body Results as anomalous).
+ANOMALY_RATIO_THRESHOLD = 10.0
+
+
+def _is_anomalous_bmd(entry: dict, threshold: float = ANOMALY_RATIO_THRESHOLD) -> bool:
+    """
+    Detect whether a BMD entry has an anomalously LOW model-derived BMD
+    compared to the statistically-observed NOEL/LOEL.
+
+    Rationale: pairwise statistical tests identify the lowest dose where
+    the effect is statistically significant (LOEL) and the highest dose
+    where it isn't (NOEL).  A curve-fit BMD substantially below the NOEL
+    means the model extrapolates an "effect" at doses where the actual
+    measurements showed none — almost always a model artifact (e.g.,
+    poor model fit, control variability, BMR set too tight relative to
+    the data).  The reference report flags such BMDs as anomalous and
+    excludes them from the Abstract's "effects included..." list.
+
+    Decision rule:
+      - If NOEL is present and BMD < NOEL / threshold  → anomalous.
+      - If NOEL is None but LOEL is present and
+        BMD < LOEL / threshold → anomalous (weaker signal).
+      - Otherwise → not flagged.
+
+    Args:
+        entry: BMD summary dict with keys 'bmd', 'noel', 'loel'.
+        threshold: ratio at which BMD is considered too low to trust
+                   (default 10, i.e., BMD < NOEL/10 is anomalous).
+
+    Returns:
+        True if the BMD should be filtered out of the Abstract effects list.
+    """
+    bmd_raw = entry.get("bmd")
+    if bmd_raw is None:
+        return False
+    try:
+        bmd = float(str(bmd_raw).strip())
+    except (TypeError, ValueError):
+        return False
+    if bmd <= 0:
+        return False
+
+    noel = entry.get("noel")
+    loel = entry.get("loel")
+
+    # Prefer NOEL when available (it's the strongest evidence of "no
+    # statistical effect at this dose"); fall back to LOEL otherwise.
+    reference_dose = None
+    if noel is not None:
+        try:
+            reference_dose = float(noel)
+        except (TypeError, ValueError):
+            pass
+    if reference_dose is None and loel is not None:
+        try:
+            reference_dose = float(loel)
+        except (TypeError, ValueError):
+            pass
+
+    if reference_dose is None or reference_dose <= 0:
+        return False
+
+    return bmd < (reference_dose / threshold)
+
+
+def _normalize_endpoint_name(endpoint: str) -> str:
+    """
+    Lowercase a multi-word endpoint name for mid-sentence use, while
+    preserving short ALL-CAPS acronyms (e.g., "ALT", "RBC") that should
+    stay uppercase.
+
+    Examples:
+      "Total Thyroxine"           → "total thyroxine"
+      "Aspartate Aminotransferase" → "aspartate aminotransferase"
+      "Thyroid Stimulating Hormone" → "thyroid stimulating hormone"
+      "ALT"                        → "ALT"
+      "Hgb"                        → "hgb"
+    """
+    if not endpoint:
+        return ""
+
+    words = endpoint.strip().split()
+    out_words: list[str] = []
+    for w in words:
+        # Acronym heuristic: all-uppercase, 2-5 chars, no digits → keep
+        if 2 <= len(w) <= 5 and w.isupper() and w.isalpha():
+            out_words.append(w)
+        else:
+            out_words.append(w.lower())
+    return " ".join(out_words)
+
+
+def _format_endpoint_phrase(endpoint: str, direction: str, platform: str) -> str:
+    """
+    Build the descriptor phrase used in the abstract sentence:
+      "{direction word} {endpoint name lowercased}{contextual suffix}"
+
+    Hormone endpoints conventionally include "concentration" (e.g.,
+    "decreased total thyroxine concentration"); organ weight endpoints
+    append "weight" (e.g., "increased liver weight"); other platforms
+    use the bare endpoint name.
+    """
+    direction_word = _DIRECTION_WORDS.get(direction or "", "altered")
+    endpoint_lower = _normalize_endpoint_name(endpoint) or "(unknown endpoint)"
+
+    suffix = ""
+    if platform == "Hormones":
+        suffix = " concentration"
+    elif platform == "Organ Weight":
+        suffix = " weight"
+
+    return f"{direction_word} {endpoint_lower}{suffix}"
+
+
+def _format_bmd_pair(bmd, bmdl) -> str:
+    """
+    Format one BMD (BMDL) value pair for the listing sentence.
+
+    Strategy: when the source value parses as a clean decimal, preserve
+    the source's precision — the upstream BMDExpress output already
+    rounds to a sensible number of significant figures, and matching
+    that display avoids spurious trailing zeros (e.g., "8.54" not
+    "8.540").  Falls back to "—" for missing/non-numeric values.
+    """
+    def _fmt(v) -> str:
+        if v is None:
+            return "—"
+        s = str(v).strip()
+        if s in ("", "—", "NVM", "ND", "NA"):
+            return "—"
+        # Verify it's parseable, but return the original string to
+        # preserve source-side rounding (e.g., "8.54" not "8.5400")
+        try:
+            float(s)
+        except (TypeError, ValueError):
+            return s
+        return s
+
+    return f"{_fmt(bmd)} ({_fmt(bmdl)})"
+
+
+def _join_oxford(items: list[str]) -> str:
+    """
+    Join a list with Oxford comma and "and" before the last element.
+    "" → "", ["a"] → "a", ["a","b"] → "a and b",
+    ["a","b","c"] → "a, b, and c".
+    """
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
+def build_abstract_results_apical(
+    apical_bmd_summary: list[dict],
+    sexes: list[str] | None = None,
+) -> str:
+    """
+    Build the apical-findings portion of the Abstract → Results paragraph.
+
+    Mirrors NIEHS Report 10's per-sex apical summary:
+
+      Several clinical pathology and organ weight measurements showed
+      dose-related changes from which BMD values were calculated. In
+      male rats, the effects included {direction} {endpoint}, ... The
+      BMDs and benchmark dose lower confidence limits (BMDLs) were
+      {bmd1} ({bmdl1}), ..., respectively. In female rats, there were
+      no apical endpoints for which a BMD value could be reliably
+      estimated.
+
+    Strategy:
+      1. Lead sentence reports which platform categories had reliable
+         BMDs (e.g., "clinical pathology and organ weight" or just
+         "organ weight"), or omits the lead if no reliable BMDs exist
+         in either sex.
+      2. For each sex (in canonical Male, Female order), filter to
+         entries with reliable BMDs and a known direction, sort by
+         ascending BMD, and emit a "the effects included ..." sentence
+         followed by the BMD/BMDL listing.
+      3. If a sex has no reliable BMDs, emit the standard "no apical
+         endpoints" fallback sentence.
+
+    Args:
+        apical_bmd_summary: list of {endpoint, sex, platform, bmd, bmdl,
+                            bmd_status, loel, noel, direction} dicts —
+                            same structure as data["bmd_summary"]["endpoints"].
+        sexes: optional list of sex labels to include (defaults to
+               ["Male", "Female"]).  Order is preserved in output.
+
+    Returns:
+        A single paragraph string ready to insert into the Abstract.
+    """
+    if sexes is None:
+        sexes = ["Male", "Female"]
+
+    # --- De-duplicate ---
+    # The cache may carry duplicate rows where one has BMD values and
+    # the other has "—" placeholders.  Keep only the rows with reliable
+    # BMD values, dropping the placeholder duplicates.
+    reliable = [e for e in apical_bmd_summary if _is_reliable_bmd(e)]
+
+    # --- Anomalous-BMD filter ---
+    # Exclude entries whose curve-fit BMD is implausibly low compared to
+    # the statistically-observed NOEL/LOEL.  These are model artifacts,
+    # not real potency estimates — the reference report excludes them
+    # from the Abstract effects list and instead calls them out as
+    # anomalous in the body Results section.
+    reliable = [e for e in reliable if not _is_anomalous_bmd(e)]
+
+    # --- Lead sentence: which platform categories had findings? ---
+    # Group reliable entries by platform → human-readable category name
+    PLATFORM_TO_CATEGORY = {
+        "Clinical Chemistry": "clinical pathology",
+        "Hematology":         "clinical pathology",
+        "Hormones":           "clinical pathology",
+        "Organ Weight":       "organ weight",
+        "Body Weight":        "body weight",
+    }
+    categories: list[str] = []
+    seen: set[str] = set()
+    # Order categories by first appearance among reliable entries sorted
+    # by sex then platform — gives stable output across runs.
+    for entry in sorted(reliable, key=lambda e: (e.get("sex", ""), e.get("platform", ""))):
+        cat = PLATFORM_TO_CATEGORY.get(entry.get("platform", ""))
+        if cat and cat not in seen:
+            categories.append(cat)
+            seen.add(cat)
+
+    sentences: list[str] = []
+    if categories:
+        cat_phrase = _join_oxford(categories)
+        sentences.append(
+            f"Several {cat_phrase} measurements showed dose-related changes "
+            f"from which BMD values were calculated."
+        )
+
+    # --- Per-sex apical findings ---
+    for sex in sexes:
+        sex_entries = [e for e in reliable if e.get("sex") == sex]
+        # Filter to entries with a known direction (non-empty)
+        sex_entries = [e for e in sex_entries if e.get("direction")]
+
+        if not sex_entries:
+            sentences.append(
+                f"In {sex.lower()} rats, there were no apical endpoints "
+                f"for which a BMD value could be reliably estimated."
+            )
+            continue
+
+        # Sort by ascending BMD (most sensitive first — matches NIEHS reference)
+        sex_entries.sort(key=lambda e: float(e["bmd"]))
+
+        # Build the descriptor phrases and the parallel BMD (BMDL) list
+        descriptors = [
+            _format_endpoint_phrase(
+                e.get("endpoint", ""),
+                e.get("direction", ""),
+                e.get("platform", ""),
+            )
+            for e in sex_entries
+        ]
+        bmd_pairs = [_format_bmd_pair(e["bmd"], e.get("bmdl")) for e in sex_entries]
+
+        # Differentiate "BMD" vs "BMDs" if singular
+        plural = len(sex_entries) > 1
+        sentences.append(
+            f"In {sex.lower()} rats, the effects included "
+            f"significantly {_join_oxford(descriptors)}. "
+            f"The BMD{'s' if plural else ''} and benchmark dose lower "
+            f"confidence limit{'s' if plural else ''} (BMDL{'s' if plural else ''}) "
+            f"{'were' if plural else 'was'} {_join_oxford(bmd_pairs)}, "
+            f"{'respectively' if plural else ''}".rstrip(", ") + "."
+        )
+
+    return " ".join(sentences)
+
+
+# ---------------------------------------------------------------------------
+# Genomics: most sensitive gene sets and genes per organ × sex
+# ---------------------------------------------------------------------------
+
+def _format_rat_gene_symbol(symbol: str) -> str:
+    """
+    Convert an uppercase gene symbol (e.g., "PRLR") into NIEHS rat-gene
+    convention (e.g., "Prlr") — first letter capitalized, rest lowercase,
+    with embedded slashes and digits preserved.
+
+    Examples:
+      "PRLR"                  → "Prlr"
+      "GSTA2"                 → "Gsta2"
+      "LOC100911545/A2M"      → "Loc100911545/A2m"
+      "CYP7A1"                → "Cyp7a1"
+    """
+    if not symbol:
+        return symbol
+    # Slash-separated multi-symbols: format each segment independently
+    if "/" in symbol:
+        return "/".join(_format_rat_gene_symbol(s) for s in symbol.split("/"))
+    s = symbol.strip()
+    if not s:
+        return s
+    return s[0].upper() + s[1:].lower()
+
+
+def _stat_display_name(stat_key: str) -> str:
+    """
+    Convert a BMD aggregation stat key (e.g., "median", "fifth_pct") into
+    the prose word used in the abstract sentence ("median", "fifth percentile").
+    """
+    return {
+        "median":     "median",
+        "mean":       "mean",
+        "fifth_pct":  "fifth percentile",
+        "minimum":    "minimum",
+        "maximum":    "maximum",
+    }.get(stat_key, stat_key.replace("_", " "))
+
+
+def _format_dose_value(v) -> str:
+    """
+    Format a dose/BMD value preserving sensible precision.  Drops trailing
+    zeros while keeping at most 3 decimal places (matches NIEHS reference
+    e.g., "0.520", "5.725", "1,000").  NaN/inf values render as the dash
+    placeholder used elsewhere for missing data.
+    """
+    import math
+
+    if v is None:
+        return "—"
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if math.isnan(f) or math.isinf(f):
+        return "—"
+    if f >= 1000 and f == int(f):
+        return f"{int(f):,}"
+    if f == int(f):
+        return str(int(f))
+    # Round to 3 decimal places, strip trailing zeros, restore at least one
+    s = f"{f:.3f}".rstrip("0").rstrip(".")
+    return s if s else "0"
+
+
+def _picks_above_lle(items: list[dict], lle: float, n: int) -> list[dict]:
+    """
+    Return up to N items sorted by ascending BMD, filtered to those with
+    BMD >= lower-limit-of-extrapolation (LLE).  The reference report
+    excludes anything below LLE from the "most sensitive" lists.
+
+    Items with NaN/inf BMD or BMDL are treated as unreliable and dropped
+    — these come from failed model fits where curve coefficients didn't
+    converge.
+    """
+    import math
+
+    reliable: list[dict] = []
+    for item in items:
+        bmd = item.get("bmd")
+        bmdl = item.get("bmdl")
+        if bmd is None:
+            continue
+        try:
+            bmd_f = float(bmd)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(bmd_f) or math.isinf(bmd_f) or bmd_f < lle:
+            continue
+        # Also filter NaN BMDLs — a NaN BMDL means the lower confidence
+        # limit didn't converge, which the reference treats as unreliable.
+        try:
+            bmdl_f = float(bmdl) if bmdl is not None else None
+            if bmdl_f is not None and (math.isnan(bmdl_f) or math.isinf(bmdl_f)):
+                continue
+        except (TypeError, ValueError):
+            pass
+        reliable.append({**item, "_bmd_float": bmd_f})
+
+    reliable.sort(key=lambda x: x["_bmd_float"])
+    return reliable[:n]
+
+
+def _build_gene_sets_sentence(
+    sets: list[dict], sex: str, stat_label: str, dose_unit: str,
+) -> str:
+    """
+    Build one "most sensitive gene sets" sentence for a given sex.
+
+    Reference pattern:
+      "The most sensitive gene sets in {sex} rats for which a reliable
+       estimate of the BMD could be made were {GO terms with Oxford
+       comma} with {stat} BMDs of {values} {unit} and {stat} BMDLs of
+       {values} {unit}, respectively."
+
+    Returns "" when the input list is empty (caller decides whether to
+    emit a "no reliable BMD" fallback).
+    """
+    if not sets:
+        return ""
+
+    terms = [s.get("go_term", s.get("go_id", "(unknown)")) for s in sets]
+    bmds = [_format_dose_value(s.get("bmd")) for s in sets]
+    bmdls = [_format_dose_value(s.get("bmdl")) for s in sets]
+
+    plural = len(sets) > 1
+    return (
+        f"The most sensitive gene set{'s' if plural else ''} in "
+        f"{sex.lower()} rats for which a reliable estimate of the "
+        f"BMD could be made {'were' if plural else 'was'} "
+        f"{_join_oxford(terms)} with {stat_label} BMD"
+        f"{'s' if plural else ''} of {_join_oxford(bmds)} {dose_unit} "
+        f"and {stat_label} BMDL{'s' if plural else ''} of "
+        f"{_join_oxford(bmdls)} {dose_unit}, respectively."
+    )
+
+
+def _build_top_genes_sentence(
+    genes: list[dict], sex: str, direction: str, dose_unit: str,
+) -> str:
+    """
+    Build one "most sensitive up/down-regulated genes" sentence.
+
+    Reference pattern:
+      "The most sensitive {up/down}regulated genes in {sex} rats with
+       reliable BMD estimates included {gene symbols} with BMDs (BMDLs)
+       of {pairs}, respectively."
+
+    Returns "" when no genes match the direction filter.
+    """
+    if not genes:
+        return ""
+
+    symbols = [_format_rat_gene_symbol(g.get("gene_symbol", "")) for g in genes]
+    pairs = [
+        f"{_format_dose_value(g.get('bmd'))} ({_format_dose_value(g.get('bmdl'))})"
+        for g in genes
+    ]
+
+    plural = len(genes) > 1
+    return (
+        f"The most sensitive {direction}regulated gene"
+        f"{'s' if plural else ''} in {sex.lower()} rats with reliable "
+        f"BMD estimate{'s' if plural else ''} "
+        f"{'included' if plural else 'was'} {_join_oxford(symbols)} "
+        f"with BMD{'s' if plural else ''} (BMDL{'s' if plural else ''}) "
+        f"of {_join_oxford(pairs)} {dose_unit}, respectively."
+    )
+
+
+def build_abstract_results_genomics(
+    genomics_sections: dict,
+    dose_groups: list[float],
+    dose_unit: str = "mg/kg",
+    bmd_stat: str | None = None,
+    n_top_sets: int = 3,
+    n_top_genes: int = 8,
+    sexes: list[str] | None = None,
+) -> str:
+    """
+    Build the genomics portion of the Abstract → Results paragraph.
+
+    For each organ (alphabetical order, matching reference convention),
+    emits:
+      1. A lower-limit-of-extrapolation summary sentence: either "no GO
+         process or individual genes had BMD median values below
+         <{LLE} {unit}>" or a count of items below.
+      2. Per sex: the most sensitive gene sets sentence (up to n_top_sets).
+      3. Per sex: the most sensitive up-regulated genes sentence
+         (up to n_top_genes).
+      4. Per sex: the most sensitive down-regulated genes sentence
+         (up to n_top_genes).
+
+    Empty sentences are omitted (e.g., a sex with no reliable gene sets
+    silently drops that sentence).
+
+    Args:
+        genomics_sections: dict keyed by "{organ}_{sex}" (e.g., "liver_male"),
+                           each value with gene_sets_by_stat and top_genes.
+        dose_groups:       The full study dose list — used to compute the
+                           lower limit of extrapolation (lowest non-zero / 3).
+        dose_unit:         Display unit (default "mg/kg").
+        bmd_stat:          Which stat to use ("median", "fifth_pct", etc.).
+                           Defaults to whichever stat is present in the data.
+        n_top_sets:        How many top gene sets to list per sex.
+        n_top_genes:       How many top up/down-regulated genes per sex.
+        sexes:             Sex order (defaults to ["Male", "Female"]).
+
+    Returns:
+        Paragraph string, or empty string if no genomics data is present.
+    """
+    if not genomics_sections:
+        return ""
+
+    sexes = sexes or ["Male", "Female"]
+
+    # Lower limit of extrapolation = lowest non-zero dose / 3 (BMDExpress convention)
+    nonzero_doses = [d for d in dose_groups if d and d > 0]
+    if not nonzero_doses:
+        return ""
+    lle = min(nonzero_doses) / 3.0
+    lle_str = _format_dose_value(lle)
+
+    # Identify all organs from the section keys (e.g. "liver_male" → "liver")
+    organs: set[str] = set()
+    for key in genomics_sections:
+        if "_" in key:
+            organs.add(key.split("_", 1)[0])
+    organs_sorted = sorted(organs)
+
+    sentences: list[str] = []
+
+    for organ in organs_sorted:
+        # --- Pick which BMD stat to read (default to whatever exists) ---
+        sample_section = None
+        for sex in sexes:
+            sec = genomics_sections.get(f"{organ}_{sex.lower()}")
+            if sec and sec.get("gene_sets_by_stat"):
+                sample_section = sec
+                break
+        if not sample_section:
+            continue
+
+        available_stats = list(sample_section["gene_sets_by_stat"].keys())
+        chosen_stat = bmd_stat if bmd_stat in available_stats else (available_stats[0] if available_stats else None)
+        if not chosen_stat:
+            continue
+        stat_label = _stat_display_name(chosen_stat)
+
+        # --- Lower-limit-of-extrapolation summary across both sexes ---
+        # Count how many gene sets and individual genes have BMD < LLE
+        # across all sexes for this organ.
+        below_lle_sets = 0
+        below_lle_genes = 0
+        for sex in sexes:
+            sec = genomics_sections.get(f"{organ}_{sex.lower()}", {})
+            if not sec:
+                continue
+            sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
+            for s in sets:
+                bmd = s.get("bmd")
+                try:
+                    if bmd is not None and float(bmd) < lle:
+                        below_lle_sets += 1
+                except (TypeError, ValueError):
+                    pass
+            for g in sec.get("top_genes", []):
+                bmd = g.get("bmd")
+                try:
+                    if bmd is not None and float(bmd) < lle:
+                        below_lle_genes += 1
+                except (TypeError, ValueError):
+                    pass
+
+        sex_phrase = " and ".join(s.lower() for s in sexes) + " rats"
+        if below_lle_sets == 0 and below_lle_genes == 0:
+            sentences.append(
+                f"In the {organ} of {sex_phrase}, no Gene Ontology "
+                f"biological process or individual genes had BMD "
+                f"{stat_label} values below the lower limit of "
+                f"extrapolation (<{lle_str} {dose_unit})."
+            )
+        else:
+            # Plural-aware count phrase
+            sets_word = "gene set" if below_lle_sets == 1 else "gene sets"
+            genes_word = "gene" if below_lle_genes == 1 else "genes"
+            sentences.append(
+                f"In the {organ} of {sex_phrase}, "
+                f"{below_lle_sets} Gene Ontology biological process "
+                f"{sets_word} and {below_lle_genes} individual "
+                f"{genes_word} had BMD {stat_label} values below the "
+                f"lower limit of extrapolation (<{lle_str} {dose_unit})."
+            )
+
+        # --- Per-sex gene sets and top genes ---
+        for sex in sexes:
+            sec = genomics_sections.get(f"{organ}_{sex.lower()}", {})
+            if not sec:
+                continue
+
+            # Top gene sets (above LLE, sorted by BMD ascending)
+            sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
+            top_sets = _picks_above_lle(sets, lle, n_top_sets)
+            sets_sentence = _build_gene_sets_sentence(top_sets, sex, stat_label, dose_unit)
+            if sets_sentence:
+                sentences.append(sets_sentence)
+
+            # Top up-regulated and down-regulated genes
+            top_genes = sec.get("top_genes", [])
+            up_genes = [g for g in top_genes if str(g.get("direction", "")).lower() == "up"]
+            down_genes = [g for g in top_genes if str(g.get("direction", "")).lower() == "down"]
+            up_top = _picks_above_lle(up_genes, lle, n_top_genes)
+            down_top = _picks_above_lle(down_genes, lle, n_top_genes)
+
+            up_sentence = _build_top_genes_sentence(up_top, sex, "up", dose_unit)
+            if up_sentence:
+                sentences.append(up_sentence)
+            down_sentence = _build_top_genes_sentence(down_top, sex, "down", dose_unit)
+            if down_sentence:
+                sentences.append(down_sentence)
+
+    return " ".join(sentences)
+
+
+def build_abstract_results_pk(
+    chemical_name: str,
+    pk_concentrations: dict | None,
+    pk_half_lives: dict | None,
+    pk_timepoints: list[int],
+    dose_unit: str = "mg/kg",
+    sexes: list[str] | None = None,
+) -> str:
+    """
+    Build the pharmacokinetic portion of the Abstract → Results paragraph.
+
+    Reference pattern:
+      "Average {TA} plasma concentrations at {2 and 24} hours postdose
+       were {lower/higher} in {sex_a} rats than in {sex_b} rats. Half-
+       lives estimated using the two time points were {longer/shorter}
+       in {sex_b} rats ({78.2 and 25.6} hours for the {4 and 37} {unit}
+       groups, respectively) than in {sex_a} rats ({40.1 and 15.1}
+       hours for the {4 and 37} {unit} groups, respectively)."
+
+    Strategy:
+      1. Compute total exposure (sum of mean concentrations across all
+         timepoints and biosampling doses) per sex to decide the sentence
+         polarity (which sex had lower/higher concentrations).
+      2. Format the timepoint list ("at 2 and 24 hours postdose").
+      3. Build the half-life comparison sentence with values aligned to
+         the same dose order.
+
+    Returns "" when there are insufficient data (no two-timepoint half-
+    lives, or only one sex represented).
+
+    Args:
+        chemical_name:    The test article name (used in the concentration sentence).
+        pk_concentrations: {sex: {dose: {hour: mean_value}}} from MethodsContext.
+        pk_half_lives:    {sex: {dose: hours_float}} from MethodsContext.
+        pk_timepoints:    Sorted list of timepoint hours seen in the data.
+        dose_unit:        Display unit (default "mg/kg").
+        sexes:            Sex labels (defaults to ["Male", "Female"]).
+
+    Returns:
+        A paragraph string, or empty string if data is insufficient.
+    """
+    if not pk_concentrations or not pk_half_lives:
+        return ""
+    if not pk_timepoints:
+        return ""
+
+    sexes = sexes or ["Male", "Female"]
+
+    # Need both sexes for a comparison sentence
+    sexes_present = [s for s in sexes if s in pk_concentrations and s in pk_half_lives]
+    if len(sexes_present) < 2:
+        return ""
+
+    sex_a, sex_b = sexes_present[0], sexes_present[1]
+
+    # --- Total mean concentrations per sex (sum across dose × timepoint) ---
+    # Used only to decide which sex had "lower" vs "higher" concentrations.
+    def _total(sex: str) -> float:
+        total = 0.0
+        for dose, by_hour in pk_concentrations.get(sex, {}).items():
+            for v in by_hour.values():
+                total += v
+        return total
+
+    total_a = _total(sex_a)
+    total_b = _total(sex_b)
+    if total_a < total_b:
+        conc_lower, conc_higher = sex_a, sex_b
+        conc_polarity = "lower"
+    else:
+        conc_lower, conc_higher = sex_b, sex_a
+        conc_polarity = "lower"  # phrasing always uses "lower"
+
+    # --- Timepoints sentence ("at 2 and 24 hours postdose") ---
+    tp_phrase = _join_oxford([str(t) for t in pk_timepoints])
+
+    # --- Half-life comparison ---
+    # Find the union of doses where both sexes have a half-life
+    common_doses = sorted(
+        set(pk_half_lives[sex_a].keys()) & set(pk_half_lives[sex_b].keys())
+    )
+    if not common_doses:
+        return ""
+
+    # Decide polarity: which sex has the longer mean half-life?
+    def _mean_half_life(sex: str) -> float:
+        vals = [pk_half_lives[sex][d] for d in common_doses if d in pk_half_lives[sex]]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    if _mean_half_life(sex_a) > _mean_half_life(sex_b):
+        hl_longer, hl_shorter = sex_a, sex_b
+    else:
+        hl_longer, hl_shorter = sex_b, sex_a
+
+    # Format dose group list and the matched half-life lists
+    dose_list = _join_oxford([_format_dose_value(d) for d in common_doses])
+
+    def _hl_list(sex: str) -> str:
+        # NIEHS reference uses one decimal for half-lives (78.2, 25.6, etc.)
+        vals = [pk_half_lives[sex][d] for d in common_doses]
+        formatted = [f"{v:.1f}" for v in vals]
+        return _join_oxford(formatted)
+
+    hl_longer_str = _hl_list(hl_longer)
+    hl_shorter_str = _hl_list(hl_shorter)
+
+    # --- Assemble ---
+    # The chemical name appears in the first sentence; subsequent sentences
+    # use "rats" alone since the test article is implicit.
+    return (
+        f"Average {chemical_name} plasma concentrations at "
+        f"{tp_phrase} hours postdose were {conc_polarity} in "
+        f"{conc_lower.lower()} rats than in {conc_higher.lower()} rats. "
+        f"Half-lives estimated using the two time points were longer in "
+        f"{hl_longer.lower()} rats ({hl_longer_str} hours for the "
+        f"{dose_list} {dose_unit} groups, respectively) than in "
+        f"{hl_shorter.lower()} rats ({hl_shorter_str} hours for the "
+        f"{dose_list} {dose_unit} groups, respectively)."
+    )
+
+
+def build_abstract_summary(
+    apical_bmd_summary: list[dict] | None = None,
+    genomics_sections: dict | None = None,
+    dose_groups: list[float] | None = None,
+    dose_unit: str = "mg/kg",
+    bmd_stat: str | None = None,
+    sexes: list[str] | None = None,
+) -> str:
+    """
+    Build the Abstract → Summary paragraph.
+
+    Reference pattern (NIEHS Report 10):
+      "Taken together, in male rats, the most sensitive gene set BMD
+       (BMDL) median, individual gene BMD (BMDL), and apical endpoint
+       BMD (BMDL) values that could be reliably determined occurred at
+       0.520 (0.160), 0.510 (0.212), and 7.264 (5.024) mg/kg,
+       respectively. In female rats, the most sensitive gene set BMD
+       (BMDL) median and individual gene BMD (BMDL) values that could
+       be reliably determined occurred at 10.324 (7.461) and 1.163
+       (0.179) mg/kg, respectively. There were no apical endpoints in
+       female rats for which a BMD value could be reliably estimated."
+
+    Strategy: for each sex, find the lowest reliable BMD across all
+    organs in three categories — gene sets, individual genes, apical
+    endpoints — and assemble a sentence whose category list is gated
+    on availability.  When apical fails entirely for a sex, we add the
+    "no apical endpoints" fallback sentence.
+
+    Args:
+        apical_bmd_summary: list of BMD summary entry dicts.
+        genomics_sections:  dict keyed by "{organ}_{sex}" with gene_sets and top_genes.
+        dose_groups:        Full study dose list (for lower-limit-of-extrapolation).
+        dose_unit:          Display unit (default "mg/kg").
+        bmd_stat:           Which stat to use for gene sets ("median", "fifth_pct").
+        sexes:              Optional sex order (defaults to ["Male", "Female"]).
+
+    Returns:
+        Paragraph string, or empty string if no reliable BMDs exist anywhere.
+    """
+    sexes = sexes or ["Male", "Female"]
+
+    # Lower limit of extrapolation (LLE) — reuse same convention as Results
+    nonzero_doses = [d for d in (dose_groups or []) if d and d > 0]
+    lle = (min(nonzero_doses) / 3.0) if nonzero_doses else 0.0
+
+    # Determine which BMD stat to read from gene_sets_by_stat.  Default
+    # to whatever the data carries (matches the Results paragraph logic).
+    chosen_stat = bmd_stat
+    if not chosen_stat and genomics_sections:
+        for sec in genomics_sections.values():
+            if sec and sec.get("gene_sets_by_stat"):
+                stats = list(sec["gene_sets_by_stat"].keys())
+                if stats:
+                    chosen_stat = stats[0]
+                    break
+    stat_label = _stat_display_name(chosen_stat) if chosen_stat else ""
+
+    # --- Per-sex lowest-BMD lookups ---
+    # Each helper returns {bmd_str, bmdl_str} or None if no reliable
+    # value exists for the sex × category combination.
+    def _lowest_geneset(sex: str) -> dict | None:
+        if not genomics_sections or not chosen_stat:
+            return None
+        candidates: list[dict] = []
+        for key, sec in genomics_sections.items():
+            if not key.endswith(f"_{sex.lower()}"):
+                continue
+            sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
+            candidates.extend(_picks_above_lle(sets, lle, n=1))
+        if not candidates:
+            return None
+        # Among per-organ winners, pick the one with the lowest BMD overall
+        candidates.sort(key=lambda x: x["_bmd_float"])
+        winner = candidates[0]
+        return {
+            "bmd": _format_dose_value(winner.get("bmd")),
+            "bmdl": _format_dose_value(winner.get("bmdl")),
+        }
+
+    def _lowest_gene(sex: str) -> dict | None:
+        if not genomics_sections:
+            return None
+        candidates: list[dict] = []
+        for key, sec in genomics_sections.items():
+            if not key.endswith(f"_{sex.lower()}"):
+                continue
+            genes = sec.get("top_genes", [])
+            candidates.extend(_picks_above_lle(genes, lle, n=1))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: x["_bmd_float"])
+        winner = candidates[0]
+        return {
+            "bmd": _format_dose_value(winner.get("bmd")),
+            "bmdl": _format_dose_value(winner.get("bmdl")),
+        }
+
+    def _lowest_apical(sex: str) -> dict | None:
+        if not apical_bmd_summary:
+            return None
+        # Apply same reliability + anomaly filters as the Results paragraph
+        reliable = [
+            e for e in apical_bmd_summary
+            if e.get("sex") == sex
+            and _is_reliable_bmd(e)
+            and not _is_anomalous_bmd(e)
+            and e.get("direction")
+        ]
+        if not reliable:
+            return None
+        reliable.sort(key=lambda e: float(e["bmd"]))
+        winner = reliable[0]
+        return {
+            "bmd": _format_dose_value(winner.get("bmd")),
+            "bmdl": _format_dose_value(winner.get("bmdl")),
+        }
+
+    # --- Build per-sex sentences ---
+    # Each sex gets one main sentence listing all available categories,
+    # plus an optional fallback sentence when apical is missing.
+    sentences: list[str] = []
+    has_any_content = False
+
+    for sex in sexes:
+        gs = _lowest_geneset(sex)
+        gene = _lowest_gene(sex)
+        apical = _lowest_apical(sex)
+
+        # Build the (label, value_string) pairs in NIEHS reference order:
+        # gene set → individual gene → apical endpoint.
+        category_phrases: list[tuple[str, str]] = []
+        if gs:
+            label = (
+                f"the most sensitive gene set BMD (BMDL) {stat_label}"
+                if stat_label else
+                "the most sensitive gene set BMD (BMDL)"
+            )
+            category_phrases.append((label, f"{gs['bmd']} ({gs['bmdl']})"))
+        if gene:
+            category_phrases.append((
+                "individual gene BMD (BMDL)",
+                f"{gene['bmd']} ({gene['bmdl']})",
+            ))
+        if apical:
+            category_phrases.append((
+                "apical endpoint BMD (BMDL)",
+                f"{apical['bmd']} ({apical['bmdl']})",
+            ))
+
+        if not category_phrases:
+            # Nothing reliable for this sex at all — skip the sentence,
+            # but still emit the apical-missing fallback if relevant.
+            if apical_bmd_summary:
+                sentences.append(
+                    f"There were no apical endpoints in {sex.lower()} rats "
+                    f"for which a BMD value could be reliably estimated."
+                )
+            continue
+
+        has_any_content = True
+        labels = [p[0] for p in category_phrases]
+        values = [p[1] for p in category_phrases]
+        plural = len(category_phrases) > 1
+
+        # Sentence start: the very first sex sentence is preceded by
+        # the "Taken together, " connective (which uses lowercase "in"
+        # because it comes after a comma); subsequent sex sentences are
+        # standalone and start with capital "In".
+        if not sentences:
+            opener = f"Taken together, in {sex.lower()} rats,"
+        else:
+            opener = f"In {sex.lower()} rats,"
+
+        sentences.append(
+            f"{opener} "
+            f"{_join_oxford(labels)} value{'s' if plural else ''} that could "
+            f"be reliably determined occurred at {_join_oxford(values)} "
+            f"{dose_unit}{', respectively' if plural else ''}."
+        )
+
+        # If apical was missing for this sex but genomics existed, add
+        # the standard fallback sentence about apical specifically.
+        if apical_bmd_summary and not apical:
+            sentences.append(
+                f"There were no apical endpoints in {sex.lower()} rats "
+                f"for which a BMD value could be reliably estimated."
+            )
+
+    if not has_any_content:
+        return ""
+
+    return " ".join(sentences)
+
+
+def build_abstract_results(
+    apical_bmd_summary: list[dict] | None = None,
+    genomics_sections: dict | None = None,
+    dose_groups: list[float] | None = None,
+    dose_unit: str = "mg/kg",
+    bmd_stat: str | None = None,
+    sexes: list[str] | None = None,
+    methods_ctx: dict | None = None,
+) -> str:
+    """
+    Build the full Abstract → Results paragraph.
+
+    Combines, in NIEHS Report 10 order:
+      1. Apical findings per sex (build_abstract_results_apical)
+      2. Pharmacokinetic findings — plasma concentrations + half-lives
+         (build_abstract_results_pk), driven by methods_ctx.pk_*
+      3. Genomics findings per organ × sex (build_abstract_results_genomics)
+
+    Args:
+        apical_bmd_summary: list of BMD summary entry dicts.
+        genomics_sections:  dict keyed by "{organ}_{sex}" with gene_sets and top_genes.
+        dose_groups:        Full study dose list (for lower-limit-of-extrapolation).
+        dose_unit:          Display unit (default "mg/kg").
+        bmd_stat:           Which stat to use for gene sets ("median", "fifth_pct", ...).
+        sexes:              Optional sex order (defaults to ["Male", "Female"]).
+        methods_ctx:        Optional MethodsContext-as-dict.  When present, its
+                            pk_concentrations / pk_half_lives / pk_timepoints fields
+                            drive the pharmacokinetics sentence.
+
+    Returns:
+        A single paragraph string for the Abstract Results section.
+    """
+    parts: list[str] = []
+
+    if apical_bmd_summary:
+        ap = build_abstract_results_apical(apical_bmd_summary, sexes=sexes)
+        if ap:
+            parts.append(ap)
+
+    # PK paragraph: only when MethodsContext carries pk_* aggregates
+    if methods_ctx:
+        pk = build_abstract_results_pk(
+            chemical_name=methods_ctx.get("chemical_name", "the test article"),
+            pk_concentrations=methods_ctx.get("pk_concentrations"),
+            pk_half_lives=methods_ctx.get("pk_half_lives"),
+            pk_timepoints=methods_ctx.get("pk_timepoints", []),
+            dose_unit=methods_ctx.get("dose_unit", dose_unit),
+            sexes=sexes,
+        )
+        if pk:
+            parts.append(pk)
+
+    if genomics_sections and dose_groups:
+        gn = build_abstract_results_genomics(
+            genomics_sections=genomics_sections,
+            dose_groups=dose_groups,
+            dose_unit=dose_unit,
+            bmd_stat=bmd_stat,
+            sexes=sexes,
+        )
+        if gn:
+            parts.append(gn)
+
+    return " ".join(parts)
 
 
 # ---------------------------------------------------------------------------
