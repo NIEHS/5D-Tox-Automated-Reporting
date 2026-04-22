@@ -636,6 +636,113 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     if gene_narrative:
         data["gene_narrative"] = _ensure_paragraphs(gene_narrative)
 
+    # --- Auto-populate Gene Set / Gene BMD body narratives ---
+    # When the user hasn't supplied their own narrative text, inject the
+    # deterministic NIEHS-Report-10 style intro paragraphs (methodology +
+    # interpretation caveat) followed by per-organ findings built from
+    # the cached genomics_sections dict.  Pulling from disk rather than
+    # the body payload because the payload only carries the ARRAY form
+    # of genomics_sections (per-card), not the dict keyed by organ_sex
+    # that the genomics cache stores.
+    _genomics_cache = None
+    _dtxsid = body.get("dtxsid", "")
+    if _dtxsid and genomics:
+        try:
+            _session_dir_path = Path("sessions") / _dtxsid
+            _caches = list(_session_dir_path.glob("_cache_genomics_*.json"))
+            if _caches:
+                import orjson
+                _genomics_cache = orjson.loads(_caches[0].read_bytes())
+        except Exception:
+            pass
+
+    if _genomics_cache:
+        try:
+            from methods_report import (
+                build_gene_set_body_intro,
+                build_gene_set_body_findings,
+                build_gene_body_intro,
+                build_gene_body_findings,
+            )
+            from document_tree import find_node as _fn, compute_table_numbers as _ctn
+            _ctn()
+
+            # Assemble MethodsContext-derived fields for the narratives
+            _ctx_dict = (methods_data or {}).get("context") or {}
+            _chem_name = _ctx_dict.get("chemical_name") or body.get("chemical_name") or "the test article"
+            _ge_organs = _ctx_dict.get("ge_organs", [])
+            if not _ge_organs:
+                # Fall back: derive organs from the cache keys themselves
+                _ge_organs = sorted({k.split("_", 1)[0].capitalize()
+                                     for k in _genomics_cache if "_" in k})
+            _dose_groups_g = _ctx_dict.get("dose_groups", []) or []
+            _dose_unit_g = _ctx_dict.get("dose_unit", "mg/kg")
+            _fc_filter = _ctx_dict.get("fold_change_filter")
+
+            # Collect the table numbers auto-assigned to the gene-set and
+            # gene tables.  These live under the "gene-sets" and "gene-bmd"
+            # nodes in the tree — each subtree contains per-organ table nodes.
+            def _collect_tnums(node_id: str) -> list[int]:
+                node = _fn(node_id)
+                if not node:
+                    return []
+                nums: list[int] = []
+                def _walk(n):
+                    if n.table_number is not None:
+                        nums.append(n.table_number)
+                    for c in n.children:
+                        _walk(c)
+                _walk(node)
+                return nums
+
+            _gs_tables = _collect_tnums("gene-sets")
+            _gn_tables = _collect_tnums("gene-bmd")
+
+            # Gene Set body narrative: overlay only when the request didn't
+            # carry user-edited paragraphs.  The frontend always sends a
+            # dict ({paragraphs: []}) even when empty, so check the
+            # paragraphs list rather than the dict's truthiness.
+            _gs_user_paras = (
+                (gene_set_narrative or {}).get("paragraphs", [])
+                if isinstance(gene_set_narrative, dict) else []
+            )
+            if not _gs_user_paras:
+                gs_intros = build_gene_set_body_intro(
+                    chemical_name=_chem_name,
+                    ge_organs=_ge_organs,
+                    table_numbers=_gs_tables,
+                )
+                gs_findings = build_gene_set_body_findings(
+                    genomics_sections=_genomics_cache,
+                    dose_groups=_dose_groups_g,
+                    dose_unit=_dose_unit_g,
+                )
+                data["gene_set_narrative"] = {
+                    "paragraphs": gs_intros + gs_findings,
+                }
+
+            # Gene BMD body narrative: same fallback pattern.
+            _gn_user_paras = (
+                (gene_narrative or {}).get("paragraphs", [])
+                if isinstance(gene_narrative, dict) else []
+            )
+            if not _gn_user_paras:
+                gn_intros = build_gene_body_intro(
+                    ge_organs=_ge_organs,
+                    table_numbers=_gn_tables,
+                    fold_change_filter=_fc_filter,
+                )
+                gn_findings = build_gene_body_findings(
+                    genomics_sections=_genomics_cache,
+                    dose_groups=_dose_groups_g,
+                    dose_unit=_dose_unit_g,
+                )
+                data["gene_narrative"] = {
+                    "paragraphs": gn_intros + gn_findings,
+                }
+        except Exception as e:
+            logging.exception("Failed to build genomics body narratives: %s", e)
+
     # Summary
     summary_paragraphs = body.get("summary_paragraphs", [])
     if summary_paragraphs:
@@ -1486,6 +1593,20 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
         filtered = [s for s in sections if s.get("key") in methods_keys]
         if filtered:
             data["methods"] = {**methods_data, "sections": filtered}
+
+    # Sub-filter genomics_sections by type for the gene-sets / gene-bmd
+    # node previews.  Both nodes share data_key="genomics_sections" but each
+    # represents a different slice — gene-sets renders type="gene_set"
+    # entries, gene-bmd renders type="gene" entries.  Without this filter,
+    # the gene-sets preview would also show gene tables and vice versa.
+    # The narrative_key on the node uniquely identifies which slice to keep.
+    nk = getattr(node, "narrative_key", None)
+    if nk in ("gene_set_narrative", "gene_narrative") and "genomics_sections" in data:
+        wanted_type = "gene_set" if nk == "gene_set_narrative" else "gene"
+        data["genomics_sections"] = [
+            s for s in data["genomics_sections"]
+            if s.get("type") == wanted_type
+        ]
 
 
 def _build_missing_animal_footnotes(

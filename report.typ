@@ -1461,7 +1461,12 @@
   if has-typed-sections {
     // --- Gene Set BMD Analysis (H2) ---
     if gene-set-sections.len() > 0 {
-      pagebreak()
+      // Skip the pagebreak in section-only previews — the "Results" H1
+      // was just emitted as the parent heading and would otherwise sit
+      // alone on a leader page before the gene set content.
+      if not section-only {
+        pagebreak()
+      }
       heading(level: _gene-sets-info.level, _gene-sets-info.title)
 
       // Shared narrative for gene set analysis
@@ -1530,7 +1535,12 @@
     // NIEHS page 38 (body 26): starts on a new page.
     // Heading derived from document tree node "gene-bmd".
     if gene-sections.len() > 0 {
-      pagebreak()
+      // Same leader-page suppression as the gene-set block above —
+      // skip the pagebreak in section-only previews so the "Results" H1
+      // and the Gene BMD Analysis H2 share the first page.
+      if not section-only {
+        pagebreak()
+      }
       heading(level: _gene-bmd-info.level, _gene-bmd-info.title)
 
       // Shared narrative for gene analysis
