@@ -2903,17 +2903,15 @@ async def api_process_integrated(dtxsid: str, request: Request):
             charts_cached = _load_cache(dtxsid, "charts", charts_hash)
 
             # Schema migration: caches written before SVGs were added to
-            # the chart payload lack `umap_svg`/`cluster_svg`.  Treat
-            # those as stale so we re-render and populate both formats.
-            # A single entry missing the SVG is enough — the whole batch
-            # gets re-rendered (tiny cost compared to hitting Enrichr).
-            def _has_svg(images):
-                if not images:
-                    return True  # nothing to migrate
-                first = images[0] if isinstance(images, list) else images
-                return isinstance(first, dict) and "umap_svg" in first
+            # the chart payload lack `umap_svg`/`cluster_svg`.  Shared
+            # `cache_has_svg` probe + `render_chart_images_for_sections`
+            # batch render live in genomics_viz so this code path and
+            # the session-load migration stay in lockstep.
+            from genomics_viz import (
+                cache_has_svg, render_chart_images_for_sections,
+            )
 
-            if charts_cached and _has_svg(charts_cached):
+            if charts_cached and cache_has_svg(charts_cached):
                 chart_images = charts_cached
             else:
                 if charts_cached:
@@ -2921,40 +2919,17 @@ async def api_process_integrated(dtxsid: str, request: Request):
                         "Chart cache for %s lacks SVG — re-rendering",
                         dtxsid,
                     )
-                from genomics_viz import render_chart_images
-
+                # Run in the thread pool so we don't block the event
+                # loop while Plotly+kaleido serialises figures.
                 loop = asyncio.get_running_loop()
-                for key, gen_data in genomics_sections.items():
-                    # Use the primary BMD stat's gene_sets for chart rendering
-                    gs_by_stat = gen_data.get("gene_sets_by_stat", {})
-                    gene_sets = gs_by_stat.get(bmd_stat, [])
-                    if not gene_sets:
-                        continue
-
-                    organ = gen_data.get("organ", "")
-                    sex = gen_data.get("sex", "")
-                    organ_title = organ.capitalize() or "Unknown"
-                    sex_title = sex.capitalize() or ""
-
-                    try:
-                        result = await loop.run_in_executor(
-                            None,
-                            lambda gs=gene_sets, o=organ, s=sex: render_chart_images(
-                                gene_sets=gs,
-                                organ=o,
-                                sex=s,
-                                dose_unit=dose_unit,
-                            ),
-                        )
-                        result["label"] = f"{organ_title} ({sex_title})"
-                        result["organ"] = organ
-                        result["sex"] = sex
-                        chart_images.append(result)
-                    except Exception as e:
-                        logger.warning(
-                            "Chart rendering failed for %s: %s", key, e,
-                        )
-
+                chart_images = await loop.run_in_executor(
+                    None,
+                    lambda: render_chart_images_for_sections(
+                        genomics_sections=genomics_sections,
+                        bmd_stat=bmd_stat,
+                        dose_unit=dose_unit,
+                    ),
+                )
                 if chart_images:
                     _save_cache(dtxsid, "charts", charts_hash, chart_images)
 

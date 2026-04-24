@@ -829,6 +829,84 @@ def render_chart_images(
     }
 
 
+# ---------------------------------------------------------------------------
+# Batch render + cache migration
+# ---------------------------------------------------------------------------
+# Both the process-integrated pipeline (pool_orchestrator) and the session
+# load path (session_routes) need to render one chart pair per organ × sex.
+# Keeping the loop here means there's one code path — if the cache shape
+# or chart render contract changes, both callers pick it up automatically.
+
+def cache_has_svg(chart_images) -> bool:
+    """
+    Schema probe for the chart cache: returns True when the cache is
+    either empty/None (nothing to migrate) or the first entry carries
+    an `umap_svg` field.  Caches written before 2026-04-24 only have
+    PNG fields and need to be re-rendered so the HTML can inline SVG.
+    """
+    if not chart_images:
+        return True
+    first = chart_images[0] if isinstance(chart_images, list) else chart_images
+    return isinstance(first, dict) and "umap_svg" in first
+
+
+def render_chart_images_for_sections(
+    genomics_sections: dict,
+    bmd_stat: str = "median",
+    dose_unit: str = "mg/kg",
+) -> list[dict]:
+    """
+    Render one chart pair (UMAP + cluster scatter + enrichment) per
+    organ × sex in a genomics_sections dict.
+
+    Args:
+        genomics_sections: organ_sex-keyed dict (same shape as
+                           _cache_genomics_*.json and the
+                           process-integrated response).  Each entry
+                           must carry `gene_sets_by_stat[bmd_stat]`
+                           with at least one gene set, else skipped.
+        bmd_stat:          Which BMD statistic's gene-set list drives
+                           the charts (same stat as the PDF tables).
+        dose_unit:         Passed through for axis labels.
+
+    Returns:
+        List of per-entry dicts as produced by render_chart_images,
+        annotated with `label`, `organ`, `sex` so the consumer can
+        route entries to the right display slot.  Entries for which
+        rendering failed are omitted (warnings logged).
+
+    Synchronous — callers that need async concurrency should wrap in
+    run_in_executor themselves.  A single-session render (4 pairs) is
+    fast enough to do inline on a page load.
+    """
+    out: list[dict] = []
+    for key, gen_data in genomics_sections.items():
+        gs_by_stat = gen_data.get("gene_sets_by_stat") or {}
+        gene_sets = gs_by_stat.get(bmd_stat) or []
+        if not gene_sets:
+            continue
+
+        organ = gen_data.get("organ", "")
+        sex = gen_data.get("sex", "")
+        organ_title = organ.capitalize() or "Unknown"
+        sex_title = sex.capitalize() or ""
+
+        try:
+            result = render_chart_images(
+                gene_sets=gene_sets,
+                organ=organ,
+                sex=sex,
+                dose_unit=dose_unit,
+            )
+            result["label"] = f"{organ_title} ({sex_title})"
+            result["organ"] = organ
+            result["sex"] = sex
+            out.append(result)
+        except Exception as e:
+            logger.warning("Chart rendering failed for %s: %s", key, e)
+    return out
+
+
 @router.post("/api/genomics-chart-images")
 async def api_genomics_chart_images(request: Request):
     """

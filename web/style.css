@@ -1045,6 +1045,23 @@ header p {
     margin-bottom: 0.75rem;
 }
 
+/* Section-level intro paragraphs for Gene Set / Gene BMD — the
+ * methodology + interpretation caveat block (NIEHS Report 10 p. 19).
+ * Renders once per section, above the per-organ panels.  Derived from
+ * `gene_set_narrative.intros` / `gene_narrative.intros` on the server
+ * so the HTML and PDF show the same prose.
+ */
+.genomics-section-intro {
+    margin: 0.5rem 0 1rem 0;
+}
+
+.genomics-section-intro > p {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--c-text-primary);
+}
+
 /* Per-organ findings paragraph — the server-derived prose shown above
  * each organ's gene-set or gene-bmd table.  Mirrors the PDF layout
  * where NIEHS-style findings sentences precede each per-organ table.

@@ -485,6 +485,12 @@ async function restoreSession(data) {
     if (data.gene_narrative) {
         genomicsGeneNarrative = data.gene_narrative;
     }
+    // Render section-level intro paragraphs as soon as the narrative
+    // arrives.  Organ panels don't exist yet; intros live in static
+    // slots in index.html and render once at the section top.
+    if (typeof _rebuildGenomicsIntros === 'function') {
+        _rebuildGenomicsIntros();
+    }
 
     // --- Restore inline chart images (SVG + PNG per organ × sex) ---
     // Same disk cache the PDF exporter reads.  Setting before card
@@ -539,6 +545,34 @@ async function restoreSession(data) {
                 lockSection(card);
                 setButtons(`genomics-${key}`, section.stale ? 'stale' : 'approved');
             }
+        }
+    } else if (data.genomics_cache && Object.keys(data.genomics_cache).length > 0) {
+        // --- Unapproved fallback: restore from _cache_genomics_*.json ---
+        // When no `genomics_*.json` approval files exist but the raw
+        // organ_sex cache is present (server built it during a prior
+        // process-integrated run), surface it so the user sees the
+        // full gene-set + gene-bmd panels without having to re-run
+        // processing.  Entries are NOT marked approved — the user can
+        // approve individually via the per-sex cards.
+        if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+            Alpine.store('app').ready.data = true;
+            Alpine.store('app').ready.geneSets = true;
+            Alpine.store('app').ready.geneBmd = true;
+        }
+
+        const restoreLabels = {};
+        for (const s of (reportSettings.bmd_stats || ['median'])) {
+            restoreLabels[s] = _bmdStatLabel(s);
+        }
+
+        for (const [key, section] of Object.entries(data.genomics_cache)) {
+            const organ = section.organ || key.split('_', 1)[0] || '';
+            const sex = section.sex || key.split('_').slice(-1)[0] || '';
+            genomicsResults[key] = {
+                ...section,
+                approved: false,
+            };
+            createGenomicsCard(key, section, organ, sex, restoreLabels);
         }
     }
 

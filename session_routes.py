@@ -398,17 +398,72 @@ async def api_session_load(dtxsid: str):
         slug = f.stem.removeprefix("genomics_")
         genomics_sections[slug] = json.loads(f.read_text(encoding="utf-8"))
 
+    # Load the raw organ_sex-keyed genomics cache first — used by both
+    # the narrative assembler and (Bug C fallback) by the client when
+    # no approved `genomics_*.json` files exist for this session.
+    genomics_cache = None
+    genomics_cache_path = None
+    try:
+        for gc in sorted(d.glob("_cache_genomics_*.json")):
+            genomics_cache = json.loads(gc.read_text(encoding="utf-8"))
+            genomics_cache_path = gc
+            break
+    except Exception:
+        pass
+
     # Load cached chart images (PNG + SVG per organ × sex).  These are
     # the same figures the PDF uses — the HTML in-app view embeds the
     # SVGs inline, the PDF embeds the PNGs.  Both come from the same
     # `_cache_charts_*.json` written during process-integrated.
+    #
+    # Schema migration: caches written before SVGs were added lack
+    # `umap_svg`/`cluster_svg`.  Re-render from genomics_cache on the
+    # fly and overwrite the cache file, so subsequent reloads are
+    # cheap.  Shared `cache_has_svg` + `render_chart_images_for_sections`
+    # helpers in genomics_viz keep this in lockstep with the
+    # pool_orchestrator path.
     chart_images = None
+    chart_cache_path = None
     try:
         for cc in sorted(d.glob("_cache_charts_*.json")):
             chart_images = json.loads(cc.read_text(encoding="utf-8"))
+            chart_cache_path = cc
             break
     except Exception:
         pass
+
+    if chart_images and genomics_cache and chart_cache_path:
+        try:
+            from genomics_viz import (
+                cache_has_svg, render_chart_images_for_sections,
+            )
+            if not cache_has_svg(chart_images):
+                logging.info(
+                    "Chart cache for %s lacks SVG — re-rendering on "
+                    "session load", dtxsid,
+                )
+                # Pick the primary BMD stat from the cached genomics
+                # entries — mirrors what pool_orchestrator does.
+                first_entry = next(iter(genomics_cache.values()), {})
+                stats = list((first_entry.get("gene_sets_by_stat") or {}).keys())
+                bmd_stat = stats[0] if stats else "median"
+                rerendered = render_chart_images_for_sections(
+                    genomics_sections=genomics_cache,
+                    bmd_stat=bmd_stat,
+                )
+                if rerendered:
+                    chart_images = rerendered
+                    # Overwrite the cache file so subsequent reloads
+                    # skip the re-render.  Using orjson for speed on
+                    # the ~2MB payload.
+                    import orjson
+                    chart_cache_path.write_bytes(
+                        orjson.dumps(rerendered)
+                    )
+        except Exception:
+            logging.exception(
+                "Chart cache SVG migration failed for %s", dtxsid,
+            )
 
     # Rebuild Gene Set / Gene BMD body narratives from the cached
     # genomics_sections + methods context on disk.  These aren't
@@ -420,14 +475,6 @@ async def api_session_load(dtxsid: str):
     gene_set_narrative = None
     gene_narrative = None
     try:
-        # Pull the raw organ_sex dict from the cache, same shape the
-        # shared builder expects.  Prefer the cache over the per-section
-        # approved files because the cache preserves `gene_sets_by_stat`
-        # and `top_genes` exactly as BMDExpress emitted them.
-        genomics_cache = None
-        for gc in sorted(d.glob("_cache_genomics_*.json")):
-            genomics_cache = json.loads(gc.read_text(encoding="utf-8"))
-            break
         if genomics_cache:
             # Methods cache may hold the MethodsContext dict we need
             # (dose_groups, ge_organs, fold_change_filter, dose_unit).
@@ -473,6 +520,18 @@ async def api_session_load(dtxsid: str):
         "animal_report": _read_json("animal_report.json"),
         "bmd_summary": _read_json("bmd_summary.json"),
         "genomics_sections": genomics_sections,
+        # Unapproved fallback: when no `genomics_*.json` approved files
+        # exist but `_cache_genomics_*.json` does, surface the raw
+        # organ_sex dict so the client can restore the gene-set +
+        # gene-bmd panels without requiring approval or a fresh
+        # process-integrated call.  Bug C in the 2026-04-24 HTML/PDF
+        # alignment pass — page reloads were showing empty tables
+        # because the approval path was the only route to populate
+        # genomicsResults on the client.
+        "genomics_cache": (
+            genomics_cache if genomics_cache and not genomics_sections
+            else None
+        ),
         "gene_set_narrative": gene_set_narrative,
         "gene_narrative": gene_narrative,
         "chart_images": chart_images,

@@ -329,6 +329,48 @@ function _upsertPerSexConfigCard(key, data, organKey, sexKey, sexTitle, kind) {
 
 
 /* ----------------------------------------------------------------
+ * Section intro paragraphs — methodology + interpretation caveat
+ *
+ * The Gene Set and Gene BMD sections each carry two boilerplate
+ * paragraphs at the top (NIEHS Report 10 p. 19 / p. 26).  They're
+ * built deterministically by `methods_report.build_gene_set_body_intro`
+ * / `build_gene_body_intro` on the server and travel in the
+ * `intros` field of each narrative dict.  Independent of per-organ
+ * data — they describe the statistic choice and the caveat about
+ * over-interpreting the gene sets, so they belong at the section
+ * level, not the organ panel level.
+ *
+ * Rendered into static slots in index.html (`#genomics-gene-set-intro`
+ * and `#genomics-gene-bmd-intro`) so they render exactly once per
+ * section, regardless of how many organs are present.
+ * ---------------------------------------------------------------- */
+
+/**
+ * Render the two intro paragraphs for each genomics section.  Safe to
+ * call whenever `genomicsGeneSetNarrative` / `genomicsGeneNarrative`
+ * changes — idempotent, overwrites innerHTML on each call.
+ */
+function _rebuildGenomicsIntros() {
+    const slots = [
+        ['genomics-gene-set-intro', genomicsGeneSetNarrative],
+        ['genomics-gene-bmd-intro', genomicsGeneNarrative],
+    ];
+    for (const [slotId, narr] of slots) {
+        const slot = document.getElementById(slotId);
+        if (!slot) continue;
+        const intros = (narr && Array.isArray(narr.intros)) ? narr.intros : [];
+        if (intros.length === 0) {
+            slot.innerHTML = '';
+            continue;
+        }
+        slot.innerHTML = intros
+            .map(p => `<p>${escapeHtml(p)}</p>`)
+            .join('');
+    }
+}
+
+
+/* ----------------------------------------------------------------
  * Per-organ combined display — mirrors the PDF table layout
  *
  * Reads the latest genomicsResults entries for both sexes of an

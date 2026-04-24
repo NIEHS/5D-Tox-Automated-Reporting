@@ -463,6 +463,13 @@ async function runProcessingPipeline() {
             if (result.gene_narrative) {
                 genomicsGeneNarrative = result.gene_narrative;
             }
+            // Render the methodology + caveat intro paragraphs now —
+            // they live at the section level (above the per-organ
+            // panels), so their rendering doesn't depend on any
+            // particular organ panel existing yet.
+            if (typeof _rebuildGenomicsIntros === 'function') {
+                _rebuildGenomicsIntros();
+            }
 
             if (result.genomics_sections) {
                 const autoStatLabels = result.bmd_stat_labels || null;
