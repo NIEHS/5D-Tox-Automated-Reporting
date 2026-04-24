@@ -2295,12 +2295,18 @@ def build_gene_set_body_findings(
     bmd_stat: str | None = None,
     n_top: int = 2,
     sexes: list[str] | None = None,
-) -> list[str]:
+) -> dict[str, str]:
     """
     Build the per-organ "findings" paragraphs for the Gene Set BMD
     Analysis section body.
 
-    Per organ (alphabetical), one paragraph composed of:
+    Returns a dict keyed by lowercase organ name (e.g., "liver",
+    "kidney"), with each value a single paragraph describing that
+    organ's findings.  The Typst renderer uses this keyed form to
+    place each organ's paragraph immediately above its table, rather
+    than lumping all paragraphs at the top of the section.
+
+    Each paragraph is composed of:
       - Lower-limit-of-extrapolation check, scoped to gene sets only:
           "No gene sets in the {organ} of male or female rats had
            estimated BMD median values <{LLE} {unit}."
@@ -2319,13 +2325,13 @@ def build_gene_set_body_findings(
         instead of separated "BMDs of X and Z and BMDLs of Y and W"
     """
     if not genomics_sections:
-        return []
+        return {}
 
     sexes = sexes or ["Male", "Female"]
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
-        return []
+        return {}
     lle = min(nonzero) / 3.0
     lle_str = _format_dose_value(lle)
 
@@ -2339,12 +2345,12 @@ def build_gene_set_body_findings(
                     chosen_stat = stats[0]
                     break
     if not chosen_stat:
-        return []
+        return {}
     stat_label = _stat_display_name(chosen_stat)
 
     # Walk organs alphabetically
     organs = sorted({k.split("_", 1)[0] for k in genomics_sections if "_" in k})
-    paragraphs: list[str] = []
+    by_organ: dict[str, str] = {}
 
     for organ in organs:
         sentences: list[str] = []
@@ -2416,9 +2422,9 @@ def build_gene_set_body_findings(
                 f"{', respectively' if plural else ''}."
             )
 
-        paragraphs.append(" ".join(sentences))
+        by_organ[organ] = " ".join(sentences)
 
-    return paragraphs
+    return by_organ
 
 
 # ---------------------------------------------------------------------------
@@ -2496,12 +2502,17 @@ def build_gene_body_findings(
     dose_unit: str = "mg/kg",
     n_top: int = 8,
     sexes: list[str] | None = None,
-) -> list[str]:
+) -> dict[str, str]:
     """
     Build the per-organ × per-sex "findings" paragraphs for the Gene BMD
     Analysis section body.
 
-    Per organ (alphabetical), one paragraph composed of:
+    Returns a dict keyed by lowercase organ name (e.g., "liver",
+    "kidney"), with each value a single paragraph describing that
+    organ's findings.  The Typst renderer uses this keyed form to
+    place each organ's paragraph immediately above its table.
+
+    Each paragraph is composed of:
       - Lower-limit-of-extrapolation check, scoped to genes only.
       - For each sex, separate clauses for upregulated and downregulated
         most-sensitive genes:
@@ -2518,18 +2529,18 @@ def build_gene_body_findings(
     or from bmdx.duckdb.
     """
     if not genomics_sections:
-        return []
+        return {}
 
     sexes = sexes or ["Male", "Female"]
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
-        return []
+        return {}
     lle = min(nonzero) / 3.0
     lle_str = _format_dose_value(lle)
 
     organs = sorted({k.split("_", 1)[0] for k in genomics_sections if "_" in k})
-    paragraphs: list[str] = []
+    by_organ: dict[str, str] = {}
 
     for organ in organs:
         sentences: list[str] = []
@@ -2602,9 +2613,9 @@ def build_gene_body_findings(
                         f"{', respectively' if plural else ''}."
                     )
 
-        paragraphs.append(" ".join(sentences))
+        by_organ[organ] = " ".join(sentences)
 
-    return paragraphs
+    return by_organ
 
 
 def build_abstract_summary(

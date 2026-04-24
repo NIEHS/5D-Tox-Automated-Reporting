@@ -698,47 +698,70 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
             _gs_tables = _collect_tnums("gene-sets")
             _gn_tables = _collect_tnums("gene-bmd")
 
-            # Gene Set body narrative: overlay only when the request didn't
-            # carry user-edited paragraphs.  The frontend always sends a
-            # dict ({paragraphs: []}) even when empty, so check the
-            # paragraphs list rather than the dict's truthiness.
-            _gs_user_paras = (
-                (gene_set_narrative or {}).get("paragraphs", [])
-                if isinstance(gene_set_narrative, dict) else []
-            )
-            if not _gs_user_paras:
+            # Gene Set body narrative: overlay unless the request already
+            # carries a `by_organ` map — that's the new structured shape
+            # Typst needs to place each organ's paragraph above its
+            # table.  The frontend today only flattens to `paragraphs`
+            # (no per-organ awareness), so any session without
+            # `by_organ` gets a fresh auto-populate on export, which
+            # upgrades the rendered layout without requiring a frontend
+            # change.  Once the frontend learns to preserve `by_organ`
+            # through user edits, this condition will keep those edits.
+            _gs_narrative_dict = gene_set_narrative if isinstance(gene_set_narrative, dict) else {}
+            _gs_has_by_organ = bool(_gs_narrative_dict.get("by_organ"))
+            if not _gs_has_by_organ:
                 gs_intros = build_gene_set_body_intro(
                     chemical_name=_chem_name,
                     ge_organs=_ge_organs,
                     table_numbers=_gs_tables,
                 )
-                gs_findings = build_gene_set_body_findings(
+                # build_gene_set_body_findings now returns a dict keyed
+                # by organ — one paragraph per organ — so the Typst
+                # template can place each organ's prose directly above
+                # its per-organ table instead of lumping everything at
+                # the top of the section.
+                gs_findings_by_organ = build_gene_set_body_findings(
                     genomics_sections=_genomics_cache,
                     dose_groups=_dose_groups_g,
                     dose_unit=_dose_unit_g,
                 )
+                # Keep a flat `paragraphs` field (intros + organ paras in
+                # alphabetical organ order) for any consumer that reads
+                # the legacy shape — e.g., DOCX export, or a user-edited
+                # narrative round-trip where the per-organ structure
+                # isn't preserved.  The Typst renderer prefers `intros`
+                # + `by_organ` when both are present.
                 data["gene_set_narrative"] = {
-                    "paragraphs": gs_intros + gs_findings,
+                    "paragraphs": gs_intros + [
+                        gs_findings_by_organ[o]
+                        for o in sorted(gs_findings_by_organ.keys())
+                    ],
+                    "intros": gs_intros,
+                    "by_organ": gs_findings_by_organ,
                 }
 
-            # Gene BMD body narrative: same fallback pattern.
-            _gn_user_paras = (
-                (gene_narrative or {}).get("paragraphs", [])
-                if isinstance(gene_narrative, dict) else []
-            )
-            if not _gn_user_paras:
+            # Gene BMD body narrative: same upgrade-on-missing-by_organ
+            # trigger as the gene-set block.
+            _gn_narrative_dict = gene_narrative if isinstance(gene_narrative, dict) else {}
+            _gn_has_by_organ = bool(_gn_narrative_dict.get("by_organ"))
+            if not _gn_has_by_organ:
                 gn_intros = build_gene_body_intro(
                     ge_organs=_ge_organs,
                     table_numbers=_gn_tables,
                     fold_change_filter=_fc_filter,
                 )
-                gn_findings = build_gene_body_findings(
+                gn_findings_by_organ = build_gene_body_findings(
                     genomics_sections=_genomics_cache,
                     dose_groups=_dose_groups_g,
                     dose_unit=_dose_unit_g,
                 )
                 data["gene_narrative"] = {
-                    "paragraphs": gn_intros + gn_findings,
+                    "paragraphs": gn_intros + [
+                        gn_findings_by_organ[o]
+                        for o in sorted(gn_findings_by_organ.keys())
+                    ],
+                    "intros": gn_intros,
+                    "by_organ": gn_findings_by_organ,
                 }
         except Exception as e:
             logging.exception("Failed to build genomics body narratives: %s", e)
@@ -1508,6 +1531,27 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
         "acknowledgments", "abstract", "table_of_contents",
     }
 
+    # --- Resolve dynamic per-organ subnode IDs ---
+    # The frontend sidebar generates per-organ subnodes for the genomics
+    # parents — IDs like "gene-set-liver" or "gene-bmd-kidney" — that
+    # don't exist in the static DOCUMENT_TREE.  Map them to the parent
+    # node ("gene-sets" / "gene-bmd") and remember the organ qualifier
+    # so we can sub-filter genomics_sections to just that organ below.
+    organ_qualifier: str | None = None
+    if section_filter and section_filter not in (None, ""):
+        for prefix, parent_id in (
+            ("gene-set-", "gene-sets"),
+            ("gene-bmd-", "gene-bmd"),
+        ):
+            if section_filter.startswith(prefix):
+                candidate_organ = section_filter[len(prefix):]
+                # Only treat as a per-organ subnode when the suffix
+                # isn't itself an existing static node ID.
+                if find_node(section_filter) is None and candidate_organ:
+                    organ_qualifier = candidate_organ.lower()
+                    section_filter = parent_id
+                break
+
     # --- Look up the node in the document tree ---
     node = find_node(section_filter)
 
@@ -1606,6 +1650,17 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
         data["genomics_sections"] = [
             s for s in data["genomics_sections"]
             if s.get("type") == wanted_type
+        ]
+
+    # Per-organ subnode filter — when the requested TOC id was e.g.
+    # "gene-set-liver", drop sections for other organs so the preview
+    # renders only the Liver table (and its narrative, via the Typst
+    # `by_organ` lookup).  The narrative dict stays intact because its
+    # per-organ placement is keyed by organ name in the template.
+    if organ_qualifier and "genomics_sections" in data:
+        data["genomics_sections"] = [
+            s for s in data["genomics_sections"]
+            if str(s.get("organ", "")).lower() == organ_qualifier
         ]
 
 

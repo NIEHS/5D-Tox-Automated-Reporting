@@ -1012,7 +1012,11 @@
   data.at("apical_sections", default: ()).len() > 0 or
   data.at("internal_dose", default: none) != none or
   data.at("bmd_summary", default: none) != none or
-  data.at("genomics_sections", default: ()).len() > 0
+  data.at("genomics_sections", default: ()).len() > 0 or
+  // genomics_charts must trigger Results H1 too — when the charts node
+  // is previewed alone, charts are the only Results content, and the
+  // chart H3 headings need an H1 ancestor for PDF/UA-1 compliance.
+  data.at("genomics_charts", default: ()).len() > 0
 )
 
 // Emit the "Results" H1 heading.
@@ -1469,58 +1473,153 @@
       }
       heading(level: _gene-sets-info.level, _gene-sets-info.title)
 
-      // Shared narrative for gene set analysis
+      // Gene-set narrative comes in one of two shapes:
+      //   - New form: { intros: [...], by_organ: {kidney: "...", liver: "..."}, paragraphs: [...] }
+      //     where `intros` are boilerplate paragraphs rendered here,
+      //     and `by_organ` is consumed inline above each per-organ
+      //     table so each organ's findings sit next to its table.
+      //   - Legacy form: { paragraphs: [...] } — all paragraphs lumped
+      //     and rendered here (the old layout).  This is what user-
+      //     edited narratives look like when the round-trip drops the
+      //     per-organ structure.
       let gs-narrative = data.at("gene_set_narrative", default: none)
+      let gs-by-organ-paras = (:)
       if gs-narrative != none {
-        for para in gs-narrative.at("paragraphs", default: ()) {
-          [#para]
-          parbreak()
+        let has-split = "intros" in gs-narrative or "by_organ" in gs-narrative
+        if has-split {
+          for para in gs-narrative.at("intros", default: ()) {
+            [#para]
+            parbreak()
+          }
+          gs-by-organ-paras = gs-narrative.at("by_organ", default: (:))
+        } else {
+          for para in gs-narrative.at("paragraphs", default: ()) {
+            [#para]
+            parbreak()
+          }
         }
       }
 
+      // Group sections by (organ, bmd_stat) so male + female share a
+      // single table.  Mirrors NIEHS Report 10 Table 9 / Table 10
+      // layout: one H3 per organ (e.g., "Liver"), one sex-grouped-table
+      // with bold "Male" / "Female" row-group headers, and one deduped
+      // GO-descriptions block below.  Upstream data is still
+      // per-{organ,sex}; this is purely a presentation regrouping.
+      //
+      // The stat is part of the grouping key because export.js emits
+      // one section per (organ, sex, bmd_stat) when multiple BMD stats
+      // are selected.  Collapsing only by organ would overwrite
+      // different-stat entries and silently drop data; keying on the
+      // stat as well yields one table per (organ, stat) — multiple
+      // tables for the same organ when >1 stat is present.
+      let gs-by-key = (:)
+      let gs-key-order = ()
+      let gs-organ-by-key = (:)
       for gs-sec in gene-set-sections {
-        let organ = gs-sec.at("organ", default: "")
-        let sex = gs-sec.at("sex", default: "")
-        let label = if organ != "" and sex != "" {
-          upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
-        } else if organ != "" {
-          upper(organ.first()) + organ.slice(1)
-        } else { "" }
+        let organ = lower(gs-sec.at("organ", default: ""))
+        if organ == "" { continue }
+        let sex = lower(gs-sec.at("sex", default: ""))
+        let stat = gs-sec.at("bmd_stat", default: "")
+        let key = organ + "|" + stat
+        if key not in gs-key-order {
+          gs-key-order.push(key)
+          gs-by-key.insert(key, (:))
+          gs-organ-by-key.insert(key, organ)
+        }
+        let entry = gs-by-key.at(key)
+        entry.insert(sex, gs-sec)
+        gs-by-key.insert(key, entry)
+      }
 
-        if label != "" { heading(level: 3, label) }
+      // Track which organs have already had their H3 emitted — with
+      // multi-stat data, the second table for an organ should stay
+      // under the same H3 rather than emit the heading again.
+      let gs-organs-heading-done = ()
 
-        // Gene sets table — use the stat label from the section (e.g. "5th %ile")
-        // falling back to "Median" for legacy data that doesn't carry a label.
-        let gene-sets = gs-sec.at("gene_sets", default: ())
-        if gene-sets.len() > 0 {
-          let stat-label = gs-sec.at("bmd_stat_label", default: "Median")
-          let gs-rows = gene-sets.map(gs => (
+      for key in gs-key-order {
+        let entries = gs-by-key.at(key)
+        let organ = gs-organ-by-key.at(key)
+        let label = upper(organ.first()) + organ.slice(1)
+        if organ not in gs-organs-heading-done {
+          heading(level: 3, label)
+          gs-organs-heading-done.push(organ)
+          // Per-organ findings paragraph — placed between the organ
+          // H3 and its table so the reader sees "here's what happened
+          // in the liver" right before the liver table, not lumped
+          // together at the top of the section.  Emitted only once
+          // per organ (on the first stat's pass when multi-stat data
+          // would produce multiple tables for the same organ).
+          let organ-para = gs-by-organ-paras.at(organ, default: "")
+          if organ-para != "" {
+            [#organ-para]
+            parbreak()
+          }
+        }
+
+        let male-sec = entries.at("male", default: none)
+        let female-sec = entries.at("female", default: none)
+
+        // Row builders — one per sex.  Empty array if the section is
+        // missing so sex-grouped-table can skip that group cleanly.
+        let male-gs = if male-sec != none { male-sec.at("gene_sets", default: ()) } else { () }
+        let female-gs = if female-sec != none { female-sec.at("gene_sets", default: ()) } else { () }
+
+        if male-gs.len() > 0 or female-gs.len() > 0 {
+          // Stat label is the same across sexes for a given study; read
+          // it from whichever section is present.
+          let ref-sec = if male-sec != none { male-sec } else { female-sec }
+          let stat-label = ref-sec.at("bmd_stat_label", default: "Median")
+
+          let gs-row-of(gs) = (
             gs.at("go_term", default: ""),
             gs.at("go_id", default: ""),
             fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
             fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
             str(gs.at("n_genes", default: "")),
             gs.at("direction", default: ""),
-          ))
+          )
 
-          niehs-table(
+          // Merge footnotes from both sexes, preserving order and
+          // dropping duplicates (the same note may apply to both).
+          let merged-footnotes = ()
+          for sec in (male-sec, female-sec) {
+            if sec == none { continue }
+            for fn in sec.at("footnotes", default: ()) {
+              if fn not in merged-footnotes { merged-footnotes.push(fn) }
+            }
+          }
+
+          sex-grouped-table(
             ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", "Direction"),
-            gs-rows,
-            caption: gs-sec.at("caption", default: "Gene Set BMD Analysis — " + label),
+            male-gs.map(gs-row-of),
+            female-gs.map(gs-row-of),
+            caption: "Gene Set BMD Analysis — " + label,
             numeric-cols: (2, 3, 4),
-            footnotes: gs-sec.at("footnotes", default: ()),
+            footnotes: merged-footnotes,
           )
           v(8pt)
         }
 
-        // GO process descriptions — dense 9pt text block following the table
-        // In the NIEHS PDF, these appear as compact paragraphs with bold
-        // GO IDs followed by their definitions.
-        let go-descriptions = gs-sec.at("go_descriptions", default: ())
-        if go-descriptions.len() > 0 {
+        // GO process descriptions — combine from both sexes and dedupe
+        // by GO ID.  Overlap is expected when the same GO term appears
+        // in both the male and female top-N.
+        let merged-descs = ()
+        let seen-go-ids = ()
+        for sec in (male-sec, female-sec) {
+          if sec == none { continue }
+          for desc in sec.at("go_descriptions", default: ()) {
+            let go-id = desc.at("go_id", default: "")
+            if go-id not in seen-go-ids {
+              seen-go-ids.push(go-id)
+              merged-descs.push(desc)
+            }
+          }
+        }
+        if merged-descs.len() > 0 {
           set text(size: 9pt)
           set par(leading: 0.3em, spacing: 3pt)
-          for desc in go-descriptions {
+          for desc in merged-descs {
             let go-id = desc.at("go_id", default: "")
             let go-name = desc.at("name", default: "")
             let definition = desc.at("definition", default: "")
@@ -1543,56 +1642,113 @@
       }
       heading(level: _gene-bmd-info.level, _gene-bmd-info.title)
 
-      // Shared narrative for gene analysis
+      // Gene BMD narrative follows the same split shape as
+      // gene_set_narrative: new form carries `intros` + `by_organ`,
+      // legacy form carries a flat `paragraphs` list.  See the
+      // gene-set block above for the rationale.
       let gene-narrative = data.at("gene_narrative", default: none)
+      let gn-by-organ-paras = (:)
       if gene-narrative != none {
-        for para in gene-narrative.at("paragraphs", default: ()) {
-          [#para]
-          parbreak()
+        let has-split = "intros" in gene-narrative or "by_organ" in gene-narrative
+        if has-split {
+          for para in gene-narrative.at("intros", default: ()) {
+            [#para]
+            parbreak()
+          }
+          gn-by-organ-paras = gene-narrative.at("by_organ", default: (:))
+        } else {
+          for para in gene-narrative.at("paragraphs", default: ()) {
+            [#para]
+            parbreak()
+          }
         }
       }
 
+      // Same per-organ grouping as the gene-set block above — one H3
+      // per organ, one sex-grouped-table with Male/Female row groups,
+      // deduped gene descriptions below.
+      let g-by-organ = (:)
+      let g-organ-order = ()
       for g-sec in gene-sections {
-        let organ = g-sec.at("organ", default: "")
-        let sex = g-sec.at("sex", default: "")
-        let label = if organ != "" and sex != "" {
-          upper(organ.first()) + organ.slice(1) + " — " + upper(sex.first()) + sex.slice(1)
-        } else if organ != "" {
-          upper(organ.first()) + organ.slice(1)
-        } else { "" }
+        let organ = lower(g-sec.at("organ", default: ""))
+        if organ == "" { continue }
+        let sex = lower(g-sec.at("sex", default: ""))
+        if organ not in g-organ-order {
+          g-organ-order.push(organ)
+          g-by-organ.insert(organ, (:))
+        }
+        let entry = g-by-organ.at(organ)
+        entry.insert(sex, g-sec)
+        g-by-organ.insert(organ, entry)
+      }
 
-        if label != "" { heading(level: 3, label) }
+      for organ in g-organ-order {
+        let entries = g-by-organ.at(organ)
+        let label = upper(organ.first()) + organ.slice(1)
+        heading(level: 3, label)
 
-        // Top genes table
-        let top-genes = g-sec.at("top_genes", default: ())
-        if top-genes.len() > 0 {
-          let gene-rows = top-genes.map(g => (
-            // Gene symbols are conventionally italicized in biology
+        // Per-organ findings paragraph — placed between the organ H3
+        // and its table.  Matches the gene-set block's placement.
+        let organ-para = gn-by-organ-paras.at(organ, default: "")
+        if organ-para != "" {
+          [#organ-para]
+          parbreak()
+        }
+
+        let male-sec = entries.at("male", default: none)
+        let female-sec = entries.at("female", default: none)
+
+        let male-tg = if male-sec != none { male-sec.at("top_genes", default: ()) } else { () }
+        let female-tg = if female-sec != none { female-sec.at("top_genes", default: ()) } else { () }
+
+        if male-tg.len() > 0 or female-tg.len() > 0 {
+          let gene-row-of(g) = (
+            // Gene symbols are conventionally italicized in biology.
             emph(g.at("gene_symbol", default: "")),
             fmt-val3(g.at("bmd", default: none)),
             fmt-val3(g.at("bmdl", default: none)),
             fmt-val(g.at("fold_change", default: none)),
             g.at("direction", default: ""),
-          ))
+          )
 
-          niehs-table(
+          let merged-footnotes = ()
+          for sec in (male-sec, female-sec) {
+            if sec == none { continue }
+            for fn in sec.at("footnotes", default: ()) {
+              if fn not in merged-footnotes { merged-footnotes.push(fn) }
+            }
+          }
+
+          sex-grouped-table(
             ("Gene", "BMD", "BMDL", "Fold Change", "Direction"),
-            gene-rows,
-            caption: g-sec.at("caption", default: "Gene BMD Analysis — " + label),
+            male-tg.map(gene-row-of),
+            female-tg.map(gene-row-of),
+            caption: "Gene BMD Analysis — " + label,
             numeric-cols: (1, 2, 3),
-            footnotes: g-sec.at("footnotes", default: ()),
+            footnotes: merged-footnotes,
           )
           v(8pt)
         }
 
-        // Gene descriptions — dense text block with UniProt/Entrez annotations
-        // In the NIEHS PDF (pages 41-46, 44-46), each gene symbol is bold
-        // followed by its functional description from public databases.
-        let gene-descriptions = g-sec.at("gene_descriptions", default: ())
-        if gene-descriptions.len() > 0 {
+        // Gene descriptions — merge from both sexes, dedupe by symbol.
+        // The same gene can appear in both male and female top-N lists
+        // with the same UniProt/Entrez description.
+        let merged-descs = ()
+        let seen-symbols = ()
+        for sec in (male-sec, female-sec) {
+          if sec == none { continue }
+          for desc in sec.at("gene_descriptions", default: ()) {
+            let symbol = desc.at("gene_symbol", default: "")
+            if symbol not in seen-symbols {
+              seen-symbols.push(symbol)
+              merged-descs.push(desc)
+            }
+          }
+        }
+        if merged-descs.len() > 0 {
           set text(size: 9pt)
           set par(leading: 0.3em, spacing: 3pt)
-          for desc in gene-descriptions {
+          for desc in merged-descs {
             let symbol = desc.at("gene_symbol", default: "")
             let description = desc.at("description", default: "")
             [*#emph(symbol):* #description]
@@ -1689,18 +1845,6 @@
 }
 
 
-// --- Summary ---
-// NIEHS page 47 (body 35): concluding paragraphs synthesizing all results.
-#if data.at("summary", default: none) != none {
-  pagebreak(weak: true)
-  heading(level: 1, "Summary")
-  for para in data.summary.at("paragraphs", default: ()) {
-    [#para]
-    parbreak()
-  }
-}
-
-
 // --- Genomics Charts ---
 // Server-rendered UMAP and cluster scatter charts, one pair per organ×sex
 // combination.  The data dict contains a list of entries, each with temp
@@ -1709,8 +1853,25 @@
 //
 // Chart images are rendered by render_chart_images() in genomics_viz.py
 // and written to indexed temp files by build_report_pdf() in report_pdf.py.
+//
+// Note on ordering: Charts must be emitted *before* the Summary H1 so the
+// PDF outline keeps it under Results.  The PDF outline tree is built by
+// scanning headings in document order; once a sibling H1 (Summary) opens,
+// any subsequent H2 nests under that new H1, not under Results.  Summary
+// follows immediately after this block.
 #let charts = data.at("genomics_charts", default: none)
-#if charts != none {
+#if charts != none and charts.len() > 0 {
+  // Emit a parent H2 before the per-chart H3s.  In a full report this
+  // also makes the section show up in the TOC; in a section-only preview
+  // it satisfies PDF/UA-1's requirement that heading levels not skip
+  // (Results H1 → Genomics Charts H2 → chart H3s).  The pagebreak is
+  // skipped in section-only mode to avoid a blank "Results" leader page.
+  let _charts-info = _group-info.at("charts", default: (title: "Genomics Charts", level: 2))
+  if not section-only {
+    pagebreak()
+  }
+  heading(level: _charts-info.level, _charts-info.title)
+
   for entry in charts {
     let label = entry.at("label", default: "")
     // UMAP Scatter Plot for this organ×sex combo
@@ -1766,6 +1927,20 @@
     // Page break after the summary table so each organ×sex group
     // is fully separated from the next.
     pagebreak()
+  }
+}
+
+
+// --- Summary ---
+// NIEHS page 47 (body 35): concluding paragraphs synthesizing all results.
+// Placed after Genomics Charts so the PDF outline keeps Charts under
+// Results — see the note above the Genomics Charts block.
+#if data.at("summary", default: none) != none {
+  pagebreak(weak: true)
+  heading(level: 1, "Summary")
+  for para in data.summary.at("paragraphs", default: ()) {
+    [#para]
+    parbreak()
   }
 }
 

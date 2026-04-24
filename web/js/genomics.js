@@ -68,18 +68,34 @@ function ensureGenomicsContainers(key, organ, sex) {
         if (geneBmdCards) geneBmdCards.appendChild(geneBmdPanel);
 
         // --- Sidebar TOC children ---
-        // Add clickable leaf nodes for this organ×sex under the
-        // Gene Set and Gene BMD parent nodes in the sidebar.
+        // Add a clickable leaf node for this organ under the Gene Set
+        // and Gene BMD parent nodes in the sidebar.  The IDs use only
+        // the organ — the sex is merged into the per-organ table on
+        // the PDF side (see task #58), so a per-{organ,sex} leaf here
+        // would navigate to a view that no longer exists as its own
+        // table.  Per-{organ,sex} content panels still get created
+        // above for cards/editing; only the TOC entries collapse.
+        //
+        // De-dupe by checking whether a leaf for this organ already
+        // exists before appending — data arrives per-{organ,sex} so
+        // this function fires twice per organ (once for male, once for
+        // female).  The second call must skip creating a duplicate
+        // sidebar entry.
+        const organToc = organ.toLowerCase();
+        const organDisplay = organTitle;  // e.g., "Liver" (no sex)
+
         const tocGeneSetList = document.getElementById('toc-gene-set-children');
-        if (tocGeneSetList) {
+        if (tocGeneSetList && !tocGeneSetList.querySelector(`[data-organ="${organToc}"]`)) {
             const li = document.createElement('li');
-            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-set-${key}')">${label}</a>`;
+            li.setAttribute('data-organ', organToc);
+            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-set-${organToc}')">${organDisplay}</a>`;
             tocGeneSetList.appendChild(li);
         }
         const tocGeneBmdList = document.getElementById('toc-gene-bmd-children');
-        if (tocGeneBmdList) {
+        if (tocGeneBmdList && !tocGeneBmdList.querySelector(`[data-organ="${organToc}"]`)) {
             const li = document.createElement('li');
-            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-bmd-${key}')">${label}</a>`;
+            li.setAttribute('data-organ', organToc);
+            li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-bmd-${organToc}')">${organDisplay}</a>`;
             tocGeneBmdList.appendChild(li);
         }
 
