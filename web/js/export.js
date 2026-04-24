@@ -1032,10 +1032,18 @@ async function buildExportPayload() {
     // Summary
     const summaryParas = extractProse('summary-prose');
 
-    // Aggregate top-level narrative arrays across all genomics sections
-    // (Typst template reads gene_set_narrative / gene_narrative from root, not per-section)
-    const allGsNarr = genomicsSecs.flatMap(s => s.gene_set_narrative || []);
-    const allGeneNarr = genomicsSecs.flatMap(s => s.gene_narrative || []);
+    // Gene Set / Gene BMD body narratives — server-derived by the shared
+    // assembler (genomics_narratives.build_genomics_body_narratives) and
+    // captured from the process-integrated response into state.js.  Pass
+    // the whole dict through (intros + by_organ + paragraphs) so the
+    // PDF's `marshal_export_data` overlay guard
+    // (`if not _gs_existing.get("by_organ")`) uses this exact narrative
+    // instead of rebuilding from disk — guaranteeing the PDF and the
+    // HTML in-app view show identical prose.  Falls back to empty on
+    // sessions processed before this wiring existed; the PDF path then
+    // auto-populates on its own, same as before.
+    const geneSetNarrativeExport = genomicsGeneSetNarrative || null;
+    const geneNarrativeExport    = genomicsGeneNarrative    || null;
 
     // Chart images are read server-side from _cache_charts_{hash}.json —
     // no need to round-trip large base64 PNGs through the client payload.
@@ -1067,8 +1075,8 @@ async function buildExportPayload() {
         methods_paragraphs: methodsParas,
         bmd_summary_endpoints: bmdSummaryEps,
         genomics_sections: genomicsSecs,
-        gene_set_narrative: { paragraphs: allGsNarr },
-        gene_narrative: { paragraphs: allGeneNarr },
+        gene_set_narrative: geneSetNarrativeExport,
+        gene_narrative: geneNarrativeExport,
         summary_paragraphs: summaryParas,
         // Abstract Background — LLM-generated alongside the body Background
         // by background_writer.py (delimited "=== ABSTRACT BACKGROUND ===" block).

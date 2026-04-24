@@ -46,6 +46,63 @@ _UMAP_REF: list[dict] = []
 _UMAP_LOOKUP: dict[str, dict] = {}
 
 
+# ---------------------------------------------------------------------------
+# SVG ID namespacing
+# ---------------------------------------------------------------------------
+# Plotly's SVG export uses auto-generated IDs like `clip0`, `defs1`,
+# `legend0` that are unique only within a single <svg> instance.  When
+# we inline multiple SVGs into the same HTML page (one pair per organ
+# × sex), these IDs collide: the browser resolves `url(#clip0)` to
+# whichever definition was last added, and every chart ends up using
+# that single clip-path.  Symptoms: all analysis points vanish, or all
+# charts render with the wrong legend.
+#
+# Fix: rewrite every `id="..."`, `url(#...)`, `href="#..."`, and
+# `xlink:href="#..."` in the SVG to carry a unique prefix per render.
+# Done with a small, permissive regex — sufficient because we only
+# ever consume Plotly's own SVG output, whose IDs are always simple
+# alphanumerics.
+
+import re as _re
+
+# Matches any `xxx="some-id"` attribute where xxx is one of the
+# identifier-bearing attributes.  Capture group 1 is the attribute
+# name + `="`, group 2 is the ID itself, group 3 is the closing `"`.
+_SVG_ID_ATTR = _re.compile(
+    r'((?:id|xlink:href|href|clip-path|mask|filter)=")'
+    r'(#?)'
+    r'([A-Za-z_][\w\-:.]*)'
+    r'(")'
+)
+# The `url(#xxx)` form used inside style attributes and fill/stroke
+# values.  Capture group 1 is the leading `url(#`, 2 the id, 3 `)`.
+_SVG_URL_REF = _re.compile(r'(url\(#)([A-Za-z_][\w\-:.]*)(\))')
+
+
+def _namespace_svg_ids(svg: str, prefix: str) -> str:
+    """
+    Rewrite every ID reference in a Plotly SVG so it carries a unique
+    prefix.  Lets multiple SVGs coexist in the same DOM without clip-
+    path / mask / filter definitions stomping on each other.
+
+    Only Plotly-style auto-generated IDs need rewriting, so we keep
+    the regex permissive rather than parsing the SVG.  The prefix is
+    typically "u-liver-male" or "c-kidney-female" so IDs become
+    "u-liver-male-clip0", etc.
+    """
+    def _attr_sub(m):
+        # Rewrite only when the ID isn't already namespaced.
+        attr, hash_sign, ident, close = m.group(1), m.group(2), m.group(3), m.group(4)
+        return f'{attr}{hash_sign}{prefix}-{ident}{close}'
+
+    def _url_sub(m):
+        return f'{m.group(1)}{prefix}-{m.group(2)}{m.group(3)}'
+
+    out = _SVG_ID_ATTR.sub(_attr_sub, svg)
+    out = _SVG_URL_REF.sub(_url_sub, out)
+    return out
+
+
 def _load_umap_reference():
     """Load the reference UMAP data from disk into module-level caches."""
     global _UMAP_REF, _UMAP_LOOKUP
@@ -712,9 +769,25 @@ def render_chart_images(
         font=dict(size=13),
     )
 
-    # ── Render to PNG ──────────────────────────────────────────────────
+    # ── Render to PNG + SVG from the same figures ─────────────────────
+    # Both renders go through kaleido's export path over the identical
+    # figure objects — any divergence between the PDF (PNG) and the
+    # HTML in-app view (SVG) is limited to rasterization, never data.
+    # This is the architectural contract: one render, two output
+    # encodings chosen by the consumer.
     umap_bytes = fig_umap.to_image(format="png", scale=2)
     cluster_bytes = fig_cluster.to_image(format="png", scale=2)
+
+    # SVG output is utf-8 text; decode and namespace it so multiple
+    # charts can coexist in the same DOM without Plotly's auto-generated
+    # clip-path IDs (`clip0`, `clip1`, ...) colliding across <svg>
+    # instances.  Without this, the browser applies whichever clip-path
+    # was last defined to every SVG on the page.
+    umap_svg_raw = fig_umap.to_image(format="svg").decode("utf-8")
+    cluster_svg_raw = fig_cluster.to_image(format="svg").decode("utf-8")
+    svg_ns_suffix = f"{organ}-{sex}".lower().replace(" ", "_") or "chart"
+    umap_svg = _namespace_svg_ids(umap_svg_raw, f"u-{svg_ns_suffix}")
+    cluster_svg = _namespace_svg_ids(cluster_svg_raw, f"c-{svg_ns_suffix}")
 
     umap_b64 = base64.b64encode(umap_bytes).decode()
     cluster_b64 = base64.b64encode(cluster_bytes).decode()
@@ -743,6 +816,13 @@ def render_chart_images(
     return {
         "umap_png": umap_b64,
         "cluster_png": cluster_b64,
+        # SVG bytes for the HTML inline render (same figures as PNG).
+        # Stored as utf-8 text rather than base64 because we inject them
+        # directly into the DOM via innerHTML.  The caller can strip
+        # these when serializing to keep payloads lean for consumers
+        # that only need the rasters.
+        "umap_svg": umap_svg,
+        "cluster_svg": cluster_svg,
         "umap_caption": umap_caption,
         "cluster_caption": cluster_caption,
         "cluster_summary": cluster_summary,

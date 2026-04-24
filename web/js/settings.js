@@ -271,7 +271,6 @@ async function applySettings() {
         if (Object.keys(genomicsResults).length > 0 && typeof Alpine !== 'undefined' && Alpine.store('app')) {
             Alpine.store('app').ready.geneSets = true;
             Alpine.store('app').ready.geneBmd = true;
-            Alpine.store('app').ready.charts = true;
         }
 
         // --- Rebuild BMD summary from apical_bmd_summary ---

@@ -1012,11 +1012,10 @@
   data.at("apical_sections", default: ()).len() > 0 or
   data.at("internal_dose", default: none) != none or
   data.at("bmd_summary", default: none) != none or
-  data.at("genomics_sections", default: ()).len() > 0 or
-  // genomics_charts must trigger Results H1 too — when the charts node
-  // is previewed alone, charts are the only Results content, and the
-  // chart H3 headings need an H1 ancestor for PDF/UA-1 compliance.
-  data.at("genomics_charts", default: ()).len() > 0
+  data.at("genomics_sections", default: ()).len() > 0
+  // (genomics_charts no longer triggers Results on its own — charts
+  // are rendered inline within the gene-set per-organ blocks, which
+  // require genomics_sections to exist anyway.)
 )
 
 // Emit the "Results" H1 heading.
@@ -1627,6 +1626,88 @@
             parbreak()
           }
         }
+
+        // --- Inline GO-term visualizations for this organ ---
+        // The UMAP and cluster scatter charts live with the gene-set
+        // analysis content (instead of as a standalone "Genomics
+        // Charts" section after Summary).  The chart payload is
+        // per-{organ,sex}, so filter by the current organ and emit one
+        // H4 sub-block per sex.  Each sub-block contains the UMAP
+        // figure, the cluster scatter figure, and the cluster biology
+        // summary table.
+        let _all-charts = data.at("genomics_charts", default: ())
+        let _organ-charts = _all-charts.filter(c => lower(c.at("organ", default: "")) == organ)
+        // Keep the inner block ordering deterministic: male first, then
+        // female.  Other sexes (if ever introduced) are appended in
+        // their natural order.  Parentheses are required so Typst
+        // parses the multiline `+` as binary array concat instead of
+        // unary plus on the next line.
+        let _ordered-organ-charts = (
+          _organ-charts.filter(c => lower(c.at("sex", default: "")) == "male") +
+          _organ-charts.filter(c => lower(c.at("sex", default: "")) == "female") +
+          _organ-charts.filter(c => not (lower(c.at("sex", default: "")) in ("male", "female")))
+        )
+
+        for chart-entry in _ordered-organ-charts {
+          let sex-label = chart-entry.at("sex", default: "")
+          let sex-display = if sex-label != "" {
+            upper(sex-label.first()) + sex-label.slice(1)
+          } else { "" }
+          let chart-label = label + (if sex-display != "" { " — " + sex-display } else { "" })
+
+          // One H4 per sex, covering both visualizations.  Tighter than
+          // emitting an H4 per individual chart (UMAP + cluster) and
+          // keeps the PDF outline readable.
+          if sex-display != "" {
+            heading(level: 4, "GO Term Visualizations — " + sex-display)
+          } else {
+            heading(level: 4, "GO Term Visualizations")
+          }
+
+          let umap-path = chart-entry.at("umap_path", default: none)
+          if umap-path != none {
+            figure(
+              image(umap-path, width: 51%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster — " + chart-label),
+              caption: text(size: 9pt, style: "italic", chart-entry.at("umap_caption", default: "")),
+            )
+          }
+
+          let cluster-path = chart-entry.at("cluster_path", default: none)
+          if cluster-path != none {
+            figure(
+              image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity — " + chart-label),
+              caption: text(size: 9pt, style: "italic", chart-entry.at("cluster_caption", default: "")),
+            )
+          }
+
+          // Cluster biology summary table — maps each gene-overlap
+          // cluster to its top enriched terms from Enrichr (or internal
+          // GO terms as fallback).  Ordered to match the y-axis of the
+          // scatter plot.
+          let summary = chart-entry.at("cluster_summary", default: none)
+          if summary != none and summary.len() > 0 {
+            v(0.5em)
+            text(size: 9pt, weight: "bold")[Cluster Biology Summary — #chart-label]
+            v(0.3em)
+            table(
+              columns: (auto, auto, 1fr),
+              stroke: 0.5pt + luma(200),
+              inset: 5pt,
+              table.header(
+                text(size: 8pt, weight: "bold")[Cluster],
+                text(size: 8pt, weight: "bold")[Genes],
+                text(size: 8pt, weight: "bold")[Top Enriched Terms],
+              ),
+              ..for row in summary {
+                (
+                  text(size: 8pt)[#row.at("cluster", default: "")],
+                  text(size: 8pt)[#str(row.at("n_genes", default: 0))],
+                  text(size: 8pt)[#row.at("terms", default: ()).join("; ")],
+                )
+              }
+            )
+          }
+        }
       }
     }
 
@@ -1846,89 +1927,14 @@
 
 
 // --- Genomics Charts ---
-// Server-rendered UMAP and cluster scatter charts, one pair per organ×sex
-// combination.  The data dict contains a list of entries, each with temp
-// PNG filenames (relative to this template's directory), captions, and a
-// label like "Liver (Male)".
+// Charts are now rendered inline within each gene-set per-organ block
+// (see the Gene Set Benchmark Dose Analysis section above).  The
+// previous standalone "Genomics Charts" H2 has been removed so the
+// charts live next to the gene-set tables they visualize, instead of
+// being relegated to a separate post-Summary section.
 //
-// Chart images are rendered by render_chart_images() in genomics_viz.py
-// and written to indexed temp files by build_report_pdf() in report_pdf.py.
-//
-// Note on ordering: Charts must be emitted *before* the Summary H1 so the
-// PDF outline keeps it under Results.  The PDF outline tree is built by
-// scanning headings in document order; once a sibling H1 (Summary) opens,
-// any subsequent H2 nests under that new H1, not under Results.  Summary
-// follows immediately after this block.
-#let charts = data.at("genomics_charts", default: none)
-#if charts != none and charts.len() > 0 {
-  // Emit a parent H2 before the per-chart H3s.  In a full report this
-  // also makes the section show up in the TOC; in a section-only preview
-  // it satisfies PDF/UA-1's requirement that heading levels not skip
-  // (Results H1 → Genomics Charts H2 → chart H3s).  The pagebreak is
-  // skipped in section-only mode to avoid a blank "Results" leader page.
-  let _charts-info = _group-info.at("charts", default: (title: "Genomics Charts", level: 2))
-  if not section-only {
-    pagebreak()
-  }
-  heading(level: _charts-info.level, _charts-info.title)
-
-  for entry in charts {
-    let label = entry.at("label", default: "")
-    // UMAP Scatter Plot for this organ×sex combo
-    let umap-path = entry.at("umap_path", default: none)
-    if umap-path != none {
-      heading(level: 3, "GO Term Semantic Map (UMAP) — " + label)
-      figure(
-        image(umap-path, width: 51%, alt: "UMAP scatter plot of GO Biological Process terms colored by HDBSCAN semantic cluster — " + label),
-        caption: text(size: 9pt, style: "italic", entry.at("umap_caption", default: "")),
-      )
-    }
-    // Cluster Scatter Plot for this organ×sex combo
-    let cluster-path = entry.at("cluster_path", default: none)
-    if cluster-path != none {
-      heading(level: 3, "GO Category Cluster Scatter — " + label)
-      figure(
-        image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity — " + label),
-        caption: text(size: 9pt, style: "italic", entry.at("cluster_caption", default: "")),
-      )
-    }
-
-    // Page break after cluster scatter so the summary table and next
-    // organ×sex group start on a fresh page.
-    pagebreak()
-
-    // Cluster biology summary table — maps each gene-overlap cluster
-    // to its top enriched terms from Enrichr (or internal GO terms as
-    // fallback).  Ordered to match the y-axis of the scatter plot.
-    let summary = entry.at("cluster_summary", default: none)
-    if summary != none and summary.len() > 0 {
-      v(0.5em)
-      text(size: 9pt, weight: "bold")[Cluster Biology Summary — #label]
-      v(0.3em)
-      table(
-        columns: (auto, auto, 1fr),
-        stroke: 0.5pt + luma(200),
-        inset: 5pt,
-        table.header(
-          text(size: 8pt, weight: "bold")[Cluster],
-          text(size: 8pt, weight: "bold")[Genes],
-          text(size: 8pt, weight: "bold")[Top Enriched Terms],
-        ),
-        ..for row in summary {
-          (
-            text(size: 8pt)[#row.at("cluster", default: "")],
-            text(size: 8pt)[#str(row.at("n_genes", default: 0))],
-            text(size: 8pt)[#row.at("terms", default: ()).join("; ")],
-          )
-        }
-      )
-    }
-
-    // Page break after the summary table so each organ×sex group
-    // is fully separated from the next.
-    pagebreak()
-  }
-}
+// The genomics_charts payload is still produced upstream and read by
+// the gene-set loop via a per-organ filter on chart_entry.organ.
 
 
 // --- Summary ---

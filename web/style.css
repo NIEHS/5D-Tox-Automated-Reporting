@@ -1018,6 +1018,169 @@ header p {
  * Uses <details>/<summary> for click-to-expand since these blocks
  * can be long and would otherwise dominate the card visually.
  * ---------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+ * Per-organ genomics panel — mirrors the PDF layout
+ *
+ * One panel per organ in the Gene Set BMD and Gene BMD sections.
+ * The panel contains:
+ *   - <h3>Organ name</h3>
+ *   - .organ-display: combined sex-grouped table + descriptions
+ *   - .organ-charts: inline chart slots (gene-set side only, deferred)
+ *   - .organ-controls: collapsible holding per-{organ,sex} editing
+ *     cards (approval, narrative, config)
+ *
+ * Visually distinct from the editing controls so the table+chart
+ * area reads as the primary content.
+ * ---------------------------------------------------------------- */
+.genomics-organ-panel {
+    margin-bottom: 1.5rem;
+}
+
+.genomics-organ-panel > h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.genomics-organ-panel .organ-display {
+    margin-bottom: 0.75rem;
+}
+
+/* Per-organ findings paragraph — the server-derived prose shown above
+ * each organ's gene-set or gene-bmd table.  Mirrors the PDF layout
+ * where NIEHS-style findings sentences precede each per-organ table.
+ * Read-only; no user input (the dict is the SSOT, not the DOM text).
+ */
+.genomics-organ-panel .organ-findings {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--c-text-primary);
+}
+
+/* Inline chart pair per sex inside each organ's gene-set panel.  The
+ * SVG comes from the same Plotly figures the PDF renders as PNG —
+ * `genomics_viz.render_chart_images` produces both encodings from one
+ * figure object.  CSS here just handles layout; the SVG carries its
+ * own viewBox for crisp scaling.
+ */
+.genomics-organ-panel .organ-charts {
+    margin: 0.75rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.organ-chart-pair {
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    padding: 0.6rem 0.75rem;
+    background: var(--c-bg);
+}
+
+.organ-chart-pair > h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.85rem;
+    color: var(--c-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Two charts side by side on wide viewports; stack on narrow.  The
+ * flex items cap at 50% each so the pair fills the panel width. */
+.organ-chart-figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.organ-chart-figure {
+    flex: 1 1 320px;
+    margin: 0;
+    min-width: 0;
+}
+
+/* SVG container — constrains display size while preserving aspect
+ * ratio.  Plotly's exported SVG already has width/height attributes
+ * set, so we override with 100% width and auto height. */
+.organ-chart-svg {
+    width: 100%;
+    overflow: hidden;
+}
+
+.organ-chart-svg svg {
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+}
+
+.organ-chart-figure figcaption {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--c-text-secondary);
+    font-style: italic;
+}
+
+.cluster-summary-block {
+    margin-top: 0.6rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+}
+
+.cluster-summary-block > summary {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    background: var(--c-bg-light);
+    cursor: pointer;
+    user-select: none;
+}
+
+.cluster-summary-block .cluster-summary-table {
+    width: 100%;
+    font-size: 0.75rem;
+}
+
+.cluster-summary-block .cluster-summary-table th,
+.cluster-summary-block .cluster-summary-table td {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.genomics-organ-panel .organ-controls {
+    margin-top: 0.75rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    background: var(--c-bg-light);
+}
+
+.genomics-organ-panel .organ-controls > summary {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.genomics-organ-panel .organ-controls .organ-cards {
+    padding: 0.5rem 0.75rem;
+}
+
+/* Sex-row group header inside the per-organ table.  Mirrors the
+ * NIEHS PDF layout where "Male" and "Female" appear as bold row
+ * spanners separating the per-sex blocks within a single table.
+ */
+.sex-row-header {
+    background: var(--c-bg-light);
+    font-weight: 600;
+    text-align: left !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+}
+
 .descriptions-block {
     margin-top: 0.5rem;
     border: 1px solid var(--c-border);

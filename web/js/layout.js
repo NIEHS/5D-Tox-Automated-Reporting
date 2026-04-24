@@ -94,11 +94,6 @@ function navigateToNode(tocId) {
         renderReportTab();
     }
 
-    // Lazy-render genomics charts when navigating to the Charts section
-    if (tocId === 'charts' && typeof renderGenomicsCharts === 'function') {
-        renderGenomicsCharts();
-    }
-
     // Scroll the content pane to the top when switching views
     const pane = document.querySelector('.content-pane');
     if (pane) pane.scrollTop = 0;

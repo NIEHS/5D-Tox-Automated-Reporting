@@ -472,6 +472,27 @@ async function restoreSession(data) {
         }
     }
 
+    // --- Restore Gene Set / Gene BMD body narratives ---
+    // Server rebuilds these deterministically on session load (pure
+    // function of genomics_sections + MethodsContext) so the HTML
+    // per-organ panels show the same paragraphs the PDF would render.
+    // Must be set BEFORE createGenomicsCard() runs below, because that
+    // triggers _rebuildOrganDisplays which reads these globals to emit
+    // the findings paragraph above each organ's table.
+    if (data.gene_set_narrative) {
+        genomicsGeneSetNarrative = data.gene_set_narrative;
+    }
+    if (data.gene_narrative) {
+        genomicsGeneNarrative = data.gene_narrative;
+    }
+
+    // --- Restore inline chart images (SVG + PNG per organ × sex) ---
+    // Same disk cache the PDF exporter reads.  Setting before card
+    // creation so _rebuildOrganCharts finds the entries on first pass.
+    if (data.chart_images) {
+        chartImagesCache = data.chart_images;
+    }
+
     // --- Restore Genomics sections ---
     // For each saved genomics section: create a synthetic uploadedFiles
     // entry (type='csv', restored: true), render a greyed file pool item,
@@ -481,7 +502,6 @@ async function restoreSession(data) {
             Alpine.store('app').ready.data = true;
             Alpine.store('app').ready.geneSets = true;
             Alpine.store('app').ready.geneBmd = true;
-            Alpine.store('app').ready.charts = true;
         }
 
         for (const [slug, section] of Object.entries(data.genomics_sections)) {

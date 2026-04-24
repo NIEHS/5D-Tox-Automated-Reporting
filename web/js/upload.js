@@ -545,7 +545,6 @@ async function confirmResetPool() {
             ready.bmdSummaryBmds = false;
             ready.geneSets = false;
             ready.geneBmd = false;
-            ready.charts = false;
             ready.methods = false;
             ready.summary = false;
             // Clear per-platform flags so TOC table nodes disable
@@ -674,7 +673,6 @@ async function confirmResetSession() {
             ready.bmdSummaryBmds = false;
             ready.geneSets = false;
             ready.geneBmd = false;
-            ready.charts = false;
             ready.methods = false;
             ready.summary = false;
             // Clear per-platform flags so TOC table nodes disable

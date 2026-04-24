@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=7">
+    <link rel="stylesheet" href="/style.css?v=10">
     <!-- Alpine.js — lightweight reactive framework for sidebar TOC navigation.
          Loaded via CDN with defer so it initializes after our state.js registers
          the Alpine store via 'alpine:init' event.  No build step needed.
@@ -738,8 +738,14 @@
              Split from the old monolithic "Genomics" tab into its own
              document-structure section.  Per-organ containers are created
              dynamically by genomics.js after processing. -->
+        <!-- x-show matches both the parent TOC node ('gene-sets') and
+             any per-organ sub-node ('gene-set-liver', 'gene-set-kidney')
+             so clicking an organ leaf in the sidebar keeps the section
+             visible while still filtering the PDF preview to that
+             organ via report_pdf._apply_section_filter. -->
         <div class="results-group" id="section-gene-sets" data-toc-id="gene-sets"
-             x-data x-show="$store.app.activeSection === 'gene-sets'" style="display:none;">
+             x-data x-show="$store.app.activeSection === 'gene-sets' || ($store.app.activeSection || '').startsWith('gene-set-')"
+             style="display:none;">
             <h2>Gene Set Benchmark Dose Analysis</h2>
             <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')" style="margin-bottom:0.5rem">PDF Preview</button>
             <!-- Per-organ×sex card containers created dynamically by genomics.js -->
@@ -757,64 +763,19 @@
         <!-- Gene BMD Analysis — individual gene tables per organ×sex.
              The second half of the old "Genomics" tab, now its own section
              in the document TOC. -->
+        <!-- Same pattern as gene-sets above — match parent + per-organ
+             sub-nodes so organ navigation keeps the section visible. -->
         <div class="results-group" id="section-gene-bmd" data-toc-id="gene-bmd"
-             x-data x-show="$store.app.activeSection === 'gene-bmd'" style="display:none;">
+             x-data x-show="$store.app.activeSection === 'gene-bmd' || ($store.app.activeSection || '').startsWith('gene-bmd-')"
+             style="display:none;">
             <h2>Gene Benchmark Dose Analysis</h2>
             <div id="genomics-gene-bmd-cards"></div>
         </div>
 
-        <!-- Genomics Charts — interactive Plotly visualizations of GO category
-             BMD distributions and semantic UMAP embeddings.  Hidden until
-             genomics data is available.  Contains two charts:
-               1. Cluster Scatter Plot — BMD vs hierarchical gene cluster ID
-               2. UMAP Scatter Plot — GO terms projected into 2D semantic space
-             Both charts are also rendered server-side for inclusion in the
-             exported PDF/DOCX report. -->
-        <div class="bm2-section" id="genomics-charts-section" data-toc-id="charts"
-             x-data x-show="$store.app.activeSection === 'charts'" style="display:none;">
-            <h2>Genomics Charts</h2>
-            <!-- Organ×sex sub-tabs — switches which experiment's data
-                 is visualized in the chart panels below -->
-            <div class="sub-tab-bar" id="charts-sub-tabs"></div>
-
-            <!-- Chart type sub-tabs — switches between UMAP and Cluster views.
-                 PDF preview uses the shared preview pane (like all other sections). -->
-            <div class="sub-tab-bar visible" id="chart-type-tabs">
-                <button class="active" data-chart-type="umap"
-                        onclick="activateChartTypeTab('umap')">Semantic Map (UMAP)</button>
-                <button data-chart-type="cluster"
-                        onclick="activateChartTypeTab('cluster')">Cluster Scatter</button>
-            </div>
-
-            <!-- UMAP Scatter Plot panel -->
-            <div class="chart-type-panel active" id="chart-panel-umap">
-                <div class="bm2-card">
-                    <div class="card-header">
-                        <span class="filename">GO Term Semantic Map (UMAP)</span>
-                    </div>
-                    <p class="chart-caption">Gene Ontology Biological Process categories from this analysis projected
-                    onto a pre-computed UMAP embedding of ~2,840 GO BP terms. Points are colored by
-                    HDBSCAN semantic cluster. Backdrop shows the full reference space.</p>
-                    <div id="umap-chart" style="width:100%; aspect-ratio:1/1;"></div>
-                </div>
-            </div>
-
-            <!-- Cluster Scatter Plot panel -->
-            <div class="chart-type-panel" id="chart-panel-cluster">
-                <div class="bm2-card">
-                    <div class="card-header">
-                        <span class="filename">GO Category Cluster Scatter</span>
-                    </div>
-                    <p class="chart-caption">GO categories plotted by BMD value (x-axis) against hierarchical
-                    gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes
-                    with BMD values. Points are colored by UMAP semantic cluster (same palette as the
-                    semantic map above). Categories are clustered on the y-axis by Jaccard similarity
-                    of their gene sets.</p>
-                    <div id="cluster-chart" style="width:100%; aspect-ratio:1.25/1;"></div>
-                </div>
-            </div>
-
-        </div>
+        <!-- Genomics Charts moved inline into each Gene Set per-organ panel
+             (see `organ-charts` slot built by ensureGenomicsOrganPanels in
+             genomics.js).  The server-rendered SVGs come from the same
+             Plotly figures as the PDF's PNGs — see genomics_viz.py. -->
 
         <!-- ================================================================
              Apical Endpoint Results — narrative+tables groups.
@@ -1065,14 +1026,14 @@
     -->
     <script src="/js/app_store.js?v=5"></script>
     <script src="/js/pool_state.js?v=8"></script>
-    <script src="/js/state.js?v=9"></script>
+    <script src="/js/state.js?v=10"></script>
     <script src="/js/utils.js?v=8"></script>
     <script src="/js/login.js?v=1"></script>
     <script src="/js/settings.js?v=2"></script>
     <script src="/js/layout.js?v=2"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=1"></script>
-    <script src="/js/genomics.js?v=2"></script>
+    <script src="/js/export.js?v=2"></script>
+    <script src="/js/genomics.js?v=6"></script>
     <script src="/js/genomics_charts.js?v=1"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->
     <script src="/js/upload.js?v=8"></script>
@@ -1081,7 +1042,7 @@
     <!-- sections.js split into background.js, methods_summary.js, pipeline.js -->
     <script src="/js/background.js?v=1"></script>
     <script src="/js/methods_summary.js?v=1"></script>
-    <script src="/js/pipeline.js?v=2"></script>
-    <script src="/js/chemical.js?v=3"></script>
+    <script src="/js/pipeline.js?v=4"></script>
+    <script src="/js/chemical.js?v=4"></script>
 </body>
 </html>

@@ -363,17 +363,12 @@ DOCUMENT_TREE: list[DocNode] = [
                 narrative_key="gene_narrative",
                 ready_key="geneBmd",
             ),
-            # Genomics Charts — UMAP semantic maps and cluster scatter
-            # plots, one pair per organ×sex combo.  Rendered server-side
-            # so the PDF includes all combos, not just the active tab.
-            DocNode(
-                id="charts",
-                title="Genomics Charts",
-                level=2,
-                node_type="genomics-charts",
-                data_key="genomics_charts",
-                ready_key="charts",
-            ),
+            # Note: the former `charts` DocNode was removed when the
+            # genomics UMAP + cluster-scatter charts were inlined into
+            # each Gene Set per-organ block (see report.typ's gene-set
+            # loop + `organ-charts` slots in genomics.js).  The charts
+            # are still rendered server-side by genomics_viz.py, just
+            # not given a standalone H2 section anymore.
         ],
     ),
 

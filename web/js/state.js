@@ -90,7 +90,6 @@ document.addEventListener('alpine:init', () => {
             bmdSummaryBmds:  false,  // shown after BMDS summary loaded
             geneSets:        false,  // shown after genomics processed
             geneBmd:         false,  // shown after genomics processed
-            charts:          false,  // shown after genomics charts rendered
             summary:         false,  // shown after other sections exist
             report:          true,   // always in DOM (lazy-rendered on navigate)
 
@@ -228,6 +227,16 @@ const genomicsResults = {};
 // cluster_summary.  Set during process-integrated, passed through to
 // /api/export-pdf so the export never re-renders charts or calls Enrichr.
 let chartImagesCache = null;
+
+// --- Gene Set / Gene BMD body narratives (shared with PDF) ---
+// Populated from /api/process-integrated.  Each is the full dict produced
+// by `genomics_narratives.build_genomics_body_narratives`:
+//   { intros: [...], by_organ: {organ: paragraph}, paragraphs: [...] }
+// The HTML renders `by_organ[organ]` above each organ's table via
+// `_rebuildOrganDisplays` in genomics.js; the same dict round-trips to
+// the server for PDF export so both outputs stay in lockstep.
+let genomicsGeneSetNarrative = null;
+let genomicsGeneNarrative    = null;
 
 
 // --- Form field config ---

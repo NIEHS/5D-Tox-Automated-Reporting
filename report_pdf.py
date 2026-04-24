@@ -120,6 +120,13 @@ def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> byte
         for i, entry in enumerate(chart_images):
             entry_data = {
                 "label": entry.get("label", f"Chart {i + 1}"),
+                # organ + sex are preserved so the Typst template can
+                # group charts by organ when rendering them inline within
+                # the per-organ gene-set blocks.  Without these, the
+                # Typst-side filter has no key to match on and falls back
+                # to the legacy "render all charts in a flat list" path.
+                "organ": entry.get("organ", ""),
+                "sex": entry.get("sex", ""),
             }
 
             for key, filename in [
@@ -637,13 +644,12 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         data["gene_narrative"] = _ensure_paragraphs(gene_narrative)
 
     # --- Auto-populate Gene Set / Gene BMD body narratives ---
-    # When the user hasn't supplied their own narrative text, inject the
-    # deterministic NIEHS-Report-10 style intro paragraphs (methodology +
-    # interpretation caveat) followed by per-organ findings built from
-    # the cached genomics_sections dict.  Pulling from disk rather than
-    # the body payload because the payload only carries the ARRAY form
-    # of genomics_sections (per-card), not the dict keyed by organ_sex
-    # that the genomics cache stores.
+    # When the user hasn't supplied their own narrative text with a
+    # per-organ `by_organ` map, delegate to the shared assembler so the
+    # PDF and the in-app HTML render identical prose.  The cache is
+    # read here (not in the shared assembler) because this path is
+    # session-specific; `/api/process-integrated` passes the in-memory
+    # genomics_sections dict directly instead.
     _genomics_cache = None
     _dtxsid = body.get("dtxsid", "")
     if _dtxsid and genomics:
@@ -658,111 +664,33 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
 
     if _genomics_cache:
         try:
-            from methods_report import (
-                build_gene_set_body_intro,
-                build_gene_set_body_findings,
-                build_gene_body_intro,
-                build_gene_body_findings,
-            )
-            from document_tree import find_node as _fn, compute_table_numbers as _ctn
-            _ctn()
+            from genomics_narratives import build_genomics_body_narratives
 
-            # Assemble MethodsContext-derived fields for the narratives
             _ctx_dict = (methods_data or {}).get("context") or {}
-            _chem_name = _ctx_dict.get("chemical_name") or body.get("chemical_name") or "the test article"
-            _ge_organs = _ctx_dict.get("ge_organs", [])
-            if not _ge_organs:
-                # Fall back: derive organs from the cache keys themselves
-                _ge_organs = sorted({k.split("_", 1)[0].capitalize()
-                                     for k in _genomics_cache if "_" in k})
-            _dose_groups_g = _ctx_dict.get("dose_groups", []) or []
-            _dose_unit_g = _ctx_dict.get("dose_unit", "mg/kg")
-            _fc_filter = _ctx_dict.get("fold_change_filter")
+            _chem_name = (
+                _ctx_dict.get("chemical_name")
+                or body.get("chemical_name")
+                or "the test article"
+            )
+            narratives = build_genomics_body_narratives(
+                genomics_sections=_genomics_cache,
+                methods_context=_ctx_dict,
+                chemical_name=_chem_name,
+            )
 
-            # Collect the table numbers auto-assigned to the gene-set and
-            # gene tables.  These live under the "gene-sets" and "gene-bmd"
-            # nodes in the tree — each subtree contains per-organ table nodes.
-            def _collect_tnums(node_id: str) -> list[int]:
-                node = _fn(node_id)
-                if not node:
-                    return []
-                nums: list[int] = []
-                def _walk(n):
-                    if n.table_number is not None:
-                        nums.append(n.table_number)
-                    for c in n.children:
-                        _walk(c)
-                _walk(node)
-                return nums
+            # Overlay each narrative only when the request didn't already
+            # carry a `by_organ` map.  The frontend flattens user edits
+            # to `paragraphs` (no per-organ awareness), so any session
+            # saved before the format upgrade gets a fresh auto-populate
+            # on export.  Once the frontend learns to preserve `by_organ`
+            # through user edits, those edits win.
+            _gs_existing = gene_set_narrative if isinstance(gene_set_narrative, dict) else {}
+            if not _gs_existing.get("by_organ") and "gene_set_narrative" in narratives:
+                data["gene_set_narrative"] = narratives["gene_set_narrative"]
 
-            _gs_tables = _collect_tnums("gene-sets")
-            _gn_tables = _collect_tnums("gene-bmd")
-
-            # Gene Set body narrative: overlay unless the request already
-            # carries a `by_organ` map — that's the new structured shape
-            # Typst needs to place each organ's paragraph above its
-            # table.  The frontend today only flattens to `paragraphs`
-            # (no per-organ awareness), so any session without
-            # `by_organ` gets a fresh auto-populate on export, which
-            # upgrades the rendered layout without requiring a frontend
-            # change.  Once the frontend learns to preserve `by_organ`
-            # through user edits, this condition will keep those edits.
-            _gs_narrative_dict = gene_set_narrative if isinstance(gene_set_narrative, dict) else {}
-            _gs_has_by_organ = bool(_gs_narrative_dict.get("by_organ"))
-            if not _gs_has_by_organ:
-                gs_intros = build_gene_set_body_intro(
-                    chemical_name=_chem_name,
-                    ge_organs=_ge_organs,
-                    table_numbers=_gs_tables,
-                )
-                # build_gene_set_body_findings now returns a dict keyed
-                # by organ — one paragraph per organ — so the Typst
-                # template can place each organ's prose directly above
-                # its per-organ table instead of lumping everything at
-                # the top of the section.
-                gs_findings_by_organ = build_gene_set_body_findings(
-                    genomics_sections=_genomics_cache,
-                    dose_groups=_dose_groups_g,
-                    dose_unit=_dose_unit_g,
-                )
-                # Keep a flat `paragraphs` field (intros + organ paras in
-                # alphabetical organ order) for any consumer that reads
-                # the legacy shape — e.g., DOCX export, or a user-edited
-                # narrative round-trip where the per-organ structure
-                # isn't preserved.  The Typst renderer prefers `intros`
-                # + `by_organ` when both are present.
-                data["gene_set_narrative"] = {
-                    "paragraphs": gs_intros + [
-                        gs_findings_by_organ[o]
-                        for o in sorted(gs_findings_by_organ.keys())
-                    ],
-                    "intros": gs_intros,
-                    "by_organ": gs_findings_by_organ,
-                }
-
-            # Gene BMD body narrative: same upgrade-on-missing-by_organ
-            # trigger as the gene-set block.
-            _gn_narrative_dict = gene_narrative if isinstance(gene_narrative, dict) else {}
-            _gn_has_by_organ = bool(_gn_narrative_dict.get("by_organ"))
-            if not _gn_has_by_organ:
-                gn_intros = build_gene_body_intro(
-                    ge_organs=_ge_organs,
-                    table_numbers=_gn_tables,
-                    fold_change_filter=_fc_filter,
-                )
-                gn_findings_by_organ = build_gene_body_findings(
-                    genomics_sections=_genomics_cache,
-                    dose_groups=_dose_groups_g,
-                    dose_unit=_dose_unit_g,
-                )
-                data["gene_narrative"] = {
-                    "paragraphs": gn_intros + [
-                        gn_findings_by_organ[o]
-                        for o in sorted(gn_findings_by_organ.keys())
-                    ],
-                    "intros": gn_intros,
-                    "by_organ": gn_findings_by_organ,
-                }
+            _gn_existing = gene_narrative if isinstance(gene_narrative, dict) else {}
+            if not _gn_existing.get("by_organ") and "gene_narrative" in narratives:
+                data["gene_narrative"] = narratives["gene_narrative"]
         except Exception as e:
             logging.exception("Failed to build genomics body narratives: %s", e)
 
@@ -1612,6 +1540,16 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     platforms = collect_platforms(node)
     if platforms:
         keep.add("apical_sections")
+
+    # Charts are now rendered inline within the gene-set per-organ
+    # blocks (no longer a standalone H2 section).  Their payload key,
+    # `genomics_charts`, must travel with `genomics_sections` whenever
+    # the gene-sets node (or one of its dynamic per-organ subnodes) is
+    # being previewed — otherwise the inline chart filter has nothing
+    # to draw from.  collect_data_keys() doesn't know about this
+    # cross-node coupling, so we add it explicitly.
+    if "genomics_sections" in keep:
+        keep.add("genomics_charts")
 
     for key in ALL_BODY - keep:
         data.pop(key, None)

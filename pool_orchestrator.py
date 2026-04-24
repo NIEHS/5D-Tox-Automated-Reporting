@@ -2902,9 +2902,25 @@ async def api_process_integrated(dtxsid: str, request: Request):
             charts_hash = genomics_hash  # same inputs → same cache lifetime
             charts_cached = _load_cache(dtxsid, "charts", charts_hash)
 
-            if charts_cached:
+            # Schema migration: caches written before SVGs were added to
+            # the chart payload lack `umap_svg`/`cluster_svg`.  Treat
+            # those as stale so we re-render and populate both formats.
+            # A single entry missing the SVG is enough — the whole batch
+            # gets re-rendered (tiny cost compared to hitting Enrichr).
+            def _has_svg(images):
+                if not images:
+                    return True  # nothing to migrate
+                first = images[0] if isinstance(images, list) else images
+                return isinstance(first, dict) and "umap_svg" in first
+
+            if charts_cached and _has_svg(charts_cached):
                 chart_images = charts_cached
             else:
+                if charts_cached:
+                    logger.info(
+                        "Chart cache for %s lacks SVG — re-rendering",
+                        dtxsid,
+                    )
                 from genomics_viz import render_chart_images
 
                 loop = asyncio.get_running_loop()
@@ -2965,6 +2981,43 @@ async def api_process_integrated(dtxsid: str, request: Request):
             })
 
         # ══════════════════════════════════════════════════════════════
+        # Layer 3.5 — Gene Set / Gene BMD body narratives
+        # ══════════════════════════════════════════════════════════════
+        # Per-organ findings paragraphs (plus the methodology + caveat
+        # intros).  Built by the shared assembler so the HTML in-app
+        # view and the PDF render identical prose above each organ's
+        # genomics table — no divergence between the two renderers.
+        # Depends on genomics_sections (organ_sex dict) + MethodsContext
+        # (dose_groups, ge_organs, fold_change_filter, dose_unit), both
+        # of which are now available.
+        gene_set_narrative = None
+        gene_narrative = None
+        if genomics_sections:
+            try:
+                from genomics_narratives import build_genomics_body_narratives
+                _methods_ctx = (
+                    methods_result.get("context") if methods_result else None
+                )
+                _chem_name = (
+                    (_methods_ctx or {}).get("chemical_name")
+                    or compound_name
+                    or "the test article"
+                )
+                narratives = build_genomics_body_narratives(
+                    genomics_sections=genomics_sections,
+                    methods_context=_methods_ctx,
+                    chemical_name=_chem_name,
+                )
+                gene_set_narrative = narratives.get("gene_set_narrative")
+                gene_narrative = narratives.get("gene_narrative")
+            except Exception as e:
+                # Non-fatal — the PDF export path still auto-populates
+                # on its own if the in-app response is missing this.
+                logger.warning(
+                    "Genomics body narrative assembly failed: %s", e,
+                )
+
+        # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
         # ══════════════════════════════════════════════════════════════
         # Identical structure to the old monolithic response so the
@@ -2977,6 +3030,11 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "sections": sections,
             "unified_narratives": unified_narratives,
             "genomics_sections": genomics_sections,
+            # Per-organ body narratives for Gene Set / Gene BMD — HTML
+            # renders `by_organ[organ]` above each organ's table; PDF
+            # export consumes the same dict via marshal_export_data.
+            "gene_set_narrative": gene_set_narrative,
+            "gene_narrative": gene_narrative,
             "chart_images": chart_images if chart_images else None,
             "apical_bmd_summary": apical_bmd_summary,
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,

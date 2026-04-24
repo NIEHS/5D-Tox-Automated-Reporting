@@ -451,6 +451,19 @@ async function runProcessingPipeline() {
             // if a gene expression .bm2 was included in the integration.
             // BMDExpress's own prefilter → curve fit → BMD pipeline already
             // ran, and we read its results directly (no CSV re-analysis).
+
+            // Capture the shared Gene Set / Gene BMD body narratives
+            // BEFORE the per-organ cards render, so _rebuildOrganDisplays
+            // can read `by_organ[organ]` when building each organ's panel.
+            // The same dict round-trips to the server for PDF export, so
+            // the HTML in-app view and the PDF render identical prose.
+            if (result.gene_set_narrative) {
+                genomicsGeneSetNarrative = result.gene_set_narrative;
+            }
+            if (result.gene_narrative) {
+                genomicsGeneNarrative = result.gene_narrative;
+            }
+
             if (result.genomics_sections) {
                 const autoStatLabels = result.bmd_stat_labels || null;
                 for (const [key, gData] of Object.entries(result.genomics_sections)) {
@@ -539,7 +552,6 @@ async function runProcessingPipeline() {
     if (Object.keys(genomicsResults).length > 0 && typeof Alpine !== 'undefined' && Alpine.store('app')) {
         Alpine.store('app').ready.geneSets = true;
         Alpine.store('app').ready.geneBmd = true;
-        Alpine.store('app').ready.charts = true;
     }
 
     // Show Methods and Summary sections now that processing is complete.
