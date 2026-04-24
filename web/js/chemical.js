@@ -510,12 +510,19 @@ async function restoreSession(data) {
             Alpine.store('app').ready.geneBmd = true;
         }
 
+        const restoreLabels = {};
+        for (const s of (reportSettings.bmd_stats || ['median'])) {
+            restoreLabels[s] = _bmdStatLabel(s);
+        }
+        // Legacy `genomics_*.json` approval files — still read for
+        // back-compat with pre-refactor sessions, but the `approved`
+        // flag is no longer surfaced in the UI (tables are derived
+        // from deterministic inputs, no approval concept).
         for (const [slug, section] of Object.entries(data.genomics_sections)) {
             const organ = section.organ || '';
             const sex = section.sex || '';
             const key = `${organ}_${sex}`;
 
-            // Create a synthetic uploadedFiles entry for the CSV
             const fileId = 'file-restored-csv-' + slug;
             if (!uploadedFiles[fileId]) {
                 uploadedFiles[fileId] = {
@@ -530,30 +537,13 @@ async function restoreSession(data) {
             genomicsResults[key] = {
                 ...section,
                 fileId: fileId,
-                approved: true,
             };
-
-            // Create the card and lock it as approved.
-            // Build stat labels dict from current settings for column headers.
-            const restoreLabels = {};
-            for (const s of (reportSettings.bmd_stats || ['median'])) {
-                restoreLabels[s] = _bmdStatLabel(s);
-            }
             createGenomicsCard(key, section, organ, sex, restoreLabels);
-            const card = document.getElementById(`genomics-card-${key}`);
-            if (card) {
-                lockSection(card);
-                setButtons(`genomics-${key}`, section.stale ? 'stale' : 'approved');
-            }
         }
     } else if (data.genomics_cache && Object.keys(data.genomics_cache).length > 0) {
-        // --- Unapproved fallback: restore from _cache_genomics_*.json ---
-        // When no `genomics_*.json` approval files exist but the raw
-        // organ_sex cache is present (server built it during a prior
-        // process-integrated run), surface it so the user sees the
-        // full gene-set + gene-bmd panels without having to re-run
-        // processing.  Entries are NOT marked approved — the user can
-        // approve individually via the per-sex cards.
+        // Unapproved fallback: surface the raw organ_sex cache from
+        // `_cache_genomics_*.json` so the user sees the full panels
+        // without needing a fresh process-integrated run.
         if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
             Alpine.store('app').ready.data = true;
             Alpine.store('app').ready.geneSets = true;
@@ -568,10 +558,7 @@ async function restoreSession(data) {
         for (const [key, section] of Object.entries(data.genomics_cache)) {
             const organ = section.organ || key.split('_', 1)[0] || '';
             const sex = section.sex || key.split('_').slice(-1)[0] || '';
-            genomicsResults[key] = {
-                ...section,
-                approved: false,
-            };
+            genomicsResults[key] = { ...section };
             createGenomicsCard(key, section, organ, sex, restoreLabels);
         }
     }

@@ -474,15 +474,11 @@ async function runProcessingPipeline() {
             if (result.genomics_sections) {
                 const autoStatLabels = result.bmd_stat_labels || null;
                 for (const [key, gData] of Object.entries(result.genomics_sections)) {
-                    // Skip sections that were already restored and approved
-                    // from a prior session — don't overwrite user-approved data.
-                    // But DO create cards for new sections (e.g. liver_male
-                    // missing from a session saved before all sections existed).
-                    if (genomicsResults[key]?.approved) continue;
-
+                    // Overwrite — no approval concept for genomics tables
+                    // anymore.  The data is deterministic; a fresh run
+                    // always produces the authoritative version.
                     genomicsResults[key] = {
                         ...gData,
-                        approved: false,
                     };
 
                     createGenomicsCard(key, gData, gData.organ, gData.sex, autoStatLabels);

@@ -66,19 +66,37 @@ function ensureGenomicsOrganPanels(organ) {
         panel.id = panelId;
         panel.className = 'genomics-organ-panel';
         panel.setAttribute('data-organ', organ);
-        // Charts block only emitted for the gene-set side — the gene-bmd
-        // section in the PDF doesn't get inline charts (see task #60).
+
+        // Per-organ panel structure — all slots have stable DOM identity
+        // so re-renders target the right slot without blowing away the
+        // contenteditable state of the LLM narrative block.
+        //
+        //   .organ-findings       — deterministic factual summary (read-only)
+        //   .organ-narrative-llm  — LLM analysis; contenteditable when unlocked
+        //   .organ-tables         — sex-grouped data table + descriptions
+        //   .organ-charts         — inline chart SVGs (gene-set only)
+        //
+        // The Lock/Unlock button controls the LLM block's editability.
+        // Initial state is locked.  Clicking unlocks; clicking again
+        // persists the edit to the session-level override file.
         const chartsBlock = kind === 'gene-set'
             ? `<div class="organ-charts" id="genomics-${kind}-charts-${organ}"></div>`
             : '';
         panel.innerHTML = `
             <h3>${organTitle}</h3>
-            <div class="organ-display" id="genomics-${kind}-display-${organ}"></div>
+            <p class="organ-findings" id="genomics-${kind}-findings-${organ}"></p>
+            <div class="organ-narrative-llm-block">
+                <div class="organ-narrative-llm" id="genomics-${kind}-narrative-llm-${organ}"
+                     contenteditable="false" data-kind="${kind}" data-organ="${organ}"></div>
+                <div class="organ-narrative-controls">
+                    <button class="btn-small btn-narrative-lock"
+                            id="genomics-${kind}-lock-${organ}"
+                            data-kind="${kind}" data-organ="${organ}"
+                            onclick="toggleNarrativeLock('${kind}','${organ}')">Unlock</button>
+                </div>
+            </div>
+            <div class="organ-tables" id="genomics-${kind}-display-${organ}"></div>
             ${chartsBlock}
-            <details class="organ-controls">
-                <summary>Section Config &amp; Editing</summary>
-                <div class="organ-cards" id="genomics-${kind}-cards-${organ}"></div>
-            </details>
         `;
         const parent = document.getElementById(parentContainerId);
         if (parent) parent.appendChild(panel);
@@ -208,123 +226,16 @@ function _fmtNum(val, decimals = 3) {
 
 function createGenomicsCard(key, data, organ, sex, statLabels) {
     // Ensure the per-organ panels exist in both the Gene Set and Gene
-    // BMD sections.  Idempotent — second call for the same organ
-    // hits the existing panels.
+    // BMD sections.  Idempotent — second call for the same organ hits
+    // the existing panels.  The per-organ panel carries everything
+    // that used to live in per-{organ,sex} cards: section title comes
+    // from boilerplate in the Typst template, captions come from
+    // methods_report, and the narrative is server-derived.  No
+    // user-editable section config because the tabular data is
+    // deterministic — either the app constructs it correctly or it's
+    // a bug to fix, not something to reconfigure.
     ensureGenomicsOrganPanels(organ);
-
-    const organKey = organ.toLowerCase();
-    const sexKey = sex.toLowerCase();
-    const sexTitle = sexKey.charAt(0).toUpperCase() + sexKey.slice(1);
-
-    // Slim per-{organ,sex} card lives in the per-organ panel's "Section
-    // Config & Editing" collapsible.  The actual data table is rendered
-    // by _rebuildOrganDisplays into the per-organ display block above
-    // so male and female render together as one sex-grouped table
-    // (mirrors PDF layout).  Calling _upsertPerSexConfigCard for both
-    // 'gene-set' and 'gene-bmd' keeps the per-section approval flow on
-    // both sides.
-    _upsertPerSexConfigCard(key, data, organKey, sexKey, sexTitle, 'gene-set');
-    _upsertPerSexConfigCard(key, data, organKey, sexKey, sexTitle, 'gene-bmd');
-
-    _rebuildOrganDisplays(organKey, statLabels);
-}
-
-
-/* ----------------------------------------------------------------
- * Per-{organ,sex} config card — header + config + narrative
- *
- * This is the editing surface that survives the per-organ
- * restructure.  Each card contains:
- *   - Approve / Edit / Try Again buttons (per-section approval)
- *   - Collapsible section config (title, caption, compound, dose)
- *   - Narrative textarea + Generate button
- *
- * The card is appended into the per-organ panel's "Section Config &
- * Editing" collapsible so per-sex editing stays available without
- * cluttering the table view that mirrors the PDF.  Gene-bmd kind
- * gets a minimal header-only card (no inputs) since the editing
- * surface lives on the gene-set side.
- * ---------------------------------------------------------------- */
-function _upsertPerSexConfigCard(key, data, organKey, sexKey, sexTitle, kind) {
-    const organTitle = organKey.charAt(0).toUpperCase() + organKey.slice(1);
-    const cardId = kind === 'gene-set' ? `genomics-card-${key}` : `genomics-gene-bmd-card-${key}`;
-    const containerId = `genomics-${kind}-cards-${organKey}`;
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    // Replace any previous incarnation of this card (re-processing the
-    // same key produces a fresh card)
-    const existing = document.getElementById(cardId);
-    if (existing) existing.remove();
-
-    const card = document.createElement('div');
-    card.className = 'bm2-card';
-    card.id = cardId;
-
-    if (kind === 'gene-set') {
-        const defaultTitle = `Gene Expression — ${organTitle}`;
-        const defaultCaption = `Summary of Gene Expression Findings in ${organTitle} of {sex} Rats Administered {compound} for Five Days`;
-        const compoundName = currentIdentity?.name || '';
-        // No narrative textarea here — the per-organ findings paragraph
-        // is server-derived (see genomics_narratives.py) and rendered
-        // above the organ's table by _rebuildOrganDisplays.  Keeping
-        // only the per-{organ,sex} approval + title/caption/compound/
-        // dose-unit inputs so per-sex approve/edit/retry still works.
-        card.innerHTML = `
-            <div class="card-header">
-                <span class="filename">${escapeHtml(sexTitle)}
-                    (${data.total_responsive_genes || 0} responsive genes)</span>
-                <div class="card-actions">
-                    <button class="btn-small approve" id="btn-approve-genomics-${key}"
-                            onclick="approveGenomics('${key}')">Approve</button>
-                    <button class="btn-small" id="btn-edit-genomics-${key}"
-                            onclick="editGenomics('${key}')" style="display:none">Edit</button>
-                    <button class="btn-small" id="btn-retry-genomics-${key}"
-                            onclick="retryGenomics('${key}')" style="display:none">Try Again</button>
-                    <span class="approved-badge" id="badge-genomics-${key}"
-                          style="display:none">Approved</span>
-                    <span class="stale-badge" id="stale-badge-genomics-${key}"
-                          style="display:none">Data Changed — Re-process</span>
-                </div>
-            </div>
-            <details class="card-config-collapse">
-                <summary>Section Config</summary>
-                <div class="card-fields">
-                    <div class="form-group">
-                        <label>Section Title</label>
-                        <input type="text" id="genomics-title-${key}"
-                            value="${escapeHtml(defaultTitle)}">
-                    </div>
-                    <div class="form-group">
-                        <label>Table Caption</label>
-                        <input type="text" id="genomics-caption-${key}"
-                            value="${escapeHtml(defaultCaption)}">
-                    </div>
-                    <div class="form-group">
-                        <label>Compound Name</label>
-                        <input type="text" id="genomics-compound-${key}"
-                            placeholder="e.g., PFHxSAm"
-                            value="${escapeHtml(compoundName)}">
-                    </div>
-                    <div class="form-group">
-                        <label>Dose Unit</label>
-                        <input type="text" id="genomics-unit-${key}" value="mg/kg">
-                    </div>
-                </div>
-            </details>
-        `;
-    } else {
-        // Gene-BMD side: minimal header card.  The actual gene table
-        // is rendered in the per-organ display block above.
-        card.innerHTML = `
-            <div class="card-header">
-                <span class="filename">${escapeHtml(sexTitle)} — Gene BMD
-                    (${(data.top_genes || []).length} genes shown)</span>
-            </div>
-        `;
-    }
-
-    container.appendChild(card);
+    _rebuildOrganDisplays(organ.toLowerCase(), statLabels);
 }
 
 
@@ -387,30 +298,50 @@ function _rebuildOrganDisplays(organKey, statLabels) {
     const maleData = genomicsResults[`${organKey}_male`] || null;
     const femaleData = genomicsResults[`${organKey}_female`] || null;
 
-    // Per-organ findings paragraph — server-derived, read-only.  Shared
-    // with the PDF: the same `by_organ[organ]` dict that Typst renders
-    // above each organ's table is what we display here.  Missing means
-    // the assembler couldn't build it (e.g., no dose groups yet) — we
-    // silently skip rather than showing an empty block.
-    const gsPara = genomicsGeneSetNarrative?.by_organ?.[organKey] || '';
-    const gnPara = genomicsGeneNarrative?.by_organ?.[organKey]    || '';
+    // Three independent slots per kind, each with stable DOM identity:
+    //   1. findings       — deterministic paragraph (read-only)
+    //   2. narrative-llm  — LLM paragraphs (lockable contenteditable)
+    //   3. tables         — sex-grouped table + descriptions
+    // Rebuilding each slot in place preserves the contenteditable
+    // state and focus on the LLM block during table re-renders.
+    for (const kind of ['gene-set', 'gene-bmd']) {
+        const narr = kind === 'gene-set'
+            ? genomicsGeneSetNarrative
+            : genomicsGeneNarrative;
 
-    const _findingsHtml = (text) => text
-        ? `<p class="organ-findings">${escapeHtml(text)}</p>`
-        : '';
+        // Slot 1: deterministic findings paragraph.  Silently empty
+        // when by_organ[organ] isn't populated yet (e.g., methods
+        // context missing, so dose_groups can't be derived).
+        const findingsEl = document.getElementById(`genomics-${kind}-findings-${organKey}`);
+        if (findingsEl) {
+            findingsEl.textContent = narr?.by_organ?.[organKey] || '';
+        }
 
-    const gsDisplay = document.getElementById(`genomics-gene-set-display-${organKey}`);
-    if (gsDisplay) {
-        gsDisplay.innerHTML =
-            _findingsHtml(gsPara) +
+        // Slot 2: LLM narrative.  Only rewrite when the user isn't
+        // currently editing this block — preserves mid-edit state
+        // during incremental renders (e.g., second sex arriving).
+        const llmEl = document.getElementById(`genomics-${kind}-narrative-llm-${organKey}`);
+        if (llmEl && document.activeElement !== llmEl) {
+            const llmParas = narr?.by_organ_llm?.[organKey] || [];
+            const locked = llmEl.getAttribute('contenteditable') !== 'true';
+            llmEl.innerHTML = llmParas.length > 0
+                ? llmParas.map(p => `<p>${escapeHtml(p)}</p>`).join('')
+                : (locked ? '<p class="organ-narrative-empty">No analysis generated yet.</p>' : '');
+        }
+    }
+
+    // Slot 3 (gene-set): sex-grouped gene-set table + GO descriptions
+    const gsTables = document.getElementById(`genomics-gene-set-display-${organKey}`);
+    if (gsTables) {
+        gsTables.innerHTML =
             _buildSexGroupedGeneSetTableHtml(maleData, femaleData, statLabels) +
             _buildCombinedGoDescriptionsHtml(maleData, femaleData);
     }
 
-    const gbDisplay = document.getElementById(`genomics-gene-bmd-display-${organKey}`);
-    if (gbDisplay) {
-        gbDisplay.innerHTML =
-            _findingsHtml(gnPara) +
+    // Slot 3 (gene-bmd): sex-grouped gene table + gene descriptions
+    const gbTables = document.getElementById(`genomics-gene-bmd-display-${organKey}`);
+    if (gbTables) {
+        gbTables.innerHTML =
             _buildSexGroupedGeneTableHtml(maleData, femaleData) +
             _buildCombinedGeneDescriptionsHtml(maleData, femaleData);
     }
@@ -420,6 +351,112 @@ function _rebuildOrganDisplays(organKey, statLabels) {
     // shared render path.  Only the gene-set side gets charts; the
     // gene-bmd side has no corresponding visualization in the PDF.
     _rebuildOrganCharts(organKey);
+}
+
+
+/* ----------------------------------------------------------------
+ * LLM narrative — Lock/Unlock + persistence of user edits
+ *
+ * Each per-organ panel carries two editability states for its LLM
+ * narrative block: locked (read-only, initial) and unlocked
+ * (contenteditable).  Clicking the toggle:
+ *
+ *   locked  → unlocked   — make the block editable, focus it
+ *   unlocked → locked    — POST the current content to the session-
+ *                          level override endpoint, update the client
+ *                          narrative dict so future renders show the
+ *                          edit, make the block read-only
+ *
+ * The server merges the override file on top of the LLM cache when
+ * returning narratives, so the user's edit survives page reloads and
+ * even a fresh /api/process-integrated run (the override takes
+ * precedence over freshly-regenerated LLM output).
+ * ---------------------------------------------------------------- */
+
+/**
+ * Toggle the editability of an organ panel's LLM narrative block.
+ * Called from the per-organ Lock/Unlock button's onclick handler.
+ */
+async function toggleNarrativeLock(kind, organKey) {
+    const llmEl = document.getElementById(`genomics-${kind}-narrative-llm-${organKey}`);
+    const btn = document.getElementById(`genomics-${kind}-lock-${organKey}`);
+    if (!llmEl || !btn) return;
+
+    const currentlyLocked = llmEl.getAttribute('contenteditable') !== 'true';
+    if (currentlyLocked) {
+        // Unlock: make editable and focus.  Also clear any empty-state
+        // placeholder so the user isn't editing placeholder text.
+        const isPlaceholder = llmEl.querySelector('.organ-narrative-empty');
+        if (isPlaceholder) llmEl.innerHTML = '';
+        llmEl.setAttribute('contenteditable', 'true');
+        llmEl.classList.add('editing');
+        btn.textContent = 'Lock';
+        llmEl.focus();
+    } else {
+        // Lock: persist the edit to the session override file.  Parse
+        // the edited HTML into paragraphs (one per <p>, falling back to
+        // splitting on double-newlines for plain-text edits).
+        const paragraphs = _extractNarrativeParagraphs(llmEl);
+
+        // Update the in-memory narrative dict so subsequent renders
+        // read the edited text rather than the cached LLM output.
+        const narr = kind === 'gene-set'
+            ? genomicsGeneSetNarrative
+            : genomicsGeneNarrative;
+        if (narr) {
+            narr.by_organ_llm = narr.by_organ_llm || {};
+            narr.by_organ_llm[organKey] = paragraphs;
+        }
+
+        llmEl.setAttribute('contenteditable', 'false');
+        llmEl.classList.remove('editing');
+        btn.textContent = 'Unlock';
+
+        // Post the override — silent success; failure is surfaced
+        // via the toast so the user knows if their edit didn't save.
+        try {
+            const dtxsid = currentIdentity?.dtxsid;
+            if (!dtxsid) return;
+            const kindKey = kind === 'gene-set' ? 'gene_set' : 'gene_bmd';
+            const resp = await fetch(
+                `/api/session/${dtxsid}/genomics-narrative-override`,
+                {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        kind: kindKey,
+                        organ: organKey,
+                        paragraphs: paragraphs,
+                    }),
+                },
+            );
+            if (!resp.ok) {
+                showError('Failed to save narrative edit');
+            } else {
+                markReportDirty();
+            }
+        } catch (e) {
+            showError('Failed to save narrative edit: ' + e.message);
+        }
+    }
+}
+
+/**
+ * Pull paragraphs out of a contenteditable block.  Browsers normalise
+ * contenteditable content in quirky ways — we accept either <p>-
+ * separated content (richer edits) or plain text with double-newlines
+ * (paste-from-plain-text), and normalise to an array of paragraph
+ * strings with any residual HTML stripped.
+ */
+function _extractNarrativeParagraphs(el) {
+    const paras = Array.from(el.querySelectorAll('p'))
+        .map(p => (p.textContent || '').trim())
+        .filter(Boolean);
+    if (paras.length > 0) return paras;
+    // Fallback: treat the whole thing as plain text, split on blank lines
+    const text = (el.textContent || '').trim();
+    if (!text) return [];
+    return text.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
 }
 
 
@@ -701,56 +738,12 @@ function _buildCombinedGeneDescriptionsHtml(maleData, femaleData) {
 
 
 
-/**
- * Approve a genomics card — sends data to the server.
- *
- * The per-organ findings paragraph is server-derived (see
- * `genomics_narratives.build_genomics_body_narratives`) and is not
- * stored in the per-{organ,sex} approval payload.  It round-trips
- * through the process-integrated response and is rebuilt on export,
- * so the approval flow doesn't need to persist it.
- */
-async function approveGenomics(key) {
-    const data = genomicsResults[key];
-    if (!data) return;
-
-    const result = await postApproveToServer(
-        'genomics',
-        document.getElementById(`genomics-card-${key}`),
-        `genomics-${key}`,
-        {
-            organ: data.organ,
-            sex: data.sex,
-            gene_sets: _flattenGeneSets(data),
-            gene_sets_by_stat: data.gene_sets_by_stat || null,
-            top_genes: data.top_genes,
-            go_descriptions: data.go_descriptions || [],
-            gene_descriptions: data.gene_descriptions || [],
-            total_responsive_genes: data.total_responsive_genes,
-            csv_id: data.fileId ? (uploadedFiles[data.fileId]?.id || data.fileId) : data.csv_id,
-        },
-    );
-    if (!result) return;
-
-    genomicsResults[key].approved = true;
-}
-
-function editGenomics(key) {
-    genomicsResults[key].approved = false;
-    markReportDirty();
-    const card = document.getElementById(`genomics-card-${key}`);
-    unlockSection(card);
-    setButtons(`genomics-${key}`, 'editing');
-    updateExportButton();
-}
-
-async function retryGenomics(key) {
-    // Re-run the processing pipeline with current settings to rebuild
-    // genomics cards.  Delegates to applySettings() which does a clean
-    // fetch + rebuild of both apical and genomics sections.
-    markReportDirty();
-    await applySettings();
-}
+// (Previously: approveGenomics / editGenomics / retryGenomics.
+//  Removed because the tabular data is deterministic — the app either
+//  constructs it correctly or there's a bug to fix, not a data point
+//  the user should approve or retry.  The only user-editable surface
+//  is the LLM narrative, which has its own Lock/Unlock flow via
+//  toggleNarrativeLock above.)
 
 /* ----------------------------------------------------------------
  * BMD Summary — auto-populated from approved .bm2 sections

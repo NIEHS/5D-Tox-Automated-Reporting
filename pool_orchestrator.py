@@ -2956,15 +2956,132 @@ async def api_process_integrated(dtxsid: str, request: Request):
             })
 
         # ══════════════════════════════════════════════════════════════
-        # Layer 3.5 — Gene Set / Gene BMD body narratives
+        # Layer 3.5a — LLM-generated per-{organ,sex} narratives
+        # ══════════════════════════════════════════════════════════════
+        # Runs the shared `generate_genomics_narrative_async` once per
+        # organ × sex, in parallel.  Each call does enrichment against
+        # bmdx.duckdb (cached in `_cache_interpretation_*.json`) and
+        # then one LLM call for the biology interpretation.  Per-sex
+        # results are aggregated under each organ into the narrative
+        # dict's `by_organ_llm` field so both HTML and PDF render
+        # identical analysis under each organ's table.
+        llm_gs_by_organ: dict[str, list[str]] = {}
+        llm_gene_by_organ: dict[str, list[str]] = {}
+        if genomics_sections:
+            try:
+                from llm_routes import generate_genomics_narrative_async
+
+                # Load identity from session for chemical name — used in
+                # the LLM prompt's "{compound} exposure" phrasing.  Falls
+                # back to the request's compound_name if identity is missing.
+                _identity = {}
+                _identity_path = _session_dir(dtxsid) / "identity.json"
+                if _identity_path.exists():
+                    try:
+                        _identity = json.loads(_identity_path.read_text())
+                    except Exception:
+                        pass
+                _llm_compound = _identity.get("name", compound_name)
+
+                # Override file: user's Lock/Unlock edits persist here and
+                # WIN over any freshly generated LLM output for the same
+                # organ×kind pair.  Load once; pass into the merge below.
+                _overrides = {"gene_set": {}, "gene_bmd": {}}
+                _overrides_path = (
+                    _session_dir(dtxsid) / "genomics_narrative_overrides.json"
+                )
+                if _overrides_path.exists():
+                    try:
+                        raw = json.loads(_overrides_path.read_text())
+                        _overrides["gene_set"] = raw.get("gene_set", {}) or {}
+                        _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
+                    except Exception:
+                        pass
+
+                async def _one(key, gen_data):
+                    """LLM-generate narrative for a single organ×sex."""
+                    organ = gen_data.get("organ", "")
+                    sex = gen_data.get("sex", "")
+                    gs_by_stat = gen_data.get("gene_sets_by_stat") or {}
+                    gene_sets_for_llm = gs_by_stat.get(bmd_stat) or []
+                    try:
+                        return key, await generate_genomics_narrative_async(
+                            dtxsid=dtxsid,
+                            compound=_llm_compound,
+                            organ=organ,
+                            sex=sex,
+                            gene_sets=gene_sets_for_llm,
+                            top_genes=gen_data.get("top_genes") or [],
+                            all_genes=gen_data.get("all_genes") or [],
+                            total_responsive=gen_data.get("total_responsive_genes", 0),
+                            dose_unit=dose_unit,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "LLM narrative failed for %s: %s", key, e,
+                        )
+                        return key, {"error": str(e)}
+
+                # Parallel fanout — N calls, wall-clock ≈ one LLM call.
+                tasks = [_one(k, v) for k, v in genomics_sections.items()]
+                llm_results = await asyncio.gather(*tasks)
+
+                # Aggregate per-sex results under each organ, in sex
+                # order (male then female) so narrative reads naturally.
+                per_organ_bundles: dict[str, dict[str, list[str]]] = {}
+                for key, llm_out in llm_results:
+                    if not llm_out or "error" in llm_out:
+                        continue
+                    organ = (genomics_sections[key].get("organ") or "").lower()
+                    sex = (genomics_sections[key].get("sex") or "").lower()
+                    per_organ_bundles.setdefault(organ, {})[sex] = {
+                        "gs": llm_out.get("gene_set_narrative") or [],
+                        "gn": llm_out.get("gene_narrative") or [],
+                    }
+
+                _sex_order = ("male", "female")
+                for organ, by_sex in per_organ_bundles.items():
+                    gs_paras, gn_paras = [], []
+                    for sx in _sex_order:
+                        blk = by_sex.get(sx)
+                        if not blk:
+                            continue
+                        sex_label = sx.capitalize()
+                        # Prefix first paragraph of each sex bundle with a
+                        # sex label so the reader can orient which block
+                        # describes which sex.  Avoids adding structural
+                        # HTML markup; keeps it inline within the prose.
+                        if blk["gs"]:
+                            gs_paras.append(f"{sex_label}: " + blk["gs"][0])
+                            gs_paras.extend(blk["gs"][1:])
+                        if blk["gn"]:
+                            gn_paras.append(f"{sex_label}: " + blk["gn"][0])
+                            gn_paras.extend(blk["gn"][1:])
+                    if gs_paras:
+                        llm_gs_by_organ[organ] = gs_paras
+                    if gn_paras:
+                        llm_gene_by_organ[organ] = gn_paras
+
+                # Apply user overrides — stored paragraphs win over LLM.
+                for organ, paras in _overrides["gene_set"].items():
+                    if paras:
+                        llm_gs_by_organ[organ] = paras
+                for organ, paras in _overrides["gene_bmd"].items():
+                    if paras:
+                        llm_gene_by_organ[organ] = paras
+            except Exception as e:
+                logger.warning(
+                    "LLM narrative pipeline failed: %s", e,
+                )
+
+        # ══════════════════════════════════════════════════════════════
+        # Layer 3.5b — Deterministic body narratives
         # ══════════════════════════════════════════════════════════════
         # Per-organ findings paragraphs (plus the methodology + caveat
         # intros).  Built by the shared assembler so the HTML in-app
         # view and the PDF render identical prose above each organ's
         # genomics table — no divergence between the two renderers.
-        # Depends on genomics_sections (organ_sex dict) + MethodsContext
-        # (dose_groups, ge_organs, fold_change_filter, dose_unit), both
-        # of which are now available.
+        # The LLM output from Layer 3.5a is merged in as `by_organ_llm`.
         gene_set_narrative = None
         gene_narrative = None
         if genomics_sections:
@@ -2985,6 +3102,13 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 )
                 gene_set_narrative = narratives.get("gene_set_narrative")
                 gene_narrative = narratives.get("gene_narrative")
+                # Attach the LLM tier under each narrative dict so both
+                # the HTML (read from by_organ_llm) and the PDF (export
+                # payload passes it through to Typst) see the same data.
+                if gene_set_narrative is not None:
+                    gene_set_narrative["by_organ_llm"] = llm_gs_by_organ
+                if gene_narrative is not None:
+                    gene_narrative["by_organ_llm"] = llm_gene_by_organ
             except Exception as e:
                 # Non-fatal — the PDF export path still auto-populates
                 # on its own if the in-app response is missing this.

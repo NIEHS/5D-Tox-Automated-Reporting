@@ -264,7 +264,7 @@ async function applySettings() {
         }
         if (result.genomics_sections) {
             for (const [key, gData] of Object.entries(result.genomics_sections)) {
-                genomicsResults[key] = { ...gData, approved: false };
+                genomicsResults[key] = { ...gData };
                 createGenomicsCard(key, gData, gData.organ, gData.sex, statLabelsMap);
             }
         }

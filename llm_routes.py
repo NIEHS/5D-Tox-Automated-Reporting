@@ -634,52 +634,36 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
 # want to review the tables before generating narrative.
 # ---------------------------------------------------------------------------
 
-@router.post("/api/generate-genomics-narrative")
-async def api_generate_genomics_narrative(request: Request):
+async def generate_genomics_narrative_async(
+    *,
+    dtxsid: str,
+    compound: str,
+    organ: str,
+    sex: str,
+    gene_sets: list,
+    top_genes: list,
+    all_genes: list,
+    total_responsive: int,
+    dose_unit: str = "mg/kg",
+) -> dict:
     """
-    Generate narrative paragraphs for the genomics Results section.
+    LLM-generate narrative paragraphs for a single organ × sex.
 
-    Takes gene set and gene ranking data (from /api/process-genomics)
-    and produces LLM-generated narrative for each subsection.  When a
-    dtxsid is provided, runs the full interpretation pipeline from
-    interpret.py — pathway enrichment, GO enrichment, BMD ordering,
-    organ signatures, per-gene literature evidence — so the LLM prompt
-    is grounded in actual biological context rather than just raw tables.
+    Shared entry point used by both the /api/generate-genomics-narrative
+    endpoint (user-triggered regeneration, legacy) and the
+    process-integrated pipeline (auto-generation per organ × sex).  Pure
+    async function — no Request/Response wrapping.  Handles enrichment
+    context + interpretation cache + LLM call + result normalisation.
 
-    Input JSON:
-      {
-        "dtxsid": "DTXSID50469320",          (optional, enables enrichment)
-        "identity": {ChemicalIdentity fields},
-        "organ": "liver",
-        "sex": "male",
-        "gene_sets": [{go_id, go_term, bmd_median, n_genes, direction}, ...],
-        "top_genes": [{gene_symbol, bmd, bmdl, fold_change, direction}, ...],
-        "all_genes": [{gene_symbol, bmd, bmdl, direction, fold_change}, ...],
-        "total_responsive_genes": 150,
-        "dose_unit": "mg/kg"
-      }
-
-    Returns JSON:
-      {
-        "gene_set_narrative": ["paragraph1", "paragraph2"],
-        "gene_narrative": ["paragraph1", "paragraph2"],
-        "model_used": "claude-sonnet-4-6",
-        "enrichment_available": true
-      }
+    Returns:
+        {
+          "gene_set_narrative": list[str],
+          "gene_narrative":     list[str],
+          "model_used":         "claude-sonnet-4-6",
+          "enrichment_available": bool,
+        }
+        or {"error": "..."} on failure.
     """
-    body = await request.json()
-    identity = body.get("identity", {})
-    dtxsid = body.get("dtxsid", "")
-    organ = body.get("organ", "")
-    sex = body.get("sex", "")
-    gene_sets = body.get("gene_sets", [])
-    top_genes = body.get("top_genes", [])
-    all_genes = body.get("all_genes", [])
-    total_responsive = body.get("total_responsive_genes", 0)
-    dose_unit = body.get("dose_unit", "mg/kg")
-
-    compound = identity.get("name", "the test article")
-
     # --- Attempt enrichment analysis via interpret.py pipeline ---
     # The enrichment pipeline queries bmdx.duckdb for pathway/GO/literature
     # evidence, producing a ~200-line structured context block that gives the
@@ -730,6 +714,23 @@ async def api_generate_genomics_narrative(request: Request):
             except Exception:
                 logger.warning("Corrupted interpretation cache, recomputing")
                 cached = None
+
+        # Fast path: cache already carries the LLM output from a prior
+        # call.  Skip both enrichment recompute AND the LLM call — the
+        # narrative is deterministic given the same gene list hash, so
+        # returning the cached prose matches the hash-based cache
+        # semantics of the enrichment side.
+        if (
+            cached
+            and cached.get("gene_set_narrative")
+            and cached.get("gene_narrative") is not None
+        ):
+            return {
+                "gene_set_narrative": cached.get("gene_set_narrative") or [],
+                "gene_narrative": cached.get("gene_narrative") or [],
+                "model_used": cached.get("model_used", "claude-sonnet-4-6"),
+                "enrichment_available": bool(cached.get("context_text")),
+            }
 
         if cached and cached.get("context_text"):
             # Cache hit — use the previously computed enrichment context.
@@ -891,15 +892,59 @@ Return ONLY valid JSON, no markdown formatting."""
         if isinstance(gene_narr, str):
             gene_narr = [gene_narr]
 
-        return JSONResponse({
+        # Persist the LLM output back into the interpretation cache so
+        # session reloads and process-integrated re-runs find it
+        # without triggering another LLM call.  Cache file already
+        # exists (enrichment was either cached or just freshly written);
+        # read-modify-write adds the narrative fields alongside
+        # `context_text`.
+        if cache_path and cache_path.exists():
+            try:
+                existing = json.loads(cache_path.read_text())
+                existing["gene_set_narrative"] = gs_narr
+                existing["gene_narrative"] = gene_narr
+                existing["model_used"] = "claude-sonnet-4-6"
+                cache_path.write_text(json.dumps(existing))
+            except Exception:
+                logger.warning(
+                    "Failed to cache LLM narrative", exc_info=True,
+                )
+
+        return {
             "gene_set_narrative": gs_narr,
             "gene_narrative": gene_narr,
             "model_used": "claude-sonnet-4-6",
             "enrichment_available": enrichment_available,
-        })
+        }
 
     except Exception as e:
-        return JSONResponse(
-            {"error": f"Genomics narrative generation failed: {e}"},
-            status_code=500,
-        )
+        return {"error": f"Genomics narrative generation failed: {e}"}
+
+
+@router.post("/api/generate-genomics-narrative")
+async def api_generate_genomics_narrative(request: Request):
+    """
+    HTTP wrapper over `generate_genomics_narrative_async`.  Preserves
+    the legacy Generate-button flow for ad-hoc regenerations, though
+    process-integrated now calls the shared function directly.
+
+    Input JSON (same as before):
+      {dtxsid, identity, organ, sex, gene_sets, top_genes, all_genes,
+       total_responsive_genes, dose_unit}
+    """
+    body = await request.json()
+    identity = body.get("identity", {})
+    result = await generate_genomics_narrative_async(
+        dtxsid=body.get("dtxsid", ""),
+        compound=identity.get("name", "the test article"),
+        organ=body.get("organ", ""),
+        sex=body.get("sex", ""),
+        gene_sets=body.get("gene_sets", []),
+        top_genes=body.get("top_genes", []),
+        all_genes=body.get("all_genes", []),
+        total_responsive=body.get("total_responsive_genes", 0),
+        dose_unit=body.get("dose_unit", "mg/kg"),
+    )
+    if "error" in result:
+        return JSONResponse(result, status_code=500)
+    return JSONResponse(result)

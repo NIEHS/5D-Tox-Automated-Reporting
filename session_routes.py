@@ -465,19 +465,21 @@ async def api_session_load(dtxsid: str):
                 "Chart cache SVG migration failed for %s", dtxsid,
             )
 
-    # Rebuild Gene Set / Gene BMD body narratives from the cached
-    # genomics_sections + methods context on disk.  These aren't
-    # persisted per-section (they're pure functions of the data +
-    # MethodsContext) — recomputing on load keeps the HTML in-app view
-    # in lockstep with the PDF without adding a second source of truth.
-    # Shared with /api/process-integrated and report_pdf via the same
-    # builder module.
+    # Rebuild Gene Set / Gene BMD body narratives from caches on disk:
+    #   * deterministic tier  — reproduced from genomics_sections +
+    #     MethodsContext via the shared `build_genomics_body_narratives`
+    #   * LLM tier           — pulled from the interpretation cache
+    #     files `_cache_interpretation_{organ}_{sex}_{hash}.json` which
+    #     carry `gene_set_narrative` / `gene_narrative` fields when the
+    #     LLM has previously run (see `generate_genomics_narrative_async`)
+    #   * user overrides     — `genomics_narrative_overrides.json` at
+    #     session root, if the user has used the Lock/Unlock flow to
+    #     edit a paragraph; wins over both cached tiers
     gene_set_narrative = None
     gene_narrative = None
     try:
         if genomics_cache:
-            # Methods cache may hold the MethodsContext dict we need
-            # (dose_groups, ge_organs, fold_change_filter, dose_unit).
+            # --- Deterministic tier ---
             methods_ctx = None
             chem_name = None
             for mc in sorted(d.glob("_cache_methods_*.json")):
@@ -496,6 +498,87 @@ async def api_session_load(dtxsid: str):
             )
             gene_set_narrative = narratives.get("gene_set_narrative")
             gene_narrative = narratives.get("gene_narrative")
+
+            # --- LLM tier (by_organ_llm) from interpretation caches ---
+            # Iterate the organ_sex keys, look up the latest
+            # interpretation cache for each, and aggregate the
+            # `gene_set_narrative` / `gene_narrative` paragraphs with
+            # a leading sex label so male/female read naturally in
+            # sequence under each organ.
+            llm_gs: dict[str, list[str]] = {}
+            llm_gn: dict[str, list[str]] = {}
+            per_organ_bundles: dict[str, dict[str, dict]] = {}
+            for key in genomics_cache.keys():
+                if "_" not in key:
+                    continue
+                organ_k, sex_k = key.split("_", 1)
+                organ_k = organ_k.lower()
+                sex_k = sex_k.lower()
+                # Pick the most recent cache for this organ×sex (if
+                # multiple gene_hashes linger — shouldn't happen after
+                # the cleanup in generate_genomics_narrative_async, but
+                # be defensive).
+                prefix = f"_cache_interpretation_{organ_k}_{sex_k}_"
+                latest = None
+                latest_mtime = -1.0
+                for cf in d.glob(f"{prefix}*.json"):
+                    try:
+                        mt = cf.stat().st_mtime
+                        if mt > latest_mtime:
+                            latest_mtime = mt
+                            latest = cf
+                    except Exception:
+                        continue
+                if latest is None:
+                    continue
+                try:
+                    interp = json.loads(latest.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                per_organ_bundles.setdefault(organ_k, {})[sex_k] = {
+                    "gs": interp.get("gene_set_narrative") or [],
+                    "gn": interp.get("gene_narrative") or [],
+                }
+
+            _sex_order = ("male", "female")
+            for organ_k, by_sex in per_organ_bundles.items():
+                gs_paras, gn_paras = [], []
+                for sx in _sex_order:
+                    blk = by_sex.get(sx)
+                    if not blk:
+                        continue
+                    sex_label = sx.capitalize()
+                    if blk["gs"]:
+                        gs_paras.append(f"{sex_label}: " + blk["gs"][0])
+                        gs_paras.extend(blk["gs"][1:])
+                    if blk["gn"]:
+                        gn_paras.append(f"{sex_label}: " + blk["gn"][0])
+                        gn_paras.extend(blk["gn"][1:])
+                if gs_paras:
+                    llm_gs[organ_k] = gs_paras
+                if gn_paras:
+                    llm_gn[organ_k] = gn_paras
+
+            # --- User override tier ---
+            overrides_path = d / "genomics_narrative_overrides.json"
+            if overrides_path.exists():
+                try:
+                    raw = json.loads(overrides_path.read_text())
+                    for organ_k, paras in (raw.get("gene_set") or {}).items():
+                        if paras:
+                            llm_gs[organ_k.lower()] = paras
+                    for organ_k, paras in (raw.get("gene_bmd") or {}).items():
+                        if paras:
+                            llm_gn[organ_k.lower()] = paras
+                except Exception:
+                    pass
+
+            # Attach to the narrative dicts — same shape as what
+            # process-integrated produces in Layer 3.5.
+            if gene_set_narrative is not None:
+                gene_set_narrative["by_organ_llm"] = llm_gs
+            if gene_narrative is not None:
+                gene_narrative["by_organ_llm"] = llm_gn
     except Exception:
         # Non-fatal — falls back to empty on the client.  The user can
         # re-run process-integrated to populate them; the PDF export
@@ -539,6 +622,80 @@ async def api_session_load(dtxsid: str):
         "validation_report": validation_report,
         "precedence": precedence,
     })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/session/{dtxsid}/genomics-narrative-override
+# ---------------------------------------------------------------------------
+# Persists a user-edited LLM narrative for one organ × kind pair.
+# Written by the Lock/Unlock flow in web/js/genomics.js when the user
+# locks an edited paragraph block.  The override file merges over the
+# cached LLM tier on subsequent session loads and process-integrated
+# runs, so the user's edit survives regeneration.
+#
+# File shape at `sessions/{dtxsid}/genomics_narrative_overrides.json`:
+#   {
+#     "gene_set": {"liver": ["para1", "para2"], "kidney": [...]},
+#     "gene_bmd": {"liver": [...], "kidney": [...]}
+#   }
+# Empty `paragraphs` on the request clears the override for that organ.
+# ---------------------------------------------------------------------------
+
+@router.post("/api/session/{dtxsid}/genomics-narrative-override")
+async def api_genomics_narrative_override(dtxsid: str, request: Request):
+    """
+    Save (or clear) a user's edit to a genomics LLM narrative block.
+
+    Input JSON:
+      {
+        "kind": "gene_set" | "gene_bmd",
+        "organ": "liver",
+        "paragraphs": ["edited paragraph 1", "edited paragraph 2"]
+      }
+
+    Returns {"saved": true}.  An empty `paragraphs` array clears the
+    override for that organ (LLM output wins again on next render).
+    """
+    body = await request.json()
+    kind = body.get("kind", "")
+    organ = (body.get("organ") or "").lower()
+    paragraphs = body.get("paragraphs") or []
+
+    if kind not in ("gene_set", "gene_bmd"):
+        return JSONResponse(
+            {"error": f"Invalid kind: {kind}"}, status_code=400,
+        )
+    if not organ:
+        return JSONResponse(
+            {"error": "organ is required"}, status_code=400,
+        )
+
+    session_dir = SESSIONS_DIR / dtxsid
+    if not session_dir.exists():
+        return JSONResponse(
+            {"error": f"Session {dtxsid} not found"}, status_code=404,
+        )
+
+    overrides_path = session_dir / "genomics_narrative_overrides.json"
+    # Read-modify-write — defensive against partial writes by other
+    # endpoints.  No locking because this is a single-user app and
+    # override edits happen on explicit user action (Lock click).
+    existing = {"gene_set": {}, "gene_bmd": {}}
+    if overrides_path.exists():
+        try:
+            raw = json.loads(overrides_path.read_text(encoding="utf-8"))
+            existing["gene_set"] = raw.get("gene_set", {}) or {}
+            existing["gene_bmd"] = raw.get("gene_bmd", {}) or {}
+        except Exception:
+            pass
+
+    if paragraphs:
+        existing[kind][organ] = [str(p) for p in paragraphs]
+    else:
+        existing[kind].pop(organ, None)
+
+    overrides_path.write_text(json.dumps(existing, indent=2))
+    return JSONResponse({"saved": True})
 
 
 # ---------------------------------------------------------------------------

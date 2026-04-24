@@ -210,12 +210,16 @@ function updateExportButton() {
         return;
     }
 
-    // At least one results section must be approved (apical or genomics)
+    // At least one results section must be available.  Genomics data
+    // is no longer approval-gated — if genomicsResults has entries, the
+    // tables are considered ready.  Apical .bm2 files still use the
+    // per-file approval flow because their narratives are user-edited
+    // prose, not deterministic tables.
     const processedBm2 = Object.values(apicalSections).filter(f => f.processed);
     const anyBm2Approved = processedBm2.some(f => f.approved);
-    const anyGenomicsApproved = Object.values(genomicsResults).some(r => r.approved);
+    const hasGenomics = Object.keys(genomicsResults).length > 0;
 
-    if (!anyBm2Approved && !anyGenomicsApproved) {
+    if (!anyBm2Approved && !hasGenomics) {
         btn.disabled = true;
         btn.title = 'Approve at least one results section (apical or genomics)';
         return;

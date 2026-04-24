@@ -1062,16 +1062,72 @@ header p {
     color: var(--c-text-primary);
 }
 
-/* Per-organ findings paragraph — the server-derived prose shown above
- * each organ's gene-set or gene-bmd table.  Mirrors the PDF layout
- * where NIEHS-style findings sentences precede each per-organ table.
- * Read-only; no user input (the dict is the SSOT, not the DOM text).
+/* Per-organ findings paragraph — the server-derived deterministic
+ * summary shown above each organ's gene-set or gene-bmd table.
+ * Mirrors the PDF layout.  Read-only; the text is regenerated from
+ * data each render, not an editable surface.
  */
 .genomics-organ-panel .organ-findings {
     margin: 0 0 0.6rem 0;
     font-size: 0.82rem;
     line-height: 1.55;
     color: var(--c-text-primary);
+}
+.genomics-organ-panel .organ-findings:empty {
+    display: none;
+}
+
+/* LLM narrative block — richer biological interpretation grounded in
+ * pathway / GO enrichment.  Auto-generated server-side during
+ * process-integrated, cached alongside the interpretation context.
+ * User can Lock/Unlock to edit; edits persist to a session override
+ * file and win over fresh LLM output on subsequent renders.
+ */
+.organ-narrative-llm-block {
+    position: relative;
+    margin: 0 0 0.85rem 0;
+    padding: 0.6rem 0.75rem 0.5rem 0.75rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    background: var(--c-bg-light);
+}
+
+.organ-narrative-llm {
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--c-text-primary);
+    outline: none;
+}
+
+.organ-narrative-llm > p {
+    margin: 0 0 0.6rem 0;
+}
+.organ-narrative-llm > p:last-child {
+    margin-bottom: 0;
+}
+
+/* Visual cue when the block is unlocked/editable */
+.organ-narrative-llm.editing {
+    background: var(--c-bg);
+    border: 1px dashed var(--c-accent, #3b82f6);
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--r-sm, 4px);
+}
+
+.organ-narrative-empty {
+    font-style: italic;
+    color: var(--c-text-secondary);
+}
+
+.organ-narrative-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.4rem;
+}
+
+.btn-narrative-lock {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
 }
 
 /* Inline chart pair per sex inside each organ's gene-set panel.  The
