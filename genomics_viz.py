@@ -905,7 +905,11 @@ def render_chart_images_for_sections(
     """
     out: list[dict] = []
     for key, gen_data in genomics_sections.items():
-        gs_by_stat = gen_data.get("gene_sets_by_stat") or {}
+        # Prefer the full chart set (all passing GO terms) over the top-20 table
+        # slice so the UMAP and scatter plots show the complete responsive landscape.
+        # Falls back to gene_sets_by_stat for caches that pre-date this field.
+        chart_by_stat = gen_data.get("gene_sets_chart_by_stat") or {}
+        gs_by_stat = chart_by_stat if chart_by_stat else (gen_data.get("gene_sets_by_stat") or {})
         gene_sets = gs_by_stat.get(bmd_stat) or []
         if not gene_sets:
             continue

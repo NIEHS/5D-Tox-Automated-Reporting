@@ -2236,7 +2236,14 @@ async def _extract_genomics(
             # Build a separate gene_sets table for each requested BMD statistic.
             # Categories where the stat is null (not computed by BMDExpress) are
             # excluded from that table entirely rather than falling back.
-            gene_sets_by_stat = {}
+            #
+            # Two fields are written per stat:
+            #   gene_sets_by_stat      — top-20 rows with rank, for report tables + LLM
+            #   gene_sets_chart_by_stat — ALL passing rows (no cap), for UMAP + scatter
+            #     charts.  Without the full set, charts only show the 20 table entries
+            #     instead of the complete responsive GO term landscape.
+            gene_sets_by_stat: dict[str, list] = {}
+            gene_sets_chart_by_stat: dict[str, list] = {}
             for stat in bmd_stats:
                 stat_go = [
                     g for g in filtered_go
@@ -2246,8 +2253,9 @@ async def _extract_genomics(
                     key=lambda g: _safe_float(_pick_go_stat(g, "bmd", stat)),
                 )
 
-                rows = []
-                for i, g in enumerate(stat_go[:20]):
+                # Build full row list first (no cap); slice for tables below.
+                all_rows = []
+                for g in stat_go:
                     # Count up/down among member genes that have a BMD.
                     # gene_symbols is a semicolon-separated string of the genes
                     # that passed all BMDExpress filters — the same population
@@ -2258,8 +2266,7 @@ async def _extract_genomics(
                     n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
                     n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
 
-                    rows.append({
-                        "rank": i + 1,
+                    all_rows.append({
                         "go_id": g["go_id"],
                         "go_term": g["go_term"],
                         "bmd": _pick_go_stat(g, "bmd", stat),
@@ -2272,7 +2279,14 @@ async def _extract_genomics(
                         "fishers_p": g.get("fishers_two_tail"),
                         "genes": g.get("gene_symbols", ""),
                     })
-                gene_sets_by_stat[stat] = rows
+
+                # Full list for charts — no cap, no rank (rank is table-specific).
+                gene_sets_chart_by_stat[stat] = all_rows
+
+                # Top-20 slice for report tables; rank is positional within this subset.
+                gene_sets_by_stat[stat] = [
+                    {"rank": i + 1, **r} for i, r in enumerate(all_rows[:20])
+                ]
 
             genomics_sections[key] = {
                 "organ": organ,
@@ -2280,6 +2294,7 @@ async def _extract_genomics(
                 "total_probes": exp.get("total_probes", 0),
                 "total_responsive_genes": len(genes),
                 "gene_sets_by_stat": gene_sets_by_stat,
+                "gene_sets_chart_by_stat": gene_sets_chart_by_stat,
                 # top_genes: ranked subset (top 20) shown in the UI gene table.
                 "top_genes": [
                     {

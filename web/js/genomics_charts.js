@@ -171,6 +171,14 @@ async function _ensureUmapRefLoaded() {
  * @returns {Array} array of gene set objects
  */
 function _getGeneSets(data) {
+    // Prefer gene_sets_chart_by_stat (all passing GO terms, no top-20 cap) so
+    // the UMAP and scatter plots show the full responsive landscape.  Falls back
+    // to gene_sets_by_stat for sessions processed before this field was added.
+    const chartByStatMap = data.gene_sets_chart_by_stat || {};
+    const chartStatKeys = Object.keys(chartByStatMap);
+    if (chartStatKeys.length > 0) {
+        return chartByStatMap[chartStatKeys[0]] || [];
+    }
     const byStatMap = data.gene_sets_by_stat || {};
     const statKeys = Object.keys(byStatMap);
     if (statKeys.length > 0) {
