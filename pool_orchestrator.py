@@ -1534,6 +1534,12 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+# Bump this when the genomics cache schema changes (new fields added/removed).
+# Changing this constant forces all existing caches to be regenerated on the
+# next reprocess, even when the input data and filter parameters are identical.
+_GENOMICS_CACHE_SCHEMA_VERSION = 2  # bumped: added gene_sets_chart_by_stat
+
+
 def _hash_genomics(
     bmd_stats: list[str],
     go_pct: float,
@@ -1548,8 +1554,13 @@ def _hash_genomics(
     bmd_stats (the full array) matters because each stat gets its own
     GO table.  GO filter cutoffs and the GE filename determine which
     categories pass and from which file.
+
+    _GENOMICS_CACHE_SCHEMA_VERSION is included so that schema changes
+    (new fields, renamed fields) force a cache miss even when the input
+    data and filter parameters are unchanged.
     """
     key = json.dumps({
+        "schema_version": _GENOMICS_CACHE_SCHEMA_VERSION,
         "bmd_stats": list(bmd_stats),
         "ge_filename": ge_filename,
         "go_max_genes": go_max_genes,
