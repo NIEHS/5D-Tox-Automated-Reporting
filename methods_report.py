@@ -1593,6 +1593,213 @@ def _join_oxford(items: list[str]) -> str:
     return ", ".join(items[:-1]) + ", and " + items[-1]
 
 
+def build_apical_bmd_summary_narrative(
+    apical_bmd_summary: list[dict],
+    compound_name: str,
+    dose_unit: str = "mg/kg",
+) -> list[str]:
+    """
+    Build the descriptive body narrative for the Apical Endpoint BMD Summary section.
+
+    Produces two paragraphs that sit above Table 8 (the sex-grouped BMD table):
+
+      1. Overview: which platforms had dose-related changes and a count of
+         endpoints with reliable BMD estimates.
+      2. Per-sex findings: most sensitive endpoint, direction summary per
+         platform, BMD range for each sex; UREP/LOEL-only endpoints noted.
+
+    This is the programmatic (deterministic) layer.  A separate LLM pass
+    generates an analytical biology-based paragraph that is appended after
+    these by the caller.
+
+    Args:
+        apical_bmd_summary: Flat list of endpoint dicts from
+            _build_apical_bmd_summary() — each with keys endpoint, sex,
+            platform, bmd, bmdl, direction, loel, noel, anomalous (optional).
+        compound_name: Chemical name used in prose (e.g. "PFHxSAm").
+        dose_unit: Dose unit string (e.g. "mg/kg").
+
+    Returns:
+        List of paragraph strings ready for display or export.
+    """
+    if not apical_bmd_summary:
+        return []
+
+    # Canonical readable platform name for prose
+    _PLATFORM_PROSE = {
+        "Clinical Chemistry": "clinical chemistry",
+        "Hematology":         "hematology",
+        "Hormones":           "hormone",
+        "Organ Weight":       "organ weight",
+        "Body Weight":        "body weight",
+    }
+
+    # --- Classify entries ---
+    # Reliable: numeric BMD string that is not UREP/NVM/empty.
+    # UREP/anomalous: row exists but BMD flagged as unreliable curve-fit.
+    # LOEL-only: no BMD (UREP or NVM or missing) but has a LOEL.
+    def _is_numeric(val) -> bool:
+        try:
+            float(str(val))
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    reliable = [e for e in apical_bmd_summary if _is_numeric(e.get("bmd"))]
+
+    # Deduplicate reliable by (endpoint, sex) — same endpoint can appear
+    # multiple times in the raw data (e.g., from multiple platform tables).
+    _seen_reliable: set[tuple] = set()
+    _deduped_reliable = []
+    for e in reliable:
+        key = (e.get("endpoint", ""), e.get("sex", ""))
+        if key not in _seen_reliable:
+            _seen_reliable.add(key)
+            _deduped_reliable.append(e)
+    reliable = _deduped_reliable
+
+    urep = [e for e in apical_bmd_summary if e.get("anomalous") or
+            (str(e.get("bmd", "")).strip().upper() in ("UREP", "NVM"))]
+
+    # Deduplicate UREP; also collect the set of endpoint names so LOEL-only
+    # can exclude endpoints already captured by the UREP classification.
+    _seen_urep: set[tuple] = set()
+    _deduped_urep = []
+    urep_endpoint_keys: set[tuple] = set()
+    for e in urep:
+        key = (e.get("endpoint", ""), e.get("sex", ""))
+        if key not in _seen_urep:
+            _seen_urep.add(key)
+            _deduped_urep.append(e)
+        urep_endpoint_keys.add(key)
+    urep = _deduped_urep
+
+    # LOEL-only: statistically significant but no reliable OR unreliable BMD.
+    # Exclude endpoints already in the UREP list to keep the three buckets
+    # mutually exclusive for clean prose.
+    _loel_raw = [
+        e for e in apical_bmd_summary
+        if not _is_numeric(e.get("bmd"))
+        and not e.get("anomalous")
+        and str(e.get("bmd", "")).strip().upper() not in ("UREP", "NVM")
+        and e.get("loel") is not None
+        and (e.get("endpoint", ""), e.get("sex", "")) not in urep_endpoint_keys
+    ]
+    _seen_loel: set[tuple] = set()
+    loel_only = []
+    for e in _loel_raw:
+        key = (e.get("endpoint", ""), e.get("sex", ""))
+        if key not in _seen_loel:
+            _seen_loel.add(key)
+            loel_only.append(e)
+
+    paragraphs: list[str] = []
+
+    # ── Paragraph 1: overview ───────────────────────────────────────────────
+    # Platforms that had at least one reliable BMD or LOEL-only finding.
+    active_platforms: list[str] = []
+    seen_plats: set[str] = set()
+    for e in reliable + loel_only:
+        p = e.get("platform", "")
+        prose_p = _PLATFORM_PROSE.get(p, p.lower())
+        if prose_p not in seen_plats:
+            active_platforms.append(prose_p)
+            seen_plats.add(prose_p)
+
+    n_reliable = len(reliable)
+    if active_platforms:
+        plat_phrase = _join_oxford(active_platforms)
+        count_phrase = (
+            f"{n_reliable} endpoint{'s' if n_reliable != 1 else ''}"
+            if n_reliable > 0
+            else "no endpoints"
+        )
+        overview = (
+            f"Exposure to {compound_name} resulted in dose-related changes in "
+            f"{plat_phrase} measurements. "
+            f"Reliable BMD values were calculated for {count_phrase}."
+        )
+        paragraphs.append(overview)
+
+    # ── Paragraph 2: per-sex findings ──────────────────────────────────────
+    sex_sentences: list[str] = []
+
+    for sex in ("Male", "Female"):
+        sex_reliable = [e for e in reliable if e.get("sex") == sex]
+        sex_urep     = [e for e in urep     if e.get("sex") == sex]
+        sex_loel     = [e for e in loel_only if e.get("sex") == sex]
+
+        if not sex_reliable and not sex_urep and not sex_loel:
+            sex_sentences.append(
+                f"In {sex.lower()} rats, no apical endpoints showed "
+                f"dose-related changes."
+            )
+            continue
+
+        parts: list[str] = []
+
+        if sex_reliable:
+            # Sort by BMD ascending so the most sensitive appears first.
+            sex_reliable_sorted = sorted(sex_reliable, key=lambda e: float(e["bmd"]))
+            most_sensitive = sex_reliable_sorted[0]
+            ms_bmd  = most_sensitive["bmd"]
+            ms_bmdl = most_sensitive.get("bmdl", "")
+            ms_ep   = most_sensitive["endpoint"]
+            ms_dir  = most_sensitive.get("direction", "")
+            ms_plat = _PLATFORM_PROSE.get(most_sensitive.get("platform", ""),
+                                          most_sensitive.get("platform", ""))
+
+            # Direction inside the parenthetical:
+            # "Total Thyroxine (decreased; hormone; BMD = 8.54 mg/kg, ...)"
+            dir_word = {"UP": "increased", "DOWN": "decreased"}.get(
+                (ms_dir or "").upper(), ""
+            )
+            dir_prefix = f"{dir_word}; " if dir_word else ""
+
+            bmd_range_lo  = ms_bmd
+            bmd_range_hi  = sex_reliable_sorted[-1]["bmd"]
+            range_phrase = (
+                f"BMDs ranged from {bmd_range_lo} to {bmd_range_hi} {dose_unit}"
+                if bmd_range_lo != bmd_range_hi
+                else f"BMD = {bmd_range_lo} {dose_unit}"
+            )
+
+            parts.append(
+                f"the most sensitive endpoint was {ms_ep} "
+                f"({dir_prefix}{ms_plat}; BMD = {ms_bmd} {dose_unit}, "
+                f"BMDL = {ms_bmdl} {dose_unit})"
+            )
+            if len(sex_reliable) > 1:
+                parts.append(f"with {len(sex_reliable)} reliable BMD estimates "
+                             f"overall ({range_phrase})")
+
+        if sex_urep:
+            ep_list = _join_oxford([e["endpoint"] for e in sex_urep])
+            parts.append(
+                f"{ep_list} {'was' if len(sex_urep) == 1 else 'were'} flagged "
+                f"as unreliable potency estimates (UREP)"
+            )
+
+        if sex_loel:
+            ep_list = _join_oxford([e["endpoint"] for e in sex_loel])
+            parts.append(
+                f"no viable BMD model was available for {ep_list}, "
+                f"but statistically significant effects were observed "
+                f"(LOEL-only)"
+            )
+
+        if parts:
+            body = "; ".join(parts) + "."
+            sex_sentences.append(
+                f"In {sex.lower()} rats, {body}"
+            )
+
+    if sex_sentences:
+        paragraphs.append(" ".join(sex_sentences))
+
+    return paragraphs
+
+
 def build_abstract_results_apical(
     apical_bmd_summary: list[dict],
     sexes: list[str] | None = None,

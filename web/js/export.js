@@ -1078,6 +1078,7 @@ async function buildExportPayload() {
         methods_data: methodsPayload,
         methods_paragraphs: methodsParas,
         bmd_summary_endpoints: bmdSummaryEps,
+        apical_bmd_narrative: apicalBmdNarrative,
         genomics_sections: genomicsSecs,
         gene_set_narrative: geneSetNarrativeExport,
         gene_narrative: geneNarrativeExport,

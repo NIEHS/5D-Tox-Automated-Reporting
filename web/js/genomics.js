@@ -843,6 +843,46 @@ function renderBmdSummaryTable(endpoints) {
 }
 
 /**
+ * Render the apical BMD summary narrative (descriptive + analytical paragraphs)
+ * above the BMD summary table.
+ *
+ * Receives the apical_bmd_narrative dict from process-integrated:
+ *   { descriptive: [str], analytical: [str], paragraphs: [str] }
+ *
+ * Renders all paragraphs in order into #bmd-summary-narrative, with a
+ * subtle visual separator between the programmatic descriptive block and
+ * the LLM analytical block so reviewers can see which is which.
+ */
+function renderBmdSummaryNarrative(narrative) {
+    const el = document.getElementById('bmd-summary-narrative');
+    if (!el) return;
+
+    const descriptive = narrative.descriptive || [];
+    const analytical  = narrative.analytical  || [];
+
+    if (descriptive.length === 0 && analytical.length === 0) {
+        el.style.display = 'none';
+        return;
+    }
+
+    let html = '';
+    if (descriptive.length > 0) {
+        html += `<div class="narrative-descriptive">`;
+        html += descriptive.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+        html += `</div>`;
+    }
+    if (analytical.length > 0) {
+        // Visual cue that this block came from the LLM
+        html += `<div class="narrative-analytical" style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px dashed #cbd5e1;">`;
+        html += analytical.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+        html += `</div>`;
+    }
+
+    el.innerHTML = html;
+    el.style.display = '';
+}
+
+/**
  * Render the BMDS (pybmds) BMD summary as an HTML table.
  *
  * Same structure as renderBmdSummaryTable() but adds a "Model" column

@@ -281,6 +281,10 @@ async function applySettings() {
                 Alpine.store('app').ready.bmdSummary = true;
             }
         }
+        if (result.apical_bmd_narrative) {
+            apicalBmdNarrative = result.apical_bmd_narrative;
+            renderBmdSummaryNarrative(result.apical_bmd_narrative);
+        }
 
         // --- Rebuild BMDS summary (pybmds) ---
         if (result.apical_bmd_summary_bmds && result.apical_bmd_summary_bmds.length > 0) {

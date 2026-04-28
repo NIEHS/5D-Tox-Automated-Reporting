@@ -205,6 +205,7 @@ let summaryApproved     = false;
 // Falls back to legacy format {paragraphs: [...]} for old sessions.
 let methodsData          = null;
 let bmdSummaryEndpoints  = [];     // derived from approved .bm2 data
+let apicalBmdNarrative   = null;   // {descriptive, analytical, paragraphs} from process-integrated
 let summaryParagraphs    = null;
 
 

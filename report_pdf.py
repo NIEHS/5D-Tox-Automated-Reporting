@@ -573,34 +573,31 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
             "footnotes": _bmd_summary_footnotes,
         }
 
-    # --- Apical Endpoint BMD Summary intro paragraph ---
-    # NIEHS Report 10 places a 2-sentence boilerplate intro before Table 8
-    # explaining that the table shows calculated BMDs plus LOEL/NOEL for
-    # endpoints that lack a BMD.  The "<X mg/kg" lower-limit-of-extrapolation
-    # value is parameterized — = lowest non-zero dose ÷ 3 (BMDExpress
-    # convention).  Pulled from MethodsContext when available.
+    # --- Apical Endpoint BMD Summary paragraphs ---
+    # Three-layer paragraph block prepended before Table 8:
+    #   1. Boilerplate intro (table reference + LLE explanation) — always present.
+    #   2. Descriptive findings (programmatic) — from apical_bmd_narrative if
+    #      provided by process-integrated; otherwise omitted.
+    #   3. Analytical paragraph (LLM) — from apical_bmd_narrative if present.
+    #
+    # The intro is generated here from MethodsContext because this path runs
+    # during both process-integrated (narrative passed in) and standalone PDF
+    # export (narrative may not be present, so we still build the intro).
     if data.get("bmd_summary") and not data["bmd_summary"].get("paragraphs"):
-        # Determine the lower-limit-of-extrapolation from the study doses.
-        # The table number itself is positional (assigned by the document
-        # tree), so the prose just says "Table N" generically — Typst
-        # numbers it correctly when rendered.
+        all_paras: list[str] = []
+
+        # --- Layer 1: boilerplate table-reference intro ---
         _doses_for_lle: list[float] = []
         if methods_data and methods_data.get("context"):
             _doses_for_lle = methods_data["context"].get("dose_groups", []) or []
         _nonzero = [d for d in _doses_for_lle if d and d > 0]
         if _nonzero:
             _lle = min(_nonzero) / 3.0
-            # Format LLE: drop trailing zeros, keep up to 3 decimals
-            _lle_str = (
-                f"{_lle:.3f}".rstrip("0").rstrip(".") or "0"
-            )
+            _lle_str = f"{_lle:.3f}".rstrip("0").rstrip(".") or "0"
             _dose_unit_str = (
                 methods_data["context"].get("dose_unit", "mg/kg")
                 if methods_data and methods_data.get("context") else "mg/kg"
             )
-            # Look up the table number assigned by the document tree to
-            # the bmd-summary node.  This stays in sync with the rendered
-            # caption ("Table N. ...") that sex-grouped-table() emits.
             _table_num = None
             try:
                 from document_tree import find_node, compute_table_numbers
@@ -610,11 +607,8 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                     _table_num = _bmd_node.table_number
             except Exception:
                 pass
-            _table_ref = (
-                f"Table {_table_num}" if _table_num is not None
-                else "the table below"
-            )
-            intro = (
+            _table_ref = f"Table {_table_num}" if _table_num is not None else "the table below"
+            all_paras.append(
                 f"A summary of the calculated BMDs for each toxicological "
                 f"endpoint is provided in {_table_ref}. The endpoint-"
                 f"specific LOEL and NOEL are included and could be informative "
@@ -623,7 +617,17 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 f"below the lower limit of extrapolation (<{_lle_str} "
                 f"{_dose_unit_str})."
             )
-            data["bmd_summary"]["paragraphs"] = [intro]
+
+        # --- Layers 2 + 3: descriptive + analytical from process-integrated ---
+        # apical_bmd_narrative is provided when the PDF is exported immediately
+        # after process-integrated (the in-app flow).  On standalone PDF export
+        # (export.js → /api/export-pdf) the frontend should include it in the
+        # request body if it received it from process-integrated.
+        _apical_narr = body.get("apical_bmd_narrative") or {}
+        all_paras.extend(_apical_narr.get("paragraphs") or [])
+
+        if all_paras:
+            data["bmd_summary"]["paragraphs"] = all_paras
 
     # Genomics
     genomics = body.get("genomics_sections", [])

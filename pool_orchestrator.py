@@ -1537,7 +1537,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 2  # bumped: added gene_sets_chart_by_stat
+_GENOMICS_CACHE_SCHEMA_VERSION = 3  # bumped: added adversity_signatures
 
 
 def _hash_genomics(
@@ -2152,6 +2152,143 @@ def _build_section_cards(
     return sections
 
 
+def _extract_adversity_signatures(
+    integrated: dict,
+    bmd_stats: list[str],
+) -> dict[str, list[dict]]:
+    """
+    Extract S1500 adversity signature results from the integrated BMDProject.
+
+    Adversity signatures are a second type of category analysis that lives
+    alongside GO BP results in the gene expression .bm2 file.  They test
+    whether the dose-response data resembles predefined S1500 toxicity
+    signatures (e.g., Proliferation, Overt Toxicity).
+
+    Uses two pieces of existing infrastructure rather than name-parsing:
+      1. categoryAnalysisResults[i].doseResponseExperiment (@ref int) resolves
+         to the parent doseResponseExperiment, which already has LLM-inferred
+         experimentDescription (organ, sex, platform).  Organ/sex come from
+         there — no name parsing required.
+      2. integrated["_category_lookup"] (written by ExportCategories via
+         integrate_pool) already contains BMD statistics for every category
+         keyed as "{experiment_prefix}|{category_title}".
+
+    The only name-based discriminator is checking for "Adversity Signatures"
+    in the categoryAnalysisResults.name field — Java does not populate
+    experimentDescription on categoryAnalysisResults, so there is no metadata
+    field that marks the entry type.  This is an acknowledged gap; the @ref
+    path above is the canonical organ/sex source.
+
+    Args:
+        integrated:  The full merged BMDProject dict (with _category_lookup).
+        bmd_stats:   Ordered list of BMD statistic keys; first key is primary.
+
+    Returns:
+        Dict mapping "organ_sex" keys (e.g., "kidney_female") to a list of
+        signature result dicts, one per signature category (e.g., Proliferation,
+        Overt Toxicity).  Empty dict when no adversity signature data exists.
+    """
+    # Build @ref → doseResponseExperiment index so we can resolve the
+    # integer reference stored in categoryAnalysisResults.doseResponseExperiment.
+    ref_to_exp: dict[int, dict] = {}
+    for exp in integrated.get("doseResponseExperiments", []):
+        ref = exp.get("@ref")
+        if ref is not None:
+            ref_to_exp[ref] = exp
+
+    flat_cat = integrated.get("_category_lookup", {})
+    primary_stat = bmd_stats[0] if bmd_stats else "median"
+
+    result: dict[str, list[dict]] = {}
+
+    for cat_entry in integrated.get("categoryAnalysisResults", []):
+        name = cat_entry.get("name", "")
+        # Only process adversity-signature category analyses.  Gene expression
+        # GO BP entries share the same parent experiment but have a different
+        # name structure (they contain "GENE" not "Adversity Signatures").
+        if "Adversity Signatures" not in name:
+            continue
+
+        # Resolve the parent experiment to get LLM-inferred organ and sex.
+        parent_ref = cat_entry.get("doseResponseExperiment")
+        if parent_ref is None:
+            continue
+        parent_exp = ref_to_exp.get(parent_ref)
+        if not parent_exp:
+            continue
+
+        desc = parent_exp.get("experimentDescription") or {}
+        organ = (desc.get("organ") or "").lower()
+        sex = (desc.get("sex") or "").lower()
+        if not organ or not sex:
+            logger.warning(
+                "Adversity signature entry %r: parent @ref=%s has no organ/sex in "
+                "experimentDescription — skipping",
+                name[:60], parent_ref,
+            )
+            continue
+
+        key = f"{organ}_{sex}"
+        if key not in result:
+            result[key] = []
+
+        exp_base_name = parent_exp.get("name", "")
+
+        # Each inner item in categoryAnalsyisResults (note Java typo) is one
+        # signature category (e.g., "S1500 Adversity Signature 1 — Proliferation").
+        for sig_item in cat_entry.get("categoryAnalsyisResults", []):
+            cat_id_obj = sig_item.get("categoryIdentifier") or {}
+            sig_id = cat_id_obj.get("id", "")        # e.g., "S1500 Adversity Signature 1"
+            sig_title = cat_id_obj.get("title", "")  # e.g., "Proliferation"
+
+            # Look up pre-extracted BMD statistics from the category lookup.
+            # Keys are "{experiment_name}|{category_title}" — the lookup was
+            # built by ExportCategories during integrate_pool().
+            lookup_key = f"{exp_base_name}|{sig_title}"
+            lookup_entry = flat_cat.get(lookup_key) or {}
+
+            bmd_stats_block = lookup_entry.get("bmd_stats") or {}
+            bmdl_stats_block = lookup_entry.get("bmdl_stats") or {}
+            bmdu_stats_block = lookup_entry.get("bmdu_stats") or {}
+
+            # Select the requested primary statistic; fall back to mean if absent.
+            bmd_val = bmd_stats_block.get(primary_stat) or bmd_stats_block.get("mean")
+            bmdl_val = bmdl_stats_block.get(primary_stat) or bmdl_stats_block.get("mean")
+            bmdu_val = bmdu_stats_block.get(primary_stat) or bmdu_stats_block.get("mean")
+
+            n_passed = sig_item.get("genesThatPassedAllFilters") or 0
+            n_genes = sig_item.get("geneAllCount") or 0
+
+            result[key].append({
+                # Human-readable label for the signature (e.g., "Proliferation")
+                "title": sig_title,
+                # Full S1500 identifier (e.g., "S1500 Adversity Signature 1")
+                "signature_id": sig_id,
+                # Whether this signature has a BMD result (n_passed > 0)
+                "active": n_passed > 0,
+                # Genes from the reference set that passed all BMDExpress filters
+                "n_passed": n_passed,
+                # Total genes in the S1500 reference signature set
+                "n_genes": n_genes,
+                # Fraction of reference set with BMD values (0–100)
+                "percentage": sig_item.get("percentage"),
+                # BMD statistics (primary statistic selected above)
+                "bmd": bmd_val,
+                "bmdl": bmdl_val,
+                "bmdu": bmdu_val,
+                # Full stat blocks so the UI can switch statistics without reload
+                "bmd_stats": bmd_stats_block,
+                "bmdl_stats": bmdl_stats_block,
+                "bmdu_stats": bmdu_stats_block,
+                # Direction of the signature response (up/down/conflict)
+                "direction": lookup_entry.get("direction", ""),
+                # Fisher's exact two-tail p-value for signature enrichment
+                "fishers_p": sig_item.get("fishersExactTwoTailPValue"),
+            })
+
+    return result
+
+
 async def _extract_genomics(
     dtxsid: str,
     integrated: dict,
@@ -2336,6 +2473,29 @@ async def _extract_genomics(
             }
     finally:
         os.unlink(tmp_json.name)
+
+    # Attach adversity signature results to each organ/sex section.
+    # This reads from integrated["_category_lookup"] and the
+    # categoryAnalysisResults @ref linkage — no additional Java call needed.
+    adversity = _extract_adversity_signatures(integrated, bmd_stats)
+    for key, sigs in adversity.items():
+        if key in genomics_sections:
+            genomics_sections[key]["adversity_signatures"] = sigs
+        else:
+            # Organ has adversity data but no GO BP results (edge case).
+            # Create a minimal section so the data isn't silently dropped.
+            organ, sex = key.split("_", 1) if "_" in key else (key, "")
+            genomics_sections[key] = {
+                "organ": organ,
+                "sex": sex,
+                "total_probes": 0,
+                "total_responsive_genes": 0,
+                "gene_sets_by_stat": {},
+                "gene_sets_chart_by_stat": {},
+                "top_genes": [],
+                "all_genes": [],
+                "adversity_signatures": sigs,
+            }
 
     return genomics_sections
 
@@ -3165,6 +3325,62 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 )
 
         # ══════════════════════════════════════════════════════════════
+        # Layer 3.5c — Apical BMD Summary narratives
+        # ══════════════════════════════════════════════════════════════
+        # Two-part narrative for the "Apical Endpoint Benchmark Dose
+        # Summary" section:
+        #   descriptive — programmatic summary of the BMD findings:
+        #                 most sensitive endpoint, BMD range, per-sex.
+        #   analytical  — LLM paragraph interpreting biological
+        #                 significance, organ-system sensitivity, sex
+        #                 differences, and dose-response coherence.
+        # Both are combined into apical_bmd_narrative["paragraphs"]
+        # which report_pdf.py prepends to the BMD summary table.
+        apical_bmd_narrative: dict = {}
+        if apical_bmd_summary:
+            try:
+                from methods_report import build_apical_bmd_summary_narrative
+                _methods_ctx = (
+                    methods_result.get("context") if methods_result else None
+                ) or {}
+                _chem_name = _methods_ctx.get("chemical_name") or compound_name or "the test article"
+                _dur = _methods_ctx.get("study_duration", "subchronic (90-day)")
+                _dose_groups = _methods_ctx.get("dose_groups") or []
+
+                # Descriptive paragraphs (deterministic, no LLM).
+                desc_paras = build_apical_bmd_summary_narrative(
+                    apical_bmd_summary,
+                    compound_name=_chem_name,
+                    dose_unit=dose_unit,
+                )
+
+                # LLM analytical paragraph (async, cached per summary hash).
+                llm_paras: list[str] = []
+                try:
+                    from llm_routes import generate_apical_bmd_narrative_async
+                    llm_result = await generate_apical_bmd_narrative_async(
+                        dtxsid=dtxsid,
+                        compound_name=_chem_name,
+                        dose_unit=dose_unit,
+                        apical_bmd_summary=apical_bmd_summary,
+                        study_duration=_dur,
+                        dose_groups=_dose_groups,
+                    )
+                    llm_paras = llm_result.get("paragraphs", [])
+                except Exception as _llm_e:
+                    logger.warning("Apical BMD LLM narrative failed: %s", _llm_e)
+
+                apical_bmd_narrative = {
+                    "descriptive": desc_paras,
+                    "analytical": llm_paras,
+                    # Flat paragraphs list for the PDF renderer — descriptive
+                    # first, then LLM analytical paragraph(s) below.
+                    "paragraphs": desc_paras + llm_paras,
+                }
+            except Exception as _apical_narr_e:
+                logger.warning("Apical BMD narrative build failed: %s", _apical_narr_e)
+
+        # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
         # ══════════════════════════════════════════════════════════════
         # Identical structure to the old monolithic response so the
@@ -3185,6 +3401,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "chart_images": chart_images if chart_images else None,
             "apical_bmd_summary": apical_bmd_summary,
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
+            # Apical BMD Summary section narratives (descriptive +
+            # analytical).  The flat "paragraphs" list is consumed by
+            # report_pdf.py and the frontend BMD summary card.
+            "apical_bmd_narrative": apical_bmd_narrative,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
             # Materials and Methods — LLM-generated structured sections.

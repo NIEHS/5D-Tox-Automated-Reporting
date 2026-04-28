@@ -493,7 +493,9 @@ async function runProcessingPipeline() {
 
             // --- Apical BMD summary (Table 8 equivalent) ---
             // The process-integrated endpoint now returns apical_bmd_summary
-            // with BMD, BMDL, LOEL, NOEL, direction for all modeled endpoints.
+            // with BMD, BMDL, LOEL, NOEL, direction for all modeled endpoints,
+            // plus apical_bmd_narrative with descriptive + analytical paragraphs
+            // that display above the table.
             if (result.apical_bmd_summary && result.apical_bmd_summary.length > 0) {
                 bmdSummaryEndpoints = result.apical_bmd_summary;
                 renderBmdSummaryTable(bmdSummaryEndpoints);
@@ -501,6 +503,10 @@ async function runProcessingPipeline() {
                     Alpine.store('app').ready.bmdSummary = true;
                 }
                 markReportDirty();
+            }
+            if (result.apical_bmd_narrative) {
+                apicalBmdNarrative = result.apical_bmd_narrative;
+                renderBmdSummaryNarrative(result.apical_bmd_narrative);
             }
 
             // --- BMDS summary (pybmds — EPA BMDS methodology) ---
