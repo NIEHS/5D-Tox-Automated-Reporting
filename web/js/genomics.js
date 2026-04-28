@@ -535,8 +535,13 @@ function _organChartBlockHtml(entry) {
         const rows = summary.map(r => {
             const sourceNote = r.source === 'enrichr' ? '' : ' <em>(internal)</em>';
             const terms = (r.terms || []).join('; ');
+            // Show directional split when available (same pattern as GO BP BMD table).
+            const dirCell = (r.n_up != null && r.n_down != null)
+                ? `${r.n_up}&nbsp;/&nbsp;${r.n_down}`
+                : '';
             return `<tr><td>${escapeHtml(String(r.cluster))}</td>` +
                    `<td>${r.n_genes || 0}</td>` +
+                   `<td>${dirCell}</td>` +
                    `<td>${escapeHtml(terms)}${sourceNote}</td></tr>`;
         }).join('');
         summaryHtml = `
@@ -544,6 +549,7 @@ function _organChartBlockHtml(entry) {
                 <summary>Cluster biology summary (Enrichr)</summary>
                 <table class="cluster-summary-table">
                     <thead><tr><th>Cluster</th><th>Genes</th>
+                        <th>&#x2191;&nbsp;/&nbsp;&#x2193;</th>
                         <th>Top Enriched Terms</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
@@ -605,7 +611,7 @@ function _buildSexGroupedGeneSetTableHtml(maleData, femaleData, statLabels) {
             <h4>Top Gene Sets (by BMD)</h4>
             <table>
                 <tr><th>GO Term</th><th>GO ID</th><th>BMD Median</th>
-                    <th>BMDL Median</th><th># Genes</th><th>Direction</th></tr>
+                    <th>BMDL Median</th><th># Genes</th><th>↑ / ↓</th></tr>
                 ${maleSets.length > 0 ? `<tr><td colspan="6" class="sex-row-header"><b>Male</b></td></tr>` : ''}
                 ${maleSets.map(_geneSetRowHtml).join('')}
                 ${femaleSets.length > 0 ? `<tr><td colspan="6" class="sex-row-header"><b>Female</b></td></tr>` : ''}
@@ -630,7 +636,7 @@ function _buildSexGroupedGeneSetTableHtml(maleData, femaleData, statLabels) {
             <h4>Gene Sets — BMD ${escapeHtml(label)}</h4>
             <table>
                 <tr><th>GO Term</th><th>GO ID</th><th>BMD ${escapeHtml(label)}</th>
-                    <th>BMDL ${escapeHtml(label)}</th><th># Genes</th><th>Direction</th></tr>
+                    <th>BMDL ${escapeHtml(label)}</th><th># Genes</th><th>↑ / ↓</th></tr>
                 ${maleSets.length > 0 ? `<tr><td colspan="6" class="sex-row-header"><b>Male</b></td></tr>` : ''}
                 ${maleSets.map(_geneSetRowHtml).join('')}
                 ${femaleSets.length > 0 ? `<tr><td colspan="6" class="sex-row-header"><b>Female</b></td></tr>` : ''}
@@ -641,6 +647,11 @@ function _buildSexGroupedGeneSetTableHtml(maleData, femaleData, statLabels) {
 }
 
 function _geneSetRowHtml(gs) {
+    // Show explicit up/down gene counts when available (new caches).
+    // Fall back to the categorical direction label for older caches.
+    const dirCell = (gs.n_up != null && gs.n_down != null)
+        ? `${gs.n_up} / ${gs.n_down}`
+        : escapeHtml(gs.direction || '');
     return `
         <tr>
             <td>${escapeHtml(gs.go_term)}</td>
@@ -648,7 +659,7 @@ function _geneSetRowHtml(gs) {
             <td class="bmd-col">${_fmtNum(gs.bmd != null ? gs.bmd : gs.bmd_median)}</td>
             <td class="bmd-col">${_fmtNum(gs.bmdl != null ? gs.bmdl : gs.bmdl_median)}</td>
             <td>${gs.n_genes || 0}</td>
-            <td>${escapeHtml(gs.direction || '')}</td>
+            <td>${dirCell}</td>
         </tr>`;
 }
 

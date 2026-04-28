@@ -1585,14 +1585,25 @@
           let ref-sec = if male-sec != none { male-sec } else { female-sec }
           let stat-label = ref-sec.at("bmd_stat_label", default: "Median")
 
-          let gs-row-of(gs) = (
-            gs.at("go_term", default: ""),
-            gs.at("go_id", default: ""),
-            fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
-            fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
-            str(gs.at("n_genes", default: "")),
-            gs.at("direction", default: ""),
-          )
+          // Show up/down gene counts ("21 / 1") when available; fall back to
+          // the categorical direction label for caches built before this field.
+          let gs-row-of(gs) = {
+            let n-up = gs.at("n_up", default: none)
+            let n-down = gs.at("n_down", default: none)
+            let dir-cell = if n-up != none and n-down != none {
+              str(n-up) + " / " + str(n-down)
+            } else {
+              gs.at("direction", default: "")
+            }
+            (
+              gs.at("go_term", default: ""),
+              gs.at("go_id", default: ""),
+              fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
+              fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
+              str(gs.at("n_genes", default: "")),
+              dir-cell,
+            )
+          }
 
           // Merge footnotes from both sexes, preserving order and
           // dropping duplicates (the same note may apply to both).
@@ -1605,7 +1616,7 @@
           }
 
           sex-grouped-table(
-            ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", "Direction"),
+            ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", sym.arrow.t + " / " + sym.arrow.b),
             male-gs.map(gs-row-of),
             female-gs.map(gs-row-of),
             caption: "Gene Set BMD Analysis — " + label,
@@ -1705,18 +1716,25 @@
             text(size: 9pt, weight: "bold")[Cluster Biology Summary — #chart-label]
             v(0.3em)
             table(
-              columns: (auto, auto, 1fr),
+              columns: (auto, auto, auto, 1fr),
               stroke: 0.5pt + luma(200),
               inset: 5pt,
               table.header(
                 text(size: 8pt, weight: "bold")[Cluster],
                 text(size: 8pt, weight: "bold")[Genes],
+                text(size: 8pt, weight: "bold")[#sym.arrow.t / #sym.arrow.b],
                 text(size: 8pt, weight: "bold")[Top Enriched Terms],
               ),
               ..for row in summary {
+                let n-up   = row.at("n_up",   default: none)
+                let n-down = row.at("n_down", default: none)
+                let dir-cell = if n-up != none and n-down != none {
+                  str(n-up) + " / " + str(n-down)
+                } else { "" }
                 (
                   text(size: 8pt)[#row.at("cluster", default: "")],
                   text(size: 8pt)[#str(row.at("n_genes", default: 0))],
+                  text(size: 8pt)[#dir-cell],
                   text(size: 8pt)[#row.at("terms", default: ()).join("; ")],
                 )
               }
@@ -1880,17 +1898,26 @@
       let gene-sets = gs-sec.at("gene_sets", default: ())
       if gene-sets.len() > 0 {
         let stat-label = gs-sec.at("bmd_stat_label", default: "Median")
-        let gs-rows = gene-sets.map(gs => (
-          gs.at("go_term", default: ""),
-          gs.at("go_id", default: ""),
-          fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
-          fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
-          str(gs.at("n_genes", default: "")),
-          gs.at("direction", default: ""),
-        ))
+        let gs-rows = gene-sets.map(gs => {
+          let n-up = gs.at("n_up", default: none)
+          let n-down = gs.at("n_down", default: none)
+          let dir-cell = if n-up != none and n-down != none {
+            str(n-up) + " / " + str(n-down)
+          } else {
+            gs.at("direction", default: "")
+          }
+          (
+            gs.at("go_term", default: ""),
+            gs.at("go_id", default: ""),
+            fmt-val3(gs.at("bmd", default: gs.at("bmd_median", default: none))),
+            fmt-val3(gs.at("bmdl", default: gs.at("bmdl_median", default: none))),
+            str(gs.at("n_genes", default: "")),
+            dir-cell,
+          )
+        })
 
         niehs-table(
-          ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", "Direction"),
+          ("GO Term", "GO ID", "BMD " + stat-label, "BMDL " + stat-label, "# Genes", sym.arrow.t + " / " + sym.arrow.b),
           gs-rows,
           caption: "Gene Set BMD Analysis — " + label,
           numeric-cols: (2, 3, 4),

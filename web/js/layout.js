@@ -98,6 +98,19 @@ function navigateToNode(tocId) {
     const pane = document.querySelector('.content-pane');
     if (pane) pane.scrollTop = 0;
 
+    // Methods and Summary sections use .output-section which has CSS
+    // `display: none` by default.  Alpine's x-show only toggles an
+    // inline display:none — it cannot override the CSS rule when showing.
+    // Add/remove the .visible class (which has display:block) here so
+    // the sections appear as soon as the user navigates to them, even
+    // before content is generated.  Background manages its own .visible
+    // via displayResult() so we leave it alone.
+    const _tocVisibleSections = { 'methods': 'methods-section', 'summary': 'summary-section' };
+    for (const [id, elId] of Object.entries(_tocVisibleSections)) {
+        const el = document.getElementById(elId);
+        if (el) el.classList.toggle('visible', tocId === id);
+    }
+
     // --- Auto-compile PDF preview for the active TOC node ---
     // Skip non-document nodes (chem-id, data) — they have no PDF content.
     // For all document sections, compile a preview in the background.

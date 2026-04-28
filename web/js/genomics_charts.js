@@ -351,7 +351,7 @@ async function renderGenomicsCharts() {
     if (cachedCharts && cachedCharts.cluster_summary) {
         _renderCachedClusterSummary(cachedCharts.cluster_summary);
     } else {
-        _fetchEnrichrClusterSummary(geneSets, clusters);
+        _fetchEnrichrClusterSummary(geneSets, clusters, data.all_genes || []);
     }
 }
 
@@ -843,7 +843,7 @@ function _renderClusterChart(geneSets, data, clusters) {
     }
 
     let summaryHtml = '<table class="cluster-summary-table">' +
-        '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms</th></tr></thead>' +
+        '<thead><tr><th>Cluster</th><th>Genes</th><th>&#x2191;&nbsp;/&nbsp;&#x2193;</th><th>Top Enriched Terms</th></tr></thead>' +
         '<tbody>';
     for (const gc of rankedClusters) {
         const clusterPts = (byGeneCluster[gc] || [])
@@ -852,7 +852,9 @@ function _renderClusterChart(geneSets, data, clusters) {
         const topTerms = clusterPts.slice(0, 5).map(p => p.go_term);
         const label = gc === -1 ? 'Outlier' : String(gc);
         const nGenes = clusterGeneCounts[gc] || 0;
-        summaryHtml += `<tr><td>${label}</td><td>${nGenes}</td><td>${topTerms.join('; ')}</td></tr>`;
+        // Direction counts not available at this stage — filled in when
+        // _renderCachedClusterSummary or _fetchEnrichrClusterSummary arrives.
+        summaryHtml += `<tr><td>${label}</td><td>${nGenes}</td><td></td><td>${topTerms.join('; ')}</td></tr>`;
     }
     summaryHtml += '</tbody></table>';
 
@@ -886,12 +888,24 @@ function _renderClusterChart(geneSets, data, clusters) {
  * Fetch Enrichr enrichment for each gene-overlap cluster and replace
  * the summary table with the results.
  *
- * @param {Array} geneSets   - gene_sets from genomicsResults
+ * @param {Array}  geneSets  - gene_sets from genomicsResults
  * @param {Object} clusters  - go_id → cluster_id mapping
+ * @param {Array}  allGenes  - full responsive gene list (gene_symbol, direction)
+ *                             used to send gene_dir to the server so cluster rows
+ *                             gain n_up/n_down counts
  */
-async function _fetchEnrichrClusterSummary(geneSets, clusters) {
+async function _fetchEnrichrClusterSummary(geneSets, clusters, allGenes) {
     const summaryEl = document.getElementById('cluster-summary');
     if (!summaryEl) return;
+
+    // Pre-compute uppercase symbol → direction so the server can count n_up/n_down
+    // without needing the full all_genes list.
+    const geneDir = {};
+    for (const g of (allGenes || [])) {
+        if (g.gene_symbol && g.direction) {
+            geneDir[g.gene_symbol.toUpperCase()] = g.direction;
+        }
+    }
 
     // Show loading state — preserve existing table but add indicator
     const loadingDiv = document.createElement('div');
@@ -911,6 +925,7 @@ async function _fetchEnrichrClusterSummary(geneSets, clusters) {
                     bmd: gs.bmd,
                 })),
                 clusters: clusters,
+                gene_dir: Object.keys(geneDir).length > 0 ? geneDir : undefined,
             }),
         });
 
@@ -930,13 +945,19 @@ async function _fetchEnrichrClusterSummary(geneSets, clusters) {
 
         // Replace the entire summary table with Enrichr results
         let html = '<table class="cluster-summary-table">' +
-            '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
+            '<thead><tr><th>Cluster</th><th>Genes</th>' +
+            '<th>&#x2191;&nbsp;/&nbsp;&#x2193;</th>' +
+            '<th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
             '<tbody>';
         for (const row of summary) {
             const source = row.source === 'enrichr' ? '' : ' <em>(internal)</em>';
+            const dirCell = (row.n_up != null && row.n_down != null)
+                ? `${row.n_up}&nbsp;/&nbsp;${row.n_down}`
+                : '';
             html += `<tr>` +
                 `<td>${row.cluster}</td>` +
                 `<td>${row.n_genes || 0}</td>` +
+                `<td>${dirCell}</td>` +
                 `<td>${row.terms.join('; ')}${source}</td>` +
                 `</tr>`;
         }
@@ -979,13 +1000,19 @@ function _renderCachedClusterSummary(summary) {
     if (!summaryEl || !summary || summary.length === 0) return;
 
     let html = '<table class="cluster-summary-table">' +
-        '<thead><tr><th>Cluster</th><th>Genes</th><th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
+        '<thead><tr><th>Cluster</th><th>Genes</th>' +
+        '<th>&#x2191;&nbsp;/&nbsp;&#x2193;</th>' +
+        '<th>Top Enriched Terms (Enrichr)</th></tr></thead>' +
         '<tbody>';
     for (const row of summary) {
         const source = row.source === 'enrichr' ? '' : ' <em>(internal)</em>';
+        const dirCell = (row.n_up != null && row.n_down != null)
+            ? `${row.n_up}&nbsp;/&nbsp;${row.n_down}`
+            : '';
         html += `<tr>` +
             `<td>${row.cluster}</td>` +
             `<td>${row.n_genes || 0}</td>` +
+            `<td>${dirCell}</td>` +
             `<td>${row.terms.join('; ')}${source}</td>` +
             `</tr>`;
     }

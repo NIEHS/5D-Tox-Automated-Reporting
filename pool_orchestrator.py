@@ -2224,6 +2224,15 @@ async def _extract_genomics(
                     continue
                 filtered_go.append(g)
 
+            # Build an all-caps direction lookup from the per-gene results.
+            # gene_symbols in GO rows use lowercase (e.g. "cyp2b1"), while
+            # all_genes uses mixed case (e.g. "CYP2B1").  Normalising both to
+            # uppercase avoids silent mismatches when counting n_up/n_down.
+            gene_dir_upper = {
+                g["gene_symbol"].upper(): g.get("direction", "")
+                for g in genes
+            }
+
             # Build a separate gene_sets table for each requested BMD statistic.
             # Categories where the stat is null (not computed by BMDExpress) are
             # excluded from that table entirely rather than falling back.
@@ -2236,8 +2245,20 @@ async def _extract_genomics(
                 stat_go.sort(
                     key=lambda g: _safe_float(_pick_go_stat(g, "bmd", stat)),
                 )
-                gene_sets_by_stat[stat] = [
-                    {
+
+                rows = []
+                for i, g in enumerate(stat_go[:20]):
+                    # Count up/down among member genes that have a BMD.
+                    # gene_symbols is a semicolon-separated string of the genes
+                    # that passed all BMDExpress filters — the same population
+                    # reflected in n_passed/n_genes_with_bmd.
+                    member_syms = [
+                        s.upper() for s in (g.get("gene_symbols") or "").split(";") if s
+                    ]
+                    n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
+                    n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
+
+                    rows.append({
                         "rank": i + 1,
                         "go_id": g["go_id"],
                         "go_term": g["go_term"],
@@ -2246,11 +2267,12 @@ async def _extract_genomics(
                         "n_genes": g.get("n_genes", 0),
                         "n_genes_with_bmd": g.get("n_passed", 0),
                         "direction": g.get("direction", ""),
+                        "n_up": n_up,
+                        "n_down": n_down,
                         "fishers_p": g.get("fishers_two_tail"),
                         "genes": g.get("gene_symbols", ""),
-                    }
-                    for i, g in enumerate(stat_go[:20])
-                ]
+                    })
+                gene_sets_by_stat[stat] = rows
 
             genomics_sections[key] = {
                 "organ": organ,

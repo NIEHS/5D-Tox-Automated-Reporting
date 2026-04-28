@@ -808,7 +808,10 @@ Return a JSON object with two keys:
 1. "gene_set_narrative": 2–3 paragraphs covering biological processes, pathway \
 enrichment, BMD ordering, and organ predictions. Ground claims in the pathway \
 and GO enrichment results above. Note mechanism of action and whether responses \
-are adaptive or adverse.
+are adaptive or adverse. For each key biological process, comment on the predominant \
+direction of regulation using the ↑/↓ gene counts in the table (e.g., "87% of \
+lipid metabolism genes were upregulated, consistent with PPAR-alpha induction"). \
+When counts are roughly equal (conflict), note the bidirectional response explicitly.
 
 2. "gene_narrative": 2–3 paragraphs covering individual gene sensitivity, literature \
 support (consensus vs single-study genes), and confidence assessment.
@@ -823,10 +826,19 @@ Return ONLY valid JSON, no markdown formatting."""
         # without bmdx.duckdb or with enrichment failures).
         gs_lines = []
         for gs in gene_sets[:10]:
+            n_up = gs.get("n_up")
+            n_down = gs.get("n_down")
+            # Prefer explicit up/down counts over the categorical label so the
+            # LLM can report proportions (e.g. "14 of 16 genes upregulated").
+            dir_str = (
+                f"{n_up} up / {n_down} down"
+                if n_up is not None and n_down is not None
+                else f"direction = {gs.get('direction', 'N/A')}"
+            )
             gs_lines.append(
                 f"  {gs.get('go_term', '')} (GO:{gs.get('go_id', '')}): "
                 f"median BMD = {gs.get('bmd_median', 'N/A')} {dose_unit}, "
-                f"{gs.get('n_genes', 0)} genes, direction = {gs.get('direction', 'N/A')}"
+                f"{gs.get('n_genes', 0)} genes, {dir_str}"
             )
         gs_table = "\n".join(gs_lines) if gs_lines else "(no gene sets)"
 
@@ -857,8 +869,10 @@ Top individual genes ranked by BMD (most sensitive first):
 
 Return a JSON object with two keys:
 1. "gene_set_narrative": An array of 1–2 paragraphs summarizing the gene set BMD analysis.
-   Note which biological processes were perturbed at the lowest doses, the predominant
-   direction of perturbation, and the number of responsive gene sets.
+   Note which biological processes were perturbed at the lowest doses. For each key
+   process, report the predominant direction using the up/down counts provided (e.g.,
+   "14 of 16 xenobiotic metabolism genes were upregulated"). When counts are roughly
+   equal, note the bidirectional response explicitly.
 
 2. "gene_narrative": An array of 1–2 paragraphs summarizing the individual gene BMD analysis.
    Note which genes were most sensitive, the direction and magnitude of their response,

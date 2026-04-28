@@ -162,6 +162,7 @@ def enrich_clusters(
     gene_sets: list[dict],
     clusters: dict[str, int],
     top_n: int = 5,
+    gene_dir: dict[str, str] | None = None,
 ) -> list[dict]:
     """
     For each gene-overlap cluster, pool unique genes and run Enrichr
@@ -178,13 +179,19 @@ def enrich_clusters(
         gene_sets: GO category dicts with go_id, go_term, genes, bmd
         clusters:  go_id → cluster_id mapping
         top_n:     How many Enrichr terms to keep per cluster
+        gene_dir:  Optional all-caps symbol → "up"/"down" map.  When
+                   provided, each cluster row gains n_up/n_down counts
+                   (same pattern as the GO BP BMD table rows).
 
     Returns:
         List of dicts, each with keys:
           cluster (str), terms (list[str]), n_genes (int),
           n_categories (int), source ("enrichr" | "internal"),
-          adj_p_values (list[float], only when source="enrichr")
+          adj_p_values (list[float], only when source="enrichr"),
+          n_up (int, when gene_dir provided), n_down (int, when gene_dir provided)
     """
+    # Normalise once so the inner helpers don't need to repeat it.
+    _gene_dir: dict[str, str] = gene_dir or {}
     # Build go_id → gene set lookup
     go_id_to_genes: dict[str, set[str]] = {}
     for gs in gene_sets:
@@ -231,13 +238,17 @@ def enrich_clusters(
     def _internal_summary(cid: int, gs_list: list, cluster_genes: set) -> dict:
         label = "Outlier" if cid == -1 else str(cid)
         sorted_gs = sorted(gs_list, key=lambda g: float(g.get("bmd", 999)))
-        return {
+        row: dict = {
             "cluster": label,
             "terms": [g.get("go_term", "") for g in sorted_gs[:top_n]],
             "n_genes": len(cluster_genes),
             "n_categories": len(gs_list),
             "source": "internal",
         }
+        if _gene_dir:
+            row["n_up"]   = sum(1 for s in cluster_genes if _gene_dir.get(s) == "up")
+            row["n_down"] = sum(1 for s in cluster_genes if _gene_dir.get(s) == "down")
+        return row
 
     # Attempt Enrichr enrichment per cluster
     cluster_summary = []
@@ -269,14 +280,18 @@ def enrich_clusters(
             top_terms = lib_results[0] if lib_results else []
 
             if top_terms:
-                cluster_summary.append({
+                row: dict = {
                     "cluster": label,
                     "terms": [t["term"] for t in top_terms],
                     "adj_p_values": [t["adj_p_value"] for t in top_terms],
                     "n_genes": len(cluster_genes),
                     "n_categories": len(gs_list),
                     "source": "enrichr",
-                })
+                }
+                if _gene_dir:
+                    row["n_up"]   = sum(1 for s in cluster_genes if _gene_dir.get(s) == "up")
+                    row["n_down"] = sum(1 for s in cluster_genes if _gene_dir.get(s) == "down")
+                cluster_summary.append(row)
             else:
                 cluster_summary.append(_internal_summary(cid, gs_list, cluster_genes))
 
@@ -437,6 +452,9 @@ async def api_genomics_cluster_enrichment(request: Request):
     body = await request.json()
     gene_sets = body.get("gene_sets", [])
     clusters = body.get("clusters", {})
+    # Optional: pre-computed all-caps symbol → "up"/"down" sent by the client
+    # so cluster summary rows carry n_up/n_down without needing all_genes server-side.
+    gene_dir: dict[str, str] | None = body.get("gene_dir") or None
 
     if not gene_sets or not clusters:
         return JSONResponse(
@@ -446,9 +464,11 @@ async def api_genomics_cluster_enrichment(request: Request):
     # Delegate to shared function — runs Enrichr per cluster with
     # automatic fallback to internal GO terms on failure.
     import asyncio
+    from functools import partial
     loop = asyncio.get_running_loop()
     cluster_summary = await loop.run_in_executor(
-        None, enrich_clusters, gene_sets, clusters,
+        None,
+        partial(enrich_clusters, gene_sets, clusters, gene_dir=gene_dir),
     )
 
     return JSONResponse({"cluster_summary": cluster_summary})
@@ -464,6 +484,7 @@ def render_chart_images(
     sex: str,
     dose_unit: str = "mg/kg",
     clusters: dict | None = None,
+    gene_dir: dict[str, str] | None = None,
 ) -> dict:
     """
     Render UMAP scatter and cluster scatter charts as base64 PNG images.
@@ -481,6 +502,9 @@ def render_chart_images(
         dose_unit:  Dose unit for axis labels (default "mg/kg").
         clusters:   Optional pre-computed {go_id: cluster_id} mapping.
                     If None, gene-overlap clusters are computed inline.
+        gene_dir:   Optional all-caps symbol → "up"/"down" map.  Passed
+                    through to enrich_clusters() so cluster summary rows
+                    gain n_up/n_down counts.
 
     Returns:
         Dict with keys: umap_png, cluster_png, umap_caption, cluster_caption.
@@ -811,7 +835,7 @@ def render_chart_images(
     # per cluster, calls Enrichr, and falls back to internal GO terms.
     # The `clusters` variable (go_id → cluster_id) is already available
     # from the clustering step above.
-    cluster_summary = enrich_clusters(gene_sets, clusters)
+    cluster_summary = enrich_clusters(gene_sets, clusters, gene_dir=gene_dir)
 
     return {
         "umap_png": umap_b64,
@@ -892,11 +916,22 @@ def render_chart_images_for_sections(
         sex_title = sex.capitalize() or ""
 
         try:
+            # Build all-caps direction lookup from per-gene results so that
+            # cluster summary rows get n_up/n_down (same normalisation used
+            # in the GO BP BMD table builder in pool_orchestrator).
+            all_genes_raw = gen_data.get("all_genes") or []
+            section_gene_dir: dict[str, str] = {
+                g["gene_symbol"].upper(): g.get("direction", "")
+                for g in all_genes_raw
+                if g.get("gene_symbol")
+            }
+
             result = render_chart_images(
                 gene_sets=gene_sets,
                 organ=organ,
                 sex=sex,
                 dose_unit=dose_unit,
+                gene_dir=section_gene_dir or None,
             )
             result["label"] = f"{organ_title} ({sex_title})"
             result["organ"] = organ

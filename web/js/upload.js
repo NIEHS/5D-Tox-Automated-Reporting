@@ -329,9 +329,11 @@ function updateFilePoolSummary() {
         total++;
     }
 
-    // Show/hide the "Reset Pool" button — visible whenever there are files
-    // in the pool (regardless of whether they're from a fresh upload or
-    // a restored session).  This is the only way to clear restored files.
+    // Show/hide the pool action buttons — visible whenever files are present.
+    // Reprocess re-runs process-integrated without deleting anything.
+    // Reset Pool is the destructive nuclear option.
+    const reprocessBtn = document.getElementById('btn-reprocess-pool');
+    if (reprocessBtn) reprocessBtn.style.display = total > 0 ? '' : 'none';
     const resetBtn = document.getElementById('btn-reset-pool');
     if (resetBtn) resetBtn.style.display = total > 0 ? '' : 'none';
 
@@ -408,6 +410,42 @@ function updateClearFilesButton() {
     btn.style.display = hasRemovable ? '' : 'none';
 }
 
+
+/**
+ * Re-run process-integrated without deleting any files or approved sections.
+ * Use this when you want to pick up code or configuration changes (e.g. new
+ * table columns, changed GO filters) without starting from scratch.
+ *
+ * Approved narrative sections (background, methods, summary) are preserved on
+ * the server — process-integrated only overwrites the computed table caches,
+ * not the approval records.
+ */
+async function confirmAndReprocess() {
+    const dtxsid = document.getElementById('dtxsid')?.value;
+    if (!dtxsid) {
+        showToast('No chemical resolved — nothing to reprocess.');
+        return;
+    }
+
+    const ok = confirm(
+        'Reprocess — Re-run all statistical analysis and table generation.\n\n' +
+        'Uploaded files and approved narrative sections are preserved.\n' +
+        'Computed table caches will be rebuilt.\n\n' +
+        'Continue?'
+    );
+    if (!ok) return;
+
+    // runProcessingPipeline() requires lastValidationReport.fingerprints to
+    // be populated — they are set during session restore, so this is normally
+    // satisfied as long as the session loaded before the button was clicked.
+    const fingerprints = lastValidationReport?.fingerprints || {};
+    if (Object.keys(fingerprints).length === 0) {
+        showToast('Session not fully loaded — please wait a moment and try again.');
+        return;
+    }
+
+    await runProcessingPipeline();
+}
 
 /**
  * Confirm and execute a full pool reset — removes ALL files, integrated data,
