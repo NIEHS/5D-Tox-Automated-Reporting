@@ -767,14 +767,27 @@
         "(No tables defined yet.)")
     }
   } else {
-    // --- Full report: auto-generated tables outline ---
-    context {
-      let table-figs = query(figure.where(kind: table))
-      if table-figs.len() > 0 {
-        outline(title: none, target: figure.where(kind: table))
-      } else {
-        text(style: "italic", size: 10pt, "(Table numbering follows inline captions throughout the report.)")
+    // --- Full report: use pre-computed table_entries (same source as preview).
+    // outline(target: figure.where(kind: table)) only finds figure() wrappers
+    // with kind: table; our tables are raw table() blocks, so that query always
+    // returns empty.  table_entries is built by _build_toc_entries() in Python
+    // before the Typst compile runs, so it is always available for both paths.
+    let tables = data.at("table_entries", default: ())
+    if tables.len() > 0 {
+      for entry in tables {
+        let is-ready = entry.at("ready", default: false)
+        block(spacing: 0.55em, {
+          if is-ready {
+            text("Table " + str(entry.table_number) + ". " + entry.title)
+          } else {
+            text(fill: luma(140), style: "italic",
+              "Table " + str(entry.table_number) + ". " + entry.title)
+          }
+        })
       }
+    } else {
+      text(style: "italic", size: 10pt,
+        "(No tables defined yet.)")
     }
   }
 }

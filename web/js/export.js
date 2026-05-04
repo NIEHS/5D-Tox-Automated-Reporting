@@ -16,10 +16,9 @@
 //
 // Dependencies (globals from state.js):
 //   currentIdentity, apicalSections, genomicsResults, methodsData,
-//   methodsApproved, bmdSummaryApproved, bmdSummaryEndpoints,
-//   summaryApproved, backgroundApproved, uploadedFiles,
-//   animalReportApproved, animalReportData, _previewEscapeHandler,
-//   currentResult, summaryParagraphs
+//   bmdSummaryEndpoints, uploadedFiles, _previewEscapeHandler,
+//   currentResult, apicalBmdNarrative, genomicsGeneSetNarrative,
+//   genomicsGeneNarrative
 //
 // Dependencies (functions from other files):
 //   extractProse, showToast, showError, show, hide, buildTable,
@@ -139,12 +138,20 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
  * format parameter.
  */
 async function exportDocument() {
-    const btn = document.getElementById('btn-export');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Generating...';
-    }
+    // Both the background-section button (#btn-export) and the Report-tab
+    // button (#btn-export-pdf) call this function.  Update both so either
+    // entry point gives feedback.  On completion, restore state via
+    // updateExportButton() rather than force-enabling, which would bypass
+    // the approval gate on #btn-export.
+    const btnBg     = document.getElementById('btn-export');
+    const btnReport = document.getElementById('btn-export-pdf');
 
+    const _setExportBtns = (label, disabled) => {
+        if (btnBg)     { btnBg.disabled = disabled;     btnBg.textContent = label; }
+        if (btnReport) { btnReport.disabled = disabled; btnReport.textContent = label; }
+    };
+
+    _setExportBtns('Generating...', true);
     showBlockingSpinner('Generating PDF...');
     try {
         const payload = await buildExportPayload();
@@ -162,74 +169,71 @@ async function exportDocument() {
             return;
         }
 
-        // Trigger browser download of the PDF file
+        // Trigger browser download — defer revoking the blob URL so the
+        // browser has time to start the download before the URL is gone.
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
+        a.style.display = 'none';
         a.download = `5dToxReport_${chemicalName.replace(/[^a-zA-Z0-9 _-]/g, '_')}.pdf`;
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 2000);
 
         showToast('Downloaded tagged PDF (PDF/UA-1)');
     } catch (err) {
         showError('PDF export error: ' + err.message);
     } finally {
         hideBlockingSpinner();
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Export PDF';
-        }
+        _setExportBtns('Export PDF', false);
+        // Re-run the gate so #btn-export reflects approval state correctly.
+        updateExportButton();
     }
 }
 
 
 /* ================================================================
- * Export gating — only enable Export when all sections are approved
+ * Export gating — enable Export when any section has generated content
  * ================================================================ */
 
 /**
- * Enable the Export button only when:
- *   1. The background section is approved
- *   2. At least one results section is approved
- *   3. All processed .bm2 files are approved
+ * Enable the background-section Export button (#btn-export) whenever
+ * any report content has been generated.
  *
- * Called on every approval state change (approve, unapprove, retry,
- * new generation, session restore).
+ * Gate is intentionally loose — the same condition as renderReportTab's
+ * "has any content" check.  Background approval is NOT required: it is
+ * a report-writing concern, not a prerequisite for exporting data
+ * sections that are already visible in the preview.
+ *
+ * The Report-tab Export button (#btn-export-pdf) has no HTML disabled
+ * attribute and is always active; this function does not touch it.
+ *
+ * Called on every approval/generation state change.
  */
 function updateExportButton() {
     const btn = document.getElementById('btn-export');
     if (!btn) return;
 
-    // Background must be approved
-    if (!backgroundApproved) {
-        btn.disabled = true;
-        btn.title = 'Approve the background section first';
-        return;
-    }
+    // Check the same content sources renderReportTab uses.
+    const bgProseEl = document.getElementById('output-prose');
+    const hasBg     = bgProseEl && bgProseEl.textContent.trim().length > 0;
+    const hasApical = Object.values(apicalSections).some(s => s.tableData);
+    const hasBmd    = bmdSummaryEndpoints.length > 0;
+    const hasGenomics = Object.values(genomicsResults).some(
+        g => g.gene_sets_by_stat || g.gene_sets || g.top_genes
+    );
+    const summaryEl = document.getElementById('summary-prose');
+    const hasSummary = summaryEl && summaryEl.textContent.trim().length > 0;
 
-    // At least one results section must be available.  Genomics data
-    // is no longer approval-gated — if genomicsResults has entries, the
-    // tables are considered ready.  Apical .bm2 files still use the
-    // per-file approval flow because their narratives are user-edited
-    // prose, not deterministic tables.
-    const processedBm2 = Object.values(apicalSections).filter(f => f.processed);
-    const anyBm2Approved = processedBm2.some(f => f.approved);
-    const hasGenomics = Object.keys(genomicsResults).length > 0;
+    const hasAnyContent = hasBg || hasApical || hasBmd || hasGenomics || hasSummary;
 
-    if (!anyBm2Approved && !hasGenomics) {
+    if (!hasAnyContent) {
         btn.disabled = true;
-        btn.title = 'Approve at least one results section (apical or genomics)';
-        return;
-    }
-
-    // All processed .bm2 files must be approved (can't export partial)
-    const allBm2Approved = processedBm2.every(f => f.approved);
-    if (!allBm2Approved) {
-        btn.disabled = true;
-        btn.title = 'Approve all processed .bm2 sections first';
+        btn.title = 'Generate at least one section before exporting';
         return;
     }
 

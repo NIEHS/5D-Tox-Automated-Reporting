@@ -471,11 +471,23 @@ let _blockingDepth = 0;
  *
  * @param {string} [msg='Working...'] — Status message shown next to the spinner
  */
+/** @type {number|null} setTimeout handle for the escape-hatch dismiss button */
+let _blockingDismissTimer = null;
+
 function showBlockingSpinner(msg = 'Working...') {
     _blockingDepth++;
     const overlay = document.getElementById('blocking-overlay');
     document.getElementById('blocking-overlay-msg').textContent = msg;
     overlay.style.display = '';
+
+    // After 15 s show the "×" dismiss button so a stuck overlay is never
+    // a permanent trap.  Clear any previous timer first.
+    if (_blockingDismissTimer) clearTimeout(_blockingDismissTimer);
+    const dismissBtn = document.getElementById('blocking-overlay-dismiss');
+    if (dismissBtn) dismissBtn.style.display = 'none';
+    _blockingDismissTimer = setTimeout(() => {
+        if (dismissBtn) dismissBtn.style.display = '';
+    }, 15000);
 }
 
 /**
@@ -486,6 +498,12 @@ function hideBlockingSpinner() {
     if (_blockingDepth > 0) _blockingDepth--;
     if (_blockingDepth === 0) {
         document.getElementById('blocking-overlay').style.display = 'none';
+        if (_blockingDismissTimer) {
+            clearTimeout(_blockingDismissTimer);
+            _blockingDismissTimer = null;
+        }
+        const dismissBtn = document.getElementById('blocking-overlay-dismiss');
+        if (dismissBtn) dismissBtn.style.display = 'none';
     }
 }
 
