@@ -8,57 +8,13 @@ Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, the
 
 ## Contents
 
-- [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Report Workflow](#report-workflow)
+- [Architecture](#architecture)
 - [Input Files](#input-files)
-- [Knowledge Base Pipeline](#knowledge-base-pipeline)
+- [Knowledge Base](#knowledge-base)
 - [Deployment](#deployment)
 - [Dependencies](#dependencies)
-
----
-
-## Architecture
-
-The system has two major components.
-
-### 1 — Report Generation Web Application
-
-A browser-based application backed by a FastAPI server (`background_server.py`). Users work through sections in order — identify the chemical, generate text, upload dose-response data, review and approve each section, then export.
-
-| Module | Purpose |
-|--------|---------|
-| `background_server.py` | FastAPI app, middleware, router mounting, static file serving |
-| `pool_orchestrator.py` | File pool lifecycle: fingerprint → validate → integrate → process |
-| `session_routes.py` | Session load/save, approve/unapprove, version history, BMD summary |
-| `upload_routes.py` | Upload `.bm2`, CSV, ZIP; process genomics; preview files |
-| `llm_routes.py` | LLM generation endpoints (background, methods, genomics narrative, summary) |
-| `export_routes.py` | Export full report as tagged PDF/UA-1 or `.docx` |
-| `document_tree.py` | `DocNode` tree — single source of truth for report structure and table numbering |
-| `report_pdf.py` | PDF generation via Typst (`report.typ`) |
-| `build_docx.py` | Word document assembly |
-| `session_store.py` | On-disk session persistence with per-section version history |
-| `server_state.py` | Shared mutable state (upload registries, pool fingerprints) |
-| `style_learning.py` | Global writing style profile learned from user edits |
-| `interpret.py` | Toxicological interpretation: KB queries, pathway/GO enrichment, LLM narratives |
-| `web/` | Alpine.js frontend (HTML + CSS, no build step) |
-| `java/` | Pre-compiled BMDExpress 3 helper classes (`.bm2` parsing, Williams/Dunnett tests) |
-
-**Table builders** (consume `integrated.json` only):
-
-| Module | Table |
-|--------|-------|
-| `body_weight_table.py` | Body weight |
-| `organ_weight_table.py` | Organ weight |
-| `clinical_pathology_table.py` | Clinical pathology |
-| `tissue_concentration_table.py` | Tissue concentration |
-| `apical_bmds.py` | Apical endpoint BMDs |
-
-### 2 — Toxicogenomics Knowledge Base
-
-A literature mining pipeline that builds `bmdx.duckdb`, a DuckDB analytical database used by the interpretation step. It crawls the Semantic Scholar API, extracts gene/claim data from abstracts via local LLM, normalizes gene names, cross-references Gene Ontology and pathway databases, and loads everything into a 9-table schema.
-
-See [Knowledge Base Pipeline](#knowledge-base-pipeline) for details.
 
 ---
 
@@ -80,9 +36,8 @@ Open `http://localhost:9000` in a browser. The login gate displays the usage gui
 **Prerequisites:**
 - Python 3.12+
 - Java 21 JRE (for `.bm2` file processing via BMDExpress helper classes)
-- `bmdx.duckdb` knowledge base (see [Knowledge Base Pipeline](#knowledge-base-pipeline) to build, or use the committed copy)
 - `bmdx-core.jar` and its Maven dependencies staged in `bmdx/target/` (contact project maintainer)
-- Anthropic API key in environment (`ANTHROPIC_API_KEY`) for Claude-backed generation, OR a local Ollama server for open-weight model runs
+- Anthropic API key (`ANTHROPIC_API_KEY`) for Claude-backed generation, OR a local Ollama server for open-weight model runs
 
 ---
 
@@ -112,6 +67,51 @@ Export the approved report as a tagged PDF/UA-1 (via Typst) or Word document.
 
 ---
 
+## Architecture
+
+A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a pre-built toxicogenomics knowledge base (`bmdx.duckdb`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
+
+**Server and routing:**
+
+| Module | Purpose |
+|--------|---------|
+| `background_server.py` | FastAPI app, middleware, router mounting, static file serving |
+| `pool_orchestrator.py` | File pool lifecycle: fingerprint → validate → integrate → process |
+| `session_routes.py` | Session load/save, approve/unapprove, version history, BMD summary |
+| `upload_routes.py` | Upload `.bm2`, CSV, ZIP; process genomics; preview files |
+| `llm_routes.py` | LLM generation endpoints (background, methods, genomics narrative, summary) |
+| `export_routes.py` | Export full report as tagged PDF/UA-1 or `.docx` |
+
+**Report structure and output:**
+
+| Module | Purpose |
+|--------|---------|
+| `document_tree.py` | `DocNode` tree — single source of truth for report structure and table numbering |
+| `report_pdf.py` | PDF generation via Typst (`report.typ`) |
+| `build_docx.py` | Word document assembly |
+| `interpret.py` | Toxicological interpretation: KB queries, pathway/GO enrichment, LLM narratives |
+
+**Table builders** (consume `integrated.json` only):
+
+| Module | Table |
+|--------|-------|
+| `body_weight_table.py` | Body weight |
+| `organ_weight_table.py` | Organ weight |
+| `clinical_pathology_table.py` | Clinical pathology |
+| `tissue_concentration_table.py` | Tissue concentration |
+| `apical_bmds.py` | Apical endpoint BMDs |
+
+**Supporting modules:**
+
+| Module | Purpose |
+|--------|---------|
+| `session_store.py` | On-disk session persistence with per-section version history |
+| `server_state.py` | Shared mutable state (upload registries, pool fingerprints) |
+| `style_learning.py` | Global writing style profile learned from user edits |
+| `java/` | Pre-compiled BMDExpress 3 helper classes (`.bm2` parsing, Williams/Dunnett tests) |
+
+---
+
 ## Input Files
 
 | File type | Extension | Contents |
@@ -124,9 +124,11 @@ Export the approved report as a tagged PDF/UA-1 (via Typst) or Word document.
 
 ---
 
-## Knowledge Base Pipeline
+## Knowledge Base
 
-`bmdx.duckdb` is built by a multi-phase literature mining pipeline. A committed copy ships with the repo — rebuild only if you need to expand or update it.
+The genomics interpretation step (Step 5) is grounded in `bmdx.duckdb`, a DuckDB analytical database built from the toxicogenomics literature. It provides the gene-level context — pathway memberships, GO term annotations, organ associations, and paper-derived claims — that the LLM uses to generate credible, citation-grounded narratives rather than relying on training data alone.
+
+A committed copy of `bmdx.duckdb` ships with the repo and is ready to use. Rebuild only if you need to expand or update coverage.
 
 ### Schema
 
@@ -142,33 +144,19 @@ citation_edges  — paper-cites-paper edges
 pathways        — 2,860 gene-pathway associations (KEGG + Reactome)
 ```
 
-### Rebuild steps
+Current coverage: 2,315 deduplicated papers across general tox, brain, heart, lung, and gene-function crawls. Top consensus genes by paper count: NFE2L2 (81), TP53 (63), BCL2 (45), BAX (41), SIRT1 (39).
+
+### Rebuilding
 
 ```bash
-# 1. Crawl papers (Semantic Scholar API)
 uv run python citegraph.py --query "your search terms" --output citegraph_output_topic
-
-# 2. Phase 2 targeted crawls (organ gaps, gene-function deep dives)
-uv run python crawl_phase2.py
-
-# 3. LLM extraction (requires local Ollama with qwen2.5:14b, or edit model arg)
 uv run python extract.py citegraph_output_topic/papers.json
-
-# 4. Merge consensus across all crawl directories
 uv run python extract.py merge
-
-# 5. Pathway enrichment (KEGG + Reactome)
 uv run python pathway_enrich.py
-
-# 6. Build DuckDB
 uv run python build_db.py
 ```
 
-See `README_pipeline.md` for detailed options including full-text extraction.
-
-### Coverage
-
-The current database was built from 2,315 deduplicated papers across 7 crawl directories (general tox, brain, heart, lung, gene-function passes 1 and 2). Top consensus genes by paper count: NFE2L2 (81), TP53 (63), BCL2 (45), BAX (41), SIRT1 (39), IL6 (38), KEAP1 (37), TNF (36).
+See `README_pipeline.md` for the full pipeline including Phase 2 targeted crawls and full-text extraction.
 
 ---
 
@@ -177,7 +165,6 @@ The current database was built from 2,315 deduplicated papers across 7 crawl dir
 The application ships with a `Dockerfile` targeting Google Cloud Run.
 
 ```bash
-# Stage external JARs and data, then build and push
 ./deploy.sh
 ```
 
