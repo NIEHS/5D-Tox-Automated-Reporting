@@ -43,3 +43,17 @@ Consult these memory files when working in unfamiliar areas:
 - `expertise_document_tree.md` — DocNode structure, Typst rendering, NIEHS fidelity gap
 - `expertise_ui_state.md` — AppStore architecture, phase derivation, migration status
 - `todo.md` — prioritized work items (CRITICAL/HIGH/MEDIUM/LONG-TERM)
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues at NIEHS/5D-Tox-Automated-Reporting via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles using their default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
