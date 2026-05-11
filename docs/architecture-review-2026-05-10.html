@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rlm-bmdx · Architecture Review · 2026-05-10</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --surface: #ffffff;
+    --ink: #1d1d1b;
+    --muted: #5b5b58;
+    --rule: #e6e3dc;
+    --accent: #6b3f1f;
+    --accent-soft: #efe4d2;
+    --code-bg: #f3efe6;
+    --high: #7a3017;
+    --med: #8a6b1c;
+    --low: #4d6b7c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Source Serif Pro", Georgia, serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.55;
+    font-size: 16px;
+  }
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+  header.doc {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+  }
+  header.doc .eyebrow {
+    font-family: ui-sans-serif, system-ui, "Helvetica Neue", Arial, sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  header.doc h1 {
+    font-size: 32px;
+    line-height: 1.2;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  header.doc .meta {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  h2 {
+    font-size: 22px;
+    margin: 48px 0 12px;
+    letter-spacing: -0.005em;
+  }
+  h3 {
+    font-size: 17px;
+    margin: 0 0 8px;
+    letter-spacing: -0.005em;
+  }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); }
+
+  code, kbd, .mono {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #2b2a26;
+  }
+  pre code { display: block; padding: 12px 14px; }
+
+  .lede {
+    font-size: 17px;
+    color: var(--ink);
+  }
+
+  /* Executive summary — sponsor-facing */
+  .exec {
+    border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 24px;
+    margin: 0 0 40px;
+    font-size: 16.5px;
+    line-height: 1.65;
+  }
+  .exec p { margin-bottom: 14px; }
+  .exec p:last-child { margin-bottom: 0; }
+  .exec-eyebrow {
+    font-family: ui-sans-serif, system-ui, "Helvetica Neue", Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    color: var(--muted);
+    margin: 0 0 12px !important;
+    font-weight: 600;
+  }
+
+  /* Vocabulary box */
+  .vocab {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 16px 20px;
+    margin: 0 0 32px;
+    border-radius: 4px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .vocab .vocab-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .vocab dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 14px;
+    margin: 0;
+  }
+  .vocab dt {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .vocab dd {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  /* Candidate cards */
+  .candidate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 24px 26px;
+    margin-bottom: 24px;
+  }
+  .candidate-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .candidate-num {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .candidate-title {
+    flex: 1 1 auto;
+    font-size: 18px;
+    margin: 0;
+  }
+  .pill {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: transparent;
+    flex-shrink: 0;
+  }
+  .pill.high { color: var(--high); }
+  .pill.med  { color: var(--med); }
+  .pill.low  { color: var(--low); }
+
+  .row { margin-bottom: 10px; }
+  .row .label {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .row .body { font-size: 15.5px; }
+  .files {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    color: #3a3a36;
+  }
+
+  /* Cross-cutting summary table */
+  .matrix {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 8px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .matrix th, .matrix td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .matrix th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .matrix td.num {
+    color: var(--accent);
+    font-weight: 600;
+    width: 32px;
+  }
+  .matrix .tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    color: var(--muted);
+    background: var(--accent-soft);
+    white-space: nowrap;
+  }
+
+  /* Final prompt */
+  .next-step {
+    margin-top: 48px;
+    padding: 22px 26px;
+    background: var(--accent-soft);
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  .next-step strong { color: var(--accent); }
+
+  footer.doc {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  @media print {
+    body { background: white; }
+    .candidate { break-inside: avoid; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="doc">
+  <p class="eyebrow">Architecture Review</p>
+  <h1>rlm-bmdx — Deepening Opportunities</h1>
+  <p class="meta">2026-05-10 · main branch <span class="mono">4c09d19</span> · 8 candidates</p>
+</header>
+
+<section class="exec">
+  <p class="exec-eyebrow">Executive summary</p>
+
+  <p>rlm-bmdx is now mature enough that most of the friction we encounter is not in writing new features but in landing them safely. As the codebase has grown — about 41,500 lines across the Python and JavaScript layers — a handful of files have absorbed responsibilities that originally belonged elsewhere. Most are still working correctly. None are in crisis.</p>
+
+  <p>What has changed is the cost of changing them. That cost shows up in the places worth measuring: the time it takes to wire a new narrative section, the time it takes to add a new chemical&rsquo;s report, and our confidence that a fix in one area hasn&rsquo;t quietly broken another. The pattern is well understood — most codebases this size encounter it once the original shape has been stretched past its initial design assumptions.</p>
+
+  <p>This document is a structured look at where that stretching has concentrated. It identifies eight specific places where the underlying code shape no longer matches what the project has become. Several are small, contained improvements that can be landed and verified in a single afternoon. A few are larger and would warrant careful validation before starting. One in particular — the contract between rlm-bmdx and the upstream bmdx-pipe project — would, if addressed, meaningfully reduce a class of intermittent errors we currently rediscover by accident.</p>
+
+  <p>The practical question is which to pick first. Nothing below is urgent in isolation; together, they are the difference between a codebase that keeps pace with the science and one that gradually slows it down.</p>
+</section>
+
+<p class="lede">Eight architectural friction points found by walking the codebase. Each is a candidate <em>deepening opportunity</em> — somewhere a shallow module could become a deep one, or a leaky seam could be made explicit. Ranked roughly by impact.</p>
+
+<p>No new interfaces are designed in this document. The next step is to pick one candidate and grill the design. Cross-cutting candidates (#1, #3, #4) should not be started in parallel — the lesson from the earlier domain-model refactor was that one-at-a-time, validated end-to-end, beats two-at-a-time half-validated.</p>
+
+<aside class="vocab">
+  <div class="vocab-title">Vocabulary used in this document</div>
+  <dl>
+    <dt>Module</dt>          <dd>Anything with an interface and an implementation.</dd>
+    <dt>Interface</dt>       <dd>Everything a caller must know — types, invariants, error modes, ordering, config.</dd>
+    <dt>Depth</dt>           <dd>Leverage at the interface. Deep = a lot behind a small interface. Shallow = interface ≈ implementation.</dd>
+    <dt>Seam</dt>            <dd>Where an interface lives — a place behaviour can be altered without editing in place.</dd>
+    <dt>Deletion test</dt>   <dd>Imagine deleting the module. If complexity vanishes, it was a pass-through. If it concentrates elsewhere, it was earning its keep.</dd>
+    <dt>Locality</dt>        <dd>What maintainers gain from depth — change, bugs, knowledge concentrated in one place.</dd>
+    <dt>Leverage</dt>        <dd>What callers gain from depth — a small interface that does a lot.</dd>
+  </dl>
+</aside>
+
+<h2>The eight candidates</h2>
+
+<!-- 1 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 1</span>
+    <h3 class="candidate-title"><span class="mono">pool_orchestrator.py</span> is six modules in one</h3>
+    <span class="pill high">High confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">pool_orchestrator.py (3488 lines)</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">One file owns fingerprinting, validation, conflict resolution, integration, per-platform section-card building, and genomics extraction. Validation is interleaved with I/O inside HTTP-endpoint handlers (<span class="mono">api_run_lightweight_validation</span> and friends), so testing &ldquo;given these fingerprints, what does validation say?&rdquo; requires mocking the endpoint or spinning up the full pipeline.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">God object. <strong>Deletion test:</strong> the module is <em>not</em> a pass-through — removing it would scatter complexity across <span class="mono">session_routes.py</span>, <span class="mono">llm_routes.py</span>, and the table builders. So the orchestration is earning its keep, but it&rsquo;s earning it as <em>six modules pretending to be one</em>. Each phase has the depth to stand alone; together they form a hub nobody can change without re-reading 3500 lines.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">Separate phases into independently-callable modules (validation, integration, section-card extraction, genomics extraction). Each becomes a deep module with a small interface (input data → output report). The orchestrator shrinks to a coordinator.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> fingerprint logic changes don&rsquo;t risk breaking section-card building. <strong>Leverage:</strong> a <span class="mono">validate_pool(fingerprints, conflicts) -&gt; Report</span> interface is a 10-line unit test instead of a FastAPI integration test. <strong>Cross-link:</strong> same shape as the earlier domain-model refactor (committed but not validated end-to-end), so the cross-cutting-refactor constraint profile applies.</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 2</span>
+    <h3 class="candidate-title"><span class="mono">ToxKBQuerier</span> is a shallow wrapper — <span class="mono">.con.execute()</span> leaks through</h3>
+    <span class="pill high">High confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">interpret.py (lines 88–207); upload_routes.py (line 646); other call sites</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">The class promises a typed-query interface over <span class="mono">bmdx.duckdb</span>, but ~30 callers reach through <span class="mono">kb.con.execute("SELECT ...")</span> directly. The real interface is SQL; the class is decoration.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Shallow wrapper. <strong>Deletion test:</strong> if you delete <span class="mono">ToxKBQuerier</span>, callers move from <span class="mono">kb.con.execute(...)</span> to <span class="mono">duckdb.connect(path).execute(...)</span> — three extra characters. Complexity concentrates nowhere; the wrapper is a pass-through. <em>It&rsquo;s earning nothing right now.</em> That doesn&rsquo;t mean the seam is wrong — it means the seam exists but no caller honours it.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">Turn it into a real DAO. Define a small set of typed query methods (e.g.&nbsp;<span class="mono">chemical_summary(dtxsid)</span>, <span class="mono">paper_organs_for(dtxsid)</span>); make <span class="mono">.con</span> private; force schema brittleness to live in one file. Per the knowledge-base notes, <span class="mono">bmdx.duckdb</span> schema is a cross-project contract — concentrating it in one DAO is the natural seam.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> a schema change (bmdx-pipe rebuilds the DB with renamed columns) breaks one file instead of 30. <strong>Leverage:</strong> narratives can mock <span class="mono">ToxKBQuerier</span> instead of mocking duckdb. <strong>Tests:</strong> narrative generation gets unit-testable without a DB fixture.</p>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 3</span>
+    <h3 class="candidate-title">Narrative generation is reinvented per section — no shared seam</h3>
+    <span class="pill high">High confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">background_writer.py, unified_narrative.py, genomics_narratives.py, llm_routes.py; the build_*_intro/findings quartet in methods_report.py (lines 2418, 2498, 2641, 2706)</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">Each narrative type implements &ldquo;build context → render prompt → call LLM → parse → validate → return prose&rdquo; from scratch. The four <span class="mono">methods_report.py</span> functions have nearly identical shape (same return type, same data flow) with no shared base. When the customer asks for a fifth narrative type, the path of least resistance is copy-paste.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Missing seam — same operation, no module. <strong>Deletion test:</strong> delete any single narrative module and complexity reappears at exactly one caller. The four narrative modules are deep individually but <em>collectively shallow</em> because they don&rsquo;t compose.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">A single <em>Narrative</em> module — context-builder + prompt-template + LLM-call + parse pipeline — where each section type is a small adapter. By the &ldquo;two adapters = real seam&rdquo; rule, you already have at least four, so the seam is real. The style-learning system in <span class="mono">style_learning.py</span> likely wants to hook into this single seam too.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> prompt-engineering improvements (caching, retry policy, citation grounding) land in one place. <strong>Leverage:</strong> adding a sixth narrative type costs an adapter, not a module. <strong>Tests:</strong> narrative-shape tests run without an LLM (mock the adapter).</p>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 4</span>
+    <h3 class="candidate-title"><span class="mono">integrated.json</span> shape is implicit — no schema at the rlm-bmdx ↔ bmdx-pipe seam</h3>
+    <span class="pill high">High confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">pool_orchestrator.py (line 91 caches <span class="mono">_integrated_pool: dict[str, dict]</span>); every consumer</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">Architectural invariant&nbsp;#1 says &ldquo;<span class="mono">integrated.json</span> is the single source of truth,&rdquo; but the <em>shape</em> of that truth lives in a Java class in <span class="mono">bmdx-pipe</span>. rlm-bmdx loads it as untyped <span class="mono">dict</span> and the contract is implicit. If bmdx-pipe schema drifts (e.g. renames <span class="mono">bmdl</span> → <span class="mono">bmd_lower</span>), rlm-bmdx finds out at runtime, often via a confusing <span class="mono">KeyError</span> deep in a table builder.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Missing schema at a <em>real</em> seam. The seam between rlm-bmdx and bmdx-pipe is the most important seam in the project — but it has no contract module on the rlm-bmdx side.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">A <span class="mono">BMDProject</span> Pydantic model in rlm-bmdx that validates on load. Becomes the canonical &ldquo;this is what we expect from bmdx-pipe.&rdquo; Memory note <span class="mono">project_bmdx_pipe_migration.md</span> records that these are separate projects (not a migration), which makes the schema contract more important, not less — you can&rsquo;t refactor across the seam.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> schema mismatches surface at one assertion at load time, not 12 mysterious downstream failures. <strong>Leverage:</strong> type-checking in IDEs and tests across all consumers. <strong>Tests:</strong> fixtures become typed, not untyped dicts.</p>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 5</span>
+    <h3 class="candidate-title">Python → Typst data dict is an implicit, undocumented contract</h3>
+    <span class="pill high">High confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">report_pdf.py (lines 22–80, build_report_pdf); report.typ; every caller that builds the data dict</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body"><span class="mono">build_report_pdf(data: dict)</span> passes a dict to Typst via stdin. The expected keys (<span class="mono">foreword</span>, <span class="mono">background</span>, <span class="mono">methods</span>, <span class="mono">bmd_summary</span>, <span class="mono">abstract.sections[].label</span>, …) are documented only in the docstring. Callers assemble the dict by hand from sidecars and table outputs. A renamed field surfaces as an opaque Typst compilation error.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Same shape as #4 (missing schema at a seam) but at the <em>output</em> boundary. The seam between Python and Typst is real (two languages, subprocess, stdin/stdout), so the contract should be explicit.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">A Pydantic model for the PDF data envelope; <span class="mono">build_report_pdf</span> accepts the model, not a dict; assemblers must construct the model. <span class="mono">report.typ</span> is documented as &ldquo;this is what consumes the model.&rdquo;</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> adding a section means one model edit + Typst edit, not &ldquo;find every place that builds the dict.&rdquo; <strong>Tests:</strong> golden-test the dict shape independent of running Typst.</p>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 6</span>
+    <h3 class="candidate-title">Sidecar loading is scattered — no <span class="mono">SidecarStore</span> seam</h3>
+    <span class="pill med">Medium-high confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">table_builder_common.py (find_sidecar, load_sidecar); pool_orchestrator.py (lines ~1953, 2053); each *_table.py</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">Sidecars preserve per-animal metadata that <span class="mono">integrated.json</span> discards (Selection, Observation Day, Terminal Flag, raw values). They&rsquo;re loaded ad-hoc via shared helpers from both table builders and the orchestrator. The discovery logic (file naming, parsing) lives in the helpers, but every caller knows the convention by virtue of importing those helpers.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Leaky seam. Sidecars are an implementation detail of &ldquo;per-animal data sources,&rdquo; but the orchestrator reaches around the table builders to load them for narrative generation. Two consumers, no module — by the &ldquo;two adapters = real seam&rdquo; test, this seam is <em>required</em> but absent.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">A <span class="mono">SidecarStore</span> that owns discovery, parsing, and a typed data interface. Table builders and orchestrator both depend on the store, not on filenames.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> sidecar naming changes (the unresolved study-day data-model question) edit one file. <strong>Leverage:</strong> store can transparently fall back to <span class="mono">integrated.json</span> when sidecars are absent, hiding the pivot-data-loss problem behind a clean interface. <strong>Tests:</strong> sidecar loading is testable in isolation.</p>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 7</span>
+    <h3 class="candidate-title"><span class="mono">session_store.py</span> exposes helpers, not a <span class="mono">SessionStore</span> module</h3>
+    <span class="pill med">Medium confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">session_store.py; session_routes.py</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body"><span class="mono">session_store.py</span> exports loose helper functions (<span class="mono">save_section</span>, <span class="mono">delete_section</span>, <span class="mono">load_style_profile</span>, …). <span class="mono">session_routes.py</span> calls them and assumes the returned dicts have specific shapes the JS UI expects. There&rsquo;s no <span class="mono">SessionStore</span> class with a typed contract, no Pydantic models for what&rsquo;s saved/loaded.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Helpers, not a module. <strong>Deletion test:</strong> delete <span class="mono">session_store.py</span> and the helpers reappear inline in <span class="mono">session_routes.py</span> — barely worse, which is the diagnostic for shallowness. The seam exists in name but adds little leverage.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">A <span class="mono">SessionStore</span> class with typed session-data models; routes hold a <span class="mono">SessionStore</span> instance. Tests can use an in-memory store. Aligns with the &ldquo;state derivation, never imperative&rdquo; rule: an explicit store makes the derivation rule enforceable.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> schema for &ldquo;what&rsquo;s a saved section&rdquo; lives in one place. <strong>Tests:</strong> routes become unit-testable without disk I/O.</p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="candidate">
+  <div class="candidate-header">
+    <span class="candidate-num">№ 8</span>
+    <h3 class="candidate-title">DocNode tree → table-numbering → narrative is a fragile three-phase coupling</h3>
+    <span class="pill med">Medium confidence</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Files</span>
+    <span class="files body">genomics_narratives.py (lazy import at line 76 of compute_table_numbers, find_node); document_tree.py</span>
+  </div>
+
+  <div class="row">
+    <span class="label">Problem</span>
+    <p class="body">Architectural invariant #2 says the DocNode tree drives all structure, but the narrative builder reaches into the tree at runtime to compute table numbers for intro prose (&ldquo;Tables 4–7 below…&rdquo;). This requires (a) the tree exists, (b) table numbers are computed, (c) <em>then</em> narratives can be built — and the lazy import exists to break a circular dependency.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Hypothesis</span>
+    <p class="body">Coupling to presentation. Narratives shouldn&rsquo;t know about <em>numbers</em>; they should know about <em>references</em> the renderer resolves later. The lazy import is the smell.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">What deepening looks like</span>
+    <p class="body">Narratives emit reference tokens (e.g.&nbsp;<span class="mono">{table:liver-bmd-summary}</span>); a renderer pass replaces them post-tree-walk. The narrative module no longer imports <span class="mono">document_tree</span>.</p>
+  </div>
+
+  <div class="row">
+    <span class="label">Benefits</span>
+    <p class="body"><strong>Locality:</strong> re-ordering sections in the tree never re-runs narrative LLMs. <strong>Leverage:</strong> same narrative reusable in HTML and PDF without re-resolving numbers. <strong>Cross-link:</strong> lines up with &ldquo;table numbers are positional, never user-provided&rdquo; — the invariant is correct but currently leaks into narrative-generation timing.</p>
+  </div>
+</section>
+
+<h2>Cross-cutting summary</h2>
+
+<table class="matrix">
+  <thead>
+    <tr><th>#</th><th>Candidate</th><th>Type</th><th>Scope</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="num">1</td><td>pool_orchestrator split</td><td><span class="tag">cross-cutting</span></td><td>Pipeline + routes + builders</td></tr>
+    <tr><td class="num">2</td><td>ToxKBQuerier DAO</td><td><span class="tag">localised</span></td><td>Knowledge base</td></tr>
+    <tr><td class="num">3</td><td>Narrative seam</td><td><span class="tag">cross-cutting</span></td><td>LLM narratives</td></tr>
+    <tr><td class="num">4</td><td>BMDProject schema</td><td><span class="tag">cross-cutting</span></td><td>rlm-bmdx ↔ bmdx-pipe seam</td></tr>
+    <tr><td class="num">5</td><td>Typst data envelope</td><td><span class="tag">localised</span></td><td>PDF rendering</td></tr>
+    <tr><td class="num">6</td><td>SidecarStore</td><td><span class="tag">localised</span></td><td>Data pipeline</td></tr>
+    <tr><td class="num">7</td><td>SessionStore module</td><td><span class="tag">localised</span></td><td>UI / sessions</td></tr>
+    <tr><td class="num">8</td><td>Narrative ↔ DocNode references</td><td><span class="tag">tactical</span></td><td>Document tree</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Cross-cutting refactors</strong> (#1, #3, #4) should not be started in parallel — the lesson from the earlier domain-model refactor was that one-at-a-time, validated end-to-end, beats two-at-a-time half-validated.</p>
+
+<p><strong>Localised refactors</strong> (#2, #5, #6, #7) are good candidates if you want a deepening win without re-validating the full pipeline.</p>
+
+<p><strong>Tactical</strong> (#8) is probably worth doing only if you&rsquo;re already in <span class="mono">genomics_narratives.py</span> for another reason.</p>
+
+<div class="next-step">
+  <strong>Next step.</strong> Pick one candidate to grill. We&rsquo;ll walk constraints, what sits behind the new seam, what tests survive — and update <span class="mono">CONTEXT.md</span> or open an ADR inline if names or rejections crystallize.
+</div>
+
+<footer class="doc">
+  Generated 2026-05-10 · rlm-bmdx · main · 4c09d19. Methodology adapted from <span class="mono">/improve-codebase-architecture</span>; vocabulary from the skill&rsquo;s LANGUAGE.md.
+</footer>
+
+</div>
+</body>
+</html>
