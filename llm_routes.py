@@ -32,6 +32,7 @@ from chem_resolver import ChemicalIdentity
 from data_gatherer import gather_all
 from background_writer import generate_background
 from server_state import get_pool_fingerprints
+from pool_orchestrator import load_integrated
 from interpret import build_genomics_interpretation
 
 logger = logging.getLogger(__name__)
@@ -253,14 +254,13 @@ async def api_generate_methods(request: Request):
                 pass
 
     # --- Load integrated data for genomics assay identification ---
-    integrated_data = None
-    if dtxsid:
-        int_path = SESSIONS_DIR / dtxsid / "integrated.json"
-        if int_path.exists():
-            try:
-                integrated_data = json.loads(int_path.read_text())
-            except Exception:
-                pass
+    # Route through the schema-validating loader (ADR-0001).  If the
+    # session has no integrated data yet, load_integrated returns None
+    # and we proceed without it — the methods narrative is best-effort
+    # context.  If integrated.json fails schema validation, the raised
+    # BMDProjectValidationError propagates to the global handler in
+    # background_server.py which returns a structured 422.
+    integrated_data = load_integrated(dtxsid) if dtxsid else None
 
     # --- Extract structured context from all data sources ---
     ctx = extract_methods_context(

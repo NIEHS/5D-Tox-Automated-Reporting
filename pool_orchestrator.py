@@ -1440,6 +1440,18 @@ def _load_integrated(dtxsid: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Public alias for the load function
+# ---------------------------------------------------------------------------
+# External modules (export_routes, llm_routes, session_routes, etc.) need
+# to read integrated.json through the schema-validating barrier.  Rather
+# than import the underscore-prefixed `_load_integrated` directly (which
+# would violate the module-privacy convention), we expose this public
+# alias.  The implementation stays in `_load_integrated`; the alias is
+# only the import-facing name.
+load_integrated = _load_integrated
+
+
+# ---------------------------------------------------------------------------
 # Per-section cache infrastructure
 # ---------------------------------------------------------------------------
 # Instead of one monolithic cache that invalidates on ANY parameter change,

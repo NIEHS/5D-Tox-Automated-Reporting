@@ -29,6 +29,7 @@ from style_learning import (
     load_style_profile, save_style_profile,
 )
 from server_state import get_bm2_uploads
+from pool_orchestrator import load_integrated
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +299,14 @@ async def api_export_bm2(dtxsid: str):
     json_path = sess_path / "integrated.json"
     bm2_path = sess_path / "integrated.bm2"
 
-    if not json_path.exists():
+    # Run the schema-validating loader before continuing (ADR-0001).
+    # The result is discarded — bmdx_pipe re-reads integrated.json
+    # from disk internally — but the call still gates this endpoint
+    # against malformed integrated data.  Returns None when no data
+    # exists (which also implies the file is missing); raises
+    # BMDProjectValidationError on a schema failure (handled globally
+    # in background_server.py → 422).
+    if load_integrated(dtxsid) is None:
         return JSONResponse(
             {"error": "No integrated data found — run integration first"},
             status_code=404,
