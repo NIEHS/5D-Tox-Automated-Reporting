@@ -108,9 +108,12 @@ exception-handling in FastAPI endpoints catches it naturally.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +284,10 @@ class TestArticle(_BaseModel):
 class ExperimentDescription(_BaseModel):
     """
     Metadata about one `DoseResponseExperiment` that rlm-bmdx uses to
-    classify and group results.  This is the structure that
-    `_dedup_legacy_apical_experiments()`, `_partition_by_platform()`,
-    and the table builders read most heavily.
+    classify and group results.  This is the structure that the
+    schema's `_dedupe_legacy_apical_pre` validator,
+    `_partition_by_platform()`, and the table builders read most
+    heavily.
 
     Most fields are Optional because the Java-side `experimentDescription`
     objects attached to result lists (WilliamsTrendResults, BMDResult,
@@ -349,10 +353,10 @@ class DoseResponseExperiment(_BaseModel):
     values that drive every downstream computation).
     """
 
-    # Internal identifier — used by `_dedup_legacy_apical_experiments`
-    # to detect the legacy-vs-truth siblings, and by
-    # `_partition_by_platform` to infer sex when the description is
-    # missing it.
+    # Internal identifier — used by the schema's
+    # `_dedupe_legacy_apical_pre` validator to detect legacy-vs-truth
+    # siblings, and by `_partition_by_platform` to infer sex when the
+    # description is missing it.
     name: str
 
     # Per-animal exposure records; parallels the `responses` lists on
@@ -470,6 +474,172 @@ class BMDProject(_BaseModel):
     # model can also be constructed with the keyword `meta=...` in
     # Python code (useful for tests and for hand-built BMDProjects).
     meta: Meta = Field(alias="_meta")
+
+    # ---------------------------------------------------------------
+    # Domain invariants (ADR-0001 commit-sequence step 4)
+    # ---------------------------------------------------------------
+    # Two validators consolidate the legacy-vs-truth handling that
+    # previously lived in `_dedup_legacy_apical_experiments` inside
+    # pool_orchestrator.py.  This pulls the domain rule into the
+    # schema, so any code path that constructs a BMDProject — load
+    # AND save — sees the same normalized, validated data without
+    # the orchestrator having to remember to call a helper.
+    #
+    # The split is:
+    #
+    #   1. `mode="before"` pre-validator (`_dedupe_legacy_apical_pre`):
+    #      runs on the raw input dict, drops legacy `{sex}_{platform}`
+    #      experiments when a `{platform}_truth_{sex}` sibling exists
+    #      for the same (platform, sex).  This is the normalization
+    #      step — it makes data that USED to fail the invariant pass
+    #      it cleanly, so existing sessions on disk continue to load.
+    #
+    #   2. `mode="after"` post-validator (`_assert_apical_uniqueness`):
+    #      enforces that no (platform, sex) pair carries more than one
+    #      apical experiment.  Anything the pre-validator didn't clean
+    #      up — e.g. two truth-named experiments for the same bucket,
+    #      or a future bmdx-pipe bug producing fresh duplicates —
+    #      fails loudly with a ValidationError.  The pre-validator is
+    #      forgiving; the post-validator is the safety net.
+    #
+    # Genomics (provider="BioSpyder") is exempt from the uniqueness
+    # check because S1500+_rat legitimately carries multiple organs
+    # per (platform, sex) — Kidney + Liver are separate experiments
+    # with the same platform string.  The exemption is by provider,
+    # not platform, so any future genomics platforms inherit it.
+
+    @model_validator(mode="before")
+    @classmethod
+    def _dedupe_legacy_apical_pre(cls, data: Any) -> Any:
+        """
+        Drop legacy apical experiments superseded by `_truth_` siblings.
+
+        For each (platform, sex) group of non-genomics experiments, if
+        any experiment in the group has `_truth_` in its name, drop
+        every non-`_truth_` sibling.  Groups without a truth marker
+        are left untouched so the post-validator can flag them.
+
+        Operates on the raw input dict — runs BEFORE field validation,
+        so it sees plain Python types (dicts, strings, numbers).
+        """
+        # Only act on dict input; passing through other shapes lets
+        # Pydantic produce its standard "expected dict" error.
+        if not isinstance(data, dict):
+            return data
+        exps = data.get("doseResponseExperiments")
+        if not isinstance(exps, list) or not exps:
+            return data
+
+        # Group experiments by (platform, sex).  Genomics is skipped
+        # via the BioSpyder provider check.
+        groups: dict[tuple[str, str], list[dict]] = {}
+        for exp in exps:
+            if not isinstance(exp, dict):
+                continue
+            desc = exp.get("experimentDescription") or {}
+            if not isinstance(desc, dict):
+                continue
+            if desc.get("provider") == "BioSpyder":
+                continue
+            platform = desc.get("platform") or desc.get("domain")
+            if not platform:
+                continue
+            name = exp.get("name", "")
+            if not isinstance(name, str):
+                continue
+            nlow = name.lower()
+            if "female" in nlow:
+                sex = "Female"
+            elif "male" in nlow:
+                sex = "Male"
+            else:
+                continue
+            groups.setdefault((platform, sex), []).append(exp)
+
+        # Identify legacy duplicates to drop: any group with both a
+        # truth-named member and at least one non-truth-named member.
+        # The non-truth members all go.  Use id() to track because
+        # two unrelated experiments could theoretically be `==`.
+        to_drop_ids: set[int] = set()
+        dropped_names: list[str] = []
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            has_truth = any(
+                "_truth_" in e.get("name", "").lower() for e in group
+            )
+            if not has_truth:
+                continue
+            for e in group:
+                if "_truth_" not in e.get("name", "").lower():
+                    to_drop_ids.add(id(e))
+                    dropped_names.append(e.get("name", ""))
+
+        if to_drop_ids:
+            logger.info(
+                "Dropped %d legacy apical experiment(s) superseded by "
+                "truth siblings: %s",
+                len(dropped_names),
+                ", ".join(dropped_names),
+            )
+            data["doseResponseExperiments"] = [
+                e for e in exps if id(e) not in to_drop_ids
+            ]
+        return data
+
+    @model_validator(mode="after")
+    def _assert_apical_uniqueness(self) -> "BMDProject":
+        """
+        Enforce that every (platform, sex) carries at most one apical
+        experiment.
+
+        Runs after field validation, so `experimentDescription` is a
+        typed `ExperimentDescription` (or None) and `sex` has already
+        been narrowed to the `Literal["male", "female"]` set.
+
+        Genomics (`provider == "BioSpyder"`) is exempt: those platforms
+        carry one experiment per organ within the same (platform, sex),
+        which is intentional and not a duplicate.
+        """
+        groups: dict[tuple[str, str], list[str]] = {}
+        for exp in self.doseResponseExperiments:
+            desc = exp.experimentDescription
+            if desc is None:
+                continue
+            if desc.provider == "BioSpyder":
+                continue
+            platform = desc.platform
+            if not platform:
+                continue
+            # Sex may be explicitly set; if missing on the description
+            # itself, fall back to inferring from the experiment name
+            # using the same female-before-male rule as elsewhere.
+            sex = desc.sex
+            if sex is None:
+                nlow = exp.name.lower()
+                if "female" in nlow:
+                    sex = "female"
+                elif "male" in nlow:
+                    sex = "male"
+                else:
+                    # Can't classify; skip rather than false-positive.
+                    continue
+            groups.setdefault((platform, sex), []).append(exp.name)
+
+        duplicates = {k: v for k, v in groups.items() if len(v) > 1}
+        if duplicates:
+            # Raise ValueError; Pydantic wraps it into a
+            # ValidationError automatically, and `load_and_validate`
+            # converts that into BMDProjectValidationError → 422.
+            detail = "; ".join(
+                f"({platform}, {sex}): {names}"
+                for (platform, sex), names in duplicates.items()
+            )
+            raise ValueError(
+                "Apical experiments must be unique per (platform, sex). "
+                f"Duplicates found: {detail}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------

@@ -1927,118 +1927,6 @@ def _filter_gene_expression(integrated: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Legacy-vs-truth experiment deduplication
-# ---------------------------------------------------------------------------
-# Recent uploads include "truth" versions of every apical file (for example
-# `clin_chem_truth_male.txt`, `body_weight_truth_female.txt`).  These come
-# paired with sidecar JSON files that preserve per-animal metadata the pivot
-# step otherwise discards: Selection (Core Animals vs Biosampling Animals),
-# Observation Day, and Terminal Flag.  The truth files were introduced to
-# resolve the "pivot data loss" problem documented in
-# `expertise_data_pipeline.md` — they are the authoritative apical source.
-#
-# In sessions uploaded before this convention existed, only the legacy file
-# (named like `male_clin_chem.txt`) is present, and integration produces one
-# experiment per (platform, sex).  In sessions where the customer has also
-# uploaded the truth version, BOTH files survive integration as SEPARATE
-# experiments, producing duplicate rows in every downstream table:
-#
-#   - Legacy experiment  →  correct BMD/BMDL (its name matches the .bm2
-#                           experiment name BMDExpress 3 was built with)
-#                       →  wrong  mean/SE  (includes Biosampling animals
-#                           and any imputed values the legacy file carries)
-#
-#   - Truth experiment   →  correct mean/SE (sidecar honours Selection)
-#                       →  missing BMD/BMDL (name doesn't match the .bm2)
-#
-# The clean fix would be to drop the legacy file at upload/integration time,
-# but the integration pipeline lives in bmdx-pipe and changing it has a
-# larger blast radius.  This helper is the smaller, in-orchestrator dedup:
-# whenever a truth experiment exists for a given (platform, sex), drop its
-# legacy sibling so that only the truth experiment proceeds through
-# `build_table_data()` and onward.  No-op for sessions that don't have truth
-# files (the legacy experiment is left in place).
-def _dedup_legacy_apical_experiments(integrated: dict) -> dict:
-    """
-    Drop legacy apical experiments that have been superseded by a truth sibling.
-
-    For each (platform, sex) group in `doseResponseExperiments`, if any
-    experiment's name contains "_truth_", drop every non-"_truth_" experiment
-    in the same group.  If no truth experiment is present for the group, the
-    group is left untouched (the legacy experiment is the only source).
-
-    Platform is read from `experimentDescription.platform` (with a fallback
-    to `experimentDescription.domain` for older sessions).  Sex is inferred
-    from the experiment name by the same rule used in
-    `_partition_by_platform`: "female" before "male", since "female"
-    contains "male" as a substring.
-
-    Args:
-        integrated: A BMDProject dict, usually already filtered for gene
-                    expression by `_filter_gene_expression`.
-
-    Returns:
-        A shallow copy of `integrated` with the legacy experiments removed,
-        or the original dict unchanged when no dedup was needed.
-    """
-    exps = integrated.get("doseResponseExperiments", [])
-    if not exps:
-        return integrated
-
-    # Group experiments by (platform, sex).  Experiments whose platform or
-    # sex can't be inferred are skipped — they won't be deduped, which is
-    # the safe default (we'd rather show them than silently drop them).
-    by_group: dict[tuple[str, str], list[dict]] = {}
-    for exp in exps:
-        name = exp.get("name", "")
-        desc = exp.get("experimentDescription") or {}
-        platform = desc.get("platform") or desc.get("domain") or ""
-        if not platform:
-            continue
-        nlow = name.lower()
-        if "female" in nlow:
-            sex = "Female"
-        elif "male" in nlow:
-            sex = "Male"
-        else:
-            continue
-        by_group.setdefault((platform, sex), []).append(exp)
-
-    # Walk each group; identify legacy duplicates to drop.  We track the
-    # Python id() of each experiment dict so the final filter below removes
-    # the right objects even if two experiments happen to be ==.
-    to_drop_ids: set[int] = set()
-    dropped_names: list[str] = []
-    for group in by_group.values():
-        if len(group) < 2:
-            continue
-        has_truth = any("_truth_" in e.get("name", "").lower() for e in group)
-        if not has_truth:
-            # Multiple experiments but none is the truth variant — don't
-            # touch.  We don't know which to prefer in this case.
-            continue
-        for e in group:
-            if "_truth_" not in e.get("name", "").lower():
-                to_drop_ids.add(id(e))
-                dropped_names.append(e.get("name", ""))
-
-    if not to_drop_ids:
-        return integrated
-
-    logger.info(
-        "Dropped %d legacy apical experiment(s) superseded by truth siblings: %s",
-        len(dropped_names),
-        ", ".join(dropped_names),
-    )
-    return {
-        **integrated,
-        "doseResponseExperiments": [
-            e for e in exps if id(e) not in to_drop_ids
-        ],
-    }
-
-
 def _partition_by_platform(
     apical_integrated: dict,
     source_files: dict,
@@ -2973,15 +2861,12 @@ async def api_process_integrated(dtxsid: str, request: Request):
         else:
             cat_lookup = _restore_category_lookup(integrated, bmd_stat)
             apical_integrated = _filter_gene_expression(integrated)
-            # Drop legacy apical experiments that have been superseded by a
-            # truth sibling (e.g. when `clin_chem_truth_male` and the older
-            # `male_clin_chem` both ended up in integrated.json).  Without
-            # this step build_table_data produces two TableRows per
-            # endpoint and the customer-facing tables show every endpoint
-            # twice with conflicting mean/SE and BMD columns.  See the
-            # _dedup_legacy_apical_experiments docstring for the full
-            # rationale and the legacy-vs-truth tradeoff.
-            apical_integrated = _dedup_legacy_apical_experiments(apical_integrated)
+            # NOTE: legacy-vs-truth deduplication used to happen here via
+            # _dedup_legacy_apical_experiments().  As of ADR-0001 step 4
+            # that responsibility moved into the BMDProject schema —
+            # load_integrated() returns already-deduped data and
+            # save_integrated() rejects duplicates outright.  No fix-up
+            # is needed in the processing path.
 
             loop = asyncio.get_running_loop()
             table_data = await loop.run_in_executor(
