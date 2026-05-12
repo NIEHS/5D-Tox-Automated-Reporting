@@ -42,6 +42,7 @@ from style_learning import (
 from pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
+    load_integrated,
 )
 from server_state import (
     get_bm2_uploads,
@@ -1268,20 +1269,19 @@ async def api_get_experiment_metadata(dtxsid: str):
         "approved": true/false
       }
     """
-    sess_path = session_dir(dtxsid)
-    json_path = sess_path / "integrated.json"
-
-    if not json_path.exists():
+    # Route through the schema-validating loader (ADR-0001).  Returns
+    # None when no integrated.json exists for this session; raises
+    # BMDProjectValidationError if the file is on disk but malformed
+    # (handled globally in background_server.py → 422).
+    integrated = load_integrated(dtxsid)
+    if integrated is None:
         return JSONResponse(
             {"error": "No integrated data found"}, status_code=404,
         )
 
-    try:
-        integrated = json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        return JSONResponse(
-            {"error": f"Failed to read integrated data: {e}"}, status_code=500,
-        )
+    # sess_path is still needed below for sibling artifacts (e.g.
+    # metadata_approved.json).  load_integrated() doesn't surface it.
+    sess_path = session_dir(dtxsid)
 
     # Extract experiment summaries with their metadata
     experiments = []

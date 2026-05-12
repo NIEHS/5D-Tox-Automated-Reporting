@@ -51,6 +51,55 @@ app = FastAPI(
 
 
 # ---------------------------------------------------------------------------
+# Schema-validation error handler — ADR-0001 (BMDProject load barrier).
+#
+# Any endpoint that calls `load_integrated()` may raise
+# `BMDProjectValidationError` when the integrated.json on disk fails
+# schema validation.  Without this handler that exception would bubble
+# up as a 500 Internal Server Error; with it, we return a structured
+# 422 (Unprocessable Entity) so the UI can surface a useful message
+# instead of a generic crash.
+#
+# 422 is the right status because the *content* of integrated.json is
+# what's wrong — the request itself was well-formed and authenticated.
+# It signals "I understood the request, but the underlying data is
+# semantically invalid for this operation."
+# ---------------------------------------------------------------------------
+
+from bmd_project_schema import BMDProjectValidationError
+
+
+@app.exception_handler(BMDProjectValidationError)
+async def bmdproject_validation_error_handler(
+    request: Request, exc: BMDProjectValidationError,
+):
+    """
+    Translate a load-barrier validation failure to a 422 with structured
+    detail.  The session id (carried on `exc.source`) and the first
+    Pydantic error are included so the UI can show the user something
+    more useful than "server error."
+    """
+    # Pull the first per-field error out of the wrapped pydantic.ValidationError
+    # for a tight summary.  Full structured details are also available
+    # if the UI ever wants them.
+    errors = exc.pydantic_error.errors()
+    first = errors[0] if errors else {}
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Integrated dataset failed schema validation.",
+            "source": exc.source,
+            "first_error": {
+                "loc": ".".join(str(x) for x in first.get("loc", ())),
+                "msg": first.get("msg", ""),
+                "type": first.get("type", ""),
+            },
+            "error_count": len(errors),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # User gate — lightweight access control via ?user= query parameter.
 #
 # If ALLOWED_USERS is set (comma-separated list), every /api/ request must
