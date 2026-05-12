@@ -204,11 +204,130 @@ class TestRealSessionIntegratedJson:
             pytest.skip(f"session fixture not present at {path}")
         raw = json.loads(path.read_text())
         out = load_and_validate(raw, source="DTXSID50469320")
-        # Smoke checks: 26 experiments in the known-good session,
-        # _meta envelope round-trips, and the Java result lists are
-        # preserved.
-        assert len(out["doseResponseExperiments"]) == 26
+        # As of ADR-0001 step 4, the schema's pre-validator dedupes
+        # legacy apical experiments superseded by truth siblings.
+        # The on-disk session has 26 raw experiments; after dedup,
+        # 10 legacy siblings (Body Weight, Organ Weight, Clinical
+        # Chemistry, Hematology, Hormones — male+female each) are
+        # dropped, leaving 16.
+        assert len(out["doseResponseExperiments"]) == 16
         assert out["_meta"]["dtxsid"] == "DTXSID50469320"
         # Java result lists pass through as extras at the top level.
         assert "williamsTrendResults" in out
         assert "bMDResult" in out
+
+
+# ---------------------------------------------------------------------------
+# Domain invariants (ADR-0001 step 4): legacy/truth dedup + uniqueness
+# ---------------------------------------------------------------------------
+
+def _exp(
+    name: str, platform: str, sex: str, provider: str = "Apical",
+) -> dict:
+    """Helper to build a minimal valid DoseResponseExperiment dict."""
+    return {
+        "name": name,
+        "treatments": [{"name": "0", "dose": 0.0}],
+        "probeResponses": [{"probe": {"id": "X"}, "responses": [1.0]}],
+        "experimentDescription": {
+            "platform": platform,
+            "provider": provider,
+            "sex": sex,
+            "testArticle": {"name": "X", "dsstox": "DTXSID00000000"},
+        },
+    }
+
+
+def _project(*experiments: dict) -> dict:
+    """Helper to build a minimal valid BMDProject dict around experiments."""
+    return {
+        "name": "integrated",
+        "doseResponseExperiments": list(experiments),
+        "_meta": {
+            "dtxsid": "DTXSID00000000",
+            "integrated_at": "2026-05-12T00:00:00+00:00",
+            "source_files": {},
+        },
+    }
+
+
+class TestLegacyTruthDedup:
+    """The pre-validator drops legacy siblings when a truth sibling exists."""
+
+    def test_truth_wins_over_legacy(self):
+        # Both legacy and truth experiments for the same (platform, sex).
+        # After dedup, only the truth one survives.
+        raw = _project(
+            _exp("male_clin_chem", "Clinical Chemistry", "male"),
+            _exp("clin_chem_truth_male", "Clinical Chemistry", "male"),
+        )
+        out = load_and_validate(raw, source="test")
+        names = [e["name"] for e in out["doseResponseExperiments"]]
+        assert names == ["clin_chem_truth_male"]
+
+    def test_no_truth_means_no_dedup(self):
+        # Two non-truth experiments for the same (platform, sex) — the
+        # pre-validator can't choose, so it leaves both.  The post-
+        # validator then catches the duplicate as an invariant failure.
+        raw = _project(
+            _exp("male_clin_chem_v1", "Clinical Chemistry", "male"),
+            _exp("male_clin_chem_v2", "Clinical Chemistry", "male"),
+        )
+        with pytest.raises(BMDProjectValidationError) as exc:
+            load_and_validate(raw, source="test")
+        # The error message names both experiments so the caller can
+        # diagnose which (platform, sex) bucket exploded.
+        msg = str(exc.value)
+        assert "Clinical Chemistry" in msg
+        assert "male" in msg
+
+    def test_lone_experiment_untouched(self):
+        # Single experiment per (platform, sex) — no dedup, no error.
+        raw = _project(
+            _exp("male_clin_chem", "Clinical Chemistry", "male"),
+        )
+        out = load_and_validate(raw, source="test")
+        assert len(out["doseResponseExperiments"]) == 1
+
+
+class TestApicalUniquenessInvariant:
+    """The post-validator enforces (platform, sex) uniqueness on apical data."""
+
+    def test_two_truth_experiments_fail(self):
+        # Two truth-named experiments — pre-validator can't dedup
+        # (both have _truth_ in name), so the post-validator fires.
+        raw = _project(
+            _exp("clin_chem_truth_male_a", "Clinical Chemistry", "male"),
+            _exp("clin_chem_truth_male_b", "Clinical Chemistry", "male"),
+        )
+        with pytest.raises(BMDProjectValidationError):
+            load_and_validate(raw, source="test")
+
+    def test_genomics_multi_organ_allowed(self):
+        # BioSpyder genomics legitimately has Kidney + Liver under the
+        # same (platform, sex) — the invariant must exempt them.
+        raw = _project(
+            _exp("Kidney_X_Female_No0", "S1500+_rat", "female", "BioSpyder"),
+            _exp("Liver_X_Female_No0",  "S1500+_rat", "female", "BioSpyder"),
+        )
+        out = load_and_validate(raw, source="test")
+        # Both survive: BioSpyder is exempt from the invariant.
+        assert len(out["doseResponseExperiments"]) == 2
+
+    def test_different_sexes_allowed(self):
+        # Same platform, different sexes — not a duplicate.
+        raw = _project(
+            _exp("male_clin_chem",   "Clinical Chemistry", "male"),
+            _exp("female_clin_chem", "Clinical Chemistry", "female"),
+        )
+        out = load_and_validate(raw, source="test")
+        assert len(out["doseResponseExperiments"]) == 2
+
+    def test_different_platforms_allowed(self):
+        # Same sex, different platforms — not a duplicate.
+        raw = _project(
+            _exp("male_clin_chem", "Clinical Chemistry", "male"),
+            _exp("male_organ_weights", "Organ Weight", "male"),
+        )
+        out = load_and_validate(raw, source="test")
+        assert len(out["doseResponseExperiments"]) == 2
