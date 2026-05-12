@@ -44,6 +44,10 @@ import orjson
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
+from bmd_project_schema import (
+    BMDProjectValidationError,
+    load_and_validate as _load_and_validate_bmd_project,
+)
 from session_store import session_dir as _session_dir_imported
 from llm_helpers import (
     llm_generate_json as _llm_generate_json_imported,
@@ -1362,16 +1366,27 @@ def _enrich_source_experiment_counts(
 
 def _load_integrated(dtxsid: str) -> dict | None:
     """
-    Load the integrated BMDProject for a session.
+    Load and schema-validate the integrated BMDProject for a session.
 
     Prefers the in-memory cache (_integrated_pool).  Falls back to reading
     sessions/{dtxsid}/integrated.json from disk and populating the cache.
+
+    Schema validation runs on every call (whether the data came from the
+    cache or freshly off disk).  This makes _load_integrated the single
+    runtime barrier between bmdx-pipe's BMDProject format and rlm-bmdx's
+    downstream consumers — anything this function returns is guaranteed
+    to conform to `bmd_project_schema.BMDProject`.  The cost is one
+    Pydantic validation per call (sub-100ms on real session data), which
+    is acceptable on every API hit.  See ADR-0001 for the design.
 
     The _category_lookup is stored in a separate sidecar file
     (_category_lookup.json) to keep integrated.json lean for fast summary
     loads.  It's merged back into the in-memory dict on first access.
 
     Returns None if no integrated data exists (caller should return 400).
+    Raises BMDProjectValidationError if integrated.json fails the schema
+    check — FastAPI handlers catch it as a ValueError subclass and
+    translate to a structured 4xx response.
     """
     integrated = _integrated_pool.get(dtxsid)
     if integrated is None:
@@ -1399,6 +1414,28 @@ def _load_integrated(dtxsid: str) -> dict | None:
                         integrated["_category_lookup"] = {}
 
             _integrated_pool[dtxsid] = integrated
+
+    # Validate the (possibly cached) data against the schema before
+    # returning.  Validating on every call rather than once per cache
+    # population means fresh-from-integration data is gated too — see
+    # ADR-0001 for why we accepted the per-call cost.  The validated
+    # form is written back to the cache so subsequent calls operate on
+    # the dict-dump form (which is shape-equivalent to the original
+    # plus the model's normalizations).
+    if integrated is not None:
+        try:
+            integrated = _load_and_validate_bmd_project(
+                integrated, source=f"DTXSID={dtxsid}",
+            )
+        except BMDProjectValidationError:
+            # Re-raise after logging.  Don't swallow — the whole point
+            # of the barrier is to surface contract violations loudly.
+            logger.exception(
+                "BMDProject schema validation failed for %s", dtxsid,
+            )
+            raise
+        _integrated_pool[dtxsid] = integrated
+
     return integrated
 
 
