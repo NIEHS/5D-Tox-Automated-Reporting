@@ -1452,6 +1452,67 @@ load_integrated = _load_integrated
 
 
 # ---------------------------------------------------------------------------
+# Schema-validated writer for integrated.json
+# ---------------------------------------------------------------------------
+# Implements ADR-0001 commit-sequence step 3.  Mirrors `load_integrated`
+# on the write side: a single chokepoint where every mutation of
+# integrated.json passes through the BMDProject schema validator before
+# touching disk.  Without this, the metadata-edit code path in
+# session_routes.py could persist invalid data (e.g. a typo in the sex
+# field) that would only be caught on the NEXT read — by which time the
+# .bm2 re-export, approval marker, and cache invalidation may have
+# already happened against bad data.
+def save_integrated(dtxsid: str, data: dict) -> dict:
+    """
+    Validate-then-write integrated.json for a session.
+
+    Runs the BMDProject schema over `data` first; only on a successful
+    validation does anything touch disk.  After the write, updates the
+    in-memory `_integrated_pool` cache so subsequent `load_integrated`
+    calls return the new content without re-reading from disk.
+
+    Args:
+        dtxsid: Session identifier (DTXSID).  The integrated.json path
+                is derived from this via `_session_dir`.
+        data:   The dict to persist.  Should already be in BMDProject
+                shape — typically the result of a `load_integrated`
+                call followed by in-place edits to
+                `experimentDescription` fields or similar.
+
+    Returns:
+        The validated (and round-tripped through the model) dict.
+        Callers that need a guaranteed-clean copy can rely on this
+        return value rather than the input.
+
+    Raises:
+        BMDProjectValidationError: when `data` does not match the
+        schema.  Nothing is written in this case; the existing
+        integrated.json on disk is untouched.  The global FastAPI
+        handler in `background_server.py` translates this to a 422.
+    """
+    # Validation FIRST — only persist what passes the schema.  This is
+    # the load barrier inverted: invalid data never reaches disk in the
+    # first place, so we don't have to clean up after a bad write.
+    validated = _load_and_validate_bmd_project(
+        data, source=f"DTXSID={dtxsid}",
+    )
+
+    # Write the validated form (after model round-trip) so the file on
+    # disk is the canonical post-model shape — never the raw input.
+    session = _session_dir(dtxsid)
+    integrated_path = session / "integrated.json"
+    integrated_path.write_text(
+        json.dumps(validated, indent=2), encoding="utf-8",
+    )
+
+    # Keep the in-memory cache consistent with disk.  Future
+    # `load_integrated` calls hit the cache and re-validate (cheap),
+    # but they should see the just-written content immediately.
+    _integrated_pool[dtxsid] = validated
+    return validated
+
+
+# ---------------------------------------------------------------------------
 # Per-section cache infrastructure
 # ---------------------------------------------------------------------------
 # Instead of one monolithic cache that invalidates on ANY parameter change,

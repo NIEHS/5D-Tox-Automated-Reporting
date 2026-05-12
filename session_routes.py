@@ -42,7 +42,7 @@ from style_learning import (
 from pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
-    load_integrated,
+    load_integrated, save_integrated,
 )
 from server_state import (
     get_bm2_uploads,
@@ -1348,10 +1348,11 @@ async def api_save_experiment_metadata(dtxsid: str, request: Request):
     Also writes a metadata_approved.json marker so the UI knows the
     user has explicitly reviewed and approved the metadata.
     """
-    sess_path = session_dir(dtxsid)
-    json_path = sess_path / "integrated.json"
-
-    if not json_path.exists():
+    # Route the read through the schema-validating loader (ADR-0001).
+    # Returns None when no integrated.json exists; raises
+    # BMDProjectValidationError on a malformed file (→ 422 globally).
+    integrated = load_integrated(dtxsid)
+    if integrated is None:
         return JSONResponse(
             {"error": "No integrated data found"}, status_code=404,
         )
@@ -1364,12 +1365,10 @@ async def api_save_experiment_metadata(dtxsid: str, request: Request):
             {"error": "No metadata provided"}, status_code=400,
         )
 
-    try:
-        integrated = json.loads(json_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        return JSONResponse(
-            {"error": f"Failed to read integrated data: {e}"}, status_code=500,
-        )
+    # sess_path is still needed below for sibling artifacts (the .bm2
+    # re-export target and the approval marker).
+    sess_path = session_dir(dtxsid)
+    json_path = sess_path / "integrated.json"
 
     # Apply user-edited metadata to each experiment
     updated_count = 0
@@ -1379,9 +1378,12 @@ async def api_save_experiment_metadata(dtxsid: str, request: Request):
             exp["experimentDescription"] = metadata_by_name[name]
             updated_count += 1
 
-    # Write updated integrated.json
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(integrated, f, indent=2)
+    # Write through the schema-validating writer (ADR-0001 step 3).
+    # If the user submitted metadata that violates the schema (e.g. a
+    # mistyped sex value), validation fails BEFORE disk is touched and
+    # the global handler returns a structured 422 — the on-disk file
+    # is left untouched.
+    save_integrated(dtxsid, integrated)
 
     # Re-export .bm2 with the approved metadata
     bm2_path = sess_path / "integrated.bm2"
