@@ -227,12 +227,19 @@ def build_clinical_pathology_table_from_sidecar(
                 bmd_str = stat_row.get("bmd_str", "\u2014")
                 bmdl_str = stat_row.get("bmdl_str", "\u2014")
                 trend_marker = stat_row.get("trend_marker", "")
+                # `responsive` is the Jonckheere+Dunnett gate (see
+                # body_weight_table.py docstring at line 49).  Carried into
+                # the row dict so the HTML preview and Typst template can
+                # bold responsive endpoints \u2014 the NIEHS-style visual cue
+                # for "this endpoint contributed a BMD."
+                responsive = stat_row.get("responsive", False)
             else:
                 label = stat_row.label
                 vbd = stat_row.values_by_dose
                 bmd_str = stat_row.bmd_str
                 bmdl_str = stat_row.bmdl_str
                 trend_marker = stat_row.trend_marker
+                responsive = getattr(stat_row, "responsive", False)
 
             # BMD/BMDL display: pass through the .bm2-sourced values directly.
             # BMDExpress 3 modeling and NTP statistical significance are
@@ -268,6 +275,7 @@ def build_clinical_pathology_table_from_sidecar(
                 "values": values,
                 "bmd": bmd_text,
                 "bmdl": bmdl_text,
+                "responsive": bool(responsive),
             }
             if trend_marker:
                 entry["trend_marker"] = trend_marker

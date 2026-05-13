@@ -1226,19 +1226,30 @@
         for r in rows-data {
           let label = r.at("label", default: "")
           let row-markers = r.at("markers", default: (:))
-          let row = (label,)
+          // Bold the whole row when the endpoint passed the NTP
+          // Jonckheere+Dunnett gate.  Set by clinical_pathology_table.py
+          // (other apical builders simply don't carry the flag, so their
+          // rows render at the default weight).  The wrapper is a no-op
+          // when responsive is false.
+          let responsive = r.at("responsive", default: false)
+          let cell-fmt = if responsive {
+            c => text(weight: "bold", c)
+          } else {
+            c => c
+          }
+          let row = (cell-fmt(label),)
           for dose in doses {
             let val = r.at("values", default: (:)).at(str(dose), default: "")
             let marker = row-markers.at(str(dose), default: none)
             if marker != none {
-              row += ([#val#super[#marker]],)
+              row += (cell-fmt([#val#super[#marker]]),)
             } else {
-              row += (str(val),)
+              row += (cell-fmt(str(val)),)
             }
           }
           row += (
-            str(r.at("bmd", default: "")),
-            str(r.at("bmdl", default: "")),
+            cell-fmt(str(r.at("bmd", default: ""))),
+            cell-fmt(str(r.at("bmdl", default: ""))),
           )
           tbl-rows += (row,)
         }
@@ -1700,8 +1711,15 @@
 
           let cluster-path = chart-entry.at("cluster_path", default: none)
           if cluster-path != none {
+            // The cluster scatter is 1000×(29N+72) px where N = number of
+            // gene-overlap clusters.  For dense organs (~70 clusters) the
+            // PNG is over 2000 px tall — at width: 90% on US-letter that
+            // renders to ~12.5 in, overflowing the 9 in content area and
+            // truncating the top rows.  Cap the height so Typst scales the
+            // image down to fit, preserving aspect ratio (the resulting
+            // narrower image is centered on the page).
             figure(
-              image(cluster-path, width: 90%, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity — " + chart-label),
+              image(cluster-path, height: 8in, alt: "Category cluster scatter plot showing GO terms grouped by gene-overlap similarity — " + chart-label),
               caption: text(size: 9pt, style: "italic", chart-entry.at("cluster_caption", default: "")),
             )
           }

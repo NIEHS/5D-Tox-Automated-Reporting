@@ -705,7 +705,13 @@ function _renderClusterChart(geneSets, data, clusters) {
             const count = geneClusterCounts[p.geneCluster];
             const idx = geneClusterIndex[p.go_id];
             const spread = Math.min(count, 10);
-            return baseY + (idx / Math.max(spread, 1) - 0.5) * 0.5;
+            // Cycle idx through [0, spread) so the jitter offset stays in
+            // ±0.25 regardless of how many points share a cluster.  See the
+            // matching comment in genomics_viz.py — without the modulo the
+            // most responsive cluster's high-idx points drift above the
+            // plot's clip rect and disappear from the rendered chart.
+            const idxNorm = idx % Math.max(spread, 1);
+            return baseY + (idxNorm / Math.max(spread, 1) - 0.5) * 0.5;
         });
 
         const sizes = pts.map(p => Math.max(6, Math.min(30, p.n_genes * 0.5 + 5)));

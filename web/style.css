@@ -1333,6 +1333,15 @@ header p {
     font-weight: 600;
 }
 
+/* Bold the whole row when the endpoint passed the NTP gate (responsive).
+   Set by cards.js when row.responsive is truthy.  Visual cue, NIEHS-style,
+   for "this endpoint contributed a BMD."  Uses font-weight:700 to be one
+   step heavier than the always-semi-bold endpoint-label (600), so the
+   row reads as bold across every column. */
+.table-preview tr.responsive-row td {
+    font-weight: 700;
+}
+
 .table-preview .bmd-col {
     background: #fefce8;
 }
