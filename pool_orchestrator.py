@@ -1607,14 +1607,25 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+# Bump when the sections cache schema changes (new fields on row dicts,
+# renamed keys, etc.).  Changing this forces all existing sections caches
+# to miss on the next reprocess even if NTP inputs are unchanged.
+_SECTIONS_CACHE_SCHEMA_VERSION = 2  # bumped: clinical-pathology rows now carry `responsive`
+
+
 def _hash_sections(ntp_hash: str, compound_name: str, dose_unit: str) -> str:
     """
     Hash inputs that affect section card building.
 
     Depends on NTP stats output (via ntp_hash) plus display parameters
     that affect narrative text.  dtxsid is implicit (cache directory).
+
+    A schema_version is folded in so that adding/renaming row-dict fields
+    (e.g. the `responsive` flag for clinical-pathology bolding) forces a
+    miss even when the upstream inputs haven't changed.
     """
     key = json.dumps({
+        "schema_version": _SECTIONS_CACHE_SCHEMA_VERSION,
         "ntp": ntp_hash,
         "compound_name": compound_name,
         "dose_unit": dose_unit,
@@ -1648,6 +1659,13 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
 _GENOMICS_CACHE_SCHEMA_VERSION = 3  # bumped: added adversity_signatures
+
+# Bump when the chart-rendering algorithm changes (jitter formula,
+# axis configuration, etc.) without changing the underlying gene-set
+# inputs.  Mixed into charts_hash on top of genomics_hash, so the
+# chart cache invalidates while the (slow + LLM-costed) genomics
+# pipeline cache stays warm.
+_CHARTS_CACHE_SCHEMA_VERSION = 2  # bumped: bounded jitter (no clipped top-cluster points)
 
 
 def _hash_genomics(
@@ -3223,7 +3241,20 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # gene sets that feed the charts).  Chart images are base64 PNGs.
         chart_images = []
         if genomics_sections:
-            charts_hash = genomics_hash  # same inputs → same cache lifetime
+            # Bump _CHARTS_CACHE_SCHEMA_VERSION (defined near the other
+            # cache schema constants) when the chart-rendering algorithm
+            # itself changes — e.g. when the jitter formula is fixed.
+            # The chart cache normally tracks the genomics_hash so that
+            # changes to which gene sets exist propagate; mixing in the
+            # charts schema version on top of that lets us invalidate
+            # *only* the chart SVGs/PNGs without forcing the (expensive)
+            # genomics + LLM narrative pipeline to re-run.
+            charts_hash = hashlib.sha256(
+                json.dumps({
+                    "genomics_hash": genomics_hash,
+                    "charts_schema": _CHARTS_CACHE_SCHEMA_VERSION,
+                }, sort_keys=True).encode()
+            ).hexdigest()[:16]
             charts_cached = _load_cache(dtxsid, "charts", charts_hash)
 
             # Schema migration: caches written before SVGs were added to

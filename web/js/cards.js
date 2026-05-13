@@ -463,6 +463,12 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
             // All rows rendered as-is (n, day 0, day 5)
             for (const row of rows) {
                 const tr = document.createElement('tr');
+                // Bold the whole row when the endpoint passed the NTP
+                // Jonckheere+Dunnett gate (responsive=true).  This is the
+                // NIEHS-style visual cue for "this endpoint contributed
+                // a BMD" — see clinical_pathology_table.py where the
+                // flag is carried into row data.
+                if (row.responsive) tr.classList.add('responsive-row');
                 tr.innerHTML = `<td class="endpoint-label">${row.label}</td>`;
                 const markers = row.markers || {};
                 for (const dose of doses) {

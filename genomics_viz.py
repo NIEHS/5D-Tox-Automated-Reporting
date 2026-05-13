@@ -705,7 +705,16 @@ def render_chart_images(
         idx = gene_cluster_index[p["go_id"]]
         count = gene_cluster_counts[gc]
         spread = min(count, 10)
-        p["y_jittered"] = base_y + (idx / max(spread, 1) - 0.5) * 0.5
+        # Cycle the per-point index through [0, spread) so the jitter offset
+        # is always bounded in ±0.25.  Without the modulo, idx grows up to
+        # count-1 while spread caps at 10 — so for any cluster with more
+        # than 10 points, idx/spread climbs past 1.0 and pushes points
+        # above (and below) the cluster's band.  Those out-of-band points
+        # then land outside Plotly's plotclip rect and silently vanish —
+        # which is why the most responsive cluster (always the densest)
+        # was missing its top-end points in the rendered chart.
+        idx_norm = idx % max(spread, 1)
+        p["y_jittered"] = base_y + (idx_norm / max(spread, 1) - 0.5) * 0.5
 
     # Group by UMAP semantic cluster for traces — each trace gets one
     # color, matching the UMAP scatter chart's legend exactly.
