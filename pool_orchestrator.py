@@ -41,14 +41,13 @@ from pathlib import Path
 from typing import Any
 
 import orjson
-from fastapi import APIRouter, Request
+from fastapi import Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from bmd_project_schema import (
     BMDProjectValidationError,
     load_and_validate as _load_and_validate_bmd_project,
 )
-from session_store import session_dir as _session_dir_imported
 from llm_helpers import (
     llm_generate_json as _llm_generate_json_imported,
     llm_generate_json_async as _llm_generate_json_async,
@@ -75,71 +74,26 @@ from bmdx_pipe import (
 )
 from apical_bmds import run_bmds_for_endpoints
 
+# Shared state, the FastAPI router, and the path helper have all moved to
+# pool_globals.py so the upcoming split modules can reach for them without
+# importing pool_orchestrator (which would create a load-order cycle, since
+# pool_orchestrator re-exports those same modules' contents for backward
+# compatibility).  Re-imported here under their original names so every
+# function body and external `from pool_orchestrator import ...` keeps
+# working unchanged.
+from pool_globals import (
+    router,
+    _pool_fingerprints,
+    _integrated_pool,
+    _data_uploads,
+    _session_dir,
+    _get_bm2_uploads,
+    get_pool_fingerprints,
+    get_integrated_pool,
+    get_data_uploads,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Shared state
-# ---------------------------------------------------------------------------
-# These module-level dicts hold the in-memory state for the file pool.
-# They are accessed by background_server.py (upload handlers, session restore)
-# via the public accessor functions below.
-
-# Maps dtxsid -> {file_id -> FileFingerprint} for cross-validation.
-# Populated when files are fingerprinted (on upload or validation request).
-# Persisted to disk as validation_report.json per session directory.
-_pool_fingerprints: dict[str, dict[str, FileFingerprint]] = {}
-
-# Maps dtxsid -> merged BMDProject dict from pool integration.
-# Populated by /api/pool/integrate/{dtxsid} and persisted to
-# sessions/{dtxsid}/integrated.json for cross-session restore.
-_integrated_pool: dict[str, dict] = {}
-
-# Maps file_id (UUID string) -> dict with filename, temp_path, type.
-# Used for raw dose-response experimental data (.csv, .txt, .xlsx) extracted
-# from zip archives.  These are BMDExpress-importable input data, not
-# gene-level BMD results.  The client references these by ID in the file pool.
-_data_uploads: dict[str, dict] = {}
-
-
-# ---------------------------------------------------------------------------
-# Direct imports replace the old init_orchestrator() injection pattern.
-# session_store and llm_helpers are leaf modules with no circular dependency.
-# bm2_uploads is imported lazily from server_state to break the import cycle
-# (server_state imports from pool_orchestrator, so we can't import at module level).
-# ---------------------------------------------------------------------------
-
-def _session_dir(dtxsid: str) -> Path:
-    """Return the session directory for a DTXSID, creating it if needed."""
-    return _session_dir_imported(dtxsid)
-
-
-def _get_bm2_uploads() -> dict[str, dict]:
-    """Lazy import of bm2_uploads from server_state to avoid circular import."""
-    from server_state import get_bm2_uploads
-    return get_bm2_uploads()
-
-
-# ---------------------------------------------------------------------------
-# Public accessors for shared state
-# ---------------------------------------------------------------------------
-# background_server.py needs to read/write these dicts from upload handlers
-# and session restore code.  Rather than importing the raw dicts (which would
-# make the dependency invisible), we provide explicit accessor functions.
-
-def get_pool_fingerprints() -> dict[str, dict[str, FileFingerprint]]:
-    """Return the full pool fingerprints dict (dtxsid -> {fid -> fp})."""
-    return _pool_fingerprints
-
-
-def get_integrated_pool() -> dict[str, dict]:
-    """Return the full integrated pool dict (dtxsid -> BMDProject dict)."""
-    return _integrated_pool
-
-
-def get_data_uploads() -> dict[str, dict]:
-    """Return the data uploads dict (file_id -> upload info)."""
-    return _data_uploads
 
 
 # ---------------------------------------------------------------------------
@@ -743,10 +697,11 @@ def ensure_fingerprints(dtxsid: str, force: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# FastAPI router
+# FastAPI route handlers
 # ---------------------------------------------------------------------------
-
-router = APIRouter()
+# The `router` itself is created in pool_globals.py so the upcoming split
+# route modules can register on the same APIRouter.  Decorators below
+# attach handlers to the imported router.
 
 
 @router.post("/api/pool/validate/{dtxsid}")
@@ -1589,6 +1544,17 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # bmd_stat — so switching from "median" to "mean" doesn't re-run the
 # 8-minute pybmds session.
 
+# Bump when something OTHER than the hashed inputs changes how NTP
+# TableRows come out — e.g. a change in bmd_project_schema that alters
+# the integrated dict at load time.  _hash_ntp deliberately hashes only
+# experiment identity (names + count), so a change like the bMDResult
+# repointing in `_repoint_bmd_results_to_truth` — which mutates refs but
+# not experiment names — is invisible to the hash and would otherwise
+# serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
+# folds in ntp_hash, bumping here also cascades the sections cache.
+_NTP_CACHE_SCHEMA_VERSION = 2  # bumped: schema repoints bMDResult refs onto truth siblings
+
+
 def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     """
     Hash inputs that affect NTP stats computation.
@@ -1597,9 +1563,15 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     the primary BMD statistic (affects category lookup → BMD/BMDL
     values on TableRows).  xlsx_rosters are part of _meta and only
     change on re-integration, which deletes all caches anyway.
+
+    A schema_version is folded in so that changes in how the integrated
+    dict is normalized at load time (e.g. the bMDResult repointing in
+    bmd_project_schema) force a cache miss even when experiment identity
+    is unchanged.
     """
     experiments = integrated.get("doseResponseExperiments", [])
     key = json.dumps({
+        "schema_version": _NTP_CACHE_SCHEMA_VERSION,
         "bmd_stat": bmd_stat,
         "n_experiments": len(experiments),
         "experiment_names": sorted(e.get("name", "") for e in experiments),
@@ -1610,7 +1582,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 2  # bumped: clinical-pathology rows now carry `responsive`
+_SECTIONS_CACHE_SCHEMA_VERSION = 7  # bumped: organ-weight + body-weight rows now carry `emphasize` (bold-row rule)
 
 
 def _hash_sections(ntp_hash: str, compound_name: str, dose_unit: str) -> str:
@@ -2059,6 +2031,7 @@ def _build_section_cards(
     compound_name: str,
     dose_unit: str,
     dtxsid: str | None = None,
+    imputed_cells: dict | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -2080,6 +2053,13 @@ def _build_section_cards(
         dose_unit:       Dose unit string (e.g., "mg/kg").
         dtxsid:          The DTXSID for this session.  Needed to locate sidecar
                          files for body weight.  If None, the generic path is used.
+        imputed_cells:   The `_meta.imputed_cells` map from the BMDProject
+                         schema — {platform: {sex: {dose: count}}} of dose
+                         groups whose legacy file imputed missing values.
+                         Threaded to the clinical-pathology builder so it
+                         can footnote imputation-backed BMDs.  None when no
+                         imputation was detected (or the data was already
+                         deduped before this load).
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -2160,10 +2140,12 @@ def _build_section_cards(
                     "narrative": narrative,
                     # Pass through body-weight-specific fields that the
                     # Typst template and UI use for specialized rendering.
+                    # `footnotes` is the typed footnote list (legend /
+                    # definition / lettered records); the BMD definition is
+                    # a `definition` record inside it, not a separate key.
                     "first_col_header": bw_result.get("first_col_header"),
                     "caption": bw_result.get("caption"),
                     "footnotes": bw_result.get("footnotes"),
-                    "bmd_definition": bw_result.get("bmd_definition"),
                 })
                 logger.info(
                     "Body Weight section built from sidecar (%d sexes, %d footnotes)",
@@ -2188,12 +2170,17 @@ def _build_section_cards(
                 # All endpoints appear in the table (not just responsive).
                 # The responsive gate controls BMD column values (ND vs numeric),
                 # not row inclusion — matching the body weight pattern.
+                # imputed_cells[platform] tells the builder which dose groups
+                # had values imputed in the legacy file, for the imputation
+                # footnote; None/missing means no imputation for this platform.
+                platform_imputed = (imputed_cells or {}).get(platform)
                 cp_result = build_clinical_pathology_table_from_sidecar(
                     platform=platform,
                     sidecar_paths=sidecar_paths,
                     ntp_stats=sex_rows,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
+                    imputed_cells=platform_imputed,
                 )
 
                 if cp_result.get("table_data"):
@@ -2207,10 +2194,10 @@ def _build_section_cards(
                         "narrative": narrative,
                         "first_col_header": cp_result.get("first_col_header"),
                         "caption": cp_result.get("caption"),
+                        # Typed footnote list — the significance legend and
+                        # BMD definition are `legend`/`definition` records
+                        # inside it, no longer separate keys.
                         "footnotes": cp_result.get("footnotes"),
-                        "bmd_definition": cp_result.get("bmd_definition"),
-                        "significance_explanation": cp_result.get("significance_explanation"),
-                        "significance_marker_legend": cp_result.get("significance_marker_legend"),
                     })
                     logger.info(
                         "%s section built from sidecar (%d sexes)",
@@ -2249,10 +2236,10 @@ def _build_section_cards(
                         "narrative": narrative,
                         "first_col_header": ow_result.get("first_col_header"),
                         "caption": ow_result.get("caption"),
+                        # Typed footnote list — the significance legend and
+                        # BMD definition are `legend`/`definition` records
+                        # inside it, no longer separate keys.
                         "footnotes": ow_result.get("footnotes"),
-                        "bmd_definition": ow_result.get("bmd_definition"),
-                        "significance_explanation": ow_result.get("significance_explanation"),
-                        "significance_marker_legend": ow_result.get("significance_marker_legend"),
                     })
                     logger.info(
                         "Organ Weight section built from sidecar (%d sexes)",
@@ -2957,10 +2944,14 @@ async def api_process_integrated(dtxsid: str, request: Request):
             # narratives from templates) — wrap in executor to avoid
             # blocking the event loop during parallel execution.
             loop = asyncio.get_running_loop()
+            # imputed_cells is recorded on _meta by the BMDProject schema's
+            # legacy/truth dedup — see _dedupe_legacy_apical_pre.
+            imputed_cells = integrated.get("_meta", {}).get("imputed_cells")
             sections = await loop.run_in_executor(
                 None,
                 lambda: _build_section_cards(
-                    platform_tables, compound_name, dose_unit, dtxsid=dtxsid,
+                    platform_tables, compound_name, dose_unit,
+                    dtxsid=dtxsid, imputed_cells=imputed_cells,
                 ),
             )
             # Clinical obs tables bypass Java integration (categorical data).
