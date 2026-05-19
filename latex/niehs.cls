@@ -1,0 +1,111 @@
+% =====================================================================
+% niehs.cls — NIEHS biological potency report document class.
+%
+% Companion to latex_generator.py, which emits report.tex against this
+% class.  This file owns the visual presentation of the report:
+% page geometry, fonts, table chrome, footnote styling.
+%
+% Why a custom class
+% ------------------
+% Per the Option B grilling session (2026-05-19), the LaTeX path uses a
+% hybrid styling model: the generated report.tex uses vanilla
+% \section / \subsection for prose so that Overleaf authors see familiar
+% LaTeX, while this class owns the specialized environments (tables,
+% footnote blocks, future genomics chart layouts) that have NIEHS-specific
+% conventions worth abstracting.
+%
+% Tracer-bullet scope
+% -------------------
+% Minimum needed to compile a narrative-only report end-to-end:
+%   - article-based class with US letter geometry
+%   - threeparttable, graphicx, hyperref, amsmath, lmodern loaded
+%   - placeholder niehstable environment (just \begin{table}\centering ...)
+%
+% Future sessions will flesh out:
+%   - the real niehstable env with caption + threeparttable wrap
+%   - NIEHS-matching heading fonts (Liberation Sans Bold equivalent)
+%   - page numbering switch (roman in front matter, arabic in body)
+%   - landscape layout for wide dose-response tables
+%   - per-table lettered footnote styling
+% =====================================================================
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesClass{niehs}[2026/05/19 NIEHS biological potency report]
+
+% --- Base class ----------------------------------------------------------
+% article gives us \section / \subsection / \subsubsection at H1/H2/H3
+% with article-style numbering ("1", "1.1", "1.1.1"), which we keep for
+% v1.  NIEHS Report 10 uses unnumbered sections; that's a v2 refinement.
+\LoadClass[11pt]{article}
+
+% --- Page geometry -------------------------------------------------------
+% US Letter, 1-inch margins.  Matches NIEHS Report 10 (NBK589955) page
+% block: 6.5in text width, 9in text height, fits expected dose-response
+% table widths at 10pt.
+\RequirePackage{geometry}
+\geometry{
+  letterpaper,
+  margin=1in,
+}
+
+% --- Tables --------------------------------------------------------------
+% threeparttable provides the table + caption + lettered-footnotes idiom
+% we chose in decision #5.  It groups the tabular with its tnotes so the
+% footnotes stay attached even if the table is wrapped in a float.
+\RequirePackage{threeparttable}
+
+% Booktabs for \toprule / \midrule / \bottomrule — cleaner than \hline
+% and conventionally what scientific tables use.  Matches the visual
+% weight of the NIEHS reference report.
+\RequirePackage{booktabs}
+
+% --- Figures -------------------------------------------------------------
+% graphicx for \includegraphics{figures/<chart>.pdf}.  Decision #7: each
+% genomics chart ships as a PDF in the figures/ subdirectory of the
+% Overleaf export bundle.
+\RequirePackage{graphicx}
+
+% --- Math ----------------------------------------------------------------
+% amsmath because the abstract sometimes contains subscripted dose units
+% (BMDL_{1Std}, etc.).  Even if the prose itself doesn't need math, the
+% scaffold abstract uses \textsubscript which behaves better with amsmath
+% loaded.
+\RequirePackage{amsmath}
+
+% --- Fonts ---------------------------------------------------------------
+% lmodern is a free, well-hinted modern roman font that gives pdflatex
+% scalable output.  Computer Modern (the default) renders poorly on
+% screen and is a common Overleaf complaint.  When we want a closer
+% match to the NIEHS Liberation Serif look, swap in a Times-equivalent
+% (mathptmx / newtxtext) — deferred to a typography session.
+\RequirePackage{lmodern}
+
+% --- Links ---------------------------------------------------------------
+% hyperref for blue clickable links (NIEHS Report 10 uses blue links for
+% URLs in the references section).  Loaded last per LaTeX convention so
+% it can hook into the other packages' \section / \caption commands.
+\RequirePackage[
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue,
+]{hyperref}
+
+% --- niehstable environment ---------------------------------------------
+% Placeholder.  Real implementation lands in the table-rendering session
+% (decision #4).  The signature here mirrors how the generator will call
+% it: \begin{niehstable}{<table-id>}{<caption text>} ... \end{niehstable}.
+%
+% For tracer-bullet we just open a centered table float so any test that
+% references the env compiles without erroring.  Tables themselves are
+% not yet emitted by the generator.
+\newenvironment{niehstable}[2]{%
+  \begin{table}[h]\centering%
+  % #1 = table id (e.g., "tbl-body-weight"); used as label anchor later
+  % #2 = caption text; ignored in the stub, will be wired into a real
+  %      \caption call once we have a numbering strategy.
+}{%
+  \end{table}%
+}
+
+\endinput
