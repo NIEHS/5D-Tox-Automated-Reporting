@@ -52,6 +52,7 @@ from __future__ import annotations
 # argparse for the CLI entry point used in the demo workflow.
 
 import argparse
+import json
 import zipfile
 from pathlib import Path
 
@@ -135,6 +136,16 @@ reordering) should not be made in the .tex — those are driven by
 When session data updates (new BMD analysis, fresh narrative), re-export
 from the source app to get a fresh zip.  This is a one-way hand-off:
 edits made in Overleaf do not flow back to the source session.
+
+From a developer terminal in the source repo:
+
+```
+# Scaffold-only bundle (structural skeleton, no chemical-specific data)
+uv run python -m latex_export
+
+# Real-session bundle — overlays cached state from sessions/<dtxsid>/
+uv run python -m latex_export --session --dtxsid DTXSID50469320
+```
 """
 
 
@@ -156,6 +167,259 @@ def _read_class_file() -> str:
             f"cannot ship without the class file."
         )
     return CLASS_FILE.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Session cache loader — turns a session directory into a data dict
+# ---------------------------------------------------------------------------
+
+# Where session caches live.  This module assumes the conventional repo
+# layout: sessions/<DTXSID>/ holds the per-chemical state.
+_SESSIONS_DIR = REPO_ROOT / "sessions"
+
+
+def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
+    """
+    Return the most recently modified file matching the glob, or None.
+
+    Session caches are keyed on a hash of the input fingerprints; when
+    the inputs change a new cache file appears alongside the old one.
+    Picking the newest mtime is the right heuristic for "the active
+    cache" in the absence of a manifest.
+    """
+    candidates = sorted(session_dir.glob(glob_pattern), key=lambda p: p.stat().st_mtime)
+    return candidates[-1] if candidates else None
+
+
+def _load_json(path: Path | None) -> dict | list | None:
+    """Read a JSON file or return None if absent / unreadable."""
+    if path is None or not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def _normalize_apical_section(sec: dict) -> dict:
+    """
+    Convert a `_cache_sections_*.json` section entry into the shape the
+    latex_generator's apical-table handler expects.
+
+    The cache stores `tables_json` as a dict keyed by sex, with each row
+    carrying `values` as a dict keyed by dose value (string form).  The
+    generator expects `table_data` keyed by sex with rows whose `values`
+    are a flat list parallel to the row's `doses` list.  This function
+    translates between the two.
+
+    Why the dict-of-values form exists in the cache
+    -----------------------------------------------
+    The web UI uses the dict-by-dose form so it can render cells in any
+    column order regardless of input.  The LaTeX path renders in a
+    fixed left-to-right tabular, so we flatten back to a list here.
+    """
+    tables_json = sec.get("tables_json")
+    if not isinstance(tables_json, dict):
+        return sec  # already in expected shape or empty
+    table_data: dict[str, list] = {}
+    for sex in ("Male", "Female"):
+        rows = tables_json.get(sex, []) or []
+        normalized_rows: list[dict] = []
+        for row in rows:
+            doses = row.get("doses", []) or []
+            values_dict = row.get("values", {}) or {}
+            values_list: list[str] = []
+            for d in doses:
+                # Try the original string form first; fall back to int-form
+                # for whole-number doses (the cache normalizes "0.0" → "0").
+                keys = [str(d)]
+                if isinstance(d, float) and d.is_integer():
+                    keys.append(str(int(d)))
+                val: str = "—"
+                for k in keys:
+                    if k in values_dict:
+                        val = str(values_dict[k])
+                        break
+                values_list.append(val)
+            normalized_rows.append({
+                "endpoint": row.get("label", ""),
+                "doses": doses,
+                "values": values_list,
+                "bmd": row.get("bmd", "—"),
+                "bmdl": row.get("bmdl", "—"),
+                "is_n_row": bool(row.get("is_n_row", False)),
+            })
+        if normalized_rows:
+            table_data[sex] = normalized_rows
+    out = dict(sec)  # shallow copy so we don't mutate the cache
+    out["table_data"] = table_data
+    out["narrative"] = sec.get("narrative", []) or []
+    return out
+
+
+def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
+    """
+    Convert the `_cache_genomics_*.json` shape into the list-of-sections
+    form data["genomics_sections"] expects.
+
+    Input shape:  {"<organ>_<sex>": {organ, sex, gene_sets_by_stat,
+                  top_genes, ...}, ...}.
+    Output shape: a flat list with two entries per organ_sex pair —
+    one type="gene_set" using gene_sets_by_stat["median"], one
+    type="gene" using top_genes.
+    """
+    out: list[dict] = []
+    if not isinstance(genomics_cache, dict):
+        return out
+    for key in sorted(genomics_cache.keys()):
+        entry = genomics_cache[key]
+        if not isinstance(entry, dict):
+            continue
+        organ = entry.get("organ", "")
+        sex = entry.get("sex", "")
+        # Gene-set entry — pull from gene_sets_by_stat using the median
+        # statistic (the canonical default; the UI lets users switch
+        # but the LaTeX path renders one view).
+        gene_sets = (
+            (entry.get("gene_sets_by_stat") or {}).get("median")
+            or []
+        )
+        out.append({
+            "type": "gene_set",
+            "organ": organ,
+            "sex": sex,
+            "caption": f"Top Gene Sets — {organ.capitalize()}, {sex.capitalize()}",
+            "gene_sets": gene_sets,
+            "go_descriptions": [],
+        })
+        # Gene entry — map gene_symbol → gene to match generator's expected key
+        top_genes_raw = entry.get("top_genes", []) or []
+        top_genes = [
+            {**g, "gene": g.get("gene_symbol") or g.get("gene", "")}
+            for g in top_genes_raw
+        ]
+        out.append({
+            "type": "gene",
+            "organ": organ,
+            "sex": sex,
+            "caption": f"Top Genes — {organ.capitalize()}, {sex.capitalize()}",
+            "top_genes": top_genes,
+            "gene_descriptions": [],
+        })
+    return out
+
+
+def load_session_data(
+    dtxsid: str,
+    chemical_name: str = "Test Article",
+    casrn: str = "000-00-0",
+) -> dict:
+    """
+    Build a report data dict by overlaying a session's cached state onto
+    the canonical scaffold.
+
+    What gets overlaid (when the corresponding cache file exists):
+
+      - data["background"]["paragraphs"]           ← background.json
+      - data["abstract"]["sections"]["Background"] ← background.json:abstract_background
+      - data["bmd_summary"]["endpoints"]           ← _cache_bmd_summary_*.json:apical
+      - data["summary"]["paragraphs"]              ← _cache_summary_generated.json
+      - data["apical_sections"]                    ← _cache_sections_*.json:sections (normalized)
+      - data["unified_narratives"]                 ← _cache_sections_*.json:unified_narratives
+      - data["genomics_sections"]                  ← _cache_genomics_*.json (converted)
+
+    Anything not present in the session caches keeps the scaffold's
+    placeholder content.  This way the bundle always has the full
+    structure; whatever the session has gets surfaced, whatever it
+    doesn't shows as a visible "[pending]" line in Overleaf.
+
+    Args:
+        dtxsid:        Session identifier (folder under sessions/).
+        chemical_name: Display name for titles and captions.  Should
+                       match what's in the session's metadata.
+        casrn:         CASRN for the title page.
+
+    Returns:
+        A data dict the generator can consume.  Falls back to scaffold-
+        only when the session folder doesn't exist.
+    """
+    # Import lazily — scaffold_report_data has heavy transitive deps
+    # (methods_report → llm_helpers → anthropic) we don't want pulled
+    # in when latex_export is imported as a library by the web app.
+    from report_pdf import scaffold_report_data
+
+    data = scaffold_report_data(
+        chemical_name=chemical_name,
+        casrn=casrn,
+        dtxsid=dtxsid,
+    )
+
+    session_dir = _SESSIONS_DIR / dtxsid
+    if not session_dir.exists():
+        # No session on disk — return the scaffold unchanged.  This is
+        # the same behavior the scaffold-only CLI invocation produces.
+        return data
+
+    # ── Background paragraphs + abstract Background sentence ──────────
+    bg = _load_json(session_dir / "background.json")
+    if isinstance(bg, dict):
+        if bg.get("paragraphs"):
+            data["background"] = {
+                "paragraphs": bg["paragraphs"],
+                # Carry references through so a future References handler
+                # can pull them from the same blob.
+                "references": bg.get("references", []),
+            }
+        abs_bg = (bg.get("abstract_background") or "").strip()
+        if abs_bg and isinstance(data.get("abstract"), dict):
+            sections = data["abstract"].setdefault("sections", [])
+            # Replace any existing scaffold "Background" entry rather
+            # than appending a duplicate.
+            replaced = False
+            for s in sections:
+                if isinstance(s, dict) and s.get("label") == "Background":
+                    s["text"] = abs_bg
+                    replaced = True
+                    break
+            if not replaced:
+                sections.insert(0, {"label": "Background", "text": abs_bg})
+
+    # ── BMD summary endpoints ─────────────────────────────────────────
+    bmd_path = _latest(session_dir, "_cache_bmd_summary_*.json")
+    bmd_cache = _load_json(bmd_path)
+    if isinstance(bmd_cache, dict) and bmd_cache.get("apical"):
+        data["bmd_summary"] = {
+            "paragraphs": data.get("bmd_summary", {}).get("paragraphs", []),
+            "endpoints": bmd_cache["apical"],
+        }
+
+    # ── Summary paragraphs ────────────────────────────────────────────
+    summary_cache = _load_json(session_dir / "_cache_summary_generated.json")
+    if isinstance(summary_cache, dict) and summary_cache.get("paragraphs"):
+        data["summary"] = {"paragraphs": summary_cache["paragraphs"]}
+
+    # ── Apical sections + unified narratives ──────────────────────────
+    sections_path = _latest(session_dir, "_cache_sections_*.json")
+    sections_cache = _load_json(sections_path)
+    if isinstance(sections_cache, dict):
+        raw_sections = sections_cache.get("sections", []) or []
+        if raw_sections:
+            data["apical_sections"] = [
+                _normalize_apical_section(s) for s in raw_sections
+            ]
+        unified = sections_cache.get("unified_narratives")
+        if isinstance(unified, dict) and unified:
+            data["unified_narratives"] = unified
+
+    # ── Genomics sections ─────────────────────────────────────────────
+    genomics_path = _latest(session_dir, "_cache_genomics_*.json")
+    genomics_cache = _load_json(genomics_path)
+    if isinstance(genomics_cache, dict) and genomics_cache:
+        converted = _convert_genomics_cache(genomics_cache)
+        if converted:
+            data["genomics_sections"] = converted
+
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +498,7 @@ def _main() -> None:
     from report_pdf import scaffold_report_data
 
     parser = argparse.ArgumentParser(
-        description="Build an Overleaf-ready zip from scaffold report data.",
+        description="Build an Overleaf-ready zip from session or scaffold data.",
     )
     parser.add_argument(
         "--chemical-name",
@@ -249,7 +513,16 @@ def _main() -> None:
     parser.add_argument(
         "--dtxsid",
         default="DTXSID50469320",
-        help="DSSTox ID — used only as a session identifier here",
+        help="DSSTox ID — used as a session identifier when --session is also "
+             "passed; otherwise just metadata for the scaffold path.",
+    )
+    parser.add_argument(
+        "--session",
+        action="store_true",
+        help="Overlay real session content from sessions/<dtxsid>/ on top of "
+             "the scaffold.  Sections without cached data still render as "
+             "visible [pending] placeholders.  Without this flag the bundle "
+             "renders pure scaffold (no session-specific content).",
     )
     parser.add_argument(
         "--out",
@@ -259,16 +532,29 @@ def _main() -> None:
     )
     args = parser.parse_args()
 
-    # Build the scaffold (placeholder front matter + empty body stubs).
-    # When this is wired into the production export endpoint, the call
-    # will route through marshal_export_data to overlay real session
-    # content on top of the scaffold.  For the demo, scaffold alone is
-    # enough to show the document structure.
-    data = scaffold_report_data(
-        chemical_name=args.chemical_name,
-        casrn=args.casrn,
-        dtxsid=args.dtxsid,
-    )
+    # Two build paths:
+    #
+    #   --session   →  load_session_data overlays cached state on the
+    #                  scaffold; the resulting .tex carries real prose,
+    #                  real BMD summary rows, real gene-set rankings,
+    #                  etc.  Used for the customer demo.
+    #
+    #   scaffold-only (no --session)  →  pure boilerplate front matter
+    #                  + empty body stubs.  Used to demonstrate the
+    #                  document structure without coupling to any
+    #                  particular session.
+    if args.session:
+        data = load_session_data(
+            dtxsid=args.dtxsid,
+            chemical_name=args.chemical_name,
+            casrn=args.casrn,
+        )
+    else:
+        data = scaffold_report_data(
+            chemical_name=args.chemical_name,
+            casrn=args.casrn,
+            dtxsid=args.dtxsid,
+        )
 
     bundle = build_overleaf_bundle(data, args.out)
     size_kb = bundle.stat().st_size / 1024

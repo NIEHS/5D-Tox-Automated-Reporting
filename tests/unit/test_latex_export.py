@@ -143,3 +143,132 @@ def test_bundle_without_readme(scaffold, tmp_path):
     assert "report.tex" in names
     assert "niehs.cls" in names
     assert "README.md" not in names
+
+
+# ---------------------------------------------------------------------------
+# Tests — load_session_data and its conversion helpers
+# ---------------------------------------------------------------------------
+
+from latex_export import (
+    _convert_genomics_cache,
+    _normalize_apical_section,
+    load_session_data,
+)
+
+
+def test_normalize_apical_section_flattens_values_dict():
+    """
+    The cache stores row values as a dict keyed by dose-as-string; the
+    generator wants a list parallel to the row's doses.  Verify the
+    translation.
+    """
+    raw = {
+        "platform": "Body Weight",
+        "tables_json": {
+            "Male": [
+                {
+                    "label": "n",
+                    "doses": [0.0, 0.15, 1.0],
+                    "values": {"0": "10", "0.15": "5", "1": "5"},
+                    "bmd": "NA", "bmdl": "NA",
+                    "is_n_row": True,
+                },
+                {
+                    "label": "Day 5",
+                    "doses": [0.0, 0.15, 1.0],
+                    "values": {"0": "245.3", "0.15": "244.8", "1": "240.1"},
+                    "bmd": "8.5", "bmdl": "3.6",
+                },
+            ],
+        },
+    }
+    out = _normalize_apical_section(raw)
+    assert "table_data" in out
+    male_rows = out["table_data"]["Male"]
+    assert len(male_rows) == 2
+    assert male_rows[0]["values"] == ["10", "5", "5"]
+    assert male_rows[0]["is_n_row"] is True
+    assert male_rows[1]["values"] == ["245.3", "244.8", "240.1"]
+    assert male_rows[1]["endpoint"] == "Day 5"
+    assert male_rows[1]["bmd"] == "8.5"
+
+
+def test_normalize_apical_section_handles_missing_dose():
+    """A dose without a values entry must fall back to '—', not KeyError."""
+    raw = {
+        "platform": "Hormones",
+        "tables_json": {
+            "Female": [
+                {
+                    "label": "T4",
+                    "doses": [0.0, 1.0, 10.0],
+                    "values": {"0": "5.5", "10": "3.2"},  # 1.0 missing
+                    "bmd": "—", "bmdl": "—",
+                },
+            ],
+        },
+    }
+    out = _normalize_apical_section(raw)
+    assert out["table_data"]["Female"][0]["values"] == ["5.5", "—", "3.2"]
+
+
+def test_convert_genomics_cache_produces_two_entries_per_organ_sex():
+    """One gene_set entry and one gene entry per (organ, sex) tuple."""
+    cache = {
+        "liver_male": {
+            "organ": "liver", "sex": "male",
+            "gene_sets_by_stat": {
+                "median": [{"rank": 1, "go_id": "GO:1", "go_term": "x",
+                            "bmd": 1.0, "bmdl": 0.5, "n_genes": 10, "direction": "up"}],
+            },
+            "top_genes": [{"rank": 1, "gene_symbol": "FOXP1",
+                           "bmd": 0.1, "bmdl": 0.05, "direction": "down",
+                           "fold_change": -2.5}],
+        },
+    }
+    out = _convert_genomics_cache(cache)
+    assert len(out) == 2
+    types = {e["type"] for e in out}
+    assert types == {"gene_set", "gene"}
+    gene_entry = next(e for e in out if e["type"] == "gene")
+    # gene_symbol → gene rename for generator compatibility
+    assert gene_entry["top_genes"][0]["gene"] == "FOXP1"
+
+
+def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkeypatch):
+    """An unknown dtxsid yields the scaffold unchanged — no crash."""
+    # Point _SESSIONS_DIR at an empty tmp directory so the lookup misses.
+    import latex_export
+    monkeypatch.setattr(latex_export, "_SESSIONS_DIR", tmp_path)
+    data = load_session_data(
+        dtxsid="DTXSID00000000",
+        chemical_name="Test",
+        casrn="00-00-0",
+    )
+    # Scaffold guarantees these keys exist
+    assert "background" in data
+    assert "methods" in data
+    assert "abstract" in data
+
+
+def test_load_session_data_overlays_real_session_when_present():
+    """
+    DTXSID50469320 is the golden session shipped in this repo.  Loading
+    it must overlay real content — verify a few high-signal markers.
+    """
+    data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    # Background prose should be real, not the scaffold's empty list
+    assert data.get("background", {}).get("paragraphs"), \
+        "Real background paragraphs should be loaded"
+    # BMD summary should carry real apical endpoints
+    endpoints = data.get("bmd_summary", {}).get("endpoints", [])
+    assert len(endpoints) > 1, "Real session has many endpoints"
+    # Genomics should be the converted list shape, not the original dict
+    gs = data.get("genomics_sections", [])
+    assert isinstance(gs, list)
+    assert any(e.get("type") == "gene_set" for e in gs)
+    assert any(e.get("type") == "gene" for e in gs)
