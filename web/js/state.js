@@ -226,7 +226,7 @@ const genomicsResults = {};
 // Pre-rendered chart images from process-integrated (Layer 2.5).
 // Array of dicts per organ×sex, each with umap_png, cluster_png, captions,
 // cluster_summary.  Set during process-integrated, passed through to
-// /api/export-pdf so the export never re-renders charts or calls Enrichr.
+// /api/export-overleaf-bundle (or /api/preview-latex-html for previews) so the export never re-renders charts or calls Enrichr.
 let chartImagesCache = null;
 
 // --- Gene Set / Gene BMD body narratives (shared with PDF) ---

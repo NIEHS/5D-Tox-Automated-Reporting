@@ -2,27 +2,31 @@
 Export and style-profile routes for 5dToxReport.
 
 Provides endpoints for exporting the complete NIEHS Report 10-structured
-document as tagged PDF/UA-1, plus managing the global writing style
-profile that the LLM uses to match user preferences.
+document as an Overleaf-ready LaTeX bundle (.zip with report.tex +
+niehs.cls + figures/), plus managing the global writing style profile
+that the LLM uses to match user preferences.
 
-Extracted from background_server.py (Phase 4) to keep the main server
-file focused on app creation, middleware, and router mounting.
+The export pipeline runs:
+
+    marshal_export_data(body)            ← report_pdf.py: data assembly
+        → generate_latex(data, …)        ← latex_generator.py: tree walk
+        → build_overleaf_bundle(data, …) ← latex_export.py: zip writer
 
 Endpoints:
-  GET    /api/style-profile          — Retrieve the global style profile
-  DELETE /api/style-profile/{idx}    — Delete a style rule by index
-  POST   /api/export-pdf             — Export full report to tagged PDF/UA-1
-  GET    /api/export-pdf-scaffold    — Generate scaffold PDF with placeholders
-  GET    /api/export-bm2/{dtxsid}    — Download enriched .bm2 file
+  GET    /api/style-profile             — Retrieve the global style profile
+  DELETE /api/style-profile/{idx}       — Delete a style rule by index
+  POST   /api/export-overleaf-bundle    — Download full report as Overleaf .zip
+  POST   /api/preview-latex-fragment    — Fetch .tex source for one TOC subtree
+  GET    /api/export-bm2/{dtxsid}       — Download enriched .bm2 file
 """
 
 import asyncio
+import io
 import logging
-import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from session_store import safe_filename
 from style_learning import (
@@ -87,35 +91,20 @@ async def api_delete_style_rule(idx: int):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/export-pdf — export full report to tagged PDF/UA-1
+# Helpers for the LaTeX export and preview endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/api/export-pdf")
-async def api_export_pdf(request: Request):
+def _resolve_bm2_into_body(body: dict) -> None:
     """
-    Export the full 5dToxReport to a PDF/UA-1 compliant PDF file.
+    Inline-resolve any apical_sections that reference uploaded .bm2 files.
 
-    Accepts the same JSON payload as /api/export-docx for consistency.
-    Marshals the data into the Typst template schema and compiles it
-    using the Typst compiler (embedded Rust binary via typst-py).
+    The web UI may send bm2_id references instead of inline table_data
+    (it does this to keep the request payload small).  The export
+    pipeline expects fully-inlined table_data, so we look up the
+    cached data from the upload store and splice it in.
 
-    The output PDF has:
-      - Full StructTreeRoot with H1-H3, P, Table/TH/TD/TR tags
-      - PDF/UA-1 identifier in XMP metadata
-      - /Lang set to "en" in the document catalog
-      - /MarkInfo << /Marked true >>
-      - Proper heading hierarchy matching NIEHS Report 10
-      - Running header and page numbers marked as Artifacts
-
-    Returns the PDF file as a downloadable attachment.
+    Mutates body in place.
     """
-    from report_pdf import build_report_pdf, marshal_export_data
-
-    body = await request.json()
-
-    # Resolve table_data for apical sections that reference uploaded .bm2 files.
-    # The web UI may send bm2_id references instead of inline table_data,
-    # so we need to look up the cached data from the upload store.
     _bm2_uploads = get_bm2_uploads()
     for sec in body.get("apical_sections", []):
         if "table_data" not in sec or not sec["table_data"]:
@@ -123,151 +112,121 @@ async def api_export_pdf(request: Request):
             upload = _bm2_uploads.get(bm2_id)
             if upload and upload.get("table_data"):
                 sec["table_data"] = upload["table_data"]
-
-    # Also inject narrative from server cache if not provided inline
-    for sec in body.get("apical_sections", []):
         if not sec.get("narrative_paragraphs"):
             bm2_id = sec.get("bm2_id", "")
             upload = _bm2_uploads.get(bm2_id)
             if upload and upload.get("narrative"):
                 sec["narrative_paragraphs"] = upload["narrative"]
 
-    # Optional section filter for per-tab PDF previews.
-    # When set to "apical", "genomics", or "charts", the marshalled data
-    # is stripped down to only that section — producing a focused PDF
-    # suitable for embedding in a tab's iframe.
-    section_filter = body.get("section_filter")
 
-    # Debug: log apical section data when section filter is active
-    if section_filter:
-        asecs = body.get("apical_sections", [])
-        logger.info(
-            "section_filter=%s, apical_sections=%d, table_data_sizes=%s",
-            section_filter,
-            len(asecs),
-            [(s.get("section_title", "?"), list(s.get("table_data", {}).keys())) for s in asecs],
-        )
+# ---------------------------------------------------------------------------
+# POST /api/export-overleaf-bundle — download the LaTeX Overleaf bundle (zip)
+# ---------------------------------------------------------------------------
 
-    # --- Chart images: read from server-side cache ---
-    # Charts (UMAP scatter, cluster scatter, Enrichr cluster summaries)
-    # are pre-rendered during process-integrated and cached as
-    # _cache_charts_{hash}.json.  Read directly from disk to avoid
-    # round-tripping large base64 PNGs through the client payload.
-    #
-    # Falls back to chart_images in the payload if the cache file
-    # doesn't exist (e.g., no genomics data, or cache was cleared).
-    chart_images = None
-    dtxsid = body.get("dtxsid", "")
-    if dtxsid:
-        session_dir = Path("sessions") / dtxsid
-        charts_files = list(session_dir.glob("_cache_charts_*.json"))
-        if charts_files:
-            try:
-                import orjson
-                chart_images = orjson.loads(charts_files[0].read_bytes())
-                logger.info("Loaded chart images from cache: %s", charts_files[0].name)
-            except Exception:
-                logger.warning("Failed to read charts cache, checking payload")
-    if chart_images is None:
-        chart_images = body.get("chart_images") or None
+@router.post("/api/export-overleaf-bundle")
+async def api_export_overleaf_bundle(request: Request):
+    """
+    Export the full report as an Overleaf-ready zip bundle.
+
+    Accepts the same JSON payload the old /api/export-pdf endpoint did.
+    Marshals it through the shared report_pdf data-assembly pipeline,
+    then renders to a .tex via the LaTeX generator and packages it
+    alongside niehs.cls + figures/ + README.md into a zip the author
+    drags into Overleaf.
+
+    Pipeline:
+      body → marshal_export_data → generate_latex → build_overleaf_bundle
+    """
+    from report_pdf import marshal_export_data
+    from latex_export import build_overleaf_bundle
+
+    body = await request.json()
+    _resolve_bm2_into_body(body)
 
     try:
-        # Marshal the DOCX-format payload into the Typst template schema
-        report_data = marshal_export_data(body, section_filter=section_filter)
-
-        # Compile to PDF/UA-1 — sub-second for typical report sizes.
-        # Chart images are written to temp files alongside the Typst
-        # template so it can reference them as local images.
-        pdf_bytes = build_report_pdf(report_data, chart_images=chart_images)
+        report_data = marshal_export_data(body)
+        # Build the zip in memory.  build_overleaf_bundle writes to a
+        # path, so we pipe through a tmpfile-shaped buffer to keep the
+        # streaming simple and avoid filesystem chatter on every export.
+        import tempfile
+        with tempfile.NamedTemporaryFile(
+            suffix=".zip", prefix="5dtox_bundle_", delete=False,
+        ) as tmp:
+            build_overleaf_bundle(report_data, Path(tmp.name))
+            zip_bytes = Path(tmp.name).read_bytes()
+            Path(tmp.name).unlink(missing_ok=True)
     except Exception as e:
-        logging.exception("PDF export failed")
+        logging.exception("Overleaf bundle export failed")
         return JSONResponse(
-            {"error": f"PDF generation failed: {e}"},
+            {"error": f"Overleaf bundle generation failed: {e}"},
             status_code=500,
         )
 
-    # Write to a temp file for FileResponse
     chemical_name = body.get("chemical_name", "Chemical")
     safe_name = safe_filename(chemical_name)
-    filename = f"5dToxReport_{safe_name}.pdf"
+    filename = f"5dToxReport_{safe_name}_overleaf.zip"
 
-    tmp = tempfile.NamedTemporaryFile(
-        delete=False, suffix=".pdf", prefix="5dtox_",
-    )
-    tmp.write(pdf_bytes)
-    tmp.close()
-
-    return FileResponse(
-        tmp.name,
-        filename=filename,
-        media_type="application/pdf",
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 # ---------------------------------------------------------------------------
-# GET /api/export-pdf-scaffold — generate a scaffold PDF showing all sections
+# POST /api/preview-latex-html — render a section subtree to HTML
 # ---------------------------------------------------------------------------
 
-@router.get("/api/export-pdf-scaffold")
-async def api_export_pdf_scaffold(
-    chemical_name: str = "Test Article",
-    casrn: str = "000-00-0",
-    dtxsid: str = "DTXSID0000000",
-):
+@router.post("/api/preview-latex-html")
+async def api_preview_latex_html(request: Request):
     """
-    Generate a complete scaffold PDF with placeholder content in every section.
+    Render a slice of the report to HTML for the in-app preview iframes.
 
-    This endpoint produces a full NIEHS Report 10-structured PDF with all
-    sections populated by clearly-marked placeholder text (wrapped in angle
-    quotes).  The purpose is to show the exact page flow, typography, table
-    layout, landscape pages, and pagination that the final report will have.
+    Accepts the same payload as /api/export-overleaf-bundle plus an
+    optional "section_filter" field naming a DocNode id.  When set, only
+    that subtree renders (the fragment-compile path); when omitted, the
+    full report renders.
 
-    Every template code path is exercised: title page, roman-numeral front
-    matter (foreword, TOC, tables list, about, peer review, pub details,
-    acknowledgments, abstract), arabic body pages (background, M&M with
-    Table 1, results with landscape dose-response tables, internal dose
-    portrait table, BMD summary sex-grouped table, genomics gene set
-    and gene tables with GO/gene descriptions), summary, and references.
+    Pipeline:
+      body → marshal_export_data → generate_latex(section_filter=…)
+           → preprocess for pandoc → pandoc -t html5 → HTML string
 
-    Query parameters allow customizing the chemical identity on the
-    title page and throughout the document:
-      ?chemical_name=Perfluorohexanesulfonamide&casrn=41997-13-1&dtxsid=DTXSID50469320
-
-    Returns the PDF as a downloadable attachment.
+    The HTML is delivered with text/html so the browser can drop it
+    straight into an iframe via srcdoc.  The preview is intentionally
+    lossy compared to Overleaf's final compile (we substitute the
+    custom niehs.cls + niehstable env for stock LaTeX before pandoc);
+    final rendering remains Overleaf's job.
     """
-    from report_pdf import build_report_pdf, scaffold_report_data
+    from report_pdf import marshal_export_data
+    from latex_html_preview import render_html_preview
+
+    body = await request.json()
+    _resolve_bm2_into_body(body)
+    section_filter = body.get("section_filter")
+
+    if section_filter:
+        # Debug log to help diagnose "preview is empty" reports against
+        # specific TOC nodes.  Tracks the same fields the old PDF path
+        # used to log so existing dashboards / grep recipes keep working.
+        asecs = body.get("apical_sections", [])
+        logger.info(
+            "preview-latex-html section_filter=%s, apical_sections=%d, "
+            "platforms=%s",
+            section_filter, len(asecs),
+            [s.get("platform", "?") for s in asecs],
+        )
 
     try:
-        data = scaffold_report_data(
-            chemical_name=chemical_name,
-            casrn=casrn,
-            dtxsid=dtxsid,
-        )
-        pdf_bytes = build_report_pdf(data)
+        report_data = marshal_export_data(body, section_filter=section_filter)
+        html = render_html_preview(report_data, section_filter=section_filter)
     except Exception as e:
-        logging.exception("Scaffold PDF generation failed")
+        logging.exception("LaTeX → HTML preview failed")
         return JSONResponse(
-            {"error": f"Scaffold PDF generation failed: {e}"},
+            {"error": f"LaTeX preview generation failed: {e}"},
             status_code=500,
         )
 
-    # Clean filename from chemical name
-    safe_name = safe_filename(chemical_name)
-    filename = f"5dToxReport_Scaffold_{safe_name}.pdf"
-
-    tmp = tempfile.NamedTemporaryFile(
-        delete=False, suffix=".pdf", prefix="5dtox_scaffold_",
-    )
-    tmp.write(pdf_bytes)
-    tmp.close()
-
-    return FileResponse(
-        tmp.name,
-        filename=filename,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return Response(content=html, media_type="text/html")
 
 
 # ---------------------------------------------------------------------------

@@ -126,7 +126,7 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
  * ================================================================ */
 
 /**
- * Export the report as a tagged PDF/UA-1 file via /api/export-pdf.
+ * Export the report as an Overleaf-ready zip via /api/export-overleaf-bundle.
  *
  * Uses buildExportPayload() to collect all approved section data,
  * POSTs to the server, and triggers a browser download of the
@@ -139,48 +139,57 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
  * format parameter.
  */
 async function exportDocument() {
+    // Export the report as an Overleaf-ready zip bundle.
+    //
+    // The bundle contains: report.tex (the rendered LaTeX), niehs.cls
+    // (the document class), figures/ (genomics chart PDFs, when wired),
+    // and README.md (Overleaf upload instructions).  The author drops
+    // the zip into Overleaf's "Upload Project" page and compiles there.
+    //
+    // This replaces the Typst → PDF/UA-1 pipeline that lived here
+    // through 2026-05-19.  No PDF is produced by the server anymore.
     const btn = document.getElementById('btn-export');
     if (btn) {
         btn.disabled = true;
         btn.textContent = 'Generating...';
     }
 
-    showBlockingSpinner('Generating PDF...');
+    showBlockingSpinner('Building Overleaf bundle...');
     try {
         const payload = await buildExportPayload();
         const chemicalName = payload.chemical_name || 'Chemical';
 
-        const resp = await fetch('/api/export-pdf', {
+        const resp = await fetch('/api/export-overleaf-bundle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ error: 'PDF export failed' }));
-            showError(err.error || 'PDF export failed');
+            const err = await resp.json().catch(() => ({ error: 'Overleaf bundle export failed' }));
+            showError(err.error || 'Overleaf bundle export failed');
             return;
         }
 
-        // Trigger browser download of the PDF file
+        // Trigger browser download of the zip file
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `5dToxReport_${chemicalName.replace(/[^a-zA-Z0-9 _-]/g, '_')}.pdf`;
+        a.download = `5dToxReport_${chemicalName.replace(/[^a-zA-Z0-9 _-]/g, '_')}_overleaf.zip`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        showToast('Downloaded tagged PDF (PDF/UA-1)');
+        showToast('Downloaded Overleaf bundle — upload to overleaf.com to compile');
     } catch (err) {
-        showError('PDF export error: ' + err.message);
+        showError('Overleaf bundle export error: ' + err.message);
     } finally {
         hideBlockingSpinner();
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Export PDF';
+            btn.textContent = 'Export to Overleaf';
         }
     }
 }
@@ -874,7 +883,7 @@ function markReportDirty() {
  * displaying it in the browser's native PDF viewer via an iframe.
  *
  * Collects all generated section data (same payload as exportPdf),
- * POSTs to /api/export-pdf, receives the compiled PDF/UA-1 bytes,
+ * POSTs to /api/export-overleaf-bundle (export) or /api/preview-latex-html (preview),
  * and sets the iframe src to a blob URL.  The browser's built-in
  * PDF renderer handles pages, zoom, scrolling, and text selection.
  */
@@ -933,7 +942,7 @@ async function renderReportTab() {
  * Collects all generated section data from the DOM and state objects:
  * background paragraphs, references, apical sections (with inline
  * table_data), methods, BMD summary, genomics, summary, and chart
- * images.  Returns a plain object ready to POST to /api/export-pdf.
+ * images.  Returns a plain object ready to POST to /api/export-overleaf-bundle.
  *
  * Used by both compilePdfPreview() (full report) and compileSectionPdf()
  * (per-tab filtered preview) to avoid duplicating the payload assembly.
@@ -943,7 +952,7 @@ async function renderReportTab() {
  * found in the genomics_sections payload.
  *
  * Returns:
- *   Object with all export fields matching the /api/export-pdf schema.
+ *   Object with all export fields matching the /api/export-overleaf-bundle schema.
  */
 async function buildExportPayload() {
     const chemicalName = currentIdentity?.name || 'Chemical';
@@ -999,13 +1008,12 @@ async function buildExportPayload() {
             // to select sections for per-subsection PDF previews.
             platform: info.platform || null,
         };
-        // Body-weight-specific fields from the sidecar builder.
-        // These pass through marshal_export_data to the Typst template
-        // for footnotes, BMD definition line, and Study Day header.
+        // Rule-based builder fields passed through to the Typst template.
+        // `footnotes` is the typed footnote list — the BMD definition line
+        // is a `definition` record inside it, not a separate field.
         if (info.footnotes)      sectionEntry.footnotes = info.footnotes;
         if (info.firstColHeader) sectionEntry.first_col_header = info.firstColHeader;
         if (info.caption)        sectionEntry.caption = info.caption;
-        if (info.bmdDefinition)  sectionEntry.bmd_definition = info.bmdDefinition;
         if (tableNumber && !isNaN(tableNumber)) {
             sectionEntry.table_number = tableNumber;
         }
@@ -1093,13 +1101,18 @@ async function buildExportPayload() {
 
 
 /**
- * Compile the PDF via /api/export-pdf and display it in the iframe.
+ * Compile the full report to HTML via /api/preview-latex-html and
+ * display it in the Report tab's preview iframe.
  *
- * Collects all generated section data (same payload as exportPdf but
- * includes non-approved content too), POSTs to the server, receives
- * the compiled PDF/UA-1 bytes, creates a blob URL, and sets the
- * iframe src.  The browser's native PDF renderer handles everything:
- * pages, zoom, scrolling, text selection, accessibility.
+ * Server pipeline: marshal_export_data → generate_latex → pandoc →
+ * HTML.  The browser renders the HTML inline via iframe.srcdoc — no
+ * blob URLs, no PDF viewer, no Typst.
+ *
+ * Note on naming: the function is still called compilePdfPreview() so
+ * the dozens of HTML/JS call sites don't all need renaming in this
+ * commit.  Despite the name, no PDFs are produced anywhere in the
+ * stack — see the function body and /api/preview-latex-html for the
+ * actual rendering path.
  */
 async function compilePdfPreview() {
     const emptyEl = document.getElementById('report-empty');
@@ -1115,34 +1128,29 @@ async function compilePdfPreview() {
         // Build the shared export payload (all sections, with charts)
         const payload = await buildExportPayload();
 
-        // --- POST to server for Typst compilation ---
-        const resp = await fetch('/api/export-pdf', {
+        // POST to the new LaTeX → HTML preview endpoint
+        const resp = await fetch('/api/preview-latex-html', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ error: 'PDF compilation failed' }));
-            showError(err.error || 'PDF compilation failed');
+            const err = await resp.json().catch(() => ({ error: 'Preview compilation failed' }));
+            showError(err.error || 'Preview compilation failed');
             return;
         }
 
-        // --- Display the PDF in the iframe ---
-        const blob = await resp.blob();
-
-        // Revoke the previous blob URL to free memory
-        if (currentPdfBlobUrl) {
-            URL.revokeObjectURL(currentPdfBlobUrl);
-        }
-        currentPdfBlobUrl = URL.createObjectURL(blob);
-
-        iframe.src = currentPdfBlobUrl;
+        // Render the returned HTML inline via iframe.srcdoc.  Unlike the
+        // old PDF path, no blob URL is created — srcdoc takes the HTML
+        // string directly, which simplifies cleanup (nothing to revoke).
+        const html = await resp.text();
+        iframe.srcdoc = html;
         iframe.classList.remove('hidden');
         emptyEl.classList.add('hidden');
 
     } catch (err) {
-        showError('PDF preview error: ' + err.message);
+        showError('Preview error: ' + err.message);
     } finally {
         if (refreshBtn) {
             refreshBtn.disabled = false;
@@ -1176,7 +1184,7 @@ const _sectionPdfBlobUrls = {};
  *
  * Called by navigateToNode() whenever the active section changes.
  * Builds the full export payload, sets section_filter to the TOC node ID,
- * and sends it to /api/export-pdf.  The server strips everything except
+ * and sends it to /api/preview-latex-html.  The server strips everything except
  * the content belonging to that node.
  *
  * Caches compiled PDFs by node ID so re-visiting a node doesn't recompile.
@@ -1213,13 +1221,11 @@ async function compilePreviewForNode(tocId, force = false) {
     if (completeness && completeness.size > 0 && docTree) {
         const nodeStatus = isNodeComplete(tocId, completeness, docTree);
         if (!nodeStatus.complete) {
-            // Clear cached PDF for this node (data changed)
-            if (_sectionPdfBlobUrls[tocId]) {
-                URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
-                delete _sectionPdfBlobUrls[tocId];
-            }
+            // Invalidate cached HTML for this node (data changed).
+            // No URL.revokeObjectURL needed — we cache strings now, not blob URLs.
+            delete _sectionPdfBlobUrls[tocId];
             // Show the missing-data message in the preview pane
-            frame.src = 'about:blank';
+            frame.srcdoc = '';
             if (status) {
                 const reasons = nodeStatus.missing.map(m => `<li>${m}</li>`).join('');
                 status.innerHTML =
@@ -1232,22 +1238,28 @@ async function compilePreviewForNode(tocId, force = false) {
         }
     }
 
-    // Check cache — reuse existing blob URL if available
+    // Check cache — reuse existing HTML if available.  The cache now
+    // stores HTML strings (was previously PDF blob URLs); same key
+    // shape so the rest of the function is unchanged.
     if (!force && _sectionPdfBlobUrls[tocId]) {
-        frame.src = _sectionPdfBlobUrls[tocId] + '#zoom=75';
+        frame.srcdoc = _sectionPdfBlobUrls[tocId];
         if (status) status.textContent = '';
         return;
     }
 
     // Use the same blocking spinner overlay as validate/integrate/approve.
-    showBlockingSpinner('Compiling PDF preview\u2026');
+    showBlockingSpinner('Rendering preview\u2026');
     if (status) status.textContent = '';
 
     try {
         const payload = await buildExportPayload();
         payload.section_filter = tocId;
 
-        const resp = await fetch('/api/export-pdf', {
+        // POST to the LaTeX -> HTML preview endpoint.  Server runs
+        // marshal_export_data, then generate_latex(section_filter=...),
+        // then pandoc to produce an HTML fragment we can drop straight
+        // into the iframe via srcdoc.
+        const resp = await fetch('/api/preview-latex-html', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -1255,22 +1267,14 @@ async function compilePreviewForNode(tocId, force = false) {
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
-            if (status) status.textContent = err.error || 'Compilation failed';
+            if (status) status.textContent = err.error || 'Preview failed';
             return;
         }
 
-        const blob = await resp.blob();
-
-        // Revoke previous blob URL for this node to free memory
-        if (_sectionPdfBlobUrls[tocId]) {
-            URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
-        }
-        const blobUrl = URL.createObjectURL(blob);
-        _sectionPdfBlobUrls[tocId] = blobUrl;
-
-        // Set 75% zoom via PDF viewer URL fragment.
-        // Most browsers' built-in PDF viewers respect #zoom=N.
-        frame.src = blobUrl + '#zoom=75';
+        const html = await resp.text();
+        _sectionPdfBlobUrls[tocId] = html;  // cache by tocId (key name kept for back-compat)
+        // srcdoc takes the HTML string directly; no blob URL to manage.
+        frame.srcdoc = html;
         if (status) status.textContent = '';
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
@@ -1285,15 +1289,16 @@ function refreshSectionPdf(f) { compilePreviewForNode(f, true); }
 
 
 /**
- * Compile a scaffold PDF — full NIEHS report structure with placeholder
- * content — and display it in the Report tab iframe.
+ * Render the report scaffold (no session data) to HTML and show it in
+ * the Report tab iframe.
  *
- * Called when no sections have been generated yet.  Uses the current
- * test article identity (if set) so the title page, running header,
- * and name forms show the real chemical name rather than defaults.
- *
- * The scaffold endpoint is a simple GET request with query parameters
- * for the chemical identity fields.
+ * Called when no sections have been generated yet.  Goes through the
+ * same /api/preview-latex-html endpoint as compilePdfPreview, but
+ * with a stripped-down payload — no abstract content, no apical
+ * sections — so the server's marshal_export_data falls back to the
+ * full scaffold (empty placeholders everywhere).  The test article
+ * identity fields (name, CASRN, DTXSID) are still passed so the title
+ * page and running header show the right chemical.
  */
 async function compileScaffoldPreview() {
     const emptyEl = document.getElementById('report-empty');
@@ -1306,33 +1311,32 @@ async function compileScaffoldPreview() {
     }
 
     try {
-        // Build query string from current test article identity
         const chemicalName = currentIdentity?.name || 'Test Article';
         const casrn = currentIdentity?.casrn || '';
         const dtxsid = currentIdentity?.dtxsid || '';
 
-        const params = new URLSearchParams({
+        // Minimal payload — just identity fields.  marshal_export_data
+        // produces the full scaffold structure when no body content
+        // (paragraphs, methods_data, apical_sections, etc.) is supplied.
+        const payload = {
             chemical_name: chemicalName,
             casrn: casrn,
             dtxsid: dtxsid,
-        });
+        };
 
-        const resp = await fetch(`/api/export-pdf-scaffold?${params}`);
+        const resp = await fetch('/api/preview-latex-html', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ error: resp.statusText }));
             showError('Scaffold preview error: ' + (err.error || resp.statusText));
             return;
         }
 
-        const blob = await resp.blob();
-
-        // Revoke previous blob URL to prevent memory leaks
-        if (currentPdfBlobUrl) {
-            URL.revokeObjectURL(currentPdfBlobUrl);
-        }
-        currentPdfBlobUrl = URL.createObjectURL(blob);
-
-        iframe.src = currentPdfBlobUrl;
+        const html = await resp.text();
+        iframe.srcdoc = html;
         iframe.classList.remove('hidden');
         emptyEl.classList.add('hidden');
 

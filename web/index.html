@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=13">
+    <link rel="stylesheet" href="/style.css?v=14">
     <!-- Alpine.js — lightweight reactive framework for sidebar TOC navigation.
          Loaded via CDN with defer so it initializes after our state.js registers
          the Alpine store via 'alpine:init' event.  No build step needed.
@@ -193,7 +193,7 @@
                 <!-- ============================================ -->
                 <h2>Step 10 &mdash; Export</h2>
 
-                <p>The <strong>Report</strong> tab contains an integrated PDF viewer that shows a live preview of your report, updated automatically as you approve sections. When you are satisfied with the report, click <strong>Export PDF</strong> to download a tagged PDF/UA-1 generated with Typst.</p>
+                <p>The <strong>Report</strong> tab contains an integrated preview that shows a live LaTeX-rendered HTML view of your report, updated automatically as you approve sections. When you are satisfied with the report, click <strong>Export to Overleaf</strong> to download a zip you can upload to Overleaf for final PDF compilation.</p>
 
                 <hr>
 
@@ -248,7 +248,7 @@
                         <tr><td>Restore a past version</td><td>Open version history, click <strong>Restore</strong> on any entry</td></tr>
                         <tr><td>Upload files</td><td>Drag onto the drop zone, or click to browse</td></tr>
                         <tr><td>Change GO filters</td><td>Gear icon &rarr; GO Category Filters &rarr; Apply &amp; Reprocess</td></tr>
-                        <tr><td>Export PDF</td><td><strong>Report</strong> tab &rarr; <strong>Export PDF</strong></td></tr>
+                        <tr><td>Export to Overleaf</td><td><strong>Report</strong> tab &rarr; <strong>Export to Overleaf</strong></td></tr>
                         <tr><td>Switch views</td><td><strong>Tabbed View</strong> / <strong>Stacked View</strong> button in toolbar</td></tr>
                     </tbody>
                 </table>
@@ -307,7 +307,7 @@
              for automatic show/hide.
              ================================================================ -->
         <!-- ================================================================
-             PDF Preview Pane — persistent, auto-compiles for active TOC node.
+             Preview Pane — persistent, auto-renders LaTeX→HTML for active TOC node.
              Positioned between sidebar and content drawer.  Open by default.
              ================================================================ -->
         <div class="preview-pane" id="preview-pane" x-data
@@ -315,7 +315,7 @@
              style="display:none">
             <div class="preview-body" x-show="$store.app.previewVisible">
                 <div class="preview-toolbar">
-                    <span class="preview-title" id="preview-title">PDF Preview</span>
+                    <span class="preview-title" id="preview-title">Preview</span>
                     <button class="btn-small" onclick="recompilePreview()">Recompile</button>
                 </div>
                 <div class="preview-status" id="preview-status"></div>
@@ -588,7 +588,7 @@
                         <div class="version-dropdown" id="version-dropdown-bg" style="display:none"></div>
                     </span>
                     <button class="btn-action" onclick="event.stopPropagation(); copyToClipboard()">Copy</button>
-                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocument()" disabled>Export PDF</button>
+                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocument()" disabled>Export to Overleaf</button>
                 </div>
             </div>
 
@@ -750,7 +750,7 @@
              x-data x-show="$store.app.activeSection === 'gene-sets' || ($store.app.activeSection || '').startsWith('gene-set-')"
              style="display:none;">
             <h2>Gene Set Benchmark Dose Analysis</h2>
-            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')" style="margin-bottom:0.5rem">PDF Preview</button>
+            <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('genomics')" style="margin-bottom:0.5rem">Preview</button>
             <!-- Section intro — methodology + interpretation caveat paragraphs
                  from gene_set_narrative.intros.  Populated by
                  _rebuildGenomicsIntros() in genomics.js after the server-derived
@@ -829,7 +829,7 @@
                         </div>
                         <iframe id="bmd_summary-pdf-frame" class="section-pdf-frame"></iframe>
                     </div>
-                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary')" style="margin-top:0.5rem">PDF Preview</button>
+                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary')" style="margin-top:0.5rem">Preview</button>
                 </div>
             </div>
 
@@ -851,7 +851,7 @@
                         </div>
                         <iframe id="bmd_summary_bmds-pdf-frame" class="section-pdf-frame"></iframe>
                     </div>
-                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary_bmds')" style="margin-top:0.5rem">PDF Preview</button>
+                    <button class="btn-small section-pdf-tab-btn" onclick="toggleSectionPdfPreview('bmd_summary_bmds')" style="margin-top:0.5rem">Preview</button>
                 </div>
             </div>
         </div>
@@ -937,7 +937,7 @@
         <section data-toc-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
-                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-pdf">Export PDF</button>
+                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-pdf">Export to Overleaf</button>
                 <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
                 <button onclick="togglePdfViewer()" class="btn-action" id="btn-toggle-pdf" title="Collapse/expand PDF viewer">&#x25BC;</button>
             </div>
@@ -1044,17 +1044,17 @@
     <script src="/js/settings.js?v=4"></script>
     <script src="/js/layout.js?v=3"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=4"></script>
+    <script src="/js/export.js?v=5"></script>
     <script src="/js/genomics.js?v=11"></script>
     <script src="/js/genomics_charts.js?v=4"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->
     <script src="/js/upload.js?v=9"></script>
-    <script src="/js/cards.js?v=3"></script>
+    <script src="/js/cards.js?v=5"></script>
     <script src="/js/validation.js?v=3"></script>
     <!-- sections.js split into background.js, methods_summary.js, pipeline.js -->
     <script src="/js/background.js?v=1"></script>
     <script src="/js/methods_summary.js?v=1"></script>
-    <script src="/js/pipeline.js?v=7"></script>
+    <script src="/js/pipeline.js?v=8"></script>
     <script src="/js/chemical.js?v=6"></script>
 </body>
 </html>

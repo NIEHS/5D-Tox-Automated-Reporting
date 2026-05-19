@@ -1,23 +1,37 @@
 """
-report_pdf.py — Build a PDF/UA-1 compliant report from approved session data.
+report_pdf.py — Data-assembly helpers for the LaTeX report pipeline.
 
-Compiles the report.typ Typst template with the provided report data,
-producing a tagged PDF with full StructTreeRoot, semantic heading hierarchy
-(H1-H6), proper table structure (TH/TD), XMP metadata, and PDF/UA-1
-identifier.  The output passes the Matterhorn Protocol machine-checkable
-conditions for government 508 compliance.
+This module is the data layer behind /api/export-overleaf-bundle and
+/api/preview-latex-html.  It takes the web UI's accumulated session
+state (the request body) and produces the dict the LaTeX generator
+consumes.
 
-The Typst compiler is embedded in the `typst` Python package (a pre-built
-Rust binary shipped as a wheel — no Rust toolchain needed).  Compilation
-is sub-second for typical report sizes.
+Historical context
+------------------
+This file originally held a `build_report_pdf` function that compiled
+report.typ via the Typst Python wheel to a PDF/UA-1 compliant tagged
+PDF.  When the project cut over to LaTeX (2026-05-19 — "no PDFs, no
+Typst") the Typst compile step was removed and the rendering tail
+became:
+
+    marshal_export_data(body)            ← this file
+        → generate_latex(data, …)        ← latex_generator.py
+        → build_overleaf_bundle(data, …) ← latex_export.py  (full export)
+        → render_html_preview(data, …)   ← latex_html_preview.py  (previews)
+
+The data-assembly logic (`marshal_export_data` and friends) stayed
+because it does real work the new path also needs: bm2 reference
+resolution, abstract Methods/Results/Summary deterministic paragraphs
+from MethodsContext, genomics body narratives, ChemicalIdentity name
+forms, deterministic TOC and table entries, and section_filter trimming.
 
 Usage:
-    from report_pdf import build_report_pdf
-    pdf_bytes = build_report_pdf(report_data_dict)
+    from report_pdf import marshal_export_data, scaffold_report_data
+    data = marshal_export_data(request_body)
+    # ... pass to generate_latex / build_overleaf_bundle / render_html_preview ...
 
-    # report_data_dict matches the JSON schema consumed by report.typ.
-    # All top-level keys are optional — missing sections are simply
-    # omitted from the output.  See the full schema below.
+    # data dict schema (top-level keys are optional; missing sections
+    # render as visible placeholders so the structure stays complete):
     #
     # Front matter:
     #   "foreword":            {"paragraphs": [...]}
@@ -46,138 +60,7 @@ Usage:
 import json
 from pathlib import Path
 
-import typst
-
-
-# --- Path to the Typst template ---
-# Resolved relative to this file so it works regardless of cwd.
-_TEMPLATE_PATH = str(Path(__file__).parent / "report.typ")
-
-
-def build_report_pdf(data: dict, chart_images: list[dict] | None = None) -> bytes:
-    """
-    Compile the NIEHS-styled report to PDF/UA-1.
-
-    Serializes `data` to JSON, passes it to the Typst template via
-    sys.inputs, and compiles with the ua-1 PDF standard.
-
-    If chart_images is provided (list of dicts, one per organ×sex combo,
-    each with umap_png/cluster_png as base64 strings), the PNGs are
-    written to indexed temp files and their paths injected into the data
-    dict so the Typst template can embed them as figures.
-
-    Args:
-        data: Report data dictionary matching the report.typ JSON schema.
-              All top-level keys are optional — missing sections are
-              simply omitted from the output.
-        chart_images: Optional list of dicts, each with base64-encoded PNG
-                      chart images, caption strings, and a label
-                      (e.g., "Liver (Male)").
-
-    Returns:
-        The compiled PDF as raw bytes, ready to write to a file or
-        return as an HTTP response.
-
-    Raises:
-        typst.TypstError: If the template fails to compile (e.g., due
-            to missing alt text on figures under PDF/UA-1 strict mode).
-    """
-    import base64
-    import tempfile
-
-    # Ensure required metadata fields have defaults so PDF/UA-1
-    # validation doesn't fail on missing title or language.
-    data.setdefault("title", "5dToxReport")
-    data.setdefault("author", "5dToxReport")
-
-    # Write chart images to temp files so Typst can reference them.
-    # The temp files are created in the same directory as the template
-    # so Typst's file resolution finds them relative to the root.
-    # Each organ×sex combo produces one UMAP + one cluster scatter
-    # pair, written as indexed files (chart_umap_0.png, etc.).
-    temp_files = []
-    # Chart image injection guard.  Two cases where we skip:
-    #
-    #   1. Front-matter previews — the genomics H2 parent has been stripped,
-    #      so chart H3 headings would cause a PDF/UA-1 heading level skip.
-    #
-    #   2. Body-section previews that DON'T belong to the charts subtree —
-    #      _apply_section_filter strips genomics_charts from the data dict,
-    #      but without this guard we'd re-inject them here, leaking charts
-    #      into unrelated section previews (Background, M&M, etc.).
-    #
-    # We detect case 2 by checking whether data.genomics_charts key was
-    # stripped (will be missing) — if stripped, this is a non-charts section
-    # preview and we should not re-inject.
-    is_fm_preview = data.get("preview_mode") is not None
-    is_stripped_body_preview = (
-        data.get("section_only") and "genomics_charts" not in data
-    )
-    if chart_images and not is_fm_preview and not is_stripped_body_preview:
-        template_dir = Path(_TEMPLATE_PATH).parent
-        charts_list = []
-
-        for i, entry in enumerate(chart_images):
-            entry_data = {
-                "label": entry.get("label", f"Chart {i + 1}"),
-                # organ + sex are preserved so the Typst template can
-                # group charts by organ when rendering them inline within
-                # the per-organ gene-set blocks.  Without these, the
-                # Typst-side filter has no key to match on and falls back
-                # to the legacy "render all charts in a flat list" path.
-                "organ": entry.get("organ", ""),
-                "sex": entry.get("sex", ""),
-            }
-
-            for key, filename in [
-                ("umap_png", f"chart_umap_{i}.png"),
-                ("cluster_png", f"chart_cluster_{i}.png"),
-            ]:
-                b64 = entry.get(key)
-                if not b64:
-                    continue
-                try:
-                    png_bytes = base64.b64decode(b64)
-                    img_path = template_dir / filename
-                    img_path.write_bytes(png_bytes)
-                    temp_files.append(img_path)
-                    # Map "umap_png" → "umap_path", etc.
-                    entry_data[key.replace("_png", "_path")] = filename
-                except Exception:
-                    pass
-
-            # Pass captions and cluster summary through
-            for pass_key in ("umap_caption", "cluster_caption", "cluster_summary"):
-                if entry.get(pass_key):
-                    entry_data[pass_key] = entry[pass_key]
-
-            if "umap_path" in entry_data or "cluster_path" in entry_data:
-                charts_list.append(entry_data)
-
-        if charts_list:
-            data["genomics_charts"] = charts_list
-
-    try:
-        pdf_bytes = typst.compile(
-            _TEMPLATE_PATH,
-            sys_inputs={"data": json.dumps(data, default=str)},
-            # PDF/UA-1 (ISO 14289-1) — enforces:
-            #   - StructTreeRoot with full tag hierarchy
-            #   - /MarkInfo << /Marked true >>
-            #   - PDF/UA identifier in XMP metadata
-            #   - /Lang in the document catalog
-            #   - Compile-time validation of heading order, alt text, etc.
-            pdf_standards=["ua-1"],
-        )
-    finally:
-        # Clean up temp chart image files
-        for f in temp_files:
-            try:
-                f.unlink(missing_ok=True)
-            except Exception:
-                pass
-
-    return pdf_bytes
+from table_builder_common import lettered_footnote, finalize_footnotes
 
 
 def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
@@ -445,17 +328,23 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     if apical_sections:
         data["apical_sections"] = []
         for sec in apical_sections:
+            # The builder already emitted typed footnote records (legend /
+            # definition / lettered) with letters assigned.  Copy the list
+            # so we don't mutate the cached section.
             footnotes = list(sec.get("footnotes", []))
             dose_unit = sec.get("dose_unit", "mg/kg")
+            table_data = sec.get("table_data", {})
 
             # Build per-sex missing-animal footnotes from table row data.
             # Each row may have a missing_animals dict mapping dose → count
-            # (animals that died before terminal sacrifice).  We store these
-            # separately per sex so the Typst template can append the correct
-            # footnote to each sex's table independently.
-            missing_fn = _build_missing_animal_footnotes(
-                sec.get("table_data", {}), dose_unit
+            # (animals that died before terminal sacrifice).  These are typed
+            # `lettered` records; append them and re-run finalize_footnotes so
+            # the whole list is re-lettered consistently (idempotent — it
+            # re-derives row markers from marker_refs each call).
+            footnotes.extend(
+                _build_missing_animal_footnotes(table_data, dose_unit)
             )
+            finalize_footnotes(footnotes, table_data)
 
             # Determine the first column header based on section type.
             # Body weight tables use "Study Day" (the rows are day 0, day 5);
@@ -481,13 +370,12 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 "narrative": _split_narrative(
                     sec.get("narrative_paragraphs") or sec.get("narrative")
                 ),
-                "table_data": sec.get("table_data", {}),
+                "table_data": table_data,
+                # Typed footnote list — legend / definition / lettered
+                # records, with letters assigned and row markers derived.
+                # The old separate missing_animal_footnotes and
+                # bmd_definition keys are folded into this list.
                 "footnotes": footnotes,
-                "missing_animal_footnotes": missing_fn,
-                # BMD/BMDL definition line — rendered above the lettered
-                # footnotes as an unnumbered paragraph.  Only body weight
-                # tables include this (from body_weight_table.py builder).
-                "bmd_definition": sec.get("bmd_definition"),
                 # Platform identifier — used by _apply_section_filter()
                 # to filter sections for per-subsection PDF previews.
                 "platform": sec.get("platform", section_title),
@@ -514,6 +402,20 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 apical_entry["table_number"] = tree_table_num
 
             data["apical_sections"].append(apical_entry)
+
+        # Render in document-tree order (Table 2, 3, 4, ...), not the
+        # alphabetical platform order the orchestrator's sections cache
+        # happens to produce.  Without this, the full report shows
+        # Table 3 (Organ Weight) after Tables 4/5/6 because "Organ
+        # Weight" sorts after "Clinical Chemistry" / "Hematology" /
+        # "Hormones" alphabetically — even though each per-section PDF
+        # preview correctly labels Organ Weight as Table 3.  Sections
+        # without a table_number (shouldn't happen for apical, but is
+        # possible if the document tree doesn't know the platform) sort
+        # to the end; the sort is stable to preserve sibling ordering.
+        data["apical_sections"].sort(
+            key=lambda s: s.get("table_number") or 10_000,
+        )
 
     # Unified narratives — group-level prose spanning multiple platform tables.
     # The NIEHS reference has one narrative for "Animal Condition, Body Weights,
@@ -1608,10 +1510,10 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
 
 def _build_missing_animal_footnotes(
     table_data: dict, dose_unit: str
-) -> dict[str, str]:
+) -> list[dict]:
     """
-    Scan table_data rows for missing-animal annotations and produce
-    per-sex footnote strings for the Typst template.
+    Scan table_data rows for missing-animal annotations and produce typed
+    footnote records for the apical footnote list.
 
     Each row in table_data[sex] may carry a `missing_animals` dict mapping
     dose (as string) to integer count — the number of animals in the xlsx
@@ -1621,14 +1523,16 @@ def _build_missing_animal_footnotes(
 
     We aggregate per sex, taking the max count at each dose across all
     endpoints (since different endpoints may report slightly different N),
-    and produce one footnote per sex, e.g.:
+    and produce one lettered footnote per sex, e.g.:
 
-        "5 animals at 333 mg/kg; 5 animals at 1000 mg/kg did not survive
+        "5 animals at 333 mg/kg; 5 animals at 1,000 mg/kg did not survive
          to terminal sacrifice."
 
-    The result is a dict keyed by sex ("Male", "Female") → footnote string.
-    The Typst template appends each sex's footnote to that sex's table,
-    keeping Male footnotes under the Male table and vice versa.
+    These are typed `lettered` records with `target="none"` — the dose
+    groups are named inline in the text, so no in-table cell marker is
+    needed.  The caller merges them into the section's footnote list and
+    re-runs finalize_footnotes so they pick up the next letters after the
+    builder's own footnotes.
 
     Args:
         table_data: Dict keyed by sex ("Male", "Female"), each value a
@@ -1636,10 +1540,10 @@ def _build_missing_animal_footnotes(
         dose_unit:  Dose unit string (e.g., "mg/kg") for display.
 
     Returns:
-        Dict mapping sex → footnote string.  Empty dict if no missing
-        animals in any sex.
+        List of typed `lettered` footnote records (one per sex with
+        missing animals).  Empty list if no missing animals in any sex.
     """
-    result: dict[str, str] = {}
+    records: list[dict] = []
 
     for sex in ("Male", "Female"):
         rows = table_data.get(sex, [])
@@ -1666,13 +1570,14 @@ def _build_missing_animal_footnotes(
         for d in sorted_doses:
             n = missing_by_dose[d]
             # Format dose: drop decimal for whole numbers (333 not 333.0)
-            d_label = str(int(d)) if d == int(d) else str(d)
+            d_label = f"{int(d):,}" if d == int(d) else str(d)
             parts.append(
                 f"{n} animal{'s' if n > 1 else ''} at {d_label} {dose_unit}"
             )
 
-        result[sex] = (
-            f"{'; '.join(parts)} did not survive to terminal sacrifice."
-        )
+        text = f"{'; '.join(parts)} did not survive to terminal sacrifice."
+        records.append(lettered_footnote(
+            text, f"missing_animal_{sex}", target="none",
+        ))
 
-    return result
+    return records
