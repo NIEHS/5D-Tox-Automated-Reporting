@@ -107,70 +107,11 @@ from methods_prompt import (
     _build_subsection_guidelines,
 )
 
-
-# ---------------------------------------------------------------------------
-# Table 1 builder
-# ---------------------------------------------------------------------------
-
-def build_table1_data(ctx: MethodsContext) -> dict | None:
-    """
-    Build Table 1: Final Sample Counts for BMD Analysis of Transcriptomics Data.
-
-    This table shows the number of samples per organ × sex × dose group
-    that passed QC and were included in the BMD analysis.
-
-    Args:
-        ctx: MethodsContext with genomics_sample_counts populated.
-
-    Returns:
-        Dict with keys: caption, headers, rows, footnotes.
-        Or None if no genomics data.
-    """
-    if not ctx.genomics_sample_counts:
-        return None
-
-    # Headers: empty corner cell + dose group columns
-    dose_headers = []
-    for d in ctx.dose_groups:
-        # Format: "0 mg/kg", "0.15 mg/kg", etc.
-        if d == int(d):
-            dose_headers.append(f"{int(d)} {ctx.dose_unit}")
-        else:
-            dose_headers.append(f"{d} {ctx.dose_unit}")
-
-    headers = [""] + dose_headers
-
-    # Rows: grouped by sex, then by organ
-    rows = []
-    all_sexes = sorted({
-        sex
-        for organ_data in ctx.genomics_sample_counts.values()
-        for sex in organ_data
-    })
-    all_organs = sorted(ctx.genomics_sample_counts.keys())
-
-    for sex in all_sexes:
-        # Sex header row (bold — indicated by leading **)
-        rows.append([f"**{sex}**"] + [""] * len(ctx.dose_groups))
-
-        for organ in all_organs:
-            sex_data = ctx.genomics_sample_counts.get(organ, {}).get(sex, {})
-            row = [f"  {organ}"]
-            for dose in ctx.dose_groups:
-                count = sex_data.get(dose, 0)
-                if count > 0:
-                    row.append(str(count))
-                else:
-                    # Dash indicates no samples (mortality, exclusion, etc.)
-                    row.append("–")
-            rows.append(row)
-
-    return {
-        "caption": "Final Sample Counts for BMD Analysis of Transcriptomics Data",
-        "headers": headers,
-        "rows": rows,
-        "footnotes": [],
-    }
+# Table 1 builder (Final Sample Counts for BMD Analysis of Transcriptomics
+# Data) moved to methods_table1.py.  Re-imported so external callers
+# (llm_routes uses build_table1_data for the Preview Data path) keep
+# working unchanged.
+from methods_table1 import build_table1_data
 
 
 # ---------------------------------------------------------------------------
