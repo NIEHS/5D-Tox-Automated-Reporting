@@ -65,7 +65,7 @@ from __future__ import annotations
 # DOCUMENT_TREE is the canonical structure (heading hierarchy, section ids,
 # data_keys).  DocNode is the per-node type; we annotate handlers with it.
 
-from document_tree import DOCUMENT_TREE, DocNode
+from document_tree import DOCUMENT_TREE, DocNode, find_node
 
 
 # ---------------------------------------------------------------------------
@@ -919,12 +919,13 @@ def _walk(node: DocNode, data: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _document_skeleton(title: str, author: str, body: str) -> str:
-    """
-    Wrap a rendered body in the outer LaTeX document scaffolding.
+    r"""
+    Wrap a rendered body in the outer LaTeX document scaffolding for a
+    full-report compile.
 
-    Per decision #6 we skip the NIEHS-branded cover and use \\maketitle.
-    \\tableofcontents follows the title page so the author sees a TOC
-    immediately; LaTeX auto-populates it from the \\section commands the
+    Per decision #6 we skip the NIEHS-branded cover and use \maketitle.
+    \tableofcontents follows the title page so the author sees a TOC
+    immediately; LaTeX auto-populates it from the \section commands the
     body emits.
 
     The class file (niehs.cls) owns page geometry, fonts, and the
@@ -947,6 +948,42 @@ def _document_skeleton(title: str, author: str, body: str) -> str:
         "\n"
         + body + "\n"
         "\n"
+        "\\end{document}\n"
+    )
+
+
+def _fragment_skeleton(body: str) -> str:
+    r"""
+    Wrap a rendered body in the minimal LaTeX scaffolding needed to
+    compile it as a stand-alone fragment (the preview path per decision
+    #10).
+
+    What's stripped vs the full document
+    ------------------------------------
+    A fragment compile is the path the web app hits when the user clicks
+    "Preview Apical" or "Preview BMD Summary".  It does NOT need:
+
+      - title page (\maketitle, no metadata block)
+      - table of contents
+      - front matter (foreword, abstract, peer review, etc.)
+      - any other top-level body sections beyond the selected subtree
+
+    The compile budget on Overleaf for a fragment is ~2-5 seconds vs
+    ~20-30 for the full report; stripping everything outside the requested
+    subtree is what makes the iteration loop tolerable.
+
+    Why a tiny header is still required
+    -----------------------------------
+    LaTeX cannot compile bare body content — every fragment needs a
+    \documentclass, a \begin{document} ... \end{document} pair, and any
+    packages the body uses (niehstable env depends on threeparttable +
+    table float, both of which niehs.cls loads).  So we still emit those.
+    """
+    return (
+        "\\documentclass{niehs}\n"
+        "\n"
+        "\\begin{document}\n"
+        + body + "\n"
         "\\end{document}\n"
     )
 
@@ -978,11 +1015,24 @@ def generate_latex(
         A self-contained .tex source string.  The caller is responsible
         for placing latex/niehs.cls alongside it before invoking pdflatex.
     """
-    # section_filter wiring is intentionally deferred — see decision #10
-    # in the resolved Option B plan.  Reference it so static analysis
-    # doesn't flag the parameter as unused.
-    _ = section_filter
+    # ── Fragment-compile path (decision #10) ─────────────────────────
+    # When section_filter is set, return a stand-alone .tex containing
+    # only the subtree at that node id.  This is what the web app's
+    # per-tab preview button hits.  Front matter, TOC, and \maketitle
+    # are all stripped — see _fragment_skeleton's docstring for why.
+    if section_filter:
+        node = find_node(section_filter)
+        if node is None:
+            # Unknown id → empty fragment with a comment so callers can
+            # detect the miss without crashing.  No exception, because
+            # the web app may pass user-controlled ids and we'd rather
+            # show a blank preview than 500 the request.
+            body = f"% No node found for section_filter={section_filter!r}\n"
+            return _fragment_skeleton(body)
+        body_chunks = _walk(node, data)
+        return _fragment_skeleton("\n\n".join(body_chunks))
 
+    # ── Full-report path ─────────────────────────────────────────────
     # Pull title metadata from the data dict.  marshal_export_data fills
     # these in from session test-article forms; scaffold_report_data also
     # provides defaults for the smoke-test path.

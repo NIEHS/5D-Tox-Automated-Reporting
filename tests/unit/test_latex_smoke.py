@@ -275,6 +275,60 @@ def test_class_file_provides_class():
 
 
 # ---------------------------------------------------------------------------
+# Tests — section_filter fragment-compile path (decision #10)
+# ---------------------------------------------------------------------------
+
+def test_fragment_compile_omits_front_matter(scaffold):
+    r"""
+    A fragment compile (section_filter set) must NOT emit \maketitle,
+    \tableofcontents, the title metadata, or any front-matter section.
+    The point of fragments is to be small + fast on Overleaf.
+    """
+    tex = generate_latex(scaffold, section_filter="bmd-summary")
+    assert r"\maketitle" not in tex
+    assert r"\tableofcontents" not in tex
+    assert r"\title{" not in tex
+    assert r"\section{Foreword}" not in tex
+    assert r"\section{Background}" not in tex
+
+
+def test_fragment_compile_includes_target_subtree(scaffold):
+    """A fragment must include the requested node's heading + body."""
+    tex = generate_latex(scaffold, section_filter="bmd-summary")
+    assert r"\documentclass{niehs}" in tex
+    assert r"\begin{document}" in tex
+    assert r"\end{document}" in tex
+    # The bmd-summary node renders as \subsection (level=2)
+    assert r"\subsection{Apical Endpoint Benchmark Dose Summary}" in tex
+
+
+def test_fragment_compile_recurses_into_subtree(scaffold):
+    r"""
+    Filtering to a parent node must include all descendants.  Filtering
+    to "animal-condition" should bring in the three child table nodes.
+    """
+    tex = generate_latex(scaffold, section_filter="animal-condition")
+    assert r"\subsection{Animal Condition, Body Weights, and Organ Weights}" in tex
+    assert r"\begin{niehstable}{table-body-weight}" in tex
+    assert r"\begin{niehstable}{table-organ-weight}" in tex
+    assert r"\begin{niehstable}{table-clinical-obs}" in tex
+
+
+def test_fragment_compile_unknown_id_returns_empty_body(scaffold):
+    """
+    Unknown section_filter values render a stub fragment with a
+    diagnostic comment but never crash — the web app may pass user-
+    controlled ids and we'd rather show a blank preview than 500.
+    """
+    tex = generate_latex(scaffold, section_filter="not-a-real-node-id")
+    assert r"\begin{document}" in tex
+    assert r"\end{document}" in tex
+    assert "No node found for section_filter" in tex
+    # And nothing else from the body
+    assert r"\section{Background}" not in tex
+
+
+# ---------------------------------------------------------------------------
 # Optional: actually compile the .tex (skipped if pdflatex missing)
 # ---------------------------------------------------------------------------
 
