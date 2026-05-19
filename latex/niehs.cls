@@ -92,19 +92,36 @@
 ]{hyperref}
 
 % --- niehstable environment ---------------------------------------------
-% Placeholder.  Real implementation lands in the table-rendering session
-% (decision #4).  The signature here mirrors how the generator will call
-% it: \begin{niehstable}{<table-id>}{<caption text>} ... \end{niehstable}.
+% Signature: \begin{niehstable}{<table-id>}{<caption text>} ... \end{...}
 %
-% For tracer-bullet we just open a centered table float so any test that
-% references the env compiles without erroring.  Tables themselves are
-% not yet emitted by the generator.
+%   #1 = table id (e.g., "tbl-body-weight").  Used as \label{tab:<id>}
+%        so \ref / \autoref can point at this table from prose.
+%   #2 = caption text.  Already includes the "Table N." prefix from the
+%        Python generator (which sources N from the document tree's
+%        auto-assigned table_number).
+%
+% Why threeparttable
+% ------------------
+% NIEHS tables carry per-table lettered footnotes ("Data are shown as
+% means ± SD.", "Statistical method: ...").  Standard \footnote sends
+% notes to the page foot, which scatters them.  threeparttable groups
+% the tabular and its tablenotes into one unit so footnotes stay glued
+% to their table even when the float migrates pages.
+%
+% Why \begin{table} float
+% -----------------------
+% Wrapping in a \begin{table} float makes each table eligible for
+% \listoftables (the front-matter tables list) and lets LaTeX float
+% wide tables to the next available spot rather than breaking them
+% mid-page.  [htbp] is the standard "try here, then top, then bottom,
+% then a float page" placement order.
 \newenvironment{niehstable}[2]{%
-  \begin{table}[h]\centering%
-  % #1 = table id (e.g., "tbl-body-weight"); used as label anchor later
-  % #2 = caption text; ignored in the stub, will be wired into a real
-  %      \caption call once we have a numbering strategy.
+  \begin{table}[htbp]%
+    \centering%
+    \begin{threeparttable}%
+      \caption{#2}\label{tab:#1}%
 }{%
+    \end{threeparttable}%
   \end{table}%
 }
 

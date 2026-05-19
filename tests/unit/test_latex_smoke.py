@@ -133,32 +133,87 @@ def test_appendix_renders_with_pending_placeholder(scaffold):
     assert "Appendix body pending" in tex
 
 
-def test_tables_list_renders_stub(scaffold):
-    """tables-list node emits a heading + stub placeholder for v1."""
+def test_tables_list_renders_listoftables(scaffold):
+    r"""tables-list node emits the heading + \listoftables (auto-populated)."""
     tex = generate_latex(scaffold)
     assert r"\section{Tables}" in tex
-    assert "List of tables: pending" in tex
+    assert r"\listoftables" in tex
 
 
 # ---------------------------------------------------------------------------
 # Tests — unimplemented node_types emit visible placeholders
 # ---------------------------------------------------------------------------
 
-def test_unimplemented_types_have_pending_placeholders(scaffold):
+def test_cover_and_title_page_still_unimplemented(scaffold):
     """
-    Cover, title-page, narrative+tables, table, bmd-summary, and
-    genomics-section all fall through to _render_unimplemented.
-
-    Tracer-bullet requirement: they don't crash, and they emit a visible
-    [Section pending: <type>] string so the author sees the gap.
+    Cover and title-page remain unimplemented by design (decision #6 —
+    \\maketitle handles the title; the NIEHS-branded cover is deferred).
+    They emit comment-only placeholders so the .tex still compiles.
     """
     tex = generate_latex(scaffold)
-    # The generic placeholder format from _pending_placeholder()
     assert "[Section pending: cover" in tex
     assert "[Section pending: title-page" in tex
-    assert "[Section pending: narrative+tables" in tex
-    assert "[Section pending: bmd-summary" in tex
-    assert "[Section pending: genomics-section" in tex
+
+
+def test_narrative_tables_groups_render_with_heading(scaffold):
+    r"""
+    narrative+tables groups emit their H2 heading + a narrative chunk
+    (real or placeholder).  No more "[Section pending: narrative+tables".
+    """
+    tex = generate_latex(scaffold)
+    assert r"\subsection{Animal Condition, Body Weights, and Organ Weights}" in tex
+    assert r"\subsection{Clinical Pathology}" in tex
+    # Should NOT carry the generic _render_unimplemented placeholder
+    assert "[Section pending: narrative+tables" not in tex
+
+
+def test_bmd_summary_renders_table(scaffold):
+    """BMD summary emits a niehstable env (scaffold has 1 placeholder endpoint)."""
+    tex = generate_latex(scaffold)
+    assert r"\subsection{Apical Endpoint Benchmark Dose Summary}" in tex
+    # The scaffold endpoint produces a tabular with the BMD/BMDL columns.
+    assert r"\begin{niehstable}{bmd-summary}" in tex
+    assert "BMD" in tex and "BMDL" in tex
+
+
+def test_genomics_sections_render_subsubsections(scaffold):
+    r"""
+    Genomics sections emit per-(organ, sex) \subsubsection headings
+    (scaffold has 4 entries: liver/kidney × male).
+    """
+    tex = generate_latex(scaffold)
+    assert r"\subsection{Gene Set Benchmark Dose Analysis}" in tex
+    assert r"\subsection{Gene Benchmark Dose Analysis}" in tex
+    assert r"\subsubsection{Liver, Male}" in tex
+    assert r"\subsubsection{Kidney, Male}" in tex
+
+
+def test_apical_table_nodes_emit_niehstable_envs(scaffold):
+    r"""
+    "table" node_type emits a \begin{niehstable}{<id>}{<caption>} env
+    even when data is empty (placeholder caption + body, so the table
+    still claims a number for \listoftables).
+    """
+    tex = generate_latex(scaffold)
+    assert r"\begin{niehstable}{table-body-weight}" in tex
+    assert r"\begin{niehstable}{table-organ-weight}" in tex
+    assert r"\begin{niehstable}{table-clin-chem}" in tex
+
+
+def test_methods_subsections_render(scaffold):
+    r"""
+    M&M subsections (Study Design, Chemistry, etc.) emit their
+    \subsection heading.  Scaffold has empty paragraph lists, so the
+    body falls to the [Section pending: ...] per-subsection placeholder
+    — but the structure is visible.
+    """
+    tex = generate_latex(scaffold)
+    assert r"\subsection{Study Design}" in tex
+    assert r"\subsection{Dose Selection Rationale}" in tex
+    assert r"\subsection{Chemistry}" in tex
+    # The deepest H3 subsections also appear
+    assert r"\subsubsection{Clinical Observations}" in tex
+    assert r"\subsubsection{RNA Isolation, Library Creation, and Sequencing}" in tex
 
 
 def test_narrative_tables_groups_emit_their_subsection_headings(scaffold):
