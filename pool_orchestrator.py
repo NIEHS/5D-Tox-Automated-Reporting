@@ -1,86 +1,67 @@
 """
-Pool orchestrator — file pool fingerprinting, validation, integration, and
-processing endpoints extracted from background_server.py.
+Pool orchestrator — backward-compatible facade over the split modules.
 
-This module owns the full lifecycle of the "file pool" concept:
+This module no longer contains implementation.  The original ~3700-line
+monolith was extracted into focused submodules (each with its own file
+header explaining its concern) across this branch's commits:
 
-  1. **Fingerprinting** — extract structural metadata (doses, animals, endpoints,
-     platform, data_type) from each uploaded file so we can cross-validate them.
-  2. **Validation** — check for dose group mismatches, coverage gaps, and
-     redundancy across the pool.
-  3. **Conflict resolution** — persist user precedence decisions when files
-     disagree.
-  4. **Integration** — merge the best file per platform into a single unified
-     BMDProject JSON via bmdx-core's native Java classes.
-  5. **Processing** — run NTP stats on the integrated data to produce per-platform
-     section cards (tables + narratives) for the UI, plus genomics extraction
-     from gene-expression .bm2 files.
-  6. **Animal traceability** — per-animal cross-tier/cross-platform report.
+  pool_globals.py           shared mutable state, the FastAPI APIRouter,
+                            _session_dir, and the lazy bm2-uploads
+                            accessor
+  pool_state.py             pool progression check, file-replacement
+                            cleanup, cascading artifact invalidation
+  section_serializers.py    TableRow / IncidenceRow JSON serializers
+                            and the Clinical Observations card builder
+  pool_fingerprints.py      fingerprint lifecycle: extract, persist,
+                            reload, restore, validate, ensure-scan
+  pool_routes.py            POST /api/pool/{validate,resolve,
+                            confirm-metadata,integrate}
+  integrated_io.py          BMDProject load/save barrier (ADR-0001) +
+                            GET /api/integrated/{,-summary}/{dtxsid}
+  cache_plumbing.py         per-section disk cache, hash inputs,
+                            schema-version constants, platform-table
+                            (de)serializers, category-lookup restorer
+  processing_helpers.py     pipeline phase functions consumed by the
+                            process-integrated endpoint (filter,
+                            partition, build section cards, extract
+                            adversity + genomics, build BMD summaries)
+  process_integrated.py     POST /api/process-integrated/{dtxsid} +
+                            POST /api/generate-animal-report/{dtxsid}
+                            + the _BMD_STAT_LABELS UI-label dict
 
-All endpoints are mounted as a FastAPI APIRouter, included by the main app.
+This file's only remaining job is to re-export the public surface so
+the many consumers that already import via `from pool_orchestrator
+import …` keep working without churn.  Concretely the consumers are:
 
-Shared state (module-level dicts):
-  - _pool_fingerprints:  dtxsid -> {file_id -> FileFingerprint}
-  - _integrated_pool:    dtxsid -> merged BMDProject dict
-  - _data_uploads:       file_id -> {filename, temp_path, type}
+  - background_server.py   (mounts pool_orchestrator.router)
+  - export_routes.py       (load_integrated)
+  - llm_routes.py          (load_integrated)
+  - server_state.py        (get_data_uploads / get_pool_fingerprints /
+                            get_integrated_pool)
+  - upload_routes.py       (fingerprint_and_store, run_lightweight_validation,
+                            serialize_table_rows, remove_old_file_entries,
+                            invalidate_pool_artifacts, pool_has_progressed)
+  - session_routes.py      (fingerprint_and_store, run_lightweight_validation,
+                            _js_dose_key, load_cached_fingerprint,
+                            restore_fingerprint, load_integrated, save_integrated)
+  - tests/                 (mostly private symbols: _filter_gene_expression,
+                            _partition_by_platform, _safe_float, _hash_*,
+                            _integrated_pool, save_integrated, load_integrated)
 
-These are accessed by other modules (upload handlers, session restore) via the
-public accessor functions exported at the bottom of this file.
+A future cleanup pass could rewrite each consumer to import from the
+new modules directly and then delete this file, but that's an
+independent commit — not part of the split itself.
+
+Importing this module is also what causes the @router decorators in
+pool_routes / integrated_io / process_integrated to fire against the
+shared pool_globals.router.  background_server's
+`include_router(pool_orchestrator.router)` therefore continues to
+mount every endpoint without any other change.
 """
 
-import asyncio
-import hashlib
-import json
-import logging
-import os
-import re
-import tempfile
-from dataclasses import asdict
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
-
-import orjson
-from fastapi import Request
-from fastapi.responses import FileResponse, JSONResponse, Response
-
-from bmd_project_schema import (
-    BMDProjectValidationError,
-    load_and_validate as _load_and_validate_bmd_project,
-)
-from llm_helpers import (
-    llm_generate_json as _llm_generate_json_imported,
-    llm_generate_json_async as _llm_generate_json_async,
-)
-
-from bmdx_pipe import (
-    FileFingerprint,
-    TableRow,
-    ValidationReport,
-    fingerprint_file,
-    validate_pool,
-    lightweight_validate,
-    _BM2_PLATFORM_MAP,
-    detect_platform_and_type_from_bm2,
-    integrate_pool,
-    build_animal_report,
-    report_to_dict,
-    annotate_missing_animals,
-    backfill_missing_doses,
-    build_table_data,
-    build_clinical_obs_tables,
-    export_genomics,
-    generate_results_narrative,
-)
-from apical_bmds import run_bmds_for_endpoints
-
-# Shared state, the FastAPI router, and the path helper have all moved to
-# pool_globals.py so the upcoming split modules can reach for them without
-# importing pool_orchestrator (which would create a load-order cycle, since
-# pool_orchestrator re-exports those same modules' contents for backward
-# compatibility).  Re-imported here under their original names so every
-# function body and external `from pool_orchestrator import ...` keeps
-# working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: shared state, router, path helpers
+# ---------------------------------------------------------------------------
 from pool_globals import (
     router,
     _pool_fingerprints,
@@ -93,23 +74,18 @@ from pool_globals import (
     get_data_uploads,
 )
 
-logger = logging.getLogger(__name__)
-
-
-# Pool-state mutation (pool_has_progressed, remove_old_file_entries,
-# invalidate_pool_artifacts) moved to pool_state.py.  Re-imported under
-# their original names so external `from pool_orchestrator import ...`
-# from background_server.py and upload_routes.py keeps working.
+# ---------------------------------------------------------------------------
+# Re-exports: pool-state mutation
+# ---------------------------------------------------------------------------
 from pool_state import (
     pool_has_progressed,
     remove_old_file_entries,
     invalidate_pool_artifacts,
 )
 
-# Table serialization + Clinical Observations card assembly moved to
-# section_serializers.py.  Re-imported under their original names so any
-# function body below and any external `from pool_orchestrator import ...`
-# keeps working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: section-card serialization helpers
+# ---------------------------------------------------------------------------
 from section_serializers import (
     _js_dose_key,
     serialize_table_rows,
@@ -117,10 +93,9 @@ from section_serializers import (
     _build_clinical_obs_section,
 )
 
-# Fingerprinting + lightweight validation moved to pool_fingerprints.py.
-# Re-imported under their original names so internal call sites and
-# external `from pool_orchestrator import ...` (background_server,
-# session_routes, upload_routes) keep working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: fingerprint lifecycle
+# ---------------------------------------------------------------------------
 from pool_fingerprints import (
     fingerprint_and_store,
     _save_fingerprints_to_disk,
@@ -130,13 +105,13 @@ from pool_fingerprints import (
     ensure_fingerprints,
 )
 
-# Pool lifecycle POST handlers (validate / resolve / confirm-metadata /
-# integrate) and the _write_metadata_headers helper moved to pool_routes.py.
-# Importing the module here causes its @router.post decorators to run
-# against the shared pool_globals.router, so background_server.py's
-# `include_router(pool_orchestrator.router)` still mounts every endpoint.
-# The names are re-bound so external `from pool_orchestrator import api_pool_*`
-# keeps working.
+# ---------------------------------------------------------------------------
+# Side-effect import: pool lifecycle POST handlers
+# ---------------------------------------------------------------------------
+# Importing pool_routes runs its @router.post decorators against the
+# shared pool_globals.router, so the four /api/pool/* endpoints register
+# at module load time.  The named re-exports preserve callers that import
+# the handlers by name (background_server / session_routes for testing).
 from pool_routes import (
     api_pool_validate,
     api_pool_resolve,
@@ -145,17 +120,12 @@ from pool_routes import (
     _write_metadata_headers,
 )
 
-
-# Integrated.json read/write barrier + GET routes moved to integrated_io.py.
-# Re-imported under their original names so:
-#   - external callers (export_routes, llm_routes, session_routes) that
-#     `from pool_orchestrator import load_integrated, save_integrated` keep
-#     working,
-#   - internal callers below this point that use _safe_float et al. keep
-#     working without an import shuffle,
-#   - the routes still register on the shared APIRouter (the decorators in
-#     integrated_io.py attach to pool_globals.router, which is the same
-#     object exposed as pool_orchestrator.router).
+# ---------------------------------------------------------------------------
+# Re-exports: BMDProject load/save barrier + GET routes
+# ---------------------------------------------------------------------------
+# Side-effect import also: integrated_io's @router.get decorators register
+# /api/integrated/{dtxsid} and /api/integrated-summary/{dtxsid} on the
+# shared router.
 from integrated_io import (
     _safe_float,
     _safe_float_from_bmdl,
@@ -168,16 +138,9 @@ from integrated_io import (
     api_integrated_summary,
 )
 
-
 # ---------------------------------------------------------------------------
-# Per-section cache infrastructure (extracted)
+# Re-exports: cache plumbing
 # ---------------------------------------------------------------------------
-# The disk cache, hash inputs, schema-version constants, platform-table
-# (de)serializers, and the category-lookup restorer all live in
-# cache_plumbing.py.  Re-imported here under their original names so
-# every internal call site and external `from pool_orchestrator import ...`
-# continues to work.
-
 from cache_plumbing import (
     _load_cache,
     _save_cache,
@@ -196,12 +159,9 @@ from cache_plumbing import (
     _restore_category_lookup,
 )
 
-# Pipeline phase functions (filter / partition / build cards / extract
-# adversity + genomics / build BMD summaries) moved to processing_helpers.py.
-# Re-imported so api_process_integrated (below) can call them by their
-# original names, and so tests/unit/test_partition.py (which does
-# `from pool_orchestrator import _filter_gene_expression, _partition_by_platform`)
-# keeps working.
+# ---------------------------------------------------------------------------
+# Re-exports: process-integrated pipeline phase functions
+# ---------------------------------------------------------------------------
 from processing_helpers import (
     _filter_gene_expression,
     _partition_by_platform,
@@ -212,12 +172,12 @@ from processing_helpers import (
     _build_bmds_bmd_summary,
 )
 
-# api_process_integrated god function + api_generate_animal_report + the
-# _BMD_STAT_LABELS UI-label dict moved to process_integrated.py.  Importing
-# the module here triggers its @router.post decorators against the shared
-# pool_globals.router, and the named re-exports below let any
-# `from pool_orchestrator import api_process_integrated` / `_BMD_STAT_LABELS`
-# call site keep working.
+# ---------------------------------------------------------------------------
+# Side-effect import: process-integrated + animal-report POST handlers
+# ---------------------------------------------------------------------------
+# Importing process_integrated runs its @router.post decorators against
+# the shared pool_globals.router, so /api/process-integrated/{dtxsid} and
+# /api/generate-animal-report/{dtxsid} register at module load time.
 from process_integrated import (
     api_process_integrated,
     api_generate_animal_report,
