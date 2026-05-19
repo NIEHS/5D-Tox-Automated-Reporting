@@ -1,62 +1,65 @@
 """
-methods_report.py — Structured Materials & Methods section for NIEHS 5dTox reports.
+methods_report.py — backward-compatible facade + DOCX assembly.
 
-Replicates the exact structure from NIEHS Report 10 (PFHxSAm study):
-  Materials and Methods
-  ├── Study Design
-  ├── Dose Selection Rationale
-  ├── Chemistry
-  ├── Clinical Examinations and Sample Collection
-  │   ├── Clinical Observations
-  │   ├── Body and Organ Weights
-  │   ├── Clinical Pathology
-  │   └── Internal Dose Assessment       (conditional: tissue_conc in pool)
-  ├── Transcriptomics                     (conditional: gene_expression in pool)
-  │   ├── Sample Collection for Transcriptomics
-  │   ├── RNA Isolation, Library Creation, and Sequencing
-  │   ├── Sequence Data Processing
-  │   ├── Sequencing Quality Checks and Outlier Removal
-  │   └── Data Normalization
-  ├── Data Analysis
-  │   ├── Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
-  │   ├── Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
-  │   ├── Benchmark Dose Analysis of Transcriptomics Data
-  │   ├── Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
-  │   └── Data Accessibility
-  └── [Table 1: Final Sample Counts for BMD Analysis of Transcriptomics Data]
+The original ~3200-line monolith was extracted into focused submodules
+across the methods_* and abstract_* commits on this branch:
 
-Approach: Hybrid data + LLM.
-  - Programmatically extract study metadata (doses, sample counts, domains,
-    BMDExpress analysis parameters) from fingerprints, animal_report, and .bm2
-    analysisInfo.notes.
-  - Feed the structured context to an LLM prompt that generates prose for
-    each subsection.
-  - Subsections are CONDITIONAL — only included when the file pool has the
-    relevant data domain.
+  methods_models.py        SUBSECTION_SKELETON + MethodsContext +
+                           MethodsSection + MethodsReport dataclasses
+  methods_extract.py       extract_methods_context + the bm2 / PK /
+                           biosampling / genomics-assay / sample-count
+                           extractors that feed it
+  methods_prompt.py        build_methods_prompt + build_subsection_skeleton
+                           + per-subsection LLM guideline composer
+  methods_table1.py        build_table1_data — the only programmatic
+                           table in the Methods section
+  narrative_helpers.py     cross-cutting formatters used by 4+ narrative
+                           sections (_join_oxford, _format_dose_value,
+                           _is_reliable_bmd, _picks_above_lle, etc.)
+  abstract_methods.py      Abstract → Methods paragraph (deterministic)
+  abstract_apical.py       body-Results per-platform narrative +
+                           Abstract → Results apical paragraph
+  abstract_genomics.py     Abstract → Results genomics paragraph +
+                           sentence builders
+  abstract_pk.py           Abstract → Results pharmacokinetics paragraph
+  gene_bodies.py           body Results: Gene Set BMD + Gene BMD analysis
+                           intro/findings paragraphs
+  abstract_summary.py      Abstract → Summary + Abstract → Results
+                           aggregator (the only abstract_* module that
+                           imports from sibling abstract_* modules)
 
-This module is imported by background_server.py for the /api/generate-methods
-endpoint and the /api/export-docx DOCX builder.
+What still lives here:
+
+  - re-exports of every public + private name above, so existing
+    importers don't need to change
+  - add_methods_to_doc + _add_methods_table: the python-docx
+    assembly that turns a MethodsReport into rendered Word output.
+    They live here because they have no callers outside the DOCX
+    export path; if a future commit splits the docx renderer out,
+    these go with it.
+
+External importers preserved through this shim:
+
+  - genomics_narratives.py  build_gene_set_body_{intro,findings},
+                            build_gene_body_{intro,findings}
+  - llm_routes.py           extract_methods_context + build_methods_prompt
+                            + build_subsection_skeleton + build_table1_data
+                            + MethodsReport + MethodsSection
+  - process_integrated.py   build_apical_bmd_summary_narrative,
+                            same MethodsReport / extract_methods_context
+                            set as llm_routes
+  - report_pdf.py           MethodsContext + build_abstract_methods +
+                            build_abstract_results + build_abstract_summary
+  - processing_helpers.py   _is_anomalous_bmd (lazy import inside a
+                            helper)
+
+A future cleanup pass could point each consumer at the new modules
+directly and delete this shim, but that's not part of this split.
 """
 
-from __future__ import annotations
-
-import logging
-import re
-from dataclasses import dataclass, field
-
-# base_domain is no longer needed — platform strings are used directly.
-# Kept as a no-op import guard in case downstream code still references it.
-
-
-logger = logging.getLogger(__name__)
-
-
-# Dataclasses + heading skeleton moved to methods_models.py so the upcoming
-# split narrative-builder modules can import them without dragging this
-# whole extractor + builder surface along.  Re-imported under their
-# original names for backward compatibility with existing import sites
-# (genomics_narratives, llm_routes, process_integrated, report_pdf,
-# session_routes, processing_helpers).
+# ---------------------------------------------------------------------------
+# Re-exports: dataclasses + heading skeleton
+# ---------------------------------------------------------------------------
 from methods_models import (
     SUBSECTION_SKELETON,
     MethodsContext,
@@ -64,10 +67,9 @@ from methods_models import (
     MethodsReport,
 )
 
-# Cross-cutting formatters + BMD-quality predicates moved to
-# narrative_helpers.py.  Re-imported under their original names so the
-# many in-file callers (and external processing_helpers._is_anomalous_bmd)
-# continue to work unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: cross-cutting narrative helpers
+# ---------------------------------------------------------------------------
 from narrative_helpers import (
     _DIRECTION_WORDS,
     ANOMALY_RATIO_THRESHOLD,
@@ -85,9 +87,9 @@ from narrative_helpers import (
     _picks_above_lle,
 )
 
-# Methods context extractor moved to methods_extract.py.  Re-imported
-# under their original names so existing call sites (llm_routes,
-# process_integrated) keep working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: methods context extractor
+# ---------------------------------------------------------------------------
 from methods_extract import (
     _parse_bm2_analysis_info,
     _collect_bm2_analysis_metadata,
@@ -98,30 +100,24 @@ from methods_extract import (
     _build_genomics_sample_counts,
 )
 
-# LLM prompt assembly + subsection-skeleton filter moved to methods_prompt.py.
-# Re-imported so external callers (llm_routes uses both together to drive
-# /api/generate-methods) keep working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: LLM prompt assembly
+# ---------------------------------------------------------------------------
 from methods_prompt import (
     build_subsection_skeleton,
     build_methods_prompt,
     _build_subsection_guidelines,
 )
 
-# Table 1 builder (Final Sample Counts for BMD Analysis of Transcriptomics
-# Data) moved to methods_table1.py.  Re-imported so external callers
-# (llm_routes uses build_table1_data for the Preview Data path) keep
-# working unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports: Table 1 builder
+# ---------------------------------------------------------------------------
 from methods_table1 import build_table1_data
 
-# Abstract → Methods paragraph builder moved to abstract_methods.py.
-# Re-imported so external callers (report_pdf assembles the Abstract
-# block via this) keep working.
+# ---------------------------------------------------------------------------
+# Re-exports: narrative builders (apical, genomics, pk, gene bodies, summary)
+# ---------------------------------------------------------------------------
 from abstract_methods import build_abstract_methods
-
-# Apical BMD summary narrative + Abstract→Results apical paragraph
-# moved to abstract_apical.py.  Re-imported so external callers
-# (process_integrated imports build_apical_bmd_summary_narrative
-# directly when assembling platform sections) keep working unchanged.
 from abstract_apical import (
     _normalize_endpoint_name,
     _format_endpoint_phrase,
@@ -129,36 +125,18 @@ from abstract_apical import (
     build_apical_bmd_summary_narrative,
     build_abstract_results_apical,
 )
-
-# Abstract → Results genomics paragraph + its sentence builders moved
-# to abstract_genomics.py.  Re-imported under their original names so
-# any existing call site that imports build_abstract_results_genomics
-# keeps working.
 from abstract_genomics import (
     _build_gene_sets_sentence,
     _build_top_genes_sentence,
     build_abstract_results_genomics,
 )
-
-# Abstract → Results pharmacokinetics paragraph moved to abstract_pk.py.
-# Re-imported so external assemblers (report_pdf when biosampling data
-# is present) keep working.
 from abstract_pk import build_abstract_results_pk
-
-# Body Results: Gene Set BMD Analysis + Gene BMD Analysis prose moved
-# to gene_bodies.py.  Re-imported under their original names so
-# genomics_narratives.py (which imports all four directly) keeps working.
 from gene_bodies import (
     build_gene_set_body_intro,
     build_gene_set_body_findings,
     build_gene_body_intro,
     build_gene_body_findings,
 )
-
-# Abstract → Summary + Abstract → Results aggregator moved to
-# abstract_summary.py.  Re-imported under their original names so
-# report_pdf.py (which imports both build_abstract_results and
-# build_abstract_summary directly) keeps working.
 from abstract_summary import (
     build_abstract_summary,
     build_abstract_results,
@@ -168,6 +146,10 @@ from abstract_summary import (
 # ---------------------------------------------------------------------------
 # DOCX generation: add structured M&M to a python-docx Document
 # ---------------------------------------------------------------------------
+# These two functions remain inline because nothing else in the codebase
+# uses them — they only run from the /api/export-docx path that calls
+# add_methods_to_doc to splice the Methods section into the assembled
+# Word document.  Keeping them here avoids a single-caller module.
 
 def add_methods_to_doc(
     doc,
