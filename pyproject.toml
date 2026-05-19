@@ -38,7 +38,13 @@ markers = [
     "integration: TestClient tests with mocked externals",
     "e2e: Full pipeline smoke tests",
 ]
-addopts = "--tb=short -q"
+# Exclude e2e tests from default runs.  The e2e suite's `_step_impl`
+# helper (tests/e2e/conftest.py) calls page.pause() between every step
+# to open Playwright Inspector for interactive review, which hangs any
+# unattended invocation of `pytest tests/`.  Opt in explicitly with
+# `pytest -m e2e` or `pytest tests/e2e/ -m e2e`.  See the todo.md entry
+# "E2e test default: skip interactive pauses" for the deeper fix.
+addopts = "--tb=short -q -m 'not e2e'"
 
 [tool.uv.sources]
 bmdx-pipe = { path = "../bmdx-pipe", editable = true }
