@@ -1,0 +1,890 @@
+"""
+html_generator.py — HTML rendering of the NIEHS biological potency report.
+
+This module is the sibling of latex_generator.py.  Both walk the same
+DOCUMENT_TREE with the same data dict and dispatch on the same set of
+node_type values; they differ only in the output format each handler
+emits.  That gives the in-app preview iframe a 1:1 semantic match with
+what Overleaf compiles from the .tex output — same tree, same data,
+same dispatch, just different rendering strings.
+
+Why we have this
+----------------
+The earlier preview path generated .tex via latex_generator and then
+piped it through pandoc to produce HTML for the iframe.  That worked
+but was lossy (pandoc doesn't understand our niehs.cls or the custom
+niehstable env), required a subprocess per preview, and pulled in
+pandoc as a runtime dependency.
+
+This module renders the same DocNode tree directly to HTML — no .tex,
+no pandoc, no subprocess.  The HTML side gets its own CSS in an inline
+<style> block (the iframe srcdoc is sandboxed from the parent page's
+style.css), so the preview is self-contained.
+
+Architecture mirror
+-------------------
+The dispatch table, helper functions, and per-type render handlers
+follow latex_generator.py's structure as closely as makes sense.  A
+bug in apical-table rendering, for example, will manifest in both
+outputs and gets fixed in both files — drift between the two is the
+risk we accept for not having one renderer with pluggable backends.
+
+Tracer scope
+------------
+v1 covers every node_type latex_generator handles:
+  front-matter, narrative, heading-only, appendix, tables-list,
+  narrative+tables, table, incidence-table, bmd-summary,
+  genomics-section.
+
+Cover and title-page emit a header block instead of being skipped (the
+LaTeX path uses \\maketitle, the HTML path emits a styled title block).
+"""
+
+from __future__ import annotations
+
+# ---------------------------------------------------------------------------
+# Imports
+# ---------------------------------------------------------------------------
+
+import html as _html
+from typing import Optional
+
+from document_tree import DOCUMENT_TREE, DocNode, find_node
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Map DocNode.level to the HTML heading tag.  Level 0 means "no heading"
+# (cover/title-page, individual leaf table nodes); the dispatch skips
+# heading emission for those.  Levels 1-3 map to h2/h3/h4 — we reserve
+# h1 for the document title at the top of the page so the section
+# headings nest correctly under it for accessibility / outline order.
+_HEADING_TAG_BY_LEVEL: dict[int, str] = {
+    1: "h2",
+    2: "h3",
+    3: "h4",
+}
+
+
+# Inline CSS for the iframe-embedded preview.  Kept minimal:
+# article-style typography, tables with NIEHS-resembling rules
+# (horizontal-only borders), and a visible "pending" placeholder style
+# so authors can scan for unfinished sections.  Reuses CSS variable
+# names that line up with web/style.css so a future shared stylesheet
+# can replace this block without semantic changes.
+_PREVIEW_CSS: str = """
+body {
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Helvetica Neue", Arial, sans-serif;
+  color: #1a1a1a;
+  background: #fff;
+  max-width: 8.5in;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+}
+.title-block {
+  border-bottom: 2px solid #d6d3cd;
+  margin-bottom: 28px;
+  padding-bottom: 12px;
+}
+.title-block h1 {
+  font-size: 22px;
+  margin: 0 0 6px;
+  line-height: 1.25;
+}
+.title-block .meta {
+  color: #555;
+  font-size: 13px;
+}
+h2 { font-size: 19px; margin: 28px 0 10px; border-bottom: 1px solid #e2e0db; padding-bottom: 4px; }
+h3 { font-size: 16px; margin: 22px 0 8px; color: #2c5282; }
+h4 { font-size: 14px; margin: 16px 0 6px; color: #4a5568; font-weight: 600; }
+p { margin: 0 0 10px; }
+em.pending {
+  color: #b7791f;
+  background: #fff7ed;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-style: normal;
+  font-size: 12.5px;
+}
+table.niehstable {
+  border-collapse: collapse;
+  margin: 12px 0 8px;
+  font-size: 13px;
+  width: 100%;
+}
+table.niehstable caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #1a202c;
+}
+table.niehstable thead th {
+  border-top: 1.5px solid #1a202c;
+  border-bottom: 1px solid #1a202c;
+  text-align: right;
+  padding: 4px 8px;
+  font-weight: 600;
+}
+table.niehstable thead th:first-child { text-align: left; }
+table.niehstable tbody td {
+  padding: 3px 8px;
+  border: none;
+  text-align: right;
+}
+table.niehstable tbody td:first-child { text-align: left; }
+table.niehstable tbody tr.sex-separator td {
+  border-top: 1px solid #d6d3cd;
+  font-weight: 700;
+  padding-top: 6px;
+}
+table.niehstable tbody tr.n-row td { color: #4a5568; }
+table.niehstable tfoot,
+table.niehstable .tablenotes {
+  font-size: 12px;
+  color: #4a5568;
+  margin-top: 4px;
+}
+table.niehstable .tablenotes ol { margin: 4px 0 0; padding-left: 18px; }
+table.niehstable tbody tr:last-child td { border-bottom: 1.5px solid #1a202c; }
+.description-list dt {
+  font-weight: 600;
+  margin-top: 6px;
+}
+.description-list dd { margin: 0 0 4px 0; }
+.appendix-stub, .placeholder-block {
+  background: #fff7ed;
+  border-left: 3px solid #f59e0b;
+  padding: 8px 12px;
+  margin: 8px 0;
+  color: #92400e;
+  font-size: 13px;
+}
+"""
+
+
+# ---------------------------------------------------------------------------
+# Helper functions (private)
+# ---------------------------------------------------------------------------
+
+def _esc(text) -> str:
+    """
+    HTML-escape a value, coercing None and non-strings to "".
+
+    Used wherever we splice arbitrary strings (chemical names, narrative
+    paragraphs, section titles, footnote bodies) into the HTML output.
+    Without this, an ampersand or angle bracket from user prose would
+    corrupt the document structure.
+    """
+    if text is None:
+        return ""
+    return _html.escape(str(text), quote=True)
+
+
+def _heading(level: int, title: str) -> str:
+    """
+    Emit an HTML heading tag for the given level + title.
+
+    Level 0 returns "" so callers can unconditionally splice the result.
+    Title text is escaped before splicing.
+    """
+    if level <= 0:
+        return ""
+    tag = _HEADING_TAG_BY_LEVEL.get(level, "h5")
+    return f"<{tag}>{_esc(title)}</{tag}>"
+
+
+def _render_paragraphs(paragraphs: list) -> str:
+    """
+    Render a flat list of paragraph strings as a sequence of <p> blocks.
+
+    Each paragraph is escaped individually.  Returns "" for empty input
+    so callers can detect "no content" and substitute a placeholder.
+    """
+    if not paragraphs:
+        return ""
+    return "\n".join(f"<p>{_esc(p)}</p>" for p in paragraphs)
+
+
+def _pending(label: str) -> str:
+    """
+    Emit the visible "pending" placeholder used for unimplemented or
+    data-missing sections.  Mirrors the LaTeX \\emph{[Section pending: ...]}
+    convention so the same scan-for-gaps workflow works in either view.
+    """
+    return f'<em class="pending">[{_esc(label)}]</em>'
+
+
+# ---------------------------------------------------------------------------
+# Table helpers (shared shape across all the table-rendering handlers)
+# ---------------------------------------------------------------------------
+
+def _emit_table_row(cells: list, *, td_class: str = "", tr_class: str = "") -> str:
+    """
+    Format a single <tr> from a list of cell strings.
+
+    Cells are HTML-escaped.  Optional CSS classes go on the row and/or
+    individual cells (used to mark sex-separator rows, n-rows, header
+    rows differently in the rendered preview).
+    """
+    td_attr = f' class="{td_class}"' if td_class else ""
+    tr_attr = f' class="{tr_class}"' if tr_class else ""
+    tds = "".join(f"<td{td_attr}>{_esc(c)}</td>" for c in cells)
+    return f"<tr{tr_attr}>{tds}</tr>"
+
+
+def _emit_table_header(headers: list) -> str:
+    """Emit the <thead> with one <th> per header cell (each escaped)."""
+    ths = "".join(f"<th>{_esc(h)}</th>" for h in headers)
+    return f"<thead><tr>{ths}</tr></thead>"
+
+
+def _emit_table_footnotes(footnotes: list) -> str:
+    """
+    Emit a footnote block beneath a table.
+
+    footnotes is the typed list table_builder_common produces: each
+    entry is a dict with kind ("lettered", "legend", "definition"),
+    letter (for lettered records), and text.  Lettered entries render
+    as <li> in an ordered list with the letter as the marker; other
+    kinds render as a flat <p>.
+    """
+    if not footnotes:
+        return ""
+    items: list[str] = []
+    for fn in footnotes:
+        if not isinstance(fn, dict):
+            continue
+        text = fn.get("text") or fn.get("body") or ""
+        if not text:
+            continue
+        if fn.get("kind") == "lettered" and fn.get("letter"):
+            items.append(
+                f'<li><span class="letter">{_esc(fn["letter"])}</span> {_esc(text)}</li>'
+            )
+        else:
+            items.append(f"<li>{_esc(text)}</li>")
+    if not items:
+        return ""
+    return (
+        '<div class="tablenotes"><ol>'
+        + "".join(items)
+        + "</ol></div>"
+    )
+
+
+def _format_dose_label(dose, unit: str) -> str:
+    """
+    Format a dose value with its unit using a non-breaking space so the
+    column header doesn't wrap mid-label.  Mirrors latex_generator's
+    _format_dose_label byte-for-byte (modulo the LaTeX vs HTML escape).
+    """
+    if dose == 0 or dose == 0.0:
+        return f"0 {unit}"
+    if isinstance(dose, float) and dose.is_integer():
+        return f"{int(dose)} {unit}"
+    return f"{dose} {unit}"
+
+
+def _table_caption(node: DocNode, base_caption: str) -> str:
+    """
+    Prefix the caption with "Table N. " from the auto-assigned
+    table_number, mirroring latex_generator's behavior.  Strips any
+    leftover {compound} / {sex} placeholder tokens.
+    """
+    cleaned = (base_caption or "")
+    cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
+    cleaned = cleaned.strip()
+    if node.table_number is not None:
+        return f"Table {node.table_number}. {cleaned}" if cleaned else f"Table {node.table_number}"
+    return cleaned
+
+
+# ---------------------------------------------------------------------------
+# Per-node-type render handlers
+# ---------------------------------------------------------------------------
+# Each handler takes (node, data) and returns the HTML for that node
+# alone (not its children — the walker handles children separately).
+# Returning "" means "this node contributes no output."
+#
+# Mirrors latex_generator.py's per-handler shape.  Adding a new
+# node_type means: write a _render_<type> function here AND in
+# latex_generator.py, and register it in both _DISPATCH tables.
+
+
+def _render_front_matter(node: DocNode, data: dict) -> str:
+    """
+    Front matter section (foreword, about, peer review, publication
+    details, acknowledgments, abstract).  Heading + paragraphs.
+    """
+    body = ""
+    if node.data_key:
+        content = data.get(node.data_key)
+        if isinstance(content, dict):
+            paragraphs = content.get("paragraphs", [])
+            body = _render_paragraphs(paragraphs)
+    if not body:
+        body = _pending(f"Section pending: {node.title}")
+    return f"{_heading(node.level, node.title)}\n{body}"
+
+
+def _render_narrative(node: DocNode, data: dict) -> str:
+    """
+    Plain narrative section.  M&M subsections route through the
+    methods-specific lookup because their content lives in a flat
+    sections list, not at data[data_key]["paragraphs"].
+    """
+    if node.methods_key:
+        return _render_methods_subsection(node, data)
+    return _render_front_matter(node, data)
+
+
+def _render_methods_subsection(node: DocNode, data: dict) -> str:
+    """
+    M&M subsection — content lives in data["methods"]["sections"] as a
+    flat list keyed by heading (title-match).  Mirrors the LaTeX
+    handler's lookup strategy.
+    """
+    body = ""
+    methods = data.get("methods", {})
+    if isinstance(methods, dict):
+        for section in methods.get("sections", []):
+            if section.get("heading") == node.title:
+                body = _render_paragraphs(section.get("paragraphs", []))
+                table_inline = section.get("table")
+                if isinstance(table_inline, dict):
+                    body = (body + "\n" + _render_inline_table(table_inline)).strip()
+                break
+    if not body:
+        body = _pending(f"Section pending: {node.title}")
+    return f"{_heading(node.level, node.title)}\n{body}"
+
+
+def _render_inline_table(table: dict) -> str:
+    """Inline table inside an M&M subsection (e.g., Sample Counts)."""
+    caption = table.get("caption", "")
+    headers = table.get("headers", [])
+    rows = table.get("rows", [])
+    if not headers and not rows:
+        return ""
+    head = _emit_table_header([str(h) for h in headers]) if headers else ""
+    body_rows = [_emit_table_row([str(c) for c in r]) for r in rows]
+    notes = _emit_table_footnotes(table.get("footnotes", []))
+    return (
+        '<table class="niehstable">'
+        f"<caption>{_esc(caption)}</caption>"
+        f"{head}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+        f"{notes}"
+    )
+
+
+def _render_heading_only(node: DocNode, data: dict) -> str:
+    """Structural heading; children rendered separately by the walker."""
+    return _heading(node.level, node.title)
+
+
+def _render_appendix(node: DocNode, data: dict) -> str:
+    """Appendix node — heading + visible body-pending placeholder."""
+    body = f'<div class="appendix-stub">Appendix body pending: {_esc(node.title)}</div>'
+    return f"{_heading(node.level, node.title)}\n{body}"
+
+
+def _render_tables_list(node: DocNode, data: dict) -> str:
+    """
+    Tables list in the front matter.
+
+    In the LaTeX path this becomes \\listoftables (auto-populated from
+    the table floats).  In HTML we emit a manual list from
+    data["table_entries"] when marshal_export_data has populated it;
+    otherwise fall back to a stub message.
+    """
+    heading = _heading(node.level, node.title)
+    entries = data.get("table_entries") or []
+    if not entries:
+        return f"{heading}\n{_pending('List of tables: pending.')}"
+    items: list[str] = []
+    for entry in entries:
+        title = entry.get("title", "")
+        n = entry.get("table_number")
+        ready = entry.get("ready", False)
+        line = f"Table {n}. {title}" if n is not None else title
+        cls = "" if ready else 'class="pending-item"'
+        items.append(f"<li {cls}>{_esc(line)}</li>")
+    return f"{heading}\n<ol class=\"tables-list\">{''.join(items)}</ol>"
+
+
+# ---------------------------------------------------------------------------
+# Results-section handlers (narrative+tables, tables, bmd-summary,
+# incidence-table, genomics-section)
+# ---------------------------------------------------------------------------
+
+def _find_apical_section(node: DocNode, data: dict) -> Optional[dict]:
+    """Same platform-match lookup the LaTeX handler uses."""
+    sections = data.get("apical_sections", []) or []
+    for sec in sections:
+        if sec.get("platform") and sec["platform"] == node.platform:
+            return sec
+    for sec in sections:
+        if sec.get("title") and node.platform in sec.get("title", ""):
+            return sec
+    return None
+
+
+def _render_apical_table(node: DocNode, data: dict) -> str:
+    """
+    Apical dose-response table — HTML mirror of latex_generator's
+    _render_apical_table.  Identical row-iteration logic so the LaTeX
+    and HTML views show the same data shape.
+
+    Reads from the same apical_sections entry, uses the same n-row /
+    data-row / sex-separator structure, formats values the same way.
+    """
+    section = _find_apical_section(node, data)
+    if not section or not section.get("table_data"):
+        return _emit_table_placeholder(node)
+
+    table_data = section.get("table_data", {})
+    male_rows = table_data.get("Male", []) or []
+    female_rows = table_data.get("Female", []) or []
+    if not male_rows and not female_rows:
+        return _emit_table_placeholder(node)
+
+    dose_unit = section.get("dose_unit", "mg/kg")
+    first_col = section.get("first_col_header", "Endpoint")
+
+    ref_row = (male_rows or female_rows)[0]
+    doses = ref_row.get("doses", []) or []
+
+    headers = (
+        [first_col]
+        + [_format_dose_label(d, dose_unit) for d in doses]
+        + [f"BMD₁Std ({dose_unit})", f"BMDL₁Std ({dose_unit})"]
+    )
+    ncols = len(headers)
+
+    body_rows: list[str] = []
+    for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
+        if not rows:
+            continue
+        # Sex separator row spanning all columns.
+        body_rows.append(
+            f'<tr class="sex-separator"><td colspan="{ncols}">'
+            f"<strong>{_esc(sex_label)}</strong></td></tr>"
+        )
+        for row in rows:
+            label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
+            values = row.get("values", []) or []
+            bmd = row.get("bmd", "—") or "—"
+            bmdl = row.get("bmdl", "—") or "—"
+            cells = [str(label), *[str(v) for v in values], str(bmd), str(bmdl)]
+            while len(cells) < ncols:
+                cells.append("—")
+            tr_class = "n-row" if row.get("is_n_row") else ""
+            body_rows.append(_emit_table_row(cells, tr_class=tr_class))
+
+    head = _emit_table_header(headers)
+    notes = _emit_table_footnotes(section.get("footnotes", []))
+    caption = _table_caption(node, section.get("caption", ""))
+    return (
+        '<table class="niehstable">'
+        f"<caption>{_esc(caption)}</caption>"
+        f"{head}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+        f"{notes}"
+    )
+
+
+def _emit_table_placeholder(node: DocNode) -> str:
+    """Visible "[Table data pending: ...]" stub keeping the slot's caption."""
+    caption = _table_caption(node, node.title or "")
+    return (
+        '<table class="niehstable"><caption>'
+        f"{_esc(caption)}</caption><tbody><tr><td>"
+        f'<em class="pending">[Table data pending: {_esc(node.title)}]</em>'
+        "</td></tr></tbody></table>"
+    )
+
+
+def _render_narrative_tables(node: DocNode, data: dict) -> str:
+    """
+    H2 group under Results (Animal Condition, Clinical Pathology, etc.).
+    Emits the heading + unified narrative paragraphs.  Child table nodes
+    are walked separately by _walk.
+    """
+    paragraphs: list = []
+    if node.narrative_key:
+        unified = data.get("unified_narratives", {})
+        if isinstance(unified, dict):
+            entry = unified.get(node.narrative_key)
+            if isinstance(entry, list):
+                paragraphs = entry
+            elif isinstance(entry, dict):
+                paragraphs = entry.get("paragraphs", []) or []
+    body = _render_paragraphs(paragraphs)
+    if not body:
+        body = _pending(f"Narrative pending: {node.title}")
+    return f"{_heading(node.level, node.title)}\n{body}"
+
+
+def _render_bmd_summary(node: DocNode, data: dict) -> str:
+    """Apical Endpoint Benchmark Dose Summary table."""
+    summary = data.get("bmd_summary", {}) or {}
+    endpoints = summary.get("endpoints", []) or []
+    paragraphs = summary.get("paragraphs", []) or []
+
+    heading = _heading(node.level, node.title)
+    prose = _render_paragraphs(paragraphs)
+
+    if not endpoints:
+        body = prose or _pending(f"BMD summary endpoints pending: {node.title}")
+        return f"{heading}\n{body}"
+
+    headers = ["Sex", "Endpoint", "BMD", "BMDL", "LOEL", "NOEL", "Direction"]
+    body_rows = []
+    for ep in endpoints:
+        cells = [
+            ep.get("sex", ""),
+            ep.get("endpoint", ""),
+            ep.get("bmd", "—") or "—",
+            ep.get("bmdl", "—") or "—",
+            ep.get("loel", "—") or "—",
+            ep.get("noel", "—") or "—",
+            ep.get("direction", ""),
+        ]
+        body_rows.append(_emit_table_row([str(c) for c in cells]))
+
+    caption = _table_caption(node, node.title)
+    table = (
+        '<table class="niehstable">'
+        f"<caption>{_esc(caption)}</caption>"
+        f"{_emit_table_header(headers)}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+    chunks = [c for c in (heading, prose, table) if c]
+    return "\n".join(chunks)
+
+
+def _render_incidence_table(node: DocNode, data: dict) -> str:
+    """Clinical Observations incidence table — observation × dose group."""
+    section = _find_apical_section(node, data)
+    if not section:
+        return _emit_table_placeholder(node)
+    rows = section.get("incidence_rows", []) or section.get("rows", []) or []
+    if not rows:
+        return _emit_table_placeholder(node)
+
+    doses = section.get("doses", []) or []
+    dose_unit = section.get("dose_unit", "mg/kg")
+    headers = ["Observation"] + [_format_dose_label(d, dose_unit) for d in doses]
+    ncols = len(headers)
+
+    body_rows = []
+    for row in rows:
+        label = row.get("observation") or row.get("label") or ""
+        counts = row.get("counts") or row.get("values") or []
+        cells = [str(label), *[str(c) for c in counts]]
+        while len(cells) < ncols:
+            cells.append("0")
+        body_rows.append(_emit_table_row(cells))
+
+    caption = _table_caption(node, section.get("caption", "") or node.title)
+    notes = _emit_table_footnotes(section.get("footnotes", []))
+    return (
+        '<table class="niehstable">'
+        f"<caption>{_esc(caption)}</caption>"
+        f"{_emit_table_header(headers)}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+        f"{notes}"
+    )
+
+
+def _render_genomics_section(node: DocNode, data: dict) -> str:
+    """Gene Set or Gene BMD section — per-(organ, sex) subsections."""
+    role = "gene_set" if node.id == "gene-sets" else "gene"
+    heading = _heading(node.level, node.title)
+    top_narrative_key = "gene_set_narrative" if role == "gene_set" else "gene_narrative"
+    top_nar = data.get(top_narrative_key)
+    intro_paragraphs: list = []
+    if isinstance(top_nar, list):
+        intro_paragraphs = top_nar
+    elif isinstance(top_nar, dict) and isinstance(top_nar.get("paragraphs"), list):
+        intro_paragraphs = top_nar["paragraphs"]
+    intro = _render_paragraphs(intro_paragraphs)
+
+    entries = [
+        s for s in (data.get("genomics_sections", []) or [])
+        if s.get("type") == role
+    ]
+    if not entries:
+        body = intro or _pending(f"Genomics data pending: {node.title}")
+        return f"{heading}\n{body}"
+
+    blocks: list[str] = [heading]
+    if intro:
+        blocks.append(intro)
+
+    for entry in entries:
+        organ = (entry.get("organ") or "").capitalize()
+        sex = (entry.get("sex") or "").capitalize()
+        blocks.append(f"<h4>{_esc(f'{organ}, {sex}')}</h4>")
+        narrative = entry.get("narrative") or []
+        if narrative:
+            blocks.append(_render_paragraphs(narrative))
+        if role == "gene_set":
+            blocks.append(_render_gene_set_table(entry))
+        else:
+            blocks.append(_render_gene_table(entry))
+        descriptions = (
+            entry.get("go_descriptions") if role == "gene_set"
+            else entry.get("gene_descriptions")
+        ) or []
+        if descriptions:
+            blocks.append(_render_description_list(descriptions))
+
+    return "\n".join(b for b in blocks if b)
+
+
+def _render_gene_set_table(entry: dict) -> str:
+    """Top-gene-sets table for one (organ, sex)."""
+    rows = entry.get("gene_sets", []) or []
+    if not rows:
+        return _pending(
+            f"Top gene sets pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
+        )
+    headers = ["Rank", "GO ID", "Term", "BMD", "BMDL", "Genes", "Direction"]
+    body_rows = []
+    for r in rows:
+        cells = [
+            r.get("rank", ""),
+            r.get("go_id", ""),
+            r.get("go_term", ""),
+            r.get("bmd", "—"),
+            r.get("bmdl", "—"),
+            r.get("n_genes", ""),
+            r.get("direction", ""),
+        ]
+        body_rows.append(_emit_table_row([str(c) for c in cells]))
+    return (
+        '<table class="niehstable">'
+        f"{_emit_table_header(headers)}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+
+
+def _render_gene_table(entry: dict) -> str:
+    """Top-genes table for one (organ, sex)."""
+    rows = entry.get("top_genes", []) or []
+    if not rows:
+        return _pending(
+            f"Top genes pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
+        )
+    headers = ["Rank", "Gene", "BMD", "BMDL", "Direction", "Fold Change"]
+    body_rows = []
+    for r in rows:
+        cells = [
+            r.get("rank", ""),
+            r.get("gene") or r.get("gene_symbol", ""),
+            r.get("bmd", "—"),
+            r.get("bmdl", "—"),
+            r.get("direction", ""),
+            r.get("fold_change", "—"),
+        ]
+        body_rows.append(_emit_table_row([str(c) for c in cells]))
+    return (
+        '<table class="niehstable">'
+        f"{_emit_table_header(headers)}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+
+
+def _render_description_list(descriptions: list) -> str:
+    """A <dl> of go-term or gene definitions for the genomics section."""
+    items: list[str] = []
+    for d in descriptions:
+        if not isinstance(d, dict):
+            continue
+        label = (
+            d.get("label")
+            or d.get("go_term")
+            or d.get("gene")
+            or d.get("go_id")
+            or ""
+        )
+        text = d.get("text") or d.get("description") or ""
+        if not (label or text):
+            continue
+        items.append(f"<dt>{_esc(label)}</dt><dd>{_esc(text)}</dd>")
+    if not items:
+        return ""
+    return f'<dl class="description-list">{"".join(items)}</dl>'
+
+
+def _render_cover(node: DocNode, data: dict) -> str:
+    """
+    Title block at the top of the HTML preview.
+
+    The LaTeX path skips the NIEHS-branded cover and uses \\maketitle.
+    For HTML the equivalent affordance is a styled title block — the
+    first <h1> in the document plus a metadata line.  Suppress the
+    title-page node entirely (its content is the same as cover).
+    """
+    title = data.get("title", "5dToxReport")
+    chemical = data.get("chemical_name", "")
+    casrn = data.get("casrn", "")
+    dtxsid = data.get("dtxsid", "")
+    meta_parts = [p for p in (chemical, casrn, dtxsid) if p]
+    meta = " · ".join(_esc(p) for p in meta_parts)
+    return (
+        '<header class="title-block">'
+        f"<h1>{_esc(title)}</h1>"
+        f'<div class="meta">{meta}</div>'
+        "</header>"
+    )
+
+
+def _render_title_page(node: DocNode, data: dict) -> str:
+    """Suppressed — the cover handler already emitted the title block."""
+    return ""
+
+
+def _render_unimplemented(node: DocNode, data: dict) -> str:
+    """
+    Catch-all for node_types we haven't ported.  Emits this node's
+    heading (if any) plus a visible pending placeholder.
+    """
+    heading = _heading(node.level, node.title) if node.level > 0 else ""
+    placeholder = _pending(
+        f"Section pending: {node.node_type} rendering not yet implemented"
+    )
+    return f"{heading}\n{placeholder}" if heading else f"<!-- {node.node_type} {node.id} -->{placeholder}"
+
+
+# Dispatch table — one entry per DocNode.node_type value.  Mirrors
+# latex_generator.py:_DISPATCH so the two stay in lock-step.  Anything
+# not listed falls through to _render_unimplemented.
+_DISPATCH: dict[str, object] = {
+    "cover":            _render_cover,
+    "title-page":       _render_title_page,
+    "front-matter":     _render_front_matter,
+    "narrative":        _render_narrative,
+    "heading-only":     _render_heading_only,
+    "appendix":         _render_appendix,
+    "tables-list":      _render_tables_list,
+    "narrative+tables": _render_narrative_tables,
+    "table":            _render_apical_table,
+    "incidence-table":  _render_incidence_table,
+    "bmd-summary":      _render_bmd_summary,
+    "genomics-section": _render_genomics_section,
+}
+
+
+# ---------------------------------------------------------------------------
+# Tree walk
+# ---------------------------------------------------------------------------
+
+def _walk(node: DocNode, data: dict) -> list[str]:
+    """
+    Render one node, then recurse into its children.  Same flow as
+    latex_generator._walk; only the handlers differ.
+    """
+    handler = _DISPATCH.get(node.node_type, _render_unimplemented)
+    chunks: list[str] = []
+    chunk = handler(node, data)
+    if chunk:
+        chunks.append(chunk)
+    for child in node.children:
+        chunks.extend(_walk(child, data))
+    return chunks
+
+
+# ---------------------------------------------------------------------------
+# Document skeleton
+# ---------------------------------------------------------------------------
+
+def _document_skeleton(body: str) -> str:
+    """
+    Wrap the rendered body in a self-contained HTML5 document with
+    inline CSS.  Self-contained because the iframe srcdoc is sandboxed
+    from the parent page's stylesheet.
+    """
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en"><head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>NIEHS Report Preview</title>'
+        f"<style>{_PREVIEW_CSS}</style>"
+        "</head><body>"
+        f"{body}"
+        "</body></html>"
+    )
+
+
+def _fragment_skeleton(body: str) -> str:
+    """
+    Minimal HTML wrapper for fragment-compile previews.
+
+    Stripped down: no title block (the cover/title-page nodes are
+    outside the requested subtree), but still self-contained so the
+    iframe srcdoc renders standalone.  Same CSS as the full document.
+    """
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en"><head>'
+        '<meta charset="utf-8">'
+        f"<style>{_PREVIEW_CSS}</style>"
+        "</head><body>"
+        f"{body}"
+        "</body></html>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def generate_html(
+    data: dict,
+    section_filter: Optional[str] = None,
+) -> str:
+    """
+    Walk DOCUMENT_TREE + data and produce a complete HTML document.
+
+    Args:
+        data:           The data dict marshal_export_data builds (same
+                        shape generate_latex consumes).
+        section_filter: For the fragment-compile preview path.  When set,
+                        only the subtree at that DocNode id renders.
+
+    Returns:
+        A self-contained HTML string suitable for iframe srcdoc.
+    """
+    # Fragment path — only emit the requested subtree.
+    if section_filter:
+        node = find_node(section_filter)
+        if node is None:
+            body = (
+                f"<p><em>No section found for id "
+                f"<code>{_esc(section_filter)}</code></em></p>"
+            )
+            return _fragment_skeleton(body)
+        body = "\n".join(_walk(node, data))
+        return _fragment_skeleton(body)
+
+    # Full-document path — walk every top-level node in tree order.
+    body_chunks: list[str] = []
+    for top in DOCUMENT_TREE:
+        body_chunks.extend(_walk(top, data))
+    body = "\n".join(body_chunks)
+    return _document_skeleton(body)

@@ -188,17 +188,21 @@ async def api_preview_latex_html(request: Request):
     full report renders.
 
     Pipeline:
-      body → marshal_export_data → generate_latex(section_filter=…)
-           → preprocess for pandoc → pandoc -t html5 → HTML string
+      body → marshal_export_data → generate_html(section_filter=…) → HTML
 
-    The HTML is delivered with text/html so the browser can drop it
-    straight into an iframe via srcdoc.  The preview is intentionally
-    lossy compared to Overleaf's final compile (we substitute the
-    custom niehs.cls + niehstable env for stock LaTeX before pandoc);
-    final rendering remains Overleaf's job.
+    Both the LaTeX export and this HTML preview walk the same
+    DOCUMENT_TREE with the same data dict, dispatching on the same
+    node_type set — they're semantically equivalent renderings of the
+    same canonical structure.  A bug in apical-table rendering manifests
+    in both outputs (so fixing once fixes both); the only difference is
+    the output format each handler emits.
+
+    The HTML is self-contained (inline CSS) and delivered with
+    text/html so the browser can drop it straight into an iframe via
+    srcdoc.
     """
     from report_pdf import marshal_export_data
-    from latex_html_preview import render_html_preview
+    from html_generator import generate_html
 
     body = await request.json()
     _resolve_bm2_into_body(body)
@@ -210,7 +214,7 @@ async def api_preview_latex_html(request: Request):
         # used to log so existing dashboards / grep recipes keep working.
         asecs = body.get("apical_sections", [])
         logger.info(
-            "preview-latex-html section_filter=%s, apical_sections=%d, "
+            "preview-html section_filter=%s, apical_sections=%d, "
             "platforms=%s",
             section_filter, len(asecs),
             [s.get("platform", "?") for s in asecs],
@@ -218,11 +222,11 @@ async def api_preview_latex_html(request: Request):
 
     try:
         report_data = marshal_export_data(body, section_filter=section_filter)
-        html = render_html_preview(report_data, section_filter=section_filter)
+        html = generate_html(report_data, section_filter=section_filter)
     except Exception as e:
-        logging.exception("LaTeX → HTML preview failed")
+        logging.exception("HTML preview generation failed")
         return JSONResponse(
-            {"error": f"LaTeX preview generation failed: {e}"},
+            {"error": f"HTML preview generation failed: {e}"},
             status_code=500,
         )
 
