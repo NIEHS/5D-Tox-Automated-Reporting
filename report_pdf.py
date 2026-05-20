@@ -63,6 +63,120 @@ from pathlib import Path
 from table_builder_common import lettered_footnote, finalize_footnotes
 
 
+# ---------------------------------------------------------------------------
+# Apical section normalizer — canonical input shape for the renderers
+# ---------------------------------------------------------------------------
+# Both the LaTeX export and the in-app HTML preview consume the same
+# data dict.  Their per-row table iteration assumes:
+#
+#   row["endpoint"]  — the row label
+#   row["doses"]     — list of dose values defining column order
+#   row["values"]    — list of cell strings parallel to doses
+#   row["bmd"], row["bmdl"], row.get("is_n_row")
+#
+# But the web UI (and the session cache it derives from) ships rows
+# with row["label"] for the label and row["values"] as a dict keyed by
+# dose-as-string.  Without normalization, the renderers iterate the
+# values dict, get the dose strings (its keys) back, and emit the same
+# garbage in every row's dose columns — which is exactly the bug
+# observed in clinical-endpoint tables on 2026-05-19.
+#
+# normalize_apical_section_for_render reshapes one apical_sections entry
+# into the canonical form.  marshal_export_data invokes it on every
+# entry so renderers see consistent input; load_session_data calls it
+# too for the CLI path.  Idempotent — already-normalized rows pass
+# through unchanged.
+
+
+def normalize_apical_section_for_render(sec: dict) -> dict:
+    """
+    Return a shallow-copy of `sec` with apical table rows reshaped to
+    the canonical render-input form.
+
+    Source shapes (per-row) we accept and unify:
+
+        {label, doses, values: {dose-string: str}, bmd, bmdl,
+         is_n_row?, marker_refs?, ...}        ← web UI body & cache
+        {endpoint, doses, values: [str], bmd, bmdl, is_n_row?, ...}
+                                              ← already-normalized
+
+    Output shape (per-row):
+
+        {endpoint, doses, values: [str], bmd, bmdl, is_n_row,
+         + any other keys carried through}
+
+    Rows whose `values` is already a list are passed through untouched
+    (modulo the label→endpoint rename if `endpoint` is absent).  Rows
+    with neither `tables_json` nor `table_data` come back unchanged so
+    callers can keep using the same dict reference.
+    """
+    # Resolve which key carries the per-sex row lists.  The web UI
+    # forwards apical_sections entries with the data under "table_data"
+    # (renamed from the cache's "tables_json" at buildExportPayload
+    # time), so handle both.
+    src = sec.get("table_data") if isinstance(sec.get("table_data"), dict) else None
+    if src is None:
+        src = sec.get("tables_json") if isinstance(sec.get("tables_json"), dict) else None
+    if not src:
+        return sec  # nothing to normalize; pass through unchanged
+
+    table_data: dict[str, list[dict]] = {}
+    for sex in ("Male", "Female"):
+        rows = src.get(sex, []) or []
+        if not rows:
+            continue
+        normalized_rows: list[dict] = []
+        for row in rows:
+            doses = row.get("doses", []) or []
+            raw_values = row.get("values", [])
+            # Flatten dict-by-dose into list-parallel-to-doses when needed.
+            # When values is already a list, accept it as-is.
+            if isinstance(raw_values, list):
+                values_list = [str(v) for v in raw_values]
+            elif isinstance(raw_values, dict):
+                values_list = []
+                for d in doses:
+                    # Try the dose's str() form first; for whole-number
+                    # floats (e.g. 1.0) also try the int form because the
+                    # cache normalizes "1.0" → "1" inconsistently across
+                    # platforms.
+                    candidates = [str(d)]
+                    if isinstance(d, float) and d.is_integer():
+                        candidates.append(str(int(d)))
+                    if isinstance(d, int):
+                        candidates.append(str(float(d)))
+                    val = "—"
+                    for k in candidates:
+                        if k in raw_values:
+                            val = str(raw_values[k])
+                            break
+                    values_list.append(val)
+            else:
+                values_list = []
+            # Preserve every original key (marker_refs, emphasize,
+            # day_label, etc.) and overlay the canonical fields.
+            normalized = dict(row)
+            normalized["endpoint"] = (
+                row.get("endpoint") or row.get("label") or row.get("day_label") or ""
+            )
+            normalized["doses"] = doses
+            normalized["values"] = values_list
+            normalized["bmd"] = row.get("bmd", "—") or "—"
+            normalized["bmdl"] = row.get("bmdl", "—") or "—"
+            normalized["is_n_row"] = bool(row.get("is_n_row", False))
+            normalized_rows.append(normalized)
+        table_data[sex] = normalized_rows
+
+    out = dict(sec)
+    out["table_data"] = table_data
+    # Drop tables_json from the canonical shape — table_data is now the
+    # only authoritative form, and leaving both around invites the next
+    # renderer drift.
+    out.pop("tables_json", None)
+    out["narrative"] = sec.get("narrative", []) or []
+    return out
+
+
 def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     """
     Convert the /api/export-pdf request body (same schema as /api/export-docx)
@@ -416,6 +530,18 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         data["apical_sections"].sort(
             key=lambda s: s.get("table_number") or 10_000,
         )
+
+        # Canonicalize per-row shape so both renderers (LaTeX and HTML)
+        # see the same input.  The web UI ships row.values as a dict
+        # keyed by dose-as-string; the renderers iterate values as a
+        # list — without this step they'd produce the dict's keys (the
+        # dose strings) in every row's value columns, identical for
+        # every endpoint.  See normalize_apical_section_for_render's
+        # docstring for the full reasoning.
+        data["apical_sections"] = [
+            normalize_apical_section_for_render(s)
+            for s in data["apical_sections"]
+        ]
 
     # Unified narratives — group-level prose spanning multiple platform tables.
     # The NIEHS reference has one narrative for "Animal Condition, Body Weights,

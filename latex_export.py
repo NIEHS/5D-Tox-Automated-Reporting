@@ -203,58 +203,12 @@ def _load_json(path: Path | None) -> dict | list | None:
 
 def _normalize_apical_section(sec: dict) -> dict:
     """
-    Convert a `_cache_sections_*.json` section entry into the shape the
-    latex_generator's apical-table handler expects.
-
-    The cache stores `tables_json` as a dict keyed by sex, with each row
-    carrying `values` as a dict keyed by dose value (string form).  The
-    generator expects `table_data` keyed by sex with rows whose `values`
-    are a flat list parallel to the row's `doses` list.  This function
-    translates between the two.
-
-    Why the dict-of-values form exists in the cache
-    -----------------------------------------------
-    The web UI uses the dict-by-dose form so it can render cells in any
-    column order regardless of input.  The LaTeX path renders in a
-    fixed left-to-right tabular, so we flatten back to a list here.
+    Backwards-compat shim: delegates to the canonical normalizer in
+    report_pdf so the CLI path and the web-export marshaling path share
+    one implementation.
     """
-    tables_json = sec.get("tables_json")
-    if not isinstance(tables_json, dict):
-        return sec  # already in expected shape or empty
-    table_data: dict[str, list] = {}
-    for sex in ("Male", "Female"):
-        rows = tables_json.get(sex, []) or []
-        normalized_rows: list[dict] = []
-        for row in rows:
-            doses = row.get("doses", []) or []
-            values_dict = row.get("values", {}) or {}
-            values_list: list[str] = []
-            for d in doses:
-                # Try the original string form first; fall back to int-form
-                # for whole-number doses (the cache normalizes "0.0" → "0").
-                keys = [str(d)]
-                if isinstance(d, float) and d.is_integer():
-                    keys.append(str(int(d)))
-                val: str = "—"
-                for k in keys:
-                    if k in values_dict:
-                        val = str(values_dict[k])
-                        break
-                values_list.append(val)
-            normalized_rows.append({
-                "endpoint": row.get("label", ""),
-                "doses": doses,
-                "values": values_list,
-                "bmd": row.get("bmd", "—"),
-                "bmdl": row.get("bmdl", "—"),
-                "is_n_row": bool(row.get("is_n_row", False)),
-            })
-        if normalized_rows:
-            table_data[sex] = normalized_rows
-    out = dict(sec)  # shallow copy so we don't mutate the cache
-    out["table_data"] = table_data
-    out["narrative"] = sec.get("narrative", []) or []
-    return out
+    from report_pdf import normalize_apical_section_for_render
+    return normalize_apical_section_for_render(sec)
 
 
 def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:

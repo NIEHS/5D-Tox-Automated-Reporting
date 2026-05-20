@@ -201,3 +201,81 @@ def test_special_characters_are_html_escaped():
     # Escaped form must appear
     assert "X &amp; Y &lt;example&gt;" in html
     assert "&lt;script&gt;" in html
+
+
+# ---------------------------------------------------------------------------
+# Regression: dict-by-dose values must not leak into cell columns
+# ---------------------------------------------------------------------------
+# Bug observed 2026-05-19: when the web UI POSTed apical_sections with
+# row.values shaped as {dose: cell}, the renderers iterated the dict and
+# emitted its KEYS (the dose strings) in every endpoint's cell columns —
+# identical for every row.  Fixed by normalize_apical_section_for_render
+# in marshal_export_data; this test pins that fix so it doesn't regress.
+
+def test_apical_row_values_render_real_measurements_not_dose_keys():
+    """
+    Feed the renderer a row in the web-UI shape (values as dict-by-dose,
+    label key 'label') and verify the rendered HTML carries the actual
+    measurement strings, not the dose-string keys.
+    """
+    from report_pdf import marshal_export_data
+    body = {
+        "chemical_name": "TestChem",
+        "casrn": "00-00-0",
+        "dtxsid": "DTXSID00000000",
+        "apical_sections": [
+            {
+                "platform": "Body Weight",
+                "table_data": {
+                    "Male": [
+                        {
+                            "label": "n",
+                            "doses": [0.0, 1.0, 10.0],
+                            "values": {"0": "10", "1": "5", "10": "5"},
+                            "bmd": "NA", "bmdl": "NA", "is_n_row": True,
+                        },
+                        {
+                            "label": "Day 5",
+                            "doses": [0.0, 1.0, 10.0],
+                            "values": {"0": "245.3", "1": "244.8", "10": "240.1"},
+                            "bmd": "8.5", "bmdl": "3.6",
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+    data = marshal_export_data(body)
+    html = generate_html(data, section_filter="table-body-weight")
+    # The actual measurement strings must appear in the rendered HTML.
+    assert "245.3" in html
+    assert "244.8" in html
+    assert "240.1" in html
+    # The dose-string keys ("0", "1", "10") must NOT appear as cell values
+    # of the Day-5 row.  Specifically the run "<td>0</td><td>1</td><td>10</td>"
+    # is what the bug would produce — assert against that sequence.
+    assert "<td>0</td><td>1</td><td>10</td>" not in html.replace(" ", "").replace(
+        '<td class="', '<td '  # tolerate any sex-separator td-class noise
+    )
+
+
+def test_normalize_apical_section_is_idempotent():
+    """Re-normalizing an already-normalized section is a no-op."""
+    from report_pdf import normalize_apical_section_for_render
+    sec = {
+        "platform": "Body Weight",
+        "table_data": {
+            "Male": [
+                {
+                    "endpoint": "Day 5",
+                    "doses": [0.0, 1.0, 10.0],
+                    "values": ["245.3", "244.8", "240.1"],
+                    "bmd": "8.5", "bmdl": "3.6", "is_n_row": False,
+                },
+            ],
+        },
+    }
+    once = normalize_apical_section_for_render(sec)
+    twice = normalize_apical_section_for_render(once)
+    assert once["table_data"] == twice["table_data"]
+    assert once["table_data"]["Male"][0]["values"] == ["245.3", "244.8", "240.1"]
