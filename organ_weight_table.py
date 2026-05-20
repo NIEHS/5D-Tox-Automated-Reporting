@@ -40,6 +40,8 @@ import math
 
 from table_builder_common import (
     BMD_DEFINITION,
+    SIGNIFICANCE_EXPLANATION,
+    SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
     mean_se,
     format_mean_se,
@@ -48,6 +50,14 @@ from table_builder_common import (
     find_sidecar_paths,
     build_n_row,
     format_dose_label,
+    legend_footnote,
+    definition_footnote,
+    lettered_footnote,
+    finalize_footnotes,
+    detect_core_animal_availability,
+    build_sample_availability_footnotes,
+    build_attrition_footnote,
+    is_reportable_bmd,
 )
 
 
@@ -76,18 +86,11 @@ FOOTNOTE_RELATIVE_WEIGHT = (
     "are given as mg organ weight/g body weight."
 )
 
-# Significance explanation — same paragraph as clinical pathology
-SIGNIFICANCE_EXPLANATION = (
-    "Statistical significance for a dosed group indicates a significant "
-    "pairwise test compared to the vehicle control group. Statistical "
-    "significance for the vehicle control group indicates a significant "
-    "trend test."
-)
-
-# Organ weight tables in the reference only show ** (p ≤ 0.01)
-SIGNIFICANCE_MARKER_LEGEND = (
-    "**Statistically significant at p \u2264 0.01."
-)
+# The significance-marker text (SIGNIFICANCE_EXPLANATION + the */** legend)
+# is shared across every apical table and lives in table_builder_common -
+# imported above rather than re-declared here.  The reference organ-weight
+# tables emphasize ** (p <= 0.01); the shared legend also names * for
+# uniformity across the apical table set.
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,18 @@ def build_organ_weight_table_from_sidecar(
     sidecar_data: dict[str, dict] = {}
     for sex, sc_path in sidecar_paths.items():
         sidecar_data[sex] = load_sidecar(sc_path)
+
+    # ── Detect Core Animal availability per dose (shared helper) ──────────
+    # Splits each dose group's Core Animals into "has usable data" vs
+    # "all-NA" (organ not weighed — animal died before terminal sacrifice,
+    # tissue not collected, etc.).  Shared with clinical_pathology_table.py;
+    # see table_builder_common.  Feeds the sample-availability and attrition
+    # footnotes built near the end of this function.
+    (
+        core_n_by_sex_dose,
+        total_core_by_sex_dose,
+        missing_sample_animals,
+    ) = detect_core_animal_availability(sidecar_data)
 
     # Collect all doses for consistent column set
     all_doses: set[float] = set()
@@ -336,18 +351,22 @@ def build_organ_weight_table_from_sidecar(
             abs_at_dose = ep_vals.get(organ, {})
             rel_at_dose = rel_data.get(organ, {})
 
-            # Get NTP stats for BMD/BMDL (on the absolute weight endpoint)
+            # Get NTP stats for BMD/BMDL (on the absolute weight endpoint).
+            # `responsive` is the NTP statistical gate \u2014 carried onto the
+            # absolute row so the row-emphasis rule can use it.
             organ_ntp = sex_ntp.get(organ, {})
             if isinstance(organ_ntp, dict):
                 organ_bmd = organ_ntp.get("bmd_str", "\u2014")
                 organ_bmdl = organ_ntp.get("bmdl_str", "\u2014")
                 organ_vbd = organ_ntp.get("values_by_dose", {})
                 organ_trend = organ_ntp.get("trend_marker", "")
+                organ_responsive = organ_ntp.get("responsive", False)
             else:
                 organ_bmd = getattr(organ_ntp, "bmd_str", "\u2014")
                 organ_bmdl = getattr(organ_ntp, "bmdl_str", "\u2014")
                 organ_vbd = getattr(organ_ntp, "values_by_dose", {})
                 organ_trend = getattr(organ_ntp, "trend_marker", "")
+                organ_responsive = getattr(organ_ntp, "responsive", False)
 
             # Absolute weight row — use NTP stats values (includes significance markers)
             abs_values: dict[str, str] = {}
@@ -372,12 +391,19 @@ def build_organ_weight_table_from_sidecar(
             bmd_text = organ_bmd if organ_bmd else "\u2014"
             bmdl_text = organ_bmdl if organ_bmdl else "\u2014"
 
+            # Row emphasis (bold) — same union rule as clinical pathology:
+            # the absolute-weight row is emphasized when it passed the NTP
+            # responsive gate OR BMDExpress produced a reportable BMD.
             abs_entry = {
                 "label": f"{organ} Absolute (g)",
                 "doses": sorted_doses,
                 "values": abs_values,
                 "bmd": bmd_text,
                 "bmdl": bmdl_text,
+                "responsive": bool(organ_responsive),
+                "emphasize": (
+                    bool(organ_responsive) or is_reportable_bmd(bmd_text)
+                ),
             }
             if organ_trend:
                 abs_entry["trend_marker"] = organ_trend
@@ -397,12 +423,17 @@ def build_organ_weight_table_from_sidecar(
                 else:
                     rel_values[dk] = "\u2013"
 
+            # Relative-weight rows are never modeled by BMDExpress (bmd is
+            # always "ND") and have no responsive gate, so emphasize is
+            # always False — set it explicitly for uniformity with the
+            # absolute rows.
             rows.append({
                 "label": f"{organ} Relative (mg/g)",
                 "doses": sorted_doses,
                 "values": rel_values,
                 "bmd": "ND",
                 "bmdl": "ND",
+                "emphasize": is_reportable_bmd("ND"),
             })
 
         serialized[sex] = rows
@@ -410,20 +441,72 @@ def build_organ_weight_table_from_sidecar(
     if not serialized:
         return {}
 
-    # NIEHS reference footnote structure for organ weight (Table 3):
-    #   1. Significance explanation paragraph (unnumbered)
-    #   2. Significance marker legend (**p ≤ 0.01)
-    #   3. BMD definition paragraph
-    #   4. (a) Data format description
-    #   5. (b) Statistical method (Williams/Dunnett for organ weight)
-    #   6. (c,d,...) Attrition footnotes (dynamic)
-    #   7. (e) Relative weight definition
-    footnotes = [
-        FOOTNOTE_DATA_FORMAT,           # (a)
-        FOOTNOTE_STAT_METHOD_ORGAN,     # (b)
+    # ── Footnotes (typed model — see table_builder_common) ────────────────
+    # Order in the list IS the render order; finalize_footnotes assigns the
+    # a/b/c... letters to the `lettered` records (legend/definition skipped):
+    #
+    #   legend      — significance explanation               [Canonical]
+    #   legend      — */** marker key                        [Canonical]
+    #   definition  — BMD/BMDL abbreviation paragraph         [Canonical]
+    #   (a)         — data format                            [Canonical]
+    #   (b)         — statistical method (Williams/Dunnett)   [Canonical]
+    #   (c)         — relative-weight definition              [Canonical]
+    #   (d,e,...)   — sample-availability (organ not weighed) [Canonical]
+    #   (next)      — attrition (whole dose group, no data)   [Canonical]
+    #
+    # The sample-availability and attrition footnotes are dynamic — they
+    # only appear when an organ-weight sidecar actually has Core Animals
+    # with no usable data — and are built by the shared helpers in
+    # table_builder_common, identical to clinical pathology.
+    #
+    # Provenance: every organ-weight footnote is Canonical — anchored in
+    # NIEHS Report 10 Table 3, with the reference PDF as the authority.
+    footnotes: list[dict] = [
+        legend_footnote(SIGNIFICANCE_EXPLANATION),
+        legend_footnote(SIGNIFICANCE_MARKER_LEGEND),
+        definition_footnote(BMD_DEFINITION),
+        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
+        lettered_footnote(FOOTNOTE_STAT_METHOD_ORGAN, "stat_method"),
+        lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT, "relative_weight"),
     ]
-    # Attrition footnotes would be inserted here as (c,d,...) if applicable
-    footnotes.append(FOOTNOTE_RELATIVE_WEIGHT)  # last lettered footnote
+
+    # ── Sample-availability + attrition footnotes (shared helpers) ────────
+    # Same detection and footnote-building as clinical pathology; see
+    # table_builder_common.  For most organ-weight sessions these produce
+    # nothing (terminal organ weights are recorded for every Core Animal),
+    # but they fire correctly when an animal's tissue was not collected.
+    n_row_marker_refs: dict[str, dict[float, str]] = {}
+
+    sa_records, sa_refs = build_sample_availability_footnotes(
+        missing_sample_animals, total_core_by_sex_dose, sorted_doses,
+    )
+    footnotes.extend(sa_records)
+
+    attr_record, attr_refs = build_attrition_footnote(
+        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit,
+    )
+    if attr_record is not None:
+        footnotes.append(attr_record)
+
+    for sex, dose_refs in sa_refs.items():
+        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+    for sex, dose_refs in attr_refs.items():
+        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+
+    # Attach the marker refs to each sex's n-row (built earlier in this
+    # function), then finalize_footnotes assigns letters and derives the
+    # rows' `markers` dicts from `marker_refs`.
+    for sex, rows in serialized.items():
+        sex_refs = n_row_marker_refs.get(sex, {})
+        if sex_refs and rows and rows[0].get("is_n_row"):
+            n_row = rows[0]
+            refs = n_row.get("marker_refs", {})
+            refs.update({
+                js_dose_key(d): fid for d, fid in sex_refs.items()
+            })
+            n_row["marker_refs"] = refs
+
+    finalize_footnotes(footnotes, serialized)
 
     return {
         "title": "Organ Weight",
@@ -432,8 +515,8 @@ def build_organ_weight_table_from_sidecar(
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",
         "table_data": serialized,
+        # Typed footnote list: legend + definition + lettered records, with
+        # letters already assigned by finalize_footnotes.  The old separate
+        # bmd_definition / significance_* keys are folded in as records.
         "footnotes": footnotes,
-        "bmd_definition": BMD_DEFINITION,
-        "significance_explanation": SIGNIFICANCE_EXPLANATION,
-        "significance_marker_legend": SIGNIFICANCE_MARKER_LEGEND,
     }

@@ -463,12 +463,12 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
             // All rows rendered as-is (n, day 0, day 5)
             for (const row of rows) {
                 const tr = document.createElement('tr');
-                // Bold the whole row when the endpoint passed the NTP
-                // Jonckheere+Dunnett gate (responsive=true).  This is the
-                // NIEHS-style visual cue for "this endpoint contributed
-                // a BMD" — see clinical_pathology_table.py where the
-                // flag is carried into row data.
-                if (row.responsive) tr.classList.add('responsive-row');
+                // Bold the whole row when the table builder flagged it for
+                // emphasis: either the endpoint passed the NTP statistical
+                // gate, or BMDExpress modeled it (the BMD column shows a
+                // value other than "—").  The union rule is computed in
+                // clinical_pathology_table.py; here we just read the flag.
+                if (row.emphasize) tr.classList.add('emphasized-row');
                 tr.innerHTML = `<td class="endpoint-label">${row.label}</td>`;
                 const markers = row.markers || {};
                 for (const dose of doses) {
@@ -498,8 +498,14 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
         table.appendChild(tbody);
         previewEl.appendChild(table);
 
-        // Render footnotes from the sidecar builder (stored in apicalSections
-        // state by sections.js when the process-integrated response arrives).
+        // Render the typed footnote list the table builder emitted
+        // (legend / definition / lettered records; letters already assigned
+        // by finalize_footnotes — see table_builder_common.py).  Dispatch on
+        // each record's `kind`: legend/definition render as unlettered lines,
+        // lettered records render with their own pre-assigned `letter`.
+        // The cell superscript markers (row.markers, used above) carry the
+        // matching letters because finalize_footnotes assigned both from the
+        // one id->letter map.
         const sectionInfo = apicalSections[bm2Id];
         const footnotes = sectionInfo?.footnotes;
         if (footnotes && footnotes.length > 0) {
@@ -508,10 +514,19 @@ function renderTablePreview(bm2Id, tables, doseUnit, tableType) {
             fnDiv.style.fontSize = '0.75rem';
             fnDiv.style.marginTop = '4px';
             fnDiv.style.lineHeight = '1.4';
-            const letters = 'abcdefghijklmnopqrstuvwxyz';
-            fnDiv.innerHTML = footnotes.map((fn, i) =>
-                `<div><sup>${letters[i]}</sup> ${fn}</div>`
-            ).join('');
+            fnDiv.innerHTML = footnotes.map(fn => {
+                // Defensive: a pre-typed-model cached session could still
+                // hold a bare string.  Render its text with no marker (the
+                // sections-cache schema bump forces a reprocess, so this is
+                // a should-never-happen fallback).
+                if (typeof fn === 'string') {
+                    return `<div>${fn}</div>`;
+                }
+                if (fn.kind === 'legend' || fn.kind === 'definition') {
+                    return `<div>${fn.text || ''}</div>`;
+                }
+                return `<div><sup>${fn.letter || ''}</sup> ${fn.text || ''}</div>`;
+            }).join('');
             previewEl.appendChild(fnDiv);
         }
 

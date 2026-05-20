@@ -68,6 +68,10 @@ from table_builder_common import (
     load_sidecar as _load_sidecar,
     find_sidecar_paths,
     BMD_DEFINITION,
+    definition_footnote,
+    lettered_footnote,
+    finalize_footnotes,
+    is_reportable_bmd,
 )
 
 
@@ -115,250 +119,6 @@ def _study_day_label(probe_label: str) -> str:
     if probe_label.upper().startswith("SD"):
         return probe_label[2:]
     return probe_label
-
-
-# ---------------------------------------------------------------------------
-# BMD/BMDL presentation rules
-# ---------------------------------------------------------------------------
-
-def _bmd_display(row, is_baseline: bool) -> tuple[str, str]:
-    """
-    Apply NIEHS business rules to determine BMD/BMDL cell text.
-
-    The inferred .bm2 data is the source of truth for BMD values.
-    Each study day probe (SD0, SD5) is modeled independently by
-    BMDExpress, so both baseline and terminal can have BMD results
-    if the statistical gate passes.
-
-    Rules:
-        - If the endpoint is NOT responsive (Jonckheere trend AND
-          Dunnett pairwise not both significant): "ND" — BMD was
-          not determined because the statistical gate was not passed.
-        - If responsive AND BMDExpress produced a result: show the
-          numeric BMD/BMDL value.
-        - If responsive BUT BMDExpress failed to model (noisy data,
-          convergence failure, etc.): "ND" — not determined because
-          modeling couldn't produce a value.
-
-    The NIEHS reference shows ND for body weight because the gate
-    didn't pass.  With different data, any study day could show a
-    numeric BMD.
-
-    Args:
-        row:         A TableRow object with bmd_str, bmdl_str, responsive,
-                     and bmd_status attributes.
-        is_baseline: True for study day 0 rows (unused — all days use
-                     the same logic now).
-
-    Returns:
-        (bmd_text, bmdl_text) tuple of display strings.
-    """
-    if not row.responsive:
-        # Gate not passed — BMD not computed
-        return ("ND", "ND")
-
-    # Gate passed — show BMDExpress result
-    bmd = row.bmd_str if row.bmd_str and row.bmd_str != "\u2014" else "ND"
-    bmdl = row.bmdl_str if row.bmdl_str and row.bmdl_str != "\u2014" else "ND"
-    return (bmd, bmdl)
-
-
-# ---------------------------------------------------------------------------
-# Attrition footnotes
-# ---------------------------------------------------------------------------
-
-@dataclass
-class _AttritionNote:
-    """One animal attrition event to be rendered as a footnote."""
-    dose: float
-    count: int
-    sex: str
-    description: str  # e.g., "found dead on study day 0"
-
-
-def _build_attrition_footnotes(
-    table_data: dict,
-    dose_unit: str,
-) -> tuple[list[str], dict[str, dict[float, str]]]:
-    """
-    Build attrition footnotes and per-cell superscript marker assignments.
-
-    Scans the n_by_dose and missing_animals_by_dose fields across all rows
-    and sexes.  Each dose group with missing animals gets a footnote letter
-    (c, d, e, ...) and the corresponding n-cell gets a superscript marker.
-
-    The NIEHS reference shows specific descriptions:
-        "One male rat was found dead on study day 0."
-        "All male and female 333 and 1,000 mg/kg rats were found dead
-         or moribund and euthanized by study day 1."
-
-    We generate generic descriptions from the count data.  More specific
-    descriptions (cause of death, study day) would require additional
-    metadata from the xlsx study file.
-
-    Args:
-        table_data: {sex: [TableRow, ...]} from build_table_data.
-        dose_unit:  Dose unit string for display (e.g., "mg/kg").
-
-    Returns:
-        (footnotes, markers) where:
-            footnotes: list of footnote text strings (starting from letter c)
-            markers:   {sex: {dose: "c"}} mapping for superscript placement
-    """
-    footnotes: list[str] = []
-    markers: dict[str, dict[float, str]] = {}
-    # Start footnote letters at 'c' since 'a' and 'b' are the fixed footnotes
-    next_letter_ord = ord("c")
-
-    # Collect unique (dose, sex) attrition events.
-    # Use the n row to detect doses where N dropped to 0 or below expected.
-    # Also check missing_animals_by_dose for explicit attrition counts.
-    seen: set[tuple[str, float]] = set()
-
-    for sex in ("Male", "Female"):
-        rows = table_data.get(sex, [])
-        markers.setdefault(sex, {})
-
-        for row in rows:
-            if not row.missing_animals_by_dose:
-                continue
-            for dose, count in sorted(row.missing_animals_by_dose.items()):
-                if count <= 0:
-                    continue
-                key = (sex, dose)
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                letter = chr(next_letter_ord)
-                next_letter_ord += 1
-
-                # Format dose for display: drop .0 for whole numbers
-                d_label = str(int(dose)) if dose == int(dose) else str(dose)
-
-                # Generic description — specific cause/timing would need
-                # additional study metadata
-                animal_word = "animal" if count == 1 else "animals"
-                sex_word = sex.lower()
-                footnotes.append(
-                    f"{count} {sex_word} {animal_word} at "
-                    f"{d_label} {dose_unit} did not survive to "
-                    f"terminal sacrifice."
-                )
-                markers[sex][dose] = letter
-
-    return footnotes, markers
-
-
-# ---------------------------------------------------------------------------
-# Main builder
-# ---------------------------------------------------------------------------
-
-def build_body_weight_table(
-    table_data: dict,
-    compound_name: str = "Chemical",
-    dose_unit: str = "mg/kg",
-) -> dict:
-    """
-    Build the NIEHS Table 2 (Body Weights) data structure.
-
-    Takes raw TableRow objects from the NTP stats pipeline and produces
-    a dict matching the Typst template's apical_sections entry schema,
-    with all body-weight-specific business rules applied:
-        - Study day labels (SD0→0, SD5→5)
-        - BMD/BMDL presentation (NA/ND/value per rules)
-        - Structured footnotes (definition line + a,b + attrition)
-        - Sex-grouped row structure (Male block, Female block)
-
-    Args:
-        table_data:    {sex: [TableRow, ...]} from build_table_data().
-                       Expected to contain body weight rows with labels
-                       like "SD0", "SD5".
-        compound_name: Full chemical name for the caption.
-        dose_unit:     Dose unit string (default "mg/kg").
-
-    Returns:
-        Dict with keys matching the Typst apical_sections schema:
-            title, caption, compound, dose_unit, first_col_header,
-            table_data (serialized), footnotes, bmd_definition
-    """
-    # Build attrition footnotes from missing-animal data
-    attrition_fn, attrition_markers = _build_attrition_footnotes(
-        table_data, dose_unit
-    )
-
-    # Assemble the complete footnote list:
-    #   [0] = BMD/BMDL definition (unnumbered, rendered as a paragraph)
-    #   [1] = (a) data format
-    #   [2] = (b) statistical method
-    #   [3..] = (c,d,...) attrition notes
-    footnotes = [
-        FOOTNOTE_DATA_FORMAT,     # (a)
-        FOOTNOTE_STAT_METHOD,     # (b)
-    ] + attrition_fn              # (c, d, ...)
-
-    # Serialize rows for each sex, applying business rules
-    serialized: dict[str, list[dict]] = {}
-
-    for sex in ("Male", "Female"):
-        rows = table_data.get(sex, [])
-        if not rows:
-            continue
-
-        serialized[sex] = []
-        for row in rows:
-            label = _study_day_label(row.label)
-            is_baseline = label == "0"
-
-            # Apply BMD/BMDL display rules
-            bmd_text, bmdl_text = _bmd_display(row, is_baseline)
-
-            # Get the dose list from the row's data
-            sorted_doses = sorted(row.values_by_dose.keys())
-
-            # Build the values dict with string dose keys matching
-            # JavaScript's String(number) behavior
-            values = {}
-            n_vals = {}
-            for dose in sorted_doses:
-                dk = _js_dose_key(dose)
-                values[dk] = row.values_by_dose.get(dose, "\u2013")
-                n_vals[dk] = row.n_by_dose.get(dose, 0)
-
-            entry = {
-                "label": label,
-                "doses": sorted_doses,
-                "values": values,
-                "n": n_vals,
-                "bmd": bmd_text,
-                "bmdl": bmdl_text,
-            }
-
-            # Attach attrition markers for this sex's n-row rendering.
-            # The Typst template uses these to place superscript letters
-            # on specific n-cells (e.g., "4^c" for a dose group where
-            # one animal died).
-            sex_markers = attrition_markers.get(sex, {})
-            if sex_markers:
-                entry["attrition_markers"] = {
-                    _js_dose_key(d): letter
-                    for d, letter in sex_markers.items()
-                }
-
-            serialized[sex].append(entry)
-
-    return {
-        "title": "Animal Condition, Body Weights, and Organ Weights",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name),
-        "compound": compound_name,
-        "dose_unit": dose_unit,
-        "first_col_header": "Study Day",
-        "table_data": serialized,
-        "footnotes": footnotes,
-        "bmd_definition": BMD_DEFINITION,
-        "missing_animal_footnotes": {},  # handled via attrition_markers instead
-    }
-
 
 
 # _js_dose_key, _mean_se, _format_mean_se, _load_sidecar, find_sidecar_paths,
@@ -583,19 +343,37 @@ def build_body_weight_table_from_sidecar(
     # Individual events get per-dose footnotes with n-row markers.
     # Mass events are merged into one combined footnote with dash markers.
 
-    footnotes: list[str] = [
-        FOOTNOTE_DATA_FORMAT,     # (a)
-        FOOTNOTE_STAT_METHOD,     # (b)
+    # ── Footnotes (typed model — see table_builder_common) ────────────────
+    # Body weight's footnote set, in render order.  finalize_footnotes —
+    # called at the end, once the rows exist — assigns the a/b/c... letters
+    # to the `lettered` records and derives each row's `markers` dict from
+    # its `marker_refs`.
+    #
+    #   definition  — BMD/BMDL abbreviation paragraph         [Canonical]
+    #   (a)         — data format (header marker a)           [Canonical]
+    #   (b)         — statistical method (header marker b)    [Canonical]
+    #   (c,d,...)   — attrition, one per individual-death event [Canonical]
+    #   (next)      — mass attrition (one combined footnote)  [Canonical]
+    #
+    # There is no `*`/`**` significance legend: the sidecar builder computes
+    # plain mean +/- SE from Core Animals and runs no pairwise test, so
+    # body-weight cells carry no significance markers.  Provenance: every
+    # body-weight footnote is Canonical — anchored in NIEHS Report 10 Table 2.
+    footnotes: list[dict] = [
+        definition_footnote(BMD_DEFINITION),
+        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format", target="header"),
+        lettered_footnote(FOOTNOTE_STAT_METHOD, "stat_method", target="header"),
     ]
-    next_letter_ord = ord("c")
 
-    # Markers placed on the n-row: {sex: {dose: letter}}
-    # Used when N is reduced (individual deaths before baseline)
-    n_row_markers: dict[str, dict[float, str]] = {}
-
-    # Markers placed on dashes in data rows: {sex: {(dose, day): letter}}
-    # Used when all animals at a dose are dead for a given study day
-    dash_markers: dict[str, dict[tuple[float, str], str]] = {}
+    # Footnote IDs to superscript on cells, keyed by location.  Two marker
+    # placements (per the NIEHS reference):
+    #   n_row_marker_refs  {sex: {dose: id}}        — N reduced by an
+    #       individual early death; marker on the n-row cell.
+    #   dash_marker_refs   {sex: {(dose, day): id}} — all animals at a dose
+    #       died before a study day; marker on that data row's "-" dash.
+    # finalize_footnotes turns these stable ids into the displayed letters.
+    n_row_marker_refs: dict[str, dict[float, str]] = {}
+    dash_marker_refs: dict[str, dict[tuple[float, str], str]] = {}
 
     # ── Pass 1: Classify individual vs mass attrition ────────────────
     # Individual deaths: animal died on a day EARLIER than the rest of
@@ -610,8 +388,8 @@ def build_body_weight_table_from_sidecar(
 
     for sex in ("Male", "Female"):
         attrition = attrition_by_sex_dose.get(sex, {})
-        n_row_markers.setdefault(sex, {})
-        dash_markers.setdefault(sex, {})
+        n_row_marker_refs.setdefault(sex, {})
+        dash_marker_refs.setdefault(sex, {})
 
         for dose in sorted_doses:
             events = attrition.get(dose, [])
@@ -661,39 +439,45 @@ def build_body_weight_table_from_sidecar(
                         "day": day,
                     })
 
-    # ── Pass 2: Generate individual footnotes (n-row markers) ────────
+    # ── Pass 2: individual-death footnotes (n-row markers) ───────────
+    # One lettered/cells footnote per DISTINCT (sex, study-day, count) —
+    # NOT per event.  Two dose groups that each lost "one male rat on
+    # study day 0" share a single footnote, with its letter superscripted
+    # on both n-row cells (the typed model lets many cells point at one
+    # footnote id via marker_refs).  Emitting one footnote per event — the
+    # old behavior — produced near-duplicate notes whenever the same death
+    # pattern recurred across dose groups.  The footnote text names no
+    # dose, so it reads correctly per-cell wherever its marker appears.
+    indiv_fid_by_key: dict[tuple, str] = {}
     for ev in individual_events:
-        letter = chr(next_letter_ord)
-        next_letter_ord += 1
-
         sex = ev["sex"]
         dose = ev["dose"]
         count = ev["count"]
-        day_num = ev["day"][2:] if ev["day"].upper().startswith("SD") else ev["day"]
+        day = ev["day"]
+        day_num = day[2:] if day.upper().startswith("SD") else day
+        key = (sex, day, count)
+        fid = indiv_fid_by_key.get(key)
+        if fid is None:
+            # First event with this (sex, day, count) — emit the footnote.
+            fid = f"indiv_death_{sex}_{day}_{count}"
+            sex_word = sex.lower()
+            if count == 1:
+                text = f"One {sex_word} rat was found dead on study day {day_num}."
+            else:
+                text = f"{count} {sex_word} rats were found dead on study day {day_num}."
+            footnotes.append(lettered_footnote(text, fid, target="cells"))
+            indiv_fid_by_key[key] = fid
 
-        # Marker goes on the n-row at this dose for this sex
-        # (the N is reduced because this animal's data was excluded)
-        n_row_markers[sex][dose] = letter
+        # Marker goes on the n-row at this dose for this sex (the N is
+        # reduced because this animal's data was excluded from the stats).
+        n_row_marker_refs[sex][dose] = fid
 
-        sex_word = sex.lower()
-        if count == 1:
-            footnotes.append(
-                f"One {sex_word} rat was found dead on study day {day_num}."
-            )
-        else:
-            footnotes.append(
-                f"{count} {sex_word} rats were found dead on study day {day_num}."
-            )
-
-    # ── Pass 3: Generate mass attrition footnote (dash markers) ──────
+    # ── Pass 3: mass-attrition footnote (dash markers) ───────────────
     # Merge all mass-attrition doses and sexes into one combined footnote,
     # matching the NIEHS reference style:
     #   "All male and female 333 and 1,000 mg/kg rats were found dead or
     #    moribund and euthanized by study day 1."
     if mass_doses:
-        letter = chr(next_letter_ord)
-        next_letter_ord += 1
-
         # Collect all doses involved in mass attrition
         all_mass_doses: set[float] = set()
         mass_terminal_day = None
@@ -708,18 +492,18 @@ def build_body_weight_table_from_sidecar(
                 if day_num > curr_num:
                     mass_terminal_day = day
 
-        # Place dash marker on the FIRST dash cell only (standard footnote
-        # convention — the superscript introduces the footnote once, the
-        # footnote text describes all affected cells).  The table is read
-        # Male-then-Female, lowest-dose-first, so the first dash is at
-        # the lowest mass-attrition dose in the Male SD5 row.
+        # Place the dash marker on the FIRST dash cell only (standard
+        # footnote convention — the superscript introduces the footnote
+        # once, the footnote text describes all affected cells).  The table
+        # is read Male-then-Female, lowest-dose-first, so the first dash is
+        # at the lowest mass-attrition dose in the Male SD5 row.
         marker_placed = False
         for sex in ("Male", "Female"):
             attrition = attrition_by_sex_dose.get(sex, {})
             for dose in sorted(all_mass_doses):
                 if dose in attrition:
                     if not marker_placed:
-                        dash_markers[sex][(dose, expected_terminal_day)] = letter
+                        dash_marker_refs[sex][(dose, expected_terminal_day)] = "mass_attrition"
                         marker_placed = True
                     # Remaining dashes get no marker — the footnote text
                     # ("All male and female 333 and 1,000 mg/kg...") tells
@@ -740,10 +524,11 @@ def build_body_weight_table_from_sidecar(
             sex_str = sex_list[0].lower()
 
         day_num = mass_terminal_day[2:] if mass_terminal_day.upper().startswith("SD") else mass_terminal_day
-        footnotes.append(
+        footnotes.append(lettered_footnote(
             f"All {sex_str} {dose_str} {dose_unit} rats were found dead "
-            f"or moribund and euthanized by study day {day_num}."
-        )
+            f"or moribund and euthanized by study day {day_num}.",
+            "mass_attrition", target="cells",
+        ))
 
     # ── Determine which study days to show as TABLE ROWS ────────────────
     # Only the baseline (SD0) and terminal (SD5) study days appear as data
@@ -777,8 +562,8 @@ def build_body_weight_table_from_sidecar(
         if not sex_vals:
             continue
 
-        sex_n_markers = n_row_markers.get(sex, {})
-        sex_dash_markers = dash_markers.get(sex, {})
+        sex_n_marker_refs = n_row_marker_refs.get(sex, {})
+        sex_dash_marker_refs = dash_marker_refs.get(sex, {})
         rows: list[dict] = []
 
         # ── n row (sample sizes) ─────────────────────────────────────────
@@ -790,7 +575,7 @@ def build_body_weight_table_from_sidecar(
         # N is the max across all display study days for each dose — this
         # gives the starting count (baseline SD0 has all surviving animals).
         n_vals: dict[str, str] = {}
-        n_markers: dict[str, str] = {}
+        n_marker_refs: dict[str, str] = {}
         for dose in sorted_doses:
             dk = _js_dose_key(dose)
             max_n = 0
@@ -800,26 +585,29 @@ def build_body_weight_table_from_sidecar(
                 if n_at_dose > max_n:
                     max_n = n_at_dose
 
-            # Only attach marker if this dose has an individual death
-            # that reduced N (marker on n-row, not on dash)
-            marker = sex_n_markers.get(dose)
-            if marker:
-                n_markers[dk] = marker
+            # Only attach a marker ref if this dose has an individual death
+            # that reduced N (marker on n-row, not on dash).  finalize_footnotes
+            # turns the ref id into the displayed letter.
+            ref = sex_n_marker_refs.get(dose)
+            if ref:
+                n_marker_refs[dk] = ref
 
             if max_n > 0:
                 n_vals[dk] = str(max_n)
             else:
                 n_vals[dk] = "\u2013"
 
-        rows.append({
+        n_row = {
             "label": "n",
             "doses": sorted_doses,
             "values": n_vals,
-            "markers": n_markers,
             "bmd": "NA",
             "bmdl": "NA",
             "is_n_row": True,
-        })
+        }
+        if n_marker_refs:
+            n_row["marker_refs"] = n_marker_refs
+        rows.append(n_row)
 
         # ── Data rows (one per display study day) ────────────────────────
         for day in display_days:
@@ -848,7 +636,7 @@ def build_body_weight_table_from_sidecar(
             bmdl_text = day_bmd.get("bmdl", "ND")
 
             values: dict[str, str] = {}
-            row_markers: dict[str, str] = {}
+            row_marker_refs: dict[str, str] = {}
             for dose in sorted_doses:
                 dk = _js_dose_key(dose)
                 animals_at_dose = dose_vals.get(dose, [])
@@ -859,24 +647,37 @@ def build_body_weight_table_from_sidecar(
                 else:
                     # No surviving animals at this dose for this day.
                     # Show dash (–) matching NIEHS convention.
-                    values[dk] = "\u2013"
-                    # Check for a dash marker (mass attrition footnote)
-                    dm = sex_dash_markers.get((dose, day))
-                    if dm:
-                        row_markers[dk] = dm
+                    values[dk] = "–"
+                    # Check for a dash marker ref (mass attrition footnote);
+                    # finalize_footnotes turns the ref id into the letter.
+                    ref = sex_dash_marker_refs.get((dose, day))
+                    if ref:
+                        row_marker_refs[dk] = ref
 
+            # Row emphasis (bold).  Body weight's sidecar builder runs no
+            # NTP gate, so there is no `responsive` flag to OR in — a study-
+            # day row is emphasized purely when its BMD column holds a real
+            # modeled value (is_reportable_bmd).  The n-row is built above
+            # with bmd "NA" and gets no `emphasize` key at all, so it never
+            # bolds.
             entry = {
                 "label": label,
                 "doses": sorted_doses,
                 "values": values,
                 "bmd": bmd_text,
                 "bmdl": bmdl_text,
+                "emphasize": is_reportable_bmd(bmd_text),
             }
-            if row_markers:
-                entry["markers"] = row_markers
+            if row_marker_refs:
+                entry["marker_refs"] = row_marker_refs
             rows.append(entry)
 
         serialized[sex] = rows
+
+    # Assign letters to the lettered footnotes and derive every row's
+    # `markers` dict from its `marker_refs` — see the typed footnote
+    # model in table_builder_common.
+    finalize_footnotes(footnotes, serialized)
 
     return {
         "title": "Animal Condition, Body Weights, and Organ Weights",
@@ -885,8 +686,10 @@ def build_body_weight_table_from_sidecar(
         "dose_unit": dose_unit,
         "first_col_header": "Study Day",
         "table_data": serialized,
+        # Typed footnote list: definition + lettered records, letters already
+        # assigned by finalize_footnotes.  The old separate bmd_definition key
+        # is folded in as a `definition` record.
         "footnotes": footnotes,
-        "bmd_definition": BMD_DEFINITION,
     }
 
 

@@ -33,9 +33,20 @@ from __future__ import annotations
 
 from table_builder_common import (
     BMD_DEFINITION,
+    SIGNIFICANCE_EXPLANATION,
+    SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
     load_sidecar,
     build_n_row,
+    format_dose_label,
+    legend_footnote,
+    definition_footnote,
+    lettered_footnote,
+    finalize_footnotes,
+    detect_core_animal_availability,
+    build_sample_availability_footnotes,
+    build_attrition_footnote,
+    is_reportable_bmd,
 )
 
 
@@ -66,21 +77,10 @@ FOOTNOTE_STAT_METHOD_CLINICAL = (
     "and Shirley or Dunn (pairwise) tests."
 )
 
-# Significance explanation paragraph — appears above the lettered footnotes
-# in the reference report.  Explains what significance markers mean on
-# control vs dosed group cells.
-SIGNIFICANCE_EXPLANATION = (
-    "Statistical significance for a dosed group indicates a significant "
-    "pairwise test compared to the vehicle control group. Statistical "
-    "significance for the vehicle control group indicates a significant "
-    "trend test."
-)
-
-# Significance marker legend — both * and ** for clinical pathology
-SIGNIFICANCE_MARKER_LEGEND = (
-    "*Statistically significant at p \u2264 0.05; "
-    "**p \u2264 0.01."
-)
+# The significance-marker text (SIGNIFICANCE_EXPLANATION + the */** legend)
+# is shared across every apical table and lives in table_builder_common -
+# imported above rather than re-declared here.  It used to be a per-builder
+# copy, which drifted into three slightly different wordings.
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +93,7 @@ def build_clinical_pathology_table_from_sidecar(
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    imputed_cells: dict | None = None,
 ) -> dict:
     """
     Build a clinical pathology table (Tables 4/5/6) from sidecar + NTP stats.
@@ -115,6 +116,13 @@ def build_clinical_pathology_table_from_sidecar(
                         missing_animals_by_dose.
         compound_name:  Full chemical name for the caption.
         dose_unit:      Dose unit string (default "mg/kg").
+        imputed_cells:  {sex: {dose_str: count}} for THIS platform — dose
+                        groups whose legacy/inferred file filled missing
+                        values with the dose-group mean.  Recorded by the
+                        BMDProject schema's legacy/truth dedup and threaded
+                        in via _build_section_cards.  None when no
+                        imputation was detected for this platform; drives
+                        the imputation footnote.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema:
@@ -146,54 +154,15 @@ def build_clinical_pathology_table_from_sidecar(
                     pass
     sorted_doses = sorted(all_doses)
 
-    # ── Count Core Animals per dose from sidecar ──────────────────────────
-    # For the n-row, we need the number of Core Animals at each dose that
-    # have at least one non-NA observation for any endpoint in this platform.
-    # We also track the total Core Animals per dose (including those with
-    # all-NA values) to detect sample availability issues — animals that
-    # exist but whose samples were not received, had clots, etc.
-    core_n_by_sex_dose: dict[str, dict[float, int]] = {}
-    # Total Core Animals per dose (including all-NA animals)
-    total_core_by_sex_dose: dict[str, dict[float, int]] = {}
-    # Animals with no data: {sex: {dose: [animal_id, ...]}}
-    missing_sample_animals: dict[str, dict[float, list[str]]] = {}
-
-    for sex, sc in sidecar_data.items():
-        dose_with_data: dict[float, set[str]] = {}
-        dose_all: dict[float, set[str]] = {}
-        dose_missing: dict[float, list[str]] = {}
-
-        for aid, rec in sc.get("animals", {}).items():
-            selection = rec.get("selection", "Unknown")
-            # Include Core Animals and animals with unknown selection.
-            # "Unknown" means the CSV had no Selection column — these are
-            # implicitly Core Animals (e.g., Hormones CSV has no Biosampling
-            # Animals, so no Selection column is provided).
-            if "biosampling" in selection.lower():
-                continue
-            dose = rec["dose"]
-            dose_all.setdefault(dose, set()).add(aid)
-
-            # Check if animal has at least one non-null, non-NA observation
-            has_data = any(
-                obs.get("value") and obs["value"].strip()
-                and obs["value"].strip().upper() != "NA"
-                for obs in rec.get("observations", [])
-            )
-            if has_data:
-                dose_with_data.setdefault(dose, set()).add(aid)
-            else:
-                # This animal is a Core Animal at this dose but has no
-                # usable data — sample not received, clotted, etc.
-                dose_missing.setdefault(dose, []).append(aid)
-
-        core_n_by_sex_dose[sex] = {
-            dose: len(aids) for dose, aids in dose_with_data.items()
-        }
-        total_core_by_sex_dose[sex] = {
-            dose: len(aids) for dose, aids in dose_all.items()
-        }
-        missing_sample_animals[sex] = dose_missing
+    # ── Detect Core Animal availability per dose (shared helper) ──────────
+    # Splits each dose group's Core Animals into "has usable data" vs
+    # "all-NA" (sample not received, clotted, etc.).  Shared with
+    # organ_weight_table.py — see table_builder_common.
+    (
+        core_n_by_sex_dose,
+        total_core_by_sex_dose,
+        missing_sample_animals,
+    ) = detect_core_animal_availability(sidecar_data)
 
     # ── Build rows for ALL endpoints ─────────────────────────────────────
     # The NIEHS reference includes every measured endpoint in the table,
@@ -269,6 +238,19 @@ def build_clinical_pathology_table_from_sidecar(
                     val = vbd.get(str(dose), vbd.get(str(float(dose))))
                 values[dk] = val if val is not None else "\u2013"
 
+            # Row emphasis (bold) rule.  A row is emphasized when EITHER:
+            #   - it passed the NTP statistical gate (`responsive`), OR
+            #   - BMDExpress modeled it at all — i.e. the BMD column shows
+            #     anything other than "—" (viable, <LNZD/3, NVM, or UREP).
+            # The two criteria are independent (see the comment above), so
+            # the union catches both "statistically significant" and "has
+            # a modeled potency" rows.  Computed here, in the table builder,
+            # so the HTML preview (cards.js) and the Typst template read a
+            # single boolean rather than each re-deriving the business rule.
+            # `is_reportable_bmd` (shared with organ/body weight) decides
+            # what counts as a real modeled BMD value.
+            emphasize = bool(responsive) or is_reportable_bmd(bmd_text)
+
             entry = {
                 "label": label,
                 "doses": sorted_doses,
@@ -276,6 +258,7 @@ def build_clinical_pathology_table_from_sidecar(
                 "bmd": bmd_text,
                 "bmdl": bmdl_text,
                 "responsive": bool(responsive),
+                "emphasize": emphasize,
             }
             if trend_marker:
                 entry["trend_marker"] = trend_marker
@@ -284,93 +267,119 @@ def build_clinical_pathology_table_from_sidecar(
 
         serialized[sex] = rows
 
-    # ── Footnotes ─────────────────────────────────────────────────────────
-    # NIEHS reference footnote structure for clinical pathology tables:
-    #   1. Significance explanation paragraph (unnumbered, above markers)
-    #   2. Significance marker legend (*p ≤ 0.05; **p ≤ 0.01)
-    #   3. BMD definition paragraph (unnumbered)
-    #   4. (a) Data format description
-    #   5. (b) Statistical method (Shirley/Dunn for clinical pathology)
-    #   6. (c,d,...) Sample availability notes (per dose group, dynamic)
-    #   7. Attrition footnote (333/1000 mg/kg, if applicable)
+    # ── Footnotes (typed model — see table_builder_common) ────────────────
+    # Order in the list IS the render order; finalize_footnotes assigns the
+    # a/b/c... letters to the `lettered` records (legend/definition skipped):
     #
-    # The significance_explanation and marker_legend are passed as separate
-    # keys so the Typst template can render them above the lettered footnotes.
-    footnotes = [
-        FOOTNOTE_DATA_FORMAT,              # (a)
-        FOOTNOTE_STAT_METHOD_CLINICAL,     # (b)
+    #   legend      — significance explanation                [Canonical]
+    #   legend      — */** marker key                         [Canonical]
+    #   definition  — BMD/BMDL abbreviation paragraph          [Canonical]
+    #   (a)         — data format                             [Canonical]
+    #   (b)         — statistical method (Shirley/Dunn)        [Canonical]
+    #   (c,d,...)   — sample-availability, per (sex, dose)     [Canonical]
+    #   (next)      — attrition (333/1,000 mg/kg dead)         [Canonical]
+    #   (next)      — imputation (BMDExpress on clin-path)     [Extended-canonical]
+    #
+    # Provenance tiers:
+    #   Canonical          — anchored in NIEHS Report 10; the reference PDF
+    #                        is the authority.
+    #   Extended-canonical — no NIEHS-PDF precedent; covers analysis beyond
+    #                        the reference's scope (BMDExpress dose-response
+    #                        modeling of clinical-pathology endpoints).  Same
+    #                        authority, new addition — see the imputation
+    #                        block below.
+    footnotes: list[dict] = [
+        legend_footnote(SIGNIFICANCE_EXPLANATION),
+        legend_footnote(SIGNIFICANCE_MARKER_LEGEND),
+        definition_footnote(BMD_DEFINITION),
+        lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
+        lettered_footnote(FOOTNOTE_STAT_METHOD_CLINICAL, "stat_method"),
     ]
 
-    # ── Sample availability footnotes (c,d,...) ───────────────────────────
-    # Detect animals whose samples were not available (all-NA observations).
-    # These are Core Animals that exist in the sidecar but have no usable
-    # data — sample not received, clotted, insufficient volume, etc.
-    # Each unique (sex, dose, count) combination gets a lettered footnote.
-    # Markers are placed on the n-row cells where N is reduced.
-    next_letter_ord = ord("c")
-    n_row_markers: dict[str, dict[float, str]] = {}
+    # ── Sample-availability + attrition footnotes (shared helpers) ────────
+    # [Canonical] — both anchored in NIEHS Report 10.  The detection and
+    # footnote-building logic is shared with organ_weight_table.py; see
+    # table_builder_common.
+    #   - build_sample_availability_footnotes: one deduped footnote per
+    #     distinct missing-sample count (a per-(sex,dose) footnote — the old
+    #     behavior — produced a dozen near-duplicates for hematology).
+    #   - build_attrition_footnote: one footnote for whole dose groups with
+    #     no surviving animals; partial-missing doses are NOT double-counted
+    #     here (the sample-availability helper filters whole-group doses out).
+    # n_row_marker_refs holds the {sex: {dose: footnote_id}} bindings;
+    # finalize_footnotes (called later) turns the ids into displayed letters.
+    n_row_marker_refs: dict[str, dict[float, str]] = {}
 
-    for sex in ("Male", "Female"):
-        missing = missing_sample_animals.get(sex, {})
-        n_row_markers.setdefault(sex, {})
-        for dose in sorted_doses:
-            missing_at_dose = missing.get(dose, [])
-            if not missing_at_dose:
-                continue
-            count = len(missing_at_dose)
-            letter = chr(next_letter_ord)
-            next_letter_ord += 1
-            n_row_markers[sex][dose] = letter
+    sa_records, sa_refs = build_sample_availability_footnotes(
+        missing_sample_animals, total_core_by_sex_dose, sorted_doses,
+    )
+    footnotes.extend(sa_records)
 
-            # Format: "One sample in the indicated dose group was not received."
-            # or "N samples from each of the indicated dose groups..."
-            if count == 1:
-                footnotes.append(
-                    "One sample in the indicated dose group was not received."
-                )
-            else:
-                footnotes.append(
-                    f"{count} samples in the indicated dose group "
-                    f"were not received."
-                )
+    attr_record, attr_refs = build_attrition_footnote(
+        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit,
+    )
+    if attr_record is not None:
+        footnotes.append(attr_record)
 
-    # ── Attrition footnote (333/1000 mg/kg dead animals) ──────────────────
-    # If the high-dose groups have no data at all (all animals dead before
-    # sample collection), add the standard attrition footnote.
-    for sex in ("Male", "Female"):
-        total = total_core_by_sex_dose.get(sex, {})
-        with_data = core_n_by_sex_dose.get(sex, {})
-        for dose in sorted_doses:
-            total_n = total.get(dose, 0)
-            data_n = with_data.get(dose, 0)
-            if total_n > 0 and data_n == 0:
-                # Entire dose group dead — check if we already have an
-                # attrition footnote (avoid duplicates across sexes)
-                attrition_text = (
-                    "All male and female 333 and 1,000 mg/kg rats were "
-                    "found dead or moribund and euthanized by study day 1."
-                )
-                if attrition_text not in footnotes:
-                    letter = chr(next_letter_ord)
-                    next_letter_ord += 1
-                    footnotes.append(attrition_text)
-                    # Place marker on the n-row dash for this dose/sex
-                    n_row_markers.setdefault(sex, {})[dose] = letter
-                break  # one footnote covers all dead dose groups
+    # Merge both helpers' n-row marker refs into one dict.
+    for sex, dose_refs in sa_refs.items():
+        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
+    for sex, dose_refs in attr_refs.items():
+        n_row_marker_refs.setdefault(sex, {}).update(dose_refs)
 
-    # Inject markers into the n-rows that were already built
+    # ── Imputation footnote [Extended-canonical] ──────────────────────────
+    # The BMD/BMDL values come from an inferred dataset in which missing
+    # individual values were replaced with the dose-group mean (the truth
+    # file leaves them missing; BMDExpress can't fit a curve with gaps).
+    # Per Auerbach (Weekly Meeting 7, ~00:28) the report must footnote which
+    # dose groups that affected.  marker target is "none" — the affected
+    # dose groups are named inline in the text, and the imputation touched
+    # the modeling input, not the mean +/- SE shown in the table.
+    #
+    # imputed_cells is {sex: {dose_str: count}} for this platform, recorded
+    # by the BMDProject schema's legacy/truth dedup.
+    if imputed_cells:
+        affected_doses: set[float] = set()
+        total_imputed = 0
+        for sex_doses in imputed_cells.values():
+            for dose_str, count in sex_doses.items():
+                try:
+                    affected_doses.add(float(dose_str))
+                except (TypeError, ValueError):
+                    continue
+                total_imputed += count
+        if affected_doses:
+            dose_list = ", ".join(
+                format_dose_label(d, dose_unit)
+                for d in sorted(affected_doses)
+            )
+            value_word = "value" if total_imputed == 1 else "values"
+            was_were = "was" if total_imputed == 1 else "were"
+            group_word = "group" if len(affected_doses) == 1 else "groups"
+            footnotes.append(lettered_footnote(
+                f"Benchmark dose modeling used an inferred dataset in which "
+                f"{total_imputed} missing individual {value_word} {was_were} "
+                f"replaced with the dose-group mean (affected dose "
+                f"{group_word}: {dose_list} {dose_unit}).",
+                "imputation",
+                target="none",
+            ))
+
+    # ── Attach marker_refs to the n-rows, then finalize ───────────────────
+    # The n-rows were built early (before footnotes existed), so attach each
+    # sex's marker_refs to its n-row now.  finalize_footnotes then assigns
+    # letters and derives the `markers` dict from marker_refs across all rows.
     for sex, rows in serialized.items():
-        sex_markers = n_row_markers.get(sex, {})
-        if sex_markers and rows:
-            n_row = rows[0]  # first row is always the n-row
-            if n_row.get("is_n_row"):
-                existing = n_row.get("markers", {})
-                existing.update({
-                    js_dose_key(d): letter
-                    for d, letter in sex_markers.items()
-                })
-                if existing:
-                    n_row["markers"] = existing
+        sex_refs = n_row_marker_refs.get(sex, {})
+        if sex_refs and rows and rows[0].get("is_n_row"):
+            n_row = rows[0]
+            refs = n_row.get("marker_refs", {})
+            refs.update({
+                js_dose_key(d): fid for d, fid in sex_refs.items()
+            })
+            n_row["marker_refs"] = refs
+
+    finalize_footnotes(footnotes, serialized)
 
     return {
         "title": platform,
@@ -379,10 +388,8 @@ def build_clinical_pathology_table_from_sidecar(
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",
         "table_data": serialized,
+        # Typed footnote list: legend + definition + lettered records, with
+        # letters already assigned by finalize_footnotes.  The old separate
+        # bmd_definition / significance_* keys are folded in as records.
         "footnotes": footnotes,
-        "bmd_definition": BMD_DEFINITION,
-        # Extra footnote fields rendered above the lettered footnotes
-        # by the Typst template, matching the NIEHS reference layout.
-        "significance_explanation": SIGNIFICANCE_EXPLANATION,
-        "significance_marker_legend": SIGNIFICANCE_MARKER_LEGEND,
     }

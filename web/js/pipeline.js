@@ -400,14 +400,14 @@ async function runProcessingPipeline() {
                         // "incidence" for clinical obs tables (n/N cells),
                         // undefined for normal apical tables (mean±SE cells).
                         tableType:         section.table_type || null,
-                        // Rule-based builder fields (footnotes, caption, etc.)
-                        // These flow through to the export payload and Typst.
+                        // Rule-based builder fields.  `footnotes` is the
+                        // typed footnote list (legend / definition / lettered
+                        // records) — the BMD definition and the */** legend
+                        // are records inside it, not separate fields, so the
+                        // old bmdDefinition / significance* fields are gone.
                         footnotes:               section.footnotes || null,
                         firstColHeader:          section.first_col_header || null,
                         caption:                 section.caption || null,
-                        bmdDefinition:           section.bmd_definition || null,
-                        significanceExplanation:  section.significance_explanation || null,
-                        significanceMarkerLegend: section.significance_marker_legend || null,
                     };
 
                     // Create the visual card and populate it — pass the platform

@@ -44,12 +44,381 @@ FOOTNOTE_STAT_METHOD = (
     "and Williams or Dunnett (pairwise) tests."
 )
 
-# Significance marker explanations — the NIEHS reference includes these
-# as superscript legends in the table or as a footnote.
-SIGNIFICANCE_LEGEND = (
-    "* Statistically significant (p ≤ 0.05) by Dunnett's test; "
-    "** p ≤ 0.01."
+# Significance-marker text.  The `*` / `**` markers themselves are baked
+# into the mean ± SE cell strings upstream by bmdx-pipe's build_table_data;
+# these two strings are the legend that explains them.  Consolidated here
+# (the per-builder copies in clinical_pathology_table.py and
+# organ_weight_table.py drifted into three slightly different wordings).
+# No test name is mentioned — the specific test (Williams/Dunnett vs
+# Shirley/Dunn) is already named in each table's statistical-method
+# footnote, and clinical pathology does not use Dunnett's.
+SIGNIFICANCE_MARKER_LEGEND = (
+    "*Statistically significant at p ≤ 0.05; **p ≤ 0.01."
 )
+
+# The semantics paragraph: what a marker on a dosed-group cell means
+# versus a marker on the vehicle-control cell.  Applies to every apical
+# table that carries `*` / `**` markers.
+SIGNIFICANCE_EXPLANATION = (
+    "Statistical significance for a dosed group indicates a significant "
+    "pairwise test compared to the vehicle control group. Statistical "
+    "significance for the vehicle control group indicates a significant "
+    "trend test."
+)
+
+
+# ---------------------------------------------------------------------------
+# Typed footnote model
+# ---------------------------------------------------------------------------
+# Apical-table footnotes used to be a bare `list[str]`, lettered a/b/c... by
+# position in whichever renderer happened to walk the list — with the cell
+# superscript markers lettered by a *separate* counter inside the builder.
+# Two independent counters that only lined up by luck, plus a `*`/`**`
+# significance legend that was computed and then never rendered at all.
+#
+# This model replaces that.  A footnote is now a typed record:
+#
+#   {"kind": "legend",     "text": str}
+#       The `*`/`**` significance legend / explanation.  Rendered as an
+#       unlettered block above the lettered footnotes.  No letter, no marker.
+#
+#   {"kind": "definition", "text": str}
+#       An abbreviation / BMD definition paragraph.  Unlettered, rendered
+#       above the lettered footnotes.
+#
+#   {"kind": "lettered",   "text": str, "id": str,
+#    "marker": {"target": "header" | "cells" | "none"},
+#    "letter": str}        # <- assigned by finalize_footnotes, not the builder
+#       A lettered footnote.  `id` is a stable identity (NOT the letter);
+#       `marker.target` declares where the letter also appears:
+#         "header" — superscripted on the table's first-column header
+#         "cells"  — superscripted on specific row cells; the rows name
+#                    this footnote by `id` via their `marker_refs` dict
+#         "none"   — appears only in the footnote list, no in-table marker
+#
+# A row that hosts a cell marker carries `marker_refs: {dose_key: footnote_id}`
+# — the stable id, never a letter.  `finalize_footnotes` is the single place
+# that turns ids into letters: it assigns the letters and derives each row's
+# `markers: {dose_key: letter}` from `marker_refs`.  Because it always
+# re-derives from `marker_refs`, it is idempotent and safe to run again after
+# more footnotes are merged in downstream (see report_data.py).
+
+def legend_footnote(text: str) -> dict:
+    """Build a `legend` footnote record (unlettered, e.g. the `*`/`**` key)."""
+    return {"kind": "legend", "text": text}
+
+
+def definition_footnote(text: str) -> dict:
+    """Build a `definition` footnote record (unlettered abbreviation paragraph)."""
+    return {"kind": "definition", "text": text}
+
+
+def lettered_footnote(text: str, footnote_id: str, target: str = "none") -> dict:
+    """
+    Build a `lettered` footnote record.
+
+    Args:
+        text:        The footnote sentence.
+        footnote_id: A stable identity string (e.g. "data_format",
+                     "attrition_333_male").  Rows reference this id in their
+                     `marker_refs`; it is NOT the displayed letter.
+        target:      Where the assigned letter also appears in the table —
+                     "header", "cells", or "none" (default).
+    """
+    if target not in ("header", "cells", "none"):
+        raise ValueError(
+            f"lettered_footnote target must be header/cells/none, got {target!r}"
+        )
+    return {
+        "kind": "lettered",
+        "text": text,
+        "id": footnote_id,
+        "marker": {"target": target},
+    }
+
+
+def finalize_footnotes(
+    footnotes: list[dict],
+    serialized_rows: dict[str, list[dict]] | None = None,
+) -> list[dict]:
+    """
+    Assign letters to lettered footnotes and derive row cell markers.
+
+    This is the single lettering authority for the typed footnote model.
+    It walks `footnotes` in order: every `kind == "lettered"` record gets
+    the next sequential letter (a, b, c, ...) written into `fn["letter"]`;
+    `legend` and `definition` records are skipped (they carry no letter).
+
+    It then walks `serialized_rows` ({sex: [row, ...]}) and, for every row
+    carrying a `marker_refs` dict ({dose_key: footnote_id}), derives a
+    fresh `markers` dict ({dose_key: letter}) by resolving each id through
+    the letter map.  `marker_refs` is the stable, builder-owned source of
+    truth; `markers` is always rebuilt from it — so this function is
+    idempotent and may be called again after additional footnotes are
+    merged into the list (report_data.py does exactly that).
+
+    Args:
+        footnotes:       The typed footnote list.  Mutated in place — each
+                         lettered record gains a `letter` field.
+        serialized_rows: {sex: [row dict, ...]}.  Rows with `marker_refs`
+                         gain/refresh a derived `markers` dict.  May be
+                         None for footnote lists that have no cell markers.
+
+    Returns:
+        The same `footnotes` list (mutated), for call-site convenience.
+    """
+    # Pass 1: assign letters to lettered footnotes, build id -> letter map.
+    letter_ord = ord("a")
+    id_to_letter: dict[str, str] = {}
+    for fn in footnotes:
+        if not isinstance(fn, dict) or fn.get("kind") != "lettered":
+            continue
+        letter = chr(letter_ord)
+        letter_ord += 1
+        fn["letter"] = letter
+        fid = fn.get("id")
+        if fid:
+            id_to_letter[fid] = letter
+
+    # Pass 2: re-derive each row's `markers` dict from its stable
+    # `marker_refs`.  A ref pointing at an unknown id (e.g. a footnote that
+    # was removed) is dropped rather than rendered as a dangling marker.
+    for rows in (serialized_rows or {}).values():
+        for row in rows:
+            refs = row.get("marker_refs")
+            if not refs:
+                continue
+            row["markers"] = {
+                dose_key: id_to_letter[fid]
+                for dose_key, fid in refs.items()
+                if fid in id_to_letter
+            }
+
+    return footnotes
+
+
+# ---------------------------------------------------------------------------
+# Shared apical missing-animal pipeline
+# ---------------------------------------------------------------------------
+# Apical tables built from sidecar data (clinical pathology, organ weight)
+# share the same missing-animal story, so the detection and footnote-building
+# live here rather than being copied per builder:
+#
+#   detect_core_animal_availability  — scans a sidecar's Core Animals and
+#       splits each dose group into "has usable data" vs "all-NA"; also
+#       reports the per-dose total.
+#   build_sample_availability_footnotes — turns the all-NA animals into
+#       deduped-by-count "sample not received" footnotes (one footnote per
+#       distinct count, its marker on every affected n-row cell).
+#   build_attrition_footnote — turns whole-dose-groups-with-no-data into a
+#       single "all rats found dead" footnote.
+#
+# Body weight does NOT use this pipeline: its missing-animal model is
+# death-based (per-animal terminal-day tracking), not all-NA, so it keeps
+# its own attrition logic in body_weight_table.py.
+
+def detect_core_animal_availability(
+    sidecar_data: dict[str, dict],
+) -> tuple[
+    dict[str, dict[float, int]],
+    dict[str, dict[float, int]],
+    dict[str, dict[float, list[str]]],
+]:
+    """
+    Scan sidecar Core Animals for sample availability, per sex and dose.
+
+    Biosampling Animals are excluded — they are a separate cohort and
+    never count toward an apical table's N.  A Core Animal is "available"
+    if it has at least one non-empty, non-"NA" observation value; one
+    whose every observation is empty/NA is a missing-sample animal
+    (sample not received, clotted, insufficient volume, etc.).
+
+    Args:
+        sidecar_data: {sex: parsed-sidecar-dict}, as returned by
+                      load_sidecar() per sex.
+
+    Returns:
+        A 3-tuple of per-sex, per-dose dicts:
+          - core_n_by_sex_dose:     {sex: {dose: count with usable data}}
+          - total_core_by_sex_dose: {sex: {dose: total Core Animals}}
+          - missing_sample_animals: {sex: {dose: [animal_id, ...] with no data}}
+    """
+    core_n_by_sex_dose: dict[str, dict[float, int]] = {}
+    total_core_by_sex_dose: dict[str, dict[float, int]] = {}
+    missing_sample_animals: dict[str, dict[float, list[str]]] = {}
+
+    for sex, sc in sidecar_data.items():
+        dose_with_data: dict[float, set[str]] = {}
+        dose_all: dict[float, set[str]] = {}
+        dose_missing: dict[float, list[str]] = {}
+
+        for aid, rec in sc.get("animals", {}).items():
+            selection = rec.get("selection", "Unknown")
+            # Include Core Animals and animals with unknown selection.
+            # "Unknown" means the CSV had no Selection column — those are
+            # implicitly Core Animals (e.g. a Hormones CSV with no
+            # Biosampling cohort provides no Selection column).
+            if "biosampling" in selection.lower():
+                continue
+            dose = rec["dose"]
+            dose_all.setdefault(dose, set()).add(aid)
+
+            has_data = any(
+                obs.get("value") and obs["value"].strip()
+                and obs["value"].strip().upper() != "NA"
+                for obs in rec.get("observations", [])
+            )
+            if has_data:
+                dose_with_data.setdefault(dose, set()).add(aid)
+            else:
+                dose_missing.setdefault(dose, []).append(aid)
+
+        core_n_by_sex_dose[sex] = {
+            dose: len(aids) for dose, aids in dose_with_data.items()
+        }
+        total_core_by_sex_dose[sex] = {
+            dose: len(aids) for dose, aids in dose_all.items()
+        }
+        missing_sample_animals[sex] = dose_missing
+
+    return core_n_by_sex_dose, total_core_by_sex_dose, missing_sample_animals
+
+
+def build_sample_availability_footnotes(
+    missing_sample_animals: dict[str, dict[float, list[str]]],
+    total_core_by_sex_dose: dict[str, dict[float, int]],
+    sorted_doses: list[float],
+) -> tuple[list[dict], dict[str, dict[float, str]]]:
+    """
+    Build deduped "sample not received" footnotes from all-NA Core Animals.
+
+    One footnote per DISTINCT missing-sample COUNT — NOT per (sex, dose).
+    "One sample ... was not received" / "2 samples ... were not received"
+    each appear once; the footnote's letter is superscripted on every
+    n-row cell that has that count.  (A per-(sex, dose) footnote — the old
+    behavior — produced a dozen near-duplicates for a dense table like
+    hematology.)  Footnotes are created in first-appearance order — Male
+    before Female, lowest dose first — so the first marker the reader
+    meets is "c".
+
+    A dose group where EVERY Core Animal is missing data is skipped here:
+    that is whole-group attrition, handled by build_attrition_footnote(),
+    not a sample-availability note.
+
+    Args:
+        missing_sample_animals: {sex: {dose: [animal_id, ...]}} from
+                                detect_core_animal_availability().
+        total_core_by_sex_dose: {sex: {dose: total Core Animals}} — used
+                                to tell partial missing from whole-group
+                                attrition.
+        sorted_doses:           Ordered dose list (column order).
+
+    Returns:
+        (footnote_records, n_row_marker_refs) where footnote_records is a
+        list of typed `lettered` footnote dicts (target "cells") and
+        n_row_marker_refs is {sex: {dose: footnote_id}} for the caller to
+        merge onto its n-rows before finalize_footnotes runs.
+    """
+    footnotes: list[dict] = []
+    n_row_marker_refs: dict[str, dict[float, str]] = {}
+    fid_by_count: dict[int, str] = {}
+
+    for sex in ("Male", "Female"):
+        missing = missing_sample_animals.get(sex, {})
+        totals = total_core_by_sex_dose.get(sex, {})
+        n_row_marker_refs.setdefault(sex, {})
+        for dose in sorted_doses:
+            missing_at_dose = missing.get(dose, [])
+            if not missing_at_dose:
+                continue
+            count = len(missing_at_dose)
+            # Whole-group attrition (every Core Animal missing) belongs to
+            # build_attrition_footnote, not here — skip it so we don't emit
+            # an orphaned "N samples not received" note for a dead group.
+            if count >= totals.get(dose, 0) > 0:
+                continue
+            fid = fid_by_count.get(count)
+            if fid is None:
+                # First (sex, dose) seen with this count — emit the footnote.
+                # "dose group(s)" because one footnote can span several.
+                fid = f"sample_avail_count_{count}"
+                if count == 1:
+                    text = (
+                        "One sample in the indicated dose group(s) was "
+                        "not received."
+                    )
+                else:
+                    text = (
+                        f"{count} samples in the indicated dose group(s) "
+                        f"were not received."
+                    )
+                footnotes.append(lettered_footnote(text, fid, target="cells"))
+                fid_by_count[count] = fid
+            n_row_marker_refs[sex][dose] = fid
+
+    return footnotes, n_row_marker_refs
+
+
+def build_attrition_footnote(
+    total_core_by_sex_dose: dict[str, dict[float, int]],
+    core_n_by_sex_dose: dict[str, dict[float, int]],
+    sorted_doses: list[float],
+    dose_unit: str = "mg/kg",
+) -> tuple[dict | None, dict[str, dict[float, str]]]:
+    """
+    Build a single attrition footnote for whole dose groups with no data.
+
+    A (sex, dose) group is "attrited" when it had Core Animals
+    (total > 0) but none with usable data (core_n == 0) — every animal
+    died or was moribund before the sample could be collected.  One
+    footnote covers every such group; the affected dose groups are named
+    in the text (derived, not hard-coded), and the footnote's letter is
+    superscripted on the first attrited (sex, dose) n-row cell.
+
+    Args:
+        total_core_by_sex_dose: {sex: {dose: total Core Animals}}.
+        core_n_by_sex_dose:     {sex: {dose: count with usable data}}.
+        sorted_doses:           Ordered dose list.
+        dose_unit:              Dose unit string for the footnote text.
+
+    Returns:
+        (footnote_record_or_None, n_row_marker_refs).  The record is a
+        typed `lettered` footnote dict (target "cells"), or None when no
+        whole-group attrition was found.  n_row_marker_refs is
+        {sex: {dose: "attrition"}} for the caller to merge.
+    """
+    dead: list[tuple[str, float]] = []
+    for sex in ("Male", "Female"):
+        total = total_core_by_sex_dose.get(sex, {})
+        with_data = core_n_by_sex_dose.get(sex, {})
+        for dose in sorted_doses:
+            if total.get(dose, 0) > 0 and with_data.get(dose, 0) == 0:
+                dead.append((sex, dose))
+
+    if not dead:
+        return None, {}
+
+    dead_doses = sorted({d for _, d in dead})
+    dead_sexes = sorted({s for s, _ in dead})
+    dose_str = " and ".join(
+        format_dose_label(d, dose_unit) for d in dead_doses
+    )
+    sex_str = (
+        "male and female" if len(dead_sexes) == 2
+        else dead_sexes[0].lower()
+    )
+    text = (
+        f"All {sex_str} {dose_str} {dose_unit} rats were found dead "
+        f"or moribund and euthanized by study day 1."
+    )
+    # Marker on the first attrited (sex, dose) cell — the footnote text
+    # names every affected group, so one marker introduces it.
+    first_sex, first_dose = dead[0]
+    n_row_marker_refs = {first_sex: {first_dose: "attrition"}}
+    return (
+        lettered_footnote(text, "attrition", target="cells"),
+        n_row_marker_refs,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +598,7 @@ def find_sidecar_paths(session_dir: str, platform: str) -> dict[str, str]:
 def build_n_row(
     animals_by_dose: dict[float, list],
     sorted_doses: list[float],
-    attrition_markers: dict[float, str] | None = None,
+    marker_refs: dict[float, str] | None = None,
 ) -> dict:
     """
     Build an n-row dict showing sample sizes per dose group.
@@ -239,30 +608,31 @@ def build_n_row(
     set to "NA" (not applicable — sample size is not a dose-response endpoint).
 
     Args:
-        animals_by_dose:   {dose: [list of animal values/IDs]} — the length
-                           of each list is the N for that dose.
-        sorted_doses:      Ordered list of dose values for column layout.
-        attrition_markers: Optional {dose: "c"} mapping for superscript
-                           footnote markers on N cells where animals died.
+        animals_by_dose: {dose: [list of animal values/IDs]} — the length
+                         of each list is the N for that dose.
+        sorted_doses:    Ordered list of dose values for column layout.
+        marker_refs:     Optional {dose: footnote_id} mapping — the stable
+                         footnote IDs whose letters should be superscripted
+                         on this n-row's cells (e.g. an attrition or
+                         sample-availability footnote).  finalize_footnotes
+                         later resolves these ids into the displayed
+                         `markers` dict; see the typed footnote model above.
 
     Returns:
-        Row dict with: label="n", doses, values (N per dose), markers,
-        bmd="NA", bmdl="NA", is_n_row=True.
+        Row dict with: label="n", doses, values (N per dose), marker_refs
+        (only when given), bmd="NA", bmdl="NA", is_n_row=True.
     """
-    if attrition_markers is None:
-        attrition_markers = {}
-
     n_vals: dict[str, str] = {}
-    markers: dict[str, str] = {}
+    refs: dict[str, str] = {}
 
     for dose in sorted_doses:
         dk = js_dose_key(dose)
         n = len(animals_by_dose.get(dose, []))
         n_vals[dk] = str(n) if n > 0 else "\u2013"
 
-        marker = attrition_markers.get(dose)
-        if marker:
-            markers[dk] = marker
+        ref = (marker_refs or {}).get(dose)
+        if ref:
+            refs[dk] = ref
 
     row = {
         "label": "n",
@@ -272,8 +642,8 @@ def build_n_row(
         "bmdl": "NA",
         "is_n_row": True,
     }
-    if markers:
-        row["markers"] = markers
+    if refs:
+        row["marker_refs"] = refs
 
     return row
 
@@ -313,6 +683,30 @@ def bmd_display_from_stats(
     bmd = bmd if bmd and bmd != "\u2014" else "ND"
     bmdl = bmdl if bmdl and bmdl != "\u2014" else "ND"
     return (bmd, bmdl)
+
+
+# Sentinels the BMD column uses for "no real modeled value", across the
+# apical builders: "\u2014" \u2014 endpoint not modeled by BMDExpress (clinical
+# pathology); "ND" \u2014 not determined (gate didn't pass / modeling failed);
+# "NA" \u2014 not applicable (the n-row); "" \u2014 empty.
+_NON_REPORTABLE_BMD = {"\u2014", "ND", "NA", ""}
+
+
+def is_reportable_bmd(bmd_text) -> bool:
+    """
+    True when a BMD cell holds a real modeled value \u2014 a number, or a
+    BMDExpress status code (NVM, UREP, <LNZD/3) \u2014 rather than a
+    "nothing here" sentinel.
+
+    This is the `reportable` half of the row-emphasis rule the apical
+    table builders share: a row is emphasized (bold) when it passed the
+    NTP responsive gate OR its BMD column is reportable.  Defined here so
+    all three builders test it the same way instead of each re-deriving
+    the sentinel set.
+    """
+    if bmd_text is None:
+        return False
+    return str(bmd_text).strip() not in _NON_REPORTABLE_BMD
 
 
 # ---------------------------------------------------------------------------
