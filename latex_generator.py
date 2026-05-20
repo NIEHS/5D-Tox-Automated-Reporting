@@ -1,7 +1,7 @@
 """
 latex_generator.py — LaTeX rendering of the NIEHS biological potency report.
 
-This module is the LaTeX-side counterpart to report_pdf.py's Typst pipeline.
+This module is the LaTeX-side counterpart to report_data.py's Typst pipeline.
 It walks the canonical document_tree.DOCUMENT_TREE and emits a flat report.tex
 that, together with latex/niehs.cls, compiles via pdflatex to a NIEHS-styled
 PDF.  The .tex output is the artifact authors upload to Overleaf and hand-edit.

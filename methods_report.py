@@ -48,7 +48,7 @@ External importers preserved through this shim:
   - process_integrated.py   build_apical_bmd_summary_narrative,
                             same MethodsReport / extract_methods_context
                             set as llm_routes
-  - report_pdf.py           MethodsContext + build_abstract_methods +
+  - report_data.py           MethodsContext + build_abstract_methods +
                             build_abstract_results + build_abstract_summary
   - processing_helpers.py   _is_anomalous_bmd (lazy import inside a
                             helper)

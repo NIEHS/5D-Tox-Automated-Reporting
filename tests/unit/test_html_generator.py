@@ -31,7 +31,7 @@ import pytest
 
 from html_generator import generate_html
 from latex_export import load_session_data
-from report_pdf import scaffold_report_data
+from report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +218,7 @@ def test_apical_row_values_render_real_measurements_not_dose_keys():
     label key 'label') and verify the rendered HTML carries the actual
     measurement strings, not the dose-string keys.
     """
-    from report_pdf import marshal_export_data
+    from report_data import marshal_export_data
     body = {
         "chemical_name": "TestChem",
         "casrn": "00-00-0",
@@ -261,7 +261,7 @@ def test_apical_row_values_render_real_measurements_not_dose_keys():
 
 def test_normalize_apical_section_is_idempotent():
     """Re-normalizing an already-normalized section is a no-op."""
-    from report_pdf import normalize_apical_section_for_render
+    from report_data import normalize_apical_section_for_render
     sec = {
         "platform": "Body Weight",
         "table_data": {

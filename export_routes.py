@@ -8,7 +8,7 @@ that the LLM uses to match user preferences.
 
 The export pipeline runs:
 
-    marshal_export_data(body)            ← report_pdf.py: data assembly
+    marshal_export_data(body)            ← report_data.py: data assembly
         → generate_latex(data, …)        ← latex_generator.py: tree walk
         → build_overleaf_bundle(data, …) ← latex_export.py: zip writer
 
@@ -129,7 +129,7 @@ async def api_export_overleaf_bundle(request: Request):
     Export the full report as an Overleaf-ready zip bundle.
 
     Accepts the same JSON payload the old /api/export-pdf endpoint did.
-    Marshals it through the shared report_pdf data-assembly pipeline,
+    Marshals it through the shared report_data data-assembly pipeline,
     then renders to a .tex via the LaTeX generator and packages it
     alongside niehs.cls + figures/ + README.md into a zip the author
     drags into Overleaf.
@@ -137,7 +137,7 @@ async def api_export_overleaf_bundle(request: Request):
     Pipeline:
       body → marshal_export_data → generate_latex → build_overleaf_bundle
     """
-    from report_pdf import marshal_export_data
+    from report_data import marshal_export_data
     from latex_export import build_overleaf_bundle
 
     body = await request.json()
@@ -201,7 +201,7 @@ async def api_preview_latex_html(request: Request):
     text/html so the browser can drop it straight into an iframe via
     srcdoc.
     """
-    from report_pdf import marshal_export_data
+    from report_data import marshal_export_data
     from html_generator import generate_html
 
     body = await request.json()

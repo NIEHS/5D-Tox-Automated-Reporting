@@ -1,5 +1,5 @@
 """
-report_pdf.py — Data-assembly helpers for the LaTeX report pipeline.
+report_data.py — Data-assembly helpers for the LaTeX report pipeline.
 
 This module is the data layer behind /api/export-overleaf-bundle and
 /api/preview-latex-html.  It takes the web UI's accumulated session
@@ -8,7 +8,7 @@ consumes.
 
 Historical context
 ------------------
-This file originally held a `build_report_pdf` function that compiled
+This file originally held a `build_report_data` function that compiled
 report.typ via the Typst Python wheel to a PDF/UA-1 compliant tagged
 PDF.  When the project cut over to LaTeX (2026-05-19 — "no PDFs, no
 Typst") the Typst compile step was removed and the rendering tail
@@ -26,7 +26,7 @@ from MethodsContext, genomics body narratives, ChemicalIdentity name
 forms, deterministic TOC and table entries, and section_filter trimming.
 
 Usage:
-    from report_pdf import marshal_export_data, scaffold_report_data
+    from report_data import marshal_export_data, scaffold_report_data
     data = marshal_export_data(request_body)
     # ... pass to generate_latex / build_overleaf_bundle / render_html_preview ...
 
@@ -201,7 +201,7 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                         When None, the full report is returned.
 
     Returns:
-        A dict ready to pass to build_report_pdf().
+        A dict ready to pass to build_report_data().
     """
     chemical_name = body.get("chemical_name", "Chemical")
 
@@ -662,7 +662,7 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     if genomics:
         data["genomics_sections"] = genomics
         # Placeholder for chart images — the actual PNGs are injected later
-        # by build_report_pdf(), but the key must exist here so
+        # by build_report_data(), but the key must exist here so
         # _apply_section_filter() doesn't strip it when section_filter="charts".
         if any(s.get("type") == "gene_set" for s in genomics):
             data["genomics_charts"] = []
@@ -988,7 +988,7 @@ def scaffold_report_data(
         dtxsid: DSSTox substance identifier.
 
     Returns:
-        A dict ready to pass directly to build_report_pdf().
+        A dict ready to pass directly to build_report_data().
     """
     # --- Placeholder helper ---
     # Wraps text so it's clearly identifiable as scaffold content.

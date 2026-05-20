@@ -87,7 +87,7 @@ A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`).
 | Module | Purpose |
 |--------|---------|
 | `document_tree.py` | `DocNode` tree — single source of truth for report structure and table numbering |
-| `report_pdf.py` | PDF generation via Typst (`report.typ`) |
+| `report_data.py` | PDF generation via Typst (`report.typ`) |
 | `build_docx.py` | Word document assembly |
 | `interpret.py` | Toxicological interpretation: KB queries, pathway/GO enrichment, LLM narratives |
 

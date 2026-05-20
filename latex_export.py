@@ -31,7 +31,7 @@ Usage
 -----
 Programmatic:
 
-    from report_pdf import scaffold_report_data
+    from report_data import scaffold_report_data
     from latex_export import build_overleaf_bundle
     data = scaffold_report_data(chemical_name="Perfluorohexanesulfonamide", ...)
     build_overleaf_bundle(data, Path("dist/niehs-overleaf-bundle.zip"))
@@ -204,10 +204,10 @@ def _load_json(path: Path | None) -> dict | list | None:
 def _normalize_apical_section(sec: dict) -> dict:
     """
     Backwards-compat shim: delegates to the canonical normalizer in
-    report_pdf so the CLI path and the web-export marshaling path share
+    report_data so the CLI path and the web-export marshaling path share
     one implementation.
     """
-    from report_pdf import normalize_apical_section_for_render
+    from report_data import normalize_apical_section_for_render
     return normalize_apical_section_for_render(sec)
 
 
@@ -300,7 +300,7 @@ def load_session_data(
     # Import lazily — scaffold_report_data has heavy transitive deps
     # (methods_report → llm_helpers → anthropic) we don't want pulled
     # in when latex_export is imported as a library by the web app.
-    from report_pdf import scaffold_report_data
+    from report_data import scaffold_report_data
 
     data = scaffold_report_data(
         chemical_name=chemical_name,
@@ -449,7 +449,7 @@ def _main() -> None:
     """
     # Import here to keep module import cheap when latex_export is used
     # purely as a library (the web export endpoint, for instance).
-    from report_pdf import scaffold_report_data
+    from report_data import scaffold_report_data
 
     parser = argparse.ArgumentParser(
         description="Build an Overleaf-ready zip from session or scaffold data.",

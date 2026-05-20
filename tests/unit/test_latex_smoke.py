@@ -41,7 +41,7 @@ from pathlib import Path
 import pytest
 
 from latex_generator import generate_latex
-from report_pdf import scaffold_report_data
+from report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ def scaffold() -> dict:
     Build the full NIEHS scaffold for a sample chemical.
 
     This is the same scaffold the production export path uses
-    (report_pdf.scaffold_report_data → marshal_export_data overlay).
+    (report_data.scaffold_report_data → marshal_export_data overlay).
     For the smoke test we exercise the scaffold-only branch: every
     section has placeholder content but the structure is complete.
 

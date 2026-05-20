@@ -28,7 +28,7 @@ The aggregator is the only abstract_* module that imports from the
 other abstract_* modules.  All other "abstract_X.py" files only depend
 on narrative_helpers + methods_models.
 
-report_pdf.py imports both names via the methods_report.py re-export
+report_data.py imports both names via the methods_report.py re-export
 shim when assembling the Abstract block.
 """
 

@@ -17,7 +17,7 @@ Single public function:
 
   build_abstract_methods(ctx) -> str
 
-methods_report.py re-exports the name; report_pdf.py imports it via
+methods_report.py re-exports the name; report_data.py imports it via
 the shim to assemble the Abstract block.
 """
 

@@ -31,7 +31,7 @@ from latex_export import (
     build_overleaf_bundle,
 )
 from latex_generator import generate_latex
-from report_pdf import scaffold_report_data
+from report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------

@@ -802,7 +802,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         #                 significance, organ-system sensitivity, sex
         #                 differences, and dose-response coherence.
         # Both are combined into apical_bmd_narrative["paragraphs"]
-        # which report_pdf.py prepends to the BMD summary table.
+        # which report_data.py prepends to the BMD summary table.
         apical_bmd_narrative: dict = {}
         if apical_bmd_summary:
             try:
@@ -870,7 +870,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
             # Apical BMD Summary section narratives (descriptive +
             # analytical).  The flat "paragraphs" list is consumed by
-            # report_pdf.py and the frontend BMD summary card.
+            # report_data.py and the frontend BMD summary card.
             "apical_bmd_narrative": apical_bmd_narrative,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,

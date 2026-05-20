@@ -1,7 +1,7 @@
 """
 Shared assembler for Gene Set / Gene BMD body narratives.
 
-Both the PDF export path (`report_pdf.marshal_export_data`) and the
+Both the PDF export path (`report_data.marshal_export_data`) and the
 in-app HTML path (`/api/process-integrated`) need to display the same
 per-organ findings paragraphs above their respective tables.  Before
 this module existed, the assembly logic lived inline inside
