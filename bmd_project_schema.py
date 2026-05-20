@@ -168,6 +168,230 @@ class BMDProjectValidationError(ValueError):
 
 
 # ---------------------------------------------------------------------------
+# Helper / utility functions (private)
+# ---------------------------------------------------------------------------
+# Used by the BMDProject pre-validator.  Kept at module scope (rather than
+# as a method) because it operates on the raw input dict, has no need for
+# class state, and is easier to unit-test standalone.
+
+def _repoint_bmd_results_to_truth(
+    data: dict[str, Any],
+    legacy_exp: dict[str, Any],
+    truth_exp: dict[str, Any],
+) -> tuple[int, int]:
+    """
+    Move BMDExpress results from a legacy apical experiment onto its
+    truth sibling, in place, before the legacy experiment is dropped.
+
+    WHY THIS EXISTS
+    ===============
+    Apical platforms (Clinical Chemistry, Hematology, Hormones, Organ
+    Weight, Body Weight) arrive as TWO BMDExpress upload files per
+    (platform, sex), confirmed by the customer (Auerbach, Weekly
+    Meeting 8):
+
+      - the "truth" file — raw measurements; missing data points
+        (dead animals, lost samples) are left missing.  This is the
+        source of truth for the mean/SE columns in the report.
+
+      - the "legacy"/inferred file — the same data with missing cells
+        filled by the dose-group average.  BMDExpress is run against
+        THIS file, because curve-fitting can't tolerate gaps.  So the
+        `bMDResult` entries in `integrated.json` reference the legacy
+        experiment's `@ref`, not the truth experiment's.
+
+    `_dedupe_legacy_apical_pre` keeps the truth experiment (correct
+    descriptive stats) and drops the legacy one.  But the BMD/BMDL
+    values BMDExpress produced are attached to the legacy experiment —
+    dropping it orphans them, and every apical BMD column collapses to
+    "—".  This helper rescues them: it rewrites the `bMDResult` graph
+    so the results point at the surviving truth experiment instead.
+
+    WHAT IT REWRITES
+    ================
+    For every `bMDResult` whose `doseResponseExperiment` @ref equals the
+    legacy experiment's @ref:
+
+      1. `doseResponseExperiment` is repointed to the truth experiment's
+         @ref.
+      2. Each `probeStatResults[*].probeResponse` @ref — which points at
+         a probe inside the legacy experiment — is repointed to the
+         truth experiment's probe carrying the same `probe.id` label.
+
+    The label is the join key because the @ref integers differ between
+    the two experiments but the endpoint names ("Alanine
+    aminotransferase", etc.) are identical.  A legacy probe with no
+    label-match in the truth experiment is left untouched: the result
+    of that is a dangling @ref that the downstream lookup
+    (`apical_report._build_bmd_result_lookup`) skips gracefully — no
+    worse than the pre-fix behavior, where the whole result was lost.
+
+    Args:
+        data:       The raw `integrated.json` dict.  `data["bMDResult"]`
+                    is mutated in place.
+        legacy_exp: The legacy experiment dict about to be dropped.
+        truth_exp:  Its `_truth_` sibling, which will survive.
+
+    Returns:
+        A `(results_repointed, probes_unmatched)` tuple — counts for the
+        caller to fold into its log line.  `(0, 0)` when there is nothing
+        to do (e.g. either experiment is missing its `@ref`).
+    """
+    legacy_ref = legacy_exp.get("@ref")
+    truth_ref = truth_exp.get("@ref")
+    # Without both @refs we can't rewire the graph; bail out as a no-op
+    # rather than guess.
+    if legacy_ref is None or truth_ref is None:
+        return (0, 0)
+
+    bmd_results = data.get("bMDResult")
+    if not isinstance(bmd_results, list) or not bmd_results:
+        return (0, 0)
+
+    # legacy probe @ref -> endpoint label
+    legacy_ref_to_label: dict[Any, str] = {}
+    for pr in legacy_exp.get("probeResponses", []) or []:
+        if not isinstance(pr, dict):
+            continue
+        pref = pr.get("@ref")
+        label = (pr.get("probe") or {}).get("id")
+        if pref is not None and label:
+            legacy_ref_to_label[pref] = label
+
+    # endpoint label -> truth probe @ref
+    truth_label_to_ref: dict[str, Any] = {}
+    for pr in truth_exp.get("probeResponses", []) or []:
+        if not isinstance(pr, dict):
+            continue
+        pref = pr.get("@ref")
+        label = (pr.get("probe") or {}).get("id")
+        if pref is not None and label:
+            truth_label_to_ref[label] = pref
+
+    results_repointed = 0
+    probes_unmatched = 0
+    for result in bmd_results:
+        if not isinstance(result, dict):
+            continue
+        if result.get("doseResponseExperiment") != legacy_ref:
+            continue
+        # Repoint the experiment reference itself.
+        result["doseResponseExperiment"] = truth_ref
+        results_repointed += 1
+        # Repoint each probe-level result by endpoint label.
+        for psr in result.get("probeStatResults", []) or []:
+            if not isinstance(psr, dict):
+                continue
+            old_pref = psr.get("probeResponse")
+            label = legacy_ref_to_label.get(old_pref)
+            new_pref = truth_label_to_ref.get(label) if label else None
+            if new_pref is not None:
+                psr["probeResponse"] = new_pref
+            else:
+                # No label-match in the truth experiment — leave the ref
+                # alone; the downstream lookup will skip it.
+                probes_unmatched += 1
+
+    return (results_repointed, probes_unmatched)
+
+
+def _is_missing(value: Any) -> bool:
+    """
+    True when a probe response value represents a missing measurement.
+
+    bmdx-pipe / Java serialization leaves a missing individual data point
+    as JSON `null` (→ Python None) or, because `json.load` accepts the
+    non-standard `NaN` literal, as a float NaN.  Either form means "no
+    measurement for this animal at this dose".
+    """
+    if value is None:
+        return True
+    # NaN is the only float that is not equal to itself.
+    return isinstance(value, float) and value != value
+
+
+def _detect_imputed_cells(
+    legacy_exp: dict[str, Any],
+    truth_exp: dict[str, Any],
+) -> dict[float, int]:
+    """
+    Find dose groups where the legacy (inferred) experiment carries a
+    value that the truth experiment leaves missing.
+
+    Apical endpoints arrive as two BMDExpress upload files per
+    (platform, sex): the truth file leaves missing individual data
+    points missing, while the inferred/legacy file fills them with the
+    dose-group mean so BMDExpress can fit a curve (see
+    `_repoint_bmd_results_to_truth` for the full background).  A cell
+    that is missing in truth but populated in legacy is therefore an
+    imputed value — and the BMD/BMDL the report shows for that endpoint
+    rests partly on imputed data.
+
+    Auerbach asked (Weekly Meeting 7, ~00:28) for the report to footnote
+    which dose groups had values imputed.  This helper produces the raw
+    counts that footnote is built from: it is called from the
+    pre-validator at the same point as the repoint, while both
+    experiments are still present.
+
+    Matching: probes are joined by endpoint label (the `@ref` integers
+    differ between the two experiments, exactly as in the repoint), and
+    response slots are aligned by index against the `treatments` list.
+    If the two experiments don't share an identical treatment vector the
+    pair is skipped — without a reliable dose alignment we'd rather
+    report nothing than guess.
+
+    Args:
+        legacy_exp: The legacy/inferred experiment dict (about to be
+                    dropped by the dedup).
+        truth_exp:  Its `_truth_` sibling, which survives.
+
+    Returns:
+        A `{dose: imputed_value_count}` dict — one entry per dose group
+        that had at least one imputed cell.  Empty when there is no
+        imputation, or when the experiments can't be aligned.
+    """
+    legacy_treatments = legacy_exp.get("treatments") or []
+    truth_treatments = truth_exp.get("treatments") or []
+    legacy_doses = [t.get("dose") for t in legacy_treatments if isinstance(t, dict)]
+    truth_doses = [t.get("dose") for t in truth_treatments if isinstance(t, dict)]
+    # Require an identical treatment vector to align response slots by
+    # index.  In practice the customer's truth and inferred files share
+    # the same study design, so this holds; the guard is just safety.
+    if not legacy_doses or legacy_doses != truth_doses:
+        return {}
+
+    # endpoint label -> response vector, for each experiment
+    def _label_to_responses(exp: dict[str, Any]) -> dict[str, list]:
+        out: dict[str, list] = {}
+        for pr in exp.get("probeResponses", []) or []:
+            if not isinstance(pr, dict):
+                continue
+            label = (pr.get("probe") or {}).get("id")
+            responses = pr.get("responses")
+            if label and isinstance(responses, list):
+                out[label] = responses
+        return out
+
+    legacy_responses = _label_to_responses(legacy_exp)
+    truth_responses = _label_to_responses(truth_exp)
+
+    imputed_by_dose: dict[float, int] = {}
+    for label, truth_vec in truth_responses.items():
+        legacy_vec = legacy_responses.get(label)
+        if legacy_vec is None:
+            continue
+        # Walk the aligned slots; a slot is imputed when truth is missing
+        # but legacy holds a real (non-missing) value.
+        for i, dose in enumerate(legacy_doses):
+            if i >= len(truth_vec) or i >= len(legacy_vec):
+                break
+            if _is_missing(truth_vec[i]) and not _is_missing(legacy_vec[i]):
+                imputed_by_dose[dose] = imputed_by_dose.get(dose, 0) + 1
+
+    return imputed_by_dose
+
+
+# ---------------------------------------------------------------------------
 # Shared base class
 # ---------------------------------------------------------------------------
 # Every model in this module inherits from `_BaseModel` instead of
@@ -493,6 +717,17 @@ class BMDProject(_BaseModel):
     #      for the same (platform, sex).  This is the normalization
     #      step — it makes data that USED to fail the invariant pass
     #      it cleanly, so existing sessions on disk continue to load.
+    #      Before each legacy experiment is dropped, the pre-validator
+    #      calls `_repoint_bmd_results_to_truth` to move that
+    #      experiment's `bMDResult` entries onto the surviving truth
+    #      sibling — see that helper for the full rationale.  Without
+    #      this, the BMD/BMDL columns for every apical platform would
+    #      collapse to "—", because BMDExpress is run against the
+    #      legacy (inferred) file and its results reference the legacy
+    #      experiment's @ref.  In the same pass it calls
+    #      `_detect_imputed_cells` and records, in `_meta.imputed_cells`,
+    #      which dose groups had values imputed in the legacy file — the
+    #      report uses that to footnote imputation-backed BMDs.
     #
     #   2. `mode="after"` post-validator (`_assert_apical_uniqueness`):
     #      enforces that no (platform, sex) pair carries more than one
@@ -518,6 +753,12 @@ class BMDProject(_BaseModel):
         any experiment in the group has `_truth_` in its name, drop
         every non-`_truth_` sibling.  Groups without a truth marker
         are left untouched so the post-validator can flag them.
+
+        Before dropping a legacy experiment, its `bMDResult` entries are
+        repointed onto the truth sibling via
+        `_repoint_bmd_results_to_truth`, so the BMD/BMDL values survive
+        the dedup, and `_detect_imputed_cells` records which dose groups
+        had imputed values into `_meta.imputed_cells`.
 
         Operates on the raw input dict — runs BEFORE field validation,
         so it sees plain Python types (dicts, strings, numbers).
@@ -562,29 +803,76 @@ class BMDProject(_BaseModel):
         # two unrelated experiments could theoretically be `==`.
         to_drop_ids: set[int] = set()
         dropped_names: list[str] = []
-        for group in groups.values():
+        results_repointed = 0
+        probes_unmatched = 0
+        # {platform: {sex: {dose_str: imputed_value_count}}} — dose groups
+        # where the legacy file filled values the truth file left missing.
+        imputed_cells: dict[str, dict[str, dict[str, int]]] = {}
+        for (platform, sex), group in groups.items():
             if len(group) < 2:
                 continue
-            has_truth = any(
-                "_truth_" in e.get("name", "").lower() for e in group
-            )
-            if not has_truth:
+            truth_members = [
+                e for e in group
+                if "_truth_" in e.get("name", "").lower()
+            ]
+            if not truth_members:
                 continue
+            # The truth sibling that inherits the dropped experiments'
+            # BMD results.  If a group somehow has more than one truth
+            # experiment, `_assert_apical_uniqueness` flags it after
+            # field validation; here we just pick the first.
+            truth_exp = truth_members[0]
             for e in group:
                 if "_truth_" not in e.get("name", "").lower():
+                    # Move BMDExpress results onto the truth sibling
+                    # BEFORE the legacy experiment is removed, so the
+                    # BMD/BMDL columns don't collapse to "—".
+                    r, u = _repoint_bmd_results_to_truth(data, e, truth_exp)
+                    results_repointed += r
+                    probes_unmatched += u
+                    # Record which dose groups the legacy file imputed,
+                    # while both experiments are still in hand.
+                    by_dose = _detect_imputed_cells(e, truth_exp)
+                    for dose, count in by_dose.items():
+                        (imputed_cells
+                            .setdefault(platform, {})
+                            .setdefault(sex, {}))
+                        imputed_cells[platform][sex][str(dose)] = (
+                            imputed_cells[platform][sex].get(str(dose), 0)
+                            + count
+                        )
                     to_drop_ids.add(id(e))
                     dropped_names.append(e.get("name", ""))
 
         if to_drop_ids:
+            n_imputed_groups = sum(
+                len(doses)
+                for sexes in imputed_cells.values()
+                for doses in sexes.values()
+            )
             logger.info(
                 "Dropped %d legacy apical experiment(s) superseded by "
-                "truth siblings: %s",
+                "truth siblings: %s — repointed %d bMDResult entr(ies) "
+                "onto truth siblings (%d probe result(s) had no "
+                "label-match and were left for the downstream lookup "
+                "to skip); detected imputation in %d dose group(s)",
                 len(dropped_names),
                 ", ".join(dropped_names),
+                results_repointed,
+                probes_unmatched,
+                n_imputed_groups,
             )
             data["doseResponseExperiments"] = [
                 e for e in exps if id(e) not in to_drop_ids
             ]
+            # Stash the imputation map in the rlm-bmdx envelope so it
+            # survives into the validated dict (and a later save).  Only
+            # write when this run actually paired legacy/truth siblings —
+            # if the data was already deduped (no legacy experiments),
+            # leave any `imputed_cells` from a prior run untouched rather
+            # than clobbering it with an empty dict.
+            if imputed_cells and isinstance(data.get("_meta"), dict):
+                data["_meta"]["imputed_cells"] = imputed_cells
         return data
 
     @model_validator(mode="after")

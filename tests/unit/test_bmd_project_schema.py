@@ -331,3 +331,271 @@ class TestApicalUniquenessInvariant:
         )
         out = load_and_validate(raw, source="test")
         assert len(out["doseResponseExperiments"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# BMD-result repointing: when the pre-validator drops a legacy apical
+# experiment, the bMDResult entries BMDExpress produced against it must be
+# repointed onto the surviving truth sibling — otherwise the BMD/BMDL
+# columns collapse to "—".  See `_repoint_bmd_results_to_truth`.
+# ---------------------------------------------------------------------------
+
+def _exp_with_refs(
+    name: str, platform: str, sex: str,
+    exp_ref: int, probes: list[tuple[int, str]],
+) -> dict:
+    """
+    Build an experiment dict with explicit Jackson @ref identity, the way
+    bmdx-pipe serializes it.  `probes` is a list of (probe_ref, label).
+    """
+    return {
+        "@ref": exp_ref,
+        "name": name,
+        "treatments": [{"name": "0", "dose": 0.0}],
+        "probeResponses": [
+            {"@ref": pref, "probe": {"id": label}, "responses": [1.0]}
+            for pref, label in probes
+        ],
+        "experimentDescription": {
+            "platform": platform,
+            "provider": "Apical",
+            "sex": sex,
+            "testArticle": {"name": "X", "dsstox": "DTXSID00000000"},
+        },
+    }
+
+
+def _bmd_result(name: str, exp_ref: int, probe_refs: list[int]) -> dict:
+    """Build a bMDResult entry referencing an experiment + probe @refs."""
+    return {
+        "@type": "BMDResult",
+        "name": name,
+        "doseResponseExperiment": exp_ref,
+        "probeStatResults": [
+            {"probeResponse": pref, "bestBMD": 10.0 + i, "bestBMDL": 5.0 + i}
+            for i, pref in enumerate(probe_refs)
+        ],
+    }
+
+
+class TestBmdResultRepointing:
+    """Legacy bMDResult entries get repointed onto the truth sibling."""
+
+    def test_bmd_result_experiment_ref_repointed(self):
+        # Legacy experiment @ref=1 carries the bMDResult; truth is @ref=2.
+        # After dedup the legacy experiment is gone, and the bMDResult's
+        # doseResponseExperiment must now point at the truth @ref.
+        legacy = _exp_with_refs(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            exp_ref=1, probes=[(11, "ALT"), (12, "AST")],
+        )
+        truth = _exp_with_refs(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            exp_ref=2, probes=[(21, "ALT"), (22, "AST")],
+        )
+        raw = _project(legacy, truth)
+        raw["bMDResult"] = [_bmd_result("legacy_bmd", 1, [11, 12])]
+
+        out = load_and_validate(raw, source="test")
+
+        # Only the truth experiment survives.
+        names = [e["name"] for e in out["doseResponseExperiments"]]
+        assert names == ["clin_chem_truth_male"]
+        # The bMDResult survived (model_extra) AND was repointed.
+        assert len(out["bMDResult"]) == 1
+        assert out["bMDResult"][0]["doseResponseExperiment"] == 2
+
+    def test_probe_response_refs_repointed_by_label(self):
+        # Each probeStatResult's probeResponse @ref must move from the
+        # legacy probe @ref to the truth probe @ref carrying the same
+        # endpoint label.
+        legacy = _exp_with_refs(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            exp_ref=1, probes=[(11, "ALT"), (12, "AST")],
+        )
+        truth = _exp_with_refs(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            exp_ref=2, probes=[(21, "ALT"), (22, "AST")],
+        )
+        raw = _project(legacy, truth)
+        raw["bMDResult"] = [_bmd_result("legacy_bmd", 1, [11, 12])]
+
+        out = load_and_validate(raw, source="test")
+
+        psrs = out["bMDResult"][0]["probeStatResults"]
+        # 11 (legacy ALT) -> 21 (truth ALT); 12 (legacy AST) -> 22 (truth AST)
+        assert [p["probeResponse"] for p in psrs] == [21, 22]
+        # The BMD values themselves are untouched — only the refs move.
+        assert psrs[0]["bestBMD"] == 10.0
+        assert psrs[1]["bestBMD"] == 11.0
+
+    def test_unmatched_probe_label_left_alone(self):
+        # When a legacy probe label has no counterpart in the truth
+        # experiment (e.g. a customer-side typo), that probeResponse @ref
+        # is left untouched rather than guessed at — the downstream lookup
+        # skips it.  The other probes still repoint correctly.
+        legacy = _exp_with_refs(
+            "male_hormone_data", "Hormones", "male",
+            exp_ref=1, probes=[(11, "Total Thyroxine"), (12, "Triiodiodothyronine")],
+        )
+        truth = _exp_with_refs(
+            "hormones_truth_male", "Hormones", "male",
+            exp_ref=2, probes=[(21, "Total Thyroxine"), (22, "Triiodothyronine")],
+        )
+        raw = _project(legacy, truth)
+        raw["bMDResult"] = [_bmd_result("legacy_bmd", 1, [11, 12])]
+
+        out = load_and_validate(raw, source="test")
+
+        psrs = out["bMDResult"][0]["probeStatResults"]
+        # "Total Thyroxine" matches -> repointed to 21.
+        assert psrs[0]["probeResponse"] == 21
+        # The misspelled "Triiodiodothyronine" has no truth match -> the
+        # original legacy @ref is left in place (12), not invented.
+        assert psrs[1]["probeResponse"] == 12
+
+    def test_no_truth_sibling_leaves_bmd_result_untouched(self):
+        # A lone legacy experiment (no truth sibling) is not dropped, so
+        # its bMDResult is not repointed either.
+        legacy = _exp_with_refs(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            exp_ref=1, probes=[(11, "ALT")],
+        )
+        raw = _project(legacy)
+        raw["bMDResult"] = [_bmd_result("legacy_bmd", 1, [11])]
+
+        out = load_and_validate(raw, source="test")
+
+        assert len(out["doseResponseExperiments"]) == 1
+        assert out["bMDResult"][0]["doseResponseExperiment"] == 1
+        assert out["bMDResult"][0]["probeStatResults"][0]["probeResponse"] == 11
+
+
+# ---------------------------------------------------------------------------
+# Imputed-cell detection: when the legacy file fills a value the truth file
+# leaves missing, the pre-validator records the affected dose groups in
+# `_meta.imputed_cells` so the report can footnote imputation-backed BMDs.
+# ---------------------------------------------------------------------------
+
+def _exp_for_imputation(
+    name: str, platform: str, sex: str,
+    doses: list[float], probe_responses: dict[str, list],
+) -> dict:
+    """
+    Build an experiment dict with a multi-dose treatment vector and
+    per-probe response vectors (which may contain None for missing cells).
+    `probe_responses` is {endpoint_label: [value_per_treatment_slot]}.
+    """
+    return {
+        "name": name,
+        "treatments": [
+            {"name": str(d), "dose": d} for d in doses
+        ],
+        "probeResponses": [
+            {"probe": {"id": label}, "responses": responses}
+            for label, responses in probe_responses.items()
+        ],
+        "experimentDescription": {
+            "platform": platform,
+            "provider": "Apical",
+            "sex": sex,
+            "testArticle": {"name": "X", "dsstox": "DTXSID00000000"},
+        },
+    }
+
+
+class TestImputedCellDetection:
+    """Legacy-vs-truth value gaps are recorded in _meta.imputed_cells."""
+
+    def test_imputed_cell_recorded(self):
+        # Truth leaves slot 1 (dose 1.4) missing; legacy fills it.  That
+        # one cell must show up under (platform, sex, dose) in _meta.
+        legacy = _exp_for_imputation(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            doses=[0.0, 1.4, 12.0],
+            probe_responses={"ALT": [50.0, 55.0, 60.0]},
+        )
+        truth = _exp_for_imputation(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            doses=[0.0, 1.4, 12.0],
+            probe_responses={"ALT": [50.0, None, 60.0]},
+        )
+        out = load_and_validate(_project(legacy, truth), source="test")
+
+        imputed = out["_meta"]["imputed_cells"]
+        assert imputed == {"Clinical Chemistry": {"Male": {"1.4": 1}}}
+
+    def test_counts_aggregate_per_dose(self):
+        # Two endpoints, both missing the same dose in truth — the count
+        # for that dose group is the sum across endpoints.
+        legacy = _exp_for_imputation(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, 60.0], "AST": [70.0, 80.0]},
+        )
+        truth = _exp_for_imputation(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, None], "AST": [70.0, None]},
+        )
+        out = load_and_validate(_project(legacy, truth), source="test")
+
+        assert out["_meta"]["imputed_cells"] == {
+            "Clinical Chemistry": {"Male": {"12.0": 2}}
+        }
+
+    def test_no_gap_means_no_imputation_entry(self):
+        # Identical truth and legacy data — nothing imputed, and the key
+        # is not added to _meta at all (rather than added empty).
+        legacy = _exp_for_imputation(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, 60.0]},
+        )
+        truth = _exp_for_imputation(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, 60.0]},
+        )
+        out = load_and_validate(_project(legacy, truth), source="test")
+
+        assert "imputed_cells" not in out["_meta"]
+
+    def test_mismatched_treatment_vectors_skipped(self):
+        # If legacy and truth don't share an identical dose vector we
+        # can't align response slots, so detection is skipped (no entry)
+        # — but the dedup itself still happens.
+        legacy = _exp_for_imputation(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            doses=[0.0, 1.4, 12.0],
+            probe_responses={"ALT": [50.0, 55.0, 60.0]},
+        )
+        truth = _exp_for_imputation(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, None]},
+        )
+        out = load_and_validate(_project(legacy, truth), source="test")
+
+        # Dedup still ran — only the truth experiment survives.
+        names = [e["name"] for e in out["doseResponseExperiments"]]
+        assert names == ["clin_chem_truth_male"]
+        # But no imputation was recorded (vectors couldn't be aligned).
+        assert "imputed_cells" not in out["_meta"]
+
+    def test_truth_value_present_is_not_imputation(self):
+        # A slot where BOTH files have a value is not imputation, even if
+        # the values differ — only truth-missing / legacy-present counts.
+        legacy = _exp_for_imputation(
+            "male_clin_chem", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, 99.0]},
+        )
+        truth = _exp_for_imputation(
+            "clin_chem_truth_male", "Clinical Chemistry", "male",
+            doses=[0.0, 12.0],
+            probe_responses={"ALT": [50.0, 60.0]},
+        )
+        out = load_and_validate(_project(legacy, truth), source="test")
+
+        assert "imputed_cells" not in out["_meta"]
