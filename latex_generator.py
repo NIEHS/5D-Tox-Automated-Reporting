@@ -71,6 +71,7 @@ from document_tree import (
     DocNode,
     find_node,
 )
+from render_capabilities import capabilities_for
 
 
 # ---------------------------------------------------------------------------
@@ -913,6 +914,15 @@ def _walk(node: DocNode, data: dict) -> list[str]:
     chunks: list[str] = []
     chunk = handler(node, data)
     if chunk:
+        # Per-node landscape: wrap this node's output in pdflscape's
+        # landscape environment when the user flipped it AND the node's
+        # semantic type is orientable (capability dictionary).  Gating on the
+        # capability ignores stale/invalid overlay flags — the dictionary is
+        # authoritative on both the UI and render sides.  pdflscape rotates
+        # both the content and the PDF page, so Overleaf shows it landscape.
+        if (data.get("orientations", {}).get(node.id) == "landscape"
+                and capabilities_for(node.node_type).orientable):
+            chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
         chunks.append(chunk)
     for child in node.children:
         chunks.extend(_walk(child, data))

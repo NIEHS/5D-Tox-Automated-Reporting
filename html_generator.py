@@ -55,6 +55,7 @@ from document_tree import (
     DocNode,
     find_node,
 )
+from render_capabilities import capabilities_for
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +269,47 @@ _PAGED_MEDIA_CSS: str = """
   }
 }
 .report-mainmatter { page: mainmatter; counter-reset: page 1; break-before: page; }
+/* Landscape pages — wide tables / charts / figures the user flipped to
+   landscape (see _walk + the orientations map).  A .landscape-block is
+   assigned this named landscape page and forced onto its own page(s);
+   content after it returns to the default portrait page.  Keeps the
+   preview's rotated pages in sync with pdflscape on the LaTeX side.  Arabic
+   page number (landscape only happens in the body).
+
+   ORIENTATION vs PAGINATION are separate axes (per the capability dictionary:
+   orientable vs breakable).  The break-before/break-after here are NOT the
+   "pagination" axis — they're intrinsic to rotation: a single physical page
+   can't be half portrait and half landscape, so entering/leaving landscape
+   forces a page boundary (exactly what pdflscape does on the LaTeX side).  A
+   future per-node "breaks" overlay (the breakable capability) is the real
+   pagination axis and stays independent of this. */
+@page report-landscape {
+  size: letter landscape;
+  margin: 1in;
+  @bottom-center {
+    content: counter(page);
+    font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: #4a5568;
+  }
+}
+.landscape-block { page: report-landscape; break-before: page; break-after: page; }
+/* Paged.js BUG WORKAROUND (the "page stays portrait" symptom): a named
+   landscape @page only updates the inner page-box vars (--pagedjs-pagebox-*),
+   NOT the visible SHEET, which Paged.js sizes from the root --pagedjs-width/
+   --pagedjs-height (set once to 8.5x11 portrait).  Result without this rule:
+   the 11in pagebox renders inside an 8.5in portrait sheet and overflows/clips,
+   so the white page never looks rotated.  Paged.js tags every landscape page
+   with the class pagedjs_<pagename>_page (here pagedjs_report-landscape_page);
+   that element is an ancestor of .pagedjs_sheet, so re-pointing the sheet vars
+   on it cascades down and makes the sheet itself render 11x8.5.  The -left/
+   -right variants cover the page landing on either side of a print spread.
+   Verified headlessly: landscape sheet measures 11.00x8.50in, portrait
+   neighbours stay 8.50x11.00in. */
+.pagedjs_report-landscape_page {
+  --pagedjs-width: 11in;        --pagedjs-height: 8.5in;
+  --pagedjs-width-left: 11in;   --pagedjs-height-left: 8.5in;
+  --pagedjs-width-right: 11in;  --pagedjs-height-right: 8.5in;
+}
 /* White sheet floating on the grey gutter, with a soft drop shadow so it
    reads as a physical printed page in the preview. */
 .pagedjs_page {
@@ -992,6 +1034,14 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         # the actual DOM nodes into page boxes, preserving these ids, so
         # the scroll target survives pagination.
         chunks.append(f'<span id="sec-{_esc(node.id)}" class="sec-anchor"></span>')
+        # Per-node landscape: wrap in a .landscape-block (assigned to the
+        # landscape @page) when the user flipped it AND the node's semantic
+        # type is orientable (capability dictionary).  Gating on the
+        # capability ignores stale/invalid overlay flags — the dictionary is
+        # authoritative on both the UI and render sides.
+        if (data.get("orientations", {}).get(node.id) == "landscape"
+                and capabilities_for(node.node_type).orientable):
+            chunk = f'<div class="landscape-block">{chunk}</div>'
         chunks.append(chunk)
     for child in node.children:
         chunks.extend(_walk(child, data))

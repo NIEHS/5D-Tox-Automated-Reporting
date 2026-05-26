@@ -237,10 +237,15 @@ async def serve_ui():
 # hardcoding them in HTML/JS.
 
 from document_tree import serialize_tree, compute_table_numbers, DOCUMENT_TREE
+from render_capabilities import annotate_capabilities
 
 # Ensure table numbers are computed before serializing
 compute_table_numbers()
-_SERIALIZED_TREE = serialize_tree()
+# Annotate each node with its rendering capabilities (orientable / breakable
+# / editable) from the single-source-of-truth dictionary, so the frontend
+# reads capabilities straight off the served tree instead of duplicating the
+# type→capability mapping in JavaScript.
+_SERIALIZED_TREE = annotate_capabilities(serialize_tree())
 
 
 @app.get("/api/document-tree")

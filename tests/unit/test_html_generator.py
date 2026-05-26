@@ -162,6 +162,37 @@ def test_title_block_is_own_headerless_cover_page(scaffold):
     assert "@page:first" not in html
 
 
+def test_landscape_orientation_wraps_node(scaffold):
+    """
+    A node flagged landscape in data["orientations"] is wrapped in a
+    .landscape-block, which the CSS assigns to the @page report-landscape
+    (size: letter landscape) so Paged.js rotates that page.
+    """
+    data = {**scaffold, "orientations": {"bmd-summary": "landscape"}}
+    html = generate_html(data)
+    # The landscape page + its size are always defined in the CSS...
+    assert "@page report-landscape" in html
+    assert "size: letter landscape" in html
+    # ...but the wrapper only appears for the flipped node.
+    assert 'class="landscape-block"' in html
+
+
+def test_portrait_default_has_no_landscape_block(scaffold):
+    """With no orientations set, nothing is wrapped landscape."""
+    html = generate_html(scaffold)
+    assert 'class="landscape-block"' not in html
+
+
+def test_landscape_flag_on_non_orientable_node_ignored(scaffold):
+    """
+    A landscape flag on a non-orientable node (prose) is ignored — the
+    capability dictionary gates the wrap, so stale/invalid flags do nothing.
+    """
+    data = {**scaffold, "orientations": {"background": "landscape"}}
+    html = generate_html(data)
+    assert 'class="landscape-block"' not in html
+
+
 def test_sections_have_scroll_anchors(scaffold):
     """
     Each walked node is preceded by a zero-height sec-<id> anchor so the

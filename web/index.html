@@ -314,6 +314,11 @@
             <div class="preview-body">
                 <div class="preview-toolbar">
                     <span class="preview-title" id="preview-title">Preview</span>
+                    <!-- Flip the active table/chart/figure section's page
+                         between portrait and landscape.  Disabled for prose
+                         sections.  See toggleActiveOrientation() in layout.js. -->
+                    <button class="btn-small" id="btn-orientation"
+                            onclick="toggleActiveOrientation()" disabled>Orientation</button>
                     <button class="btn-small" onclick="recompilePreview()">Recompile</button>
                 </div>
                 <div class="preview-status" id="preview-status"></div>
@@ -1015,9 +1020,9 @@
     <script src="/js/utils.js?v=8"></script>
     <script src="/js/login.js?v=1"></script>
     <script src="/js/settings.js?v=4"></script>
-    <script src="/js/layout.js?v=4"></script>
+    <script src="/js/layout.js?v=6"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=6"></script>
+    <script src="/js/export.js?v=7"></script>
     <script src="/js/genomics.js?v=11"></script>
     <script src="/js/genomics_charts.js?v=4"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->

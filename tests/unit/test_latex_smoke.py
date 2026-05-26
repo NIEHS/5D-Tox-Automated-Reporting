@@ -309,6 +309,33 @@ def test_class_file_provides_class():
     assert r"\LoadClass" in content
 
 
+def test_class_file_loads_pdflscape():
+    """niehs.cls must load pdflscape so \\begin{landscape} works."""
+    content = CLASS_FILE.read_text()
+    assert r"\RequirePackage{pdflscape}" in content
+
+
+def test_landscape_orientation_wraps_in_pdflscape(scaffold):
+    r"""
+    A node flagged landscape in data["orientations"] is wrapped in
+    pdflscape's landscape environment so Overleaf renders that page rotated.
+    """
+    data = {**scaffold, "orientations": {"bmd-summary": "landscape"}}
+    tex = generate_latex(data)
+    assert r"\begin{landscape}" in tex
+    assert r"\end{landscape}" in tex
+
+
+def test_landscape_flag_on_non_orientable_node_ignored(scaffold):
+    r"""
+    A landscape flag on a non-orientable node (prose) is ignored — the
+    capability dictionary gates the wrap on both render sides.
+    """
+    data = {**scaffold, "orientations": {"background": "landscape"}}
+    tex = generate_latex(data)
+    assert r"\begin{landscape}" not in tex
+
+
 def test_class_file_configures_running_header():
     r"""
     niehs.cls must set up the fancyhdr running header: load fancyhdr,

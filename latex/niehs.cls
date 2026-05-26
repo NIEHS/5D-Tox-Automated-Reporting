@@ -73,6 +73,15 @@
 % Overleaf export bundle.
 \RequirePackage{graphicx}
 
+% --- Landscape pages -----------------------------------------------------
+% pdflscape provides the `landscape` environment for individual landscape
+% pages (wide dose-response tables, charts, figures) inside an otherwise
+% portrait report.  Unlike plain `lscape`, pdflscape also sets the PDF
+% page-rotation flag, so Overleaf's compiled PDF actually displays the
+% page in landscape.  latex_generator wraps a node in \begin{landscape}
+% ... \end{landscape} when the user toggles it (see the orientations map).
+\RequirePackage{pdflscape}
+
 % --- Math ----------------------------------------------------------------
 % amsmath because the abstract sometimes contains subscripted dose units
 % (BMDL_{1Std}, etc.).  Even if the prose itself doesn't need math, the

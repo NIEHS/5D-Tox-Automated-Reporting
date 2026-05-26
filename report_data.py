@@ -241,6 +241,13 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     data["casrn"] = body.get("casrn", "")
     data["dtxsid"] = body.get("dtxsid", "")
 
+    # Per-node page orientation: {node_id: "landscape"} for nodes the user
+    # flipped to landscape (tables / charts / figures).  Both renderers read
+    # this from the data dict and wrap those nodes accordingly (pdflscape in
+    # LaTeX, an @page landscape block in the HTML preview).  Absent/portrait
+    # nodes render normally.
+    data["orientations"] = body.get("orientations") or {}
+
     # --- Report metadata overrides ---
     # These populate the inner title page and publication details.
     # Only override if the web UI provides them (scaffold has placeholders).

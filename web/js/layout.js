@@ -105,6 +105,9 @@ function navigateToNode(tocId) {
             scrollPreviewToNode(tocId === 'report' ? 'cover' : tocId);
         }
     }
+
+    // Enable/label the orientation toggle for the newly active section.
+    if (typeof updateOrientationButton === 'function') updateOrientationButton();
 }
 
 
@@ -218,6 +221,107 @@ function initPaneSplitter() {
 // Wire the splitter once the DOM is ready (the app container starts hidden
 // behind the login gate, but attaching listeners + restoring width is safe).
 document.addEventListener('DOMContentLoaded', initPaneSplitter);
+
+
+/* ================================================================
+ * Page orientation (portrait / landscape) per document node.
+ *
+ * The user can flip pages that hold tables / charts / figures to
+ * landscape.  Orientation is stored per (session, node) in localStorage
+ * and included in the export/preview payload, so BOTH the HTML preview
+ * (Paged.js @page landscape) and the .tex export (pdflscape) render the
+ * node rotated.  Prose sections are not orientable.
+ * ================================================================ */
+
+// localStorage key for the current session's orientation map.  Keyed by
+// DTXSID so different sessions keep independent orientations.
+function _orientationStoreKey() {
+    const dtxsid = (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.dtxsid)
+        || 'session';
+    return `orientations:${dtxsid}`;
+}
+
+// Read the {nodeId: "landscape"} map for the current session.
+function getOrientations() {
+    try {
+        return JSON.parse(localStorage.getItem(_orientationStoreKey()) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function _saveOrientations(map) {
+    localStorage.setItem(_orientationStoreKey(), JSON.stringify(map));
+}
+
+// Find a node object in the served document tree (depth-first).  The tree
+// is annotated server-side with per-node capabilities (see
+// render_capabilities.annotate_capabilities), so callers read
+// node.capabilities instead of duplicating any type→capability mapping here.
+function _findTreeNode(tocId) {
+    const tree = (typeof Alpine !== 'undefined' && Alpine.store('app') && Alpine.store('app').documentTree)
+        || window.__DOCUMENT_TREE__;
+    if (!tree) return null;
+    const stack = [...tree];
+    while (stack.length) {
+        const n = stack.pop();
+        if (n.id === tocId) return n;
+        if (n.children) stack.push(...n.children);
+    }
+    return null;
+}
+
+// Rendering capabilities for a node (orientable / breakable / editable),
+// read straight off the served tree.  Empty object when the node or its
+// capabilities are unknown (the safe, no-op default).
+function nodeCapabilities(tocId) {
+    const n = _findTreeNode(tocId);
+    return (n && n.capabilities) || {};
+}
+
+// Whether the given node's page can be flipped to landscape.
+function isOrientableNode(tocId) {
+    return !!nodeCapabilities(tocId).orientable;
+}
+
+// Toggle the active section's orientation, then rebuild + re-scroll the
+// preview so the rotation shows immediately.
+function toggleActiveOrientation() {
+    const tocId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
+    if (!tocId || !isOrientableNode(tocId)) return;
+    const map = getOrientations();
+    if (map[tocId] === 'landscape') {
+        delete map[tocId];                 // back to portrait (the default)
+    } else {
+        map[tocId] = 'landscape';
+    }
+    _saveOrientations(map);
+    if (typeof markReportDirty === 'function') markReportDirty();
+    if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
+    if (typeof scrollPreviewToNode === 'function') scrollPreviewToNode(tocId);
+    updateOrientationButton();
+}
+
+// Sync the toolbar button's enabled state + label to the active section:
+// disabled for non-orientable sections; otherwise shows the action that
+// flipping would perform.
+function updateOrientationButton() {
+    const btn = document.getElementById('btn-orientation');
+    if (!btn) return;
+    const tocId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
+    const orientable = tocId && isOrientableNode(tocId);
+    btn.disabled = !orientable;
+    if (!orientable) {
+        btn.textContent = 'Orientation';
+        btn.title = 'Select a table, chart, or figure section to change its page orientation';
+        return;
+    }
+    const isLandscape = getOrientations()[tocId] === 'landscape';
+    btn.textContent = isLandscape ? '↻ Portrait' : '↻ Landscape';
+    btn.title = isLandscape
+        ? 'Switch this page back to portrait'
+        : 'Switch this page to landscape';
+}
 
 /* ================================================================
  * initScrollSpy — no-op stub.

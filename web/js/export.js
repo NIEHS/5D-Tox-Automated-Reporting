@@ -1088,6 +1088,10 @@ async function buildExportPayload() {
         // The export pipeline appends a deterministic study-purpose sentence
         // to produce the full Abstract Background section.
         abstract_background: currentResult?.abstract_background || '',
+        // Per-node page orientation {nodeId: "landscape"} for pages the user
+        // flipped (tables / charts / figures).  Consumed by both renderers
+        // (pdflscape in LaTeX, @page landscape in the HTML preview).
+        orientations: (typeof getOrientations === 'function') ? getOrientations() : {},
     };
 }
 
