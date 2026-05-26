@@ -91,6 +91,84 @@ def test_title_block_present(scaffold):
 
 
 # ---------------------------------------------------------------------------
+# Printed-page pagination (Paged.js)
+# ---------------------------------------------------------------------------
+# The preview paginates the continuous body into printed-page sheets via the
+# Paged.js polyfill loaded inside the srcdoc.  These tests pin that the
+# polyfill + @page geometry + page chrome are emitted; they can't exercise
+# the actual on-screen layout (that needs a browser) — see the in-app
+# verification step for that.
+
+def test_full_document_loads_pagedjs_polyfill(scaffold):
+    """The polyfill <script> must be present so the iframe paginates."""
+    html = generate_html(scaffold)
+    assert "paged.polyfill.js" in html
+    # Emitted after the body content so the DOM is parsed before it runs.
+    assert html.index("paged.polyfill.js") > html.index("<body>")
+
+
+def test_full_document_sets_letter_page_geometry(scaffold):
+    """@page rule must request US Letter at 1in margins (matches niehs.cls)."""
+    html = generate_html(scaffold)
+    assert "@page" in html
+    assert "size: letter" in html
+    assert "margin: 1in" in html
+
+
+def test_full_document_has_page_number_and_running_header(scaffold):
+    """Page chrome: a bottom page-number box and a top running-header box."""
+    html = generate_html(scaffold)
+    # Page number in the bottom margin box.
+    assert "@bottom-center" in html
+    assert "counter(page)" in html
+    # Running header in the top margin box, carrying the full report title
+    # (the dedicated "running_header" metadata field).
+    assert "@top-center" in html
+    header = scaffold.get("running_header") or scaffold.get("title", "5dToxReport")
+    assert f'content: "{header}"' in html
+
+
+def test_title_block_is_own_headerless_cover_page(scaffold):
+    """
+    The running header must begin at Foreword, not page 1 — matching the
+    reference (NIEHS Report 10), whose cover + title pages carry no header.
+    The title block is therefore put on its own named "cover" page that
+    suppresses both header and page number, and forces a break after it.
+    """
+    html = generate_html(scaffold)
+    # A dedicated cover @page that blanks both margin boxes.
+    assert "@page cover" in html
+    # The title block is assigned to it and breaks the page after itself.
+    assert "page: cover" in html
+    assert "break-after: page" in html
+    # The old page-1-only suppression must be gone (it stranded Foreword's
+    # first page without a header).
+    assert "@page:first" not in html
+
+
+def test_fragment_preview_also_paginates(session_data):
+    """Per the chosen scope, section-card fragments paginate too."""
+    html = generate_html(session_data, section_filter="bmd-summary")
+    assert "paged.polyfill.js" in html
+    assert "@page" in html
+    assert "size: letter" in html
+
+
+def test_running_header_escaped_against_style_breakout():
+    """
+    The running header is injected into a <style> raw-text element.  A
+    title containing "</style>" must NOT close the style element early —
+    the "<" is rewritten to its CSS unicode escape.
+    """
+    data = {"title": 'Bad</style><script>alert(1)</script>'}
+    html = generate_html(data)
+    # The raw breakout sequence must not survive into the document.
+    assert "</style><script>" not in html
+    # The "<" of the title is CSS-escaped inside the @page content string.
+    assert "\\00003c" in html
+
+
+# ---------------------------------------------------------------------------
 # Section headings
 # ---------------------------------------------------------------------------
 

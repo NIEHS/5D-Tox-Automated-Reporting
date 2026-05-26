@@ -79,10 +79,15 @@ body {
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
         "Helvetica Neue", Arial, sans-serif;
   color: #1a1a1a;
-  background: #fff;
-  max-width: 8.5in;
-  margin: 0 auto;
-  padding: 24px 32px 80px;
+  /* Paged.js (loaded below) paints each page as a white .pagedjs_page
+     sheet; the <body> becomes the gutter *behind* those sheets, so we
+     colour it like a document viewer's canvas rather than simulating a
+     single page here.  The old max-width / margin / padding simulation is
+     gone on purpose — page size and inner margins are now owned by the
+     @page rule in _PAGED_MEDIA_CSS. */
+  background: #525659;
+  margin: 0;
+  padding: 0;
 }
 .title-block {
   border-bottom: 2px solid #d6d3cd;
@@ -164,6 +169,83 @@ table.niehstable tbody tr:last-child td { border-bottom: 1.5px solid #1a202c; }
   color: #92400e;
   font-size: 13px;
 }
+"""
+
+
+# Paged.js is a CSS Paged Media polyfill.  Plain @page CSS only affects the
+# browser's *print* path; it does nothing for on-screen rendering inside the
+# preview iframe.  Paged.js reads the @page rules in _PAGED_MEDIA_CSS and
+# chunks the otherwise-continuous report body into discrete .pagedjs_page
+# sheets — discrete printed-page sheets on screen, the rendering counterpart
+# to how Overleaf paginates the .tex export (our only two output surfaces are
+# this HTML preview and the .tex; there is no PDF anywhere in our system).
+#
+# Pinned CDN, mirroring how the parent page loads Alpine / oboe / plotly.  It
+# runs *inside* the sandboxed srcdoc iframe (which has no sandbox attribute
+# and the app sets no CSP), auto-initialising on DOMContentLoaded.
+#
+# HTML-PREVIEW ONLY.  latex_generator.py must never gain this — the LaTeX
+# path paginates at Overleaf compile time, not via a browser polyfill.
+_PAGEDJS_POLYFILL_URL: str = (
+    "https://unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js"
+)
+
+# The <script> element that pulls in the polyfill.  Emitted just before
+# </body> in both skeletons so the DOM is fully parsed before Paged.js runs.
+_PAGEDJS_SCRIPT: str = f'<script src="{_PAGEDJS_POLYFILL_URL}"></script>'
+
+# Static paged-media CSS: page geometry, the page-number margin box, the
+# white-sheet-on-grey-gutter chrome, and break-control rules that mirror
+# LaTeX float / longtable behaviour.  The *dynamic* running-header text is
+# appended separately by _running_header_css() because it varies per report.
+#
+# Cover-page rule rationale (kept here, NOT in the CSS string, so it doesn't
+# ship to the browser on every preview): in the reference (NIEHS Report 10)
+# the running header and the page numbering both begin at the Foreword
+# (p3) — the cover (p1) and title (p2) pages carry neither.  So the title
+# block is assigned its own named "cover" @page that blanks both margin
+# boxes and forces a page break after itself; the header therefore starts
+# on the first content page, not page 1.  (The reference also uses roman
+# numerals for front matter and arabic for the body — that split is a
+# separate, not-yet-done rendering item.)  Section names are deliberately
+# kept OUT of the CSS comments below: those strings ship inside <style> and
+# a bare "Foreword" there would trip the fragment-isolation test.
+_PAGED_MEDIA_CSS: str = """
+/* Page geometry — US Letter, 1in margins.  Matches niehs.cls
+   (\\geometry{letterpaper, margin=1in}) so the preview's page breaks land
+   roughly where Overleaf's will. */
+@page {
+  size: letter;
+  margin: 1in;
+  /* Page number centred in the bottom margin — the article-class default
+     that niehs.cls produces. */
+  @bottom-center {
+    content: counter(page);
+    font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: #4a5568;
+  }
+}
+/* Cover page: no running header, no page number (rationale in the Python
+   comment above — header + numbering begin on the first content page). */
+@page cover {
+  @top-center { content: none; }
+  @bottom-center { content: none; }
+}
+/* White sheet floating on the grey gutter, with a soft drop shadow so it
+   reads as a physical printed page in the preview. */
+.pagedjs_page {
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  margin: 14px auto;
+}
+/* Break control — keep tables, rows, and headings from splitting awkwardly,
+   mirroring how LaTeX floats and longtable behave. */
+table.niehstable thead { display: table-header-group; } /* repeat header when a table spans pages */
+table.niehstable tr { break-inside: avoid; }            /* never split one row across a page */
+table.niehstable caption { break-after: avoid; }        /* caption stays with its table */
+h2, h3, h4 { break-after: avoid; }                      /* don't strand a heading at a page foot */
+/* Title block → its own header-less "cover" page; content starts after it. */
+.title-block { page: cover; break-inside: avoid; break-after: page; }
 """
 
 
@@ -812,11 +894,64 @@ def _walk(node: DocNode, data: dict) -> list[str]:
 # Document skeleton
 # ---------------------------------------------------------------------------
 
-def _document_skeleton(body: str) -> str:
+def _running_header_css(running_header: str) -> str:
     """
-    Wrap the rendered body in a self-contained HTML5 document with
-    inline CSS.  Self-contained because the iframe srcdoc is sandboxed
-    from the parent page's stylesheet.
+    Build the @page top-center margin-box rule that carries the running
+    header text.
+
+    Paged.js renders this in the top margin of every page after the first
+    (page 1 suppresses it — see _PAGED_MEDIA_CSS).  The text is dynamic —
+    the report title for the full document, the section title for a
+    fragment preview — so it can't live in the static _PAGED_MEDIA_CSS
+    constant and is built here instead.
+
+    NOTE — this header MATCHES the reference (NIEHS Report 10): the full
+    title runs across the top of every page from Foreword onward (the
+    cover/title pages before it carry none — see the @page cover rule).
+    Our niehs.cls does NOT yet set it (article default = page number
+    only), so the .tex Overleaf export is currently MISSING the header the
+    reference has.  That's a parity GAP to close by adding fancyhdr to
+    niehs.cls — not a deliberate divergence.
+
+    Args:
+        running_header: plain text for the header; "" suppresses it.
+
+    Returns:
+        A CSS snippet (one @page block), or "" when there's no header text.
+    """
+    if not running_header:
+        return ""
+    # CSS string escaping: backslash first (so the quote-escapes we add next
+    # aren't themselves double-escaped), then the double-quote that delimits
+    # the content string.
+    escaped = running_header.replace("\\", "\\\\").replace('"', '\\"')
+    # We're injecting into a <style> raw-text element.  CSS quote-escaping
+    # does NOT stop an HTML "</style>" breakout — the HTML parser closes the
+    # element on that literal regardless of CSS quoting.  Neutralise it by
+    # rewriting "<" as its CSS unicode escape (the trailing space terminates
+    # the hex escape); the browser still renders a literal "<" in the header.
+    escaped = escaped.replace("<", "\\00003c ")
+    return (
+        "@page { @top-center {"
+        f' content: "{escaped}";'
+        ' font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;'
+        " color: #4a5568; } }"
+    )
+
+
+def _document_skeleton(body: str, running_header: str = "") -> str:
+    """
+    Wrap the rendered body in a self-contained HTML5 document with inline
+    CSS plus the Paged.js polyfill.  Self-contained because the iframe
+    srcdoc is sandboxed from the parent page's stylesheet.
+
+    The polyfill paginates the continuous body into printed-page sheets;
+    see _PAGED_MEDIA_CSS / _PAGEDJS_SCRIPT for why and how.
+
+    Args:
+        body:           the rendered report body HTML.
+        running_header: text for the per-page running header (the report
+                        title for the full document); "" omits it.
     """
     return (
         "<!DOCTYPE html>"
@@ -824,28 +959,37 @@ def _document_skeleton(body: str) -> str:
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>NIEHS Report Preview</title>'
-        f"<style>{_PREVIEW_CSS}</style>"
+        f"<style>{_PREVIEW_CSS}{_PAGED_MEDIA_CSS}{_running_header_css(running_header)}</style>"
         "</head><body>"
         f"{body}"
+        f"{_PAGEDJS_SCRIPT}"
         "</body></html>"
     )
 
 
-def _fragment_skeleton(body: str) -> str:
+def _fragment_skeleton(body: str, running_header: str = "") -> str:
     """
     Minimal HTML wrapper for fragment-compile previews.
 
-    Stripped down: no title block (the cover/title-page nodes are
-    outside the requested subtree), but still self-contained so the
-    iframe srcdoc renders standalone.  Same CSS as the full document.
+    Stripped down: no title block (the cover/title-page nodes are outside
+    the requested subtree), but still self-contained so the iframe srcdoc
+    renders standalone.  Same CSS *and* the same Paged.js pagination as the
+    full document, so a single-section card preview also renders as printed
+    page sheets (per the chosen scope).
+
+    Args:
+        body:           the rendered fragment HTML.
+        running_header: text for the per-page running header (the section
+                        title for a fragment); "" omits it.
     """
     return (
         "<!DOCTYPE html>"
         '<html lang="en"><head>'
         '<meta charset="utf-8">'
-        f"<style>{_PREVIEW_CSS}</style>"
+        f"<style>{_PREVIEW_CSS}{_PAGED_MEDIA_CSS}{_running_header_css(running_header)}</style>"
         "</head><body>"
         f"{body}"
+        f"{_PAGEDJS_SCRIPT}"
         "</body></html>"
     )
 
@@ -870,7 +1014,8 @@ def generate_html(
     Returns:
         A self-contained HTML string suitable for iframe srcdoc.
     """
-    # Fragment path — only emit the requested subtree.
+    # Fragment path — only emit the requested subtree.  The running header
+    # for a fragment is the section's own title.
     if section_filter:
         node = find_node(section_filter)
         if node is None:
@@ -880,11 +1025,19 @@ def generate_html(
             )
             return _fragment_skeleton(body)
         body = "\n".join(_walk(node, data))
-        return _fragment_skeleton(body)
+        return _fragment_skeleton(body, running_header=node.title or "")
 
-    # Full-document path — walk every top-level node in tree order.
+    # Full-document path — walk every top-level node in tree order.  The
+    # running header is the report title (same source as the cover block's
+    # <h1>, so preview header and title block stay in sync).
     body_chunks: list[str] = []
     for top in DOCUMENT_TREE:
         body_chunks.extend(_walk(top, data))
     body = "\n".join(body_chunks)
-    return _document_skeleton(body)
+    # Prefer the dedicated "running_header" metadata field (report_data.py
+    # sets it to the full, never-abbreviated title form); fall back to the
+    # plain title, then a placeholder, so a sparse data dict still renders.
+    running_header = (
+        data.get("running_header") or data.get("title") or "5dToxReport"
+    )
+    return _document_skeleton(body, running_header=running_header)
