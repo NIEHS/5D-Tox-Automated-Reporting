@@ -4,7 +4,7 @@
 //   - Document export (exportDocument) — PDF/UA-1 via Typst
 //   - Shared payload builder (buildExportPayload)
 //   - Genomics export payload assembly (buildGenomicsExportSections)
-//   - Per-tab section PDF preview (compileSectionPdf, refreshSectionPdf)
+//   - Full report preview in the side pane (ensureFullPreview, scrollPreviewToNode)
 //   - Export button gating (updateExportButton)
 //   - Clipboard copying (copyToClipboard)
 //   - File preview modal (openPreviewModal, closePreviewModal, render helpers)
@@ -862,20 +862,12 @@ let reportDirty = true;
 
 /**
  * Mark the report as needing a re-render.  Called from every
- * approve/unapprove action so the next tab switch picks up changes.
- *
- * Also invalidates the per-section PDF preview blob cache.  Without
- * this, navigating to a section after a content change (e.g., Try Again
- * on Background) returns the stale blob from the previous compile —
- * the user sees outdated content until they hit "Recompile" manually.
- * Revoking the blob URLs also frees the underlying memory.
+ * approve/unapprove action so the next navigation (or a Recompile click)
+ * rebuilds the full preview with the latest content.  ensureFullPreview()
+ * reads this flag to decide whether to recompile.
  */
 function markReportDirty() {
     reportDirty = true;
-    for (const tocId of Object.keys(_sectionPdfBlobUrls)) {
-        URL.revokeObjectURL(_sectionPdfBlobUrls[tocId]);
-        delete _sectionPdfBlobUrls[tocId];
-    }
 }
 
 /**
@@ -1161,131 +1153,92 @@ async function compilePdfPreview() {
 
 
 /* ================================================================
- * Per-tab section PDF preview
+ * Full report preview (side pane)
  *
- * Each results tab (Apical, Genomics, Charts) has an embedded PDF
- * preview that compiles only the relevant section of the NIEHS report.
- * Uses the same Typst template and pipeline as the full Report tab,
- * but with a section_filter parameter that strips everything except
- * the requested section.
+ * Per the generate-then-polish-in-Overleaf model, the side preview pane
+ * always shows the FULL paginated report (never a per-section fragment).
+ * The TOC scrolls it to the active section via scrollPreviewToNode().
  * ================================================================ */
 
-/**
- * Track per-section blob URLs so we can revoke them when a new PDF
- * is compiled (prevents memory leaks from accumulating blob URLs).
- * Keyed by section filter name ("apical", "genomics", "charts").
- */
-const _sectionPdfBlobUrls = {};
-
+// Guard against overlapping compiles (a recompile fired while one is
+// already in flight).
+let _fullPreviewRendering = false;
 
 /**
- * Compile a PDF preview for a specific TOC node and display it in the
- * persistent preview pane.
+ * Render the full paginated report into the side preview pane
+ * (#preview-pdf-frame).
  *
- * Called by navigateToNode() whenever the active section changes.
- * Builds the full export payload, sets section_filter to the TOC node ID,
- * and sends it to /api/preview-latex-html.  The server strips everything except
- * the content belonging to that node.
+ * Guarded by reportDirty: once rendered, navigating between sections does
+ * NOT recompile -- the TOC just scrolls the existing preview.  Pass
+ * force=true (the Recompile button) to rebuild regardless.  markReportDirty()
+ * (called on every approve/unapprove) flips reportDirty so the next
+ * navigation rebuilds with fresh content.
  *
- * Caches compiled PDFs by node ID so re-visiting a node doesn't recompile.
- * Pass force=true to bypass the cache (e.g., after editing content).
+ * Builds the same payload as the export bundle but WITHOUT section_filter,
+ * so the server returns the whole report.  With no generated content yet,
+ * the server still returns the full scaffolded structure (placeholders),
+ * so the preview is always populated.
  *
- * @param {string} tocId — the TOC node ID (e.g., "animal-condition",
- *                         "table-body-weight", "foreword")
- * @param {boolean} force — if true, recompile even if cached
+ * @param {boolean} force - recompile even if the preview is current
  */
-async function compilePreviewForNode(tocId, force = false) {
+async function ensureFullPreview(force = false) {
     const frame = document.getElementById('preview-pdf-frame');
-    const status = document.getElementById('preview-status');
-    const title = document.getElementById('preview-title');
     if (!frame) return;
+    // Already current (rendered + not dirty) and not forced -> nothing to do.
+    if (!force && frame.srcdoc && !reportDirty) return;
+    if (_fullPreviewRendering) return;
+    _fullPreviewRendering = true;
 
-    // Update title to show which section is being previewed.
-    // Don't force the pane open — the user controls visibility via the
-    // collapse tab.  We compile in the background so the PDF is ready
-    // when they do open it.
-    if (title) title.textContent = `Preview: ${tocId}`;
-    // Clear any previous error message immediately on navigation
-    if (status) status.textContent = '';
-
-    // --- Completeness gate ---
-    // Check whether this node has all required data sources before
-    // attempting to compile a PDF.  Incomplete sections (e.g., missing
-    // .bm2 for BMD columns) show a message instead of a broken PDF.
-    const poolState = AppStore.getState('pool');
-    const completeness = poolState?.completeness;
-    const docTree = (typeof Alpine !== 'undefined' && Alpine.store('app'))
-        ? Alpine.store('app').documentTree
-        : null;
-
-    if (completeness && completeness.size > 0 && docTree) {
-        const nodeStatus = isNodeComplete(tocId, completeness, docTree);
-        if (!nodeStatus.complete) {
-            // Invalidate cached HTML for this node (data changed).
-            // No URL.revokeObjectURL needed — we cache strings now, not blob URLs.
-            delete _sectionPdfBlobUrls[tocId];
-            // Show the missing-data message in the preview pane
-            frame.srcdoc = '';
-            if (status) {
-                const reasons = nodeStatus.missing.map(m => `<li>${m}</li>`).join('');
-                status.innerHTML =
-                    '<div class="preview-incomplete">' +
-                    '<strong>Preview unavailable — incomplete data</strong>' +
-                    `<ul>${reasons}</ul>` +
-                    '</div>';
-            }
-            return;
-        }
-    }
-
-    // Check cache — reuse existing HTML if available.  The cache now
-    // stores HTML strings (was previously PDF blob URLs); same key
-    // shape so the rest of the function is unchanged.
-    if (!force && _sectionPdfBlobUrls[tocId]) {
-        frame.srcdoc = _sectionPdfBlobUrls[tocId];
-        if (status) status.textContent = '';
-        return;
-    }
-
-    // Use the same blocking spinner overlay as validate/integrate/approve.
-    showBlockingSpinner('Rendering preview\u2026');
-    if (status) status.textContent = '';
-
+    const status = document.getElementById('preview-status');
+    if (status) status.textContent = 'Rendering preview\u2026';
     try {
-        const payload = await buildExportPayload();
-        payload.section_filter = tocId;
-
-        // POST to the LaTeX -> HTML preview endpoint.  Server runs
-        // marshal_export_data, then generate_latex(section_filter=...),
-        // then pandoc to produce an HTML fragment we can drop straight
-        // into the iframe via srcdoc.
+        const payload = await buildExportPayload();  // full report (no section_filter)
         const resp = await fetch('/api/preview-latex-html', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             if (status) status.textContent = err.error || 'Preview failed';
             return;
         }
-
-        const html = await resp.text();
-        _sectionPdfBlobUrls[tocId] = html;  // cache by tocId (key name kept for back-compat)
-        // srcdoc takes the HTML string directly; no blob URL to manage.
-        frame.srcdoc = html;
+        frame.srcdoc = await resp.text();
+        reportDirty = false;
         if (status) status.textContent = '';
     } catch (e) {
-        if (status) status.textContent = `Error: ${e.message}`;
+        if (status) status.textContent = `Preview error: ${e.message}`;
     } finally {
-        hideBlockingSpinner();
+        _fullPreviewRendering = false;
     }
 }
 
-// Legacy compat stubs — these are still referenced by some remaining HTML
-function toggleSectionPdfPreview(f) { compilePreviewForNode(f); }
-function refreshSectionPdf(f) { compilePreviewForNode(f, true); }
+/**
+ * Scroll the full preview to a TOC node's section anchor.
+ *
+ * html_generator emits a zero-height <span id="sec-<nodeId>"> before each
+ * node (see _walk).  Poll briefly for it because Paged.js paginates
+ * asynchronously: right after a (re)compile the anchor may not exist yet.
+ * The srcdoc iframe is same-origin, so contentDocument access is allowed.
+ *
+ * @param {string} tocId - the TOC node ID to scroll to
+ */
+function scrollPreviewToNode(tocId) {
+    const frame = document.getElementById('preview-pdf-frame');
+    if (!frame || !tocId) return;
+    let tries = 0;
+    const MAX_TRIES = 50;  // ~5s; covers a from-scratch Paged.js render
+    const tick = () => {
+        const doc = frame.contentDocument;
+        const el = doc && doc.getElementById('sec-' + tocId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
+        if (tries++ < MAX_TRIES) setTimeout(tick, 100);
+    };
+    tick();
+}
 
 
 /**

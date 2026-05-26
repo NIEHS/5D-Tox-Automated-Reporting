@@ -2192,16 +2192,33 @@ header p {
     background: var(--c-bg-light);
     display: flex;
     flex-direction: row;
-    transition: flex 0.2s, min-width 0.2s;
-    flex: 1;
-    min-width: 400px;
+    /* Draggable basis: initPaneSplitter() overrides flex-basis while
+       dragging and restores the persisted width on load.  min-width:0 lets
+       the splitter snap-collapse the pane to zero. */
+    flex: 0 0 45%;
+    min-width: 0;
+    overflow: hidden;
 }
 
-.preview-pane.collapsed {
-    flex: 0;
-    min-width: 28px;
-    max-width: 28px;
+/* Draggable splitter between the preview pane and the content pane —
+   full-height, sticky like the panes it sits between.  Drag to resize;
+   drag to an edge to collapse that side (see initPaneSplitter). */
+.pane-splitter {
+    flex: 0 0 6px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    cursor: col-resize;
+    background: var(--c-border);
+    z-index: 11;
+    transition: background 0.15s;
 }
+.pane-splitter:hover { background: var(--c-accent, #3b82f6); }
+/* While dragging: kill text selection and let pointer events pass THROUGH
+   the preview iframe (otherwise the iframe swallows mousemove and the drag
+   stalls the instant the cursor crosses into it). */
+body.splitter-dragging { cursor: col-resize; user-select: none; }
+body.splitter-dragging iframe { pointer-events: none; }
 
 .preview-collapse-tab {
     border-left: 1px solid var(--c-border);

@@ -72,27 +72,9 @@ function navigateToNode(tocId) {
         previewPane.style.display = noPreviewSections.includes(tocId) ? 'none' : '';
     }
 
-    // --- Report PDF viewer ---
-    // The PDF viewer is position:fixed and covers the viewport.
-    // Expand it only when navigating to the Report section;
-    // collapse it when navigating anywhere else.
-    const pdfContainer = document.getElementById('report-pdf-container');
-    if (pdfContainer) {
-        if (tocId === 'report') {
-            pdfContainer.classList.remove('collapsed');
-            const btn = document.getElementById('btn-toggle-pdf');
-            if (btn) { btn.innerHTML = '&#x25BC;'; btn.title = 'Collapse PDF viewer'; }
-        } else {
-            pdfContainer.classList.add('collapsed');
-            const btn = document.getElementById('btn-toggle-pdf');
-            if (btn) { btn.innerHTML = '&#x25B6;'; btn.title = 'Expand PDF viewer'; }
-        }
-    }
-
-    // Lazy-render the Report PDF when navigating to it
-    if (tocId === 'report' && typeof renderReportTab === 'function') {
-        renderReportTab();
-    }
+    // (The legacy fixed-position Report PDF viewer is retired: the side
+    // preview pane now always shows the full paginated report, so there's
+    // no separate Report viewer to expand/collapse here.)
 
     // Scroll the content pane to the top when switching views
     const pane = document.querySelector('.content-pane');
@@ -111,12 +93,17 @@ function navigateToNode(tocId) {
         if (el) el.classList.toggle('visible', tocId === id);
     }
 
-    // --- Auto-compile PDF preview for the active TOC node ---
-    // Skip non-document nodes (chem-id, data) — they have no PDF content.
-    // For all document sections, compile a preview in the background.
-    const NON_PREVIEW_NODES = new Set(['chem-id', 'data', 'report']);
-    if (!NON_PREVIEW_NODES.has(tocId) && typeof compilePreviewForNode === 'function') {
-        compilePreviewForNode(tocId);
+    // --- Full report preview ---
+    // The side preview always shows the FULL paginated report; the TOC just
+    // scrolls it to the active section.  chem-id/data have no document
+    // content (the preview pane is hidden for them above), so skip them.
+    const NON_PREVIEW_NODES = new Set(['chem-id', 'data']);
+    if (!NON_PREVIEW_NODES.has(tocId)) {
+        if (typeof ensureFullPreview === 'function') ensureFullPreview();
+        if (typeof scrollPreviewToNode === 'function') {
+            // 'report' = the whole document → scroll to the top (cover).
+            scrollPreviewToNode(tocId === 'report' ? 'cover' : tocId);
+        }
     }
 }
 
@@ -143,11 +130,94 @@ function toggleContentPane() {
  * Recompile the preview for the current active section.
  */
 function recompilePreview() {
+    // Force a full rebuild of the preview (the Recompile button), then
+    // re-scroll to the active section.
+    if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
     const tocId = Alpine?.store('app')?.activeSection;
-    if (tocId && typeof compilePreviewForNode === 'function') {
-        compilePreviewForNode(tocId, /* force */ true);
-    }
+    if (tocId && typeof scrollPreviewToNode === 'function') scrollPreviewToNode(tocId);
 }
+
+
+/* ================================================================
+ * initPaneSplitter — draggable divider between the preview pane and
+ * the content (work) pane.
+ *
+ * Drag the splitter to resize the two panes.  Drag it to either edge
+ * to snap-collapse that side (preview → 0 gives the work pane the full
+ * width; content → 0 gives the preview the full width).  The splitter
+ * itself never disappears, so a collapsed pane can always be dragged
+ * back open.  The chosen width persists to localStorage.
+ *
+ * Mechanism: the preview pane's flex-basis is set in pixels; the content
+ * pane (flex: 1) absorbs the remainder.  See .preview-pane / .pane-splitter
+ * in style.css.
+ * ================================================================ */
+function initPaneSplitter() {
+    const splitter = document.getElementById('pane-splitter');
+    const preview = document.getElementById('preview-pane');
+    const layout = document.getElementById('app-container');
+    const sidebar = document.querySelector('.sidebar');
+    if (!splitter || !preview || !layout) return;
+
+    const KEY = 'previewPaneWidthPx';
+    const SNAP = 48;     // within this many px of an edge → collapse that side
+    const MIN_PANE = 140; // smallest width a non-collapsed pane keeps
+
+    // Restore the persisted width (px).  Left at the CSS default (45%) if none.
+    const saved = parseInt(localStorage.getItem(KEY) || '', 10);
+    if (!isNaN(saved)) preview.style.flexBasis = saved + 'px';
+
+    let dragging = false;
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        const rect = layout.getBoundingClientRect();
+        const sidebarW = sidebar ? sidebar.getBoundingClientRect().width : 0;
+        const splitterW = splitter.getBoundingClientRect().width;
+        // Width available to share between preview + content.
+        const avail = rect.width - sidebarW - splitterW;
+        // Desired preview width = pointer position measured from the right
+        // edge of the sidebar (the preview pane's left edge).
+        let w = e.clientX - rect.left - sidebarW;
+        if (w < SNAP) {
+            w = 0;                          // snap: collapse the preview
+        } else if (w > avail - SNAP) {
+            w = avail;                      // snap: collapse the content pane
+        } else {
+            w = Math.max(MIN_PANE, Math.min(w, avail - MIN_PANE));
+        }
+        preview.style.flexBasis = w + 'px';
+        e.preventDefault();
+    };
+
+    const onUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove('splitter-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        const w = parseInt(preview.style.flexBasis, 10);
+        if (!isNaN(w)) localStorage.setItem(KEY, String(w));
+    };
+
+    splitter.addEventListener('mousedown', (e) => {
+        dragging = true;
+        document.body.classList.add('splitter-dragging');
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+    });
+
+    // Double-click resets to the CSS default split.
+    splitter.addEventListener('dblclick', () => {
+        preview.style.flexBasis = '45%';
+        localStorage.removeItem(KEY);
+    });
+}
+
+// Wire the splitter once the DOM is ready (the app container starts hidden
+// behind the login gate, but attaching listeners + restoring width is safe).
+document.addEventListener('DOMContentLoaded', initPaneSplitter);
 
 /* ================================================================
  * initScrollSpy — no-op stub.
