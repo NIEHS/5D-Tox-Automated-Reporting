@@ -84,10 +84,26 @@ def test_inline_css_is_embedded(scaffold):
 
 
 def test_title_block_present(scaffold):
-    """Title block at the top with chemical name in the metadata."""
+    """
+    The inner title page reproduces the NIEHS Report 10 (p2) layout:
+    series prefix, structured study title (chemical + CASRN, strain,
+    Gavage Studies), institutional block, and ISSN — centered, no rule.
+    """
     html = generate_html(scaffold)
     assert 'class="title-block"' in html
-    assert "Perfluorohexanesulfonamide" in html
+    # Series prefix + study-type line.
+    assert "NIEHS Report on the" in html
+    assert "In Vivo Repeat Dose Biological Potency Study of" in html
+    # Chemical with CASRN (the formal title-name), then strain + study type.
+    assert "Perfluorohexanesulfonamide (CASRN 41997-13-1)" in html
+    assert "in Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats" in html
+    assert "(Gavage Studies)" in html
+    # Publisher block + ISSN + location.
+    assert "National Institute of Environmental Health Sciences" in html
+    assert "ISSN: 2768-5632" in html
+    assert "Research Triangle Park, North Carolina, USA" in html
+    # The old left-aligned rule under the title is gone.
+    assert "border-bottom: 2px solid #d6d3cd" not in html
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +162,18 @@ def test_title_block_is_own_headerless_cover_page(scaffold):
     assert "@page:first" not in html
 
 
+def test_sections_have_scroll_anchors(scaffold):
+    """
+    Each walked node is preceded by a zero-height sec-<id> anchor so the
+    TOC can scroll the full preview to a section (scrollPreviewToNode).
+    """
+    html = generate_html(scaffold)
+    assert 'class="sec-anchor"' in html
+    assert 'id="sec-background"' in html
+    assert 'id="sec-foreword"' in html
+    assert 'id="sec-bmd-summary"' in html
+
+
 def test_fragment_preview_also_paginates(session_data):
     """Per the chosen scope, section-card fragments paginate too."""
     html = generate_html(session_data, section_filter="bmd-summary")
@@ -166,6 +194,35 @@ def test_running_header_escaped_against_style_breakout():
     assert "</style><script>" not in html
     # The "<" of the title is CSS-escaped inside the @page content string.
     assert "\\00003c" in html
+
+
+def test_roman_front_matter_arabic_body(scaffold):
+    """
+    Full document: front-matter pages are lower-roman; the body (Background
+    onward) switches to arabic restarted at 1.  The body is wrapped in
+    .report-mainmatter, which the CSS assigns to @page mainmatter.
+    """
+    html = generate_html(scaffold)
+    # Default @page (front matter) numbers in roman.
+    assert "counter(page, lower-roman)" in html
+    # Body named page (arabic) + the wrapper that resets the counter.
+    assert "@page mainmatter" in html
+    assert 'class="report-mainmatter"' in html
+    assert "counter-reset: page" in html
+    # The body wrapper sits after the front matter and contains Background.
+    assert html.index('class="report-mainmatter"') < html.index("<h2>Background</h2>")
+    assert html.index("<h2>Foreword</h2>") < html.index('class="report-mainmatter"')
+
+
+def test_fragment_page_numbers_are_arabic(scaffold):
+    """
+    A single-section fragment has no front-matter/body split, so it forces
+    the page number back to arabic (overriding the roman default) and does
+    not wrap a body.
+    """
+    html = generate_html(scaffold, section_filter="bmd-summary")
+    assert "@page { @bottom-center { content: counter(page); } }" in html
+    assert 'class="report-mainmatter"' not in html
 
 
 # ---------------------------------------------------------------------------
@@ -269,15 +326,13 @@ def test_special_characters_are_html_escaped():
     be escaped so they don't corrupt the document structure.
     """
     data = {
-        "title": "X & Y <example>",
         "background": {"paragraphs": ["A & B & C", "Foo <script>alert(1)</script>"]},
     }
     html = generate_html(data)
     # Original unescaped form must not appear
-    assert "X & Y <example>" not in html
     assert "<script>" not in html
     # Escaped form must appear
-    assert "X &amp; Y &lt;example&gt;" in html
+    assert "A &amp; B &amp; C" in html
     assert "&lt;script&gt;" in html
 
 

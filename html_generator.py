@@ -49,7 +49,12 @@ from __future__ import annotations
 import html as _html
 from typing import Optional
 
-from document_tree import DOCUMENT_TREE, DocNode, find_node
+from document_tree import (
+    DOCUMENT_TREE,
+    FRONT_MATTER_NODE_TYPES,
+    DocNode,
+    find_node,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -89,24 +94,40 @@ body {
   margin: 0;
   padding: 0;
 }
+/* Inner title page (NIEHS Report 10 p2): centered, NO horizontal rule.
+   Pushed down from the top of the sheet so the title sits in the upper-
+   middle, like the reference. */
 .title-block {
-  border-bottom: 2px solid #d6d3cd;
-  margin-bottom: 28px;
-  padding-bottom: 12px;
+  text-align: center;
+  padding-top: 1.4in;
 }
-.title-block h1 {
-  font-size: 22px;
-  margin: 0 0 6px;
-  line-height: 1.25;
+.title-block .tp-title {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0 0 40px;
+  color: #1a1a1a;
+  /* Override the global heading look — this is a centered title block,
+     not a section heading (no rule, no left alignment). */
+  border: none;
+  padding: 0;
+  text-align: center;
 }
-.title-block .meta {
-  color: #555;
+.title-block .tp-report {
   font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 56px;
+}
+.title-block .tp-publisher {
+  font-size: 13px;
+  line-height: 1.7;
 }
 h2 { font-size: 19px; margin: 28px 0 10px; border-bottom: 1px solid #e2e0db; padding-bottom: 4px; }
 h3 { font-size: 16px; margin: 22px 0 8px; color: #2c5282; }
 h4 { font-size: 14px; margin: 16px 0 6px; color: #4a5568; font-weight: 600; }
 p { margin: 0 0 10px; }
+/* Invisible per-section scroll target for TOC navigation — see _walk. */
+.sec-anchor { display: block; height: 0; margin: 0; padding: 0; }
 em.pending {
   color: #b7791f;
   background: #fff7ed;
@@ -217,10 +238,13 @@ _PAGED_MEDIA_CSS: str = """
 @page {
   size: letter;
   margin: 1in;
-  /* Page number centred in the bottom margin — the article-class default
-     that niehs.cls produces. */
+  /* Front-matter page numbers are lower-roman (ii, iii, iv...), per NIEHS
+     Report 10.  The body switches to arabic via @page mainmatter below.
+     This default @page covers the front-matter sections; the cover page
+     blanks it (@page cover), and a fragment preview overrides it back to
+     arabic (fragments have no front-matter/body split). */
   @bottom-center {
-    content: counter(page);
+    content: counter(page, lower-roman);
     font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     color: #4a5568;
   }
@@ -231,6 +255,19 @@ _PAGED_MEDIA_CSS: str = """
   @top-center { content: none; }
   @bottom-center { content: none; }
 }
+/* Body pages: arabic numerals restarted at 1 (front matter is roman).  The
+   .report-mainmatter wrapper around the body content (Background onward)
+   assigns this named page, resets the page counter, and forces the body
+   onto a fresh page — matching NIEHS Report 10, where Background is arabic
+   page 1. */
+@page mainmatter {
+  @bottom-center {
+    content: counter(page);
+    font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: #4a5568;
+  }
+}
+.report-mainmatter { page: mainmatter; counter-reset: page 1; break-before: page; }
 /* White sheet floating on the grey gutter, with a soft drop shadow so it
    reads as a physical printed page in the preview. */
 .pagedjs_page {
@@ -247,6 +284,15 @@ h2, h3, h4 { break-after: avoid; }                      /* don't strand a headin
 /* Title block → its own header-less "cover" page; content starts after it. */
 .title-block { page: cover; break-inside: avoid; break-after: page; }
 """
+
+
+# Fragment previews render a single section, so there is no front-matter/body
+# split and no roman numbering — force the default page number back to arabic.
+# Appended after _PAGED_MEDIA_CSS in the fragment skeleton so it wins over the
+# roman default that _PAGED_MEDIA_CSS sets for the full document's front matter.
+_FRAGMENT_ARABIC_PAGE_NUMBER: str = (
+    "@page { @bottom-center { content: counter(page); } }"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -814,24 +860,80 @@ def _render_description_list(descriptions: list) -> str:
 
 def _render_cover(node: DocNode, data: dict) -> str:
     """
-    Title block at the top of the HTML preview.
+    Inner title page (NIEHS Report 10, page 2) — centered, no horizontal
+    rule.  Replicates the approved Typst inner-title-page layout:
 
-    The LaTeX path skips the NIEHS-branded cover and uses \\maketitle.
-    For HTML the equivalent affordance is a styled title block — the
-    first <h1> in the document plus a metadata line.  Suppress the
-    title-page node entirely (its content is the same as cover).
+        NIEHS Report on the
+        In Vivo Repeat Dose Biological Potency Study of
+        <chemical> (CASRN <casrn>)
+        in Sprague Dawley <strain> Rats
+        (Gavage Studies)
+
+        <report number>
+        <report date>
+
+        National Institute of Environmental Health Sciences
+        Public Health Service
+        U.S. Department of Health and Human Services
+        ISSN: <issn>
+        Research Triangle Park, North Carolina, USA
+
+    The image-backed cover (page 1 of the reference) is a separate,
+    deferred concern; for now this title page stands alone as the report's
+    first page.  The title-page node stays suppressed (_render_title_page)
+    — this one handler emits the front page.
     """
-    title = data.get("title", "5dToxReport")
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
-    dtxsid = data.get("dtxsid", "")
-    meta_parts = [p for p in (chemical, casrn, dtxsid) if p]
-    meta = " · ".join(_esc(p) for p in meta_parts)
+    strain = data.get("strain", "(Hsd:Sprague Dawley® SD®)")
+    report_number = data.get("report_number", "")
+    report_date = data.get("report_date", "")
+    issn = data.get("issn", "")
+
+    # "title-name" — the most formal identifier: chemical plus CASRN
+    # (matches the Typst ta-form("title")).
+    title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
+
+    # Bold title block.  Hard line breaks at the same semantic points as the
+    # reference; long chemical/strain lines wrap naturally when centered.
+    title_lines = [
+        "NIEHS Report on the",
+        "In Vivo Repeat Dose Biological Potency Study of",
+        title_name,
+        f"in Sprague Dawley {strain} Rats",
+        "(Gavage Studies)",
+    ]
+    title_html = "<br>".join(_esc(line) for line in title_lines if line)
+
+    # Report number + date, each on its own line; omitted when absent.
+    report_html = "<br>".join(
+        _esc(line) for line in (report_number, report_date) if line
+    )
+
+    # Publisher block — static institutional lines, with the ISSN inserted
+    # when present.
+    pub_lines = [
+        "National Institute of Environmental Health Sciences",
+        "Public Health Service",
+        "U.S. Department of Health and Human Services",
+    ]
+    if issn:
+        pub_lines.append(f"ISSN: {issn}")
+    pub_lines.append("Research Triangle Park, North Carolina, USA")
+    pub_html = "<br>".join(_esc(line) for line in pub_lines)
+
+    # The title is the document <h1> (so sections nest under it for the
+    # accessibility outline); .tp-title styling makes it a centered title
+    # block, not a section heading.
+    report_block = (
+        f'<div class="tp-report">{report_html}</div>' if report_html else ""
+    )
     return (
-        '<header class="title-block">'
-        f"<h1>{_esc(title)}</h1>"
-        f'<div class="meta">{meta}</div>'
-        "</header>"
+        '<section class="title-block">'
+        f'<h1 class="tp-title">{title_html}</h1>'
+        f"{report_block}"
+        f'<div class="tp-publisher">{pub_html}</div>'
+        "</section>"
     )
 
 
@@ -884,6 +986,12 @@ def _walk(node: DocNode, data: dict) -> list[str]:
     chunks: list[str] = []
     chunk = handler(node, data)
     if chunk:
+        # Zero-height anchor before each node so the TOC can scroll the
+        # full preview to this section (frame.contentDocument
+        # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves
+        # the actual DOM nodes into page boxes, preserving these ids, so
+        # the scroll target survives pagination.
+        chunks.append(f'<span id="sec-{_esc(node.id)}" class="sec-anchor"></span>')
         chunks.append(chunk)
     for child in node.children:
         chunks.extend(_walk(child, data))
@@ -986,7 +1094,7 @@ def _fragment_skeleton(body: str, running_header: str = "") -> str:
         "<!DOCTYPE html>"
         '<html lang="en"><head>'
         '<meta charset="utf-8">'
-        f"<style>{_PREVIEW_CSS}{_PAGED_MEDIA_CSS}{_running_header_css(running_header)}</style>"
+        f"<style>{_PREVIEW_CSS}{_PAGED_MEDIA_CSS}{_FRAGMENT_ARABIC_PAGE_NUMBER}{_running_header_css(running_header)}</style>"
         "</head><body>"
         f"{body}"
         f"{_PAGEDJS_SCRIPT}"
@@ -1027,13 +1135,28 @@ def generate_html(
         body = "\n".join(_walk(node, data))
         return _fragment_skeleton(body, running_header=node.title or "")
 
-    # Full-document path — walk every top-level node in tree order.  The
-    # running header is the report title (same source as the cover block's
-    # <h1>, so preview header and title block stay in sync).
+    # Full-document path — walk every top-level node in tree order, split at
+    # the front-matter/body boundary so the page numbering can switch from
+    # roman (front matter) to arabic (body).  The body (Background onward) is
+    # wrapped in .report-mainmatter, which the CSS assigns to the arabic
+    # "mainmatter" page, restarts the page counter at 1, and breaks onto a
+    # fresh page — matching NIEHS Report 10 (Background = arabic page 1).
+    # The running header is the report title (same source as the cover
+    # block's <h1>, so preview header and title block stay in sync).
+    front_chunks: list[str] = []
     body_chunks: list[str] = []
+    in_body = False
     for top in DOCUMENT_TREE:
-        body_chunks.extend(_walk(top, data))
-    body = "\n".join(body_chunks)
+        if not in_body and top.node_type not in FRONT_MATTER_NODE_TYPES:
+            in_body = True
+        (body_chunks if in_body else front_chunks).extend(_walk(top, data))
+    body = "\n".join(front_chunks)
+    if body_chunks:
+        body += (
+            '\n<div class="report-mainmatter">\n'
+            + "\n".join(body_chunks)
+            + "\n</div>"
+        )
     # Prefer the dedicated "running_header" metadata field (report_data.py
     # sets it to the full, never-abbreviated title form); fall back to the
     # plain title, then a placeholder, so a sparse data dict still renders.
