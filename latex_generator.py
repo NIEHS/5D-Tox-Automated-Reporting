@@ -918,7 +918,9 @@ def _walk(node: DocNode, data: dict) -> list[str]:
 # Document skeleton
 # ---------------------------------------------------------------------------
 
-def _document_skeleton(title: str, author: str, body: str) -> str:
+def _document_skeleton(
+    title: str, author: str, body: str, running_header: str = ""
+) -> str:
     r"""
     Wrap a rendered body in the outer LaTeX document scaffolding for a
     full-report compile.
@@ -928,9 +930,16 @@ def _document_skeleton(title: str, author: str, body: str) -> str:
     immediately; LaTeX auto-populates it from the \section commands the
     body emits.
 
-    The class file (niehs.cls) owns page geometry, fonts, and the
-    niehstable environment — this function only emits the structural
-    skeleton.
+    The class file (niehs.cls) owns page geometry, fonts, the niehstable
+    environment, and the fancyhdr running header — this function only
+    emits the structural skeleton and feeds the header its text.
+
+    Args:
+        running_header: the per-page running-header title.  niehs.cls
+            defines \niehsrunningheader empty; we \renewcommand it here so
+            the header (which the class shows from the page after
+            \maketitle onward) carries the full report title, matching the
+            reference and the HTML preview.  Must already be LaTeX-escaped.
     """
     # Strings are concatenated rather than f-format'd to avoid the
     # double-brace escaping noise that .format() requires.  LaTeX is
@@ -941,6 +950,7 @@ def _document_skeleton(title: str, author: str, body: str) -> str:
         "\\title{" + title + "}\n"
         "\\author{" + author + "}\n"
         "\\date{\\today}\n"
+        "\\renewcommand{\\niehsrunningheader}{" + running_header + "}\n"
         "\n"
         "\\begin{document}\n"
         "\\maketitle\n"
@@ -1040,6 +1050,13 @@ def generate_latex(
     author = _escape_latex(
         data.get("author", "NIEHS Division of Translational Toxicology")
     )
+    # Running header = the dedicated "running_header" field (the full,
+    # never-abbreviated title form report_data.py sets), falling back to
+    # the plain title.  Same source the HTML preview uses, so both output
+    # surfaces show the identical header.
+    running_header = _escape_latex(
+        data.get("running_header") or data.get("title", "5dToxReport")
+    )
 
     # Walk every top-level node in document order.  Each call to _walk
     # returns one chunk for the node itself plus chunks for all its
@@ -1053,4 +1070,6 @@ def generate_latex(
     # when chunks already end in newlines.
     body = "\n\n".join(body_chunks)
 
-    return _document_skeleton(title=title, author=author, body=body)
+    return _document_skeleton(
+        title=title, author=author, body=body, running_header=running_header
+    )

@@ -102,6 +102,21 @@ def test_title_and_author_are_set(scaffold):
     assert "Perfluorohexanesulfonamide" in tex
 
 
+def test_running_header_is_set(scaffold):
+    r"""
+    The fancyhdr running header (niehs.cls) must be fed the report title
+    via \renewcommand{\niehsrunningheader}{...}, so the .tex carries the
+    same running header as the reference and the HTML preview.
+    """
+    tex = generate_latex(scaffold)
+    assert r"\renewcommand{\niehsrunningheader}{" in tex
+    # The injected header is the full title form — chemical name present.
+    header_line = next(
+        ln for ln in tex.splitlines() if r"\renewcommand{\niehsrunningheader}" in ln
+    )
+    assert "Perfluorohexanesulfonamide" in header_line
+
+
 # ---------------------------------------------------------------------------
 # Tests — implemented node_types render correctly
 # ---------------------------------------------------------------------------
@@ -274,6 +289,21 @@ def test_class_file_provides_class():
     assert r"\LoadClass" in content
 
 
+def test_class_file_configures_running_header():
+    r"""
+    niehs.cls must set up the fancyhdr running header: load fancyhdr,
+    define the (empty-by-default) \niehsrunningheader macro, and switch on
+    \pagestyle{fancy}.  The title page stays header-less automatically via
+    \maketitle's plain style, so the header begins after it — matching the
+    reference (NIEHS Report 10), where the header starts at the Foreword.
+    """
+    content = CLASS_FILE.read_text()
+    assert r"\RequirePackage{fancyhdr}" in content
+    assert r"\newcommand{\niehsrunningheader}{}" in content
+    assert r"\pagestyle{fancy}" in content
+    assert r"\fancyhead[C]{" in content
+
+
 # ---------------------------------------------------------------------------
 # Tests — section_filter fragment-compile path (decision #10)
 # ---------------------------------------------------------------------------
@@ -290,6 +320,9 @@ def test_fragment_compile_omits_front_matter(scaffold):
     assert r"\title{" not in tex
     assert r"\section{Foreword}" not in tex
     assert r"\section{Background}" not in tex
+    # Fragments don't set the running header — niehs.cls leaves it empty,
+    # so a fragment compile shows a blank header (fine for the fast path).
+    assert r"\renewcommand{\niehsrunningheader}" not in tex
 
 
 def test_fragment_compile_includes_target_subtree(scaffold):

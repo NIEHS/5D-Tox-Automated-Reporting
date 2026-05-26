@@ -46,6 +46,14 @@
 \geometry{
   letterpaper,
   margin=1in,
+  % Reserve room in the top margin for the running header (configured in
+  % the fancyhdr block below).  headheight=30pt fits a two-line wrapped
+  % title; headsep is the gap down to the body text.  Setting these here,
+  % rather than via a bare \setlength after fancyhdr, lets geometry account
+  % for them in the vertical layout and silences fancyhdr's "headheight too
+  % small" warning.
+  headheight=30pt,
+  headsep=14pt,
 }
 
 % --- Tables --------------------------------------------------------------
@@ -79,6 +87,35 @@
 % match to the NIEHS Liberation Serif look, swap in a Times-equivalent
 % (mathptmx / newtxtext) — deferred to a typography session.
 \RequirePackage{lmodern}
+
+% --- Running header (fancyhdr) ------------------------------------------
+% NIEHS Report 10 carries a running header — the full report title,
+% centered at the top of every page from the Foreword onward.  The cover
+% and title pages carry none: \maketitle issues \thispagestyle{plain}, and
+% fancyhdr leaves "plain" header-less, so the title page is automatically
+% skipped and the header begins on the page after it.
+%
+% This mirrors the in-app HTML preview (which paginates with the same
+% running header via Paged.js), so both of our output surfaces — the .tex
+% Overleaf export and the HTML preview — match the reference.
+\RequirePackage{fancyhdr}
+% The title text is injected per-report by latex_generator.py via
+% \renewcommand{\niehsrunningheader}{...} in the preamble.  The class
+% defines it empty so a fragment compile (which never sets it) still
+% compiles — it just shows a blank header.
+\newcommand{\niehsrunningheader}{}
+\pagestyle{fancy}
+\fancyhf{}% clear every header and footer field
+% Centered running header.  Wrapped in a full-width \parbox with \centering
+% so a long title (NIEHS titles run ~90 characters) breaks across two lines
+% and stays centered, like the reference.  A bare \fancyhead[C]{...} would
+% set it on one line and overflow into both margins.
+\fancyhead[C]{\parbox[b]{\textwidth}{\centering\small\niehsrunningheader}}
+% Page number centered in the footer (article's default position).  The
+% roman-front-matter / arabic-body numbering split is a separate task.
+\fancyfoot[C]{\thepage}
+% NIEHS Report 10 has no horizontal rule beneath the header.
+\renewcommand{\headrulewidth}{0pt}
 
 % --- Links ---------------------------------------------------------------
 % hyperref for blue clickable links (NIEHS Report 10 uses blue links for
