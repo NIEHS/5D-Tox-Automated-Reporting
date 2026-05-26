@@ -407,6 +407,40 @@ DOCUMENT_TREE: list[DocNode] = [
 
 
 # ---------------------------------------------------------------------------
+# Front matter vs body
+# ---------------------------------------------------------------------------
+# Node types that make up the report's front matter.  Per NIEHS Report 10,
+# front matter is numbered with roman numerals and the body switches to
+# arabic restarting at 1 (Background = arabic page 1).  Front matter is a
+# contiguous prefix of DOCUMENT_TREE; the first top-level node whose
+# node_type is NOT in this set begins the body.  Both renderers
+# (latex_generator, html_generator) consume this so the roman->arabic
+# switch lands at the same structural point — the boundary lives with the
+# tree, not duplicated in each renderer.
+FRONT_MATTER_NODE_TYPES: frozenset[str] = frozenset(
+    {"cover", "title-page", "front-matter", "tables-list"}
+)
+
+
+def first_body_node_id(tree: list[DocNode] | None = None) -> str | None:
+    """
+    Return the id of the first top-level node that begins the body — the
+    first node whose node_type is not a front-matter type (see
+    FRONT_MATTER_NODE_TYPES).  This is where page numbering switches from
+    roman to arabic.
+
+    Returns None if the tree is entirely front matter (never the case for
+    a real report, but keeps callers from crashing on a degenerate tree).
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    for node in tree:
+        if node.node_type not in FRONT_MATTER_NODE_TYPES:
+            return node.id
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Tree utilities
 # ---------------------------------------------------------------------------
 

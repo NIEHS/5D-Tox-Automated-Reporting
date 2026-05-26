@@ -65,7 +65,12 @@ from __future__ import annotations
 # DOCUMENT_TREE is the canonical structure (heading hierarchy, section ids,
 # data_keys).  DocNode is the per-node type; we annotate handlers with it.
 
-from document_tree import DOCUMENT_TREE, DocNode, find_node
+from document_tree import (
+    DOCUMENT_TREE,
+    FRONT_MATTER_NODE_TYPES,
+    DocNode,
+    find_node,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -953,7 +958,15 @@ def _document_skeleton(
         "\\renewcommand{\\niehsrunningheader}{" + running_header + "}\n"
         "\n"
         "\\begin{document}\n"
+        # Front matter is numbered in roman (NIEHS Report 10).  Set this
+        # before \maketitle so the title page is page i; the body switches
+        # to arabic via a \pagenumbering{arabic} injected into `body` at the
+        # front-matter/body boundary (see generate_latex).
+        "\\pagenumbering{roman}\n"
         "\\maketitle\n"
+        # No visible number on the title page — the reference shows a
+        # date/ISSN footer there, not a page number.
+        "\\thispagestyle{empty}\n"
         "\\tableofcontents\n"
         "\n"
         + body + "\n"
@@ -1061,8 +1074,18 @@ def generate_latex(
     # Walk every top-level node in document order.  Each call to _walk
     # returns one chunk for the node itself plus chunks for all its
     # descendants, already flattened in document order.
+    #
+    # Page numbering switches from roman (front matter) to arabic (body) at
+    # the first non-front-matter top-level node — the body's first page
+    # (Background) becomes arabic page 1, matching NIEHS Report 10.
+    # \clearpage flushes any pending floats first so the switch lands on
+    # the body's opening page, not a stray float page.
     body_chunks: list[str] = []
+    switched_to_body = False
     for top in DOCUMENT_TREE:
+        if not switched_to_body and top.node_type not in FRONT_MATTER_NODE_TYPES:
+            body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
+            switched_to_body = True
         body_chunks.extend(_walk(top, data))
 
     # Paragraph break between every chunk.  LaTeX collapses consecutive

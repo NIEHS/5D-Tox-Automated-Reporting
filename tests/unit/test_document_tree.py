@@ -13,14 +13,40 @@ import pytest
 
 from document_tree import (
     DOCUMENT_TREE,
+    FRONT_MATTER_NODE_TYPES,
     DocNode,
     compute_table_numbers,
     find_node,
+    first_body_node_id,
     collect_data_keys,
     collect_platforms,
     is_leaf_table,
     serialize_tree,
 )
+
+
+class TestFrontMatterBoundary:
+    """The roman->arabic page-numbering boundary lives with the tree."""
+
+    def test_first_body_node_is_background(self):
+        # Front matter (cover...abstract) is roman; Background begins the
+        # arabic-numbered body — see NIEHS Report 10 (Background = page 1).
+        assert first_body_node_id() == "background"
+
+    def test_front_matter_is_a_contiguous_prefix(self):
+        # The switch logic assumes all front-matter nodes come before any
+        # body node; guard that invariant so a future reordering can't
+        # silently split the front matter.
+        types = [n.node_type for n in DOCUMENT_TREE]
+        first_body = next(
+            i for i, t in enumerate(types) if t not in FRONT_MATTER_NODE_TYPES
+        )
+        assert all(t in FRONT_MATTER_NODE_TYPES for t in types[:first_body])
+        assert all(t not in FRONT_MATTER_NODE_TYPES for t in types[first_body:])
+
+    def test_abstract_is_front_matter_background_is_not(self):
+        assert find_node("abstract").node_type in FRONT_MATTER_NODE_TYPES
+        assert find_node("background").node_type not in FRONT_MATTER_NODE_TYPES
 
 
 class TestDocumentTreeStructure:

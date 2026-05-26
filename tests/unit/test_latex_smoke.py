@@ -102,6 +102,26 @@ def test_title_and_author_are_set(scaffold):
     assert "Perfluorohexanesulfonamide" in tex
 
 
+def test_roman_front_matter_then_arabic_body(scaffold):
+    r"""
+    Front matter is numbered in roman, the body in arabic restarted at 1
+    (NIEHS Report 10: Background = arabic page 1).  The preamble sets
+    \pagenumbering{roman} before \maketitle; \pagenumbering{arabic} is
+    injected at the front-matter/body boundary, before \section{Background}.
+    """
+    tex = generate_latex(scaffold)
+    assert r"\pagenumbering{roman}" in tex
+    assert r"\pagenumbering{arabic}" in tex
+    # Order: roman is set first (preamble), arabic later (at the body).
+    assert tex.index(r"\pagenumbering{roman}") < tex.index(r"\pagenumbering{arabic}")
+    # The arabic switch lands at the front-matter/body boundary: after the
+    # last front-matter section (Abstract) and right before Background.
+    assert tex.index(r"\section{Abstract}") < tex.index(r"\pagenumbering{arabic}")
+    assert tex.index(r"\pagenumbering{arabic}") < tex.index(r"\section{Background}")
+    # The title page carries no visible number.
+    assert r"\thispagestyle{empty}" in tex
+
+
 def test_running_header_is_set(scaffold):
     r"""
     The fancyhdr running header (niehs.cls) must be fed the report title
