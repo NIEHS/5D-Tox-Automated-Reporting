@@ -136,6 +136,32 @@ def capabilities_for(node_type: str) -> NodeCapabilities:
     return CAPABILITIES_BY_TYPE.get(node_type, _DEFAULT_CAPABILITIES)
 
 
+def landscape_requested(
+    node_type: str, node_id: str, orientations: dict | None
+) -> bool:
+    """
+    Whether a node should render in landscape: the user flipped it to
+    "landscape" AND its semantic type is orientable.
+
+    Gating the user's per-id overlay on the per-type capability means a stale
+    or invalid orientation flag (e.g. left over for a node type that is no
+    longer orientable) is silently ignored — the capability dictionary stays
+    authoritative.  Both renderers' tree walks call this so the gate condition
+    lives in ONE place instead of being copy-pasted (and able to drift)
+    between the HTML and LaTeX `_walk`s.
+
+    Args:
+        node_type:    the DocNode's node_type (capability lookup key).
+        node_id:      the DocNode's id (overlay lookup key).
+        orientations: the per-id overlay map {node_id: "landscape"}; may be
+                      None/empty when the user has flipped nothing.
+    """
+    return (
+        (orientations or {}).get(node_id) == "landscape"
+        and capabilities_for(node_type).orientable
+    )
+
+
 def annotate_capabilities(nodes: list[dict]) -> list[dict]:
     """
     Walk a *serialized* tree (the list-of-dicts from serialize_tree) and add

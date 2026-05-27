@@ -55,7 +55,7 @@ from document_tree import (
     DocNode,
     find_node,
 )
-from render_capabilities import capabilities_for
+from render_capabilities import landscape_requested
 
 
 # ---------------------------------------------------------------------------
@@ -1039,8 +1039,7 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         # type is orientable (capability dictionary).  Gating on the
         # capability ignores stale/invalid overlay flags — the dictionary is
         # authoritative on both the UI and render sides.
-        if (data.get("orientations", {}).get(node.id) == "landscape"
-                and capabilities_for(node.node_type).orientable):
+        if landscape_requested(node.node_type, node.id, data.get("orientations")):
             chunk = f'<div class="landscape-block">{chunk}</div>'
         chunks.append(chunk)
     for child in node.children:
