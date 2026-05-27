@@ -10,7 +10,7 @@
 //
 // Globals used (defined elsewhere):
 //   Alpine.store('app')      — Alpine store from state.js
-//   renderReportTab          — function from export.js
+//   ensureFullPreview, scrollPreviewToNode — from export.js (side-pane preview)
 //   renderGenomicsCharts     — function from genomics_charts.js
 
 /* ================================================================

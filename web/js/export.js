@@ -1,7 +1,7 @@
-// export.js — PDF export, PDF preview, file preview modals, report tab
+// export.js — Overleaf export, full-report preview, file preview modals
 //
 // Extracted from main.js.  These functions handle:
-//   - Document export (exportDocument) — PDF/UA-1 via Typst
+//   - Document export (exportDocument) — .tex bundle for Overleaf
 //   - Shared payload builder (buildExportPayload)
 //   - Genomics export payload assembly (buildGenomicsExportSections)
 //   - Full report preview in the side pane (ensureFullPreview, scrollPreviewToNode)
@@ -10,8 +10,6 @@
 //   - File preview modal (openPreviewModal, closePreviewModal, render helpers)
 //   - JSON tree renderer for preview modals (renderJsonTree, _jsonValueSpan)
 //   - Table/XLSX preview renderers (renderModalTablePreview, renderXlsxPreview)
-//   - Report tab PDF preview (renderReportTab, compilePdfPreview, compileScaffoldPreview)
-//   - PDF viewer toggle/resize (togglePdfViewer, initPdfResize)
 //   - Report dirty tracking (markReportDirty)
 //
 // Dependencies (globals from state.js):
@@ -841,103 +839,35 @@ function renderXlsxPreview(data, container) {
 
 
 /* =================================================================
- * Report tab — NIEHS-styled read-only aggregation view
+ * Full-report preview — dirty tracking
  *
- * Assembles all approved report sections into a single flowing HTML
- * document styled to match the NIEHS Report 10 PDF (NBK589955).
- * Designed for window.print() / "Save as PDF" output.
- *
- * renderReportTab() is called lazily when the Report tab is activated,
- * and re-called whenever approval state changes while the tab is visible.
+ * reportDirty flips true on any approve/unapprove so the next navigation
+ * (or the Recompile button) rebuilds the side-pane preview with fresh
+ * content; ensureFullPreview() reads it to decide whether to recompile.
  * ================================================================= */
 
-/* --- Dirty flag: set true when any approval changes so the Report
-       tab re-renders on next activation.  Prevents unnecessary DOM
-       thrashing when the user is on other tabs. --- */
 let reportDirty = true;
-
-/* showReportTab() removed — the Report tab is always visible in the
-   tab bar.  renderReportTab() handles the empty state with a
-   placeholder message when no sections are approved yet. */
 
 /**
  * Mark the report as needing a re-render.  Called from every
- * approve/unapprove action so the next navigation (or a Recompile click)
- * rebuilds the full preview with the latest content.  ensureFullPreview()
- * reads this flag to decide whether to recompile.
+ * approve/unapprove action so the next navigation (or Recompile) rebuilds
+ * the full side-pane preview.  ensureFullPreview() reads this flag.
  */
 function markReportDirty() {
     reportDirty = true;
 }
 
-/**
- * Render the Report tab by compiling a real PDF on the server and
- * displaying it in the browser's native PDF viewer via an iframe.
- *
- * Collects all generated section data (same payload as exportPdf),
- * POSTs to /api/export-overleaf-bundle (export) or /api/preview-latex-html (preview),
- * and sets the iframe src to a blob URL.  The browser's built-in
- * PDF renderer handles pages, zoom, scrolling, and text selection.
- */
-/**
- * Track the current PDF blob URL so we can revoke it when a new
- * PDF is loaded (prevents memory leaks from accumulating blob URLs).
- */
-let currentPdfBlobUrl = null;
-
-async function renderReportTab() {
-    // Skip re-render if nothing changed since last render
-    if (!reportDirty) return;
-    reportDirty = false;
-
-    const emptyEl = document.getElementById('report-empty');
-    const iframe = document.getElementById('report-pdf-frame');
-
-    // --- Check if any section has generated content ---
-    const bgProseEl = document.getElementById('output-prose');
-    const hasBg = bgProseEl && bgProseEl.textContent.trim().length > 0;
-    const hasMethods = methodsData && methodsData.sections && methodsData.sections.length > 0;
-    const methodsProseEl = document.getElementById('methods-prose');
-    const hasMethodsProse = methodsProseEl && methodsProseEl.textContent.trim().length > 0;
-    const hasApical = Object.values(apicalSections).some(s => s.tableData);
-    const hasBmd = bmdSummaryEndpoints.length > 0;
-    const hasGenomics = Object.values(genomicsResults).some(g => g.gene_sets_by_stat || g.gene_sets || g.top_genes);
-    const summaryProseEl = document.getElementById('summary-prose');
-    const hasSummary = summaryProseEl && summaryProseEl.textContent.trim().length > 0;
-
-    const hasAnyContent = hasBg || hasMethods || hasMethodsProse ||
-        hasApical || hasBmd || hasGenomics || hasSummary;
-
-    if (!hasAnyContent) {
-        // No generated content yet — show the scaffold PDF instead.
-        // The scaffold has every section populated with placeholder text
-        // (wrapped in «angle quotes»), showing the full NIEHS report
-        // structure: title page, TOC, front matter, all body sections,
-        // landscape tables, genomics, references.  This gives the user
-        // a preview of what the final report will look like before any
-        // content has been generated.
-        //
-        // The scaffold uses the current test article identity (if set)
-        // so the title page, running header, and name forms are correct.
-        await compileScaffoldPreview();
-        return;
-    }
-
-    // --- Compile the real PDF on the server and display it ---
-    await compilePdfPreview();
-}
-
 
 /**
- * Build the shared export payload for PDF compilation.
+ * Build the shared export payload for the report preview and Overleaf export.
  *
  * Collects all generated section data from the DOM and state objects:
  * background paragraphs, references, apical sections (with inline
  * table_data), methods, BMD summary, genomics, summary, and chart
  * images.  Returns a plain object ready to POST to /api/export-overleaf-bundle.
  *
- * Used by both compilePdfPreview() (full report) and compileSectionPdf()
- * (per-tab filtered preview) to avoid duplicating the payload assembly.
+ * Used by ensureFullPreview() (the side-pane preview) and exportDocument()
+ * (the Overleaf .tex bundle), so the payload assembly isn't duplicated.
  *
  * Chart images are rendered server-side — the server calls
  * render_chart_images() in genomics_viz.py for all organ×sex combos
@@ -1096,66 +1026,6 @@ async function buildExportPayload() {
 }
 
 
-/**
- * Compile the full report to HTML via /api/preview-latex-html and
- * display it in the Report tab's preview iframe.
- *
- * Server pipeline: marshal_export_data → generate_latex → pandoc →
- * HTML.  The browser renders the HTML inline via iframe.srcdoc — no
- * blob URLs, no PDF viewer, no Typst.
- *
- * Note on naming: the function is still called compilePdfPreview() so
- * the dozens of HTML/JS call sites don't all need renaming in this
- * commit.  Despite the name, no PDFs are produced anywhere in the
- * stack — see the function body and /api/preview-latex-html for the
- * actual rendering path.
- */
-async function compilePdfPreview() {
-    const emptyEl = document.getElementById('report-empty');
-    const iframe = document.getElementById('report-pdf-frame');
-    const refreshBtn = document.getElementById('btn-refresh-report');
-
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = 'Compiling...';
-    }
-
-    try {
-        // Build the shared export payload (all sections, with charts)
-        const payload = await buildExportPayload();
-
-        // POST to the new LaTeX → HTML preview endpoint
-        const resp = await fetch('/api/preview-latex-html', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ error: 'Preview compilation failed' }));
-            showError(err.error || 'Preview compilation failed');
-            return;
-        }
-
-        // Render the returned HTML inline via iframe.srcdoc.  Unlike the
-        // old PDF path, no blob URL is created — srcdoc takes the HTML
-        // string directly, which simplifies cleanup (nothing to revoke).
-        const html = await resp.text();
-        iframe.srcdoc = html;
-        iframe.classList.remove('hidden');
-        emptyEl.classList.add('hidden');
-
-    } catch (err) {
-        showError('Preview error: ' + err.message);
-    } finally {
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = 'Refresh';
-        }
-    }
-}
-
-
 /* ================================================================
  * Full report preview (side pane)
  *
@@ -1243,179 +1113,3 @@ function scrollPreviewToNode(tocId) {
     };
     tick();
 }
-
-
-/**
- * Render the report scaffold (no session data) to HTML and show it in
- * the Report tab iframe.
- *
- * Called when no sections have been generated yet.  Goes through the
- * same /api/preview-latex-html endpoint as compilePdfPreview, but
- * with a stripped-down payload — no abstract content, no apical
- * sections — so the server's marshal_export_data falls back to the
- * full scaffold (empty placeholders everywhere).  The test article
- * identity fields (name, CASRN, DTXSID) are still passed so the title
- * page and running header show the right chemical.
- */
-async function compileScaffoldPreview() {
-    const emptyEl = document.getElementById('report-empty');
-    const iframe = document.getElementById('report-pdf-frame');
-    const refreshBtn = document.getElementById('btn-refresh-report');
-
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = 'Loading scaffold...';
-    }
-
-    try {
-        const chemicalName = currentIdentity?.name || 'Test Article';
-        const casrn = currentIdentity?.casrn || '';
-        const dtxsid = currentIdentity?.dtxsid || '';
-
-        // Minimal payload — just identity fields.  marshal_export_data
-        // produces the full scaffold structure when no body content
-        // (paragraphs, methods_data, apical_sections, etc.) is supplied.
-        const payload = {
-            chemical_name: chemicalName,
-            casrn: casrn,
-            dtxsid: dtxsid,
-        };
-
-        const resp = await fetch('/api/preview-latex-html', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ error: resp.statusText }));
-            showError('Scaffold preview error: ' + (err.error || resp.statusText));
-            return;
-        }
-
-        const html = await resp.text();
-        iframe.srcdoc = html;
-        iframe.classList.remove('hidden');
-        emptyEl.classList.add('hidden');
-
-    } catch (err) {
-        showError('Scaffold preview error: ' + err.message);
-    } finally {
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = 'Refresh';
-        }
-    }
-}
-
-
-/**
- * Manual refresh button handler — forces a re-compile of the PDF
- * preview from the current state of all generated sections.
- */
-async function refreshReportPreview() {
-    reportDirty = true;
-    await renderReportTab();
-}
-
-
-/* ================================================================
- * PDF viewer collapse/expand toggle
- *
- * Toggles the .collapsed class on the PDF container, which CSS
- * animates to height: 0.  The toggle button arrow rotates to
- * indicate the current state.
- * ================================================================ */
-function togglePdfViewer() {
-    const container = document.getElementById('report-pdf-container');
-    const btn = document.getElementById('btn-toggle-pdf');
-    if (!container) return;
-
-    container.classList.toggle('collapsed');
-    // Rotate the arrow: ▼ when expanded, ▶ when collapsed
-    const isCollapsed = container.classList.contains('collapsed');
-    btn.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25BC;';
-    btn.title = isCollapsed ? 'Expand PDF viewer' : 'Collapse PDF viewer';
-}
-
-
-/* ================================================================
- * PDF viewer resize handle
- *
- * Allows the user to drag the bottom edge of the PDF container to
- * change its height.  Uses pointer events for smooth cross-browser
- * dragging (works with mouse and touch).
- *
- * During drag:
- *   - pointer is captured on the handle element
- *   - pointermove updates the container height
- *   - pointerup releases capture and cleans up
- *   - an overlay covers the iframe to prevent it from stealing events
- * ================================================================ */
-(function initPdfResize() {
-    // Wait for DOM — this IIFE runs when main.js is parsed, but the
-    // elements may not exist yet.  Use DOMContentLoaded if needed.
-    function setup() {
-        const handle = document.getElementById('report-resize-handle');
-        const container = document.getElementById('report-pdf-container');
-        if (!handle || !container) return;
-
-        let startY = 0;
-        let startHeight = 0;
-
-        handle.addEventListener('pointerdown', (e) => {
-            // Only respond to primary button (left click / touch)
-            if (e.button !== 0) return;
-
-            e.preventDefault();
-            handle.setPointerCapture(e.pointerId);
-            handle.classList.add('dragging');
-
-            // Disable the CSS transition during drag for instant feedback
-            container.style.transition = 'none';
-
-            startY = e.clientY;
-            startHeight = container.getBoundingClientRect().height;
-
-            // Create a transparent overlay to prevent the iframe from
-            // capturing pointer events during the drag operation.
-            // Without this, moving the cursor over the iframe would
-            // cause pointermove events to stop firing on the handle.
-            const overlay = document.createElement('div');
-            overlay.id = 'pdf-resize-overlay';
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;cursor:ns-resize;';
-            document.body.appendChild(overlay);
-
-            function onMove(ev) {
-                // Handle is at the top — dragging UP (negative delta)
-                // should GROW the viewer, dragging DOWN should shrink it.
-                // Max height is the full viewport.
-                const delta = startY - ev.clientY;
-                const maxHeight = window.innerHeight - 12; // leave room for handle
-                const newHeight = Math.min(maxHeight, Math.max(80, startHeight + delta));
-                container.style.height = newHeight + 'px';
-            }
-
-            function onUp(ev) {
-                handle.releasePointerCapture(ev.pointerId);
-                handle.classList.remove('dragging');
-                // Restore the CSS transition for collapse animation
-                container.style.transition = '';
-                handle.removeEventListener('pointermove', onMove);
-                handle.removeEventListener('pointerup', onUp);
-                // Remove the overlay
-                const ov = document.getElementById('pdf-resize-overlay');
-                if (ov) ov.remove();
-            }
-
-            handle.addEventListener('pointermove', onMove);
-            handle.addEventListener('pointerup', onUp);
-        });
-    }
-
-    // Run setup after DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setup);
-    } else {
-        setup();
-    }
-})();

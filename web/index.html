@@ -907,30 +907,16 @@
             <h1>Appendix F. Supplemental Data</h1>
         </div>
 
-        <!-- Report view — NIEHS-styled read-only aggregation of all approved
-             sections into a single print-ready document.  Hidden until at least
-             one section is approved; shown as a tab in the tab bar.  Content is
-             lazily rendered by renderReportTab() in main.js when the tab is
-             activated, and re-rendered when approval state changes. -->
+        <!-- Report view — hosts the Overleaf export action.  The live report
+             preview is the side pane (#preview-pane, rendered by
+             ensureFullPreview); this section is reached via the "Report
+             Preview" nav entry, which also scrolls that pane to the cover.
+             (The old embedded PDF viewer was removed — the side pane is the
+             single preview surface now.) -->
         <section data-toc-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
-                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-pdf">Export to Overleaf</button>
-                <button onclick="refreshReportPreview()" class="btn-action" id="btn-refresh-report">Refresh</button>
-                <button onclick="togglePdfViewer()" class="btn-action" id="btn-toggle-pdf" title="Collapse/expand PDF viewer">&#x25BC;</button>
-            </div>
-            <!-- Embedded PDF viewer — displays the real compiled PDF/UA-1
-                 from the Typst pipeline.  The iframe uses the browser's
-                 native PDF renderer (Chrome/Edge/Firefox all have one).
-                 The viewer container is collapsible and resizable via the
-                 drag handle on its bottom edge. -->
-            <div id="report-pdf-container" class="report-pdf-container collapsed">
-                <!-- Resize handle — drag to change viewer height -->
-                <div id="report-resize-handle" class="report-resize-handle" title="Drag to resize"></div>
-                <div id="report-empty" class="report-empty-state">
-                    <p>No sections generated yet. Generate sections to build the report.</p>
-                </div>
-                <iframe id="report-pdf-frame" class="report-pdf-frame"></iframe>
+                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-overleaf">Export to Overleaf</button>
             </div>
         </section>
 
@@ -1022,7 +1008,7 @@
     <script src="/js/settings.js?v=4"></script>
     <script src="/js/layout.js?v=6"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=7"></script>
+    <script src="/js/export.js?v=8"></script>
     <script src="/js/genomics.js?v=11"></script>
     <script src="/js/genomics_charts.js?v=4"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->
