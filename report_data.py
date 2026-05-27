@@ -177,6 +177,23 @@ def normalize_apical_section_for_render(sec: dict) -> dict:
     return out
 
 
+def _build_full_title(ta: dict) -> str:
+    """
+    Build the report's full title / running header from the test-article forms.
+
+    Fixed NIEHS study-template phrasing ("In Vivo Repeat Dose Biological
+    Potency Study of <name> in Sprague Dawley Rats"), using the running_header
+    name form (the full, never-abbreviated name).  Single-sourced here because
+    marshal_export_data and scaffold_report_data both need the identical title
+    and previously derived it with copy-pasted f-strings.
+    """
+    running_header_name = ta["forms"]["running_header"]["text"]
+    return (
+        f"In Vivo Repeat Dose Biological Potency Study of "
+        f"{running_header_name} in Sprague Dawley Rats"
+    )
+
+
 def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     """
     Convert the /api/export-pdf request body (same schema as /api/export-docx)
@@ -230,11 +247,7 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     data["test_article"] = ta
 
     # Recompute the running header and title with the full identity
-    running_header_name = ta["forms"]["running_header"]["text"]
-    full_title = (
-        f"In Vivo Repeat Dose Biological Potency Study of "
-        f"{running_header_name} in Sprague Dawley Rats"
-    )
+    full_title = _build_full_title(ta)
     data["title"] = full_title
     data["running_header"] = full_title
     data["chemical_name"] = chemical_name
@@ -1013,11 +1026,7 @@ def scaffold_report_data(
     )
 
     # Title uses the running_header form (full name, never abbreviated)
-    running_header_name = ta["forms"]["running_header"]["text"]
-    full_title = (
-        f"In Vivo Repeat Dose Biological Potency Study of "
-        f"{running_header_name} in Sprague Dawley Rats"
-    )
+    full_title = _build_full_title(ta)
 
     # --- Shorthand for name forms ---
     # These pull the pre-computed text strings from the test article forms
