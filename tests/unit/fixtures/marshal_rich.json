@@ -1,0 +1,906 @@
+{
+  "about_report": {
+    "authors": {
+      "paragraphs": []
+    },
+    "contributors": {
+      "paragraphs": []
+    }
+  },
+  "abstract": {
+    "sections": [
+      {
+        "label": "Background",
+        "text": "Abstract background sentence. A short-term, in vivo transcriptomic study was used to assess the biological potency of Test Article."
+      },
+      {
+        "label": "Methods",
+        "text": "A short-term in vivo biological potency study on Test Article in adult male and female Sprague Dawley rats was conducted. Test Article was formulated in corn oil and administered once daily for 5 consecutive days by gavage (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. A benchmark response of one standard deviation was used to model all endpoints."
+      },
+      {
+        "label": "Results",
+        "text": "In male rats, there were no apical endpoints for which a BMD value could be reliably estimated. In female rats, there were no apical endpoints for which a BMD value could be reliably estimated."
+      },
+      {
+        "label": "Summary",
+        "text": ""
+      }
+    ]
+  },
+  "acknowledgments": {
+    "paragraphs": [
+      "Ack one.",
+      "Ack two."
+    ]
+  },
+  "apical_sections": [
+    {
+      "caption": "Body weights.",
+      "compound": "Test Article",
+      "dose_unit": "mg/kg",
+      "first_col_header": "Study Day",
+      "footnotes": [],
+      "narrative": [
+        "BW narrative."
+      ],
+      "platform": "Body Weight",
+      "table_data": {},
+      "table_number": 2,
+      "title": "Body Weight"
+    }
+  ],
+  "author": "5dToxReport",
+  "background": {
+    "paragraphs": [
+      "Background para 1.",
+      "Background para 2."
+    ]
+  },
+  "bmd_summary": {
+    "endpoints": [
+      {
+        "bmd": 12.3,
+        "endpoint": "ALT"
+      }
+    ],
+    "footnotes": [
+      "BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; LOEL = lowest-observed-effect level; NOEL = no-observed-effect level; UREP = unreliable estimate of potency — a label based on review of BMD modeling results indicating the curve-fit BMD is implausibly far below the statistically observed effect threshold; NVM = nonviable model, defined as a modeling result that does not meet prespecified fit criteria and hence is deemed unreliable."
+    ],
+    "paragraphs": [
+      "A summary of the calculated BMDs for each toxicological endpoint is provided in Table 8. The endpoint-specific LOEL and NOEL are included and could be informative for endpoints that lack a calculated BMD either because no viable model was available or because the estimated BMD was below the lower limit of extrapolation (<1 mg/kg)."
+    ]
+  },
+  "casrn": "1-1-1",
+  "chemical_name": "Test Article",
+  "document_tree": [
+    {
+      "id": "cover",
+      "level": 0,
+      "title": "Cover Page",
+      "type": "cover"
+    },
+    {
+      "id": "title-page",
+      "level": 0,
+      "title": "Title Page",
+      "type": "title-page"
+    },
+    {
+      "data_key": "foreword",
+      "id": "foreword",
+      "level": 1,
+      "title": "Foreword",
+      "type": "front-matter"
+    },
+    {
+      "id": "tables-list",
+      "level": 1,
+      "title": "Tables",
+      "type": "tables-list"
+    },
+    {
+      "data_key": "about_report",
+      "id": "about",
+      "level": 1,
+      "title": "About This Report",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "peer_review",
+      "id": "peer-review",
+      "level": 1,
+      "title": "Peer Review",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "publication_details",
+      "id": "publication",
+      "level": 1,
+      "title": "Publication Details",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "acknowledgments",
+      "id": "acknowledgments",
+      "level": 1,
+      "title": "Acknowledgments",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "abstract",
+      "id": "abstract",
+      "level": 1,
+      "title": "Abstract",
+      "type": "front-matter"
+    },
+    {
+      "data_key": "background",
+      "id": "background",
+      "level": 1,
+      "title": "Background",
+      "type": "narrative"
+    },
+    {
+      "children": [
+        {
+          "data_key": "methods",
+          "id": "mm-study-design",
+          "level": 2,
+          "title": "Study Design",
+          "type": "narrative"
+        },
+        {
+          "data_key": "methods",
+          "id": "mm-dose-rationale",
+          "level": 2,
+          "title": "Dose Selection Rationale",
+          "type": "narrative"
+        },
+        {
+          "data_key": "methods",
+          "id": "mm-chemistry",
+          "level": 2,
+          "title": "Chemistry",
+          "type": "narrative"
+        },
+        {
+          "children": [
+            {
+              "data_key": "methods",
+              "id": "mm-clin-obs",
+              "level": 3,
+              "title": "Clinical Observations",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-body-organ-wt",
+              "level": 3,
+              "title": "Body and Organ Weights",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-clin-path",
+              "level": 3,
+              "title": "Clinical Pathology",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-internal-dose",
+              "level": 3,
+              "title": "Internal Dose Assessment",
+              "type": "narrative"
+            }
+          ],
+          "data_key": "methods",
+          "id": "mm-clin-exam",
+          "level": 2,
+          "title": "Clinical Examinations and Sample Collection",
+          "type": "heading-only"
+        },
+        {
+          "children": [
+            {
+              "data_key": "methods",
+              "id": "mm-tx-sample",
+              "level": 3,
+              "title": "Sample Collection for Transcriptomics",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-tx-rna",
+              "level": 3,
+              "title": "RNA Isolation, Library Creation, and Sequencing",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-tx-processing",
+              "level": 3,
+              "title": "Sequence Data Processing",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-tx-qc",
+              "level": 3,
+              "title": "Sequencing Quality Checks and Outlier Removal",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-tx-norm",
+              "level": 3,
+              "title": "Data Normalization",
+              "type": "narrative"
+            }
+          ],
+          "data_key": "methods",
+          "id": "mm-transcriptomics",
+          "level": 2,
+          "title": "Transcriptomics",
+          "type": "heading-only"
+        },
+        {
+          "children": [
+            {
+              "data_key": "methods",
+              "id": "mm-stat-apical",
+              "level": 3,
+              "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-bmd-apical",
+              "level": 3,
+              "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-bmd-tx",
+              "level": 3,
+              "title": "Benchmark Dose Analysis of Transcriptomics Data",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-fdr",
+              "level": 3,
+              "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+              "type": "narrative"
+            },
+            {
+              "data_key": "methods",
+              "id": "mm-data-access",
+              "level": 3,
+              "title": "Data Accessibility",
+              "type": "narrative"
+            }
+          ],
+          "data_key": "methods",
+          "id": "mm-data-analysis",
+          "level": 2,
+          "title": "Data Analysis",
+          "type": "heading-only"
+        }
+      ],
+      "data_key": "methods",
+      "id": "methods",
+      "level": 1,
+      "title": "Materials and Methods",
+      "type": "heading-only"
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "id": "table-body-weight",
+              "level": 0,
+              "platform": "Body Weight",
+              "ready_key": "animalCondition",
+              "table_number": 2,
+              "title": "Summary of Body Weights",
+              "type": "table"
+            },
+            {
+              "id": "table-organ-weight",
+              "level": 0,
+              "platform": "Organ Weight",
+              "ready_key": "animalCondition",
+              "table_number": 3,
+              "title": "Summary of Organ Weights",
+              "type": "table"
+            },
+            {
+              "id": "table-clinical-obs",
+              "level": 0,
+              "platform": "Clinical Observations",
+              "ready_key": "animalCondition",
+              "title": "Clinical Observations",
+              "type": "incidence-table"
+            }
+          ],
+          "id": "animal-condition",
+          "level": 2,
+          "narrative_key": "animal_condition",
+          "ready_key": "animalCondition",
+          "title": "Animal Condition, Body Weights, and Organ Weights",
+          "type": "narrative+tables"
+        },
+        {
+          "children": [
+            {
+              "id": "table-clin-chem",
+              "level": 0,
+              "platform": "Clinical Chemistry",
+              "ready_key": "clinicalPath",
+              "table_number": 4,
+              "title": "Summary of Select Clinical Chemistry Data",
+              "type": "table"
+            },
+            {
+              "id": "table-hematology",
+              "level": 0,
+              "platform": "Hematology",
+              "ready_key": "clinicalPath",
+              "table_number": 5,
+              "title": "Summary of Select Hematology Data",
+              "type": "table"
+            },
+            {
+              "id": "table-hormones",
+              "level": 0,
+              "platform": "Hormones",
+              "ready_key": "clinicalPath",
+              "table_number": 6,
+              "title": "Summary of Select Hormone Data",
+              "type": "table"
+            }
+          ],
+          "id": "clinical-path",
+          "level": 2,
+          "narrative_key": "clinical_pathology",
+          "ready_key": "clinicalPath",
+          "title": "Clinical Pathology",
+          "type": "narrative+tables"
+        },
+        {
+          "children": [
+            {
+              "id": "table-tissue-conc",
+              "level": 0,
+              "platform": "Tissue Concentration",
+              "ready_key": "internalDose",
+              "table_number": 7,
+              "title": "Summary of Plasma Concentration Data",
+              "type": "table"
+            }
+          ],
+          "id": "internal-dose",
+          "level": 2,
+          "ready_key": "internalDose",
+          "title": "Internal Dose Assessment",
+          "type": "narrative+tables"
+        },
+        {
+          "data_key": "bmd_summary",
+          "id": "bmd-summary",
+          "level": 2,
+          "ready_key": "bmdSummary",
+          "table_number": 8,
+          "title": "Apical Endpoint Benchmark Dose Summary",
+          "type": "bmd-summary"
+        },
+        {
+          "data_key": "genomics_sections",
+          "id": "gene-sets",
+          "level": 2,
+          "narrative_key": "gene_set_narrative",
+          "ready_key": "geneSets",
+          "title": "Gene Set Benchmark Dose Analysis",
+          "type": "genomics-section"
+        },
+        {
+          "data_key": "genomics_sections",
+          "id": "gene-bmd",
+          "level": 2,
+          "narrative_key": "gene_narrative",
+          "ready_key": "geneBmd",
+          "title": "Gene Benchmark Dose Analysis",
+          "type": "genomics-section"
+        }
+      ],
+      "id": "results",
+      "level": 1,
+      "title": "Results",
+      "type": "heading-only"
+    },
+    {
+      "data_key": "summary",
+      "id": "summary",
+      "level": 1,
+      "title": "Summary",
+      "type": "narrative"
+    },
+    {
+      "data_key": "references",
+      "id": "references",
+      "level": 1,
+      "title": "References",
+      "type": "narrative"
+    },
+    {
+      "id": "appendix-a",
+      "level": 1,
+      "title": "Appendix A. Internal Dose Assessment",
+      "type": "appendix"
+    },
+    {
+      "id": "appendix-b",
+      "level": 1,
+      "title": "Appendix B. Animal Identifiers",
+      "type": "appendix"
+    },
+    {
+      "id": "appendix-c",
+      "level": 1,
+      "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate",
+      "type": "appendix"
+    },
+    {
+      "id": "appendix-d",
+      "level": 1,
+      "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies",
+      "type": "appendix"
+    },
+    {
+      "id": "appendix-e",
+      "level": 1,
+      "title": "Appendix E. Organ Weight Descriptions",
+      "type": "appendix"
+    },
+    {
+      "id": "appendix-f",
+      "level": 1,
+      "title": "Appendix F. Supplemental Data",
+      "type": "appendix"
+    }
+  ],
+  "dtxsid": "DTXSID_TEST_NO_SESSION",
+  "foreword": {
+    "paragraphs": [
+      "Foreword text."
+    ]
+  },
+  "gene_narrative": {
+    "paragraphs": []
+  },
+  "gene_set_narrative": {
+    "paragraphs": [
+      "Gene set prose."
+    ]
+  },
+  "genomics_charts": [],
+  "genomics_sections": [
+    {
+      "organ": "Liver",
+      "sex": "Male",
+      "type": "gene_set"
+    }
+  ],
+  "internal_dose": {
+    "paragraphs": []
+  },
+  "issn": "2768-5632",
+  "methods": {
+    "paragraphs": [
+      "Methods flat para."
+    ],
+    "sections": []
+  },
+  "orientations": {
+    "table-body-weight": "landscape"
+  },
+  "peer_review": {
+    "paragraphs": [
+      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats was not subjected to further external peer review."
+    ]
+  },
+  "publication_details": {
+    "paragraphs": [
+      "Publisher: National Institute of Environmental Health Sciences",
+      "Publishing Location: Research Triangle Park, NC",
+      "ISSN: 2768-5632",
+      "«DOI: https://doi.org/10.22427/NIEHS-XX»",
+      "Report Series: NIEHS Report Series",
+      "«Report Series Number: XX»"
+    ]
+  },
+  "references": [
+    {
+      "id": 1,
+      "text": "Ref 1"
+    }
+  ],
+  "report_date": "Month 2026",
+  "report_number": "DR99",
+  "report_series": "NIEHS Report Series",
+  "running_header": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
+  "strain": "Wistar",
+  "summary": {
+    "paragraphs": [
+      "Summary para."
+    ]
+  },
+  "table_entries": [
+    {
+      "ready": false,
+      "table_number": 2,
+      "title": "Summary of Body Weights"
+    },
+    {
+      "ready": false,
+      "table_number": 3,
+      "title": "Summary of Organ Weights"
+    },
+    {
+      "ready": false,
+      "table_number": 4,
+      "title": "Summary of Select Clinical Chemistry Data"
+    },
+    {
+      "ready": false,
+      "table_number": 5,
+      "title": "Summary of Select Hematology Data"
+    },
+    {
+      "ready": false,
+      "table_number": 6,
+      "title": "Summary of Select Hormone Data"
+    },
+    {
+      "ready": false,
+      "table_number": 7,
+      "title": "Summary of Plasma Concentration Data"
+    },
+    {
+      "ready": true,
+      "table_number": 8,
+      "title": "Apical Endpoint Benchmark Dose Summary"
+    }
+  ],
+  "test_article": {
+    "abbreviation": "TA",
+    "casrn": "1-1-1",
+    "dtxsid": "DTXSID_TEST_NO_SESSION",
+    "ec_number": "200-000-0",
+    "forms": {
+      "background_intro": {
+        "placement": [
+          "background_first_sentence"
+        ],
+        "text": "Test Article (TA) (CASRN: 1-1-1, U.S. Environmental Protection Agency [EPA] Chemical Dashboard: DTXSID_TEST_NO_SESSION, PubChem CID: 999, European Committee Number: 200-000-0)"
+      },
+      "procedural": {
+        "placement": [
+          "methods_procedural_context"
+        ],
+        "text": "test article"
+      },
+      "prose": {
+        "placement": [
+          "body_after_intro"
+        ],
+        "text": "TA"
+      },
+      "reference": {
+        "placement": [
+          "reference_list_entries"
+        ],
+        "text": "Test Article"
+      },
+      "running_header": {
+        "placement": [
+          "page_header"
+        ],
+        "text": "Test Article"
+      },
+      "section_intro": {
+        "placement": [
+          "abstract_first_sentence",
+          "methods_first_mention",
+          "results_first_mention",
+          "summary_first_sentence"
+        ],
+        "text": "Test Article (TA)"
+      },
+      "table_caption": {
+        "placement": [
+          "all_table_captions"
+        ],
+        "text": "Test Article"
+      },
+      "title": {
+        "placement": [
+          "cover_page",
+          "inner_title_page"
+        ],
+        "text": "Test Article (CASRN 1-1-1)"
+      }
+    },
+    "name": "Test Article",
+    "pubchem_cid": "999"
+  },
+  "title": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
+  "toc_entries": [
+    {
+      "id": "foreword",
+      "level": 1,
+      "ready": true,
+      "title": "Foreword"
+    },
+    {
+      "id": "about",
+      "level": 1,
+      "ready": true,
+      "title": "About This Report"
+    },
+    {
+      "id": "peer-review",
+      "level": 1,
+      "ready": true,
+      "title": "Peer Review"
+    },
+    {
+      "id": "publication",
+      "level": 1,
+      "ready": true,
+      "title": "Publication Details"
+    },
+    {
+      "id": "acknowledgments",
+      "level": 1,
+      "ready": true,
+      "title": "Acknowledgments"
+    },
+    {
+      "id": "abstract",
+      "level": 1,
+      "ready": true,
+      "title": "Abstract"
+    },
+    {
+      "id": "background",
+      "level": 1,
+      "ready": true,
+      "title": "Background"
+    },
+    {
+      "id": "methods",
+      "level": 1,
+      "ready": true,
+      "title": "Materials and Methods"
+    },
+    {
+      "id": "mm-study-design",
+      "level": 2,
+      "ready": true,
+      "title": "Study Design"
+    },
+    {
+      "id": "mm-dose-rationale",
+      "level": 2,
+      "ready": true,
+      "title": "Dose Selection Rationale"
+    },
+    {
+      "id": "mm-chemistry",
+      "level": 2,
+      "ready": true,
+      "title": "Chemistry"
+    },
+    {
+      "id": "mm-clin-exam",
+      "level": 2,
+      "ready": true,
+      "title": "Clinical Examinations and Sample Collection"
+    },
+    {
+      "id": "mm-clin-obs",
+      "level": 3,
+      "ready": true,
+      "title": "Clinical Observations"
+    },
+    {
+      "id": "mm-body-organ-wt",
+      "level": 3,
+      "ready": true,
+      "title": "Body and Organ Weights"
+    },
+    {
+      "id": "mm-clin-path",
+      "level": 3,
+      "ready": true,
+      "title": "Clinical Pathology"
+    },
+    {
+      "id": "mm-internal-dose",
+      "level": 3,
+      "ready": true,
+      "title": "Internal Dose Assessment"
+    },
+    {
+      "id": "mm-transcriptomics",
+      "level": 2,
+      "ready": true,
+      "title": "Transcriptomics"
+    },
+    {
+      "id": "mm-tx-sample",
+      "level": 3,
+      "ready": true,
+      "title": "Sample Collection for Transcriptomics"
+    },
+    {
+      "id": "mm-tx-rna",
+      "level": 3,
+      "ready": true,
+      "title": "RNA Isolation, Library Creation, and Sequencing"
+    },
+    {
+      "id": "mm-tx-processing",
+      "level": 3,
+      "ready": true,
+      "title": "Sequence Data Processing"
+    },
+    {
+      "id": "mm-tx-qc",
+      "level": 3,
+      "ready": true,
+      "title": "Sequencing Quality Checks and Outlier Removal"
+    },
+    {
+      "id": "mm-tx-norm",
+      "level": 3,
+      "ready": true,
+      "title": "Data Normalization"
+    },
+    {
+      "id": "mm-data-analysis",
+      "level": 2,
+      "ready": true,
+      "title": "Data Analysis"
+    },
+    {
+      "id": "mm-stat-apical",
+      "level": 3,
+      "ready": true,
+      "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+    },
+    {
+      "id": "mm-bmd-apical",
+      "level": 3,
+      "ready": true,
+      "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
+    },
+    {
+      "id": "mm-bmd-tx",
+      "level": 3,
+      "ready": true,
+      "title": "Benchmark Dose Analysis of Transcriptomics Data"
+    },
+    {
+      "id": "mm-fdr",
+      "level": 3,
+      "ready": true,
+      "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
+    },
+    {
+      "id": "mm-data-access",
+      "level": 3,
+      "ready": true,
+      "title": "Data Accessibility"
+    },
+    {
+      "id": "results",
+      "level": 1,
+      "ready": true,
+      "title": "Results"
+    },
+    {
+      "id": "animal-condition",
+      "level": 2,
+      "ready": true,
+      "title": "Animal Condition, Body Weights, and Organ Weights"
+    },
+    {
+      "id": "clinical-path",
+      "level": 2,
+      "ready": false,
+      "title": "Clinical Pathology"
+    },
+    {
+      "id": "internal-dose",
+      "level": 2,
+      "ready": false,
+      "title": "Internal Dose Assessment"
+    },
+    {
+      "id": "bmd-summary",
+      "level": 2,
+      "ready": true,
+      "title": "Apical Endpoint Benchmark Dose Summary"
+    },
+    {
+      "id": "gene-sets",
+      "level": 2,
+      "ready": false,
+      "title": "Gene Set Benchmark Dose Analysis"
+    },
+    {
+      "id": "gene-bmd",
+      "level": 2,
+      "ready": false,
+      "title": "Gene Benchmark Dose Analysis"
+    },
+    {
+      "id": "summary",
+      "level": 1,
+      "ready": true,
+      "title": "Summary"
+    },
+    {
+      "id": "references",
+      "level": 1,
+      "ready": true,
+      "title": "References"
+    },
+    {
+      "id": "appendix-a",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix A. Internal Dose Assessment"
+    },
+    {
+      "id": "appendix-b",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix B. Animal Identifiers"
+    },
+    {
+      "id": "appendix-c",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate"
+    },
+    {
+      "id": "appendix-d",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies"
+    },
+    {
+      "id": "appendix-e",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix E. Organ Weight Descriptions"
+    },
+    {
+      "id": "appendix-f",
+      "level": 1,
+      "ready": false,
+      "title": "Appendix F. Supplemental Data"
+    }
+  ],
+  "unified_narratives": {
+    "animal_condition": [
+      "Unified animal-condition prose."
+    ]
+  }
+}
