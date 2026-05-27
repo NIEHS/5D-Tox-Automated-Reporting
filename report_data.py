@@ -196,29 +196,28 @@ def _build_full_title(ta: dict) -> str:
 
 def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     """
-    Convert the /api/export-pdf request body (same schema as /api/export-docx)
-    into the report.typ JSON schema.
+    Reshape a web-UI export/preview request body into the render-ready data
+    dict that both renderers consume (generate_html for the in-app preview,
+    generate_latex for the Overleaf .tex bundle).
 
     Strategy: start from the full scaffold (which defines every section the
     NIEHS template knows about — boilerplate front matter, heading-only stubs
-    for study-specific content) and overlay real data on top.  This ensures
-    the exported PDF always shows the complete NIEHS document structure:
+    for study-specific content) and overlay real content on top.  This ensures
+    the rendered report always shows the complete NIEHS document structure:
     real content where it exists, empty heading stubs everywhere else.
 
-    The web UI sends the same payload to both endpoints for consistency.
-    This function reshapes it into the structure the Typst template expects.
-
     Args:
-        body: The request JSON body from the web UI export call.
-        section_filter: Optional filter to keep only a specific report
-                        section for per-tab PDF previews.  Valid values:
+        body: The request JSON body from the web UI export/preview call.
+        section_filter: Optional filter to keep only a specific report section
+                        for the per-section preview.  Valid values:
                         "apical" (dose-response tables + narrative),
                         "genomics" (gene set/gene tables + descriptions),
                         "charts" (UMAP + cluster scatter figures).
                         When None, the full report is returned.
 
     Returns:
-        A dict ready to pass to build_report_data().
+        The render-ready data dict (the shape generate_html / generate_latex
+        walk).
     """
     chemical_name = body.get("chemical_name", "Chemical")
 
@@ -500,6 +499,23 @@ def _overlay_abstract(data: dict, body: dict) -> None:
         data["abstract"] = {"sections": sections}
 
 
+def _find_table_number(nodes: list, platform: str):
+    """
+    Walk the document tree depth-first for a table node whose `platform`
+    matches and that has a positional table_number assigned; return that
+    number, or None.  Hoisted to module scope so the apical-section loop in
+    _overlay_apical_sections doesn't redefine it on every iteration.
+    """
+    for node in nodes:
+        if node.platform == platform and node.table_number is not None:
+            return node.table_number
+        if node.children:
+            result = _find_table_number(node.children, platform)
+            if result is not None:
+                return result
+    return None
+
+
 def _overlay_apical_sections(data: dict, body: dict) -> None:
     """Overlay the apical endpoint sections: footnotes, tree-derived table numbers, document-order sort, and per-row canonicalization."""
     chemical_name = body.get("chemical_name", "Chemical")
@@ -564,19 +580,10 @@ def _overlay_apical_sections(data: dict, body: dict) -> None:
             # Table number — derived from the document structure tree.
             # The tree assigns numbers by position (Table 2 = Body Weight,
             # Table 3 = Organ Weight, etc.).  Overrides any user-provided
-            # table_number from the UI.
-            from document_tree import find_node, DOCUMENT_TREE
+            # table_number from the UI.  (_find_table_number is a module-level
+            # helper so it isn't rebuilt on every loop iteration.)
+            from document_tree import DOCUMENT_TREE
             platform = apical_entry["platform"]
-            # Search the tree for a table node matching this platform
-            def _find_table_number(nodes, plat):
-                for n in nodes:
-                    if n.platform == plat and n.table_number is not None:
-                        return n.table_number
-                    if n.children:
-                        result = _find_table_number(n.children, plat)
-                        if result is not None:
-                            return result
-                return None
             tree_table_num = _find_table_number(DOCUMENT_TREE, platform)
             if tree_table_num is not None:
                 apical_entry["table_number"] = tree_table_num
