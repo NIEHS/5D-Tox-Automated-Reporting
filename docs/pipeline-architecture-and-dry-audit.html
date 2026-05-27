@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rlm-bmdx — Report-Generation Pipeline: Architecture &amp; DRY Audit</title>
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #57606a;
+    --line: #e4e2dd;
+    --accent: #2c5282;
+    --accent-soft: #ebf2fb;
+    --code-bg: #f5f4f1;
+    --code-ink: #24292f;
+    --red: #dc2626;
+    --orange: #ea580c;
+    --yellow: #b78303;
+    --sidebar-w: 280px;
+    --maxw: 860px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* ---- Layout: fixed sidebar + scrolling main ---- */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 24px 18px 40px;
+  }
+  .sidebar h1 {
+    font-size: 15px;
+    line-height: 1.4;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  .sidebar .sub { font-size: 12px; color: var(--muted); margin: 0 0 18px; }
+  .toc { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+  .toc li { margin: 1px 0; }
+  .toc a {
+    display: block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+  .toc a:hover { background: var(--code-bg); color: var(--ink); }
+  .toc a.active { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+  .toc .nest a { padding-left: 24px; font-size: 12.5px; }
+  .toc .sev::before { content: "●"; margin-right: 6px; font-size: 10px; }
+  .toc .sev.red::before { color: var(--red); }
+  .toc .sev.orange::before { color: var(--orange); }
+  .toc .sev.yellow::before { color: var(--yellow); }
+
+  main {
+    margin-left: var(--sidebar-w);
+    padding: 48px 56px 120px;
+  }
+  .wrap { max-width: var(--maxw); }
+
+  /* ---- Typography ---- */
+  h2 {
+    font-size: 26px;
+    margin: 52px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+    scroll-margin-top: 20px;
+  }
+  h2:first-of-type { margin-top: 0; }
+  h3 { font-size: 19px; margin: 32px 0 8px; color: var(--accent); scroll-margin-top: 20px; }
+  p { margin: 0 0 14px; }
+  a { color: var(--accent); }
+  .lead { font-size: 17px; color: var(--muted); }
+  .meta {
+    font-size: 13px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; background: var(--panel); margin: 0 0 28px;
+  }
+  code {
+    font-family: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 0.86em;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  pre.flow { line-height: 1.4; color: var(--muted); }
+
+  /* ---- Tables ---- */
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { border-bottom: 2px solid var(--ink); font-weight: 600; }
+  tbody tr:hover { background: var(--accent-soft); }
+
+  /* ---- Finding cards ---- */
+  .finding {
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--line);
+    border-radius: 8px;
+    padding: 4px 22px 14px;
+    margin: 22px 0;
+    background: var(--panel);
+    scroll-margin-top: 20px;
+  }
+  .finding.red    { border-left-color: var(--red); }
+  .finding.orange { border-left-color: var(--orange); }
+  .finding.yellow { border-left-color: var(--yellow); }
+  .finding h3 { color: var(--ink); }
+  .pill {
+    display: inline-block;
+    font-size: 11px; font-weight: 700; letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+    vertical-align: middle;
+    color: #fff;
+  }
+  .pill.red { background: var(--red); }
+  .pill.orange { background: var(--orange); }
+  .pill.yellow { background: var(--yellow); }
+  .cite { color: var(--muted); font-size: 13px; }
+  .note {
+    background: var(--accent-soft);
+    border: 1px solid #cfe0f5;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 14.5px;
+  }
+  .note strong { color: var(--accent); }
+  .fix { font-size: 14px; color: var(--muted); }
+  .fix b { color: var(--ink); }
+  ul.tight { margin: 6px 0 14px; }
+  ul.tight li { margin: 3px 0; }
+  footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <h1>Report-Generation Pipeline</h1>
+  <p class="sub">Architecture &amp; cleanliness / DRY audit</p>
+  <ul class="toc" id="toc">
+    <li><a href="#scope">Scope</a></li>
+    <li><a href="#map">1 · The whole system</a></li>
+    <li><a href="#pipeline">2 · The pipeline, end to end</a></li>
+    <li class="nest"><a href="#p-tree">2a · document_tree.py</a></li>
+    <li class="nest"><a href="#p-caps">2b · render_capabilities.py</a></li>
+    <li class="nest"><a href="#p-marshal">2c · report_data.py (marshal)</a></li>
+    <li class="nest"><a href="#p-render">2d · the two renderers</a></li>
+    <li class="nest"><a href="#p-frontend">2e · frontend</a></li>
+    <li><a href="#findings">3 · DRY &amp; cleanliness findings</a></li>
+    <li class="nest"><a href="#f1" class="sev red">#1 Renderer triplication</a></li>
+    <li class="nest"><a href="#f2" class="sev orange">#2 marshal god function</a></li>
+    <li class="nest"><a href="#f3" class="sev orange">#3 Title derivation dup</a></li>
+    <li class="nest"><a href="#f4" class="sev yellow">#4 Genomics-cache dup</a></li>
+    <li class="nest"><a href="#f5" class="sev yellow">#5 CSS margin-box dup</a></li>
+    <li><a href="#bottom">4 · Bottom line</a></li>
+  </ul>
+</nav>
+
+<main>
+<div class="wrap">
+
+  <p class="lead">rlm-bmdx turns uploaded dose-response data into a structured NIEHS toxicology report. This document explains the <strong>report-generation pipeline</strong> — the structure&rarr;data&rarr;render&rarr;output core that recent work touched and that ADR-0003 will refactor — and audits it for duplication and uncleanliness.</p>
+
+  <div class="meta">
+    <strong>Scope note.</strong> The repo is ~100 Python files; this goes deep on the rendering pipeline with a one-screen map of the rest. Citations are <code>file:line</code>, verified against the rebuilt rlm-code index at commit <code>f4676bd</code> / <code>e6e5979</code> (2026-05-27).
+  </div>
+
+  <h2 id="scope">Scope</h2>
+  <p>Six subsystems make up the app. This report covers the last row in depth; the others are mapped for orientation in §1.</p>
+
+  <h2 id="map">1 · The whole system in one screen</h2>
+  <table>
+    <thead><tr><th>Subsystem</th><th>Key files</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><b>Ingestion / integration</b></td><td><code>pool_orchestrator</code>, <code>bmdx_pipe</code>, <code>bmd_project_schema.py</code></td><td>Upload &rarr; fingerprint &rarr; validate &rarr; merge into <code>integrated.json</code>. Stats run through <b>BMDExpress&nbsp;3 (Java subprocess)</b>; <code>bmd_project_schema</code> is the Pydantic load-barrier (ADR-0001).</td></tr>
+      <tr><td><b>Artifact pipeline</b></td><td><code>process_integrated.py</code></td><td><code>integrated.json</code> &rarr; all report artifacts (NTP stats, sections, BMDS, charts, narratives). One ~775-line god route (ADR-0002 proposes decomposing it).</td></tr>
+      <tr><td><b>Knowledge base</b></td><td><code>interpret.py</code> (ToxKBQuerier), <code>bmdx.duckdb</code></td><td>Grounds genomics narratives in real GO / pathway data.</td></tr>
+      <tr><td><b>LLM narratives</b></td><td><code>background_writer.py</code>, <code>unified_narrative.py</code>, <code>llm_routes.py</code></td><td>Generate prose (background, interpretation, genomics).</td></tr>
+      <tr><td><b>Table builders</b></td><td><code>*_table.py</code>, <code>table_builder_common.py</code>, <code>apical_bmds.py</code></td><td><code>integrated.json</code> &rarr; table data structures.</td></tr>
+      <tr><td><b>Structure &amp; rendering</b> &nbsp;&larr; <em>this report</em></td><td><code>document_tree.py</code>, <code>render_capabilities.py</code>, <code>report_data.py</code>, <code>html_generator.py</code>, <code>latex_generator.py</code>, <code>background_server.py</code>, <code>web/js/*</code></td><td>Canonical tree &rarr; render to HTML preview + <code>.tex</code> Overleaf bundle.</td></tr>
+    </tbody>
+  </table>
+  <p>rlm-code's objective read: the <b>hub files</b> are <code>html_generator</code>, <code>latex_generator</code>, <code>report_data</code>, <code>document_tree</code>; the <b>god objects</b> are <code>generate_html</code>/<code>generate_latex</code> (in&approx;29), <code>marshal_export_data</code> (out=23), and the three <code>_walk</code>s. That is exactly the cluster the findings below land on.</p>
+
+  <h2 id="pipeline">2 · The pipeline, end to end</h2>
+  <pre class="flow">DOCUMENT_TREE (document_tree.py)              &larr; canonical structure (hand-written today)
+        &#9474;  serialize_tree() + annotate_capabilities()
+        &#9660;
+window.__DOCUMENT_TREE__ / /api/document-tree   &rarr; frontend nav panel + capability flags
+        &#9474;
+   user session state (approved sections, edits, orientation overlay)
+        &#9474;  buildExportPayload()   (web/js/export.js)
+        &#9660;
+marshal_export_data(body)   (report_data.py)    &larr; scaffold a full template, overlay real content
+        &#9660;
+        &#9500;&#9472;&#9472;&#9658; generate_html(data)    (html_generator.py)  &rarr; self-contained HTML + Paged.js  &rarr; preview iframe
+        &#9492;&#9472;&#9472;&#9658; generate_latex(data)   (latex_generator.py) &rarr; report.tex + niehs.cls         &rarr; Overleaf .zip</pre>
+
+  <h3 id="p-tree">2a · <code>document_tree.py</code> — the single source of truth</h3>
+  <p><code>DOCUMENT_TREE</code> is a hand-written tree of <code>DocNode</code>s (<code>document_tree.py:44</code>). A node carries <code>id</code>, <code>node_type</code>, <code>level</code>, <code>title</code>, children, and data-binding keys (<code>data_key</code>, <code>narrative_key</code>, <code>methods_key</code>). <b>Nothing structural is hardcoded downstream</b> — heading hierarchy, ordering, table numbers, and the front/body boundary all derive from a tree walk:</p>
+  <ul class="tight">
+    <li><code>compute_table_numbers</code> (<code>:447</code>) assigns table numbers <em>positionally</em> by walking the tree — never user-provided.</li>
+    <li><code>first_body_node_id</code> + <code>FRONT_MATTER_NODE_TYPES</code> (<code>:425</code>) define where roman front-matter numbering switches to arabic body numbering.</li>
+    <li><code>serialize_tree</code> (<code>:567</code>) emits the tree as plain dicts (node type under key <code>"type"</code>) for the frontend.</li>
+    <li><code>find_node</code> (called in 23 places) is the universal "jump to a node" primitive.</li>
+  </ul>
+  <p>Node types: <code>cover</code>, <code>title-page</code>, <code>front-matter</code>, <code>narrative</code>, <code>heading-only</code>, <code>appendix</code>, <code>tables-list</code>, <code>narrative+tables</code>, <code>table</code>, <code>incidence-table</code>, <code>bmd-summary</code>, <code>genomics-section</code>. Two are already <em>generated</em> components — <code>tables-list</code> (a List of Tables built by walking the tree) — the working precedent for the ADR-0003 ToC.</p>
+
+  <h3 id="p-caps">2b · <code>render_capabilities.py</code> — the type&rarr;capability catalog</h3>
+  <p>A single dict <code>CAPABILITIES_BY_TYPE</code> maps each <code>node_type</code> to <code>NodeCapabilities(orientable, breakable, editable)</code> — the <b>one coupling point</b> between document and rendering semantics, and the embryo of ADR-0003's component catalog. <code>background_server.py</code> calls <code>annotate_capabilities(serialize_tree())</code> so both the injected <code>window.__DOCUMENT_TREE__</code> and <code>/api/document-tree</code> carry capability flags; the frontend reads them off the tree rather than re-encoding the mapping in JS.</p>
+  <div class="note"><strong>Two keys, two jobs.</strong> Capabilities are keyed by node <b>type</b> (the catalog); user choices (orientation, future breaks/edits) are keyed by node <b>id</b> (a per-session overlay). One-way dependency: overlay &rarr; template.</div>
+
+  <h3 id="p-marshal">2c · <code>report_data.py</code> — marshal (scaffold-then-overlay)</h3>
+  <p><code>marshal_export_data(body)</code> (<code>:180</code>) turns web session state into the render-ready dict. The pattern is clean in concept: <b><code>scaffold_report_data</code> (<code>:972</code>) builds the <em>complete</em> report dict shape</b> (every section, with placeholders), then <code>marshal_export_data</code> <b>overlays</b> real approved content on top (<code>:213</code> calls the scaffold, then patches). A sparse session still renders a full scaffolded report, and the dict shape is single-sourced in the scaffold — not re-declared. It also already builds ToC metadata via <code>_build_toc_entries</code> (<code>:1280</code>) and methods sections via <code>_build_methods_sections_from_tree</code> (<code>:937</code>), both tree-driven. (The function itself is a 585-line god function — see finding #2.)</p>
+
+  <h3 id="p-render">2d · <code>html_generator.py</code> / <code>latex_generator.py</code> — two backends, one tree</h3>
+  <p>Both renderers do the same thing in two output languages: walk <code>DOCUMENT_TREE</code> + the data dict, dispatch each node on its <code>node_type</code> to a handler, concatenate the chunks. <code>generate_html</code> produces a self-contained HTML doc with <b>Paged.js</b> (a CSS Paged Media polyfill) that paginates into printed-page sheets in the preview iframe; <code>generate_latex</code> produces <code>report.tex</code> against <code>niehs.cls</code> for an Overleaf <code>.zip</code>. <b>Two surfaces only — no PDF, no Typst.</b> The handler sets are parallel (<code>_render_narrative</code>, <code>_render_apical_table</code>, <code>_render_bmd_summary</code>, <code>_render_genomics_section</code>, &hellip;), one pair per node_type.</p>
+
+  <h3 id="p-frontend">2e · frontend (<code>web/js/*</code>)</h3>
+  <p>The <b>navigation panel</b> is a projection of the serialized tree (<code>renderNavFromTree</code> in <code>layout.js</code>); clicking a node sets <code>activeSection</code> and scrolls the <b>side preview pane</b> (<code>ensureFullPreview</code> in <code>export.js</code>, the single live preview surface after the recent dead-code removal). The <b>orientation toggle</b> is enabled per <code>node.capabilities.orientable</code> and writes a per-id overlay that flows back through <code>buildExportPayload</code> to both renderers. (Per ADR-0003 we just renamed this subsystem off "toc" &rarr; "nav", freeing "ToC" for the document component.)</p>
+
+  <h2 id="findings">3 · Cleanliness &amp; DRY findings <span style="font-size:14px;font-weight:400;color:var(--muted)">(prioritized)</span></h2>
+
+  <div class="finding red" id="f1">
+    <h3>#1 — Renderer triplication + silently-drifting dispatch <span class="pill red">highest</span></h3>
+    <p><code>html_generator._walk</code> (<code>:1022</code>) and <code>latex_generator._walk</code> (<code>:904</code>) are the <b>same recursive algorithm copy-pasted</b>: identical dispatch line, identical <code>if chunk:</code> guard, identical child-recursion tail, and a <b>byte-identical orientation gate</b>:</p>
+    <pre><code>if (data.get("orientations", {}).get(node.id) == "landscape"
+        and capabilities_for(node.node_type).orientable):</code></pre>
+    <p class="cite"><code>html_generator.py:1042-1043</code> &equiv; <code>latex_generator.py:923-924</code> — only the wrapper string differs (<code>&lt;div class="landscape-block"&gt;</code> vs <code>\begin{landscape}</code>). Both were written this session.</p>
+    <p>Worse, the two <code>_DISPATCH</code> registries <b>already drift</b>: HTML registers <code>cover</code>/<code>title-page</code> (<code>:1002-1015</code>, 12 entries); LaTeX does not (<code>:886-897</code>, 10 entries — intentional, it uses <code>\maketitle</code>). The comment at <code>html_generator.py:999-1001</code> claims they "stay in lock-step," which is now false.</p>
+    <div class="note"><strong>Risk.</strong> The lock-step contract is enforced <em>only by a comment</em>. Add a new node_type to one renderer and forget the other, and the section renders in the HTML preview but silently becomes <code>[Section pending]</code> in the Overleaf export — a desync you'd only catch on Overleaf.</div>
+    <p>Around this sit a <b>cluster of parallel helpers</b> with shared contracts (and even shared docstrings) as separate copies: <code>_heading</code> (<code>html:358</code>/<code>latex:145</code>), <code>_render_paragraphs</code> (<code>html:371</code>/<code>latex:159</code>), <code>_pending</code>/<code>_pending_placeholder</code> (<code>html:383</code>/<code>latex:172</code>), <code>_render_unimplemented</code> (<code>html:987</code>/<code>latex:855</code>), the front/body split loop (<code>html:1196</code>/<code>latex:1093</code>), and the <code>running_header &rarr; title &rarr; "5dToxReport"</code> fallback (<code>html:1213</code>/<code>latex:1080</code>). <code>_esc</code>/<code>_escape_latex</code> are correctly format-specific (not a defect).</p>
+    <p class="fix"><b>Fix &rarr; this is the ADR-0003 win.</b> One tree-walker + one shared dispatch registry, parameterized by a per-format <b>backend</b> providing six primitives (escape, heading-wrap, paragraph-wrap, pending-placeholder, orientation-wrap, anchor-emit). That removes #1, the gate duplication, and most of the helper cluster in one move.</p>
+  </div>
+
+  <div class="finding orange" id="f2">
+    <h3>#2 — <code>marshal_export_data</code> is a god function (585 lines) <span class="pill orange">high</span></h3>
+    <p><code>report_data.py:180-765</code> is one linear procedure with <b>~10 distinct phases</b> (scaffold init, metadata overrides, front-matter, background+refs, methods, a ~130-line abstract-assembly block, apical-sections loop, narratives/BMD, genomics, summary+ToC+filter). It mixes request parsing, <b>disk I/O mid-function</b> (reads session cache files at <code>:389</code> and <code>:696</code>), domain math (LLE at <code>:628</code>), tree queries, and dict assembly.</p>
+    <p class="fix"><b>Fix.</b> Same shape as the <code>process_integrated</code> god function ADR-0002 targets — extract <code>_overlay_&lt;phase&gt;(data, body)</code> helpers with a golden-snapshot test as the regression oracle.</p>
+  </div>
+
+  <div class="finding orange" id="f3">
+    <h3>#3 — Duplicated full-title derivation (byte-identical) <span class="pill orange">high</span></h3>
+    <p>The study title is built in two places, copy-pasted:</p>
+    <pre><code>running_header_name = ta["forms"]["running_header"]["text"]
+full_title = (f"In Vivo Repeat Dose Biological Potency Study of "
+              f"{running_header_name} in Sprague Dawley Rats")</code></pre>
+    <p class="cite"><code>report_data.py:233-239</code> (in <code>marshal_export_data</code>) &equiv; <code>report_data.py:1016-1020</code> (in <code>scaffold_report_data</code>).</p>
+    <p>The hardcoded "&hellip;in Sprague Dawley Rats" phrasing is duplicated even though <code>strain</code> is already a configurable field — change one and the two paths diverge.</p>
+    <p class="fix"><b>Fix.</b> Extract <code>_build_full_title(ta)</code>.</p>
+  </div>
+
+  <div class="finding yellow" id="f4">
+    <h3>#4 — Duplicated genomics-cache read <span class="pill yellow">medium</span></h3>
+    <p>The same <code>sessions/&lt;dtxsid&gt;/_cache_genomics_*.json</code> glob-and-load (with silent exception-swallowing) appears at <code>report_data.py:386-395</code> and <code>:692-702</code>. Two disk reads per call; error handling can drift.</p>
+    <p class="fix"><b>Fix.</b> Extract <code>_load_genomics_cache(dtxsid)</code>.</p>
+  </div>
+
+  <div class="finding yellow" id="f5">
+    <h3>#5 — Page-number margin-box style duplicated 4&times; <span class="pill yellow">medium</span></h3>
+    <p>The exact declaration</p>
+    <pre><code>font: 11px -apple-system, ..., Arial, sans-serif;
+color: #4a5568;</code></pre>
+    <p>is repeated in three <code>@page</code> rules and the running-header builder: <code>html_generator.py:249-250</code>, <code>:267-268</code>, <code>:291-292</code>, and <code>:1095-1096</code>. Change the footer/header typeface (e.g., to match the Overleaf font) and you must hit all four.</p>
+    <p class="fix"><b>Fix.</b> A single <code>_MARGIN_BOX_FONT</code> constant. (Minor sibling: <code>_document_skeleton</code> &approx; <code>_fragment_skeleton</code>, <code>html:1100</code>/<code>:1128</code>, share shell boilerplate.)</p>
+  </div>
+
+  <h2 id="bottom">4 · Bottom line</h2>
+  <p>The architecture is <b>sound and disciplined</b> where it counts: the tree is genuinely the single source of truth, the scaffold-then-overlay pattern single-sources the report shape, and <code>render_capabilities</code> already centralizes the type&rarr;capability mapping. The cleanliness debt is concentrated in two well-understood spots — the <b>copy-pasted dual renderers</b> (finding #1, the sharpest hazard because drift is silent) and the <b><code>marshal_export_data</code> god function</b> (#2). Findings #3–#5 are quick, safe extractions.</p>
+  <div class="note"><strong>The encouraging part:</strong> finding #1 is the strongest argument <em>for</em> ADR-0003's design. A shared tree-walker + catalog-driven dispatch + per-format backend is exactly the consolidation that eliminates the renderer drift — and the catalog you'd build for it is the same catalog ADR-0003 needs. The refactor pays down the biggest debt as a side effect rather than as separate work.</div>
+
+  <footer>
+    Generated 2026-05-27 for rlm-bmdx @ <code>f4676bd</code> · rlm-code index <code>e6e5979</code> ·
+    objective structure from rlm-code (god objects / hubs / call graph); citations verified by direct read.
+  </footer>
+
+</div>
+</main>
+
+<script>
+  // Scroll-spy: highlight the sidebar link for the section currently in view.
+  (function () {
+    const links = Array.from(document.querySelectorAll('.toc a'));
+    const byId = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+    const targets = Array.from(byId.keys())
+      .map(id => document.getElementById(id))
+      .filter(Boolean);
+    let active = null;
+    const setActive = (id) => {
+      if (active === id) return;
+      links.forEach(a => a.classList.remove('active'));
+      const a = byId.get(id);
+      if (a) { a.classList.add('active'); active = id; }
+    };
+    const obs = new IntersectionObserver((entries) => {
+      // Pick the topmost section currently intersecting the upper viewport.
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible.length) setActive(visible[0].target.id);
+    }, { rootMargin: '0px 0px -75% 0px', threshold: 0 });
+    targets.forEach(t => obs.observe(t));
+  })();
+</script>
+</body>
+</html>
