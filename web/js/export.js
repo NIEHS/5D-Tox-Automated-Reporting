@@ -120,21 +120,19 @@ function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
 }
 
 /* ================================================================
- * Export .docx — sends background + apical sections to server
+ * Export — build an Overleaf-ready .tex bundle (zip) for download
  * ================================================================ */
 
 /**
  * Export the report as an Overleaf-ready zip via /api/export-overleaf-bundle.
  *
- * Uses buildExportPayload() to collect all approved section data,
- * POSTs to the server, and triggers a browser download of the
- * compiled PDF.  The server-side marshal_export_data() reshapes the
- * payload into the Typst template schema and compiles it to PDF/UA-1.
+ * Collects all approved section data with buildExportPayload(), POSTs it,
+ * and triggers a browser download of the .tex bundle (see the inline
+ * comment below for the bundle contents).  The server reshapes the payload
+ * and renders LaTeX; the author compiles the bundle on Overleaf.
  *
- * This is the single export entry point — format-agnostic by design.
- * Currently only PDF is implemented; additional formats (e.g., HTML,
- * LaTeX) can be added by routing to different endpoints based on a
- * format parameter.
+ * This is the single export entry point.  Additional output formats would
+ * be added by routing to different endpoints on a format parameter.
  */
 async function exportDocument() {
     // Export the report as an Overleaf-ready zip bundle.
@@ -144,8 +142,8 @@ async function exportDocument() {
     // and README.md (Overleaf upload instructions).  The author drops
     // the zip into Overleaf's "Upload Project" page and compiles there.
     //
-    // This replaces the Typst → PDF/UA-1 pipeline that lived here
-    // through 2026-05-19.  No PDF is produced by the server anymore.
+    // No PDF is produced by the server — the author compiles the bundle
+    // on Overleaf.
     const btn = document.getElementById('btn-export');
     if (btn) {
         btn.disabled = true;

@@ -591,7 +591,6 @@
                         <div class="version-dropdown" id="version-dropdown-bg" style="display:none"></div>
                     </span>
                     <button class="btn-action" onclick="event.stopPropagation(); copyToClipboard()">Copy</button>
-                    <button class="btn-action primary" id="btn-export" onclick="event.stopPropagation(); exportDocument()" disabled>Export to Overleaf</button>
                 </div>
             </div>
 
@@ -916,7 +915,7 @@
         <section data-nav-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
-                <button onclick="exportDocument()" class="btn-action primary" id="btn-export-overleaf">Export to Overleaf</button>
+                <button onclick="exportDocument()" class="btn-action primary" id="btn-export" disabled>Export to Overleaf</button>
             </div>
         </section>
 
