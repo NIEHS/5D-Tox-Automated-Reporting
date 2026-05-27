@@ -431,7 +431,7 @@ async function runProcessingPipeline() {
             // The server may produce a slightly different platform set
             // than validation predicted (e.g., clinical obs only appears
             // if categorical data was detected).  Update the pool state
-            // with the confirmed set so the TOC stays accurate.
+            // with the confirmed set so the navigation stays accurate.
             const processedPlatforms = sections
                 .map(s => s.platform)
                 .filter(Boolean);

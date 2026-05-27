@@ -733,8 +733,8 @@ CHEM_ID_FIELDS.forEach(id => {
 loadSettings();
 restoreChemId();
 
-// Initialize the sidebar TOC scroll spy after Alpine has had a chance
-// to initialize.  The scroll spy observes [data-toc-id] elements and
+// Initialize the sidebar navigation scroll spy after Alpine has had a chance
+// to initialize.  The scroll spy observes [data-nav-id] elements and
 // highlights the corresponding sidebar node when a section scrolls
 // into view.  We defer this slightly to ensure Alpine has processed
 // the x-show directives first.

@@ -95,7 +95,7 @@ async function runPoolValidation() {
         // readable platform name, and filter out "gene_expression"
         // (genomics has its own ready flags, not per-platform).
         // This tells the pool state machine exactly what data types
-        // are in the pool, so the TOC can enable/disable table nodes.
+        // are in the pool, so the navigation can enable/disable table nodes.
         const detectedPlatforms = [...new Set(
             Object.keys(report.coverage_matrix || {})
                 .map(key => key.includes('|') ? key.split('|')[0] : key)

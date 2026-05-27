@@ -2058,9 +2058,9 @@ header p {
 }
 
 /* ----------------------------------------------------------------
- * App layout — sidebar TOC + scrollable content pane.
+ * App layout — sidebar navigation + scrollable content pane.
  * Replaces the old tabbed view.  The sidebar provides document-first
- * navigation mirroring the NIEHS reference report TOC.  Alpine.js
+ * navigation mirroring the NIEHS reference report navigation.  Alpine.js
  * drives the sidebar's reactive state (collapse, active node,
  * section readiness).
  * ---------------------------------------------------------------- */
@@ -2088,7 +2088,7 @@ header p {
 }
 
 /* Collapsed sidebar — thin strip showing only the ▶ toggle button.
-   40px is just enough for the button; the title and TOC body are
+   40px is just enough for the button; the title and navigation body are
    hidden via x-show in the HTML so they don't need overflow:hidden. */
 .sidebar.collapsed {
     width: 40px;
@@ -2132,7 +2132,7 @@ header p {
     background: var(--c-bg-hover);
 }
 
-/* Sidebar body — scrollable TOC content area */
+/* Sidebar body — scrollable navigation content area */
 .sidebar-body {
     padding: 0.5rem 0;
 }
@@ -2358,20 +2358,20 @@ td.data-gap, th.data-gap {
     overflow-x: hidden;
 }
 
-/* TOC tree — nested list structure for navigation */
-.toc-tree, .toc-tree ul {
+/* navigation tree — nested list structure for navigation */
+.nav-tree, .nav-tree ul {
     list-style: none;
     padding: 0;
     margin: 0;
 }
 
-/* Nested TOC levels get left indentation */
-.toc-tree ul {
+/* Nested navigation levels get left indentation */
+.nav-tree ul {
     padding-left: 1rem;
 }
 
-/* TOC node — clickable navigation item */
-.toc-node, .toc-leaf {
+/* navigation node — clickable navigation item */
+.nav-node, .nav-leaf {
     display: block;
     padding: 0.3rem 0.75rem;
     cursor: pointer;
@@ -2383,25 +2383,25 @@ td.data-gap, th.data-gap {
 }
 
 /* Hover state — light background highlight */
-.toc-node:hover, .toc-leaf:hover {
+.nav-node:hover, .nav-leaf:hover {
     background: var(--c-bg-hover);
 }
 
 /* Active state — highlighted when section is in view */
-.toc-node.active, .toc-leaf.active {
+.nav-node.active, .nav-leaf.active {
     color: var(--c-primary);
     font-weight: 600;
     background: var(--c-bg-neutral);
 }
 
 /* Disabled state — grayed out when section has no data yet */
-.toc-node.disabled, .toc-leaf.disabled {
+.nav-node.disabled, .nav-leaf.disabled {
     opacity: 0.4;
     pointer-events: none;
 }
 
-/* TOC leaf — smaller text, extra left padding for table-level children */
-.toc-leaf {
+/* navigation leaf — smaller text, extra left padding for table-level children */
+.nav-leaf {
     font-size: 0.8rem;
     padding-left: 1.5rem;
 }
@@ -2416,7 +2416,7 @@ td.data-gap, th.data-gap {
     transform: rotate(90deg);
 }
 
-/* Divider between TOC sections */
+/* Divider between navigation sections */
 .sidebar-divider {
     border: none;
     border-top: 1px solid var(--c-border);

@@ -1,9 +1,9 @@
-// layout.js — Section collapse/expand, sidebar TOC navigation
+// layout.js — Section collapse/expand, sidebar navigation
 //
 // Manages the visual layout of the report page: collapsing/expanding
-// sections, and the sidebar TOC navigation.
+// sections, and the sidebar navigation.
 //
-// The sidebar works like tabs — clicking a TOC node shows only that
+// The sidebar works like tabs — clicking a navigation node shows only that
 // section in the content pane, hiding all others.  Alpine.js store
 // drives visibility via x-show="$store.app.activeSection === '...'"
 // on each content section.
@@ -41,7 +41,7 @@ function expandAll() {
 }
 
 /* ================================================================
- * Sidebar TOC Navigation — show a single section by its data-toc-id.
+ * Sidebar navigation — show a single section by its data-nav-id.
  *
  * Called from sidebar @click handlers.  Sets the Alpine store's
  * activeSection so only the matching content section is visible
@@ -53,15 +53,15 @@ function expandAll() {
  * is scrolled into view within that section.
  * ================================================================ */
 
-function navigateToNode(tocId) {
-    if (!tocId) return;
+function navigateToNode(navId) {
+    if (!navId) return;
 
-    // Every TOC node — parent, child, or leaf — sets activeSection
+    // Every navigation node — parent, child, or leaf — sets activeSection
     // directly to its own ID.  The HTML x-show expressions on each
     // content section decide what to display: parent groups show all
     // children, child IDs show only that one piece.
     if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
-        Alpine.store('app').activeSection = tocId;
+        Alpine.store('app').activeSection = navId;
     }
 
     // Hide the entire PDF preview pane on sections that have no
@@ -69,7 +69,7 @@ function navigateToNode(tocId) {
     const noPreviewSections = ['chem-id', 'data'];
     const previewPane = document.getElementById('preview-pane');
     if (previewPane) {
-        previewPane.style.display = noPreviewSections.includes(tocId) ? 'none' : '';
+        previewPane.style.display = noPreviewSections.includes(navId) ? 'none' : '';
     }
 
     // (The legacy fixed-position Report PDF viewer is retired: the side
@@ -87,22 +87,22 @@ function navigateToNode(tocId) {
     // the sections appear as soon as the user navigates to them, even
     // before content is generated.  Background manages its own .visible
     // via displayResult() so we leave it alone.
-    const _tocVisibleSections = { 'methods': 'methods-section', 'summary': 'summary-section' };
-    for (const [id, elId] of Object.entries(_tocVisibleSections)) {
+    const _navVisibleSections = { 'methods': 'methods-section', 'summary': 'summary-section' };
+    for (const [id, elId] of Object.entries(_navVisibleSections)) {
         const el = document.getElementById(elId);
-        if (el) el.classList.toggle('visible', tocId === id);
+        if (el) el.classList.toggle('visible', navId === id);
     }
 
     // --- Full report preview ---
-    // The side preview always shows the FULL paginated report; the TOC just
+    // The side preview always shows the FULL paginated report; the navigation just
     // scrolls it to the active section.  chem-id/data have no document
     // content (the preview pane is hidden for them above), so skip them.
     const NON_PREVIEW_NODES = new Set(['chem-id', 'data']);
-    if (!NON_PREVIEW_NODES.has(tocId)) {
+    if (!NON_PREVIEW_NODES.has(navId)) {
         if (typeof ensureFullPreview === 'function') ensureFullPreview();
         if (typeof scrollPreviewToNode === 'function') {
             // 'report' = the whole document → scroll to the top (cover).
-            scrollPreviewToNode(tocId === 'report' ? 'cover' : tocId);
+            scrollPreviewToNode(navId === 'report' ? 'cover' : navId);
         }
     }
 
@@ -136,8 +136,8 @@ function recompilePreview() {
     // Force a full rebuild of the preview (the Recompile button), then
     // re-scroll to the active section.
     if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
-    const tocId = Alpine?.store('app')?.activeSection;
-    if (tocId && typeof scrollPreviewToNode === 'function') scrollPreviewToNode(tocId);
+    const navId = Alpine?.store('app')?.activeSection;
+    if (navId && typeof scrollPreviewToNode === 'function') scrollPreviewToNode(navId);
 }
 
 
@@ -258,14 +258,14 @@ function _saveOrientations(map) {
 // is annotated server-side with per-node capabilities (see
 // render_capabilities.annotate_capabilities), so callers read
 // node.capabilities instead of duplicating any type→capability mapping here.
-function _findTreeNode(tocId) {
+function _findTreeNode(navId) {
     const tree = (typeof Alpine !== 'undefined' && Alpine.store('app') && Alpine.store('app').documentTree)
         || window.__DOCUMENT_TREE__;
     if (!tree) return null;
     const stack = [...tree];
     while (stack.length) {
         const n = stack.pop();
-        if (n.id === tocId) return n;
+        if (n.id === navId) return n;
         if (n.children) stack.push(...n.children);
     }
     return null;
@@ -274,31 +274,31 @@ function _findTreeNode(tocId) {
 // Rendering capabilities for a node (orientable / breakable / editable),
 // read straight off the served tree.  Empty object when the node or its
 // capabilities are unknown (the safe, no-op default).
-function nodeCapabilities(tocId) {
-    const n = _findTreeNode(tocId);
+function nodeCapabilities(navId) {
+    const n = _findTreeNode(navId);
     return (n && n.capabilities) || {};
 }
 
 // Whether the given node's page can be flipped to landscape.
-function isOrientableNode(tocId) {
-    return !!nodeCapabilities(tocId).orientable;
+function isOrientableNode(navId) {
+    return !!nodeCapabilities(navId).orientable;
 }
 
 // Toggle the active section's orientation, then rebuild + re-scroll the
 // preview so the rotation shows immediately.
 function toggleActiveOrientation() {
-    const tocId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
-    if (!tocId || !isOrientableNode(tocId)) return;
+    const navId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
+    if (!navId || !isOrientableNode(navId)) return;
     const map = getOrientations();
-    if (map[tocId] === 'landscape') {
-        delete map[tocId];                 // back to portrait (the default)
+    if (map[navId] === 'landscape') {
+        delete map[navId];                 // back to portrait (the default)
     } else {
-        map[tocId] = 'landscape';
+        map[navId] = 'landscape';
     }
     _saveOrientations(map);
     if (typeof markReportDirty === 'function') markReportDirty();
     if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
-    if (typeof scrollPreviewToNode === 'function') scrollPreviewToNode(tocId);
+    if (typeof scrollPreviewToNode === 'function') scrollPreviewToNode(navId);
     updateOrientationButton();
 }
 
@@ -308,15 +308,15 @@ function toggleActiveOrientation() {
 function updateOrientationButton() {
     const btn = document.getElementById('btn-orientation');
     if (!btn) return;
-    const tocId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
-    const orientable = tocId && isOrientableNode(tocId);
+    const navId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
+    const orientable = navId && isOrientableNode(navId);
     btn.disabled = !orientable;
     if (!orientable) {
         btn.textContent = 'Orientation';
         btn.title = 'Select a table, chart, or figure section to change its page orientation';
         return;
     }
-    const isLandscape = getOrientations()[tocId] === 'landscape';
+    const isLandscape = getOrientations()[navId] === 'landscape';
     btn.textContent = isLandscape ? '↻ Portrait' : '↻ Landscape';
     btn.title = isLandscape
         ? 'Switch this page back to portrait'
@@ -346,7 +346,7 @@ function initScrollSpy() {
  * ================================================================ */
 
 /**
- * Render the TOC sidebar, Results containers, and M&M subsection stubs
+ * Render the navigation sidebar, Results containers, and M&M subsection stubs
  * from the document tree.  Called from alpine:init (in state.js) so the
  * DOM is populated BEFORE Alpine's first walk — this means Alpine
  * naturally processes the x-show, x-data, :class, @click, and x-collapse
@@ -363,7 +363,7 @@ function initDocumentTree() {
     // (shouldn't happen, but defensive).
     const tree = window.__DOCUMENT_TREE__;
     if (!tree || tree.length === 0) {
-        console.warn('Document tree not injected — TOC will be empty');
+        console.warn('Document tree not injected — navigation will be empty');
         return;
     }
 
@@ -372,11 +372,11 @@ function initDocumentTree() {
         Alpine.store('app').documentTree = tree;
     }
 
-    // Generate the TOC sidebar, Results containers, and M&M stubs.
+    // Generate the navigation sidebar, Results containers, and M&M stubs.
     // These populate the DOM with Alpine-directive elements BEFORE
     // Alpine's first walk, so they get processed naturally.
-    if (typeof renderTocFromTree === 'function') {
-        renderTocFromTree(tree);
+    if (typeof renderNavFromTree === 'function') {
+        renderNavFromTree(tree);
     }
     if (typeof renderResultsFromTree === 'function') {
         renderResultsFromTree(tree);
@@ -392,12 +392,12 @@ function initDocumentTree() {
 
 
 /* ================================================================
- * TOC sidebar rendering — generate the entire sidebar navigation
+ * navigation sidebar rendering — generate the entire sidebar navigation
  * from the document tree, replacing ~210 lines of hardcoded HTML.
  * ================================================================ */
 
 /**
- * Generate the complete TOC sidebar from the document tree.
+ * Generate the complete navigation sidebar from the document tree.
  *
  * The tree is organized into visual groups that match the NIEHS
  * report structure:
@@ -416,8 +416,8 @@ function initDocumentTree() {
  *
  * @param {Array} tree — serialized document tree from /api/document-tree
  */
-function renderTocFromTree(tree) {
-    const container = document.getElementById('toc-tree-container');
+function renderNavFromTree(tree) {
+    const container = document.getElementById('nav-tree-container');
     if (!container) return;
     container.innerHTML = '';
 
@@ -449,13 +449,13 @@ function renderTocFromTree(tree) {
     for (const node of body) {
         if (node.id === 'methods') {
             // Methods: collapsible with deep hierarchy + "Full Section" link
-            container.appendChild(_buildMethodsTocNode(node));
+            container.appendChild(_buildMethodsNavNode(node));
         } else if (node.id === 'results') {
             // Results: collapsible (starts expanded), special child handling
-            container.appendChild(_buildResultsTocNode(node));
+            container.appendChild(_buildResultsNavNode(node));
         } else {
             // Simple body nodes (background, summary, references)
-            container.appendChild(_buildSimpleTocNode(node));
+            container.appendChild(_buildSimpleNavNode(node));
         }
     }
 
@@ -470,7 +470,7 @@ function renderTocFromTree(tree) {
         const groupLi = document.createElement('li');
         groupLi.setAttribute('x-data', '{ expanded: false }');
         groupLi.innerHTML = `
-            <a class="toc-node toc-parent" @click="expanded = !expanded">
+            <a class="nav-node nav-parent" @click="expanded = !expanded">
                 <span class="chevron" :class="{ expanded }">▸</span> Appendices
             </a>`;
         const ul = document.createElement('ul');
@@ -479,9 +479,9 @@ function renderTocFromTree(tree) {
         for (const n of shortAppendices) {
             const li = document.createElement('li');
             const label = n._prefix ? `${n._prefix.slice(-1)}. ${n._shortTitle}` : n._shortTitle;
-            li.innerHTML = `<a class="toc-leaf"
+            li.innerHTML = `<a class="nav-leaf"
                 :class="{ active: $store.app.activeSection === '${n.id}' }"
-                @click="navigateToNode('${n.id}')">${_escToc(label)}</a>`;
+                @click="navigateToNode('${n.id}')">${_escNav(label)}</a>`;
             ul.appendChild(li);
         }
         groupLi.appendChild(ul);
@@ -489,7 +489,7 @@ function renderTocFromTree(tree) {
     }
 
     // "Genomics Charts" is now in the document tree (charts DocNode under
-    // Results) — renderTocFromTree() generates its TOC entry automatically.
+    // Results) — renderNavFromTree() generates its navigation entry automatically.
     // No hardcoded extra node needed.
 }
 
@@ -501,17 +501,17 @@ function _buildCollapsibleGroup(label, nodes, startExpanded) {
     const li = document.createElement('li');
     li.setAttribute('x-data', `{ expanded: ${startExpanded} }`);
     li.innerHTML = `
-        <a class="toc-node toc-parent" @click="expanded = !expanded">
-            <span class="chevron" :class="{ expanded }">▸</span> ${_escToc(label)}
+        <a class="nav-node nav-parent" @click="expanded = !expanded">
+            <span class="chevron" :class="{ expanded }">▸</span> ${_escNav(label)}
         </a>`;
     const ul = document.createElement('ul');
     ul.setAttribute('x-show', 'expanded');
     ul.setAttribute('x-collapse', '');
     for (const node of nodes) {
         const childLi = document.createElement('li');
-        childLi.innerHTML = `<a class="toc-node"
+        childLi.innerHTML = `<a class="nav-node"
             :class="{ active: $store.app.activeSection === '${node.id}' }"
-            @click="navigateToNode('${node.id}')">${_escToc(node.title)}</a>`;
+            @click="navigateToNode('${node.id}')">${_escNav(node.title)}</a>`;
         ul.appendChild(childLi);
     }
     li.appendChild(ul);
@@ -519,10 +519,10 @@ function _buildCollapsibleGroup(label, nodes, startExpanded) {
 }
 
 /**
- * Build a simple leaf TOC node (background, summary, references).
+ * Build a simple leaf navigation node (background, summary, references).
  * Adds disabled state if the node has a ready_key.
  */
-function _buildSimpleTocNode(node) {
+function _buildSimpleNavNode(node) {
     const li = document.createElement('li');
     const readyGuard = node.ready_key
         ? `disabled: !$store.app.ready.${node.ready_key}`
@@ -530,24 +530,24 @@ function _buildSimpleTocNode(node) {
     const clickGuard = node.ready_key
         ? `$store.app.ready.${node.ready_key} && navigateToNode('${node.id}')`
         : `navigateToNode('${node.id}')`;
-    li.innerHTML = `<a class="toc-node"
+    li.innerHTML = `<a class="nav-node"
         :class="{ active: $store.app.activeSection === '${node.id}'${readyGuard ? ', ' + readyGuard : ''} }"
-        @click="${clickGuard}">${_escToc(node.title)}</a>`;
+        @click="${clickGuard}">${_escNav(node.title)}</a>`;
     return li;
 }
 
 /**
- * Build the Materials and Methods TOC node — collapsible with
+ * Build the Materials and Methods navigation node — collapsible with
  * "Full Section" link and deep H2/H3 hierarchy matching the
  * NIEHS report structure.
  */
-function _buildMethodsTocNode(node) {
+function _buildMethodsNavNode(node) {
     const li = document.createElement('li');
     li.setAttribute('x-data', '{ expanded: false }');
     li.innerHTML = `
-        <a class="toc-node toc-parent" :class="{ disabled: !$store.app.ready.methods }"
+        <a class="nav-node nav-parent" :class="{ disabled: !$store.app.ready.methods }"
            @click="expanded = !expanded">
-            <span class="chevron" :class="{ expanded }">▸</span> ${_escToc(node.title)}
+            <span class="chevron" :class="{ expanded }">▸</span> ${_escNav(node.title)}
         </a>`;
 
     const ul = document.createElement('ul');
@@ -556,7 +556,7 @@ function _buildMethodsTocNode(node) {
 
     // "Full Section" link — navigates to the parent methods section
     const fullLi = document.createElement('li');
-    fullLi.innerHTML = `<a class="toc-node"
+    fullLi.innerHTML = `<a class="nav-node"
         :class="{ active: $store.app.activeSection === 'methods', disabled: !$store.app.ready.methods }"
         @click="$store.app.ready.methods && navigateToNode('methods')">Full Section</a>`;
     ul.appendChild(fullLi);
@@ -571,7 +571,7 @@ function _buildMethodsTocNode(node) {
 }
 
 /**
- * Recursively build Methods TOC children.  Nodes with children
+ * Recursively build Methods navigation children.  Nodes with children
  * become collapsible sub-groups; leaf nodes are simple links.
  */
 function _buildMethodsChildren(parentUl, children) {
@@ -581,8 +581,8 @@ function _buildMethodsChildren(parentUl, children) {
         if (child.children && child.children.length > 0) {
             // Heading-only node with sub-sections — collapsible
             li.setAttribute('x-data', '{ ex: false }');
-            li.innerHTML = `<a class="toc-leaf toc-parent" @click="ex = !ex">
-                <span class="chevron" :class="{ expanded: ex }">▸</span> ${_escToc(child.title)}</a>`;
+            li.innerHTML = `<a class="nav-leaf nav-parent" @click="ex = !ex">
+                <span class="chevron" :class="{ expanded: ex }">▸</span> ${_escNav(child.title)}</a>`;
             const subUl = document.createElement('ul');
             subUl.setAttribute('x-show', 'ex');
             subUl.setAttribute('x-collapse', '');
@@ -590,25 +590,25 @@ function _buildMethodsChildren(parentUl, children) {
             li.appendChild(subUl);
         } else {
             // Leaf M&M subsection
-            li.innerHTML = `<a class="toc-leaf"
+            li.innerHTML = `<a class="nav-leaf"
                 :class="{ active: $store.app.activeSection === '${child.id}' }"
-                @click="navigateToNode('${child.id}')">${_escToc(child.title)}</a>`;
+                @click="navigateToNode('${child.id}')">${_escNav(child.title)}</a>`;
         }
         parentUl.appendChild(li);
     }
 }
 
 /**
- * Build the Results TOC node — collapsible (starts expanded),
+ * Build the Results navigation node — collapsible (starts expanded),
  * with special handling for narrative+tables groups that highlight
  * when any child table is active.
  */
-function _buildResultsTocNode(node) {
+function _buildResultsNavNode(node) {
     const li = document.createElement('li');
     li.setAttribute('x-data', '{ expanded: true }');
-    li.setAttribute('data-toc-group', 'results');
+    li.setAttribute('data-nav-group', 'results');
     li.innerHTML = `
-        <a class="toc-node toc-parent" @click="expanded = !expanded">
+        <a class="nav-node nav-parent" @click="expanded = !expanded">
             <span class="chevron" :class="{ expanded }">▸</span> Results
         </a>`;
 
@@ -630,9 +630,9 @@ function _buildResultsTocNode(node) {
             const allIds = collectGroupIds(child);
             const activeExpr = `[${allIds.map(id => `'${id}'`).join(',')}].includes($store.app.activeSection)`;
 
-            childLi.innerHTML = `<a class="toc-node"
+            childLi.innerHTML = `<a class="nav-node"
                 :class="{ active: ${activeExpr}${readyExpr ? ', disabled: ' + readyExpr : ''} }"
-                @click="${clickGuard}">${_escToc(child.title)}</a>`;
+                @click="${clickGuard}">${_escNav(child.title)}</a>`;
 
             // Child table nodes — each checks per-platform availability
             // so only tables with actual data are clickable.  If the
@@ -663,23 +663,23 @@ function _buildResultsTocNode(node) {
                     tClickGuard = `navigateToNode('${tableNode.id}')`;
                 }
 
-                tableLi.innerHTML = `<a class="toc-leaf"
+                tableLi.innerHTML = `<a class="nav-leaf"
                     :class="{ active: $store.app.activeSection === '${tableNode.id}'${tReadyExpr} }"
-                    @click="${tClickGuard}">${_escToc(tableLabel)}</a>`;
+                    @click="${tClickGuard}">${_escNav(tableLabel)}</a>`;
                 childUl.appendChild(tableLi);
             }
             childLi.appendChild(childUl);
         } else {
             // Leaf Results node (bmd-summary, genomics sections)
-            childLi.innerHTML = `<a class="toc-node"
+            childLi.innerHTML = `<a class="nav-node"
                 :class="{ active: $store.app.activeSection === '${child.id}'${readyExpr ? ', disabled: ' + readyExpr : ''} }"
-                @click="${clickGuard}">${_escToc(child.title)}</a>`;
+                @click="${clickGuard}">${_escNav(child.title)}</a>`;
 
             // Genomics sections get a dynamic child UL for organ/sex sub-entries
             if (child.type === 'genomics-section') {
                 const dynUl = document.createElement('ul');
-                dynUl.id = child.id === 'gene-sets' ? 'toc-gene-set-children'
-                         : child.id === 'gene-bmd'  ? 'toc-gene-bmd-children'
+                dynUl.id = child.id === 'gene-sets' ? 'nav-gene-set-children'
+                         : child.id === 'gene-bmd'  ? 'nav-gene-bmd-children'
                          : `toc-${child.id}-children`;
                 childLi.appendChild(dynUl);
             }
@@ -692,10 +692,10 @@ function _buildResultsTocNode(node) {
 }
 
 /**
- * Escape HTML entities in TOC labels to prevent XSS from
+ * Escape HTML entities in navigation labels to prevent XSS from
  * tree node titles (which come from the server).
  */
-function _escToc(text) {
+function _escNav(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -713,7 +713,7 @@ function _escToc(text) {
  *
  * Each subsection is a simple div with x-show for its node ID and
  * a heading matching the tree title.  These are the stubs that show
- * when clicking a specific M&M subsection in the TOC (e.g., "Study
+ * when clicking a specific M&M subsection in the navigation (e.g., "Study
  * Design", "Clinical Observations").
  *
  * @param {Array} tree — serialized document tree
@@ -817,7 +817,7 @@ function renderResultsFromTree(tree) {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'results-group';
         groupDiv.id = `section-${group.id}`;
-        groupDiv.setAttribute('data-toc-id', group.id);
+        groupDiv.setAttribute('data-nav-id', group.id);
         groupDiv.setAttribute('x-data', '');
         groupDiv.setAttribute('x-show', showExpr);
         groupDiv.style.display = 'none';
@@ -846,7 +846,7 @@ function renderResultsFromTree(tree) {
 
             const platDiv = document.createElement('div');
             platDiv.className = 'platform-container';
-            platDiv.setAttribute('data-toc-id', child.id);
+            platDiv.setAttribute('data-nav-id', child.id);
             platDiv.setAttribute('data-platform', child.platform);
             platDiv.setAttribute('x-show',
                 `$store.app.activeSection === '${group.id}' || $store.app.activeSection === '${child.id}'`);

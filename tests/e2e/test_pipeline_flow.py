@@ -85,7 +85,7 @@ def test_full_pipeline(page, step):
     # golden fixtures.
 
     # Wait for the Data link to become enabled in the sidebar
-    data_link = page.locator("a.toc-node", has_text="Data")
+    data_link = page.locator("a.nav-node", has_text="Data")
     try:
         page.wait_for_function(
             "Alpine.store('app').ready.data === true",

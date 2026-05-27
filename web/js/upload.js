@@ -550,11 +550,11 @@ async function confirmResetPool() {
         const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
         if (geneBmdCards) geneBmdCards.innerHTML = '';
 
-        // Clear dynamic TOC children in the sidebar
-        const tocGeneSets = document.getElementById('toc-gene-set-children');
-        if (tocGeneSets) tocGeneSets.innerHTML = '';
-        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
-        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
+        // Clear dynamic navigation children in the sidebar
+        const navGeneSets = document.getElementById('nav-gene-set-children');
+        if (navGeneSets) navGeneSets.innerHTML = '';
+        const navGeneBmd = document.getElementById('nav-gene-bmd-children');
+        if (navGeneBmd) navGeneBmd.innerHTML = '';
 
         // Clear charts sub-tabs and chart containers
         const chartsSubTabs = document.getElementById('charts-sub-tabs');
@@ -585,7 +585,7 @@ async function confirmResetPool() {
             ready.geneBmd = false;
             ready.methods = false;
             ready.summary = false;
-            // Clear per-platform flags so TOC table nodes disable
+            // Clear per-platform flags so navigation table nodes disable
             for (const key of Object.keys(ready.platform || {})) {
                 ready.platform[key] = false;
             }
@@ -685,10 +685,10 @@ async function confirmResetSession() {
         if (geneSetCards) geneSetCards.innerHTML = '';
         const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
         if (geneBmdCards) geneBmdCards.innerHTML = '';
-        const tocGeneSets = document.getElementById('toc-gene-set-children');
-        if (tocGeneSets) tocGeneSets.innerHTML = '';
-        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
-        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
+        const navGeneSets = document.getElementById('nav-gene-set-children');
+        if (navGeneSets) navGeneSets.innerHTML = '';
+        const navGeneBmd = document.getElementById('nav-gene-bmd-children');
+        if (navGeneBmd) navGeneBmd.innerHTML = '';
         for (const ta of document.querySelectorAll('.unified-narrative')) {
             ta.value = '';
         }
@@ -713,7 +713,7 @@ async function confirmResetSession() {
             ready.geneBmd = false;
             ready.methods = false;
             ready.summary = false;
-            // Clear per-platform flags so TOC table nodes disable
+            // Clear per-platform flags so navigation table nodes disable
             for (const key of Object.keys(ready.platform || {})) {
                 ready.platform[key] = false;
             }

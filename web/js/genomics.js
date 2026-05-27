@@ -39,7 +39,7 @@
  * subsequent population.  Idempotent — called once per
  * {organ, sex}, hits the already-created panels on the second call.
  *
- * Also adds a per-organ leaf to the sidebar TOC under the Gene Set
+ * Also adds a per-organ leaf to the sidebar navigation under the Gene Set
  * and Gene BMD parents.
  *
  * @param {string} organ — organ name (lowercase)
@@ -106,23 +106,23 @@ function ensureGenomicsOrganPanels(organ) {
     const geneSetPanel = makePanel('genomics-gene-set-cards', 'gene-set', organKey, organTitle);
     const geneBmdPanel = makePanel('genomics-gene-bmd-cards', 'gene-bmd', organKey, organTitle);
 
-    // --- Sidebar TOC leaves (one per organ, deduped) ---
+    // --- Sidebar navigation leaves (one per organ, deduped) ---
     // Same logic as before: each organ gets a single leaf under both
     // gene-set and gene-bmd parents.  Data arrives per-{organ,sex} so
     // this runs twice per organ; the dedup check skips the second.
-    const tocGeneSetList = document.getElementById('toc-gene-set-children');
-    if (tocGeneSetList && !tocGeneSetList.querySelector(`[data-organ="${organKey}"]`)) {
+    const navGeneSetList = document.getElementById('nav-gene-set-children');
+    if (navGeneSetList && !navGeneSetList.querySelector(`[data-organ="${organKey}"]`)) {
         const li = document.createElement('li');
         li.setAttribute('data-organ', organKey);
-        li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-set-${organKey}')">${organTitle}</a>`;
-        tocGeneSetList.appendChild(li);
+        li.innerHTML = `<a class="nav-leaf" onclick="navigateToNode('gene-set-${organKey}')">${organTitle}</a>`;
+        navGeneSetList.appendChild(li);
     }
-    const tocGeneBmdList = document.getElementById('toc-gene-bmd-children');
-    if (tocGeneBmdList && !tocGeneBmdList.querySelector(`[data-organ="${organKey}"]`)) {
+    const navGeneBmdList = document.getElementById('nav-gene-bmd-children');
+    if (navGeneBmdList && !navGeneBmdList.querySelector(`[data-organ="${organKey}"]`)) {
         const li = document.createElement('li');
         li.setAttribute('data-organ', organKey);
-        li.innerHTML = `<a class="toc-leaf" onclick="navigateToNode('gene-bmd-${organKey}')">${organTitle}</a>`;
-        tocGeneBmdList.appendChild(li);
+        li.innerHTML = `<a class="nav-leaf" onclick="navigateToNode('gene-bmd-${organKey}')">${organTitle}</a>`;
+        navGeneBmdList.appendChild(li);
     }
 
     // Set Alpine store flags so sections become visible

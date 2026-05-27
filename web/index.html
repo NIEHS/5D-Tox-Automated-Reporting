@@ -6,11 +6,11 @@
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/style.css?v=14">
-    <!-- Alpine.js — lightweight reactive framework for sidebar TOC navigation.
+    <!-- Alpine.js — lightweight reactive framework for sidebar navigation.
          Loaded via CDN with defer so it initializes after our state.js registers
          the Alpine store via 'alpine:init' event.  No build step needed.
          Alpine.js Collapse plugin enables smooth expand/collapse transitions
-         on the TOC tree children (x-collapse directive). -->
+         on the navigation tree children (x-collapse directive). -->
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -257,13 +257,13 @@
     </div>
 
     <!-- App layout — flex container with sidebar + content pane.
-         The sidebar provides TOC-based navigation mirroring the NIEHS
+         The sidebar provides navigation mirroring the NIEHS
          reference report structure.  Alpine.js drives the sidebar's
          reactive state (collapse, active node, section readiness). -->
     <div class="app-layout" id="app-container" style="display:none;">
 
         <!-- ================================================================
-             Sidebar TOC Navigation — document-first navigation tree.
+             Sidebar navigation — document-first navigation tree.
              Mirrors the output document's table of contents.
              Sections gray out when not yet ready (no data).
              Persists collapsed state to localStorage.
@@ -278,25 +278,25 @@
             <div class="sidebar-body" x-show="!$store.app.sidebarCollapsed">
                 <!-- App tools — Chemical ID and Data management -->
                 <div class="sidebar-section">
-                    <a class="toc-node" :class="{ active: $store.app.activeSection === 'chem-id' }"
+                    <a class="nav-node" :class="{ active: $store.app.activeSection === 'chem-id' }"
                        @click="navigateToNode('chem-id')">Chemical ID</a>
-                    <a class="toc-node" :class="{ active: $store.app.activeSection === 'data',
+                    <a class="nav-node" :class="{ active: $store.app.activeSection === 'data',
                                                    disabled: !$store.app.ready.data }"
                        @click="$store.app.ready.data && navigateToNode('data')">Data</a>
                 </div>
 
                 <hr class="sidebar-divider">
 
-                <!-- TOC tree — generated dynamically from the document tree
-                     by renderTocFromTree() in layout.js.  This replaces ~210
+                <!-- navigation tree — generated dynamically from the document tree
+                     by renderNavFromTree() in layout.js.  This replaces ~210
                      lines of hardcoded HTML with a single container.  The tree
                      is fetched from /api/document-tree on page load. -->
-                <ul class="toc-tree" id="toc-tree-container">
-                    <!-- Populated by renderTocFromTree() after tree fetch -->
+                <ul class="nav-tree" id="nav-tree-container">
+                    <!-- Populated by renderNavFromTree() after tree fetch -->
                 </ul>
 
                 <hr class="sidebar-divider">
-                <a class="toc-node" :class="{ active: $store.app.activeSection === 'report' }"
+                <a class="nav-node" :class="{ active: $store.app.activeSection === 'report' }"
                    @click="navigateToNode('report')">Report Preview</a>
             </div>
         </nav>
@@ -307,7 +307,7 @@
              for automatic show/hide.
              ================================================================ -->
         <!-- ================================================================
-             Preview Pane — persistent, auto-renders LaTeX→HTML for active TOC node.
+             Preview Pane — persistent, auto-renders LaTeX→HTML for active navigation node.
              Positioned between sidebar and content drawer.  Open by default.
              ================================================================ -->
         <div class="preview-pane" id="preview-pane" style="display:none">
@@ -529,7 +529,7 @@
         </div>
 
         <!-- Chemical ID Form -->
-        <div class="form-section" id="chem-id-section" data-collapsible data-toc-id="chem-id"
+        <div class="form-section" id="chem-id-section" data-collapsible data-nav-id="chem-id"
              x-data x-show="$store.app.activeSection === 'chem-id'">
             <h2 class="section-toggle" onclick="toggleSection(this)">Chemical Identification</h2>
             <div class="section-body">
@@ -575,7 +575,7 @@
         </div>
 
         <!-- Output panel — background paragraphs + references -->
-        <div class="output-section" id="output-section" data-collapsible data-toc-id="background"
+        <div class="output-section" id="output-section" data-collapsible data-nav-id="background"
              x-data x-show="$store.app.activeSection === 'background'">
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Generated Background</h2>
@@ -627,7 +627,7 @@
         <!-- Data tab — integrated data previewer + collapsible data pool.
              Hidden until chemical identity is resolved.  Alpine x-show
              drives visibility from the store's ready.data flag. -->
-        <div id="data-tab-section" data-toc-id="data" x-data x-show="$store.app.activeSection === 'data'" style="display:none;">
+        <div id="data-tab-section" data-nav-id="data" x-data x-show="$store.app.activeSection === 'data'" style="display:none;">
 
             <!-- Integrated Data Previewer — shows the fully integrated dataset
                  at a glance: experiments, domains, probe counts, gene expression
@@ -744,12 +744,12 @@
              Split from the old monolithic "Genomics" tab into its own
              document-structure section.  Per-organ containers are created
              dynamically by genomics.js after processing. -->
-        <!-- x-show matches both the parent TOC node ('gene-sets') and
+        <!-- x-show matches both the parent navigation node ('gene-sets') and
              any per-organ sub-node ('gene-set-liver', 'gene-set-kidney')
              so clicking an organ leaf in the sidebar keeps the section
              visible while still filtering the PDF preview to that
              organ via report_data._apply_section_filter. -->
-        <div class="results-group" id="section-gene-sets" data-toc-id="gene-sets"
+        <div class="results-group" id="section-gene-sets" data-nav-id="gene-sets"
              x-data x-show="$store.app.activeSection === 'gene-sets' || ($store.app.activeSection || '').startsWith('gene-set-')"
              style="display:none;">
             <h2>Gene Set Benchmark Dose Analysis</h2>
@@ -764,10 +764,10 @@
 
         <!-- Gene BMD Analysis — individual gene tables per organ×sex.
              The second half of the old "Genomics" tab, now its own section
-             in the document TOC. -->
+             in the document navigation. -->
         <!-- Same pattern as gene-sets above — match parent + per-organ
              sub-nodes so organ navigation keeps the section visible. -->
-        <div class="results-group" id="section-gene-bmd" data-toc-id="gene-bmd"
+        <div class="results-group" id="section-gene-bmd" data-nav-id="gene-bmd"
              x-data x-show="$store.app.activeSection === 'gene-bmd' || ($store.app.activeSection || '').startsWith('gene-bmd-')"
              style="display:none;">
             <h2>Gene Benchmark Dose Analysis</h2>
@@ -800,7 +800,7 @@
 
         <!-- BMD Summary — merged section with both BMDExpress 3 and BMDS tables.
              Alpine x-show on each sub-section allows them to appear independently. -->
-        <div class="results-group" id="section-bmd-summary" data-toc-id="bmd-summary"
+        <div class="results-group" id="section-bmd-summary" data-nav-id="bmd-summary"
              x-data x-show="$store.app.activeSection === 'bmd-summary'" style="display:none;">
             <h2>Apical Endpoint Benchmark Dose Summary</h2>
 
@@ -835,7 +835,7 @@
         </div>
 
         <!-- Materials and Methods section (hidden until background approved) -->
-        <div class="output-section collapsed" id="methods-section" data-toc-id="methods"
+        <div class="output-section collapsed" id="methods-section" data-nav-id="methods"
              x-data x-show="$store.app.activeSection === 'methods'" style="display:none;" data-collapsible>
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Materials and Methods</h2>
@@ -857,13 +857,13 @@
              Generated dynamically from the document tree by
              renderMethodsSubsectionsFromTree() in layout.js.
              Each subsection shows its heading when navigated to
-             via the TOC sidebar. -->
+             via the navigation sidebar. -->
         <div id="methods-subsections-container">
             <!-- Populated by renderMethodsSubsectionsFromTree() -->
         </div>
 
         <!-- Summary section (hidden until other sections approved) -->
-        <div class="output-section collapsed" id="summary-section" data-toc-id="summary"
+        <div class="output-section collapsed" id="summary-section" data-nav-id="summary"
              x-data x-show="$store.app.activeSection === 'summary'" style="display:none;" data-collapsible>
             <div class="output-header" onclick="toggleSection(this)">
                 <h2>Summary</h2>
@@ -913,7 +913,7 @@
              Preview" nav entry, which also scrolls that pane to the cover.
              (The old embedded PDF viewer was removed — the side pane is the
              single preview surface now.) -->
-        <section data-toc-id="report" id="report-view-section"
+        <section data-nav-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
                 <button onclick="exportDocument()" class="btn-action primary" id="btn-export-overleaf">Export to Overleaf</button>

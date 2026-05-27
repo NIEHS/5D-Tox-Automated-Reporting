@@ -1031,7 +1031,7 @@ async function buildExportPayload() {
  *
  * Per the generate-then-polish-in-Overleaf model, the side preview pane
  * always shows the FULL paginated report (never a per-section fragment).
- * The TOC scrolls it to the active section via scrollPreviewToNode().
+ * The navigation scrolls it to the active section via scrollPreviewToNode().
  * ================================================================ */
 
 // Guard against overlapping compiles (a recompile fired while one is
@@ -1043,7 +1043,7 @@ let _fullPreviewRendering = false;
  * (#preview-pdf-frame).
  *
  * Guarded by reportDirty: once rendered, navigating between sections does
- * NOT recompile -- the TOC just scrolls the existing preview.  Pass
+ * NOT recompile -- the navigation just scrolls the existing preview.  Pass
  * force=true (the Recompile button) to rebuild regardless.  markReportDirty()
  * (called on every approve/unapprove) flips reportDirty so the next
  * navigation rebuilds with fresh content.
@@ -1088,23 +1088,23 @@ async function ensureFullPreview(force = false) {
 }
 
 /**
- * Scroll the full preview to a TOC node's section anchor.
+ * Scroll the full preview to a navigation node's section anchor.
  *
  * html_generator emits a zero-height <span id="sec-<nodeId>"> before each
  * node (see _walk).  Poll briefly for it because Paged.js paginates
  * asynchronously: right after a (re)compile the anchor may not exist yet.
  * The srcdoc iframe is same-origin, so contentDocument access is allowed.
  *
- * @param {string} tocId - the TOC node ID to scroll to
+ * @param {string} navId - the navigation node ID to scroll to
  */
-function scrollPreviewToNode(tocId) {
+function scrollPreviewToNode(navId) {
     const frame = document.getElementById('preview-pdf-frame');
-    if (!frame || !tocId) return;
+    if (!frame || !navId) return;
     let tries = 0;
     const MAX_TRIES = 50;  // ~5s; covers a from-scratch Paged.js render
     const tick = () => {
         const doc = frame.contentDocument;
-        const el = doc && doc.getElementById('sec-' + tocId);
+        const el = doc && doc.getElementById('sec-' + navId);
         if (el) {
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;

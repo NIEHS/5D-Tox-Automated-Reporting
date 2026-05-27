@@ -76,7 +76,7 @@ document.addEventListener('alpine:init', () => {
 
         // --- Section readiness flags ---
         // Each flag indicates whether a section has data and should be visible.
-        // Sidebar TOC nodes bind to these to toggle .disabled styling.
+        // Sidebar navigation nodes bind to these to toggle .disabled styling.
         // Content sections bind via x-show for automatic show/hide.
         ready: {
             chemId:          true,   // always visible — the identity form
@@ -94,7 +94,7 @@ document.addEventListener('alpine:init', () => {
             report:          true,   // always in DOM (lazy-rendered on navigate)
 
             // --- Per-platform availability flags ---
-            // Drives individual TOC table node enable/disable.  Synced
+            // Drives individual navigation table node enable/disable.  Synced
             // from the pool slice's `platforms` Set by a subscriber in
             // pool_state.js.  Pre-populated here with all known platform
             // strings set to false so Alpine can track them reactively
@@ -124,7 +124,7 @@ document.addEventListener('alpine:init', () => {
 
         // --- Currently active section ---
         // Only the section matching this ID is visible in the content pane.
-        // Set by navigateToNode() on sidebar click.  Sidebar TOC nodes
+        // Set by navigateToNode() on sidebar click.  Sidebar navigation nodes
         // bind to this for .active highlighting.  Defaults to 'chem-id'
         // so the Chemical ID form is visible on page load.
         activeSection: 'chem-id',
@@ -149,7 +149,7 @@ document.addEventListener('alpine:init', () => {
         // Injected by the server as window.__DOCUMENT_TREE__ in <head>.
         // This is the serialized form of document_tree.py's DOCUMENT_TREE
         // — the single source of truth for the report's organization.
-        // The frontend derives TOC sidebar, Results containers, platform-
+        // The frontend derives navigation sidebar, Results containers, platform-
         // to-section routing, and domain ordering from this tree instead
         // of hardcoding them.
         documentTree: window.__DOCUMENT_TREE__ || [],

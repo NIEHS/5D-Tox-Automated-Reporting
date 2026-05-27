@@ -245,15 +245,15 @@ async function applySettings() {
         // when cards are created — no explicit show() needed here.
 
         // --- Rebuild genomics cards ---
-        // Clear the genomics card containers and TOC children
+        // Clear the genomics card containers and navigation children
         const geneSetCards = document.getElementById('genomics-gene-set-cards');
         if (geneSetCards) geneSetCards.innerHTML = '';
         const geneBmdCards = document.getElementById('genomics-gene-bmd-cards');
         if (geneBmdCards) geneBmdCards.innerHTML = '';
-        const tocGeneSets = document.getElementById('toc-gene-set-children');
-        if (tocGeneSets) tocGeneSets.innerHTML = '';
-        const tocGeneBmd = document.getElementById('toc-gene-bmd-children');
-        if (tocGeneBmd) tocGeneBmd.innerHTML = '';
+        const navGeneSets = document.getElementById('nav-gene-set-children');
+        if (navGeneSets) navGeneSets.innerHTML = '';
+        const navGeneBmd = document.getElementById('nav-gene-bmd-children');
+        if (navGeneBmd) navGeneBmd.innerHTML = '';
         for (const key of Object.keys(genomicsResults)) {
             delete genomicsResults[key];
         }

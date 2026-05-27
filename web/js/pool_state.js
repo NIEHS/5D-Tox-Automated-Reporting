@@ -203,7 +203,7 @@ const POOL_PHASES = {
  * populated at validation time (from coverage_matrix), confirmed at
  * processing time (from actual sections), and cleared on reset.
  * An AppStore subscriber syncs these into Alpine's ready.platform
- * flags so the TOC can enable/disable individual table nodes.
+ * flags so the navigation can enable/disable individual table nodes.
  *
  * @param {Object} state   — Current pool slice state
  * @param {string} verb    — Action verb
@@ -448,7 +448,7 @@ function computeSectionCompleteness(coverageMatrix) {
  * A group node (narrative+tables) is complete only if ALL its child
  * table nodes are complete.
  *
- * @param {string} nodeId       — The TOC node ID (e.g., "animal-condition",
+ * @param {string} nodeId       — The navigation node ID (e.g., "animal-condition",
  *                                "table-body-weight")
  * @param {Map} completeness    — Per-platform completeness from
  *                                computeSectionCompleteness()
@@ -578,7 +578,7 @@ AppStore.subscribe('pool', (poolState) => {
 // --- Sync pool platforms → Alpine ready.platform flags ---
 // This subscriber bridges the AppStore (source of truth for which
 // platforms have data) to the Alpine store (reactive UI bindings).
-// TOC table nodes bind to $store.app.ready.platform['Body Weight']
+// navigation table nodes bind to $store.app.ready.platform['Body Weight']
 // to enable/disable themselves individually.  Group-level ready.*
 // flags (animalCondition, clinicalPath, etc.) are unchanged — they
 // still drive the x-show on group containers.
