@@ -322,6 +322,48 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         data["methods"] = {"sections": [], "paragraphs": methods_paragraphs}
     # else: scaffold's heading-only methods structure remains
 
+    _overlay_abstract(data, body)
+    _overlay_apical_sections(data, body)
+    _overlay_unified_and_bmd(data, body)
+    _overlay_genomics(data, body)
+
+    # Summary
+    summary_paragraphs = body.get("summary_paragraphs", [])
+    if summary_paragraphs:
+        data["summary"] = {"paragraphs": summary_paragraphs}
+
+    # Inject the document structure tree so the Typst template can walk
+    # it for heading hierarchy, table numbering, and section ordering.
+    from document_tree import serialize_tree, find_node, is_leaf_table
+    data["document_tree"] = serialize_tree()
+
+    # Build manual TOC entries from the document tree BEFORE the section
+    # filter strips content.  This lets the tables-list preview render a
+    # complete Table of Contents with ready/placeholder styling, even
+    # though the body headings are stripped from the compiled document.
+    toc_entries, table_entries = _build_toc_entries(data)
+    data["toc_entries"] = toc_entries
+    data["table_entries"] = table_entries
+
+    # Apply section filter for PDF previews.
+    # Uses the document tree to determine which data keys and platforms
+    # belong to the requested TOC node — no hardcoded maps.
+    if section_filter:
+        _apply_section_filter(data, section_filter)
+        # Tell the Typst template whether this is a leaf table preview
+        # (no headings, just the table) vs a group/section preview.
+        node = find_node(section_filter)
+        if node and is_leaf_table(node):
+            data["leaf_preview"] = True
+
+    return data
+
+
+
+def _overlay_abstract(data: dict, body: dict) -> None:
+    """Overlay the abstract sections (Methods/Background/Results/Summary), derived deterministically from MethodsContext + the BMD summary."""
+    methods_data = body.get("methods_data")
+
     # Abstract → Methods + Results paragraphs (deterministic, derived
     # from MethodsContext + BMD summary).
     #
@@ -457,6 +499,10 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 sections.append({"label": label, "text": text})
         data["abstract"] = {"sections": sections}
 
+
+def _overlay_apical_sections(data: dict, body: dict) -> None:
+    """Overlay the apical endpoint sections: footnotes, tree-derived table numbers, document-order sort, and per-row canonicalization."""
+    chemical_name = body.get("chemical_name", "Chemical")
     # Apical endpoint sections
     apical_sections = body.get("apical_sections", [])
     if apical_sections:
@@ -563,6 +609,10 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
             for s in data["apical_sections"]
         ]
 
+
+def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
+    """Overlay unified group narratives, internal dose, and the apical BMD summary table plus its intro/LLE paragraph block."""
+    methods_data = body.get("methods_data")
     # Unified narratives — group-level prose spanning multiple platform tables.
     # The NIEHS reference has one narrative for "Animal Condition, Body Weights,
     # and Organ Weights" and one for "Clinical Pathology", rendered before their
@@ -677,6 +727,10 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         if all_paras:
             data["bmd_summary"]["paragraphs"] = all_paras
 
+
+def _overlay_genomics(data: dict, body: dict) -> None:
+    """Overlay genomics gene-set/gene sections and auto-populate the gene-set / gene body narratives."""
+    methods_data = body.get("methods_data")
     # Genomics
     genomics = body.get("genomics_sections", [])
     if genomics:
@@ -745,37 +799,6 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                 data["gene_narrative"] = narratives["gene_narrative"]
         except Exception as e:
             logging.exception("Failed to build genomics body narratives: %s", e)
-
-    # Summary
-    summary_paragraphs = body.get("summary_paragraphs", [])
-    if summary_paragraphs:
-        data["summary"] = {"paragraphs": summary_paragraphs}
-
-    # Inject the document structure tree so the Typst template can walk
-    # it for heading hierarchy, table numbering, and section ordering.
-    from document_tree import serialize_tree, find_node, is_leaf_table
-    data["document_tree"] = serialize_tree()
-
-    # Build manual TOC entries from the document tree BEFORE the section
-    # filter strips content.  This lets the tables-list preview render a
-    # complete Table of Contents with ready/placeholder styling, even
-    # though the body headings are stripped from the compiled document.
-    toc_entries, table_entries = _build_toc_entries(data)
-    data["toc_entries"] = toc_entries
-    data["table_entries"] = table_entries
-
-    # Apply section filter for PDF previews.
-    # Uses the document tree to determine which data keys and platforms
-    # belong to the requested TOC node — no hardcoded maps.
-    if section_filter:
-        _apply_section_filter(data, section_filter)
-        # Tell the Typst template whether this is a leaf table preview
-        # (no headings, just the table) vs a group/section preview.
-        node = find_node(section_filter)
-        if node and is_leaf_table(node):
-            data["leaf_preview"] = True
-
-    return data
 
 
 def build_test_article_forms(
