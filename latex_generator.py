@@ -71,7 +71,8 @@ from document_tree import (
     DocNode,
     find_node,
 )
-from render_capabilities import landscape_requested
+from render_capabilities import landscape_requested, content_item_landscape_requested
+from genomics_content import genomics_content_plan
 
 
 # ---------------------------------------------------------------------------
@@ -755,29 +756,46 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         organ = (entry.get("organ") or "").capitalize()
         sex = (entry.get("sex") or "").capitalize()
         sub_title = f"{organ}, {sex}"
-        sub_heading = f"\\subsubsection{{{_escape_latex(sub_title)}}}"
-        blocks.append(sub_heading)
+        blocks.append(f"\\subsubsection{{{_escape_latex(sub_title)}}}")
 
-        # Per-organ-sex narrative, when present.
-        nar = entry.get("narrative") or []
-        if nar:
-            blocks.append(_render_paragraphs(nar))
+        # Each (organ, sex) block is an ordered list of sub-addressable content
+        # items (ADR-0003 Phase 4); the table is independently orientable, so a
+        # wide gene table can flip landscape on its own via the composite
+        # "(component, content-item)" orientation key.  Order/identity come from
+        # the shared content plan; this loop reproduces the former monolith's
+        # output when no per-item orientation is set.
+        for item in genomics_content_plan(entry, role):
+            chunk = _render_genomics_item(entry, role, item["part"])
+            if not chunk:
+                continue
+            if item["orientable"] and content_item_landscape_requested(
+                node.id, item["item_id"], data.get("orientations")
+            ):
+                chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+            blocks.append(chunk)
 
-        # Table of gene sets or genes.
-        if role == "gene_set":
-            blocks.append(_render_gene_set_table(entry))
-        else:
-            blocks.append(_render_gene_table(entry))
+    return "\n\n".join(b for b in blocks if b)
 
-        # Descriptions list (definitions of each gene set or gene).
+
+def _render_genomics_item(entry: dict, role: str, part: str) -> str:
+    """
+    Render one content item of a genomics (organ, sex) block — the payload for
+    a `part` named by genomics_content.genomics_content_plan.
+    """
+    if part == "narrative":
+        return _render_paragraphs(entry.get("narrative") or [])
+    if part == "table":
+        return (
+            _render_gene_set_table(entry) if role == "gene_set"
+            else _render_gene_table(entry)
+        )
+    if part == "descriptions":
         descriptions = (
             entry.get("go_descriptions") if role == "gene_set"
             else entry.get("gene_descriptions")
         ) or []
-        if descriptions:
-            blocks.append(_render_description_list(descriptions))
-
-    return "\n\n".join(b for b in blocks if b)
+        return _render_description_list(descriptions)
+    return ""
 
 
 def _render_gene_set_table(entry: dict) -> str:

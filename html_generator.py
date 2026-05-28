@@ -55,7 +55,8 @@ from document_tree import (
     DocNode,
     find_node,
 )
-from render_capabilities import landscape_requested
+from render_capabilities import landscape_requested, content_item_landscape_requested
+from genomics_content import genomics_content_plan
 
 
 # ---------------------------------------------------------------------------
@@ -834,21 +835,40 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         organ = (entry.get("organ") or "").capitalize()
         sex = (entry.get("sex") or "").capitalize()
         blocks.append(f"<h4>{_esc(f'{organ}, {sex}')}</h4>")
-        narrative = entry.get("narrative") or []
-        if narrative:
-            blocks.append(_render_paragraphs(narrative))
-        if role == "gene_set":
-            blocks.append(_render_gene_set_table(entry))
-        else:
-            blocks.append(_render_gene_table(entry))
+        # Ordered, sub-addressable content items (ADR-0003 Phase 4); the table
+        # is independently orientable via the composite "(component, item)" key.
+        for item in genomics_content_plan(entry, role):
+            chunk = _render_genomics_item(entry, role, item["part"])
+            if not chunk:
+                continue
+            if item["orientable"] and content_item_landscape_requested(
+                node.id, item["item_id"], data.get("orientations")
+            ):
+                chunk = f'<div class="landscape-block">{chunk}</div>'
+            blocks.append(chunk)
+
+    return "\n".join(b for b in blocks if b)
+
+
+def _render_genomics_item(entry: dict, role: str, part: str) -> str:
+    """
+    Render one content item of a genomics (organ, sex) block — the payload for
+    a `part` named by genomics_content.genomics_content_plan.
+    """
+    if part == "narrative":
+        return _render_paragraphs(entry.get("narrative") or [])
+    if part == "table":
+        return (
+            _render_gene_set_table(entry) if role == "gene_set"
+            else _render_gene_table(entry)
+        )
+    if part == "descriptions":
         descriptions = (
             entry.get("go_descriptions") if role == "gene_set"
             else entry.get("gene_descriptions")
         ) or []
-        if descriptions:
-            blocks.append(_render_description_list(descriptions))
-
-    return "\n".join(b for b in blocks if b)
+        return _render_description_list(descriptions)
+    return ""
 
 
 def _render_gene_set_table(entry: dict) -> str:

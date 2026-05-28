@@ -322,6 +322,26 @@ def landscape_requested(
     )
 
 
+def content_item_landscape_requested(
+    component_id: str, item_id: str, orientations: dict | None
+) -> bool:
+    """
+    Whether a specific content item INSIDE a component should render landscape
+    (ADR-0003 Phase 4, sub-addressable orientation).
+
+    The orientation overlay may be keyed by the composite (component_id,
+    content_item_id) — encoded as the string "component_id::content_item_id" —
+    so an individual table or chart inside a section flips independently of the
+    whole section.  Plain node-id keys continue to orient an entire node via
+    landscape_requested(); the two key shapes coexist in one overlay map.
+
+    There is no per-type capability gate here: the caller (the genomics
+    renderer) only consults this for content items its content plan marks
+    orientable, so orientability is decided by the plan, not the node type.
+    """
+    return (orientations or {}).get(f"{component_id}::{item_id}") == "landscape"
+
+
 def annotate_capabilities(nodes: list[dict]) -> list[dict]:
     """
     Walk a *serialized* tree (the list-of-dicts from serialize_tree) and add
