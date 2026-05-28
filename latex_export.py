@@ -392,6 +392,12 @@ def load_session_data(
                 # can pull them from the same blob.
                 "references": bg.get("references", []),
             }
+        # References: the LLM background pass extracts a numbered reference
+        # list (each item already prefixed "[1] ...").  Surface it in the
+        # References section — a plain narrative node whose handler renders
+        # data["references"]["paragraphs"], one reference per paragraph.
+        if bg.get("references"):
+            data["references"] = {"paragraphs": bg["references"]}
         abs_bg = (bg.get("abstract_background") or "").strip()
         if abs_bg and isinstance(data.get("abstract"), dict):
             sections = data["abstract"].setdefault("sections", [])
