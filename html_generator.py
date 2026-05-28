@@ -838,7 +838,7 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         # Ordered, sub-addressable content items (ADR-0003 Phase 4); the table
         # is independently orientable via the composite "(component, item)" key.
         for item in genomics_content_plan(entry, role):
-            chunk = _render_genomics_item(entry, role, item["part"])
+            chunk = _render_genomics_item(entry, role, item)
             if not chunk:
                 continue
             if item["orientable"] and content_item_landscape_requested(
@@ -850,17 +850,34 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     return "\n".join(b for b in blocks if b)
 
 
-def _render_genomics_item(entry: dict, role: str, part: str) -> str:
+def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
     """
-    Render one content item of a genomics (organ, sex) block — the payload for
-    a `part` named by genomics_content.genomics_content_plan.
+    Render one content item of a genomics (organ, sex) block (see
+    genomics_content.genomics_content_plan for the item shape).  Charts embed
+    the cached PNG inline as a data URI — no separate file, unlike the LaTeX
+    path which references figures/<filename>.
     """
+    part = item.get("part")
     if part == "narrative":
         return _render_paragraphs(entry.get("narrative") or [])
     if part == "table":
         return (
             _render_gene_set_table(entry) if role == "gene_set"
             else _render_gene_table(entry)
+        )
+    if part == "chart":
+        chart = next(
+            (c for c in (entry.get("charts") or []) if c.get("key") == item.get("chart_key")),
+            None,
+        )
+        if not chart:
+            return ""
+        png = chart.get("png_b64", "")
+        src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
+        caption = _esc(chart.get("caption", ""))
+        return (
+            f'<figure class="genomics-chart"><img src="{src}" alt="{caption}">'
+            f"<figcaption>{caption}</figcaption></figure>"
         )
     if part == "descriptions":
         descriptions = (

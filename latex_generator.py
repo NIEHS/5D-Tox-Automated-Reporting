@@ -765,7 +765,7 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         # the shared content plan; this loop reproduces the former monolith's
         # output when no per-item orientation is set.
         for item in genomics_content_plan(entry, role):
-            chunk = _render_genomics_item(entry, role, item["part"])
+            chunk = _render_genomics_item(entry, role, item)
             if not chunk:
                 continue
             if item["orientable"] and content_item_landscape_requested(
@@ -777,11 +777,12 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     return "\n\n".join(b for b in blocks if b)
 
 
-def _render_genomics_item(entry: dict, role: str, part: str) -> str:
+def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
     """
-    Render one content item of a genomics (organ, sex) block — the payload for
-    a `part` named by genomics_content.genomics_content_plan.
+    Render one content item of a genomics (organ, sex) block (see
+    genomics_content.genomics_content_plan for the item shape).
     """
+    part = item.get("part")
     if part == "narrative":
         return _render_paragraphs(entry.get("narrative") or [])
     if part == "table":
@@ -789,6 +790,8 @@ def _render_genomics_item(entry: dict, role: str, part: str) -> str:
             _render_gene_set_table(entry) if role == "gene_set"
             else _render_gene_table(entry)
         )
+    if part == "chart":
+        return _render_genomics_chart(entry, item.get("chart_key"))
     if part == "descriptions":
         descriptions = (
             entry.get("go_descriptions") if role == "gene_set"
@@ -796,6 +799,28 @@ def _render_genomics_item(entry: dict, role: str, part: str) -> str:
         ) or []
         return _render_description_list(descriptions)
     return ""
+
+
+def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
+    r"""
+    Render one attached genomics chart as a centered \includegraphics with an
+    italic caption.  The image file (figures/<filename>) is written into the
+    bundle by latex_export.build_overleaf_bundle; the filename comes from the
+    chart dict so the .tex reference and the written file always agree.
+    """
+    chart = next(
+        (c for c in (entry.get("charts") or []) if c.get("key") == chart_key),
+        None,
+    )
+    if not chart or not chart.get("filename"):
+        return ""
+    caption = _escape_latex(chart.get("caption", ""))
+    return (
+        "\\begin{center}\n"
+        f"\\includegraphics[width=0.85\\linewidth]{{figures/{chart['filename']}}}\\\\\n"
+        f"{{\\small\\itshape {caption}}}\n"
+        "\\end{center}"
+    )
 
 
 def _render_gene_set_table(entry: dict) -> str:

@@ -68,6 +68,18 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
          "part": "table", "orientable": True}
     )
 
+    # Charts (Phase 5): one orientable content item per attached chart image
+    # (UMAP / cluster scatter).  entry["charts"] is populated only on the
+    # session-export path (latex_export); the web path has no charts, so no
+    # chart items appear there.  Each carries its `chart_key` so the renderer
+    # can fetch the right image from entry["charts"].
+    for chart in entry.get("charts") or []:
+        key = chart.get("key", "chart")
+        plan.append(
+            {"item_id": f"{base}-{key}", "kind": "chart", "part": "chart",
+             "chart_key": key, "orientable": True}
+        )
+
     descriptions = (
         entry.get("go_descriptions") if role == "gene_set"
         else entry.get("gene_descriptions")

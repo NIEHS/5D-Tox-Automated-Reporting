@@ -263,6 +263,74 @@ def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
     return out
 
 
+def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
+    """
+    Attach per-(organ, sex) chart images to the matching gene_set entries.
+
+    `charts_cache` is the `_cache_charts_*.json` list: one entry per (organ,
+    sex) carrying base64-PNG fields umap_png / cluster_png (+ captions).  We
+    index it by (organ, sex) and hang the images on the gene_set genomics entry
+    as entry["charts"], so genomics_content_plan emits chart content items and
+    build_overleaf_bundle writes the PNGs into figures/.
+
+    Each chart carries its OWN deterministic `filename`; both the renderer
+    (the \\includegraphics path) and the bundler (the file it writes) read that
+    same field, so they can never disagree on the name — a mismatch would be a
+    missing-figure compile error on Overleaf.
+    """
+    if not isinstance(charts_cache, list):
+        return
+    by_os = {
+        ((c.get("organ") or "").lower(), (c.get("sex") or "").lower()): c
+        for c in charts_cache if isinstance(c, dict)
+    }
+    for entry in genomics_sections:
+        if entry.get("type") != "gene_set":
+            continue
+        organ = (entry.get("organ") or "").lower()
+        sex = (entry.get("sex") or "").lower()
+        cache_entry = by_os.get((organ, sex))
+        if not cache_entry:
+            continue
+        slug = f"{organ}-{sex}".replace(" ", "-")
+        charts = []
+        for key in ("umap", "cluster"):
+            png = cache_entry.get(f"{key}_png")
+            if not png:
+                continue
+            charts.append({
+                "key": key,
+                "filename": f"genomics-{slug}-{key}.png",
+                "png_b64": png,
+                "caption": cache_entry.get(f"{key}_caption", ""),
+            })
+        if charts:
+            entry["charts"] = charts
+
+
+def _collect_figure_files(data: dict) -> dict:
+    """
+    Decode every attached genomics chart into raw PNG bytes keyed by its
+    figures/ filename, for build_overleaf_bundle to write into the zip.
+    Accepts both raw base64 and data-URI ("data:image/png;base64,...") forms.
+    """
+    import base64
+    out: dict[str, bytes] = {}
+    for entry in data.get("genomics_sections", []) or []:
+        for chart in entry.get("charts") or []:
+            name = chart.get("filename")
+            b64 = chart.get("png_b64") or ""
+            if not (name and b64):
+                continue
+            if b64.startswith("data:"):
+                b64 = b64.split(",", 1)[-1]
+            try:
+                out[name] = base64.b64decode(b64)
+            except Exception:
+                continue
+    return out
+
+
 def load_session_data(
     dtxsid: str,
     chemical_name: str = "Test Article",
@@ -373,6 +441,12 @@ def load_session_data(
         if converted:
             data["genomics_sections"] = converted
 
+    # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
+    charts_path = _latest(session_dir, "_cache_charts_*.json")
+    charts_cache = _load_json(charts_path)
+    if isinstance(charts_cache, list) and data.get("genomics_sections"):
+        _attach_genomics_charts(data["genomics_sections"], charts_cache)
+
     return data
 
 
@@ -424,10 +498,18 @@ def build_overleaf_bundle(
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("report.tex", tex_source)
         zf.writestr("niehs.cls", cls_source)
-        # Empty figures/ directory.  Zip files don't really represent
-        # directories — we add an empty .gitkeep so the dir materializes
-        # on extraction and future genomics chart PDFs have a home.
-        zf.writestr("figures/.gitkeep", "")
+        # Genomics chart images (base64 PNG attached to gene_set entries by
+        # load_session_data) become real files under figures/, referenced by
+        # \includegraphics in report.tex.  Each chart carries its own filename
+        # so the .tex path and the written file always match.  Falls back to an
+        # empty .gitkeep (so the dir still materializes) when there are no
+        # charts — e.g. a scaffold-only export.
+        figures = _collect_figure_files(data)
+        if figures:
+            for fig_name, raw in figures.items():
+                zf.writestr(f"figures/{fig_name}", raw)
+        else:
+            zf.writestr("figures/.gitkeep", "")
         if include_readme:
             zf.writestr("README.md", _README_TEMPLATE)
 

@@ -78,3 +78,40 @@ def test_content_item_orientation_wraps_only_that_item():
 def test_no_composite_key_means_no_landscape_wrap():
     out = _render_genomics_section(_gene_set_node(), _gene_set_data())
     assert "\\begin{landscape}" not in out
+
+
+def test_plan_includes_chart_items_when_charts_attached():
+    entry = {
+        "type": "gene_set", "organ": "Liver", "sex": "Male",
+        "gene_sets": [_GENE_SET_ROW],
+        "charts": [
+            {"key": "umap", "filename": "genomics-liver-male-umap.png",
+             "png_b64": "x", "caption": "U"},
+            {"key": "cluster", "filename": "genomics-liver-male-cluster.png",
+             "png_b64": "y", "caption": "C"},
+        ],
+    }
+    plan = genomics_content_plan(entry, "gene_set")
+    # table first, then one orientable chart item per attached chart, in order.
+    assert [p["part"] for p in plan] == ["table", "chart", "chart"]
+    charts = [p for p in plan if p["part"] == "chart"]
+    assert [p["chart_key"] for p in charts] == ["umap", "cluster"]
+    assert [p["item_id"] for p in charts] == ["liver-male-umap", "liver-male-cluster"]
+    assert all(p["orientable"] for p in charts)
+
+
+def test_latex_renders_chart_includegraphics_with_matching_filename():
+    data = {
+        "genomics_sections": [{
+            "type": "gene_set", "organ": "liver", "sex": "male",
+            "gene_sets": [_GENE_SET_ROW],
+            "charts": [{"key": "umap", "filename": "genomics-liver-male-umap.png",
+                        "png_b64": "x", "caption": "UMAP of liver"}],
+        }],
+        "orientations": {},
+    }
+    out = _render_genomics_section(_gene_set_node(), data)
+    assert "\\includegraphics" in out
+    # The \includegraphics path must be exactly the chart's own filename, so the
+    # bundler writes the same name (no missing-figure compile error).
+    assert "figures/genomics-liver-male-umap.png" in out
