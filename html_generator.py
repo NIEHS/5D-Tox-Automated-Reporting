@@ -127,7 +127,7 @@ h2 { font-size: 19px; margin: 28px 0 10px; border-bottom: 1px solid #e2e0db; pad
 h3 { font-size: 16px; margin: 22px 0 8px; color: #2c5282; }
 h4 { font-size: 14px; margin: 16px 0 6px; color: #4a5568; font-weight: 600; }
 p { margin: 0 0 10px; }
-/* Invisible per-section scroll target for TOC navigation — see _walk. */
+/* Invisible per-section scroll target for navigation-panel scrolling — see _walk. */
 .sec-anchor { display: block; height: 0; margin: 0; padding: 0; }
 em.pending {
   color: #b7791f;
@@ -1028,7 +1028,7 @@ def _walk(node: DocNode, data: dict) -> list[str]:
     chunks: list[str] = []
     chunk = handler(node, data)
     if chunk:
-        # Zero-height anchor before each node so the TOC can scroll the
+        # Zero-height anchor before each node so the navigation panel can scroll the
         # full preview to this section (frame.contentDocument
         # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves
         # the actual DOM nodes into page boxes, preserving these ids, so

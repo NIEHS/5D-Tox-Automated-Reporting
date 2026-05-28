@@ -232,7 +232,7 @@ async def serve_ui():
 # GET /api/document-tree — serialized document structure tree
 # ---------------------------------------------------------------------------
 # Returns the NIEHS report document structure as JSON so the frontend
-# can derive the TOC sidebar, platform maps, and Results containers
+# can derive the navigation panel, platform maps, and Results containers
 # from the single source of truth (document_tree.py) instead of
 # hardcoding them in HTML/JS.
 
@@ -255,7 +255,7 @@ async def get_document_tree():
 
     The tree includes node IDs, titles, levels, types, platform mappings,
     narrative keys, table numbers, and ready_key flags — everything the
-    frontend needs to generate the TOC sidebar, Results containers, and
+    frontend needs to generate the navigation panel, Results containers, and
     platform routing without any hardcoded document structure.
     """
     return JSONResponse(_SERIALIZED_TREE)

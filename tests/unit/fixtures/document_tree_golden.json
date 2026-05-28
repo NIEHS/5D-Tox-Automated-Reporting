@@ -1,0 +1,400 @@
+[
+  {
+    "id": "cover",
+    "level": 0,
+    "title": "Cover Page",
+    "type": "cover"
+  },
+  {
+    "id": "title-page",
+    "level": 0,
+    "title": "Title Page",
+    "type": "title-page"
+  },
+  {
+    "data_key": "foreword",
+    "id": "foreword",
+    "level": 1,
+    "title": "Foreword",
+    "type": "front-matter"
+  },
+  {
+    "id": "tables-list",
+    "level": 1,
+    "title": "Tables",
+    "type": "tables-list"
+  },
+  {
+    "data_key": "about_report",
+    "id": "about",
+    "level": 1,
+    "title": "About This Report",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "peer_review",
+    "id": "peer-review",
+    "level": 1,
+    "title": "Peer Review",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "publication_details",
+    "id": "publication",
+    "level": 1,
+    "title": "Publication Details",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "acknowledgments",
+    "id": "acknowledgments",
+    "level": 1,
+    "title": "Acknowledgments",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "abstract",
+    "id": "abstract",
+    "level": 1,
+    "title": "Abstract",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "background",
+    "id": "background",
+    "level": 1,
+    "title": "Background",
+    "type": "narrative"
+  },
+  {
+    "children": [
+      {
+        "data_key": "methods",
+        "id": "mm-study-design",
+        "level": 2,
+        "title": "Study Design",
+        "type": "narrative"
+      },
+      {
+        "data_key": "methods",
+        "id": "mm-dose-rationale",
+        "level": 2,
+        "title": "Dose Selection Rationale",
+        "type": "narrative"
+      },
+      {
+        "data_key": "methods",
+        "id": "mm-chemistry",
+        "level": 2,
+        "title": "Chemistry",
+        "type": "narrative"
+      },
+      {
+        "children": [
+          {
+            "data_key": "methods",
+            "id": "mm-clin-obs",
+            "level": 3,
+            "title": "Clinical Observations",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-body-organ-wt",
+            "level": 3,
+            "title": "Body and Organ Weights",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-clin-path",
+            "level": 3,
+            "title": "Clinical Pathology",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-internal-dose",
+            "level": 3,
+            "title": "Internal Dose Assessment",
+            "type": "narrative"
+          }
+        ],
+        "data_key": "methods",
+        "id": "mm-clin-exam",
+        "level": 2,
+        "title": "Clinical Examinations and Sample Collection",
+        "type": "heading-only"
+      },
+      {
+        "children": [
+          {
+            "data_key": "methods",
+            "id": "mm-tx-sample",
+            "level": 3,
+            "title": "Sample Collection for Transcriptomics",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-tx-rna",
+            "level": 3,
+            "title": "RNA Isolation, Library Creation, and Sequencing",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-tx-processing",
+            "level": 3,
+            "title": "Sequence Data Processing",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-tx-qc",
+            "level": 3,
+            "title": "Sequencing Quality Checks and Outlier Removal",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-tx-norm",
+            "level": 3,
+            "title": "Data Normalization",
+            "type": "narrative"
+          }
+        ],
+        "data_key": "methods",
+        "id": "mm-transcriptomics",
+        "level": 2,
+        "title": "Transcriptomics",
+        "type": "heading-only"
+      },
+      {
+        "children": [
+          {
+            "data_key": "methods",
+            "id": "mm-stat-apical",
+            "level": 3,
+            "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-bmd-apical",
+            "level": 3,
+            "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-bmd-tx",
+            "level": 3,
+            "title": "Benchmark Dose Analysis of Transcriptomics Data",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-fdr",
+            "level": 3,
+            "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+            "type": "narrative"
+          },
+          {
+            "data_key": "methods",
+            "id": "mm-data-access",
+            "level": 3,
+            "title": "Data Accessibility",
+            "type": "narrative"
+          }
+        ],
+        "data_key": "methods",
+        "id": "mm-data-analysis",
+        "level": 2,
+        "title": "Data Analysis",
+        "type": "heading-only"
+      }
+    ],
+    "data_key": "methods",
+    "id": "methods",
+    "level": 1,
+    "title": "Materials and Methods",
+    "type": "heading-only"
+  },
+  {
+    "children": [
+      {
+        "children": [
+          {
+            "id": "table-body-weight",
+            "level": 0,
+            "platform": "Body Weight",
+            "ready_key": "animalCondition",
+            "table_number": 2,
+            "title": "Summary of Body Weights",
+            "type": "table"
+          },
+          {
+            "id": "table-organ-weight",
+            "level": 0,
+            "platform": "Organ Weight",
+            "ready_key": "animalCondition",
+            "table_number": 3,
+            "title": "Summary of Organ Weights",
+            "type": "table"
+          },
+          {
+            "id": "table-clinical-obs",
+            "level": 0,
+            "platform": "Clinical Observations",
+            "ready_key": "animalCondition",
+            "title": "Clinical Observations",
+            "type": "incidence-table"
+          }
+        ],
+        "id": "animal-condition",
+        "level": 2,
+        "narrative_key": "animal_condition",
+        "ready_key": "animalCondition",
+        "title": "Animal Condition, Body Weights, and Organ Weights",
+        "type": "narrative+tables"
+      },
+      {
+        "children": [
+          {
+            "id": "table-clin-chem",
+            "level": 0,
+            "platform": "Clinical Chemistry",
+            "ready_key": "clinicalPath",
+            "table_number": 4,
+            "title": "Summary of Select Clinical Chemistry Data",
+            "type": "table"
+          },
+          {
+            "id": "table-hematology",
+            "level": 0,
+            "platform": "Hematology",
+            "ready_key": "clinicalPath",
+            "table_number": 5,
+            "title": "Summary of Select Hematology Data",
+            "type": "table"
+          },
+          {
+            "id": "table-hormones",
+            "level": 0,
+            "platform": "Hormones",
+            "ready_key": "clinicalPath",
+            "table_number": 6,
+            "title": "Summary of Select Hormone Data",
+            "type": "table"
+          }
+        ],
+        "id": "clinical-path",
+        "level": 2,
+        "narrative_key": "clinical_pathology",
+        "ready_key": "clinicalPath",
+        "title": "Clinical Pathology",
+        "type": "narrative+tables"
+      },
+      {
+        "children": [
+          {
+            "id": "table-tissue-conc",
+            "level": 0,
+            "platform": "Tissue Concentration",
+            "ready_key": "internalDose",
+            "table_number": 7,
+            "title": "Summary of Plasma Concentration Data",
+            "type": "table"
+          }
+        ],
+        "id": "internal-dose",
+        "level": 2,
+        "ready_key": "internalDose",
+        "title": "Internal Dose Assessment",
+        "type": "narrative+tables"
+      },
+      {
+        "data_key": "bmd_summary",
+        "id": "bmd-summary",
+        "level": 2,
+        "ready_key": "bmdSummary",
+        "table_number": 8,
+        "title": "Apical Endpoint Benchmark Dose Summary",
+        "type": "bmd-summary"
+      },
+      {
+        "data_key": "genomics_sections",
+        "id": "gene-sets",
+        "level": 2,
+        "narrative_key": "gene_set_narrative",
+        "ready_key": "geneSets",
+        "title": "Gene Set Benchmark Dose Analysis",
+        "type": "genomics-section"
+      },
+      {
+        "data_key": "genomics_sections",
+        "id": "gene-bmd",
+        "level": 2,
+        "narrative_key": "gene_narrative",
+        "ready_key": "geneBmd",
+        "title": "Gene Benchmark Dose Analysis",
+        "type": "genomics-section"
+      }
+    ],
+    "id": "results",
+    "level": 1,
+    "title": "Results",
+    "type": "heading-only"
+  },
+  {
+    "data_key": "summary",
+    "id": "summary",
+    "level": 1,
+    "title": "Summary",
+    "type": "narrative"
+  },
+  {
+    "data_key": "references",
+    "id": "references",
+    "level": 1,
+    "title": "References",
+    "type": "narrative"
+  },
+  {
+    "id": "appendix-a",
+    "level": 1,
+    "title": "Appendix A. Internal Dose Assessment",
+    "type": "appendix"
+  },
+  {
+    "id": "appendix-b",
+    "level": 1,
+    "title": "Appendix B. Animal Identifiers",
+    "type": "appendix"
+  },
+  {
+    "id": "appendix-c",
+    "level": 1,
+    "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate",
+    "type": "appendix"
+  },
+  {
+    "id": "appendix-d",
+    "level": 1,
+    "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies",
+    "type": "appendix"
+  },
+  {
+    "id": "appendix-e",
+    "level": 1,
+    "title": "Appendix E. Organ Weight Descriptions",
+    "type": "appendix"
+  },
+  {
+    "id": "appendix-f",
+    "level": 1,
+    "title": "Appendix F. Supplemental Data",
+    "type": "appendix"
+  }
+]

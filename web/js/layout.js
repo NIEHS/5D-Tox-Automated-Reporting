@@ -680,7 +680,7 @@ function _buildResultsNavNode(node) {
                 const dynUl = document.createElement('ul');
                 dynUl.id = child.id === 'gene-sets' ? 'nav-gene-set-children'
                          : child.id === 'gene-bmd'  ? 'nav-gene-bmd-children'
-                         : `toc-${child.id}-children`;
+                         : `nav-${child.id}-children`;
                 childLi.appendChild(dynUl);
             }
         }
