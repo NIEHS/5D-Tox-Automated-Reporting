@@ -350,6 +350,21 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     return f"{_heading(node.level, node.title)}\n\n\\listoftables"
 
 
+def _render_toc(node: DocNode, data: dict) -> str:
+    r"""
+    Table of Contents — a generated front-matter component (ADR-0003),
+    distinct from the navigation panel.
+
+    Maps to LaTeX's native \tableofcontents, which auto-populates from the
+    \section/\subsection commands the body emits and gets two-pass page
+    numbers.  The component SELF-HEADS (\tableofcontents emits its own
+    unnumbered "Contents" heading), so no \section is emitted here — which is
+    why the catalog marks `toc` headingless.  This was previously hardcoded in
+    the document skeleton; it is now driven by a `toc` node in the tree.
+    """
+    return "\\tableofcontents"
+
+
 # ---------------------------------------------------------------------------
 # Table-rendering helpers
 # ---------------------------------------------------------------------------
@@ -889,6 +904,7 @@ _DISPATCH: dict[str, object] = {
     "heading-only":      _render_heading_only,
     "appendix":          _render_appendix,
     "tables-list":       _render_tables_list,
+    "toc":               _render_toc,
     "narrative+tables":  _render_narrative_tables,
     "table":             _render_apical_table,
     "incidence-table":   _render_incidence_table,
@@ -940,9 +956,9 @@ def _document_skeleton(
     full-report compile.
 
     Per decision #6 we skip the NIEHS-branded cover and use \maketitle.
-    \tableofcontents follows the title page so the author sees a TOC
-    immediately; LaTeX auto-populates it from the \section commands the
-    body emits.
+    The Table of Contents is no longer emitted here: it is a `toc` node in the
+    document tree (ADR-0003), rendered as native \tableofcontents (which LaTeX
+    auto-populates from the \section commands the body emits).
 
     The class file (niehs.cls) owns page geometry, fonts, the niehstable
     environment, and the fancyhdr running header — this function only
@@ -976,7 +992,6 @@ def _document_skeleton(
         # No visible number on the title page — the reference shows a
         # date/ISSN footer there, not a page number.
         "\\thispagestyle{empty}\n"
-        "\\tableofcontents\n"
         "\n"
         + body + "\n"
         "\n"

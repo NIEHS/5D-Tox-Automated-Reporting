@@ -12,6 +12,12 @@
     "type": "title-page"
   },
   {
+    "id": "toc",
+    "level": 0,
+    "title": "Table of Contents",
+    "type": "toc"
+  },
+  {
     "data_key": "foreword",
     "id": "foreword",
     "level": 1,

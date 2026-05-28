@@ -167,6 +167,14 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "tables-list": ComponentType(
         capabilities=_STRUCTURAL, content_kinds=("toc-entry",),
     ),
+    # ── Generated Table of Contents — a front-matter component (distinct from
+    #    the navigation panel).  It SELF-HEADS: LaTeX's \tableofcontents emits
+    #    its own unnumbered "Contents" heading and the HTML renderer emits its
+    #    own, so the generic heading machinery is skipped — hence headingless
+    #    (level 0).  Generated from the tree's section order.
+    "toc": ComponentType(
+        capabilities=_STRUCTURAL, content_kinds=("toc-entry",), headingless=True,
+    ),
     # ── A heading with no own content; its child NODES carry the content.
     #    This is the recursive structural container (it may nest itself).
     "heading-only": ComponentType(

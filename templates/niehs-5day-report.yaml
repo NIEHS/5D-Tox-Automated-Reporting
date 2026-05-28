@@ -32,6 +32,12 @@
   type: title-page
   title: "Title Page"
 
+# ── Table of Contents (generated front-matter component; native
+#    \tableofcontents in the LaTeX export) ─────────────────────────────
+- id: toc
+  type: toc
+  title: "Table of Contents"
+
 # ── Front matter (roman-numeral pages) ───────────────────────────────
 - id: foreword
   type: front-matter

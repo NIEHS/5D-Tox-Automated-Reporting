@@ -61,7 +61,7 @@ DOCUMENT_TREE: list[DocNode] = build_tree("niehs-5day-report")
 # switch lands at the same structural point — the boundary lives with the
 # tree, not duplicated in each renderer.
 FRONT_MATTER_NODE_TYPES: frozenset[str] = frozenset(
-    {"cover", "title-page", "front-matter", "tables-list"}
+    {"cover", "title-page", "toc", "front-matter", "tables-list"}
 )
 
 

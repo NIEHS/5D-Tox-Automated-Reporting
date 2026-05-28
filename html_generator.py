@@ -589,6 +589,34 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     return f"{heading}\n<ol class=\"tables-list\">{''.join(items)}</ol>"
 
 
+def _render_toc(node: DocNode, data: dict) -> str:
+    """
+    Table of Contents — a generated front-matter component (ADR-0003), distinct
+    from the navigation panel.  Built from data["toc_entries"] (walked from the
+    document tree by marshal_export_data) and indented by heading level.  In the
+    LaTeX export this is native \\tableofcontents.
+
+    The component self-heads (its own "Contents" heading), so the catalog marks
+    `toc` headingless and we emit the heading explicitly here rather than via
+    the generic _heading() machinery.
+    """
+    entries = data.get("toc_entries") or []
+    heading = f'<h2 class="toc-heading">{_esc(node.title)}</h2>'
+    if not entries:
+        return f"{heading}\n{_pending('Table of contents: pending.')}"
+    items: list[str] = []
+    for entry in entries:
+        lvl = entry.get("level", 1)
+        ready = entry.get("ready", False)
+        pad = (lvl - 1) * 16 if isinstance(lvl, int) and lvl > 1 else 0
+        cls = "toc-entry" if ready else "toc-entry pending-item"
+        items.append(
+            f'<li class="{cls}" style="padding-left:{pad}px">{_esc(entry.get("title", ""))}</li>'
+        )
+    body = "".join(items)
+    return f'{heading}\n<ol class="toc">{body}</ol>'
+
+
 # ---------------------------------------------------------------------------
 # Results-section handlers (narrative+tables, tables, bmd-summary,
 # incidence-table, genomics-section)
@@ -1007,6 +1035,7 @@ _DISPATCH: dict[str, object] = {
     "heading-only":     _render_heading_only,
     "appendix":         _render_appendix,
     "tables-list":      _render_tables_list,
+    "toc":              _render_toc,
     "narrative+tables": _render_narrative_tables,
     "table":            _render_apical_table,
     "incidence-table":  _render_incidence_table,
