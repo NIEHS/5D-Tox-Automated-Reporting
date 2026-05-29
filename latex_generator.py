@@ -329,14 +329,49 @@ def _render_appendix(node: DocNode, data: dict) -> str:
     """
     Appendix node (Appendix A through F).
 
-    The tree currently has appendices as heading-only stubs.  Real
-    appendix content (study data tables, animal identifiers, QC plots)
-    is deferred to a future session.  Tracer-bullet emits a visible
-    "[Appendix body pending]" line so the author knows to expect content
-    here later.
+    Appendix B (Animal Identifiers) renders the animal roster from
+    data["appendix_animals"] when the session supplied it.  The other
+    appendices are not yet wired to data, so they emit a visible
+    "[Appendix body pending]" line so the author knows to expect content.
     """
+    heading = _heading(node.level, node.title)
+    if node.id == "appendix-b" and data.get("appendix_animals"):
+        return f"{heading}\n\n{_render_animal_identifiers(data['appendix_animals'])}"
     body = f"\\emph{{[Appendix body pending: {_escape_latex(node.title)}]}}"
-    return f"{_heading(node.level, node.title)}\n\n{body}"
+    return f"{heading}\n\n{body}"
+
+
+def _render_animal_identifiers(rows: list) -> str:
+    r"""
+    The Appendix B animal roster as a page-breaking longtable.
+
+    ~300 animals don't fit one page, and the niehstable float can't break
+    across pages — so this uses longtable (loaded by niehs.cls), whose
+    \endhead repeats the column header on every page.
+    """
+    head = (
+        "\\begin{longtable}{l l r}\n"
+        "\\toprule\n"
+        "Animal ID & Sex & Dose (mg/kg) \\\\\n"
+        "\\midrule\n"
+        "\\endhead\n"
+    )
+    body = "\n".join(
+        _emit_tabular_row([
+            _escape_latex(str(r.get("animal_id", ""))),
+            _escape_latex(str(r.get("sex", ""))),
+            _format_dose_value(r.get("dose")),
+        ])
+        for r in rows
+    )
+    return head + body + "\n\\bottomrule\n\\end{longtable}"
+
+
+def _format_dose_value(dose) -> str:
+    """Format a numeric dose for the roster: drop a trailing .0, else as-is."""
+    if isinstance(dose, (int, float)):
+        return str(int(dose)) if float(dose).is_integer() else str(dose)
+    return "—"
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:

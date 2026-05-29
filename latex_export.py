@@ -453,7 +453,42 @@ def load_session_data(
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
         _attach_genomics_charts(data["genomics_sections"], charts_cache)
 
+    # ── Appendix B: animal identifier roster ──────────────────────────
+    animals = _load_animal_identifiers(session_dir)
+    if animals:
+        data["appendix_animals"] = animals
+
     return data
+
+
+def _load_animal_identifiers(session_dir: Path) -> list[dict]:
+    """
+    Flatten animal_report.json into a roster of {animal_id, sex, dose} rows for
+    Appendix B (Animal Identifiers), sorted by sex, then dose, then id.  Returns
+    [] when the file is absent — the appendix then keeps its pending placeholder.
+    """
+    report = _load_json(session_dir / "animal_report.json")
+    animals = report.get("animals") if isinstance(report, dict) else None
+    if not isinstance(animals, dict):
+        return []
+    rows = [
+        {
+            "animal_id": rec.get("animal_id", ""),
+            "sex": rec.get("sex") or "",
+            "dose": rec.get("dose"),
+        }
+        for rec in animals.values()
+        if isinstance(rec, dict)
+    ]
+    # Numeric doses sort ahead of missing ones; ids break ties.
+    rows.sort(
+        key=lambda r: (
+            r["sex"],
+            r["dose"] if isinstance(r["dose"], (int, float)) else float("inf"),
+            r["animal_id"],
+        )
+    )
+    return rows
 
 
 # ---------------------------------------------------------------------------

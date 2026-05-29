@@ -561,9 +561,30 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
-    """Appendix node — heading + visible body-pending placeholder."""
+    """Appendix node — Appendix B renders the animal roster; others stub out."""
+    heading = _heading(node.level, node.title)
+    if node.id == "appendix-b" and data.get("appendix_animals"):
+        return f"{heading}\n{_render_animal_identifiers(data['appendix_animals'])}"
     body = f'<div class="appendix-stub">Appendix body pending: {_esc(node.title)}</div>'
-    return f"{_heading(node.level, node.title)}\n{body}"
+    return f"{heading}\n{body}"
+
+
+def _render_animal_identifiers(rows: list) -> str:
+    """The Appendix B animal roster as a table (HTML scrolls; no pagination)."""
+    def _dose(v):
+        if isinstance(v, (int, float)):
+            return str(int(v)) if float(v).is_integer() else str(v)
+        return "—"
+    headers = ["Animal ID", "Sex", "Dose (mg/kg)"]
+    body_rows = [
+        _emit_table_row([str(r.get("animal_id", "")), str(r.get("sex", "")), _dose(r.get("dose"))])
+        for r in rows
+    ]
+    return (
+        '<table class="niehstable">'
+        + _emit_table_header(headers)
+        + f"<tbody>{''.join(body_rows)}</tbody></table>"
+    )
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:

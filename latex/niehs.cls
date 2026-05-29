@@ -67,10 +67,16 @@
 % weight of the NIEHS reference report.
 \RequirePackage{booktabs}
 
+% longtable for multi-page tables (e.g. the Appendix B animal roster, ~300
+% rows): a plain tabular / table float can't break across pages, but a
+% longtable does and repeats its header on each page.  booktabs rules work
+% inside it.
+\RequirePackage{longtable}
+
 % --- Figures -------------------------------------------------------------
-% graphicx for \includegraphics{figures/<chart>.pdf}.  Decision #7: each
-% genomics chart ships as a PDF in the figures/ subdirectory of the
-% Overleaf export bundle.
+% graphicx for \includegraphics{figures/<chart>.png}.  Each genomics chart
+% ships as a PNG (decoded from the session chart cache) in the figures/
+% subdirectory of the Overleaf export bundle.
 \RequirePackage{graphicx}
 
 % --- Landscape pages -----------------------------------------------------
