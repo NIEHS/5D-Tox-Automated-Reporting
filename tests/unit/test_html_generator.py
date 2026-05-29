@@ -177,20 +177,27 @@ def test_landscape_orientation_wraps_node(scaffold):
     assert 'class="landscape-block"' in html
 
 
-def test_portrait_default_has_no_landscape_block(scaffold):
-    """With no orientations set, nothing is wrapped landscape."""
+def test_template_landscape_default_renders_without_overlay(scaffold):
+    """
+    A template-authored landscape default (ADR-0003 Amendment 1) renders
+    landscape with NO per-session override — this is how the UI-less export
+    gets landscape tables.  (The "no default and no override -> portrait" case
+    is covered by test_landscape_requested_merges_default_and_override.)
+    """
     html = generate_html(scaffold)
-    assert 'class="landscape-block"' not in html
+    assert 'class="landscape-block"' in html
 
 
 def test_landscape_flag_on_non_orientable_node_ignored(scaffold):
     """
     A landscape flag on a non-orientable node (prose) is ignored — the
-    capability dictionary gates the wrap, so stale/invalid flags do nothing.
+    capability gates the wrap.  Verified by output-equivalence: the flag
+    changes nothing (the template's landscape defaults elsewhere apply
+    identically in both renders).
     """
-    data = {**scaffold, "orientations": {"background": "landscape"}}
-    html = generate_html(data)
-    assert 'class="landscape-block"' not in html
+    base = generate_html(scaffold)
+    flagged = generate_html({**scaffold, "orientations": {"background": "landscape"}})
+    assert base == flagged
 
 
 def test_sections_have_scroll_anchors(scaffold):

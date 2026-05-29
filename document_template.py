@@ -42,6 +42,7 @@ import yaml
 from document_node import DocNode
 from render_capabilities import (
     COMPONENT_CATALOG,
+    capabilities_for,
     is_allowed_child,
     is_headingless,
     required_bindings_for,
@@ -135,6 +136,22 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             raise ValueError(
                 f"template node {node_id!r} of type {node_type!r} is missing "
                 f"required binding {binding!r}"
+            )
+
+    # Layout settings are gated on the type's capability (ADR-0003 Amendment 1):
+    # orientation may only be authored on an orientable type, and only as
+    # portrait/landscape.  A bad hand-edit fails loudly at load time.
+    orientation = entry.get("orientation")
+    if orientation is not None:
+        if orientation not in ("portrait", "landscape"):
+            raise ValueError(
+                f"template node {node_id!r}: orientation must be 'portrait' or "
+                f"'landscape', got {orientation!r}"
+            )
+        if not capabilities_for(node_type).orientable:
+            raise ValueError(
+                f"template node {node_id!r}: orientation set but type "
+                f"{node_type!r} is not orientable"
             )
 
 

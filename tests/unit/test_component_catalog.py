@@ -107,6 +107,22 @@ def test_required_bindings_name_real_docnode_fields():
             )
 
 
+def test_landscape_requested_merges_default_and_override():
+    """
+    Effective orientation = override if present, else template default, gated
+    on the type capability (ADR-0003 Amendment 1).
+    """
+    from render_capabilities import landscape_requested
+    # override wins over the template default, both directions
+    assert landscape_requested("table", "n", {"n": "landscape"}, default="portrait") is True
+    assert landscape_requested("table", "n", {"n": "portrait"}, default="landscape") is False
+    # falls back to the template default when there is no override
+    assert landscape_requested("table", "n", {}, default="landscape") is True
+    assert landscape_requested("table", "n", {}, default=None) is False
+    # capability gate: a non-orientable type is never landscape
+    assert landscape_requested("narrative", "n", {"n": "landscape"}, default="landscape") is False
+
+
 def test_required_bindings_satisfied_by_tree():
     """
     Every node in the real tree supplies the bindings its type requires — so

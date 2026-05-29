@@ -1152,7 +1152,8 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         # type is orientable (capability dictionary).  Gating on the
         # capability ignores stale/invalid overlay flags — the dictionary is
         # authoritative on both the UI and render sides.
-        if landscape_requested(node.node_type, node.id, data.get("orientations")):
+        if landscape_requested(node.node_type, node.id, data.get("orientations"),
+                               default=node.orientation):
             chunk = f'<div class="landscape-block">{chunk}</div>'
         chunks.append(chunk)
     for child in node.children:

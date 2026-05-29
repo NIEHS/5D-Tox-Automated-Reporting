@@ -196,16 +196,19 @@
           type: table
           title: "Summary of Body Weights"
           platform: "Body Weight"
+          orientation: landscape
           ready_key: animalCondition
         - id: table-organ-weight
           type: table
           title: "Summary of Organ Weights"
           platform: "Organ Weight"
+          orientation: landscape
           ready_key: animalCondition
         - id: table-clinical-obs
           type: incidence-table
           title: "Clinical Observations"
           platform: "Clinical Observations"
+          orientation: landscape
           ready_key: animalCondition
     - id: clinical-path
       type: narrative+tables
@@ -217,16 +220,19 @@
           type: table
           title: "Summary of Select Clinical Chemistry Data"
           platform: "Clinical Chemistry"
+          orientation: landscape
           ready_key: clinicalPath
         - id: table-hematology
           type: table
           title: "Summary of Select Hematology Data"
           platform: "Hematology"
+          orientation: landscape
           ready_key: clinicalPath
         - id: table-hormones
           type: table
           title: "Summary of Select Hormone Data"
           platform: "Hormones"
+          orientation: landscape
           ready_key: clinicalPath
     - id: internal-dose
       type: narrative+tables

@@ -236,6 +236,8 @@ def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
             d["figure_number"] = node.figure_number
         if node.ready_key:
             d["ready_key"] = node.ready_key
+        if node.orientation:
+            d["orientation"] = node.orientation
         if node.children:
             d["children"] = [_to_dict(c) for c in node.children]
         return d

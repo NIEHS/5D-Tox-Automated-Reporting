@@ -308,6 +308,7 @@
             {
               "id": "table-body-weight",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Body Weight",
               "ready_key": "animalCondition",
               "table_number": 2,
@@ -317,6 +318,7 @@
             {
               "id": "table-organ-weight",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Organ Weight",
               "ready_key": "animalCondition",
               "table_number": 3,
@@ -326,6 +328,7 @@
             {
               "id": "table-clinical-obs",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Clinical Observations",
               "ready_key": "animalCondition",
               "title": "Clinical Observations",
@@ -344,6 +347,7 @@
             {
               "id": "table-clin-chem",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Clinical Chemistry",
               "ready_key": "clinicalPath",
               "table_number": 4,
@@ -353,6 +357,7 @@
             {
               "id": "table-hematology",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Hematology",
               "ready_key": "clinicalPath",
               "table_number": 5,
@@ -362,6 +367,7 @@
             {
               "id": "table-hormones",
               "level": 0,
+              "orientation": "landscape",
               "platform": "Hormones",
               "ready_key": "clinicalPath",
               "table_number": 6,

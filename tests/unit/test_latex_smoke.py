@@ -369,11 +369,13 @@ def test_landscape_orientation_wraps_in_pdflscape(scaffold):
 def test_landscape_flag_on_non_orientable_node_ignored(scaffold):
     r"""
     A landscape flag on a non-orientable node (prose) is ignored — the
-    capability dictionary gates the wrap on both render sides.
+    capability gates the wrap on both render sides.  Verified by
+    output-equivalence: the flag changes nothing (the template's landscape
+    defaults elsewhere apply identically in both renders).
     """
-    data = {**scaffold, "orientations": {"background": "landscape"}}
-    tex = generate_latex(data)
-    assert r"\begin{landscape}" not in tex
+    base = generate_latex(scaffold)
+    flagged = generate_latex({**scaffold, "orientations": {"background": "landscape"}})
+    assert base == flagged
 
 
 def test_class_file_configures_running_header():

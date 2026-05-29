@@ -133,3 +133,27 @@ def test_template_file_loads_as_a_list():
     data = load_template(TEMPLATE_NAME)
     assert isinstance(data, list) and data, "template should be a non-empty list"
     assert data[0]["id"] == "cover"
+
+
+# ---------------------------------------------------------------------------
+# Declarative layout settings (ADR-0003 Amendment 1)
+# ---------------------------------------------------------------------------
+
+def test_orientation_accepted_on_orientable_type():
+    tree = instantiate([{"id": "t", "type": "table", "title": "T",
+                         "platform": "P", "orientation": "landscape"}])
+    assert tree[0].orientation == "landscape"
+
+
+def test_orientation_rejected_on_non_orientable_type():
+    # `narrative` is not orientable, so authoring orientation on it is a
+    # load-time error (capability-gated), not a silent no-op.
+    with pytest.raises(ValueError, match="not orientable"):
+        instantiate([{"id": "x", "type": "narrative", "title": "X",
+                      "data_key": "d", "orientation": "landscape"}])
+
+
+def test_invalid_orientation_value_rejected():
+    with pytest.raises(ValueError, match="orientation must be"):
+        instantiate([{"id": "t", "type": "table", "title": "T",
+                      "platform": "P", "orientation": "sideways"}])

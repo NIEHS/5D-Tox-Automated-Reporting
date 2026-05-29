@@ -46,6 +46,11 @@ class DocNode:
                         keys in methods_report.py (e.g., "study_design", "clinical_obs").
                         Used by _apply_section_filter() to render only the selected
                         subsection in M&M previews.
+        orientation:    Authored page-orientation default ("landscape" /
+                        "portrait") for an orientable component (ADR-0003
+                        Amendment 1).  None means portrait.  A per-session UI
+                        override wins over this; the renderer merges the two via
+                        render_capabilities.landscape_requested(default=...).
     """
     id: str
     title: str
@@ -59,3 +64,4 @@ class DocNode:
     figure_number: int | None = None
     ready_key: str | None = None
     methods_key: str | None = None
+    orientation: str | None = None

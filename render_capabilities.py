@@ -297,29 +297,38 @@ def is_allowed_child(parent_type: str, child_type: str) -> bool:
 
 
 def landscape_requested(
-    node_type: str, node_id: str, orientations: dict | None
+    node_type: str,
+    node_id: str,
+    orientations: dict | None,
+    default: str | None = None,
 ) -> bool:
     """
-    Whether a node should render in landscape: the user flipped it to
-    "landscape" AND its semantic type is orientable.
+    Whether a node should render in landscape, resolving the EFFECTIVE
+    orientation (ADR-0003 Amendment 1):
 
-    Gating the user's per-id overlay on the per-type capability means a stale
-    or invalid orientation flag (e.g. left over for a node type that is no
-    longer orientable) is silently ignored — the catalog stays authoritative.
-    Both renderers' tree walks call this so the gate condition lives in ONE
-    place instead of being copy-pasted (and able to drift) between the HTML
-    and LaTeX `_walk`s.
+        effective = per-session override (if set) else the template `default`,
+        and the result is landscape only if effective == "landscape" AND the
+        type is orientable.
+
+    Precedence is override > template default > portrait.  Gating on the per-
+    type capability means a stale/invalid setting for a no-longer-orientable
+    type is silently ignored — the catalog stays authoritative.  Both renderers'
+    tree walks AND both export paths call this, so "is this landscape?" is
+    answered in exactly ONE place.
 
     Args:
         node_type:    the DocNode's node_type (capability lookup key).
-        node_id:      the DocNode's id (overlay lookup key).
-        orientations: the per-id overlay map {node_id: "landscape"}; may be
-                      None/empty when the user has flipped nothing.
+        node_id:      the DocNode's id (override lookup key).
+        orientations: the per-id override map {node_id: "landscape"|"portrait"};
+                      may be None/empty when the user has overridden nothing.
+        default:      the template-authored default orientation for this node
+                      (DocNode.orientation), used when there is no override.
     """
-    return (
-        (orientations or {}).get(node_id) == "landscape"
-        and capabilities_for(node_type).orientable
-    )
+    if not capabilities_for(node_type).orientable:
+        return False
+    override = (orientations or {}).get(node_id)
+    effective = override if override is not None else default
+    return effective == "landscape"
 
 
 def content_item_landscape_requested(

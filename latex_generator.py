@@ -1062,7 +1062,8 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         # capability ignores stale/invalid overlay flags — the dictionary is
         # authoritative on both the UI and render sides.  pdflscape rotates
         # both the content and the PDF page, so Overleaf shows it landscape.
-        if landscape_requested(node.node_type, node.id, data.get("orientations")):
+        if landscape_requested(node.node_type, node.id, data.get("orientations"),
+                               default=node.orientation):
             chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
         chunks.append(chunk)
     for child in node.children:
