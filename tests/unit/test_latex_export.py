@@ -272,3 +272,85 @@ def test_load_session_data_overlays_real_session_when_present():
     assert isinstance(gs, list)
     assert any(e.get("type") == "gene_set" for e in gs)
     assert any(e.get("type") == "gene" for e in gs)
+    # Phase 5 overlays: charts attached to gene_set entries, references list,
+    # and the Appendix B animal roster.
+    assert any(e.get("charts") for e in gs if e.get("type") == "gene_set"), \
+        "Genomics charts should be attached to gene_set entries"
+    assert data.get("references", {}).get("paragraphs"), \
+        "References should be surfaced from background.json"
+    assert data.get("appendix_animals"), \
+        "Appendix B animal roster should be loaded"
+
+
+# ---------------------------------------------------------------------------
+# Tests — chart-figure closure + decode guard (ADR-0003 Phase 5)
+# ---------------------------------------------------------------------------
+
+# A valid 1x1 PNG (base64) used to drive the figure-writing path deterministically.
+_TINY_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAA"
+    "C0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+def test_every_includegraphics_resolves_to_a_written_figure(scaffold, tmp_path):
+    r"""
+    The renderer<->bundler closure: every figures/<name> the .tex references via
+    \includegraphics must be a file the bundle actually wrote — otherwise the
+    Overleaf compile fails on a missing figure.  This is the integration test
+    the deliverable path previously lacked (only the manual /tmp baseline diff
+    covered it).
+    """
+    import copy
+    import re
+    data = copy.deepcopy(scaffold)
+    data["genomics_sections"] = [{
+        "type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [],
+        "charts": [{
+            "key": "umap",
+            "filename": "genomics-liver-male-umap.png",
+            "png_b64": _TINY_PNG,
+            "caption": "UMAP",
+        }],
+    }]
+    out = build_overleaf_bundle(data, tmp_path / "charted.zip")
+    with zipfile.ZipFile(out) as zf:
+        names = set(zf.namelist())
+        tex = zf.read("report.tex").decode("utf-8")
+    refs = re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{(figures/[^}]+)\}", tex)
+    assert refs, "expected at least one \\includegraphics in the charted bundle"
+    missing = [r for r in refs if r not in names]
+    assert not missing, f"\\includegraphics targets missing from the bundle: {missing}"
+
+
+def test_decode_png_rejects_garbage_accepts_valid():
+    from latex_export import _decode_png
+    assert _decode_png(None) is None
+    assert _decode_png("") is None
+    assert _decode_png("AAAAA") is None        # invalid base64 length
+    assert _decode_png(_TINY_PNG) is not None
+
+
+def test_attach_genomics_charts_drops_undecodable():
+    """A chart whose base64 won't decode is dropped at attach time, so it can
+    never reach the renderer as a figure with no backing file."""
+    from latex_export import _attach_genomics_charts
+    sections = [{"type": "gene_set", "organ": "liver", "sex": "male"}]
+    _attach_genomics_charts(sections, [{
+        "organ": "liver", "sex": "male",
+        "umap_png": "AAAAA",          # undecodable → dropped
+        "cluster_png": _TINY_PNG,     # valid → kept
+    }])
+    keys = [c["key"] for c in sections[0].get("charts", [])]
+    assert keys == ["cluster"], f"undecodable umap should be dropped, got {keys}"
+
+
+def test_attach_genomics_charts_attaches_valid_with_filename():
+    from latex_export import _attach_genomics_charts
+    sections = [{"type": "gene_set", "organ": "Liver", "sex": "Male"}]
+    _attach_genomics_charts(sections, [{
+        "organ": "liver", "sex": "male", "umap_png": _TINY_PNG, "umap_caption": "U",
+    }])
+    charts = sections[0].get("charts", [])
+    assert len(charts) == 1
+    assert charts[0]["filename"] == "genomics-liver-male-umap.png"

@@ -15,10 +15,9 @@ report.tex at the root, recognizes niehs.cls as a local class file (next
 to the .tex), and runs pdflatex.  This works without any Overleaf
 configuration.
 
-The figures/ directory is empty in v1 but ships in the bundle anyway so
-the directory structure that future genomics chart exports (PDF per UMAP
-or cluster scatter, per decision #7) will use is already in place — when
-those land, the author re-exports and the zip simply gains files.
+The figures/ directory carries the genomics chart images (one PNG per UMAP /
+cluster scatter, decoded from the session chart cache) when the session has
+them; a scaffold-only export ships an empty figures/ (a .gitkeep) instead.
 
 Demo / customer hand-off
 ------------------------
@@ -52,6 +51,7 @@ from __future__ import annotations
 # argparse for the CLI entry point used in the demo workflow.
 
 import argparse
+import base64
 import json
 import zipfile
 from pathlib import Path
@@ -263,6 +263,21 @@ def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
     return out
 
 
+def _decode_png(b64: str | None) -> bytes | None:
+    """
+    Decode a base64 PNG (raw, or "data:image/png;base64,..." form) to bytes,
+    returning None if it is missing or won't decode.
+    """
+    if not b64:
+        return None
+    if b64.startswith("data:"):
+        b64 = b64.split(",", 1)[-1]
+    try:
+        return base64.b64decode(b64)
+    except Exception:
+        return None
+
+
 def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
     """
     Attach per-(organ, sex) chart images to the matching gene_set entries.
@@ -298,6 +313,11 @@ def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None
             png = cache_entry.get(f"{key}_png")
             if not png:
                 continue
+            # Validate the base64 decodes NOW and drop a chart we can't decode,
+            # so it never reaches the renderer as a \includegraphics with no
+            # backing file in figures/ (which would break the Overleaf compile).
+            if _decode_png(png) is None:
+                continue
             charts.append({
                 "key": key,
                 "filename": f"genomics-{slug}-{key}.png",
@@ -312,22 +332,18 @@ def _collect_figure_files(data: dict) -> dict:
     """
     Decode every attached genomics chart into raw PNG bytes keyed by its
     figures/ filename, for build_overleaf_bundle to write into the zip.
-    Accepts both raw base64 and data-URI ("data:image/png;base64,...") forms.
+
+    Charts are validated as decodable when attached (_attach_genomics_charts),
+    so by here every chart is expected to decode; the None-guard remains as
+    defense in depth.
     """
-    import base64
     out: dict[str, bytes] = {}
     for entry in data.get("genomics_sections", []) or []:
         for chart in entry.get("charts") or []:
             name = chart.get("filename")
-            b64 = chart.get("png_b64") or ""
-            if not (name and b64):
-                continue
-            if b64.startswith("data:"):
-                b64 = b64.split(",", 1)[-1]
-            try:
-                out[name] = base64.b64decode(b64)
-            except Exception:
-                continue
+            raw = _decode_png(chart.get("png_b64"))
+            if name and raw is not None:
+                out[name] = raw
     return out
 
 
