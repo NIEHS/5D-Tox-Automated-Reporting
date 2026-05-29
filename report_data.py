@@ -359,47 +359,51 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
 
 
 
-def _overlay_abstract(data: dict, body: dict) -> None:
-    """Overlay the abstract sections (Methods/Background/Results/Summary), derived deterministically from MethodsContext + the BMD summary."""
-    methods_data = body.get("methods_data")
+def overlay_abstract(
+    data: dict,
+    *,
+    abstract_background: str = "",
+    bmd_endpoints: list | None = None,
+    genomics_cache: dict | None = None,
+    dose_groups: list | None = None,
+    dose_unit: str = "mg/kg",
+    bmd_stat=None,
+    methods_context: dict | None = None,
+) -> None:
+    """
+    Assemble data["abstract"]["sections"] (Background / Methods / Results /
+    Summary) from EXPLICIT inputs — no request body, no disk reads.
 
-    # Abstract → Methods + Results paragraphs (deterministic, derived
-    # from MethodsContext + BMD summary).
-    #
-    # When methods_data carries the MethodsContext dict (it does when the
-    # process-integrated pipeline generated the M&M), we can build a faithful
-    # Methods abstract paragraph using only the extracted study facts —
-    # vehicle, doses, biosampling groups, genomics assay, BMR, etc.
-    #
-    # Likewise, the apical BMD summary (data["bmd_summary"]["endpoints"] or
-    # the body's bmd_summary_endpoints field) drives the Results paragraph.
-    # Both overlay the scaffold's empty abstract slots.
+    Both the web path (marshal_export_data, via the _overlay_abstract adapter
+    below) and the session export (latex_export.load_session_data) call this
+    with the inputs they already have, so the abstract is assembled identically
+    from either source.  This is the shared assembler that replaced the
+    previous body-and-disk-coupled implementation.
+
+    methods_context (the MethodsContext dict) drives the Methods paragraph and
+    the study-purpose sentence; it is absent for a session with no methods
+    cache, in which case those parts are simply skipped.  endpoints come from
+    data["bmd_summary"] if present, else the explicit bmd_endpoints.  Empty
+    sections are left untouched, so a partial abstract is fine.
+    """
     abstract_updates: dict[str, str] = {}
 
-    if methods_data and methods_data.get("context"):
+    # Abstract → Methods (deterministic from the extracted study facts).
+    if methods_context:
         try:
             from methods_report import MethodsContext, build_abstract_methods
-            ctx = MethodsContext.from_dict(methods_data["context"])
-            abstract_updates["Methods"] = build_abstract_methods(ctx)
+            abstract_updates["Methods"] = build_abstract_methods(
+                MethodsContext.from_dict(methods_context)
+            )
         except Exception:
-            # Non-fatal — leave Methods abstract scaffold as-is on error
             pass
 
-    # Abstract Background = LLM-generated chemical-class/exposure/knowledge-state
-    # sentences from background_writer (delimited "=== ABSTRACT BACKGROUND ==="
-    # block) + a deterministic study-purpose third sentence built from
-    # MethodsContext.  The deterministic sentence ensures a sensible abstract
-    # exists even when the LLM omits or malforms the background distillation.
-    abstract_bg_text = (body.get("abstract_background") or "").strip()
-
-    # Build the boilerplate study-purpose sentence.  Phrasing varies based
-    # on whether transcriptomics is part of the study — matches NIEHS Report 10
-    # ("A short-term, in vivo transcriptomic study was used to assess...").
+    # Deterministic study-purpose sentence appended to the LLM background.
     study_purpose_sentence = ""
-    if methods_data and methods_data.get("context"):
+    if methods_context:
         try:
             from methods_report import MethodsContext as _MC
-            _ctx = _MC.from_dict(methods_data["context"])
+            _ctx = _MC.from_dict(methods_context)
             ta = _ctx.chemical_name or "the test article"
             descriptor = "transcriptomic" if _ctx.has_gene_expression else "toxicological"
             study_purpose_sentence = (
@@ -409,81 +413,42 @@ def _overlay_abstract(data: dict, body: dict) -> None:
         except Exception:
             pass
 
+    abstract_bg_text = (abstract_background or "").strip()
     if abstract_bg_text or study_purpose_sentence:
-        # Join with a single space; both pieces already end with periods.
-        combined = " ".join(p for p in (abstract_bg_text, study_purpose_sentence) if p)
-        abstract_updates["Background"] = combined
+        abstract_updates["Background"] = " ".join(
+            p for p in (abstract_bg_text, study_purpose_sentence) if p
+        )
 
-    # Build apical Results from whichever BMD summary source is present
-    bmd_endpoints_for_abstract: list[dict] = []
-    if data.get("bmd_summary") and data["bmd_summary"].get("endpoints"):
-        bmd_endpoints_for_abstract = data["bmd_summary"]["endpoints"]
-    elif body.get("bmd_summary_endpoints"):
-        bmd_endpoints_for_abstract = body["bmd_summary_endpoints"]
+    # Apical Results/Summary: prefer endpoints already on `data`, else the arg.
+    endpoints = (data.get("bmd_summary") or {}).get("endpoints") or bmd_endpoints or []
+    dose_groups = dose_groups or []
 
-    # Genomics data for abstract: prefer the cached dict-keyed-by-organ-sex
-    # form (same as the cache file written by process-integrated), since
-    # that's the structure build_abstract_results_genomics expects.  The
-    # request body's genomics_sections is an array, so we read the cache
-    # directly from disk when dtxsid is available.
-    genomics_for_abstract: dict | None = None
-    abstract_dose_groups: list[float] = []
-    abstract_dose_unit = body.get("dose_unit", "mg/kg")
-    abstract_bmd_stat = None
-    if methods_data and methods_data.get("context"):
-        # Pull dose groups + chosen BMD stat from MethodsContext when present —
-        # it carries the canonical study dose list extracted from fingerprints.
-        ctx_dict = methods_data["context"]
-        abstract_dose_groups = ctx_dict.get("dose_groups", []) or []
-        abstract_dose_unit = ctx_dict.get("dose_unit", abstract_dose_unit)
-
-    dtxsid_for_abstract = body.get("dtxsid", "")
-    if dtxsid_for_abstract:
-        try:
-            session_dir = Path("sessions") / dtxsid_for_abstract
-            genomics_caches = list(session_dir.glob("_cache_genomics_*.json"))
-            if genomics_caches:
-                import orjson
-                genomics_for_abstract = orjson.loads(genomics_caches[0].read_bytes())
-        except Exception:
-            pass
-
-    # Pass the full MethodsContext dict through so the PK sub-paragraph
-    # can read pk_concentrations / pk_half_lives / pk_timepoints.
-    methods_ctx_for_abstract = (
-        methods_data.get("context") if methods_data else None
-    )
-
-    if bmd_endpoints_for_abstract or genomics_for_abstract or methods_ctx_for_abstract:
+    if endpoints or genomics_cache or methods_context:
         try:
             from methods_report import build_abstract_results, build_abstract_summary
             results_text = build_abstract_results(
-                apical_bmd_summary=bmd_endpoints_for_abstract,
-                genomics_sections=genomics_for_abstract,
-                dose_groups=abstract_dose_groups,
-                dose_unit=abstract_dose_unit,
-                bmd_stat=abstract_bmd_stat,
-                methods_ctx=methods_ctx_for_abstract,
+                apical_bmd_summary=endpoints,
+                genomics_sections=genomics_cache,
+                dose_groups=dose_groups,
+                dose_unit=dose_unit,
+                bmd_stat=bmd_stat,
+                methods_ctx=methods_context,
             )
             if results_text:
                 abstract_updates["Results"] = results_text
-
-            # Abstract Summary uses the same data inputs as Results but
-            # condenses to one lowest-BMD value per (sex × category).
             summary_text = build_abstract_summary(
-                apical_bmd_summary=bmd_endpoints_for_abstract,
-                genomics_sections=genomics_for_abstract,
-                dose_groups=abstract_dose_groups,
-                dose_unit=abstract_dose_unit,
-                bmd_stat=abstract_bmd_stat,
+                apical_bmd_summary=endpoints,
+                genomics_sections=genomics_cache,
+                dose_groups=dose_groups,
+                dose_unit=dose_unit,
+                bmd_stat=bmd_stat,
             )
             if summary_text:
                 abstract_updates["Summary"] = summary_text
         except Exception:
             pass
 
-    # Apply the updates to data["abstract"]["sections"], preserving any
-    # other labels (Background, Summary) the request may have provided.
+    # Apply updates to data["abstract"]["sections"], preserving order/labels.
     if abstract_updates:
         existing = data.get("abstract", {"sections": []})
         sections = list(existing.get("sections", []))
@@ -497,6 +462,53 @@ def _overlay_abstract(data: dict, body: dict) -> None:
             if not updated:
                 sections.append({"label": label, "text": text})
         data["abstract"] = {"sections": sections}
+
+
+def _overlay_abstract(data: dict, body: dict) -> None:
+    """
+    Web-path adapter: pull the abstract inputs out of the request body — and
+    read the genomics cache from disk via the body's dtxsid — then delegate to
+    the shared overlay_abstract().  Preserves the exact inputs the previous
+    body-coupled implementation derived, so the web export is unchanged.
+    """
+    methods_data = body.get("methods_data")
+    methods_context = (
+        methods_data["context"]
+        if (methods_data and methods_data.get("context"))
+        else None
+    )
+
+    # Dose groups / unit come from the MethodsContext when present, else the
+    # body's dose_unit (default mg/kg).
+    dose_groups: list = []
+    dose_unit = body.get("dose_unit", "mg/kg")
+    if methods_context:
+        dose_groups = methods_context.get("dose_groups", []) or []
+        dose_unit = methods_context.get("dose_unit", dose_unit)
+
+    # The request body carries genomics as an array, but the abstract builders
+    # want the cached organ×sex dict — read it from disk by dtxsid.
+    genomics_cache = None
+    dtxsid = body.get("dtxsid", "")
+    if dtxsid:
+        try:
+            session_dir = Path("sessions") / dtxsid
+            caches = list(session_dir.glob("_cache_genomics_*.json"))
+            if caches:
+                import orjson
+                genomics_cache = orjson.loads(caches[0].read_bytes())
+        except Exception:
+            pass
+
+    overlay_abstract(
+        data,
+        abstract_background=body.get("abstract_background", "") or "",
+        bmd_endpoints=body.get("bmd_summary_endpoints"),
+        genomics_cache=genomics_cache,
+        dose_groups=dose_groups,
+        dose_unit=dose_unit,
+        methods_context=methods_context,
+    )
 
 
 def _find_table_number(nodes: list, platform: str):

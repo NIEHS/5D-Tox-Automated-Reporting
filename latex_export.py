@@ -475,20 +475,20 @@ def load_session_data(
         data["appendix_animals"] = animals
 
     # ── Abstract (Background + Results + Summary) ─────────────────────
-    # Reuse the web path's deterministic assembler so the session export and
-    # the app produce the same abstract.  It reads the apical BMD summary from
-    # `data` and the genomics cache from disk via dtxsid; the Background
-    # sentence comes from background.json.  The Methods abstract paragraph
-    # needs a MethodsContext (there is no methods cache for this session), so
-    # that one paragraph stays a placeholder — consistent with the M&M prose.
-    from report_data import _overlay_abstract
-    abstract_background = bg.get("abstract_background") if isinstance(bg, dict) else ""
-    _overlay_abstract(data, {
-        "dtxsid": dtxsid,
-        "dose_unit": "mg/kg",
-        "abstract_background": abstract_background or "",
-        "methods_data": None,
-    })
+    # Use the SHARED assembler (the same one the web path calls) so both
+    # surfaces produce the same abstract.  We pass explicit inputs: the apical
+    # endpoints come from `data["bmd_summary"]`, the Background sentence from
+    # background.json, and the genomics cache we ALREADY loaded above (so it is
+    # not re-read from disk, and there is no second session-path assumption).
+    # No methods_context (this session has no methods cache), so the Methods
+    # abstract paragraph is simply omitted — consistent with the M&M prose.
+    from report_data import overlay_abstract
+    overlay_abstract(
+        data,
+        abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
+        genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
+        dose_unit="mg/kg",
+    )
 
     return data
 
