@@ -280,6 +280,14 @@ def test_load_session_data_overlays_real_session_when_present():
         "References should be surfaced from background.json"
     assert data.get("appendix_animals"), \
         "Appendix B animal roster should be loaded"
+    # Abstract assembled from caches (Background + Results + Summary); the
+    # Methods paragraph stays empty without a methods cache.
+    abstract_sections = {
+        s.get("label"): s.get("text")
+        for s in data.get("abstract", {}).get("sections", [])
+    }
+    assert abstract_sections.get("Results"), \
+        "Abstract Results should be assembled from the BMD summary + genomics"
 
 
 # ---------------------------------------------------------------------------

@@ -303,6 +303,29 @@ def test_unrenderable_unicode_is_translated_to_latex():
     assert r"\textsubscript{1}" in out
 
 
+def test_abstract_renders_structured_sections_with_bold_labels():
+    r"""
+    The abstract is structured labeled sections (Background/Methods/Results/
+    Summary), not a flat paragraph list.  They render as bold run-in labels,
+    and empty sections (e.g. a Methods abstract with no MethodsContext) are
+    skipped rather than shown as a placeholder.
+    """
+    from document_node import DocNode
+    from latex_generator import _render_front_matter
+    node = DocNode(id="abstract", title="Abstract", level=1,
+                   node_type="front-matter", data_key="abstract")
+    data = {"abstract": {"sections": [
+        {"label": "Background", "text": "BG text."},
+        {"label": "Methods", "text": ""},        # empty -> skipped
+        {"label": "Results", "text": "Results text."},
+    ]}}
+    out = _render_front_matter(node, data)
+    assert r"\textbf{Background.}" in out and "BG text." in out
+    assert r"\textbf{Results.}" in out
+    assert r"\textbf{Methods.}" not in out       # empty section omitted
+    assert "Section pending" not in out
+
+
 # ---------------------------------------------------------------------------
 # Tests — companion class file ships
 # ---------------------------------------------------------------------------

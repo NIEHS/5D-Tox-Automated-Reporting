@@ -474,6 +474,22 @@ def load_session_data(
     if animals:
         data["appendix_animals"] = animals
 
+    # ── Abstract (Background + Results + Summary) ─────────────────────
+    # Reuse the web path's deterministic assembler so the session export and
+    # the app produce the same abstract.  It reads the apical BMD summary from
+    # `data` and the genomics cache from disk via dtxsid; the Background
+    # sentence comes from background.json.  The Methods abstract paragraph
+    # needs a MethodsContext (there is no methods cache for this session), so
+    # that one paragraph stays a placeholder — consistent with the M&M prose.
+    from report_data import _overlay_abstract
+    abstract_background = bg.get("abstract_background") if isinstance(bg, dict) else ""
+    _overlay_abstract(data, {
+        "dtxsid": dtxsid,
+        "dose_unit": "mg/kg",
+        "abstract_background": abstract_background or "",
+        "methods_data": None,
+    })
+
     return data
 
 

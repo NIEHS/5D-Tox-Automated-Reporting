@@ -230,11 +230,41 @@ def _render_front_matter(node: DocNode, data: dict) -> str:
     if node.data_key:
         content = data.get(node.data_key)
         if isinstance(content, dict):
-            paragraphs = content.get("paragraphs", [])
-            body = _render_paragraphs(paragraphs)
+            # The abstract is a structured set of labeled sections
+            # (Background / Methods / Results / Summary); every other
+            # front-matter section is a flat paragraph list.  Render whichever
+            # shape actually carries content.
+            if content.get("sections"):
+                body = _render_labeled_sections(content["sections"])
+            if not body:
+                body = _render_paragraphs(content.get("paragraphs", []))
     if not body:
         body = f"\\emph{{[Section pending: {_escape_latex(node.title)}]}}"
     return f"{_heading(node.level, node.title)}\n\n{body}"
+
+
+def _render_labeled_sections(sections: list) -> str:
+    r"""
+    Render structured-abstract sections ({label, text}) as paragraphs with a
+    bold run-in label (e.g. "\textbf{Background.} ...").  Empty-text sections
+    (such as a Methods abstract with no MethodsContext) are skipped, so a
+    partial abstract renders only the parts that have content.
+    """
+    parts: list[str] = []
+    for sec in sections or []:
+        if not isinstance(sec, dict):
+            continue
+        text = (sec.get("text") or "").strip()
+        if not text:
+            continue
+        label = (sec.get("label") or "").strip()
+        if label:
+            parts.append(
+                f"\\noindent\\textbf{{{_escape_latex(label)}.}} {_escape_latex(text)}"
+            )
+        else:
+            parts.append(_escape_latex(text))
+    return "\n\n".join(parts)
 
 
 def _render_narrative(node: DocNode, data: dict) -> str:
