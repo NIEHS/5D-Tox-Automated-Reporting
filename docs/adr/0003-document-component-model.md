@@ -1,6 +1,8 @@
 # 0003 — Composable document-component model: catalog, data-driven templates, generated ToC
 
 - **Status:** Proposed (2026-05-26)
+- **Amended:** 2026-05-29 — Amendment 1 (declarative layout settings + the
+  YAML / UI coordination model); see the end of this document.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (the
   integrated dataset every component reads through); the
@@ -229,3 +231,145 @@ independently landable:
 - **Plan only / ADR, no edits** *(this document).* Record the design for review
   before touching the structure layer. Chosen for this commit; it does not
   preclude the migration sequence above as the subsequent implementation.
+
+---
+
+## Amendment 1 (2026-05-29): Declarative layout settings + the YAML/UI coordination model
+
+### Why this amendment
+
+The base ADR made *structure* declarative (template YAML → instantiated tree).
+But two **layout** decisions were left as runtime-only concerns:
+
+- **Page orientation** (portrait/landscape) lived solely in a per-session UI
+  overlay (`data["orientations"]`, browser `localStorage`, web-export only).
+- **Page breaks** were a declared-but-**unconsumed** catalog capability
+  (`breakable`): nothing reads it and no renderer emits a break.
+
+Two problems followed. First, the **UI-less CLI/session export** — the actual
+Overleaf deliverable — has an empty orientation overlay, so it renders
+*everything portrait*; the wide multi-column tables then overflow the margin (a
+real `tectonic` compile confirmed this). The deliverable literally cannot
+express landscape today. Second, more fundamentally: as the report becomes
+declarative, layout must be expressible **in the spec (the YAML)**, while the
+interactive preview must still let a user **override** it for a given export.
+Without a coordination model, the YAML and the UI become two parallel,
+conflicting sources of layout truth.
+
+### The model: three distinct layers
+
+Keep these separate — conflating them is what creates parallel-truth bugs:
+
+1. **Capability** — *Can* a component type be oriented / broken? Lives in the
+   **catalog** (`render_capabilities`: `orientable`, `breakable`). Already exists.
+2. **Setting** — *Is* this instance landscape / does a break go here? Authored
+   in the **template YAML** as optional per-node fields. **New.**
+3. **Override** — Did the user change it this session? The **UI overlay**
+   (per-session, client-side). Exists for orientation; to be added for breaks.
+
+### The coordination rule (the heart of this amendment)
+
+- The **YAML is the durable baseline; the UI overlay is a delta on top of it.**
+- A single **effective-setting resolver** —
+  `effective = override if present else template-default`, **gated on the
+  catalog capability** — is used by **both renderers AND both export paths**.
+  This is the one source of "is this landscape / does it break."
+- **Precedence: UI override > YAML default > none.** A UI export therefore
+  reflects the user's intent; a no-touch export equals the YAML spec exactly;
+  the CLI deliverable (empty overlay) renders the pure YAML defaults.
+- The **served tree carries the template defaults** (not just the capability),
+  so the UI shows the *effective* state and writes only **deltas**. The UI
+  never invents layout — it overrides a server-provided baseline.
+
+### General principle (beyond layout)
+
+The UI is an **override layer over server-provided baselines**: layout baselines
+come from the YAML, content baselines from the pipeline (the `editable` prose
+case is the same shape — the UI edits a server-provided draft). Every UI change
+is a delta carried in the export payload and merged server-side by a shared
+rule. This is what keeps the YAML system and the UI **complementary rather than
+parallel**, and it is the durable answer to "how do the spec and the app relate."
+
+### Template schema additions
+
+```yaml
+- id: table-clin-chem
+  type: table
+  platform: "Clinical Chemistry"
+  orientation: landscape     # default; the UI may override it per session
+  break_before: true         # emit a page break before this component
+```
+
+- `orientation`: `portrait | landscape`. Valid only on `orientable` types.
+- `break_before` / `break_after`: boolean. Valid only on `breakable` types.
+- The instantiator validates these against the catalog capability — a
+  `landscape` on a non-orientable type, or a break on a non-breakable type, is a
+  **loud load-time error**, exactly like the required-bindings check. Hand-edits
+  stay honest.
+
+### Two instances, two costs
+
+- **Orientation — extends an existing mechanism.** The
+  overlay → `landscape_requested` → renderer-wrap path already runs end-to-end;
+  this adds the YAML default and makes the resolver merge default + override. It
+  is also the *only* way the UI-less deliverable can render landscape — i.e. the
+  fix for the wide-table overflow.
+- **Breaks — builds the mechanism.** `breakable` currently has no consumer. This
+  adds the break setting/overlay plus the renderer emission (`\clearpage` in
+  LaTeX, `break-before: page` in HTML/Paged.js), finally giving the capability a
+  consumer.
+
+### Migration shape (amendment)
+
+1. Add `orientation` to the template schema + `DocNode` + capability-gated
+   instantiator validation. Introduce the shared resolver
+   `effective_orientation(node, overlay)`, called by both renderers and both
+   export paths. Serialize the default into the served tree.
+2. Make the UI orientation overlay a **delta over the served default** (the
+   toggle reflects the effective state; it writes only deltas).
+3. Author the wide tables `orientation: landscape` in the YAML → fixes the
+   deliverable's margin overflow.
+4. Build the breaks mechanism: `break_before` / `break_after` template fields +
+   `DocNode` + capability-gated validation + renderer emission, then (later) a
+   UI breaks overlay following the same delta model.
+
+### Consequences
+
+**Positive**
+
+- Layout joins the declarative spec; the deliverable can express landscape /
+  breaks with no UI.
+- The YAML and the UI are complementary (baseline + override, one resolver) —
+  no parallel layout truths.
+- Fixes the wide-table margin overflow in the Overleaf deliverable.
+- The `breakable` capability stops being dead metadata.
+- Hand-edited layout is validated against capability (loud errors).
+
+**Negative / cost**
+
+- The UI orientation overlay must move from a free-floating `localStorage` store
+  to a **delta over the served default** (the toggle must show the effective
+  state; serialization must carry defaults). Touches `web/js/layout.js` and the
+  served tree.
+- The shared resolver wants **one** assembly path; until the two assemblers
+  (`marshal_export_data` vs `load_session_data`) converge, the resolver must be
+  called from both — another reason to unify them.
+- Breaks are net-new renderer surface (both renderers + overlay +, later, a UI
+  control).
+- A user override is keyed by node id; if the YAML default later flips, a stale
+  per-session override still wins. Acceptable because overrides are ephemeral
+  (session-scoped), but noted.
+
+### Alternatives considered (amendment)
+
+- **Keep orientation UI-only (no YAML setting).** Rejected: the UI-less CLI
+  deliverable then cannot express landscape at all (the wide tables overflow with
+  no recourse), and layout stays outside the declarative spec.
+- **YAML-only (no UI override).** Rejected: the user explicitly wants a UI
+  export to reflect per-session intent; a pure-spec model loses the interactive
+  preview's value.
+- **Persist UI changes back into the YAML ("save to template").** *Deferred, not
+  rejected.* For the foreseeable future the admin authors durable layout by
+  editing the YAML and UI changes are ephemeral session deltas (per the
+  2026-05-29 "no admin authoring tooling" decision). A future "promote this
+  override to the template default" action fits this model without changing it.
