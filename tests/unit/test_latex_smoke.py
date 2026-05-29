@@ -286,6 +286,23 @@ def test_special_characters_are_escaped():
     assert r"Acme \& Co" in tex
 
 
+def test_unrenderable_unicode_is_translated_to_latex():
+    r"""
+    Characters absent from the report font (≤ ≥ and subscript digits) must be
+    translated to LaTeX commands; otherwise they silently drop from the PDF on
+    both tectonic and Overleaf's pdflatex (a real compile confirmed this for
+    "p ≤ 0.05" and "BMD₁Std").
+    """
+    from latex_generator import _escape_latex
+    out = _escape_latex("BMD₁Std, p ≤ 0.05, n ≥ 3")
+    # The raw font-unrenderable characters must be gone…
+    assert "≤" not in out and "≥" not in out and "₁" not in out
+    # …replaced by their LaTeX equivalents.
+    assert r"\ensuremath{\le}" in out
+    assert r"\ensuremath{\ge}" in out
+    assert r"\textsubscript{1}" in out
+
+
 # ---------------------------------------------------------------------------
 # Tests — companion class file ships
 # ---------------------------------------------------------------------------

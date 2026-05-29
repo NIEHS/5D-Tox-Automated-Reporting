@@ -116,6 +116,20 @@ _LATEX_ESCAPES: list[tuple[str, str]] = [
     ("^", r"\textasciicircum{}"),
 ]
 
+# Unicode characters common in toxicology/statistics text that the report's
+# font (lmodern / T1) cannot render — they silently DROP from the PDF under
+# both tectonic and Overleaf's pdflatex (confirmed by a real compile: e.g.
+# "p ≤ 0.05" and "BMD₁Std" lost their ≤ and subscript).  Translate
+# them to LaTeX commands (math fonts carry the relations; \textsubscript for
+# subscript digits).  Applied as a post-pass AFTER the special-character
+# escaping above, so the backslashes/braces we insert here are not re-escaped.
+_UNICODE_TO_LATEX: list[tuple[str, str]] = [
+    ("≤", r"\ensuremath{\le}"),   # ≤
+    ("≥", r"\ensuremath{\ge}"),   # ≥
+    # Subscript digits ₀–₉ → \textsubscript{N}
+    *((chr(0x2080 + d), rf"\textsubscript{{{d}}}") for d in range(10)),
+]
+
 
 # ---------------------------------------------------------------------------
 # Helper functions (private)
@@ -139,6 +153,10 @@ def _escape_latex(text: str) -> str:
     if not text:
         return ""
     for raw, repl in _LATEX_ESCAPES:
+        text = text.replace(raw, repl)
+    # Translate font-unrenderable Unicode to LaTeX commands AFTER escaping, so
+    # the commands we insert (\ensuremath{...}, \textsubscript{...}) survive.
+    for raw, repl in _UNICODE_TO_LATEX:
         text = text.replace(raw, repl)
     return text
 
