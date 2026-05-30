@@ -44,6 +44,7 @@ from render_capabilities import (
     COMPONENT_CATALOG,
     capabilities_for,
     is_allowed_child,
+    is_captionable,
     is_headingless,
     required_bindings_for,
 )
@@ -153,6 +154,15 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
                 f"template node {node_id!r}: orientation set but type "
                 f"{node_type!r} is not orientable"
             )
+
+    # Captions are gated on the type's captionable flag (ADR-0004 amendment a):
+    # caption only on table-like types (BITS <table-wrap>/<fig>); a section
+    # carries only <title>.  Empty/None captions are simply absent.
+    if entry.get("caption") and not is_captionable(node_type):
+        raise ValueError(
+            f"template node {node_id!r}: caption set but type "
+            f"{node_type!r} is not captionable"
+        )
 
 
 def _instantiate(template: list[dict], depth: int, parent_type: str | None) -> list[DocNode]:

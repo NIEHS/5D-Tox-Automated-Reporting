@@ -523,12 +523,16 @@ def _format_dose_label(dose, unit: str) -> str:
 
 def _table_caption(node: DocNode, base_caption: str) -> str:
     """
-    Prefix the caption with "Table N. " using the auto-assigned
-    table_number from the document tree.  Strips any leftover Typst-era
-    placeholders like "{compound}" or "{sex}" that the data builders
-    may have emitted.
+    Prefix the caption with "Table N. " using the auto-assigned table_number
+    from the document tree.  Strips any leftover Typst-era placeholders like
+    "{compound}" or "{sex}" that the data builders may have emitted.
+
+    ADR-0004 amendment (a) — de-overloaded caption: prefer the addressable
+    item's own `caption` (template / item-authored, the BITS <caption><p>
+    role) over the data-overlay base caption; fall back when not set, so the
+    existing data-driven path is preserved unchanged.
     """
-    cleaned = (base_caption or "")
+    cleaned = (node.caption or base_caption or "")
     # Replace placeholder patterns left over from Typst-style templating.
     cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
     cleaned = cleaned.strip()

@@ -124,12 +124,19 @@ class ComponentType:
                            instantiator rejects a template node that omits one
                            at LOAD time, instead of letting it render empty.
                            Names must be DocNode binding fields.
+        captionable      — whether this type carries a descriptive caption
+                           paragraph (a table or figure — BITS <table-wrap> /
+                           <fig> with <caption><p>).  ADR-0004 amendment (a).
+                           Sections are NOT captionable (BITS <sec> has <title>
+                           only).  The instantiator rejects `caption:` on a
+                           non-captionable type.
     """
     capabilities: NodeCapabilities = field(default_factory=NodeCapabilities)
     content_kinds: tuple[str, ...] = ()
     headingless: bool = False
     allowed_children: tuple[str, ...] = ()
     requires: tuple[str, ...] = ()
+    captionable: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -208,15 +215,18 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    section heading); data comes from the integrated dataset, not text.
     "table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
-        requires=("platform",),
+        requires=("platform",), captionable=True,
     ),
     "incidence-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
-        requires=("platform",),
+        requires=("platform",), captionable=True,
     ),
     # ── A summary section whose body is one table (it DOES have a heading).
+    #    Captionable because its body is the table whose <caption><p> is the
+    #    descriptive paragraph (BITS-wise, the <table-wrap> carries the caption).
     "bmd-summary": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), requires=("data_key",),
+        captionable=True,
     ),
     # ── The genomics monolith — a heading-bearing section carrying narrative
     #    + tables + charts.  ADR-0003 Phase 4 decomposes its content_kinds
@@ -285,6 +295,15 @@ def required_bindings_for(node_type: str) -> tuple[str, ...]:
     instantiator rejects a node that omits one of these at load time.
     """
     return component_for(node_type).requires
+
+
+def is_captionable(node_type: str) -> bool:
+    """
+    Whether this type carries a descriptive caption paragraph (a table or
+    figure).  Used by the instantiator to gate the `caption:` field — sections
+    have only <title>, not <caption><p> (ADR-0004 amendment a).
+    """
+    return component_for(node_type).captionable
 
 
 def is_allowed_child(parent_type: str, child_type: str) -> bool:

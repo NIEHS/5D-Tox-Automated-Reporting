@@ -51,6 +51,14 @@ class DocNode:
                         Amendment 1).  None means portrait.  A per-session UI
                         override wins over this; the renderer merges the two via
                         render_capabilities.landscape_requested(default=...).
+        caption:        Descriptive paragraph for a captionable component (a
+                        table or figure — ADR-0004 amendment a).  Distinct from
+                        `title`, which is the short heading/title; this is the
+                        BITS <caption><p>...</p></caption> role.  Validated by
+                        the instantiator to only appear on captionable types.
+                        The renderer prefers this over the data-overlay caption
+                        when set; falls back when not, preserving the data-
+                        driven path.
     """
     id: str
     title: str
@@ -65,3 +73,4 @@ class DocNode:
     ready_key: str | None = None
     methods_key: str | None = None
     orientation: str | None = None
+    caption: str | None = None

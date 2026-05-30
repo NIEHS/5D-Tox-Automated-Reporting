@@ -303,6 +303,27 @@ def test_unrenderable_unicode_is_translated_to_latex():
     assert r"\textsubscript{1}" in out
 
 
+def test_table_caption_prefers_node_caption_over_data_overlay():
+    """
+    ADR-0004 amendment (a) — the de-overloaded `caption` on the addressable
+    item wins over the data-overlay base caption.  When `caption` is unset
+    (the current state for all real nodes), the data-overlay caption is used,
+    preserving the existing data-driven path.
+    """
+    from document_node import DocNode
+    from latex_generator import _table_caption
+    node = DocNode(id="t", title="Summary of X", level=0, node_type="table",
+                   platform="P", table_number=2, caption="Node-authored caption.")
+    # node.caption wins over the data-overlay caption argument
+    assert _table_caption(node, "Data-overlay caption.") == \
+        "Table 2. Node-authored caption."
+    # When node.caption is unset, fall back to the data-overlay caption
+    node_no_cap = DocNode(id="t", title="Summary of X", level=0, node_type="table",
+                          platform="P", table_number=2)
+    assert _table_caption(node_no_cap, "Data-overlay caption.") == \
+        "Table 2. Data-overlay caption."
+
+
 def test_abstract_renders_structured_sections_with_bold_labels():
     r"""
     The abstract is structured labeled sections (Background/Methods/Results/

@@ -157,3 +157,17 @@ def test_invalid_orientation_value_rejected():
     with pytest.raises(ValueError, match="orientation must be"):
         instantiate([{"id": "t", "type": "table", "title": "T",
                       "platform": "P", "orientation": "sideways"}])
+
+
+def test_caption_accepted_on_captionable_table():
+    tree = instantiate([{"id": "t", "type": "table", "title": "T",
+                         "platform": "P", "caption": "A descriptive line."}])
+    assert tree[0].caption == "A descriptive line."
+
+
+def test_caption_rejected_on_non_captionable_section():
+    # `narrative` is a section (BITS <sec>: <title> only, no <caption>), so
+    # authoring `caption` on it must fail loudly — capability-gated.
+    with pytest.raises(ValueError, match="not captionable"):
+        instantiate([{"id": "x", "type": "narrative", "title": "X",
+                      "data_key": "d", "caption": "nope"}])

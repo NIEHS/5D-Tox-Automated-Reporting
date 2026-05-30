@@ -467,11 +467,15 @@ def _format_dose_label(dose, unit: str) -> str:
 
 def _table_caption(node: DocNode, base_caption: str) -> str:
     """
-    Prefix the caption with "Table N. " from the auto-assigned
-    table_number, mirroring latex_generator's behavior.  Strips any
-    leftover {compound} / {sex} placeholder tokens.
+    Prefix the caption with "Table N. " from the auto-assigned table_number,
+    mirroring latex_generator's behavior.  Strips any leftover {compound} /
+    {sex} placeholder tokens.
+
+    ADR-0004 amendment (a) — de-overloaded caption: prefer the addressable
+    item's own `caption` (the BITS <caption><p> role) over the data-overlay
+    base caption; fall back when not set, preserving the data-driven path.
     """
-    cleaned = (base_caption or "")
+    cleaned = (node.caption or base_caption or "")
     cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
     cleaned = cleaned.strip()
     if node.table_number is not None:
