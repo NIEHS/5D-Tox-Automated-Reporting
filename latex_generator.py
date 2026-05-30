@@ -906,7 +906,14 @@ def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
     )
     if not chart or not chart.get("filename"):
         return ""
-    caption = _escape_latex(chart.get("caption", ""))
+    # ADR-0004 amendment (e) — prefix the caption with "Figure N." using the
+    # positional figure_number assigned at chart-attach time; the trailing
+    # rstrip drops the dangling space when the descriptive caption is empty.
+    caption_text = chart.get("caption", "")
+    fig_num = chart.get("figure_number")
+    if fig_num is not None:
+        caption_text = f"Figure {fig_num}. {caption_text}".rstrip()
+    caption = _escape_latex(caption_text)
     return (
         "\\begin{center}\n"
         f"\\includegraphics[width=0.85\\linewidth]{{figures/{chart['filename']}}}\\\\\n"

@@ -106,7 +106,8 @@ def test_latex_renders_chart_includegraphics_with_matching_filename():
             "type": "gene_set", "organ": "liver", "sex": "male",
             "gene_sets": [_GENE_SET_ROW],
             "charts": [{"key": "umap", "filename": "genomics-liver-male-umap.png",
-                        "png_b64": "x", "caption": "UMAP of liver"}],
+                        "png_b64": "x", "caption": "UMAP of liver",
+                        "figure_number": 5}],
         }],
         "orientations": {},
     }
@@ -115,3 +116,6 @@ def test_latex_renders_chart_includegraphics_with_matching_filename():
     # The \includegraphics path must be exactly the chart's own filename, so the
     # bundler writes the same name (no missing-figure compile error).
     assert "figures/genomics-liver-male-umap.png" in out
+    # ADR-0004 amendment (e): figcaption carries "Figure N." from the chart's
+    # positional figure_number assigned at attach time.
+    assert "Figure 5. UMAP of liver" in out

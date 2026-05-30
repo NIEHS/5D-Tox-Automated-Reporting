@@ -362,3 +362,25 @@ def test_attach_genomics_charts_attaches_valid_with_filename():
     charts = sections[0].get("charts", [])
     assert len(charts) == 1
     assert charts[0]["filename"] == "genomics-liver-male-umap.png"
+    assert charts[0]["figure_number"] == 1  # ADR-0004 amendment (e)
+
+
+def test_attach_genomics_charts_numbers_figures_sequentially_across_entries():
+    """Figure numbers are positional across ALL attached charts — sequential in
+    render order (entries iterate in genomics_sections order, charts within an
+    entry iterate umap → cluster).  ADR-0004 amendment (e)."""
+    from latex_export import _attach_genomics_charts
+    sections = [
+        {"type": "gene_set", "organ": "kidney", "sex": "female"},
+        {"type": "gene_set", "organ": "liver",  "sex": "male"},
+    ]
+    cache = [
+        {"organ": "kidney", "sex": "female",
+         "umap_png": _TINY_PNG, "cluster_png": _TINY_PNG},
+        {"organ": "liver", "sex": "male",
+         "umap_png": _TINY_PNG, "cluster_png": _TINY_PNG},
+    ]
+    _attach_genomics_charts(sections, cache)
+    nums = [(c["key"], c["figure_number"])
+            for s in sections for c in s.get("charts", [])]
+    assert nums == [("umap", 1), ("cluster", 2), ("umap", 3), ("cluster", 4)]

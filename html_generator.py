@@ -929,10 +929,19 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
             return ""
         png = chart.get("png_b64", "")
         src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
-        caption = _esc(chart.get("caption", ""))
+        # ADR-0004 amendment (e) — visible figcaption gets the "Figure N."
+        # prefix; the <img alt> stays the descriptive caption alone, which is
+        # the accessibility/BITS <alt-text> role (independent of the label).
+        descriptive = chart.get("caption", "")
+        fig_num = chart.get("figure_number")
+        display = (
+            f"Figure {fig_num}. {descriptive}".rstrip()
+            if fig_num is not None else descriptive
+        )
         return (
-            f'<figure class="genomics-chart"><img src="{src}" alt="{caption}">'
-            f"<figcaption>{caption}</figcaption></figure>"
+            f'<figure class="genomics-chart">'
+            f'<img src="{src}" alt="{_esc(descriptive)}">'
+            f"<figcaption>{_esc(display)}</figcaption></figure>"
         )
     if part == "descriptions":
         descriptions = (

@@ -299,6 +299,12 @@ def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None
         ((c.get("organ") or "").lower(), (c.get("sex") or "").lower()): c
         for c in charts_cache if isinstance(c, dict)
     }
+    # Sequential figure number across ALL attached charts (positional in render
+    # order: entries iterate in genomics_sections order, charts within an entry
+    # iterate umap → cluster).  Each chart's figure_number becomes the renderer's
+    # "Figure N." caption prefix and the BITS <label>Figure N</label> later
+    # (ADR-0004 amendment e).
+    next_figure = 1
     for entry in genomics_sections:
         if entry.get("type") != "gene_set":
             continue
@@ -323,7 +329,9 @@ def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None
                 "filename": f"genomics-{slug}-{key}.png",
                 "png_b64": png,
                 "caption": cache_entry.get(f"{key}_caption", ""),
+                "figure_number": next_figure,
             })
+            next_figure += 1
         if charts:
             entry["charts"] = charts
 
