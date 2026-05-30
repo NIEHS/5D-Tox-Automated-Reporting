@@ -1,6 +1,9 @@
 # 0004 — BITS/JATS export surface for PMC/Bookshelf submission
 
 - **Status:** Proposed (2026-05-27)
+- **Status update:** 2026-05-29 — BITS-readiness assessed after ADR-0003
+  Phases 0–5 + the declarative-layout amendment (see "BITS-readiness status" at
+  the end).
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (the
   integrated dataset every component reads through); [ADR-0002](0002-decompose-api-process-integrated.md)
@@ -255,3 +258,68 @@ export depends on ADR-0003's content-item addressing, so they must coordinate):
   requirement).* PMC/Bookshelf submission is the stated driver; deferring leaves
   the model with the latent cross-reference fragility unaddressed and pushes a
   second migration later.
+
+---
+
+## BITS-readiness status (as of ADR-0003 Phase 5, 2026-05-29)
+
+The deliverable-driven ADR-0003 implementation (Phases 0–5 + the declarative-
+layout amendment) was built to keep this export surface *additive*.  Where it
+stands against the plan above:
+
+### Holding — the "BITS is a projection" discipline is intact
+
+- **The canonical model stayed canonical.** `DocNode`/JSON + the YAML template
+  remain the single source of truth; nothing made BITS (or LaTeX) an *internal*
+  concern.  Invariant #2 and this ADR's projection principle both hold.
+- **Renderer-specific concerns stayed in the renderer.** The Unicode→LaTeX
+  translation (`≤`→`\ensuremath{\le}`, subscript digits→`\textsubscript`),
+  table scaling, and the landscape wraps all live in `latex_generator` /
+  `niehs.cls`.  The *data* still carries clean Unicode (`≤` stays `≤`) — exactly
+  what a BITS projection wants (UTF-8 / MathML).  Had any of that gone into the
+  data/marshal layer it would have polluted the semantic baseline; it did not.
+
+### Advanced toward BITS
+
+- **Phase 1 catalog = the BITS structural vocabulary.** `headingless` ↔ BITS
+  positional heading depth; `allowed_children` ↔ the BITS containment grammar
+  (a DAG); `content_kinds` ↔ BITS block-content kinds.  The instantiator
+  validating nesting against `allowed_children` is the BITS containment check in
+  embryo.
+- **Phase 4 content items + declarative orientation = amendment (b),
+  substantially done.** Sub-addressable `(component, content-item)` items ↔ BITS
+  addressable `<table-wrap>` / `<fig>` inside a `<sec>`; orientation-as-an-
+  attribute ↔ BITS `@orientation`.  (BITS `@position` float|anchor is still
+  unbuilt.)
+- **Structured abstract** (Background / Methods / Results / Summary labeled
+  sections) ↔ BITS `<abstract>`; **generated ToC** ↔ the PMC profile (generated,
+  not authored).
+
+### Still pending — the Decision-section amendments, unchanged
+
+- **(a) label / title / caption split** — `DocNode.title` is still overloaded
+  (section heading *and* table title); captions still live in the data overlay.
+  BITS forbids `<title>` on a table/figure, so this is a real prerequisite.
+- **(c) cross-reference mechanism (`xref`/`rid`)** — still the one net-new gap;
+  nothing has built it.  Highest-value, most-distinctive missing piece, and the
+  one the positional numbering makes most necessary.
+- **(d) front/body/back as explicit regions** — still membership-based
+  (`FRONT_MATTER_NODE_TYPES`), not the three explicit BITS containers.
+- **(e) `compute_figure_numbers()` + figure `<alt-text>`** — unimplemented; the
+  genomics charts now render with captions but no figure number and no alt-text
+  (PMC *requires* `<alt-text>`).
+
+### One semantic-baseline caveat to track
+
+**References are semantically flat.** They render as paragraphs (`[1] …`), and
+the underlying data is a list of pre-formatted strings, not structured
+`<element-citation>` fields — the upstream LLM extracts strings, not citations.
+This is *not* a regression introduced by the LaTeX work, but it is a genuine
+BITS gap: `<ref-list>` / `<ref>` / `<element-citation>` need structured citation
+data we do not currently produce.  It is the place the deliverable sits furthest
+from BITS structure.
+
+**Net:** the catalog / content-item / orientation work moved the model *toward*
+Bookshelf rather than away.  The export surface itself and prerequisites
+(a)/(c)/(d)/(e) remain this ADR's roadmap — with **(c) cross-references** the
+priority.
