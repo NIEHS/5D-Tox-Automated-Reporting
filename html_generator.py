@@ -57,6 +57,7 @@ from document_tree import (
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
+from cross_references import resolve_xrefs_html
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +354,10 @@ def _esc(text) -> str:
     """
     if text is None:
         return ""
-    return _html.escape(str(text), quote=True)
+    # Resolve semantic cross-references AFTER HTML escaping (ADR-0004
+    # amendment c): [[xref:id]] tokens survive _html.escape (brackets are not
+    # HTML-special), and the <a> we insert is therefore not re-escaped.
+    return resolve_xrefs_html(_html.escape(str(text), quote=True))
 
 
 def _heading(level: int, title: str) -> str:

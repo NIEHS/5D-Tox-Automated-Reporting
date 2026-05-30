@@ -73,6 +73,7 @@ from document_tree import (
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
+from cross_references import resolve_xrefs_latex
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +159,10 @@ def _escape_latex(text: str) -> str:
     # the commands we insert (\ensuremath{...}, \textsubscript{...}) survive.
     for raw, repl in _UNICODE_TO_LATEX:
         text = text.replace(raw, repl)
+    # Resolve semantic cross-references AFTER escaping (ADR-0004 amendment c):
+    # [[xref:id]] tokens survive the escape pass (brackets are not LaTeX-
+    # special), and the \ref{} we insert is therefore not re-escaped.
+    text = resolve_xrefs_latex(text)
     return text
 
 
