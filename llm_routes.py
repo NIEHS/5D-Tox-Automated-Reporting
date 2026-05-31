@@ -898,14 +898,12 @@ async def generate_genomics_narrative_async(
         cache_path = None
         existing_cache_path = None
         if dtxsid:
-            # Sanitize organ/sex for filename (e.g. "liver_female")
-            organ_key = organ.lower().replace(" ", "_")
-            sex_key = sex.lower().replace(" ", "_")
+            # The organ×sex cache prefix is built by the shared helper so the
+            # naming convention lives in one place (genomics_narratives).
+            from genomics_narratives import interpretation_cache_prefix
+            prefix = interpretation_cache_prefix(organ, sex)
             session_dir = SESSIONS_DIR / dtxsid
-            cache_path = (
-                session_dir
-                / f"_cache_interpretation_{organ_key}_{sex_key}_{gene_hash}.json"
-            )
+            cache_path = session_dir / f"{prefix}{gene_hash}.json"
             # Look for ANY existing narrative file for this (organ, sex),
             # not just the hash-keyed one.  Prefer the exact-hash match if
             # it exists (cleanest), otherwise fall back to the most recent
@@ -914,7 +912,6 @@ async def generate_genomics_narrative_async(
             # so both the fast-path return and the stale-context reuse below
             # are bypassed and we recompute from scratch.
             if not force:
-                prefix = f"_cache_interpretation_{organ_key}_{sex_key}_"
                 if cache_path.exists():
                     existing_cache_path = cache_path
                 else:
@@ -987,8 +984,9 @@ async def generate_genomics_narrative_async(
                     try:
                         # Clean up old caches for this organ×sex (different hash
                         # means different gene list from a re-integration).
+                        # `prefix` was computed once above via
+                        # interpretation_cache_prefix and is still in scope here.
                         cache_dir = cache_path.parent
-                        prefix = f"_cache_interpretation_{organ_key}_{sex_key}_"
                         for old in cache_dir.glob(f"{prefix}*.json"):
                             if old != cache_path:
                                 old.unlink(missing_ok=True)
@@ -1248,13 +1246,21 @@ async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
     # `_cache_genomics_*.json` is the organ_sex-keyed dict process-integrated
     # wrote; each entry carries the gene_sets_by_stat / top_genes / all_genes
     # the LLM prompt needs.  Without it there is nothing to regenerate from.
+    # A session accumulates one file per content hash, so take the NEWEST by
+    # mtime — the same selection every other genomics-cache reader uses.  The
+    # previous `sorted(...)[break]` grabbed the lexically-first file, which in a
+    # multi-hash session is the STALE one, exactly the case regenerate defends
+    # against.
     genomics_cache = None
-    for gc in sorted(session_dir.glob("_cache_genomics_*.json")):
+    _genomics_matches = sorted(
+        session_dir.glob("_cache_genomics_*.json"),
+        key=lambda p: p.stat().st_mtime,
+    )
+    if _genomics_matches:
         try:
-            genomics_cache = json.loads(gc.read_text(encoding="utf-8"))
+            genomics_cache = json.loads(_genomics_matches[-1].read_text(encoding="utf-8"))
         except Exception:
             genomics_cache = None
-        break
     if not genomics_cache:
         return JSONResponse(
             {"error": "No genomics data cached for this session"},

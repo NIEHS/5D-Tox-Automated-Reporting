@@ -14,8 +14,12 @@ Three things the template does NOT carry, because they are computed:
 
   - level — derived as `0 if the type is headingless else nesting depth`,
     using the catalog's `headingless` flag.
-  - table_number / figure_number — positional, assigned later by the
-    numbering pre-pass (compute_table_numbers).
+  - table_number — positional, assigned later by the numbering pre-pass
+    (compute_table_numbers).
+  - figure_number — reserved positional field; there is no DocNode-level
+    figure-numbering pass yet (genomics chart figure numbers are assigned on
+    the chart payloads by genomics_charts.attach_genomics_charts), so it stays
+    None on the tree today.
 
 Single source of truth for the node shape
 ------------------------------------------

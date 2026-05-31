@@ -518,8 +518,10 @@ async def api_session_load(dtxsid: str):
                 # Pick the most recent cache for this organ×sex (if
                 # multiple gene_hashes linger — shouldn't happen after
                 # the cleanup in generate_genomics_narrative_async, but
-                # be defensive).
-                prefix = f"_cache_interpretation_{organ_k}_{sex_k}_"
+                # be defensive).  The prefix is built by the shared helper
+                # so this reload path can't drift from the writer's naming.
+                from genomics_narratives import interpretation_cache_prefix
+                prefix = interpretation_cache_prefix(organ_k, sex_k)
                 latest = None
                 latest_mtime = -1.0
                 for cf in d.glob(f"{prefix}*.json"):

@@ -51,7 +51,6 @@ from __future__ import annotations
 # argparse for the CLI entry point used in the demo workflow.
 
 import argparse
-import base64
 import json
 import zipfile
 from pathlib import Path
@@ -263,77 +262,14 @@ def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
     return out
 
 
-def _decode_png(b64: str | None) -> bytes | None:
-    """
-    Decode a base64 PNG (raw, or "data:image/png;base64,..." form) to bytes,
-    returning None if it is missing or won't decode.
-    """
-    if not b64:
-        return None
-    if b64.startswith("data:"):
-        b64 = b64.split(",", 1)[-1]
-    try:
-        return base64.b64decode(b64)
-    except Exception:
-        return None
-
-
-def _attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
-    """
-    Attach per-(organ, sex) chart images to the matching gene_set entries.
-
-    `charts_cache` is the `_cache_charts_*.json` list: one entry per (organ,
-    sex) carrying base64-PNG fields umap_png / cluster_png (+ captions).  We
-    index it by (organ, sex) and hang the images on the gene_set genomics entry
-    as entry["charts"], so genomics_content_plan emits chart content items and
-    build_overleaf_bundle writes the PNGs into figures/.
-
-    Each chart carries its OWN deterministic `filename`; both the renderer
-    (the \\includegraphics path) and the bundler (the file it writes) read that
-    same field, so they can never disagree on the name — a mismatch would be a
-    missing-figure compile error on Overleaf.
-    """
-    if not isinstance(charts_cache, list):
-        return
-    by_os = {
-        ((c.get("organ") or "").lower(), (c.get("sex") or "").lower()): c
-        for c in charts_cache if isinstance(c, dict)
-    }
-    # Sequential figure number across ALL attached charts (positional in render
-    # order: entries iterate in genomics_sections order, charts within an entry
-    # iterate umap → cluster).  Each chart's figure_number becomes the renderer's
-    # "Figure N." caption prefix and the BITS <label>Figure N</label> later
-    # (ADR-0004 amendment e).
-    next_figure = 1
-    for entry in genomics_sections:
-        if entry.get("type") != "gene_set":
-            continue
-        organ = (entry.get("organ") or "").lower()
-        sex = (entry.get("sex") or "").lower()
-        cache_entry = by_os.get((organ, sex))
-        if not cache_entry:
-            continue
-        slug = f"{organ}-{sex}".replace(" ", "-")
-        charts = []
-        for key in ("umap", "cluster"):
-            png = cache_entry.get(f"{key}_png")
-            if not png:
-                continue
-            # Validate the base64 decodes NOW and drop a chart we can't decode,
-            # so it never reaches the renderer as a \includegraphics with no
-            # backing file in figures/ (which would break the Overleaf compile).
-            if _decode_png(png) is None:
-                continue
-            charts.append({
-                "key": key,
-                "filename": f"genomics-{slug}-{key}.png",
-                "png_b64": png,
-                "caption": cache_entry.get(f"{key}_caption", ""),
-                "figure_number": next_figure,
-            })
-            next_figure += 1
-        if charts:
-            entry["charts"] = charts
+# The PNG decoder and the chart-attach assembler moved to the shared
+# genomics_charts module so BOTH this session-export path AND the web/preview
+# path (report_data.marshal_export_data) attach charts identically — see that
+# module's header for why the logic can't live privately in either path.  We
+# re-bind them to the original private names so this module's internal callers
+# (and the unit tests that import them from here) keep working unchanged.
+from genomics_charts import decode_png as _decode_png
+from genomics_charts import attach_genomics_charts as _attach_genomics_charts
 
 
 def _collect_figure_files(data: dict) -> dict:

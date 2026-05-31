@@ -218,6 +218,25 @@ def build_genomics_body_narratives(
 _SEX_ORDER: tuple[str, ...] = ("male", "female")
 
 
+def interpretation_cache_prefix(organ: str, sex: str) -> str:
+    """
+    The filename prefix for an organ×sex genomics-narrative cache:
+    `_cache_interpretation_{organ}_{sex}_`.  Append `{gene_hash}.json` for a
+    specific file, or glob `{prefix}*.json` for every hash of that organ×sex.
+
+    organ/sex are sanitized the same way the cache writer does — lower-cased
+    with spaces turned to underscores — so the prefix produced here matches the
+    files on disk regardless of how the caller capitalized or spaced the names.
+    This is the single source of that naming convention: the writer, the
+    exact-and-stale lookup, the cleanup glob (llm_routes) and the session-reload
+    glob (session_routes) all build their path from this one helper, so they
+    cannot drift on the prefix string.
+    """
+    organ_key = organ.lower().replace(" ", "_")
+    sex_key = sex.lower().replace(" ", "_")
+    return f"_cache_interpretation_{organ_key}_{sex_key}_"
+
+
 def aggregate_organ_llm_narratives(
     per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]],
     overrides: dict[str, dict[str, list[str]]] | None = None,

@@ -69,6 +69,7 @@ from document_tree import (
     DOCUMENT_TREE,
     DocNode,
     find_node,
+    first_body_node_id,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
@@ -1242,18 +1243,19 @@ def generate_latex(
     # descendants, already flattened in document order.
     #
     # Page numbering switches from roman (front matter) to arabic (body) at
-    # the first top-level node with region == "body" — the body's first page
-    # (Background) becomes arabic page 1, matching NIEHS Report 10.  Region
-    # is set by the template's region containers (ADR-0004 amendment d);
-    # before that, this used a node-type membership set.  \clearpage flushes
-    # any pending floats first so the switch lands on the body's opening
-    # page, not a stray float page.
+    # the body's first top-level node — the boundary the tree owns via
+    # first_body_node_id() (the first node with region == "body", set by the
+    # template's region containers, ADR-0004 amendment d).  We ask the tree
+    # for that id rather than re-deriving "region == body" here, so the LaTeX
+    # and HTML renderers can't drift on where the switch lands.  The body's
+    # first page (Background) becomes arabic page 1, matching NIEHS Report 10.
+    # \clearpage flushes any pending floats first so the switch lands on the
+    # body's opening page, not a stray float page.
+    body_first_id = first_body_node_id()
     body_chunks: list[str] = []
-    switched_to_body = False
     for top in DOCUMENT_TREE:
-        if not switched_to_body and top.region == "body":
+        if top.id == body_first_id:
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
-            switched_to_body = True
         body_chunks.extend(_walk(top, data))
 
     # Paragraph break between every chunk.  LaTeX collapses consecutive

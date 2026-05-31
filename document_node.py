@@ -38,7 +38,11 @@ class DocNode:
                         holds the group narrative (e.g., "apical", "clinical_pathology").
         children:       Child nodes (sub-sections, tables within a section).
         table_number:   Auto-assigned by compute_table_numbers().  None until computed.
-        figure_number:  Auto-assigned by compute_figure_numbers().  None until computed.
+        figure_number:  Reserved positional figure number for a figure-bearing
+                        node.  There is NO DocNode-level figure-numbering pass
+                        yet — genomics chart figure numbers are assigned on the
+                        chart payloads by genomics_charts.attach_genomics_charts,
+                        not here — so this field is currently always None.
         ready_key:      Alpine store ready flag name (for navigation panel enable/disable).
                         None if always enabled.
         methods_key:    For M&M subsection nodes — the key in data["methods"]["sections"]

@@ -237,18 +237,11 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     ),
 }
 
-# Backward-compatible view: the historical node_type → capabilities map,
-# now DERIVED from the catalog so there is a single source of truth.
-CAPABILITIES_BY_TYPE: dict[str, NodeCapabilities] = {
-    node_type: spec.capabilities for node_type, spec in COMPONENT_CATALOG.items()
-}
-
 # Fallback for a node_type not in the catalog: an inert component (no
 # capabilities, no content, not headingless, no children).  This is what
 # lets the template reference a type before it has an entry — the new type
 # is simply inert until someone defines it above.
 _DEFAULT_COMPONENT = ComponentType()
-_DEFAULT_CAPABILITIES = _DEFAULT_COMPONENT.capabilities
 
 
 # ---------------------------------------------------------------------------

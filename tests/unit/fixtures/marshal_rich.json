@@ -552,7 +552,6 @@
       "Gene set prose."
     ]
   },
-  "genomics_charts": [],
   "genomics_sections": [
     {
       "organ": "Liver",
@@ -588,12 +587,14 @@
       "«Report Series Number: XX»"
     ]
   },
-  "references": [
-    {
-      "id": 1,
-      "text": "Ref 1"
-    }
-  ],
+  "references": {
+    "paragraphs": [
+      {
+        "id": 1,
+        "text": "Ref 1"
+      }
+    ]
+  },
   "report_date": "Month 2026",
   "report_number": "DR99",
   "report_series": "NIEHS Report Series",

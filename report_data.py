@@ -64,6 +64,27 @@ from table_builder_common import lettered_footnote, finalize_footnotes
 
 
 # ---------------------------------------------------------------------------
+# Session cache lookup
+# ---------------------------------------------------------------------------
+
+def _latest_session_cache(session_dir: Path, glob_pattern: str):
+    """
+    Return the NEWEST session cache file matching `glob_pattern`, or None.
+
+    A session accumulates one cache file per content hash (e.g. several
+    `_cache_genomics_<hash>.json` as the gene set is re-analysed), so "the
+    current one" is the most recently written — not the lexically-first.
+    Selecting by modification time matches the convention the session-export
+    path uses (latex_export._latest); this is the web/preview path's copy so
+    both surfaces resolve the same file from a multi-hash session.
+
+    Returns a pathlib.Path or None when nothing matches.
+    """
+    candidates = sorted(session_dir.glob(glob_pattern), key=lambda p: p.stat().st_mtime)
+    return candidates[-1] if candidates else None
+
+
+# ---------------------------------------------------------------------------
 # Apical section normalizer — canonical input shape for the renderers
 # ---------------------------------------------------------------------------
 # Both the LaTeX export and the in-app HTML preview consume the same
@@ -306,10 +327,17 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     if paragraphs:
         data["background"] = {"paragraphs": paragraphs}
 
-    # References
+    # References — the narrative-node handler in both renderers reads
+    # data["references"]["paragraphs"] (a dict; see _render_front_matter),
+    # which is the same shape the session-export path produces from
+    # background.json.  The request body carries a flat list of reference
+    # strings, so wrap it.  Passing the bare list (the previous behaviour)
+    # failed the renderers' isinstance(content, dict) check and silently
+    # rendered "[Section pending]" in the HTML preview and the marshal-export
+    # LaTeX — assembly drift from the session path that this corrects.
     references = body.get("references", [])
     if references:
-        data["references"] = references
+        data["references"] = _ensure_paragraphs(references)
 
     # Materials and Methods — overlay structured or flat content onto
     # the scaffold's full H2/H3 heading hierarchy.
@@ -493,10 +521,10 @@ def _overlay_abstract(data: dict, body: dict) -> None:
     if dtxsid:
         try:
             session_dir = Path("sessions") / dtxsid
-            caches = list(session_dir.glob("_cache_genomics_*.json"))
-            if caches:
+            cache = _latest_session_cache(session_dir, "_cache_genomics_*.json")
+            if cache is not None:
                 import orjson
-                genomics_cache = orjson.loads(caches[0].read_bytes())
+                genomics_cache = orjson.loads(cache.read_bytes())
         except Exception:
             pass
 
@@ -750,15 +778,34 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
 def _overlay_genomics(data: dict, body: dict) -> None:
     """Overlay genomics gene-set/gene sections and auto-populate the gene-set / gene body narratives."""
     methods_data = body.get("methods_data")
+    _dtxsid = body.get("dtxsid", "")
+    _session_dir_path = Path("sessions") / _dtxsid if _dtxsid else None
     # Genomics
     genomics = body.get("genomics_sections", [])
     if genomics:
         data["genomics_sections"] = genomics
-        # Placeholder for chart images — the actual PNGs are injected later
-        # by build_report_data(), but the key must exist here so
-        # _apply_section_filter() doesn't strip it when section_filter="charts".
-        if any(s.get("type") == "gene_set" for s in genomics):
-            data["genomics_charts"] = []
+        # Attach genomics chart images (UMAP / cluster-scatter PNGs) to the
+        # gene_set entries, exactly as the session-export path does.  The
+        # charts live in the session's _cache_charts_*.json (base64 PNG, one
+        # entry per organ×sex); the browser does NOT round-trip them through
+        # the request body, so we read them server-side here — the behaviour
+        # export.js documents ("Chart images are read server-side from
+        # _cache_charts_{hash}.json").  Charts hang on entry["charts"], which
+        # is what both renderers read; that replaces the old, dead
+        # data["genomics_charts"] key (no node type ever consumed it).
+        if _session_dir_path and _session_dir_path.exists():
+            _charts = _latest_session_cache(_session_dir_path, "_cache_charts_*.json")
+            if _charts is not None:
+                try:
+                    import orjson
+                    from genomics_charts import attach_genomics_charts
+                    charts_cache = orjson.loads(_charts.read_bytes())
+                    if isinstance(charts_cache, list):
+                        attach_genomics_charts(genomics, charts_cache)
+                except Exception:
+                    # A missing/corrupt chart cache must not abort the report;
+                    # the genomics sections simply render without figures.
+                    logging.exception("Failed to attach genomics charts")
 
     gene_set_narrative = body.get("gene_set_narrative")
     if gene_set_narrative:
@@ -775,15 +822,15 @@ def _overlay_genomics(data: dict, body: dict) -> None:
     # read here (not in the shared assembler) because this path is
     # session-specific; `/api/process-integrated` passes the in-memory
     # genomics_sections dict directly instead.
+    # _dtxsid / _session_dir_path were resolved once at the top of this
+    # function (the charts attach also needs them) — reuse them here.
     _genomics_cache = None
-    _dtxsid = body.get("dtxsid", "")
-    if _dtxsid and genomics:
+    if _session_dir_path and genomics:
         try:
-            _session_dir_path = Path("sessions") / _dtxsid
-            _caches = list(_session_dir_path.glob("_cache_genomics_*.json"))
-            if _caches:
+            _gcache = _latest_session_cache(_session_dir_path, "_cache_genomics_*.json")
+            if _gcache is not None:
                 import orjson
-                _genomics_cache = orjson.loads(_caches[0].read_bytes())
+                _genomics_cache = orjson.loads(_gcache.read_bytes())
         except Exception:
             pass
 
@@ -1050,7 +1097,8 @@ def scaffold_report_data(
         dtxsid: DSSTox substance identifier.
 
     Returns:
-        A dict ready to pass directly to build_report_data().
+        A dict ready to overlay real content onto via marshal_export_data()
+        (or to render as-is for a scaffold-only preview).
     """
     # --- Placeholder helper ---
     # Wraps text so it's clearly identifiable as scaffold content.
@@ -1420,10 +1468,6 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
                 return any(s.get("type") == "gene" and s.get("top_genes") for s in gs)
             return bool(gs)
 
-        # Genomics charts — check for cached chart images
-        if node.node_type == "genomics-charts":
-            return bool(data.get("genomics_charts"))
-
         # Narrative / heading-only nodes — check data_key for content
         if dk:
             val = data.get(dk)
@@ -1541,7 +1585,7 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     ALL_BODY = {
         "background", "methods", "apical_sections", "unified_narratives",
         "internal_dose", "bmd_summary", "genomics_sections",
-        "gene_set_narrative", "gene_narrative", "genomics_charts",
+        "gene_set_narrative", "gene_narrative",
         "summary", "references",
     }
     ALL_FRONT = {
@@ -1631,16 +1675,11 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
     if platforms:
         keep.add("apical_sections")
 
-    # Charts are now rendered inline within the gene-set per-organ
-    # blocks (no longer a standalone H2 section).  Their payload key,
-    # `genomics_charts`, must travel with `genomics_sections` whenever
-    # the gene-sets node (or one of its dynamic per-organ subnodes) is
-    # being previewed — otherwise the inline chart filter has nothing
-    # to draw from.  collect_data_keys() doesn't know about this
-    # cross-node coupling, so we add it explicitly.
-    if "genomics_sections" in keep:
-        keep.add("genomics_charts")
-
+    # Charts are rendered inline within the gene-set per-organ blocks, and
+    # their PNG payload now travels INSIDE each genomics_sections entry (as
+    # entry["charts"], attached by genomics_charts.attach_genomics_charts).
+    # So keeping "genomics_sections" automatically keeps the charts — there is
+    # no separate top-level chart key to preserve any more.
     for key in ALL_BODY - keep:
         data.pop(key, None)
 

@@ -53,6 +53,7 @@ from document_tree import (
     DOCUMENT_TREE,
     DocNode,
     find_node,
+    first_body_node_id,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
@@ -1320,15 +1321,20 @@ def generate_html(
     # wrapped in .report-mainmatter, which the CSS assigns to the arabic
     # "mainmatter" page, restarts the page counter at 1, and breaks onto a
     # fresh page — matching NIEHS Report 10 (Background = arabic page 1).
-    # The split is driven by node.region (ADR-0004 amendment d): the first
-    # top-level node with region == "body" flips us into the body bucket.
+    # The split is driven by the body's first top-level node, which the tree
+    # owns via first_body_node_id() (the first node with region == "body",
+    # ADR-0004 amendment d).  We ask the tree for that boundary id rather than
+    # re-deriving "region == body" here, so the HTML and LaTeX renderers stay
+    # in lockstep on where front matter ends.  Once we reach it, every
+    # subsequent top-level node goes into the body bucket.
     # The running header is the report title (same source as the cover
     # block's <h1>, so preview header and title block stay in sync).
+    body_first_id = first_body_node_id()
     front_chunks: list[str] = []
     body_chunks: list[str] = []
     in_body = False
     for top in DOCUMENT_TREE:
-        if not in_body and top.region == "body":
+        if top.id == body_first_id:
             in_body = True
         (body_chunks if in_body else front_chunks).extend(_walk(top, data))
     body = "\n".join(front_chunks)
