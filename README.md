@@ -2,7 +2,7 @@
 
 Automated report generation for NTP "5-Day Genomic Dose Response in Sprague-Dawley Rats" studies.
 
-Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, then produces a structured NIEHS Report 10-format document — NTP-style apical endpoint tables, LLM-generated narrative sections, and a toxicological genomics interpretation — exported as tagged PDF/UA-1 or Word (`.docx`).
+Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, then produces a structured NIEHS Report 10-format document — NTP-style apical endpoint tables, LLM-generated narrative sections, and a toxicological genomics interpretation — previewed in-app as HTML and exported as an Overleaf-ready LaTeX bundle.
 
 ---
 
@@ -63,13 +63,15 @@ Table builders consume `integrated.json` and produce NTP-style formatted tables 
 The gene-level BMD CSV is processed against the knowledge base: pathway and GO term enrichment (Fisher's exact test, BH FDR correction), BMD ordering by pathway, organ signatures. Results are sent to an LLM for a toxicological interpretation narrative.
 
 **Step 6 — Export**
-Export the approved report as a tagged PDF/UA-1 (via Typst) or Word document.
+Export the approved report as an Overleaf-ready LaTeX bundle — a `.zip` containing `report.tex`, the `niehs.cls` class file, and a `figures/` directory of genomics charts. Drop it into Overleaf and compile. The in-app HTML preview renders the same document tree as you work, so the exported PDF matches what you reviewed.
 
 ---
 
 ## Architecture
 
 A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`). All report content derives from uploaded dose-response data and a pre-built toxicogenomics knowledge base (`bmdx.duckdb`). Java helper classes handle `.bm2` file parsing and statistical tests via subprocess.
+
+For the *why* behind this structure — the purpose → architecture narrative, the domain glossary, and the decision records this section points to — see [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/).
 
 **Server and routing:**
 
@@ -80,15 +82,21 @@ A FastAPI server (`background_server.py`) with an Alpine.js browser UI (`web/`).
 | `session_routes.py` | Session load/save, approve/unapprove, version history, BMD summary |
 | `upload_routes.py` | Upload `.bm2`, CSV, ZIP; process genomics; preview files |
 | `llm_routes.py` | LLM generation endpoints (background, methods, genomics narrative, summary) |
-| `export_routes.py` | Export full report as tagged PDF/UA-1 or `.docx` |
+| `export_routes.py` | Export the Overleaf LaTeX bundle (`.zip`); serve the HTML preview for a TOC subtree |
 
-**Report structure and output:**
+**Report structure and rendering** (the document-component model — ADR-0003/0004):
 
 | Module | Purpose |
 |--------|---------|
-| `document_tree.py` | `DocNode` tree — single source of truth for report structure and table numbering |
-| `report_data.py` | PDF generation via Typst (`report.typ`) |
-| `build_docx.py` | Word document assembly |
+| `document_tree.py` / `document_node.py` | The `DocNode` tree and node type — single source of truth for report structure and positional table/figure numbering |
+| `document_template.py` | Loads a YAML template (`templates/*.yaml`) and instantiates it into the `DocNode` tree, validating against the catalog at load time |
+| `render_capabilities.py` | The component catalog — each component type's capabilities, allowed children, required bindings, and content kinds |
+| `report_data.py` | Data assembly — overlays session/request content onto the report scaffold and produces the dict both renderers consume (`marshal_export_data` web path, `load_session_data` session path) |
+| `html_generator.py` | Renders the tree to the in-app HTML preview |
+| `latex_generator.py` | Renders the tree to LaTeX (`report.tex`) |
+| `latex_export.py` | Assembles the Overleaf bundle (`report.tex` + `niehs.cls` + `figures/`) as a `.zip` |
+| `genomics_content.py` / `genomics_charts.py` | Shared genomics content-item plan and chart-image assembly, consumed by both renderers |
+| `cross_references.py` | In-text cross-reference resolution, shared by both renderers |
 | `interpret.py` | Toxicological interpretation: KB queries, pathway/GO enrichment, LLM narratives |
 
 **Table builders** (consume `integrated.json` only):
@@ -181,11 +189,11 @@ Access control is handled by the `ALLOWED_USERS` environment variable (comma-sep
 ## Dependencies
 
 **Python** (managed by `uv`):
-`fastapi`, `uvicorn`, `duckdb`, `pybmds`, `anthropic`, `python-docx`, `typst`, `networkx`, `pandas`, `scipy`, `plotly`, `umap-learn`, `hdbscan`, `pronto`, `orjson`, `requests`
+`fastapi`, `uvicorn`, `duckdb`, `pybmds`, `anthropic`, `pyyaml`, `python-docx`, `networkx`, `pandas`, `scipy`, `plotly`, `umap-learn`, `hdbscan`, `pronto`, `orjson`, `requests`
 
 **System:**
 - Java 21 JRE (BMDExpress 3 subprocess calls)
-- Typst (bundled via `typst` Python package)
+- No local LaTeX engine is required — the exported bundle compiles on Overleaf (or any TeX distribution).
 
 **External at runtime:**
 - Anthropic API key, or local Ollama server
