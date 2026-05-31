@@ -51,7 +51,6 @@ from typing import Optional
 
 from document_tree import (
     DOCUMENT_TREE,
-    FRONT_MATTER_NODE_TYPES,
     DocNode,
     find_node,
 )
@@ -1321,13 +1320,15 @@ def generate_html(
     # wrapped in .report-mainmatter, which the CSS assigns to the arabic
     # "mainmatter" page, restarts the page counter at 1, and breaks onto a
     # fresh page — matching NIEHS Report 10 (Background = arabic page 1).
+    # The split is driven by node.region (ADR-0004 amendment d): the first
+    # top-level node with region == "body" flips us into the body bucket.
     # The running header is the report title (same source as the cover
     # block's <h1>, so preview header and title block stay in sync).
     front_chunks: list[str] = []
     body_chunks: list[str] = []
     in_body = False
     for top in DOCUMENT_TREE:
-        if not in_body and top.node_type not in FRONT_MATTER_NODE_TYPES:
+        if not in_body and top.region == "body":
             in_body = True
         (body_chunks if in_body else front_chunks).extend(_walk(top, data))
     body = "\n".join(front_chunks)

@@ -59,6 +59,13 @@ class DocNode:
                         The renderer prefers this over the data-overlay caption
                         when set; falls back when not, preserving the data-
                         driven path.
+        region:         Which book region this node belongs to — "front",
+                        "body", or "back" (ADR-0004 amendment d).  Set by the
+                        instantiator from the template's region containers and
+                        inherited by descendants.  Drives the page-numbering
+                        switch and projects directly to BITS <front-matter> /
+                        <book-body> / <book-back>.  Not authored on individual
+                        nodes — region containers in the template own it.
     """
     id: str
     title: str
@@ -74,3 +81,4 @@ class DocNode:
     methods_key: str | None = None
     orientation: str | None = None
     caption: str | None = None
+    region: str | None = None

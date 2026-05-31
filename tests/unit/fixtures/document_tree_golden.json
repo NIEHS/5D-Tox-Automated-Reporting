@@ -2,18 +2,21 @@
   {
     "id": "cover",
     "level": 0,
+    "region": "front",
     "title": "Cover Page",
     "type": "cover"
   },
   {
     "id": "title-page",
     "level": 0,
+    "region": "front",
     "title": "Title Page",
     "type": "title-page"
   },
   {
     "id": "toc",
     "level": 0,
+    "region": "front",
     "title": "Table of Contents",
     "type": "toc"
   },
@@ -21,12 +24,14 @@
     "data_key": "foreword",
     "id": "foreword",
     "level": 1,
+    "region": "front",
     "title": "Foreword",
     "type": "front-matter"
   },
   {
     "id": "tables-list",
     "level": 1,
+    "region": "front",
     "title": "Tables",
     "type": "tables-list"
   },
@@ -34,6 +39,7 @@
     "data_key": "about_report",
     "id": "about",
     "level": 1,
+    "region": "front",
     "title": "About This Report",
     "type": "front-matter"
   },
@@ -41,6 +47,7 @@
     "data_key": "peer_review",
     "id": "peer-review",
     "level": 1,
+    "region": "front",
     "title": "Peer Review",
     "type": "front-matter"
   },
@@ -48,6 +55,7 @@
     "data_key": "publication_details",
     "id": "publication",
     "level": 1,
+    "region": "front",
     "title": "Publication Details",
     "type": "front-matter"
   },
@@ -55,6 +63,7 @@
     "data_key": "acknowledgments",
     "id": "acknowledgments",
     "level": 1,
+    "region": "front",
     "title": "Acknowledgments",
     "type": "front-matter"
   },
@@ -62,6 +71,7 @@
     "data_key": "abstract",
     "id": "abstract",
     "level": 1,
+    "region": "front",
     "title": "Abstract",
     "type": "front-matter"
   },
@@ -69,6 +79,7 @@
     "data_key": "background",
     "id": "background",
     "level": 1,
+    "region": "body",
     "title": "Background",
     "type": "narrative"
   },
@@ -78,6 +89,7 @@
         "data_key": "methods",
         "id": "mm-study-design",
         "level": 2,
+        "region": "body",
         "title": "Study Design",
         "type": "narrative"
       },
@@ -85,6 +97,7 @@
         "data_key": "methods",
         "id": "mm-dose-rationale",
         "level": 2,
+        "region": "body",
         "title": "Dose Selection Rationale",
         "type": "narrative"
       },
@@ -92,6 +105,7 @@
         "data_key": "methods",
         "id": "mm-chemistry",
         "level": 2,
+        "region": "body",
         "title": "Chemistry",
         "type": "narrative"
       },
@@ -101,6 +115,7 @@
             "data_key": "methods",
             "id": "mm-clin-obs",
             "level": 3,
+            "region": "body",
             "title": "Clinical Observations",
             "type": "narrative"
           },
@@ -108,6 +123,7 @@
             "data_key": "methods",
             "id": "mm-body-organ-wt",
             "level": 3,
+            "region": "body",
             "title": "Body and Organ Weights",
             "type": "narrative"
           },
@@ -115,6 +131,7 @@
             "data_key": "methods",
             "id": "mm-clin-path",
             "level": 3,
+            "region": "body",
             "title": "Clinical Pathology",
             "type": "narrative"
           },
@@ -122,6 +139,7 @@
             "data_key": "methods",
             "id": "mm-internal-dose",
             "level": 3,
+            "region": "body",
             "title": "Internal Dose Assessment",
             "type": "narrative"
           }
@@ -129,6 +147,7 @@
         "data_key": "methods",
         "id": "mm-clin-exam",
         "level": 2,
+        "region": "body",
         "title": "Clinical Examinations and Sample Collection",
         "type": "heading-only"
       },
@@ -138,6 +157,7 @@
             "data_key": "methods",
             "id": "mm-tx-sample",
             "level": 3,
+            "region": "body",
             "title": "Sample Collection for Transcriptomics",
             "type": "narrative"
           },
@@ -145,6 +165,7 @@
             "data_key": "methods",
             "id": "mm-tx-rna",
             "level": 3,
+            "region": "body",
             "title": "RNA Isolation, Library Creation, and Sequencing",
             "type": "narrative"
           },
@@ -152,6 +173,7 @@
             "data_key": "methods",
             "id": "mm-tx-processing",
             "level": 3,
+            "region": "body",
             "title": "Sequence Data Processing",
             "type": "narrative"
           },
@@ -159,6 +181,7 @@
             "data_key": "methods",
             "id": "mm-tx-qc",
             "level": 3,
+            "region": "body",
             "title": "Sequencing Quality Checks and Outlier Removal",
             "type": "narrative"
           },
@@ -166,6 +189,7 @@
             "data_key": "methods",
             "id": "mm-tx-norm",
             "level": 3,
+            "region": "body",
             "title": "Data Normalization",
             "type": "narrative"
           }
@@ -173,6 +197,7 @@
         "data_key": "methods",
         "id": "mm-transcriptomics",
         "level": 2,
+        "region": "body",
         "title": "Transcriptomics",
         "type": "heading-only"
       },
@@ -182,6 +207,7 @@
             "data_key": "methods",
             "id": "mm-stat-apical",
             "level": 3,
+            "region": "body",
             "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
             "type": "narrative"
           },
@@ -189,6 +215,7 @@
             "data_key": "methods",
             "id": "mm-bmd-apical",
             "level": 3,
+            "region": "body",
             "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
             "type": "narrative"
           },
@@ -196,6 +223,7 @@
             "data_key": "methods",
             "id": "mm-bmd-tx",
             "level": 3,
+            "region": "body",
             "title": "Benchmark Dose Analysis of Transcriptomics Data",
             "type": "narrative"
           },
@@ -203,6 +231,7 @@
             "data_key": "methods",
             "id": "mm-fdr",
             "level": 3,
+            "region": "body",
             "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
             "type": "narrative"
           },
@@ -210,6 +239,7 @@
             "data_key": "methods",
             "id": "mm-data-access",
             "level": 3,
+            "region": "body",
             "title": "Data Accessibility",
             "type": "narrative"
           }
@@ -217,6 +247,7 @@
         "data_key": "methods",
         "id": "mm-data-analysis",
         "level": 2,
+        "region": "body",
         "title": "Data Analysis",
         "type": "heading-only"
       }
@@ -224,6 +255,7 @@
     "data_key": "methods",
     "id": "methods",
     "level": 1,
+    "region": "body",
     "title": "Materials and Methods",
     "type": "heading-only"
   },
@@ -237,6 +269,7 @@
             "orientation": "landscape",
             "platform": "Body Weight",
             "ready_key": "animalCondition",
+            "region": "body",
             "table_number": 2,
             "title": "Summary of Body Weights",
             "type": "table"
@@ -247,6 +280,7 @@
             "orientation": "landscape",
             "platform": "Organ Weight",
             "ready_key": "animalCondition",
+            "region": "body",
             "table_number": 3,
             "title": "Summary of Organ Weights",
             "type": "table"
@@ -257,6 +291,7 @@
             "orientation": "landscape",
             "platform": "Clinical Observations",
             "ready_key": "animalCondition",
+            "region": "body",
             "title": "Clinical Observations",
             "type": "incidence-table"
           }
@@ -265,6 +300,7 @@
         "level": 2,
         "narrative_key": "animal_condition",
         "ready_key": "animalCondition",
+        "region": "body",
         "title": "Animal Condition, Body Weights, and Organ Weights",
         "type": "narrative+tables"
       },
@@ -276,6 +312,7 @@
             "orientation": "landscape",
             "platform": "Clinical Chemistry",
             "ready_key": "clinicalPath",
+            "region": "body",
             "table_number": 4,
             "title": "Summary of Select Clinical Chemistry Data",
             "type": "table"
@@ -286,6 +323,7 @@
             "orientation": "landscape",
             "platform": "Hematology",
             "ready_key": "clinicalPath",
+            "region": "body",
             "table_number": 5,
             "title": "Summary of Select Hematology Data",
             "type": "table"
@@ -296,6 +334,7 @@
             "orientation": "landscape",
             "platform": "Hormones",
             "ready_key": "clinicalPath",
+            "region": "body",
             "table_number": 6,
             "title": "Summary of Select Hormone Data",
             "type": "table"
@@ -305,6 +344,7 @@
         "level": 2,
         "narrative_key": "clinical_pathology",
         "ready_key": "clinicalPath",
+        "region": "body",
         "title": "Clinical Pathology",
         "type": "narrative+tables"
       },
@@ -315,6 +355,7 @@
             "level": 0,
             "platform": "Tissue Concentration",
             "ready_key": "internalDose",
+            "region": "body",
             "table_number": 7,
             "title": "Summary of Plasma Concentration Data",
             "type": "table"
@@ -323,6 +364,7 @@
         "id": "internal-dose",
         "level": 2,
         "ready_key": "internalDose",
+        "region": "body",
         "title": "Internal Dose Assessment",
         "type": "narrative+tables"
       },
@@ -331,6 +373,7 @@
         "id": "bmd-summary",
         "level": 2,
         "ready_key": "bmdSummary",
+        "region": "body",
         "table_number": 8,
         "title": "Apical Endpoint Benchmark Dose Summary",
         "type": "bmd-summary"
@@ -341,6 +384,7 @@
         "level": 2,
         "narrative_key": "gene_set_narrative",
         "ready_key": "geneSets",
+        "region": "body",
         "title": "Gene Set Benchmark Dose Analysis",
         "type": "genomics-section"
       },
@@ -350,12 +394,14 @@
         "level": 2,
         "narrative_key": "gene_narrative",
         "ready_key": "geneBmd",
+        "region": "body",
         "title": "Gene Benchmark Dose Analysis",
         "type": "genomics-section"
       }
     ],
     "id": "results",
     "level": 1,
+    "region": "body",
     "title": "Results",
     "type": "heading-only"
   },
@@ -363,6 +409,7 @@
     "data_key": "summary",
     "id": "summary",
     "level": 1,
+    "region": "body",
     "title": "Summary",
     "type": "narrative"
   },
@@ -370,42 +417,49 @@
     "data_key": "references",
     "id": "references",
     "level": 1,
+    "region": "back",
     "title": "References",
     "type": "narrative"
   },
   {
     "id": "appendix-a",
     "level": 1,
+    "region": "back",
     "title": "Appendix A. Internal Dose Assessment",
     "type": "appendix"
   },
   {
     "id": "appendix-b",
     "level": 1,
+    "region": "back",
     "title": "Appendix B. Animal Identifiers",
     "type": "appendix"
   },
   {
     "id": "appendix-c",
     "level": 1,
+    "region": "back",
     "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate",
     "type": "appendix"
   },
   {
     "id": "appendix-d",
     "level": 1,
+    "region": "back",
     "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies",
     "type": "appendix"
   },
   {
     "id": "appendix-e",
     "level": 1,
+    "region": "back",
     "title": "Appendix E. Organ Weight Descriptions",
     "type": "appendix"
   },
   {
     "id": "appendix-f",
     "level": 1,
+    "region": "back",
     "title": "Appendix F. Supplemental Data",
     "type": "appendix"
   }

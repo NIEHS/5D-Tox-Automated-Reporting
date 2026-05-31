@@ -130,9 +130,14 @@ def test_level_is_derived_not_authored():
 
 
 def test_template_file_loads_as_a_list():
+    # ADR-0004 amendment d: top level is three region containers, not bare
+    # node entries.  The first one is the front-matter container; its first
+    # child is the cover.
     data = load_template(TEMPLATE_NAME)
     assert isinstance(data, list) and data, "template should be a non-empty list"
-    assert data[0]["id"] == "cover"
+    assert data[0]["region"] == "front"
+    assert data[0]["children"][0]["id"] == "cover"
+    assert [c["region"] for c in data] == ["front", "body", "back"]
 
 
 # ---------------------------------------------------------------------------
@@ -171,3 +176,65 @@ def test_caption_rejected_on_non_captionable_section():
     with pytest.raises(ValueError, match="not captionable"):
         instantiate([{"id": "x", "type": "narrative", "title": "X",
                       "data_key": "d", "caption": "nope"}])
+
+
+# ---------------------------------------------------------------------------
+# Region containers (ADR-0004 amendment d)
+# ---------------------------------------------------------------------------
+
+def test_region_container_inherits_region_to_descendants():
+    """A region container sets `region` on every child and grandchild."""
+    tree = instantiate([
+        {"region": "body", "children": [
+            {"id": "sec", "type": "heading-only", "title": "S", "children": [
+                {"id": "nt", "type": "narrative+tables", "title": "NT", "children": [
+                    {"id": "t", "type": "table", "title": "T", "platform": "P"},
+                ]},
+            ]},
+        ]},
+    ])
+    sec = tree[0]
+    nt = sec.children[0]
+    t = nt.children[0]
+    assert sec.region == "body"
+    assert nt.region == "body"
+    assert t.region == "body"
+
+
+def test_region_container_with_invalid_region_is_rejected():
+    with pytest.raises(ValueError, match="region must be one of"):
+        instantiate([{"region": "middle", "children": []}])
+
+
+def test_region_container_with_unknown_key_is_rejected():
+    # Only `region` and `children` are allowed on a region container.
+    with pytest.raises(ValueError, match="unknown key"):
+        instantiate([{"region": "front", "children": [], "stray": 1}])
+
+
+def test_region_container_children_must_be_a_list():
+    with pytest.raises(ValueError, match="must be a list"):
+        instantiate([{"region": "front", "children": "not-a-list"}])
+
+
+def test_bare_top_level_entry_has_region_none():
+    # Back-compat: a bare node entry (no region container) instantiates
+    # with region=None — used by every existing guard-rail test above.
+    tree = instantiate([{"id": "x", "type": "narrative", "title": "X",
+                         "data_key": "d"}])
+    assert tree[0].region is None
+
+
+def test_top_level_unrolls_regions_into_flat_list():
+    """instantiate() returns a flat list of nodes; region containers are
+    unrolled so DOCUMENT_TREE keeps the pre-amendment shape."""
+    tree = instantiate([
+        {"region": "front", "children": [
+            {"id": "cover", "type": "cover", "title": "Cover"},
+        ]},
+        {"region": "body", "children": [
+            {"id": "bg", "type": "narrative", "title": "BG", "data_key": "bg"},
+        ]},
+    ])
+    assert [n.id for n in tree] == ["cover", "bg"]
+    assert [n.region for n in tree] == ["front", "body"]

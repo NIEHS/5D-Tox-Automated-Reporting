@@ -1,293 +1,282 @@
 # niehs-5day-report.yaml — the data-driven document template (ADR-0003).
 #
-# A template is DATA: an ordered, nested selection of component types from the
-# catalog (render_capabilities.COMPONENT_CATALOG).  The instantiator
-# (document_template.py) turns this into the canonical DocNode tree that the
-# renderers and navigation panel consume — so DOCUMENT_TREE is now the OUTPUT
-# of instantiating this file, not a hand-written Python literal.
+# Top-level is THREE region containers (ADR-0004 amendment d) that project
+# directly to BITS <front-matter> / <book-body> / <book-back>:
 #
-# What a node entry carries (everything else is computed, not authored):
-#   id            — stable identifier (matches navigation-panel node ids)
-#   type          — a catalog component type (drives rendering + capabilities)
-#   title         — heading / table title text
-#   data_key      — key in the report-data dict holding this node's content
-#   platform      — for table nodes: which platform's data to render
-#   narrative_key — for narrative+tables / genomics: key in unified_narratives
-#   ready_key     — Alpine store ready-flag gating the navigation panel
-#   methods_key   — for M&M subsections: key in data["methods"]["sections"]
-#   children      — nested node entries
+#   - region: front   — cover, title page, ToC, foreword, ..., abstract
+#   - region: body    — background, methods, results, summary
+#   - region: back    — references + appendices A–F
 #
-# NOT authored here (derived by the instantiator / numbering pre-pass):
-#   level         — 0 if the type is headingless, else nesting depth
-#   table_number / figure_number — positional, assigned by a tree-walk pass
+# Each region's `children` are the node entries; the instantiator inherits
+# `region` from the container onto every descendant (so any node knows its
+# region without a separate type lookup).  The page-numbering switch
+# (roman → arabic) and a future BITS export both read node.region directly.
+#
+# Node-entry fields (everything else is computed):
+#   id, type, title, data_key, platform, narrative_key, ready_key,
+#   methods_key, orientation, caption, children.
+# Computed: level (depth or 0 if headingless), table_number/figure_number
+# (positional), region (inherited from the container).
 #
 # The golden-tree test (tests/unit/test_document_template.py) asserts that
 # instantiating this file reproduces the frozen DOCUMENT_TREE byte-for-byte.
 
-# ── Structural pages (headingless) ───────────────────────────────────
-- id: cover
-  type: cover
-  title: "Cover Page"
-- id: title-page
-  type: title-page
-  title: "Title Page"
-
-# ── Table of Contents (generated front-matter component; native
-#    \tableofcontents in the LaTeX export) ─────────────────────────────
-- id: toc
-  type: toc
-  title: "Table of Contents"
-
-# ── Front matter (roman-numeral pages) ───────────────────────────────
-- id: foreword
-  type: front-matter
-  title: "Foreword"
-  data_key: foreword
-- id: tables-list
-  type: tables-list
-  title: "Tables"
-- id: about
-  type: front-matter
-  title: "About This Report"
-  data_key: about_report
-- id: peer-review
-  type: front-matter
-  title: "Peer Review"
-  data_key: peer_review
-- id: publication
-  type: front-matter
-  title: "Publication Details"
-  data_key: publication_details
-- id: acknowledgments
-  type: front-matter
-  title: "Acknowledgments"
-  data_key: acknowledgments
-- id: abstract
-  type: front-matter
-  title: "Abstract"
-  data_key: abstract
-
-# ── Body (arabic-numeral pages) ──────────────────────────────────────
-- id: background
-  type: narrative
-  title: "Background"
-  data_key: background
-
-- id: methods
-  type: heading-only
-  title: "Materials and Methods"
-  data_key: methods
+- region: front
   children:
+  - id: cover
+    type: cover
+    title: Cover Page
+  - id: title-page
+    type: title-page
+    title: Title Page
+  - id: toc
+    type: toc
+    title: Table of Contents
+  - id: foreword
+    type: front-matter
+    title: Foreword
+    data_key: foreword
+  - id: tables-list
+    type: tables-list
+    title: Tables
+  - id: about
+    type: front-matter
+    title: About This Report
+    data_key: about_report
+  - id: peer-review
+    type: front-matter
+    title: Peer Review
+    data_key: peer_review
+  - id: publication
+    type: front-matter
+    title: Publication Details
+    data_key: publication_details
+  - id: acknowledgments
+    type: front-matter
+    title: Acknowledgments
+    data_key: acknowledgments
+  - id: abstract
+    type: front-matter
+    title: Abstract
+    data_key: abstract
+- region: body
+  children:
+  - id: background
+    type: narrative
+    title: Background
+    data_key: background
+  - id: methods
+    type: heading-only
+    title: Materials and Methods
+    data_key: methods
+    children:
     - id: mm-study-design
       type: narrative
-      title: "Study Design"
+      title: Study Design
       data_key: methods
       methods_key: study_design
     - id: mm-dose-rationale
       type: narrative
-      title: "Dose Selection Rationale"
+      title: Dose Selection Rationale
       data_key: methods
       methods_key: dose_selection
     - id: mm-chemistry
       type: narrative
-      title: "Chemistry"
+      title: Chemistry
       data_key: methods
       methods_key: chemistry
     - id: mm-clin-exam
       type: heading-only
-      title: "Clinical Examinations and Sample Collection"
+      title: Clinical Examinations and Sample Collection
       data_key: methods
       methods_key: clinical_exams
       children:
-        - id: mm-clin-obs
-          type: narrative
-          title: "Clinical Observations"
-          data_key: methods
-          methods_key: clinical_obs
-        - id: mm-body-organ-wt
-          type: narrative
-          title: "Body and Organ Weights"
-          data_key: methods
-          methods_key: body_organ_weights
-        - id: mm-clin-path
-          type: narrative
-          title: "Clinical Pathology"
-          data_key: methods
-          methods_key: clinical_pathology
-        - id: mm-internal-dose
-          type: narrative
-          title: "Internal Dose Assessment"
-          data_key: methods
-          methods_key: internal_dose
+      - id: mm-clin-obs
+        type: narrative
+        title: Clinical Observations
+        data_key: methods
+        methods_key: clinical_obs
+      - id: mm-body-organ-wt
+        type: narrative
+        title: Body and Organ Weights
+        data_key: methods
+        methods_key: body_organ_weights
+      - id: mm-clin-path
+        type: narrative
+        title: Clinical Pathology
+        data_key: methods
+        methods_key: clinical_pathology
+      - id: mm-internal-dose
+        type: narrative
+        title: Internal Dose Assessment
+        data_key: methods
+        methods_key: internal_dose
     - id: mm-transcriptomics
       type: heading-only
-      title: "Transcriptomics"
+      title: Transcriptomics
       data_key: methods
       methods_key: transcriptomics
       children:
-        - id: mm-tx-sample
-          type: narrative
-          title: "Sample Collection for Transcriptomics"
-          data_key: methods
-          methods_key: txomics_sample
-        - id: mm-tx-rna
-          type: narrative
-          title: "RNA Isolation, Library Creation, and Sequencing"
-          data_key: methods
-          methods_key: txomics_rna
-        - id: mm-tx-processing
-          type: narrative
-          title: "Sequence Data Processing"
-          data_key: methods
-          methods_key: txomics_seq_processing
-        - id: mm-tx-qc
-          type: narrative
-          title: "Sequencing Quality Checks and Outlier Removal"
-          data_key: methods
-          methods_key: txomics_qc
-        - id: mm-tx-norm
-          type: narrative
-          title: "Data Normalization"
-          data_key: methods
-          methods_key: txomics_normalization
+      - id: mm-tx-sample
+        type: narrative
+        title: Sample Collection for Transcriptomics
+        data_key: methods
+        methods_key: txomics_sample
+      - id: mm-tx-rna
+        type: narrative
+        title: RNA Isolation, Library Creation, and Sequencing
+        data_key: methods
+        methods_key: txomics_rna
+      - id: mm-tx-processing
+        type: narrative
+        title: Sequence Data Processing
+        data_key: methods
+        methods_key: txomics_seq_processing
+      - id: mm-tx-qc
+        type: narrative
+        title: Sequencing Quality Checks and Outlier Removal
+        data_key: methods
+        methods_key: txomics_qc
+      - id: mm-tx-norm
+        type: narrative
+        title: Data Normalization
+        data_key: methods
+        methods_key: txomics_normalization
     - id: mm-data-analysis
       type: heading-only
-      title: "Data Analysis"
+      title: Data Analysis
       data_key: methods
       methods_key: data_analysis
       children:
-        - id: mm-stat-apical
-          type: narrative
-          title: "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
-          data_key: methods
-          methods_key: stat_analysis
-        - id: mm-bmd-apical
-          type: narrative
-          title: "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
-          data_key: methods
-          methods_key: bmd_apical
-        - id: mm-bmd-tx
-          type: narrative
-          title: "Benchmark Dose Analysis of Transcriptomics Data"
-          data_key: methods
-          methods_key: bmd_genomics
-        - id: mm-fdr
-          type: narrative
-          title: "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
-          data_key: methods
-          methods_key: efdr
-        - id: mm-data-access
-          type: narrative
-          title: "Data Accessibility"
-          data_key: methods
-          methods_key: data_accessibility
-
-- id: results
-  type: heading-only
-  title: "Results"
-  children:
+      - id: mm-stat-apical
+        type: narrative
+        title: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: stat_analysis
+      - id: mm-bmd-apical
+        type: narrative
+        title: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: bmd_apical
+      - id: mm-bmd-tx
+        type: narrative
+        title: Benchmark Dose Analysis of Transcriptomics Data
+        data_key: methods
+        methods_key: bmd_genomics
+      - id: mm-fdr
+        type: narrative
+        title: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
+        data_key: methods
+        methods_key: efdr
+      - id: mm-data-access
+        type: narrative
+        title: Data Accessibility
+        data_key: methods
+        methods_key: data_accessibility
+  - id: results
+    type: heading-only
+    title: Results
+    children:
     - id: animal-condition
       type: narrative+tables
-      title: "Animal Condition, Body Weights, and Organ Weights"
+      title: Animal Condition, Body Weights, and Organ Weights
       narrative_key: animal_condition
       ready_key: animalCondition
       children:
-        - id: table-body-weight
-          type: table
-          title: "Summary of Body Weights"
-          platform: "Body Weight"
-          orientation: landscape
-          ready_key: animalCondition
-        - id: table-organ-weight
-          type: table
-          title: "Summary of Organ Weights"
-          platform: "Organ Weight"
-          orientation: landscape
-          ready_key: animalCondition
-        - id: table-clinical-obs
-          type: incidence-table
-          title: "Clinical Observations"
-          platform: "Clinical Observations"
-          orientation: landscape
-          ready_key: animalCondition
+      - id: table-body-weight
+        type: table
+        title: Summary of Body Weights
+        platform: Body Weight
+        orientation: landscape
+        ready_key: animalCondition
+      - id: table-organ-weight
+        type: table
+        title: Summary of Organ Weights
+        platform: Organ Weight
+        orientation: landscape
+        ready_key: animalCondition
+      - id: table-clinical-obs
+        type: incidence-table
+        title: Clinical Observations
+        platform: Clinical Observations
+        orientation: landscape
+        ready_key: animalCondition
     - id: clinical-path
       type: narrative+tables
-      title: "Clinical Pathology"
+      title: Clinical Pathology
       narrative_key: clinical_pathology
       ready_key: clinicalPath
       children:
-        - id: table-clin-chem
-          type: table
-          title: "Summary of Select Clinical Chemistry Data"
-          platform: "Clinical Chemistry"
-          orientation: landscape
-          ready_key: clinicalPath
-        - id: table-hematology
-          type: table
-          title: "Summary of Select Hematology Data"
-          platform: "Hematology"
-          orientation: landscape
-          ready_key: clinicalPath
-        - id: table-hormones
-          type: table
-          title: "Summary of Select Hormone Data"
-          platform: "Hormones"
-          orientation: landscape
-          ready_key: clinicalPath
+      - id: table-clin-chem
+        type: table
+        title: Summary of Select Clinical Chemistry Data
+        platform: Clinical Chemistry
+        orientation: landscape
+        ready_key: clinicalPath
+      - id: table-hematology
+        type: table
+        title: Summary of Select Hematology Data
+        platform: Hematology
+        orientation: landscape
+        ready_key: clinicalPath
+      - id: table-hormones
+        type: table
+        title: Summary of Select Hormone Data
+        platform: Hormones
+        orientation: landscape
+        ready_key: clinicalPath
     - id: internal-dose
       type: narrative+tables
-      title: "Internal Dose Assessment"
+      title: Internal Dose Assessment
       ready_key: internalDose
       children:
-        - id: table-tissue-conc
-          type: table
-          title: "Summary of Plasma Concentration Data"
-          platform: "Tissue Concentration"
-          ready_key: internalDose
+      - id: table-tissue-conc
+        type: table
+        title: Summary of Plasma Concentration Data
+        platform: Tissue Concentration
+        ready_key: internalDose
     - id: bmd-summary
       type: bmd-summary
-      title: "Apical Endpoint Benchmark Dose Summary"
+      title: Apical Endpoint Benchmark Dose Summary
       data_key: bmd_summary
       ready_key: bmdSummary
     - id: gene-sets
       type: genomics-section
-      title: "Gene Set Benchmark Dose Analysis"
+      title: Gene Set Benchmark Dose Analysis
       data_key: genomics_sections
       narrative_key: gene_set_narrative
       ready_key: geneSets
     - id: gene-bmd
       type: genomics-section
-      title: "Gene Benchmark Dose Analysis"
+      title: Gene Benchmark Dose Analysis
       data_key: genomics_sections
       narrative_key: gene_narrative
       ready_key: geneBmd
-
-- id: summary
-  type: narrative
-  title: "Summary"
-  data_key: summary
-
-- id: references
-  type: narrative
-  title: "References"
-  data_key: references
-
-# ── Appendices ───────────────────────────────────────────────────────
-- id: appendix-a
-  type: appendix
-  title: "Appendix A. Internal Dose Assessment"
-- id: appendix-b
-  type: appendix
-  title: "Appendix B. Animal Identifiers"
-- id: appendix-c
-  type: appendix
-  title: "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate"
-- id: appendix-d
-  type: appendix
-  title: "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies"
-- id: appendix-e
-  type: appendix
-  title: "Appendix E. Organ Weight Descriptions"
-- id: appendix-f
-  type: appendix
-  title: "Appendix F. Supplemental Data"
+  - id: summary
+    type: narrative
+    title: Summary
+    data_key: summary
+- region: back
+  children:
+  - id: references
+    type: narrative
+    title: References
+    data_key: references
+  - id: appendix-a
+    type: appendix
+    title: Appendix A. Internal Dose Assessment
+  - id: appendix-b
+    type: appendix
+    title: Appendix B. Animal Identifiers
+  - id: appendix-c
+    type: appendix
+    title: Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate
+  - id: appendix-d
+    type: appendix
+    title: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies
+  - id: appendix-e
+    type: appendix
+    title: Appendix E. Organ Weight Descriptions
+  - id: appendix-f
+    type: appendix
+    title: Appendix F. Supplemental Data

@@ -13,7 +13,6 @@ import pytest
 
 from document_tree import (
     DOCUMENT_TREE,
-    FRONT_MATTER_NODE_TYPES,
     DocNode,
     compute_table_numbers,
     find_node,
@@ -33,20 +32,32 @@ class TestFrontMatterBoundary:
         # arabic-numbered body — see NIEHS Report 10 (Background = page 1).
         assert first_body_node_id() == "background"
 
-    def test_front_matter_is_a_contiguous_prefix(self):
+    def test_regions_are_contiguous_runs(self):
         # The switch logic assumes all front-matter nodes come before any
-        # body node; guard that invariant so a future reordering can't
-        # silently split the front matter.
-        types = [n.node_type for n in DOCUMENT_TREE]
-        first_body = next(
-            i for i, t in enumerate(types) if t not in FRONT_MATTER_NODE_TYPES
+        # body node, and back matter comes after.  Guard that invariant so
+        # a future reordering of the template's region containers can't
+        # silently interleave them.  (Bare unit-test scaffolds have
+        # region=None and shouldn't appear in DOCUMENT_TREE — this is
+        # checked separately.)
+        regions = [n.region for n in DOCUMENT_TREE]
+        assert all(r in ("front", "body", "back") for r in regions), regions
+        # The sequence of regions must be a strict front* → body* → back* run.
+        order = {"front": 0, "body": 1, "back": 2}
+        ranks = [order[r] for r in regions]
+        assert ranks == sorted(ranks), (
+            f"regions are out of order: {regions}"
         )
-        assert all(t in FRONT_MATTER_NODE_TYPES for t in types[:first_body])
-        assert all(t not in FRONT_MATTER_NODE_TYPES for t in types[first_body:])
 
-    def test_abstract_is_front_matter_background_is_not(self):
-        assert find_node("abstract").node_type in FRONT_MATTER_NODE_TYPES
-        assert find_node("background").node_type not in FRONT_MATTER_NODE_TYPES
+    def test_abstract_is_front_matter_background_is_body(self):
+        assert find_node("abstract").region == "front"
+        assert find_node("background").region == "body"
+
+    def test_region_inherits_to_descendants(self):
+        # Children of a region container share the region of the container —
+        # nested table nodes under Results are body; appendix children are back.
+        assert find_node("table-body-weight").region == "body"
+        # mm-stat-apical lives deeply nested under Methods → Data Analysis.
+        assert find_node("mm-stat-apical").region == "body"
 
 
 class TestDocumentTreeStructure:

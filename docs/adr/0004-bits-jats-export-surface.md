@@ -295,19 +295,39 @@ stands against the plan above:
   sections) ↔ BITS `<abstract>`; **generated ToC** ↔ the PMC profile (generated,
   not authored).
 
-### Still pending — the Decision-section amendments, unchanged
+### Still pending — the Decision-section amendments
 
-- **(a) label / title / caption split** — `DocNode.title` is still overloaded
-  (section heading *and* table title); captions still live in the data overlay.
-  BITS forbids `<title>` on a table/figure, so this is a real prerequisite.
-- **(c) cross-reference mechanism (`xref`/`rid`)** — still the one net-new gap;
-  nothing has built it.  Highest-value, most-distinctive missing piece, and the
-  one the positional numbering makes most necessary.
-- **(d) front/body/back as explicit regions** — still membership-based
-  (`FRONT_MATTER_NODE_TYPES`), not the three explicit BITS containers.
-- **(e) `compute_figure_numbers()` + figure `<alt-text>`** — unimplemented; the
-  genomics charts now render with captions but no figure number and no alt-text
-  (PMC *requires* `<alt-text>`).
+- **(a) label / title / caption split** — **shipped.** `DocNode.caption` is
+  now a separate field, gated by a `captionable` catalog flag (only on
+  table-like types); both renderers prefer it over the data-overlay caption
+  when set.  Byte-identical until a template sets `caption:`; ready to
+  carry `<caption><p>` independently of `<label>`/`<title>`.
+- **(c) cross-reference mechanism (`xref`/`rid`)** — **shipped (renderer
+  half).** `[[xref:id]]` tokens survive both LaTeX/HTML escaping and
+  resolve post-escape to `Table~\ref{tab:id}` / `<a class="xref"
+  href="#sec-id">Table N</a>`; unknown ids surface a visible broken
+  marker `[[xref:??id]]` (not re-matched).  The upstream half — LLM
+  prompts emitting tokens instead of hardcoded "Table 2" — is still to
+  do, owned by the content pipeline.
+- **(d) front/body/back as explicit regions** — **shipped.** Template top-
+  level is now three region containers (`region: front|body|back`,
+  `children:`); the instantiator inherits `region` onto every descendant;
+  `DocNode.region` projects directly to BITS `<front-matter>` / `<book-body>`
+  / `<book-back>` on a future BITS render; the type-membership
+  `FRONT_MATTER_NODE_TYPES` set is retired in favour of `node.region`.  The
+  page-numbering switch in both renderers now reads `top.region == "body"`.
+  Byte-identical `report.tex` confirmed against the (e) baseline render.
+  The "content items before child sections, no interleave" containment rule
+  (BITS' `(blocks)*, (sec)*`) is **not yet enforced** by the validator and
+  remains a separate amendment-d follow-up.
+- **(e) `compute_figure_numbers()` + figure `<alt-text>`** — **shipped for
+  genomics charts.** Charts gain a positional `figure_number` (assigned at
+  attach time in `latex_export`); both renderers prefix the chart caption
+  with "Figure N." and emit BITS-aligned alt-text (HTML `<img alt="…">` =
+  the descriptive caption alone, independent of the label).  `DocNode.
+  figure_number` stays declared but unused — content-item figures own their
+  numbers now (figures are not DocNode-typed in our tree); a tree-walk
+  `compute_figure_numbers()` would only matter once DocNode-figures exist.
 
 ### One semantic-baseline caveat to track
 

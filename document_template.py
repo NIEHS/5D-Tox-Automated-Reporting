@@ -64,9 +64,16 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 #   level, table_number, figure_number — computed
 #   node_type — bound via the template's `type` key (the one renamed field)
 #   children  — recursion, not a scalar binding
+#   region    — set by the top-level region container (ADR-0004 amendment d),
+#               inherited by descendants — never authored on a node entry.
 _COMPUTED_OR_SPECIAL = frozenset(
-    {"level", "node_type", "children", "table_number", "figure_number"}
+    {"level", "node_type", "children", "table_number", "figure_number", "region"}
 )
+
+# Valid region names — project directly to BITS <front-matter> / <book-body> /
+# <book-back> on a future BITS export (ADR-0004 amendment d).
+_VALID_REGIONS: tuple[str, ...] = ("front", "body", "back")
+_REGION_CONTAINER_KEYS = frozenset({"region", "children"})
 
 # The scalar binding fields a template node supplies BY THE SAME NAME as the
 # DocNode field (id, title, data_key, platform, narrative_key, ready_key,
@@ -165,27 +172,51 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
         )
 
 
-def _instantiate(template: list[dict], depth: int, parent_type: str | None) -> list[DocNode]:
+def _validate_region_container(entry: dict) -> None:
     """
-    Recursive worker for instantiate().  `depth` (1 at the top) drives level
+    Validate a top-level region container ({region: ..., children: [...]}) —
+    ADR-0004 amendment d.  Caller has already confirmed `region` is a key.
+    """
+    extra = set(entry) - _REGION_CONTAINER_KEYS
+    if extra:
+        raise ValueError(f"region container has unknown key(s): {sorted(extra)}")
+    region = entry["region"]
+    if region not in _VALID_REGIONS:
+        raise ValueError(
+            f"region must be one of {list(_VALID_REGIONS)}, got {region!r}"
+        )
+    children = entry.get("children", [])
+    if not isinstance(children, list):
+        raise ValueError("region container 'children' must be a list")
+
+
+def _instantiate_node(
+    entry: dict,
+    depth: int,
+    parent_type: str | None,
+    region: str | None,
+) -> DocNode:
+    """
+    Instantiate a single node entry, recursing into its children.  `region`
+    is the book region inherited from the top-level region container (ADR-0004
+    amendment d); descendants share it.  `depth` (1 at the top) drives level
     derivation; `parent_type` drives containment validation.
     """
-    nodes: list[DocNode] = []
-    for entry in template:
-        _validate_entry(entry, parent_type)
-        node_type = entry["type"]
-        # level is derived, never authored: headingless types (cover, title
-        # page, bare data tables) are level 0; everything else takes its
-        # nesting depth (top-level = 1).
-        level = 0 if is_headingless(node_type) else depth
-        children = _instantiate(entry.get("children", []), depth + 1, node_type)
-        # Forward every binding field by name; an absent optional field becomes
-        # None (DocNode's default), exactly matching the old hand-written literal.
-        bindings = {name: entry.get(name) for name in _BINDING_FIELDS}
-        nodes.append(
-            DocNode(node_type=node_type, level=level, children=children, **bindings)
-        )
-    return nodes
+    _validate_entry(entry, parent_type)
+    node_type = entry["type"]
+    # level is derived, never authored: headingless types (cover, title page,
+    # bare data tables) are level 0; everything else takes its nesting depth.
+    level = 0 if is_headingless(node_type) else depth
+    children = [
+        _instantiate_node(c, depth + 1, node_type, region)
+        for c in entry.get("children", [])
+    ]
+    # Forward every binding field by name; an absent optional field becomes
+    # None (DocNode's default), exactly matching the old hand-written literal.
+    bindings = {name: entry.get(name) for name in _BINDING_FIELDS}
+    return DocNode(
+        node_type=node_type, level=level, children=children, region=region, **bindings
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -212,14 +243,31 @@ def load_template(name: str) -> list[dict]:
 
 def instantiate(template: list[dict]) -> list[DocNode]:
     """
-    Instantiate a template (list of node-entry dicts) into a DocNode tree.
+    Instantiate a template into a flat list of DocNode top-level entries.
 
-    Validates each entry, derives heading level from the catalog's headingless
-    flag and nesting depth, recurses into children, and constructs DocNodes.
-    Positional table/figure numbers are NOT assigned here — the caller runs
-    compute_table_numbers() afterward, exactly as before.
+    Top-level template entries are EITHER region containers
+    ({region: "front"|"body"|"back", children: [...]}) — ADR-0004 amendment d
+    — OR bare node entries (back-compat for unit-test scaffolding).  Region
+    containers set the `region` for their children and descendants; bare
+    entries get region=None.  The returned list is flat (regions are unrolled
+    so DOCUMENT_TREE shape is unchanged); each node carries `region`.
+
+    Validates each entry against the catalog (type, containment, required
+    bindings, capability-gated orientation/caption), derives heading level
+    from the catalog's headingless flag + nesting depth, and recurses into
+    children.  Positional table/figure numbers are NOT assigned here — the
+    caller runs compute_table_numbers() afterward, exactly as before.
     """
-    return _instantiate(template, depth=1, parent_type=None)
+    nodes: list[DocNode] = []
+    for entry in template:
+        if isinstance(entry, dict) and "region" in entry:
+            _validate_region_container(entry)
+            region = entry["region"]
+            for child in entry.get("children", []):
+                nodes.append(_instantiate_node(child, depth=1, parent_type=None, region=region))
+        else:
+            nodes.append(_instantiate_node(entry, depth=1, parent_type=None, region=None))
+    return nodes
 
 
 def build_tree(name: str) -> list[DocNode]:

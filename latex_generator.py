@@ -67,7 +67,6 @@ from __future__ import annotations
 
 from document_tree import (
     DOCUMENT_TREE,
-    FRONT_MATTER_NODE_TYPES,
     DocNode,
     find_node,
 )
@@ -1243,14 +1242,16 @@ def generate_latex(
     # descendants, already flattened in document order.
     #
     # Page numbering switches from roman (front matter) to arabic (body) at
-    # the first non-front-matter top-level node — the body's first page
-    # (Background) becomes arabic page 1, matching NIEHS Report 10.
-    # \clearpage flushes any pending floats first so the switch lands on
-    # the body's opening page, not a stray float page.
+    # the first top-level node with region == "body" — the body's first page
+    # (Background) becomes arabic page 1, matching NIEHS Report 10.  Region
+    # is set by the template's region containers (ADR-0004 amendment d);
+    # before that, this used a node-type membership set.  \clearpage flushes
+    # any pending floats first so the switch lands on the body's opening
+    # page, not a stray float page.
     body_chunks: list[str] = []
     switched_to_body = False
     for top in DOCUMENT_TREE:
-        if not switched_to_body and top.node_type not in FRONT_MATTER_NODE_TYPES:
+        if not switched_to_body and top.region == "body":
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
             switched_to_body = True
         body_chunks.extend(_walk(top, data))
