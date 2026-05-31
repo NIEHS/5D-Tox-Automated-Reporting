@@ -192,3 +192,96 @@ def build_genomics_body_narratives(
     }
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Helper: aggregate per-(organ, sex) LLM narratives into per-organ paragraphs
+# ---------------------------------------------------------------------------
+# The LLM tier (`generate_genomics_narrative_async`) produces a separate
+# Gene Set + Gene BMD narrative for EACH organ×sex.  Three call sites need to
+# fold those per-sex results into ONE ordered paragraph list per organ —
+# male block first, then female — with a "Male:" / "Female:" label prefixed
+# on the first paragraph of each sex so the reader can tell the blocks apart:
+#
+#   * process_integrated.py  (Layer 3.5a, fresh generation during a run)
+#   * session_routes.py      (session reload, rebuilt from interpretation caches)
+#   * llm_routes.py          (the per-organ Regenerate endpoint)
+#
+# That fold-and-prefix loop, plus the "user override wins" merge, was copied
+# verbatim into all three.  This shared helper is the single source of truth
+# so any future change to the labelling, sex ordering, or override precedence
+# happens in one place and stays observable in every path at once (the same
+# discipline that motivated `build_genomics_body_narratives` above).
+
+# Sexes are emitted in this fixed order so the prose reads male-then-female
+# regardless of the dict insertion order of the per-organ bundle.
+_SEX_ORDER: tuple[str, ...] = ("male", "female")
+
+
+def aggregate_organ_llm_narratives(
+    per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]],
+    overrides: dict[str, dict[str, list[str]]] | None = None,
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """
+    Fold per-(organ, sex) LLM narratives into per-organ paragraph lists.
+
+    Inputs
+    ------
+    per_organ_bundles:
+        {organ_lower: {sex_lower: {"gs": [paras...], "gn": [paras...]}}}.
+        "gs" is the Gene Set narrative, "gn" the Gene BMD narrative, each an
+        ordered list of paragraph strings for that one organ×sex.
+    overrides:
+        Optional user-edited paragraphs that WIN over the LLM output, shaped
+        {"gene_set": {organ_lower: [paras...]}, "gene_bmd": {organ_lower:
+        [paras...]}}.  A non-empty list for an organ replaces the aggregated
+        LLM result for that organ entirely; an empty/absent entry leaves the
+        LLM result in place.  Pass None to skip the override merge (e.g. the
+        Regenerate path, which deliberately discards prior edits upstream).
+
+    Returns
+    -------
+    (gs_by_organ, gn_by_organ):
+        Two dicts {organ_lower: [paragraph strings]} — the Gene Set and Gene
+        BMD narratives respectively, ready to drop into a narrative dict's
+        `by_organ_llm` field.  Organs with no paragraphs are omitted.
+    """
+    gs_by_organ: dict[str, list[str]] = {}
+    gn_by_organ: dict[str, list[str]] = {}
+
+    for organ, by_sex in per_organ_bundles.items():
+        gs_paras: list[str] = []
+        gn_paras: list[str] = []
+        for sex in _SEX_ORDER:
+            block = by_sex.get(sex)
+            if not block:
+                continue
+            # Prefix the first paragraph of each sex block with a "Male:" /
+            # "Female:" label so a reader scanning the combined organ prose
+            # can tell which sentences describe which sex.  We keep it inline
+            # (no structural HTML) so the same string renders correctly in
+            # both the HTML view and the LaTeX/PDF export.
+            sex_label = sex.capitalize()
+            if block.get("gs"):
+                gs_paras.append(f"{sex_label}: " + block["gs"][0])
+                gs_paras.extend(block["gs"][1:])
+            if block.get("gn"):
+                gn_paras.append(f"{sex_label}: " + block["gn"][0])
+                gn_paras.extend(block["gn"][1:])
+        if gs_paras:
+            gs_by_organ[organ] = gs_paras
+        if gn_paras:
+            gn_by_organ[organ] = gn_paras
+
+    # User overrides win: a stored paragraph list for an organ replaces the
+    # aggregated LLM output entirely.  Organ keys are lower-cased to match the
+    # aggregation keys regardless of how the override file cased them.
+    if overrides:
+        for organ, paras in (overrides.get("gene_set") or {}).items():
+            if paras:
+                gs_by_organ[organ.lower()] = paras
+        for organ, paras in (overrides.get("gene_bmd") or {}).items():
+            if paras:
+                gn_by_organ[organ.lower()] = paras
+
+    return gs_by_organ, gn_by_organ

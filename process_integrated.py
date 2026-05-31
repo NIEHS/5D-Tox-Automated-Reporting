@@ -701,9 +701,12 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 tasks = [_one(k, v) for k, v in genomics_sections.items()]
                 llm_results = await asyncio.gather(*tasks)
 
-                # Aggregate per-sex results under each organ, in sex
-                # order (male then female) so narrative reads naturally.
-                per_organ_bundles: dict[str, dict[str, list[str]]] = {}
+                # Bundle the per-sex LLM results under each organ, then fold
+                # them into per-organ paragraph lists (male-then-female, sex-
+                # labelled) with user overrides winning — all in the shared
+                # `aggregate_organ_llm_narratives` helper so the session-reload
+                # and Regenerate paths stay in lockstep with this one.
+                per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]] = {}
                 for key, llm_out in llm_results:
                     if not llm_out or "error" in llm_out:
                         continue
@@ -714,36 +717,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
                         "gn": llm_out.get("gene_narrative") or [],
                     }
 
-                _sex_order = ("male", "female")
-                for organ, by_sex in per_organ_bundles.items():
-                    gs_paras, gn_paras = [], []
-                    for sx in _sex_order:
-                        blk = by_sex.get(sx)
-                        if not blk:
-                            continue
-                        sex_label = sx.capitalize()
-                        # Prefix first paragraph of each sex bundle with a
-                        # sex label so the reader can orient which block
-                        # describes which sex.  Avoids adding structural
-                        # HTML markup; keeps it inline within the prose.
-                        if blk["gs"]:
-                            gs_paras.append(f"{sex_label}: " + blk["gs"][0])
-                            gs_paras.extend(blk["gs"][1:])
-                        if blk["gn"]:
-                            gn_paras.append(f"{sex_label}: " + blk["gn"][0])
-                            gn_paras.extend(blk["gn"][1:])
-                    if gs_paras:
-                        llm_gs_by_organ[organ] = gs_paras
-                    if gn_paras:
-                        llm_gene_by_organ[organ] = gn_paras
-
-                # Apply user overrides — stored paragraphs win over LLM.
-                for organ, paras in _overrides["gene_set"].items():
-                    if paras:
-                        llm_gs_by_organ[organ] = paras
-                for organ, paras in _overrides["gene_bmd"].items():
-                    if paras:
-                        llm_gene_by_organ[organ] = paras
+                from genomics_narratives import aggregate_organ_llm_narratives
+                llm_gs_by_organ, llm_gene_by_organ = aggregate_organ_llm_narratives(
+                    per_organ_bundles, overrides=_overrides,
+                )
             except Exception as e:
                 logger.warning(
                     "LLM narrative pipeline failed: %s", e,

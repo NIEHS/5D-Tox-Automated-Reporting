@@ -93,6 +93,11 @@ function ensureGenomicsOrganPanels(organ) {
                             id="genomics-${kind}-lock-${organ}"
                             data-kind="${kind}" data-organ="${organ}"
                             onclick="toggleNarrativeLock('${kind}','${organ}')">Unlock</button>
+                    <button class="btn-small btn-narrative-regenerate"
+                            id="genomics-${kind}-regenerate-${organ}"
+                            data-organ="${organ}"
+                            title="Discard the current narrative and any manual edits for this organ, then generate a fresh one."
+                            onclick="regenerateNarrative('${organ}')">Regenerate</button>
                 </div>
             </div>
             <div class="organ-tables" id="genomics-${kind}-display-${organ}"></div>
@@ -457,6 +462,90 @@ function _extractNarrativeParagraphs(el) {
     const text = (el.textContent || '').trim();
     if (!text) return [];
     return text.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * Force-regenerate the LLM narrative for one organ (both Gene Set and
+ * Gene BMD kinds in a single server call).
+ *
+ * The narrative is normally generated once on the server and then treated
+ * as the user's to keep — it is never silently recomputed.  This is the
+ * explicit escape hatch behind the per-organ "Regenerate" button.  Because
+ * regeneration discards BOTH the cached narrative AND any manual edit for
+ * the organ (the server clears the override so the fresh text actually
+ * surfaces), we confirm first.
+ *
+ * The browser doesn't hold the gene lists, so the work happens server-side
+ * (POST .../regenerate-genomics-narrative reloads them from the session
+ * cache).  The response carries the two fresh paragraph lists, which we
+ * drop into the in-memory narrative dicts and re-render in place.
+ */
+async function regenerateNarrative(organKey) {
+    const dtxsid = currentIdentity?.dtxsid;
+    if (!dtxsid) {
+        showError('No active session — cannot regenerate.');
+        return;
+    }
+
+    const ok = window.confirm(
+        `Regenerate the genomics narrative for "${organKey}"?\n\n` +
+        'This discards the current narrative AND any manual edits you have ' +
+        'made for this organ, then generates a fresh one. This cannot be undone.'
+    );
+    if (!ok) return;
+
+    showBlockingSpinner('Regenerating genomics narrative...');
+    try {
+        const resp = await fetch(
+            `/api/session/${dtxsid}/regenerate-genomics-narrative`,
+            {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({organ: organKey}),
+            },
+        );
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            showError('Regenerate failed: ' + (err.error || resp.status));
+            return;
+        }
+        const data = await resp.json();
+
+        // Update the in-memory narrative dicts so future renders (and the
+        // PDF export payload) read the freshly generated paragraphs.  The
+        // server returns one list per kind for this organ.
+        const byKind = {'gene-set': data.gene_set || [], 'gene-bmd': data.gene_bmd || []};
+        for (const kind of ['gene-set', 'gene-bmd']) {
+            const narr = kind === 'gene-set'
+                ? genomicsGeneSetNarrative
+                : genomicsGeneNarrative;
+            const paras = byKind[kind];
+            if (narr) {
+                narr.by_organ_llm = narr.by_organ_llm || {};
+                narr.by_organ_llm[organKey] = paras;
+            }
+
+            // Re-render the block in place and force it back to the locked
+            // (read-only) state — mirrors the initial render in
+            // _rebuildOrganDisplays so the new text shows immediately.
+            const llmEl = document.getElementById(`genomics-${kind}-narrative-llm-${organKey}`);
+            if (llmEl) {
+                llmEl.innerHTML = paras.length > 0
+                    ? paras.map(p => `<p>${escapeHtml(p)}</p>`).join('')
+                    : '<p class="organ-narrative-empty">No analysis generated.</p>';
+                llmEl.setAttribute('contenteditable', 'false');
+                llmEl.classList.remove('editing');
+                const btn = document.getElementById(`genomics-${kind}-lock-${organKey}`);
+                if (btn) btn.textContent = 'Unlock';
+            }
+        }
+
+        markReportDirty();
+    } catch (e) {
+        showError('Regenerate failed: ' + e.message);
+    } finally {
+        hideBlockingSpinner();
+    }
 }
 
 

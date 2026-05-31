@@ -501,13 +501,13 @@ async def api_session_load(dtxsid: str):
             gene_narrative = narratives.get("gene_narrative")
 
             # --- LLM tier (by_organ_llm) from interpretation caches ---
-            # Iterate the organ_sex keys, look up the latest
-            # interpretation cache for each, and aggregate the
-            # `gene_set_narrative` / `gene_narrative` paragraphs with
-            # a leading sex label so male/female read naturally in
-            # sequence under each organ.
-            llm_gs: dict[str, list[str]] = {}
-            llm_gn: dict[str, list[str]] = {}
+            # Iterate the organ_sex keys, look up the latest interpretation
+            # cache for each, and bundle the `gene_set_narrative` /
+            # `gene_narrative` paragraphs per organ×sex.  The fold into
+            # per-organ paragraph lists (sex-labelled, male-then-female) plus
+            # the user-override merge happen in the shared
+            # `aggregate_organ_llm_narratives` helper, so this reload path
+            # stays byte-for-byte identical to process-integrated's Layer 3.5.
             per_organ_bundles: dict[str, dict[str, dict]] = {}
             for key in genomics_cache.keys():
                 if "_" not in key:
@@ -541,38 +541,21 @@ async def api_session_load(dtxsid: str):
                     "gn": interp.get("gene_narrative") or [],
                 }
 
-            _sex_order = ("male", "female")
-            for organ_k, by_sex in per_organ_bundles.items():
-                gs_paras, gn_paras = [], []
-                for sx in _sex_order:
-                    blk = by_sex.get(sx)
-                    if not blk:
-                        continue
-                    sex_label = sx.capitalize()
-                    if blk["gs"]:
-                        gs_paras.append(f"{sex_label}: " + blk["gs"][0])
-                        gs_paras.extend(blk["gs"][1:])
-                    if blk["gn"]:
-                        gn_paras.append(f"{sex_label}: " + blk["gn"][0])
-                        gn_paras.extend(blk["gn"][1:])
-                if gs_paras:
-                    llm_gs[organ_k] = gs_paras
-                if gn_paras:
-                    llm_gn[organ_k] = gn_paras
-
             # --- User override tier ---
+            _overrides = {"gene_set": {}, "gene_bmd": {}}
             overrides_path = d / "genomics_narrative_overrides.json"
             if overrides_path.exists():
                 try:
                     raw = json.loads(overrides_path.read_text())
-                    for organ_k, paras in (raw.get("gene_set") or {}).items():
-                        if paras:
-                            llm_gs[organ_k.lower()] = paras
-                    for organ_k, paras in (raw.get("gene_bmd") or {}).items():
-                        if paras:
-                            llm_gn[organ_k.lower()] = paras
+                    _overrides["gene_set"] = raw.get("gene_set", {}) or {}
+                    _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
                 except Exception:
                     pass
+
+            from genomics_narratives import aggregate_organ_llm_narratives
+            llm_gs, llm_gn = aggregate_organ_llm_narratives(
+                per_organ_bundles, overrides=_overrides,
+            )
 
             # Attach to the narrative dicts — same shape as what
             # process-integrated produces in Layer 3.5.

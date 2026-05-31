@@ -817,6 +817,7 @@ async def generate_genomics_narrative_async(
     all_genes: list,
     total_responsive: int,
     dose_unit: str = "mg/kg",
+    force: bool = False,
 ) -> dict:
     """
     LLM-generate narrative paragraphs for a single organ × sex.
@@ -826,6 +827,12 @@ async def generate_genomics_narrative_async(
     process-integrated pipeline (auto-generation per organ × sex).  Pure
     async function — no Request/Response wrapping.  Handles enrichment
     context + interpretation cache + LLM call + result normalisation.
+
+    `force` (default False) bypasses the per-(organ, sex) narrative store:
+    when True we skip the cache lookup entirely and recompute enrichment +
+    LLM from scratch, overwriting the stored narrative.  This is the escape
+    hatch behind the Regenerate action (see the cache comment below); the
+    normal callers leave it False so an existing narrative is reused.
 
     Returns:
         {
@@ -857,41 +864,87 @@ async def generate_genomics_narrative_async(
     has_genes = bool(all_genes or top_genes)
     db_path = Path("bmdx.duckdb")
     if has_genes and db_path.exists():
-        # --- Check interpretation cache (Phase 4) ---
-        # Cache key is a hash of the gene list — if the genes haven't changed
-        # (same integration run), reuse the cached enrichment result instead of
-        # re-running the 2-5s DuckDB + Fisher's exact pipeline.
+        # --- Check interpretation cache ---
+        #
+        # Cache file naming: _cache_interpretation_{organ}_{sex}_{gene_hash}.json.
+        # The gene_hash in the filename was originally a content-validation
+        # key (regenerate when gene list changes).  That semantics is wrong
+        # for our workflow: the user reads/edits/approves the generated
+        # narrative, then locks it.  Regenerating because the gene-list
+        # hash drifted (e.g., from a re-integration that picked up a
+        # slightly different responsive set) would silently overwrite
+        # narrative the user owns.
+        #
+        # New semantics: the cache file is a per-(organ, sex) **narrative
+        # store**.  If ANY cache file exists for this organ×sex and has
+        # both narratives populated, we return it — full stop.  We never
+        # silently regenerate over narrative the user may have read,
+        # edited, or approved.
+        #
+        # The escape hatch is the `force` flag, set by the Regenerate
+        # action (POST /api/session/{dtxsid}/regenerate-genomics-narrative
+        # → this function with force=True).  When force is set we skip the
+        # lookup below, recompute, and write a fresh narrative; the cleanup
+        # at the bottom of this function deletes the now-superseded
+        # different-hash file(s) for the same organ×sex so disk stays tidy.
+        #
+        # The hash-keyed filename is retained as the *write* target for
+        # fresh computes — so a regeneration lands at the name that
+        # reflects the current gene list.
         gene_list_for_hash = all_genes or top_genes
         gene_hash = hashlib.md5(
             json.dumps(gene_list_for_hash, sort_keys=True).encode()
         ).hexdigest()[:16]
         cache_path = None
+        existing_cache_path = None
         if dtxsid:
             # Sanitize organ/sex for filename (e.g. "liver_female")
             organ_key = organ.lower().replace(" ", "_")
             sex_key = sex.lower().replace(" ", "_")
+            session_dir = SESSIONS_DIR / dtxsid
             cache_path = (
-                SESSIONS_DIR / dtxsid
+                session_dir
                 / f"_cache_interpretation_{organ_key}_{sex_key}_{gene_hash}.json"
             )
+            # Look for ANY existing narrative file for this (organ, sex),
+            # not just the hash-keyed one.  Prefer the exact-hash match if
+            # it exists (cleanest), otherwise fall back to the most recent
+            # by mtime so a stale-hash narrative still wins over recompute.
+            # `force` skips this entirely: existing_cache_path stays None,
+            # so both the fast-path return and the stale-context reuse below
+            # are bypassed and we recompute from scratch.
+            if not force:
+                prefix = f"_cache_interpretation_{organ_key}_{sex_key}_"
+                if cache_path.exists():
+                    existing_cache_path = cache_path
+                else:
+                    matches = sorted(
+                        session_dir.glob(f"{prefix}*.json"),
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True,
+                    )
+                    if matches:
+                        existing_cache_path = matches[0]
 
         cached = None
-        if cache_path and cache_path.exists():
+        if existing_cache_path is not None:
             try:
-                cached = json.loads(cache_path.read_text())
+                cached = json.loads(existing_cache_path.read_text())
                 logger.info(
-                    "Interpretation cache hit: %s/%s for %s",
-                    organ, sex, dtxsid,
+                    "Interpretation cache hit: %s/%s for %s (%s)",
+                    organ, sex, dtxsid, existing_cache_path.name,
                 )
             except Exception:
-                logger.warning("Corrupted interpretation cache, recomputing")
+                logger.warning(
+                    "Corrupted interpretation cache at %s, recomputing",
+                    existing_cache_path,
+                )
                 cached = None
 
-        # Fast path: cache already carries the LLM output from a prior
-        # call.  Skip both enrichment recompute AND the LLM call — the
-        # narrative is deterministic given the same gene list hash, so
-        # returning the cached prose matches the hash-based cache
-        # semantics of the enrichment side.
+        # Fast path: a previously generated narrative exists on disk for
+        # this organ×sex.  Skip enrichment recompute AND the LLM call —
+        # the narrative is the user's to edit/approve/unlock; we never
+        # silently regenerate over it.
         if (
             cached
             and cached.get("gene_set_narrative")
@@ -904,7 +957,17 @@ async def generate_genomics_narrative_async(
                 "enrichment_available": bool(cached.get("context_text")),
             }
 
-        if cached and cached.get("context_text"):
+        # Reuse cached enrichment context only when the matched file is
+        # the current-hash one — a stale-hash file's context_text was
+        # computed against a different gene list and would mislead a
+        # fresh LLM regeneration.  When the user has explicitly cleared
+        # the narrative (forcing this path), we want enrichment to
+        # reflect the *current* gene list, not the prior one.
+        if (
+            cached
+            and cached.get("context_text")
+            and existing_cache_path == cache_path
+        ):
             # Cache hit — use the previously computed enrichment context.
             context_text = cached["context_text"]
             enrichment_available = True
@@ -1130,7 +1193,178 @@ async def api_generate_genomics_narrative(request: Request):
         all_genes=body.get("all_genes", []),
         total_responsive=body.get("total_responsive_genes", 0),
         dose_unit=body.get("dose_unit", "mg/kg"),
+        force=bool(body.get("force", False)),
     )
     if "error" in result:
         return JSONResponse(result, status_code=500)
     return JSONResponse(result)
+
+
+@router.post("/api/session/{dtxsid}/regenerate-genomics-narrative")
+async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
+    """
+    Force-regenerate the LLM genomics narrative for ONE organ.
+
+    This is the server side of the per-organ Regenerate button in the
+    genomics panel.  The narrative is normally generated server-side during
+    process-integrated and treated as user-owned thereafter (never silently
+    recomputed — see the cache comment in
+    `generate_genomics_narrative_async`).  This endpoint is the explicit
+    escape hatch: it discards the stored narrative AND any manual edit for
+    the organ and produces a fresh one.
+
+    Why server-side: the browser only holds the rendered `by_organ_llm`
+    paragraphs, not the gene lists the generator needs.  So we reload the
+    gene data from the session's `_cache_genomics_*.json` (the same cache
+    process-integrated wrote) rather than expecting the client to re-send it.
+
+    Steps:
+      1. Reload the organ×sex gene-data cache + the chemical identity.
+      2. Clear the user override for this organ (both kinds) so the freshly
+         generated text actually surfaces — otherwise the override tier
+         would keep winning on render and the regenerate would be invisible.
+      3. Force-generate each sex of the organ (force=True bypasses the
+         narrative store; the generator's own cleanup drops stale-hash files).
+      4. Aggregate the per-sex results into per-organ paragraph lists via the
+         shared helper (overrides=None — we just cleared them).
+
+    Input JSON:  {"organ": "liver"}
+    Returns:     {"organ": "liver", "gene_set": [...], "gene_bmd": [...]}
+                 — the two narratives to drop straight into the client's
+                 `by_organ_llm[organ]` slots.
+    """
+    body = await request.json()
+    organ = (body.get("organ") or "").strip().lower()
+    if not organ:
+        return JSONResponse({"error": "organ is required"}, status_code=400)
+
+    session_dir = SESSIONS_DIR / dtxsid
+    if not session_dir.exists():
+        return JSONResponse(
+            {"error": f"Session {dtxsid} not found"}, status_code=404,
+        )
+
+    # --- (1) Reload the organ×sex gene-data cache ---------------------------
+    # `_cache_genomics_*.json` is the organ_sex-keyed dict process-integrated
+    # wrote; each entry carries the gene_sets_by_stat / top_genes / all_genes
+    # the LLM prompt needs.  Without it there is nothing to regenerate from.
+    genomics_cache = None
+    for gc in sorted(session_dir.glob("_cache_genomics_*.json")):
+        try:
+            genomics_cache = json.loads(gc.read_text(encoding="utf-8"))
+        except Exception:
+            genomics_cache = None
+        break
+    if not genomics_cache:
+        return JSONResponse(
+            {"error": "No genomics data cached for this session"},
+            status_code=404,
+        )
+
+    # Chemical name for the prompt's phrasing; fall back gracefully.
+    compound = "the test article"
+    identity_path = session_dir / "identity.json"
+    if identity_path.exists():
+        try:
+            compound = json.loads(identity_path.read_text()).get(
+                "name", compound
+            )
+        except Exception:
+            pass
+
+    # Pick the primary BMD stat the same way the chart/narrative paths do —
+    # the first key of any entry's gene_sets_by_stat (defaults to "median").
+    first_entry = next(iter(genomics_cache.values()), {})
+    stats = list((first_entry.get("gene_sets_by_stat") or {}).keys())
+    bmd_stat = stats[0] if stats else "median"
+
+    # Collect this organ's organ×sex keys (key shape: "<organ>_<sex>", split
+    # on the first underscore exactly as the reload path does).
+    organ_keys = []
+    for key in genomics_cache.keys():
+        if "_" not in key:
+            continue
+        organ_k, _sex_k = key.split("_", 1)
+        if organ_k.lower() == organ:
+            organ_keys.append(key)
+    if not organ_keys:
+        return JSONResponse(
+            {"error": f"No genomics data for organ '{organ}'"},
+            status_code=404,
+        )
+
+    # --- (2) Clear the user override for this organ (both kinds) ------------
+    # Regenerate means "throw away my edits for this organ too" — otherwise
+    # the override tier (which wins on render) would mask the new LLM text.
+    overrides_path = session_dir / "genomics_narrative_overrides.json"
+    if overrides_path.exists():
+        try:
+            raw = json.loads(overrides_path.read_text())
+            for kind in ("gene_set", "gene_bmd"):
+                bucket = raw.get(kind)
+                if isinstance(bucket, dict):
+                    # Match case-insensitively — the override file may have
+                    # stored the organ with different casing.
+                    for k in [k for k in bucket if k.lower() == organ]:
+                        bucket.pop(k, None)
+            overrides_path.write_text(json.dumps(raw))
+        except Exception:
+            logger.warning(
+                "Failed to clear override during regenerate", exc_info=True,
+            )
+
+    # --- (3) Force-generate each sex of the organ (in parallel) ------------
+    async def _one(key):
+        entry = genomics_cache[key]
+        gs_by_stat = entry.get("gene_sets_by_stat") or {}
+        gene_sets_for_llm = gs_by_stat.get(bmd_stat) or []
+        try:
+            out = await generate_genomics_narrative_async(
+                dtxsid=dtxsid,
+                compound=compound,
+                organ=entry.get("organ", organ),
+                sex=entry.get("sex", ""),
+                gene_sets=gene_sets_for_llm,
+                top_genes=entry.get("top_genes") or [],
+                all_genes=entry.get("all_genes") or [],
+                total_responsive=entry.get("total_responsive_genes", 0),
+                dose_unit=entry.get("dose_unit", "mg/kg"),
+                force=True,
+            )
+            return key, out
+        except Exception as e:
+            logger.warning("Regenerate failed for %s: %s", key, e)
+            return key, {"error": str(e)}
+
+    results = await asyncio.gather(*[_one(k) for k in organ_keys])
+
+    # If every sex errored, surface a failure rather than a silent empty.
+    if all(("error" in out) for _key, out in results):
+        return JSONResponse(
+            {"error": "Genomics narrative regeneration failed for all sexes"},
+            status_code=500,
+        )
+
+    # --- (4) Aggregate per-sex results into per-organ paragraph lists ------
+    per_organ_bundles: dict[str, dict[str, dict[str, list]]] = {}
+    for key, out in results:
+        if not out or "error" in out:
+            continue
+        entry = genomics_cache[key]
+        organ_l = (entry.get("organ") or organ).lower()
+        sex_l = (entry.get("sex") or "").lower()
+        per_organ_bundles.setdefault(organ_l, {})[sex_l] = {
+            "gs": out.get("gene_set_narrative") or [],
+            "gn": out.get("gene_narrative") or [],
+        }
+
+    from genomics_narratives import aggregate_organ_llm_narratives
+    gs_by_organ, gn_by_organ = aggregate_organ_llm_narratives(
+        per_organ_bundles, overrides=None,
+    )
+
+    return JSONResponse({
+        "organ": organ,
+        "gene_set": gs_by_organ.get(organ, []),
+        "gene_bmd": gn_by_organ.get(organ, []),
+    })
