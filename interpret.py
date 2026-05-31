@@ -1282,6 +1282,20 @@ def build_genomics_interpretation(
     if "gene_symbol" not in df.columns and "symbol" in df.columns:
         df = df.rename(columns={"symbol": "gene_symbol"})
 
+    # Coerce the BMD column to numeric.  A gene dict can carry a BMD of the
+    # literal string "NaN" (not the float) for genes that passed the
+    # responsiveness prefilter but had a BMD model failure.  Mixing str and
+    # float in one column leaves it object-dtype, so df["bmd"].min()/.max()
+    # in analyze() raises "'<=' not supported between 'float' and 'str'".
+    # to_numeric maps "NaN" (and any other non-numeric token) to a real float
+    # NaN, which min()/max()/median() skip by default.  We deliberately do
+    # NOT drop these rows: those genes are still part of the responsive set
+    # used for enrichment (analyze() does responsive_genes = df["gene_symbol"]),
+    # so dropping them would silently shrink the enrichment input.  Mirrors
+    # the same coercion load_dose_response() applies to the CSV path.
+    if "bmd" in df.columns:
+        df["bmd"] = pd.to_numeric(df["bmd"], errors="coerce")
+
     kb = ToxKBQuerier(db_path)
     try:
         result = analyze(df, kb, fdr_cutoff)
