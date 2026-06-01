@@ -58,6 +58,9 @@ from document_tree import (
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_html
+# Shared display-precision knob (same one the LaTeX path uses), so both
+# surfaces round the raw BMD/BMDL/fold-change floats identically.
+from table_builder_common import format_display_number
 
 
 # ---------------------------------------------------------------------------
@@ -966,8 +969,8 @@ def _render_gene_set_table(entry: dict) -> str:
             r.get("rank", ""),
             r.get("go_id", ""),
             r.get("go_term", ""),
-            r.get("bmd", "—"),
-            r.get("bmdl", "—"),
+            format_display_number(r.get("bmd")),
+            format_display_number(r.get("bmdl")),
             r.get("n_genes", ""),
             r.get("direction", ""),
         ]
@@ -993,10 +996,10 @@ def _render_gene_table(entry: dict) -> str:
         cells = [
             r.get("rank", ""),
             r.get("gene") or r.get("gene_symbol", ""),
-            r.get("bmd", "—"),
-            r.get("bmdl", "—"),
+            format_display_number(r.get("bmd")),
+            format_display_number(r.get("bmdl")),
             r.get("direction", ""),
-            r.get("fold_change", "—"),
+            format_display_number(r.get("fold_change")),
         ]
         body_rows.append(_emit_table_row([str(c) for c in cells]))
     return (

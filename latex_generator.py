@@ -76,6 +76,10 @@ from document_tree import (
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_latex
+# Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
+# change floats to a configurable number of decimals at render time (see
+# table_builder_common.DISPLAY_DECIMALS).
+from table_builder_common import format_display_number
 
 
 # ---------------------------------------------------------------------------
@@ -984,8 +988,8 @@ def _render_gene_set_table(entry: dict) -> str:
             str(r.get("rank", "")),
             str(r.get("go_id", "")),
             str(r.get("go_term", "")),
-            f"{r.get('bmd', '—')}",
-            f"{r.get('bmdl', '—')}",
+            format_display_number(r.get("bmd")),
+            format_display_number(r.get("bmdl")),
             str(r.get("n_genes", "")),
             str(r.get("direction", "")),
         ]
@@ -1019,10 +1023,10 @@ def _render_gene_table(entry: dict) -> str:
         cells = [
             str(r.get("rank", "")),
             str(r.get("gene", "")),
-            f"{r.get('bmd', '—')}",
-            f"{r.get('bmdl', '—')}",
+            format_display_number(r.get("bmd")),
+            format_display_number(r.get("bmdl")),
             str(r.get("direction", "")),
-            f"{r.get('fold_change', '—')}",
+            format_display_number(r.get("fold_change")),
         ]
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")

@@ -524,6 +524,54 @@ def adaptive_decimals(*values: float) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Display precision (the configurable rounding "knob")
+# ---------------------------------------------------------------------------
+# How many digits after the decimal point a raw numeric value is rounded to
+# when shown in a report table.  This is the single place the report's
+# configurer changes display precision — it is a DISPLAY concern only.  We
+# round at render time and never mutate the underlying data, so changing this
+# value and re-rendering is enough; no pipeline re-run is needed and the full-
+# precision number is always preserved upstream.
+#
+# Why this exists: some numbers reach the tables as raw modeling-step floats
+# carrying ~17 digits of IEEE floating-point noise (e.g. a gene BMD of
+# 0.05773500056931743).  Those extra digits are not measured precision — the
+# source data has no inherent precision at that scale — so they only make
+# columns needlessly wide.  Rounding them for display loses nothing real.
+#
+# Default is 2; a deployment that wants more or fewer digits overrides it
+# (and per-call `decimals=` lets a specific column opt out).
+DISPLAY_DECIMALS = 2
+
+
+def format_display_number(value, decimals: int = DISPLAY_DECIMALS) -> str:
+    """
+    Round a single numeric value to `decimals` places for table display.
+
+    - None  -> the em-dash placeholder "—" (matches the table convention for
+      "no value").
+    - Non-numeric input (an already-formatted string, a label, "—") is
+      returned unchanged, so this is safe to call on any cell value.
+    - A number (int / float / numeric string) is rendered with exactly
+      `decimals` digits after the decimal point, e.g. with the default of 2:
+      0.05773500056931743 -> "0.06", 1.388534135554733 -> "1.39", 19.85 ->
+      "19.85".  Fixed (not stripped) decimals keep a numeric column visually
+      aligned.
+
+    `decimals` defaults to the module-level DISPLAY_DECIMALS knob; pass an
+    explicit value to override the precision for one call.
+    """
+    if value is None:
+        return "—"
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        # Already a string label / placeholder / pre-formatted value.
+        return str(value)
+    return f"{num:.{decimals}f}"
+
+
+# ---------------------------------------------------------------------------
 # Sidecar loading and discovery
 # ---------------------------------------------------------------------------
 
