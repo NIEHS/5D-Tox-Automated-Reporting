@@ -79,6 +79,22 @@
 % subdirectory of the Overleaf export bundle.
 \RequirePackage{graphicx}
 
+% --- Scale-to-fit wide tables --------------------------------------------
+% adjustbox gives us \begin{adjustbox}{max width=\linewidth}...\end{adjustbox}
+% which scales its contents DOWN to fit the available text width but leaves
+% content that already fits untouched (so portrait tables that fit are not
+% shrunk).  We use it in the niehstable environment below to make wide
+% dose-response tables fit their page.  CRUCIAL: \linewidth (unlike
+% \textwidth) is widened by pdflscape inside a landscape page (~6.5in
+% portrait -> ~9in landscape), so the SAME "max width=\linewidth" target
+% automatically uses the full landscape width on rotated pages and the
+% narrower portrait width otherwise.  adjustbox is loaded (not built by us)
+% because the earlier hand-rolled \resizebox attempt scaled the tabular
+% INSIDE threeparttable, which breaks threeparttable's width measurement
+% ("Missing \endgroup"); the fix is to scale the FINISHED threeparttable
+% from the OUTSIDE, with the \caption kept out of the scaled box.
+\RequirePackage{adjustbox}
+
 % --- Landscape pages -----------------------------------------------------
 % pdflscape provides the `landscape` environment for individual landscape
 % pages (wide dose-response tables, charts, figures) inside an otherwise
@@ -167,13 +183,26 @@
 % wide tables to the next available spot rather than breaking them
 % mid-page.  [htbp] is the standard "try here, then top, then bottom,
 % then a float page" placement order.
+%
+% Scale-to-fit (wide tables)
+% --------------------------
+% The \caption is emitted FIRST, outside the scaled box, so the caption
+% always renders at the normal body font and full text width — only the
+% table body (the tabular + its tablenotes inside threeparttable) is scaled
+% to fit.  The whole threeparttable is wrapped in adjustbox "max width=
+% \linewidth": tables wider than the text block are shrunk to fit; tables
+% that already fit pass through at natural size.  This is why a too-wide
+% dose-response table on a landscape page now fits (scaled to ~9in) instead
+% of running off the edge, while ordinary portrait tables look unchanged.
 \newenvironment{niehstable}[2]{%
   \begin{table}[htbp]%
     \centering%
+    \caption{#2}\label{tab:#1}%
+    \begin{adjustbox}{max width=\linewidth}%
     \begin{threeparttable}%
-      \caption{#2}\label{tab:#1}%
 }{%
     \end{threeparttable}%
+    \end{adjustbox}%
   \end{table}%
 }
 

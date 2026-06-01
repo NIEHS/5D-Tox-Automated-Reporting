@@ -949,7 +949,13 @@ def _render_gene_set_table(entry: dict) -> str:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
-    return "\n".join(lines)
+    # Scale-to-fit: unlike apical tables (which float through the niehstable
+    # environment and get its adjustbox wrap), these genomics gene/gene-set
+    # tables are emitted inline inside the genomics section as a bare tabular.
+    # Wrap the bare tabular in the same "max width=\linewidth" adjustbox so a
+    # wide 7-column table shrinks to the text width instead of overflowing the
+    # margin; a table that already fits is left at natural size.
+    return "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
 
 
 def _render_gene_table(entry: dict) -> str:
@@ -978,7 +984,13 @@ def _render_gene_table(entry: dict) -> str:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
-    return "\n".join(lines)
+    # Scale-to-fit: unlike apical tables (which float through the niehstable
+    # environment and get its adjustbox wrap), these genomics gene/gene-set
+    # tables are emitted inline inside the genomics section as a bare tabular.
+    # Wrap the bare tabular in the same "max width=\linewidth" adjustbox so a
+    # wide 7-column table shrinks to the text width instead of overflowing the
+    # margin; a table that already fits is left at natural size.
+    return "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
 
 
 def _render_description_list(descriptions: list) -> str:
