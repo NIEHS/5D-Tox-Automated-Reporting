@@ -65,6 +65,8 @@ from __future__ import annotations
 # DOCUMENT_TREE is the canonical structure (heading hierarchy, section ids,
 # data_keys).  DocNode is the per-node type; we annotate handlers with it.
 
+import re
+
 from document_tree import (
     DOCUMENT_TREE,
     DocNode,
@@ -180,17 +182,58 @@ def _heading(level: int, title: str) -> str:
     return f"{cmd}{{{_escape_latex(title)}}}"
 
 
+# Match an http/https URL up to the next whitespace.  Trailing sentence
+# punctuation (e.g. the period in "...11603678.") gets pulled back out in
+# _splice_urls so it stays in the prose and out of the clickable link.
+_URL_RE = re.compile(r"https?://\S+")
+_URL_TRAILING_PUNCT = ".,;:!?)]}>\"'"
+
+
+def _splice_urls(text: str) -> str:
+    r"""
+    Escape `text` for LaTeX, but render any embedded http(s) URL as a
+    breakable \url{...} instead of escaped prose.
+
+    Why this exists: a URL escaped as ordinary text is one long unbreakable
+    token — its '/' and '.' are not TeX line-break points — so a long
+    reference URL (PubChem, ATSDR, CDC links) runs past the right margin
+    (overfull \hbox).  \url, with xurl loaded in niehs.cls, breaks after any
+    character AND renders the URL as a blue clickable link via hyperref,
+    matching the NIEHS references convention.  Only the URL substrings are
+    special-cased; all surrounding prose is escaped normally.
+    """
+    out: list[str] = []
+    pos = 0
+    for m in _URL_RE.finditer(text):
+        url = m.group(0)
+        start, end = m.start(), m.end()
+        # Peel trailing sentence punctuation back off the URL so "...123."
+        # keeps its period in the prose and out of the \url link target.
+        while url and url[-1] in _URL_TRAILING_PUNCT:
+            url = url[:-1]
+            end -= 1
+        # Escape the prose before the URL, then emit the URL raw inside \url{}
+        # (the url/xurl package handles its own special characters).
+        out.append(_escape_latex(text[pos:start]))
+        out.append("\\url{" + url + "}")
+        pos = end
+    out.append(_escape_latex(text[pos:]))
+    return "".join(out)
+
+
 def _render_paragraphs(paragraphs: list[str]) -> str:
     """
     Render a flat list of paragraph strings as LaTeX, separated by blank
     lines (which TeX interprets as paragraph breaks).
 
-    Each paragraph is escaped individually.  Returns "" for empty input so
-    callers can detect "no content" and substitute a placeholder.
+    Each paragraph is escaped individually, with embedded URLs spliced into
+    breakable \\url{} links (see _splice_urls — this is what keeps long
+    reference URLs from overflowing the margin).  Returns "" for empty input
+    so callers can detect "no content" and substitute a placeholder.
     """
     if not paragraphs:
         return ""
-    return "\n\n".join(_escape_latex(p) for p in paragraphs)
+    return "\n\n".join(_splice_urls(p) for p in paragraphs)
 
 
 def _pending_placeholder(node_type: str) -> str:

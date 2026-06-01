@@ -159,6 +159,15 @@
   citecolor=blue,
 ]{hyperref}
 
+% --- Breakable URLs ------------------------------------------------------
+% xurl lets \url{...} break after ANY character.  Reference URLs (e.g. long
+% PubChem / ATSDR / CDC links) are otherwise one unbreakable token whose '/'
+% and '.' are not TeX line-break points, so they run past the right margin
+% (overfull \hbox).  latex_generator wraps URLs found in prose in \url{} (see
+% _splice_urls), and xurl makes those wrap cleanly while staying blue +
+% clickable via hyperref.  Loaded AFTER hyperref, as xurl requires.
+\RequirePackage{xurl}
+
 % --- niehstable environment ---------------------------------------------
 % Signature: \begin{niehstable}{<table-id>}{<caption text>} ... \end{...}
 %
