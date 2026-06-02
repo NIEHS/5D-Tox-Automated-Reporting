@@ -174,6 +174,61 @@ async def api_export_overleaf_bundle(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/sync-document/{dtxsid} — refresh the dev document dir from cache
+# ---------------------------------------------------------------------------
+
+@router.post("/api/sync-document/{dtxsid}")
+async def api_sync_document(dtxsid: str, request: Request):
+    """
+    Materialize/refresh the dev document directory documents/<dtxsid>/ from the
+    session cache (the ADR-0005 git-bridge working tree), on demand.
+
+    Outbound only (v1): regenerates report.tex + niehs.cls + figures/ + README
+    from sessions/<dtxsid>/ and rewrites the .rlm-sync.json sidecar.  It does
+    NOT yet absorb edits made in Overleaf — that's the ADR-0005 reconciliation
+    step (override store + diff attribution).
+
+    Optional JSON body: {chemical_name, casrn} for titles/captions; both fall
+    back to the session metadata placeholders when omitted.
+
+    Differs from /api/export-overleaf-bundle on purpose: that endpoint zips the
+    LIVE marshaled request body for download; this one syncs the on-disk session
+    CACHE into a tracked working directory.
+    """
+    from latex_export import sync_document, DOCUMENTS_DIR
+
+    # dtxsid becomes a path segment under documents/ — reject anything that
+    # isn't a clean filename so it can't escape the documents/ root.
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+
+    # Body is optional; an empty/absent body just uses metadata defaults.
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    chemical_name = body.get("chemical_name") or "Test Article"
+    casrn = body.get("casrn") or "000-00-0"
+
+    try:
+        out_dir = sync_document(dtxsid, chemical_name=chemical_name, casrn=casrn)
+    except Exception:
+        logging.exception("Dev document sync failed for %s", dtxsid)
+        return JSONResponse({"error": "Dev document sync failed"}, status_code=500)
+
+    written = sorted(
+        p.relative_to(out_dir).as_posix()
+        for p in out_dir.rglob("*") if p.is_file()
+    )
+    return JSONResponse({
+        "dtxsid": dtxsid,
+        # Path relative to the repo root (documents/<dtxsid>) for display.
+        "document_dir": out_dir.relative_to(DOCUMENTS_DIR.parent).as_posix(),
+        "files": written,
+    })
+
+
+# ---------------------------------------------------------------------------
 # POST /api/preview-latex-html — render a section subtree to HTML
 # ---------------------------------------------------------------------------
 

@@ -51,7 +51,9 @@ from __future__ import annotations
 # argparse for the CLI entry point used in the demo workflow.
 
 import argparse
+import hashlib
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -70,6 +72,26 @@ CLASS_FILE = REPO_ROOT / "latex" / "niehs.cls"
 # Default destination for the CLI demo bundle.  dist/ is gitignored so the
 # generated zip never accidentally gets committed.
 DEFAULT_BUNDLE_PATH = REPO_ROOT / "dist" / "niehs-overleaf-bundle.zip"
+
+# Where dev / working report documents live — one TRACKED directory per session,
+# the expanded Overleaf bundle materialized as real files.  This is the local
+# git working tree that Overleaf's git-bridge will push/pull (ADR-0005), kept in
+# sync with the session cache under sessions/<dtxsid>/.  Unlike dist/ (gitignored
+# zips), documents/ is committed so the working tree is portable.
+DOCUMENTS_DIR = REPO_ROOT / "documents"
+
+# Sync sidecar dropped in each document directory.  Links the document back to
+# its source session and records a content fingerprint, so we can tell when a
+# re-sync is needed and (later, ADR-0005) which git commit the generated
+# baseline corresponds to.  Deterministic — no timestamps — so an unchanged
+# re-sync produces no sidecar diff.
+_SYNC_SIDECAR = ".rlm-sync.json"
+
+# Files/dirs the directory writer fully OWNS and regenerates on every sync.  A
+# re-sync clears these first so a chart that disappeared upstream (or a renamed
+# file) doesn't linger.  Everything else in the document directory — notably
+# .git and the .rlm-sync.json sidecar — is left untouched.
+_MANAGED_DIR_ENTRIES = ("report.tex", "niehs.cls", "README.md", "figures")
 
 
 # The customer-facing README that ships INSIDE the zip.  Written in plain
@@ -504,33 +526,151 @@ def build_overleaf_bundle(
     # location and is gitignored, but callers can write anywhere.
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Generate the .tex and read the .cls now (in-memory) so the zip
-    # write below is a single fast operation with no fs surprises.
-    tex_source = generate_latex(data)
-    cls_source = _read_class_file()
-
-    # ZIP_DEFLATED gets us standard PKZIP compression — Overleaf handles
-    # this format without any special flags.  ZIP_LZMA produces smaller
-    # files but some Overleaf importers reject it.
+    # Assemble the payload once (shared with the directory writer) then stream
+    # it into the zip.  ZIP_DEFLATED is standard PKZIP — Overleaf handles it
+    # without special flags; ZIP_LZMA is smaller but some importers reject it.
+    files = _assemble_bundle_files(data, include_readme=include_readme)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("report.tex", tex_source)
-        zf.writestr("niehs.cls", cls_source)
-        # Genomics chart images (base64 PNG attached to gene_set entries by
-        # load_session_data) become real files under figures/, referenced by
-        # \includegraphics in report.tex.  Each chart carries its own filename
-        # so the .tex path and the written file always match.  Falls back to an
-        # empty .gitkeep (so the dir still materializes) when there are no
-        # charts — e.g. a scaffold-only export.
-        figures = _collect_figure_files(data)
-        if figures:
-            for fig_name, raw in figures.items():
-                zf.writestr(f"figures/{fig_name}", raw)
-        else:
-            zf.writestr("figures/.gitkeep", "")
-        if include_readme:
-            zf.writestr("README.md", _README_TEMPLATE)
+        for relpath, raw in files.items():
+            zf.writestr(relpath, raw)
 
     return out_path
+
+
+# ---------------------------------------------------------------------------
+# Shared payload assembly + the expanded-directory writer (ADR-0005)
+# ---------------------------------------------------------------------------
+
+def _assemble_bundle_files(data: dict, *, include_readme: bool = True) -> "dict[str, bytes]":
+    r"""
+    Build the in-memory file payload shared by every bundle writer.
+
+    Returns a mapping of POSIX-style relative path -> raw bytes, so a writer
+    can either stream it into a zip (build_overleaf_bundle) or materialize it
+    as real files in a directory (write_overleaf_dir) without duplicating the
+    assembly.  Layout:
+
+        report.tex          generated from DOCUMENT_TREE + data
+        niehs.cls           copied from <repo>/latex/niehs.cls
+        figures/<name>      one PNG per attached genomics chart (each carries
+                            its own filename so the \includegraphics path in
+                            report.tex always matches the written file) …
+        figures/.gitkeep    … or an empty placeholder when there are no charts
+        README.md           customer-facing instructions (when include_readme)
+    """
+    files: "dict[str, bytes]" = {}
+    files["report.tex"] = generate_latex(data).encode("utf-8")
+    files["niehs.cls"] = _read_class_file().encode("utf-8")
+    figures = _collect_figure_files(data)
+    if figures:
+        for fig_name, raw in figures.items():
+            files[f"figures/{fig_name}"] = raw
+    else:
+        files["figures/.gitkeep"] = b""
+    if include_readme:
+        files["README.md"] = _README_TEMPLATE.encode("utf-8")
+    return files
+
+
+def _write_files_to_dir(files: "dict[str, bytes]", out_dir: Path) -> Path:
+    """
+    Materialize an assembled payload as real files under out_dir.
+
+    Clears the managed entries (_MANAGED_DIR_ENTRIES) first so stale figures or
+    a renamed file don't linger across syncs, then writes each payload file
+    (creating figures/ as needed).  Anything outside the managed set — .git,
+    the .rlm-sync.json sidecar — is left untouched.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name in _MANAGED_DIR_ENTRIES:
+        target = out_dir / name
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+    for relpath, raw in files.items():
+        dest = out_dir / relpath
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(raw)
+    return out_dir
+
+
+def write_overleaf_dir(data: dict, out_dir: Path, *, include_readme: bool = True) -> Path:
+    """
+    Write the Overleaf bundle as an EXPANDED DIRECTORY (not a zip).
+
+    Same payload as build_overleaf_bundle, materialized as real files so the
+    directory can be a tracked git working tree — the local copy Overleaf's
+    git-bridge pushes/pulls (ADR-0005).
+
+    v1 is OUTBOUND ONLY: every call overwrites the managed files
+    (report.tex, niehs.cls, figures/, README.md) from the session cache.  It
+    does NOT preserve in-place edits yet — protecting human edits is the
+    ADR-0005 reconciliation step (override store + diff attribution).
+
+    Returns out_dir.
+    """
+    return _write_files_to_dir(
+        _assemble_bundle_files(data, include_readme=include_readme), out_dir
+    )
+
+
+def _content_hash(files: "dict[str, bytes]") -> str:
+    """
+    Deterministic fingerprint of a bundle payload.
+
+    Hashes each file's path + bytes in sorted order — no timestamps — so the
+    same cached data always yields the same hash.  The sync sidecar therefore
+    only changes when the actual content changes, keeping git diffs meaningful.
+    """
+    digest = hashlib.sha256()
+    for relpath in sorted(files):
+        digest.update(relpath.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(files[relpath])
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def sync_document(
+    dtxsid: str,
+    chemical_name: str = "Test Article",
+    casrn: str = "000-00-0",
+    *,
+    docs_root: Path = DOCUMENTS_DIR,
+) -> Path:
+    """
+    Materialize / refresh a session's dev document directory from its cache.
+
+    Loads the session's cached state (load_session_data), writes the expanded
+    Overleaf bundle into docs_root/<dtxsid>/, and drops a .rlm-sync.json sidecar
+    recording the source session + a content fingerprint.
+
+    On-demand (v1): call whenever you want the document brought current with the
+    cache.  Outbound only — see write_overleaf_dir for the edit-preservation
+    caveat.
+
+    Returns the document directory.
+    """
+    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn)
+    out_dir = docs_root / dtxsid
+
+    # Assemble once; reuse the same payload for both the files we write and the
+    # fingerprint we record, so generate_latex runs exactly once.
+    files = _assemble_bundle_files(data)
+    _write_files_to_dir(files, out_dir)
+
+    sidecar = {
+        "source_session": f"sessions/{dtxsid}",
+        "dtxsid": dtxsid,
+        "content_hash": _content_hash(files),
+        # Filled in by the ADR-0005 round-trip layer once this directory is a
+        # git remote: the commit representing this generated baseline, against
+        # which pulled-back Overleaf edits are diffed.
+        "baseline_commit": None,
+    }
+    (out_dir / _SYNC_SIDECAR).write_text(json.dumps(sidecar, indent=2) + "\n")
+    return out_dir
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +723,30 @@ def _main() -> None:
         default=DEFAULT_BUNDLE_PATH,
         help=f"Zip output path (default: {DEFAULT_BUNDLE_PATH})",
     )
+    parser.add_argument(
+        "--sync-document",
+        action="store_true",
+        help="Instead of writing a zip, materialize/refresh the dev document "
+             "directory documents/<dtxsid>/ from the session cache (the "
+             "ADR-0005 git-bridge working tree).  Implies session data.",
+    )
     args = parser.parse_args()
+
+    # Dev-document sync path: write the expanded, tracked bundle directory
+    # (documents/<dtxsid>/) from session cache, instead of a zip.  Always uses
+    # session data — a scaffold-only dev document would defeat the purpose.
+    if args.sync_document:
+        out_dir = sync_document(
+            dtxsid=args.dtxsid,
+            chemical_name=args.chemical_name,
+            casrn=args.casrn,
+        )
+        written = sorted(p.relative_to(out_dir).as_posix()
+                         for p in out_dir.rglob("*") if p.is_file())
+        print(f"Synced dev document → {out_dir}")
+        for rel in written:
+            print(f"  {rel}")
+        return
 
     # Two build paths:
     #
