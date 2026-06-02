@@ -17,3 +17,8 @@ tests/screenshots/
 
 # SSH artifacts
 svobodadl@*
+
+# Overleaf round-trip dev scaffolding (ADR-0005): local stand-in remote and
+# the app's working clone. Ephemeral dev-only state, never committed.
+.overleaf-standin/
+.overleaf-clone/
