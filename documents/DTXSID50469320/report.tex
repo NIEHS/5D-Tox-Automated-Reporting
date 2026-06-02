@@ -10,14 +10,21 @@
 \maketitle
 \thispagestyle{empty}
 
+%% rlm:begin node cover
 % cover node cover — pending implementation
 \emph{[Section pending: cover rendering not yet implemented in tracer-bullet.]}
+%% rlm:end node cover
 
+%% rlm:begin node title-page
 % title-page node title-page — pending implementation
 \emph{[Section pending: title-page rendering not yet implemented in tracer-bullet.]}
+%% rlm:end node title-page
 
+%% rlm:begin node toc
 \tableofcontents
+%% rlm:end node toc
 
+%% rlm:begin node foreword
 \section{Foreword}
 
 The National Institute of Environmental Health Sciences (NIEHS) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.
@@ -25,19 +32,27 @@ The National Institute of Environmental Health Sciences (NIEHS) is one of 27 ins
 The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the Division of Translational Toxicology (DTT) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.
 
 NIEHS reports are available free of charge on the NIEHS/DTT website and cataloged in PubMed, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).
+%% rlm:end node foreword
 
+%% rlm:begin node tables-list
 \section{Tables}
 
 \listoftables
+%% rlm:end node tables-list
 
+%% rlm:begin node about
 \section{About This Report}
 
 \emph{[Section pending: About This Report]}
+%% rlm:end node about
 
+%% rlm:begin node peer-review
 \section{Peer Review}
 
 This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (\url{https://doi.org/10.22427/NTP-RR-8}), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Perfluorohexanesulfonamide in Sprague Dawley Rats was not subjected to further external peer review.
+%% rlm:end node peer-review
 
+%% rlm:begin node publication
 \section{Publication Details}
 
 Publisher: National Institute of Environmental Health Sciences
@@ -51,11 +66,15 @@ ISSN: 2768-5632
 Report Series: NIEHS Report Series
 
 «Report Series Number: XX»
+%% rlm:end node publication
 
+%% rlm:begin node acknowledgments
 \section{Acknowledgments}
 
 This work was supported by the Intramural Research Program at the National Institute of Environmental Health Sciences (NIEHS), National Institutes of Health and performed for NIEHS under contract.
+%% rlm:end node acknowledgments
 
+%% rlm:begin node abstract
 \section{Abstract}
 
 \noindent\textbf{Background.} Perfluorohexanesulfonamide (PFHSA) is a member of the perfluoroalkylsulfonamide (FASA) subclass of per- and polyfluoroalkyl substances (PFAS) to which occupational and environmental exposure is anticipated through its industrial uses in aqueous film-forming foams, chrome electroplating operations, and metal surface treatment applications, with inhalation of aerosols, dermal contact, and ingestion of contaminated environmental media representing the primary human exposure pathways. Toxicological information on this compound is sparse, with no established occupational exposure limits, no completed EPA IRIS assessment, no derived oral or inhalation reference values, no authoritative cancer classification, and an absence of subchronic, chronic, and mechanistic toxicity data across all exposure durations.
@@ -63,10 +82,12 @@ This work was supported by the Intramural Research Program at the National Insti
 \noindent\textbf{Results.} Several clinical pathology and organ weight measurements showed dose-related changes from which BMD values were calculated. In male rats, the effects included significantly decreased total thyroxine concentration, increased liver weight, decreased triiodiodothyronine concentration, and decreased cholesterol. The BMDs and benchmark dose lower confidence limits (BMDLs) were 8.54 (3.59), 20.5 (3.04), 27.3 (10.8), and 101 (61.4), respectively. In female rats, the effects included significantly decreased total thyroxine concentration, increased thyroid stimulating hormone concentration, decreased sorbitol dehydrogenase, and decreased aspartate aminotransferase. The BMDs and benchmark dose lower confidence limits (BMDLs) were 14.8 (6.76), 28 (16.4), 126 (69.8), and 193 (127), respectively.
 
 \noindent\textbf{Summary.} Taken together, in male rats, the most sensitive gene set BMD (BMDL) fifth percentile, individual gene BMD (BMDL), and apical endpoint BMD (BMDL) values that could be reliably determined occurred at 0.437 (0.05), 0.059 (0.012), and 8.54 (3.59) mg/kg, respectively. In female rats, the most sensitive gene set BMD (BMDL) fifth percentile, individual gene BMD (BMDL), and apical endpoint BMD (BMDL) values that could be reliably determined occurred at 2.809 (0.798), 0.391 (0.058), and 14.8 (6.76) mg/kg, respectively.
+%% rlm:end node abstract
 
 \clearpage
 \pagenumbering{arabic}
 
+%% rlm:begin node background
 \section{Background}
 
 Perfluorohexanesulfonamide (CASRN: 41997-13-1; DTXSID: DTXSID50469320; PubChem CID: 11603678; EC Number: 816-398-1; IUPAC name: 1,1,2,2,3,3,4,4,5,5,6,6,6-tridecafluorohexane-1-sulfonamide) is a per- and polyfluoroalkyl substance (PFAS) belonging to the perfluoroalkylsulfonamide (FASA) subclass [1]. As a non-polymer PFAS with a six-carbon perfluorinated chain, the compound is classified under the OECD PFAS category and is structurally characterized by a fully fluorinated hexyl chain terminating in a sulfonamide functional group [1]. Industrially, perfluorohexanesulfonamide is employed in the formulation of aqueous film-forming foams (AFFF) used in fire-fighting applications, including foam fire extinguishers, where its surfactant properties contribute to rapid film formation over flammable liquid surfaces [2]. The compound also serves as an antifogging agent in electroplating operations, specifically in chrome plating baths, where it suppresses mist generation at the electrolyte surface, and is applied as a surface treatment and coating agent for glass and steel substrates [2]. Occupational exposure is anticipated among workers engaged in AFFF formulation and deployment, chrome electroplating operations, and metal surface treatment processes, where inhalation of aerosols or mists and dermal contact with process solutions represent the primary exposure pathways [2]. Environmental release may occur through AFFF application at fire training sites and emergency response incidents, as well as through electroplating facility effluents, potentially resulting in contamination of surface water, groundwater, and soil in the vicinity of such operations [2]. Consumer exposure data are not available in the sources consulted; however, given the compound's reported use in foam fire extinguisher formulations, incidental exposure of end users during extinguisher deployment cannot be excluded [2]. No EPA Chemical and Products Database (CPDat) functional use categories were identified in the data sources available for this assessment.
@@ -82,89 +103,137 @@ The mechanism of toxicity of perfluorohexanesulfonamide has not been fully eluci
 The hazard characterization and risk assessment of perfluorohexanesulfonamide are substantially constrained by pervasive data gaps across multiple toxicological and regulatory domains. In the domain of exposure characterization, no manufacturing process role has been defined, consumer product presence has not been documented, and specific exposure scenarios for occupational, residential, or environmental settings have not been characterized, precluding identification of high-risk subgroups or bounding of the exposed population [1, 2]. Environmental fate and transport data are absent, making it impossible to assess exposure through contaminated drinking water, ambient air, or soil pathways—a particularly significant gap given the known environmental persistence of PFAS compounds as a class [1, 2]. In the domain of hazard identification, subchronic and chronic toxicity data are unavailable, and no authoritative cancer weight-of-evidence determination has been made, leaving carcinogenic potential entirely uncharacterized [1, 2]. In the domain of dose-response assessment, no EPA IRIS assessment has been completed, no oral RfD or inhalation RfC has been established, and no NOAEL or LOAEL from a critical study has been identified, meaning that no health-based exposure limits can currently be derived for any route of exposure [1]. In the domain of risk characterization, no drinking water MCL or MCLG has been established, leaving environmental contamination risks unquantified under federal regulatory frameworks [1]. Occupational exposure limits from OSHA and NIOSH are absent, and the ACGIH TLV, while noted as existing, was not accessible for this assessment [1]. The molecular weight and structural descriptors (InChIKey, SMILES) were not provided in the structured data, limiting the ability to conduct structure-activity relationship (SAR) analysis or systematic read-across from well-characterized structural analogs. The ATSDR Toxicological Profile and ADME data are nominally available but were not retrievable in sufficient detail to support quantitative assessment [2]. Collectively, these gaps underscore the urgent need for primary toxicological data generation for perfluorohexanesulfonamide.
 
 Given the established industrial uses of perfluorohexanesulfonamide in aqueous film-forming foams, chrome electroplating, and metal surface treatment applications, the anticipated occupational and environmental exposure potential associated with these uses, the near-complete absence of subchronic, chronic, and mechanistic toxicological data, and the lack of any established regulatory dose-response values or health-based exposure limits, this 5-day genomic dose-response study in Sprague-Dawley rats was conducted to characterize concentration-dependent gene expression changes, identify molecular targets and perturbed biological pathways, and generate transcriptomic points of departure that may inform future hazard characterization and risk assessment efforts for this data-poor PFAS compound.
+%% rlm:end node background
 
+%% rlm:begin node methods
 \section{Materials and Methods}
+%% rlm:end node methods
 
+%% rlm:begin node mm-study-design
 \subsection{Study Design}
 
 \emph{[Section pending: Study Design]}
+%% rlm:end node mm-study-design
 
+%% rlm:begin node mm-dose-rationale
 \subsection{Dose Selection Rationale}
 
 \emph{[Section pending: Dose Selection Rationale]}
+%% rlm:end node mm-dose-rationale
 
+%% rlm:begin node mm-chemistry
 \subsection{Chemistry}
 
 \emph{[Section pending: Chemistry]}
+%% rlm:end node mm-chemistry
 
+%% rlm:begin node mm-clin-exam
 \subsection{Clinical Examinations and Sample Collection}
+%% rlm:end node mm-clin-exam
 
+%% rlm:begin node mm-clin-obs
 \subsubsection{Clinical Observations}
 
 \emph{[Section pending: Clinical Observations]}
+%% rlm:end node mm-clin-obs
 
+%% rlm:begin node mm-body-organ-wt
 \subsubsection{Body and Organ Weights}
 
 \emph{[Section pending: Body and Organ Weights]}
+%% rlm:end node mm-body-organ-wt
 
+%% rlm:begin node mm-clin-path
 \subsubsection{Clinical Pathology}
 
 \emph{[Section pending: Clinical Pathology]}
+%% rlm:end node mm-clin-path
 
+%% rlm:begin node mm-internal-dose
 \subsubsection{Internal Dose Assessment}
 
 \emph{[Section pending: Internal Dose Assessment]}
+%% rlm:end node mm-internal-dose
 
+%% rlm:begin node mm-transcriptomics
 \subsection{Transcriptomics}
+%% rlm:end node mm-transcriptomics
 
+%% rlm:begin node mm-tx-sample
 \subsubsection{Sample Collection for Transcriptomics}
 
 \emph{[Section pending: Sample Collection for Transcriptomics]}
+%% rlm:end node mm-tx-sample
 
+%% rlm:begin node mm-tx-rna
 \subsubsection{RNA Isolation, Library Creation, and Sequencing}
 
 \emph{[Section pending: RNA Isolation, Library Creation, and Sequencing]}
+%% rlm:end node mm-tx-rna
 
+%% rlm:begin node mm-tx-processing
 \subsubsection{Sequence Data Processing}
 
 \emph{[Section pending: Sequence Data Processing]}
+%% rlm:end node mm-tx-processing
 
+%% rlm:begin node mm-tx-qc
 \subsubsection{Sequencing Quality Checks and Outlier Removal}
 
 \emph{[Section pending: Sequencing Quality Checks and Outlier Removal]}
+%% rlm:end node mm-tx-qc
 
+%% rlm:begin node mm-tx-norm
 \subsubsection{Data Normalization}
 
 \emph{[Section pending: Data Normalization]}
+%% rlm:end node mm-tx-norm
 
+%% rlm:begin node mm-data-analysis
 \subsection{Data Analysis}
+%% rlm:end node mm-data-analysis
 
+%% rlm:begin node mm-stat-apical
 \subsubsection{Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology}
 
 \emph{[Section pending: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology]}
+%% rlm:end node mm-stat-apical
 
+%% rlm:begin node mm-bmd-apical
 \subsubsection{Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology}
 
 \emph{[Section pending: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology]}
+%% rlm:end node mm-bmd-apical
 
+%% rlm:begin node mm-bmd-tx
 \subsubsection{Benchmark Dose Analysis of Transcriptomics Data}
 
 \emph{[Section pending: Benchmark Dose Analysis of Transcriptomics Data]}
+%% rlm:end node mm-bmd-tx
 
+%% rlm:begin node mm-fdr
 \subsubsection{Empirical False Discovery Rate Determination for Genomic Dose-response Modeling}
 
 \emph{[Section pending: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling]}
+%% rlm:end node mm-fdr
 
+%% rlm:begin node mm-data-access
 \subsubsection{Data Accessibility}
 
 \emph{[Section pending: Data Accessibility]}
+%% rlm:end node mm-data-access
 
+%% rlm:begin node results
 \section{Results}
+%% rlm:end node results
 
+%% rlm:begin node animal-condition
 \subsection{Animal Condition, Body Weights, and Organ Weights}
 
 \emph{[Narrative pending: Animal Condition, Body Weights, and Organ Weights]}
+%% rlm:end node animal-condition
 
+%% rlm:begin node table-body-weight
 \begin{landscape}
 \begin{niehstable}{table-body-weight}{Table 2. Summary of Body Weights of Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccccccccccc}
@@ -183,7 +252,9 @@ n & 10 & 5 & 5 & 5 & 5 & 5 & 5 & 5 & 5 & 5 & NA & NA \\
 \end{tabular}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-body-weight
 
+%% rlm:begin node table-organ-weight
 \begin{landscape}
 \begin{niehstable}{table-organ-weight}{Table 3. Summary of Select Organ Weight Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccccccccccc}
@@ -216,13 +287,17 @@ Liver Relative (mg/g) & 37.08 ± 0.64 & 35.81 ± 0.52 & 35.14 ± 0.80 & 36
 \end{tabular}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-organ-weight
 
+%% rlm:begin node table-clinical-obs
 \begin{landscape}
 \begin{niehstable}{table-clinical-obs}{Clinical Observations}
 \emph{[Table data pending: Clinical Observations]}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-clinical-obs
 
+%% rlm:begin node clinical-path
 \subsection{Clinical Pathology}
 
 In male rats, no clinical chemistry endpoints exhibited significant trend and pairwise comparisons.
@@ -236,7 +311,9 @@ In female rats, no hematology endpoints exhibited significant trend and pairwise
 In male rats, Total Thyroxine was significantly decreased at \ensuremath{\ge}37 mg/kg with a negative trend. The BMD and BMDL were 8.54 and 3.59 mg/kg, respectively. Triiodiodothyronine was significantly decreased at \ensuremath{\ge}111 mg/kg with a negative trend. The BMD and BMDL were 27.3 and 10.8 mg/kg, respectively. Total Thyroxine was significantly decreased at \ensuremath{\ge}37 mg/kg with a negative trend. The BMD and BMDL were — and — mg/kg, respectively. Triiodothyronine was significantly decreased at \ensuremath{\ge}111 mg/kg with a negative trend. The BMD and BMDL were — and — mg/kg, respectively. Significant trend and pairwise comparisons were not observed in free thyroxine, thyroid stimulating hormone, free thyroxine, or thyroid stimulating hormone.
 
 In female rats, Thyroid Stimulating Hormone was significantly increased at \ensuremath{\ge}111 mg/kg with a positive trend. The BMD and BMDL were 28 and 16.4 mg/kg, respectively. Total Thyroxine was significantly decreased at \ensuremath{\ge}37 mg/kg with a negative trend. The BMD and BMDL were 14.8 and 6.76 mg/kg, respectively. Thyroid Stimulating Hormone was significantly increased at \ensuremath{\ge}111 mg/kg with a positive trend. The BMD and BMDL were — and — mg/kg, respectively. Total Thyroxine was significantly decreased at \ensuremath{\ge}37 mg/kg with a negative trend. The BMD and BMDL were — and — mg/kg, respectively. Significant trend and pairwise comparisons were not observed in free thyroxine, triiodiodothyronine, free thyroxine, or triiodothyronine.
+%% rlm:end node clinical-path
 
+%% rlm:begin node table-clin-chem
 \begin{landscape}
 \begin{niehstable}{table-clin-chem}{Table 4. Summary of Select Clinical Chemistry Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccccccccc}
@@ -307,7 +384,9 @@ Urea Nitrogen & 15.80 ± 0.49 & 16.00 ± 1.30 & 15.00 ± 0.63 & 15.60 ±�
 \end{tabular}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-clin-chem
 
+%% rlm:begin node table-hematology
 \begin{landscape}
 \begin{niehstable}{table-hematology}{Table 5. Summary of Select Hematology Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccccccccc}
@@ -390,7 +469,9 @@ nRBC & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & — & — \\
 \end{tabular}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-hematology
 
+%% rlm:begin node table-hormones
 \begin{landscape}
 \begin{niehstable}{table-hormones}{Table 6. Summary of Select Hormones Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccccccccc}
@@ -421,11 +502,15 @@ Triiodothyronine & 53.40 ± 1.40 & 56.95 ± 0.56 & 61.40 ± 2.30 & 66.60 
 \end{tabular}
 \end{niehstable}
 \end{landscape}
+%% rlm:end node table-hormones
 
+%% rlm:begin node internal-dose
 \subsection{Internal Dose Assessment}
 
 \emph{[Narrative pending: Internal Dose Assessment]}
+%% rlm:end node internal-dose
 
+%% rlm:begin node table-tissue-conc
 \begin{niehstable}{table-tissue-conc}{Table 7. Summary of Plasma Concentration Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days}
 \begin{tabular}{lcccc}
 \toprule
@@ -442,7 +527,9 @@ n & 3 & 3 & — & — \\
 \bottomrule
 \end{tabular}
 \end{niehstable}
+%% rlm:end node table-tissue-conc
 
+%% rlm:begin node bmd-summary
 \subsection{Apical Endpoint Benchmark Dose Summary}
 
 
@@ -497,69 +584,98 @@ Female & Manual hematocrit & NVM & NVM & — & 111.0 & DOWN \\
 \bottomrule
 \end{tabular}
 \end{niehstable}
+%% rlm:end node bmd-summary
 
+%% rlm:begin node gene-sets
 \subsection{Gene Set Benchmark Dose Analysis}
 
 \subsubsection{Kidney, Female}
 
+%% rlm:begin item gene-sets::kidney-female-table
 \emph{[Top gene sets pending: kidney, female]}
+%% rlm:end item gene-sets::kidney-female-table
 
+%% rlm:begin item gene-sets::kidney-female-umap
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-kidney-female-umap.png}\\
 {\small\itshape Figure 1. GO Biological Process categories from the Kidney (Female) gene expression analysis projected onto a pre-computed UMAP embedding of GO BP terms. Points are colored by HDBSCAN semantic cluster.}
 \end{center}
+%% rlm:end item gene-sets::kidney-female-umap
 
+%% rlm:begin item gene-sets::kidney-female-cluster
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-kidney-female-cluster.png}\\
 {\small\itshape Figure 2. GO Biological Process categories from the Kidney (Female) analysis plotted by BMD value (x-axis, log scale) against hierarchical gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes with BMD values in each category. Points are colored by UMAP semantic cluster (same palette as the semantic map above). Categories are clustered on the y-axis by Jaccard similarity of their gene sets.}
 \end{center}
+%% rlm:end item gene-sets::kidney-female-cluster
 
 \subsubsection{Kidney, Male}
 
+%% rlm:begin item gene-sets::kidney-male-table
 \emph{[Top gene sets pending: kidney, male]}
+%% rlm:end item gene-sets::kidney-male-table
 
+%% rlm:begin item gene-sets::kidney-male-umap
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-kidney-male-umap.png}\\
 {\small\itshape Figure 3. GO Biological Process categories from the Kidney (Male) gene expression analysis projected onto a pre-computed UMAP embedding of GO BP terms. Points are colored by HDBSCAN semantic cluster.}
 \end{center}
+%% rlm:end item gene-sets::kidney-male-umap
 
+%% rlm:begin item gene-sets::kidney-male-cluster
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-kidney-male-cluster.png}\\
 {\small\itshape Figure 4. GO Biological Process categories from the Kidney (Male) analysis plotted by BMD value (x-axis, log scale) against hierarchical gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes with BMD values in each category. Points are colored by UMAP semantic cluster (same palette as the semantic map above). Categories are clustered on the y-axis by Jaccard similarity of their gene sets.}
 \end{center}
+%% rlm:end item gene-sets::kidney-male-cluster
 
 \subsubsection{Liver, Female}
 
+%% rlm:begin item gene-sets::liver-female-table
 \emph{[Top gene sets pending: liver, female]}
+%% rlm:end item gene-sets::liver-female-table
 
+%% rlm:begin item gene-sets::liver-female-umap
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-liver-female-umap.png}\\
 {\small\itshape Figure 5. GO Biological Process categories from the Liver (Female) gene expression analysis projected onto a pre-computed UMAP embedding of GO BP terms. Points are colored by HDBSCAN semantic cluster.}
 \end{center}
+%% rlm:end item gene-sets::liver-female-umap
 
+%% rlm:begin item gene-sets::liver-female-cluster
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-liver-female-cluster.png}\\
 {\small\itshape Figure 6. GO Biological Process categories from the Liver (Female) analysis plotted by BMD value (x-axis, log scale) against hierarchical gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes with BMD values in each category. Points are colored by UMAP semantic cluster (same palette as the semantic map above). Categories are clustered on the y-axis by Jaccard similarity of their gene sets.}
 \end{center}
+%% rlm:end item gene-sets::liver-female-cluster
 
 \subsubsection{Liver, Male}
 
+%% rlm:begin item gene-sets::liver-male-table
 \emph{[Top gene sets pending: liver, male]}
+%% rlm:end item gene-sets::liver-male-table
 
+%% rlm:begin item gene-sets::liver-male-umap
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-liver-male-umap.png}\\
 {\small\itshape Figure 7. GO Biological Process categories from the Liver (Male) gene expression analysis projected onto a pre-computed UMAP embedding of GO BP terms. Points are colored by HDBSCAN semantic cluster.}
 \end{center}
+%% rlm:end item gene-sets::liver-male-umap
 
+%% rlm:begin item gene-sets::liver-male-cluster
 \begin{center}
 \includegraphics[width=0.85\linewidth]{figures/genomics-liver-male-cluster.png}\\
 {\small\itshape Figure 8. GO Biological Process categories from the Liver (Male) analysis plotted by BMD value (x-axis, log scale) against hierarchical gene-overlap cluster assignment (y-axis). Marker size reflects the number of genes with BMD values in each category. Points are colored by UMAP semantic cluster (same palette as the semantic map above). Categories are clustered on the y-axis by Jaccard similarity of their gene sets.}
 \end{center}
+%% rlm:end item gene-sets::liver-male-cluster
+%% rlm:end node gene-sets
 
+%% rlm:begin node gene-bmd
 \subsection{Gene Benchmark Dose Analysis}
 
 \subsubsection{Kidney, Female}
 
+%% rlm:begin item gene-bmd::kidney-female-table
 \adjustbox{max width=\linewidth}{%
 \begin{tabular}{l l r r l r}
 \toprule
@@ -588,9 +704,11 @@ Rank & Gene & BMD & BMDL & Direction & Fold Change \\
 \bottomrule
 \end{tabular}
 }
+%% rlm:end item gene-bmd::kidney-female-table
 
 \subsubsection{Kidney, Male}
 
+%% rlm:begin item gene-bmd::kidney-male-table
 \adjustbox{max width=\linewidth}{%
 \begin{tabular}{l l r r l r}
 \toprule
@@ -619,9 +737,11 @@ Rank & Gene & BMD & BMDL & Direction & Fold Change \\
 \bottomrule
 \end{tabular}
 }
+%% rlm:end item gene-bmd::kidney-male-table
 
 \subsubsection{Liver, Female}
 
+%% rlm:begin item gene-bmd::liver-female-table
 \adjustbox{max width=\linewidth}{%
 \begin{tabular}{l l r r l r}
 \toprule
@@ -650,9 +770,11 @@ Rank & Gene & BMD & BMDL & Direction & Fold Change \\
 \bottomrule
 \end{tabular}
 }
+%% rlm:end item gene-bmd::liver-female-table
 
 \subsubsection{Liver, Male}
 
+%% rlm:begin item gene-bmd::liver-male-table
 \adjustbox{max width=\linewidth}{%
 \begin{tabular}{l l r r l r}
 \toprule
@@ -681,7 +803,10 @@ Rank & Gene & BMD & BMDL & Direction & Fold Change \\
 \bottomrule
 \end{tabular}
 }
+%% rlm:end item gene-bmd::liver-male-table
+%% rlm:end node gene-bmd
 
+%% rlm:begin node summary
 \section{Summary}
 
 Perfluorohexanesulfonamide (PFHxSA; CASRN 41997-13-1) is a six-carbon perfluoroalkylsulfonamide (FASA) belonging to the broader class of per- and polyfluoroalkyl substances (PFAS). In this 5-day short-term toxicity study conducted under NTP/NIEHS guidelines, male and female rats were exposed to PFHxSA via oral gavage across a range of doses. Liver and kidney were selected as primary target tissues based on known PFAS toxicokinetics, and both apical (histopathological and clinical chemistry) and transcriptomic (whole-genome expression with BMD modeling) endpoints were evaluated to characterize dose-response relationships and identify sensitive biological perturbations.
@@ -691,17 +816,23 @@ At the apical level, the liver emerged as the most sensitive target organ, with 
 At the gene-set (pathway) level, male liver exhibited the lowest BMDs overall, with positive regulation of smooth muscle cell migration (BMD \textasciitilde{}0.44 mg/kg/day, downregulated) and xenobiotic metabolic process (BMD \textasciitilde{}0.82 mg/kg/day, upregulated) among the most sensitive pathway responses, followed closely by suppression of cholesterol and sterol metabolic processes (BMDs \textasciitilde{}1.16 mg/kg/day). These findings indicate that PFHxSA disrupts hepatic lipid homeostasis and xenobiotic biotransformation at low doses in males. Female liver showed convergent pathway responses, with long-chain and unsaturated fatty acid metabolic processes activated at BMDs of approximately 2.81 mg/kg/day, and xenobiotic and icosanoid metabolic processes responding at \textasciitilde{}7.0 mg/kg/day, suggesting a similar but less sensitive hepatic transcriptomic profile compared to males. In kidney, female tissue displayed upregulation of cell division and chromosome segregation pathways at BMDs of \textasciitilde{}3.07–4.39 mg/kg/day, while male kidney showed regulation of ketone and fatty acid metabolic processes at BMDs of \textasciitilde{}11.2 mg/kg/day, indicating that renal transcriptomic responses were generally less sensitive than hepatic responses across both sexes.
 
 Across biological levels, a clear hierarchical sensitivity pattern was observed consistent with the expected transcriptomics-to-apical concordance framework: individual gene BMDs were lowest (as low as 0.059–0.39 mg/kg/day), followed by gene-set pathway BMDs (0.44–15.8 mg/kg/day), with apical endpoints anticipated to occur at higher doses. This ordering supports the utility of transcriptomic BMD modeling as an early-warning sentinel for adversity. Male liver consistently demonstrated greater transcriptomic sensitivity than female liver or either kidney, with the earliest signals converging on disruption of sterol biosynthesis, xenobiotic metabolism, and hepatic transport—biological processes well-established as targets of PFAS exposure. The sex difference in hepatic sensitivity, with males responding at approximately 2–10-fold lower pathway BMDs than females, may reflect known sex-dependent differences in PFAS toxicokinetics and hepatic gene regulation in rats. Collectively, these findings identify the liver, particularly in males, as the primary sensitive target of short-term PFHxSA exposure, with lipid/sterol metabolic disruption and xenobiotic pathway activation as the most biologically plausible early molecular-initiating events.
+%% rlm:end node summary
 
+%% rlm:begin node references
 \section{References}
 
 [1] PubChem. "Compound Summary: Perfluorohexanesulfonamide (CID 11603678)." National Center for Biotechnology Information, U.S. National Library of Medicine. \url{https://pubchem.ncbi.nlm.nih.gov/compound/11603678}. Accessed 2024.
 
 [2] Agency for Toxic Substances and Disease Registry (ATSDR). "Toxicological Profile for Perfluorohexanesulfonamide (CASRN: 41997-13-1)." U.S. Department of Health and Human Services, Centers for Disease Control and Prevention. \url{https://wwwn.cdc.gov/TSP/ToxProfiles/ToxProfiles.aspx?id=&tid=&casrn=41997-13-1}. Accessed 2024.
+%% rlm:end node references
 
+%% rlm:begin node appendix-a
 \section{Appendix A. Internal Dose Assessment}
 
 \emph{[Appendix body pending: Appendix A. Internal Dose Assessment]}
+%% rlm:end node appendix-a
 
+%% rlm:begin node appendix-b
 \section{Appendix B. Animal Identifiers}
 
 \begin{longtable}{l l r}
@@ -1012,21 +1143,30 @@ Plate5-185 & Male & 111 \\
 205 & Male & 1000 \\
 \bottomrule
 \end{longtable}
+%% rlm:end node appendix-b
 
+%% rlm:begin node appendix-c
 \section{Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate}
 
 \emph{[Appendix body pending: Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate]}
+%% rlm:end node appendix-c
 
+%% rlm:begin node appendix-d
 \section{Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies}
 
 \emph{[Appendix body pending: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies]}
+%% rlm:end node appendix-d
 
+%% rlm:begin node appendix-e
 \section{Appendix E. Organ Weight Descriptions}
 
 \emph{[Appendix body pending: Appendix E. Organ Weight Descriptions]}
+%% rlm:end node appendix-e
 
+%% rlm:begin node appendix-f
 \section{Appendix F. Supplemental Data}
 
 \emph{[Appendix body pending: Appendix F. Supplemental Data]}
+%% rlm:end node appendix-f
 
 \end{document}

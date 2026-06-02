@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 
 
 # ---------------------------------------------------------------------------
@@ -569,6 +570,80 @@ def format_display_number(value, decimals: int = DISPLAY_DECIMALS) -> str:
         # Already a string label / placeholder / pre-formatted value.
         return str(value)
     return f"{num:.{decimals}f}"
+
+
+# Pattern that recognises a "mean ± SE" display cell so it can be re-rounded.
+#
+# It deliberately tolerates everything these strings actually carry by the time
+# they reach a renderer:
+#   - a leading minus that may be ASCII "-" or the Unicode minus sign "−"
+#     (U+2212), since NIEHS-style negative means use the typographic minus;
+#   - any spacing around the ± — bmdx-pipe emits plain ASCII spaces (" ± ")
+#     while our own format_mean_se emits non-breaking spaces (U+00A0); we
+#     normalise U+00A0 to a regular space before matching so one pattern covers
+#     both;
+#   - an optional trailing significance marker ("*" or "**") that the upstream
+#     statistics step bakes onto the SE (e.g. "0.8 ± 0.2*").
+# Anything that is NOT a mean ± SE pair (a bare "n" count like "10", an
+# incidence cell like "0/10", or a sentinel like "NA"/"ND"/"NVM"/"—") simply
+# fails to match and is returned untouched.
+_MEAN_SE_RE = re.compile(
+    r"^\s*"
+    r"(?P<mean>[-−]?\d+(?:\.\d+)?)"   # the mean, optionally negative
+    r"\s*±\s*"                         # the ± separator, any surrounding space
+    r"(?P<se>\d+(?:\.\d+)?)"               # the standard error
+    r"(?P<marker>\*{1,2})?"                # optional significance marker (* or **)
+    r"\s*$"
+)
+
+
+def format_mean_se_display(cell, decimals: int | None = None):
+    """
+    Re-round a pre-formatted "mean ± SE" table cell for display.
+
+    Many apical cells reach the renderer as strings that were already formatted
+    upstream (by bmdx-pipe) with inconsistent precision — e.g. one row shows
+    "64.8 ± 4.0" while the cell beside it shows "67.00 ± 0.95" and another shows
+    "0.0267 ± 0.0033".  That ragged precision widens columns and looks untidy
+    next to the NIEHS reference, whose cells are uniform per magnitude
+    ("311.0 ± 5.2", "11.48 ± 0.31").  This helper parses such a cell and
+    re-emits it at a single, magnitude-appropriate precision.
+
+    Like format_display_number, this is a DISPLAY-time normalisation: it never
+    sees or mutates the underlying data, so the configurer can change precision
+    and re-render with no pipeline re-run.
+
+    Args:
+        cell:     The cell value.  Only strings shaped like "mean ± SE" (with
+                  optional sign, spacing, and a trailing * / ** marker) are
+                  reformatted; anything else — n counts, "0/10" incidence,
+                  "NA"/"ND"/"—", non-strings — is returned unchanged.
+        decimals: Number of decimals to use.  When None (the default), the
+                  precision is chosen by the mean's magnitude via
+                  adaptive_decimals(), reproducing the NIEHS reference rule
+                  (≥100 → 1, ≥1 → 2, ≥0.01 → 3, else 4).  Pass an explicit
+                  value to force a fixed precision for one call.
+
+    Returns:
+        The reformatted "mean ± SE" string (non-breaking spaces around ±, with
+        any significance marker re-attached to the SE), or the original value
+        unchanged when it is not a mean ± SE cell.
+    """
+    if not isinstance(cell, str):
+        return cell
+    # Normalise non-breaking spaces to regular ones so the single pattern
+    # matches both our own output and the upstream plain-space output.
+    match = _MEAN_SE_RE.match(cell.replace(" ", " "))
+    if not match:
+        return cell
+    # The mean may carry a Unicode minus; convert it so float() accepts it.
+    mean = float(match.group("mean").replace("−", "-"))
+    se = float(match.group("se"))
+    marker = match.group("marker") or ""
+    chosen = decimals if decimals is not None else adaptive_decimals(mean)
+    # Reuse format_mean_se for the canonical non-breaking-space style, then
+    # re-attach the significance marker directly after the SE (no space).
+    return format_mean_se(mean, se, decimals=chosen) + marker
 
 
 # ---------------------------------------------------------------------------

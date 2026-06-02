@@ -79,7 +79,7 @@ from cross_references import resolve_xrefs_latex
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
 # table_builder_common.DISPLAY_DECIMALS).
-from table_builder_common import format_display_number
+from table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +675,16 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
             values = row.get("values", []) or []
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
-            cells = [str(label), *[str(v) for v in values], str(bmd), str(bmdl)]
+            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
+            # precision at render time (format_mean_se_display leaves n counts,
+            # incidence, and NA/ND/— sentinels untouched).  bmd/bmdl are not
+            # mean ± SE pairs, so they pass through unchanged either way.
+            cells = [
+                str(label),
+                *[format_mean_se_display(str(v)) for v in values],
+                str(bmd),
+                str(bmdl),
+            ]
             # Pad shorter rows to ncols so the tabular doesn't error.
             while len(cells) < ncols:
                 cells.append("—")
@@ -911,6 +920,10 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
                 node.id, item["item_id"], data.get("orientations")
             ):
                 chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+            # ADR-0005: sub-addressable item grain — key on the composite
+            # "<node-id>::<item-id>" (the same key the orientation overlay uses)
+            # so a single genomics narrative/table can be attributed on its own.
+            chunk = _anchor("item", f"{node.id}::{item['item_id']}", chunk)
             blocks.append(chunk)
 
     return "\n\n".join(b for b in blocks if b)
@@ -1118,6 +1131,44 @@ _DISPATCH: dict[str, object] = {
 # Tree walk
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# ADR-0005 round-trip anchors
+# ---------------------------------------------------------------------------
+# Every rendered node (and each sub-addressable genomics content item) is
+# wrapped in a pair of sentinel COMMENTS keyed to its stable id.  These delimit
+# a region of report.tex so the round-trip reconciliation step can map an edited
+# region of the .tex back to the node / content-item that owns it — the
+# region<->node map behind "git-diff x sentinel" edit attribution (ADR-0005).
+#
+# Grain + key:
+#   - "node" → a DocNode, keyed by node.id
+#   - "item" → a genomics content item, keyed by "<node-id>::<item-id>"
+#
+# Because they are LaTeX comments they produce NO typeset output: adding them
+# leaves the compiled PDF byte-identical; only the .tex source gains the markers.
+# The reconciler parses lines beginning with this prefix.
+_ANCHOR_PREFIX = "%% rlm:"
+
+
+def _anchor(kind: str, anchor_id: str, body: str) -> str:
+    """
+    Wrap a rendered chunk in paired begin/end sentinel comments (see above).
+
+    Args:
+        kind:      "node" or "item" — the grain the anchor_id is keyed at.
+        anchor_id: the stable id (node.id, or "<node-id>::<item-id>").
+        body:      the rendered LaTeX chunk to delimit.
+
+    Returns the chunk bracketed by `%% rlm:begin <kind> <id>` /
+    `%% rlm:end <kind> <id>` comment lines.
+    """
+    return (
+        f"{_ANCHOR_PREFIX}begin {kind} {anchor_id}\n"
+        f"{body}\n"
+        f"{_ANCHOR_PREFIX}end {kind} {anchor_id}"
+    )
+
+
 def _walk(node: DocNode, data: dict) -> list[str]:
     """
     Render one node, then recurse into its children.
@@ -1140,6 +1191,10 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         if landscape_requested(node.node_type, node.id, data.get("orientations"),
                                default=node.orientation):
             chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+        # ADR-0005: bracket the whole node block (orientation wrapper included)
+        # in begin/end sentinels keyed to node.id, so the round-trip reconciler
+        # can attribute an edited region back to this node.  Inert in the PDF.
+        chunk = _anchor("node", node.id, chunk)
         chunks.append(chunk)
     for child in node.children:
         chunks.extend(_walk(child, data))

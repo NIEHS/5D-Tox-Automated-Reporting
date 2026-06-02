@@ -60,7 +60,7 @@ from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
-from table_builder_common import format_display_number
+from table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------
@@ -739,7 +739,15 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
             values = row.get("values", []) or []
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
-            cells = [str(label), *[str(v) for v in values], str(bmd), str(bmdl)]
+            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
+            # precision at render time (mirrors the LaTeX path for dual-path
+            # parity); n counts, incidence, and NA/ND/— pass through unchanged.
+            cells = [
+                str(label),
+                *[format_mean_se_display(str(v)) for v in values],
+                str(bmd),
+                str(bmdl),
+            ]
             while len(cells) < ncols:
                 cells.append("—")
             tr_class = "n-row" if row.get("is_n_row") else ""
