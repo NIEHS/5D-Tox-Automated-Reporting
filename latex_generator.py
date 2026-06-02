@@ -75,6 +75,7 @@ from document_tree import (
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
+from document_overrides import region_hash
 from cross_references import resolve_xrefs_latex
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
@@ -922,8 +923,11 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
                 chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
             # ADR-0005: sub-addressable item grain — key on the composite
             # "<node-id>::<item-id>" (the same key the orientation overlay uses)
-            # so a single genomics narrative/table can be attributed on its own.
-            chunk = _anchor("item", f"{node.id}::{item['item_id']}", chunk)
+            # so a single genomics narrative/table can be overridden + attributed
+            # on its own.  Override first, then bracket in item sentinels.
+            item_key = f"{node.id}::{item['item_id']}"
+            chunk = _apply_override(chunk, data.get("overrides") or {}, item_key, data)
+            chunk = _anchor("item", item_key, chunk)
             blocks.append(chunk)
 
     return "\n\n".join(b for b in blocks if b)
@@ -1169,6 +1173,28 @@ def _anchor(kind: str, anchor_id: str, body: str) -> str:
     )
 
 
+def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict) -> str:
+    """
+    Replace a freshly generated region with its user-owned override, if any.
+
+    The override's latex_region is emitted verbatim — the user owns this region
+    (ADR-0005 "override wins, never silently recomputed").  When the override's
+    base_hash no longer matches the freshly generated region, the underlying
+    data has drifted since the human edited it: the override STILL wins (it is
+    returned), but the anchor id is recorded under data["_override_stale"] so
+    the app can flag it for review rather than silently masking the change.
+
+    Returns the region to emit (the override when present, else `generated`).
+    """
+    override = overrides.get(anchor_id)
+    if not override:
+        return generated
+    base = override.get("base_hash")
+    if base and base != region_hash(generated):
+        data.setdefault("_override_stale", []).append(anchor_id)
+    return override.get("latex_region", generated)
+
+
 def _walk(node: DocNode, data: dict) -> list[str]:
     """
     Render one node, then recurse into its children.
@@ -1191,9 +1217,14 @@ def _walk(node: DocNode, data: dict) -> list[str]:
         if landscape_requested(node.node_type, node.id, data.get("orientations"),
                                default=node.orientation):
             chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
-        # ADR-0005: bracket the whole node block (orientation wrapper included)
-        # in begin/end sentinels keyed to node.id, so the round-trip reconciler
-        # can attribute an edited region back to this node.  Inert in the PDF.
+        # ADR-0005: if a human owns this region (edited and reconciled into the
+        # override store), emit their version verbatim instead of the generated
+        # one.  Applied AFTER the orientation wrap so the override region matches
+        # exactly what sits between the sentinels.
+        chunk = _apply_override(chunk, data.get("overrides") or {}, node.id, data)
+        # Then bracket the whole node block in begin/end sentinels keyed to
+        # node.id, so the round-trip reconciler can attribute an edited region
+        # back to this node.  Inert in the PDF.
         chunk = _anchor("node", node.id, chunk)
         chunks.append(chunk)
     for child in node.children:

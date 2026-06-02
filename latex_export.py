@@ -456,6 +456,17 @@ def load_session_data(
         dose_unit="mg/kg",
     )
 
+    # ── User-owned content overrides (ADR-0005 round-trip) ────────────
+    # Edits a human made to report.tex (in Overleaf, the local stand-in, or by
+    # hand) are reconciled into a per-anchor override store.  Surface them so
+    # the generator emits the user's version instead of regenerating over it.
+    # Keyed by the SAME anchor ids the generator emits (node.id /
+    # "<node>::<item>").  Empty when the session has no edits → byte-identical
+    # default.  The web/marshal path doesn't set data["overrides"], so it is
+    # unaffected until that path opts in.
+    from document_overrides import load_overrides
+    data["overrides"] = load_overrides(dtxsid)
+
     return data
 
 
