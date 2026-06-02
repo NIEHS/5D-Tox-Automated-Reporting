@@ -78,8 +78,8 @@ _SCHEMA_VERSION = 1
 # ---------------------------------------------------------------------------
 
 def _store_path(dtxsid: str, sessions_dir: Path) -> Path:
-    """Filesystem path of a session's override store."""
-    return sessions_dir / dtxsid / _OVERRIDES_FILENAME
+    """Filesystem path of a session's override store (accepts a str path too)."""
+    return Path(sessions_dir) / dtxsid / _OVERRIDES_FILENAME
 
 
 def _now_iso() -> str:

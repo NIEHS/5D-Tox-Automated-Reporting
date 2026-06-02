@@ -77,13 +77,22 @@ _NOT_FOR_OVERLEAF = {".rlm-sync.json"}
 # Helpers (private)
 # ---------------------------------------------------------------------------
 
-def _git(args: "list[str]", cwd: Path, author: "tuple[str, str] | None" = None) -> str:
+def _git(
+    args: "list[str]",
+    cwd: Path,
+    author: "tuple[str, str] | None" = None,
+    *,
+    strip: bool = True,
+) -> str:
     """
-    Run a git command in `cwd` and return its stdout (stripped).
+    Run a git command in `cwd` and return its stdout.
 
     `author`, when given, sets committer + author identity for that single
     invocation via -c flags — deterministic and independent of global git
-    config (which may be unset in CI).  Raises with captured stderr on failure.
+    config (which may be unset in CI).  `strip` defaults True (sha/status
+    output); pass strip=False when capturing file CONTENT (e.g. `git show`,
+    where a trailing newline is significant).  Raises with captured stderr on
+    failure.
     """
     cmd = ["git"]
     if author is not None:
@@ -98,7 +107,7 @@ def _git(args: "list[str]", cwd: Path, author: "tuple[str, str] | None" = None) 
         raise RuntimeError(
             f"git {' '.join(args)} failed in {cwd}:\n{result.stderr.strip()}"
         )
-    return result.stdout.strip()
+    return result.stdout.strip() if strip else result.stdout
 
 
 def _standin_path(dtxsid: str, root: Path) -> Path:
@@ -221,6 +230,45 @@ def pull_document(dtxsid: str, *, root: Path = _REPO_ROOT) -> "tuple[Path, str]"
 def read_clone_report(dtxsid: str, *, root: Path = _REPO_ROOT) -> str:
     """Read report.tex from the working clone (convenience for the reconciler)."""
     return (_clone_path(dtxsid, root) / "report.tex").read_text()
+
+
+def report_at(dtxsid: str, sha: str, *, root: Path = _REPO_ROOT) -> str:
+    """
+    Read report.tex as of a specific commit in the working clone.
+
+    Used to recover the GENERATED baseline (what the app pushed) for the
+    reconciler to diff the edited working tree against.  strip=False so file
+    content is byte-faithful.
+    """
+    return _git(["show", f"{sha}:report.tex"], cwd=_clone_path(dtxsid, root), strip=False)
+
+
+def reconcile_from_clone(
+    dtxsid: str,
+    baseline_sha: str,
+    *,
+    root: Path = _REPO_ROOT,
+    source: str = "overleaf",
+    sessions_dir=None,
+):
+    """
+    Reconcile the pulled-back edits against the push baseline and write overrides.
+
+    Diffs report.tex at `baseline_sha` (the app's push) against the clone's
+    current working tree (the pulled committee edits), attributes each change to
+    its anchor, and persists overrides — the round-trip's payoff.  Returns the
+    reconcile summary {written, structural, parse_warnings}.
+
+    `sessions_dir` is forwarded to the override store (defaults to the real
+    sessions/ via document_overrides); tests redirect it to a tmp dir.
+    """
+    from document_reconcile import apply_reconcile
+
+    baseline_tex = report_at(dtxsid, baseline_sha, root=root)
+    edited_tex = read_clone_report(dtxsid, root=root)
+    return apply_reconcile(
+        dtxsid, baseline_tex, edited_tex, source=source, sessions_dir=sessions_dir
+    )
 
 
 def simulate_overleaf_edit(

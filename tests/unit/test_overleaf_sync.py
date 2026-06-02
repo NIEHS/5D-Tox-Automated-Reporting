@@ -95,6 +95,32 @@ def test_full_round_trip(tmp_path, doc_dir):
     assert "ORIGINAL SUMMARY" in base_report
 
 
+def test_round_trip_reconciles_into_overrides(tmp_path, doc_dir):
+    """The payoff: push -> committee edit -> pull -> reconcile writes the right
+    override, attributing the edit to the 'summary' anchor (background untouched)."""
+    import document_overrides as do
+
+    root = tmp_path
+    sessions = tmp_path / "sessions"  # keep the override store out of the real tree
+
+    baseline = ovs.push_document(_DTXSID, doc_dir=doc_dir, root=root)
+    ovs.simulate_overleaf_edit(_DTXSID, _edit_summary, root=root)
+    ovs.pull_document(_DTXSID, root=root)
+
+    summary = ovs.reconcile_from_clone(
+        _DTXSID, baseline, root=root, sessions_dir=sessions,
+    )
+    assert summary["written"] == ["summary"]
+    assert not summary["structural"]
+
+    ov = do.get_override(_DTXSID, "summary", sessions_dir=sessions)
+    assert "COMMITTEE-EDITED SUMMARY" in ov["latex_region"]
+    # base_hash is the baseline region's hash → renderer reads "not stale".
+    assert ov["base_hash"] == do.region_hash("ORIGINAL SUMMARY")
+    # background had no edit → no override for it.
+    assert do.get_override(_DTXSID, "background", sessions_dir=sessions) is None
+
+
 def test_re_push_is_idempotent(tmp_path, doc_dir):
     root = tmp_path
     first = ovs.push_document(_DTXSID, doc_dir=doc_dir, root=root)
