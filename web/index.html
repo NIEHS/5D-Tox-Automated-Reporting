@@ -894,10 +894,17 @@
         <section data-nav-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
+                <!-- openInOverleaf() acquires the single-writer checkout lock
+                     before opening the project; if another user holds it, it
+                     blocks and the banner below shows who. -->
                 <a id="open-in-overleaf" class="btn-action primary" target="_blank"
-                   rel="noopener" href="#" style="display:none">Open in Overleaf</a>
+                   rel="noopener" href="#" style="display:none"
+                   onclick="return openInOverleaf(event)">Open in Overleaf</a>
                 <button onclick="exportDocument()" class="btn-action" id="btn-export" disabled>Export to Overleaf (.zip)</button>
             </div>
+            <!-- Checkout-lock banner: who currently has the report open in
+                 Overleaf, with a Release control (refreshed by initReportTab). -->
+            <div class="edit-lock-banner" id="edit-lock-banner" style="display:none"></div>
             <!-- Link-a-project prompt: shown when the report has no bound
                  Overleaf project yet.  Paste the project URL (and optionally the
                  git remote we push/pull) and Save → enables "Open in Overleaf". -->

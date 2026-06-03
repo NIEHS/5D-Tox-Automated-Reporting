@@ -264,6 +264,55 @@ async def api_set_overleaf_binding(dtxsid: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# /api/edit-lock/{dtxsid} — single-writer checkout lock (ADR-0005)
+# ---------------------------------------------------------------------------
+# While a user has a report "open in Overleaf" the app holds this lock so other
+# users can't start a second editing session.  Identity is the same coarse
+# ?user= the gate middleware uses; open/local mode records "anonymous".
+
+@router.get("/api/edit-lock/{dtxsid}")
+async def api_get_edit_lock(dtxsid: str):
+    """Return the report's current checkout lock ({lock: null} if free)."""
+    from edit_lock import get_lock
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    return JSONResponse({"lock": get_lock(dtxsid)})
+
+
+@router.post("/api/edit-lock/{dtxsid}")
+async def api_acquire_edit_lock(dtxsid: str, request: Request):
+    """
+    Acquire the checkout lock for the requesting ?user=.  200 + acquired:true
+    when taken (free, or already held by the same user); 409 + acquired:false
+    when another user holds it (the response carries that holder for the UI).
+    """
+    from edit_lock import acquire_lock
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    user = request.query_params.get("user", "")
+    acquired, lock = acquire_lock(dtxsid, user)
+    return JSONResponse(
+        {"acquired": acquired, "lock": lock},
+        status_code=200 if acquired else 409,
+    )
+
+
+@router.delete("/api/edit-lock/{dtxsid}")
+async def api_release_edit_lock(dtxsid: str, request: Request):
+    """
+    Release the checkout lock.  The holder releases their own lock; ?force=1
+    breaks a stale lock left by someone who closed their tab without releasing.
+    """
+    from edit_lock import release_lock, get_lock
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    user = request.query_params.get("user", "")
+    force = request.query_params.get("force") == "1"
+    released = release_lock(dtxsid, user, force=force)
+    return JSONResponse({"released": released, "lock": get_lock(dtxsid)})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/preview-latex-html — render a section subtree to HTML
 # ---------------------------------------------------------------------------
 

@@ -2971,6 +2971,30 @@ td.data-gap, th.data-gap {
 .report-toolbar .btn-action.primary:hover {
     background: var(--c-primary-hover);
 }
+/* A disabled "Open in Overleaf" link — another author holds the checkout lock. */
+.report-toolbar .btn-action.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Checkout-lock banner (single-writer): who currently has the report open in
+   Overleaf.  "mine" = informational (you hold it); "held" = amber warning
+   (another author holds it, so you can't open until it's released). */
+.edit-lock-banner {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    border-bottom: 1px solid var(--c-border);
+}
+.edit-lock-banner.mine {
+    background: #eff6ff;
+    color: #1e40af;
+}
+.edit-lock-banner.held {
+    background: #fef3c7;
+    color: #92400e;
+}
+.edit-lock-banner .btn-small { margin-left: 0.5rem; }
 
 
 /* ----------------------------------------------------------------

@@ -1073,6 +1073,92 @@ async function initReportTab() {
         link.style.display = 'none';
         setup.style.display = '';
     }
+
+    // Reflect who (if anyone) currently has the report open in Overleaf.
+    await refreshEditLock();
+}
+
+/**
+ * Fetch + render the checkout-lock banner: who has the report open in Overleaf,
+ * with a Release control.  Disables "Open in Overleaf" when another user holds
+ * the lock (openInOverleaf also blocks server-side on a 409).
+ */
+async function refreshEditLock() {
+    const banner = document.getElementById('edit-lock-banner');
+    const link = document.getElementById('open-in-overleaf');
+    if (!banner) return;
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) { banner.style.display = 'none'; return; }
+
+    let lock = null;
+    try {
+        const resp = await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}`);
+        if (resp.ok) lock = (await resp.json()).lock;
+    } catch (e) {
+        /* treat as unlocked */
+    }
+
+    if (!lock) {
+        banner.style.display = 'none';
+        if (link) link.classList.remove('disabled');
+        return;
+    }
+
+    // Server records "anonymous" when the user gate is off; mirror that here.
+    const me = getStoredUser() || 'anonymous';
+    const mine = lock.locked_by === me;
+    const since = lock.since ? new Date(lock.since).toLocaleString() : '';
+    banner.style.display = '';
+    if (mine) {
+        banner.className = 'edit-lock-banner mine';
+        banner.innerHTML = `You have this open in Overleaf (since ${escapeHtml(since)}). ` +
+            `<button class="btn-small" onclick="releaseEditLock()">Done editing (release)</button>`;
+        if (link) link.classList.remove('disabled');
+    } else {
+        banner.className = 'edit-lock-banner held';
+        banner.innerHTML = `Locked by <strong>${escapeHtml(lock.locked_by)}</strong> since ${escapeHtml(since)}. ` +
+            `Other authors can't open it until it's released. ` +
+            `<button class="btn-small" onclick="releaseEditLock(true)">Force release</button>`;
+        if (link) link.classList.add('disabled');
+    }
+}
+
+/**
+ * Acquire the checkout lock, then open the Overleaf project.  Blocks (and shows
+ * who holds it) when another user already has the report open.
+ */
+async function openInOverleaf(event) {
+    if (event) event.preventDefault();
+    const link = document.getElementById('open-in-overleaf');
+    const dtxsid = _currentDtxsid();
+    const url = link && link.getAttribute('href');
+    if (!dtxsid || !url || url === '#') return false;
+    try {
+        const resp = await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        await refreshEditLock();
+        if (!resp.ok || !data.acquired) return false;  // held by another → blocked
+    } catch (e) {
+        return false;  // couldn't take the lock → don't open
+    }
+    window.open(url, '_blank', 'noopener');
+    return false;
+}
+
+/**
+ * Release the checkout lock (force=true breaks a stale lock left by someone who
+ * closed their tab), then refresh the banner.
+ */
+async function releaseEditLock(force = false) {
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) return;
+    const suffix = force ? '?force=1' : '';
+    try {
+        await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}${suffix}`, { method: 'DELETE' });
+    } catch (e) {
+        /* ignore — refresh will show actual state */
+    }
+    await refreshEditLock();
 }
 
 /**
