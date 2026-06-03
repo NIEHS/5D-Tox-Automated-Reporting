@@ -32,7 +32,10 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+# parent.parent: this module lives one level down in the roundtrip/ package, so
+# the default storage root resolves to <repo>/sessions (overridable via
+# sessions_dir=).
+_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent.parent / "sessions"
 _LOCK_FILENAME = "_edit_lock.json"
 
 # Holder recorded when the user gate is disabled (no ?user= available).

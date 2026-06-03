@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=14">
+    <link rel="stylesheet" href="/style.css?v=15">
     <!-- Alpine.js — lightweight reactive framework for sidebar navigation.
          Loaded via CDN with defer so it initializes after our state.js registers
          the Alpine store via 'alpine:init' event.  No build step needed.
@@ -900,11 +900,18 @@
                 <a id="open-in-overleaf" class="btn-action primary" target="_blank"
                    rel="noopener" href="#" style="display:none"
                    onclick="return openInOverleaf(event)">Open in Overleaf</a>
+                <!-- Send: regenerate from cache + push to the bound remote.
+                     Fetch: pull the committee's edits + reconcile into overrides.
+                     Both enabled only when the report is bound to a git remote. -->
+                <button onclick="sendToOverleaf()" class="btn-action" id="btn-send" disabled>Send to Overleaf</button>
+                <button onclick="fetchFromOverleaf()" class="btn-action" id="btn-fetch" disabled>Fetch committee edits</button>
                 <button onclick="exportDocument()" class="btn-action" id="btn-export" disabled>Export to Overleaf (.zip)</button>
             </div>
             <!-- Checkout-lock banner: who currently has the report open in
                  Overleaf, with a Release control (refreshed by initReportTab). -->
             <div class="edit-lock-banner" id="edit-lock-banner" style="display:none"></div>
+            <!-- Result line for Send / Fetch (commit pushed, regions reconciled). -->
+            <div class="sync-status" id="sync-status"></div>
             <!-- Link-a-project prompt: shown when the report has no bound
                  Overleaf project yet.  Paste the project URL (and optionally the
                  git remote we push/pull) and Save → enables "Open in Overleaf". -->
@@ -1007,7 +1014,7 @@
     <script src="/js/settings.js?v=4"></script>
     <script src="/js/layout.js?v=6"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=8"></script>
+    <script src="/js/export.js?v=9"></script>
     <script src="/js/genomics.js?v=11"></script>
     <script src="/js/genomics_charts.js?v=4"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->

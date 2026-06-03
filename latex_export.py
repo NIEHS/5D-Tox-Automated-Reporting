@@ -1,19 +1,19 @@
-"""
+r"""
 latex_export.py — Overleaf bundle exporter for the LaTeX rendering path.
 
-This module wraps latex_generator.generate_latex with the file-bundle layer:
-it pairs the generated report.tex with the niehs.cls class file, an empty
-figures/ directory for future genomics chart PDFs, and a short README aimed
-at the human who'll drop the bundle into Overleaf.
+This module wraps the LaTeX generator with the file-bundle layer: it pairs the
+generated main.tex (Overleaf entry: preamble + \input{report}) and report.tex
+(the body) with the niehs.cls class file, a figures/ directory for genomics
+chart images, and a short README aimed at the human who'll work in Overleaf.
 
 Why a bundle, not just a .tex
 -----------------------------
 Per the Option B grilling session (2026-05-19, decision #7), the LaTeX
 export path produces a zip the author uploads to Overleaf in a single
 drag-and-drop.  Overleaf extracts the zip into a new project, sees
-report.tex at the root, recognizes niehs.cls as a local class file (next
-to the .tex), and runs pdflatex.  This works without any Overleaf
-configuration.
+main.tex at the root (its default main document), recognizes niehs.cls as a
+local class file alongside, and runs pdflatex.  This works without any
+Overleaf configuration — no "set main document" step.
 
 The figures/ directory carries the genomics chart images (one PNG per UMAP /
 cluster scatter, decoded from the session chart cache) when the session has
@@ -57,7 +57,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from latex_generator import generate_latex
+from latex_generator import generate_main_tex, generate_report_body
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ _SYNC_SIDECAR = ".rlm-sync.json"
 # re-sync clears these first so a chart that disappeared upstream (or a renamed
 # file) doesn't linger.  Everything else in the document directory — notably
 # .git and the .rlm-sync.json sidecar — is left untouched.
-_MANAGED_DIR_ENTRIES = ("report.tex", "niehs.cls", "README.md", "figures")
+_MANAGED_DIR_ENTRIES = ("main.tex", "report.tex", "niehs.cls", "README.md", "figures")
 
 
 # The customer-facing README that ships INSIDE the zip.  Written in plain
@@ -110,15 +110,18 @@ generated from session data.  Drop it into Overleaf to compile.
 4. Click **Recompile** (top of the editor) — the PDF appears in the right
    pane.
 
-The main file is `report.tex`.  The class file `niehs.cls` defines the
-NIEHS styling (page geometry, table layout, footnote chrome) and lives
-alongside the .tex; you don't need to touch it.
+The main file is `main.tex` (Overleaf's default main document) — it holds the
+preamble and `\\input`s `report.tex`, which carries the report body.  Edit the
+prose in `report.tex`.  The class file `niehs.cls` defines the NIEHS styling
+(page geometry, table layout, footnote chrome) and lives alongside; you don't
+need to touch it.
 
 ## What's in the bundle
 
 | File                | Purpose                                                |
 |---------------------|--------------------------------------------------------|
-| `report.tex`        | The report itself.  Edit this in Overleaf to revise.   |
+| `main.tex`          | Entry document: preamble + `\\input{report}`.  Compile this. |
+| `report.tex`        | The report body.  Edit this in Overleaf to revise prose.|
 | `niehs.cls`         | NIEHS document class.  Hand-edit only for style tweaks.|
 | `figures/`          | Genomics charts (UMAP, cluster scatter) as PDFs.       |
 | `README.md`         | This file.                                             |
@@ -464,7 +467,7 @@ def load_session_data(
     # "<node>::<item>").  Empty when the session has no edits → byte-identical
     # default.  The web/marshal path doesn't set data["overrides"], so it is
     # unaffected until that path opts in.
-    from document_overrides import load_overrides
+    from roundtrip.overrides import load_overrides
     data["overrides"] = load_overrides(dtxsid)
 
     return data
@@ -559,18 +562,22 @@ def _assemble_bundle_files(data: dict, *, include_readme: bool = True) -> "dict[
     Returns a mapping of POSIX-style relative path -> raw bytes, so a writer
     can either stream it into a zip (build_overleaf_bundle) or materialize it
     as real files in a directory (write_overleaf_dir) without duplicating the
-    assembly.  Layout:
+    assembly.  Layout (Option B split — see generate_main_tex/generate_report_body):
 
-        report.tex          generated from DOCUMENT_TREE + data
+        main.tex            the Overleaf ENTRY: preamble + \input{report}.
+                            Matches Overleaf's default main document; app-owned.
+        report.tex          the report BODY only — sections + round-trip
+                            anchors.  This is the editable / reconciled file.
         niehs.cls           copied from <repo>/latex/niehs.cls
         figures/<name>      one PNG per attached genomics chart (each carries
-                            its own filename so the \includegraphics path in
-                            report.tex always matches the written file) …
+                            its own filename so the \includegraphics path
+                            always matches the written file) …
         figures/.gitkeep    … or an empty placeholder when there are no charts
         README.md           customer-facing instructions (when include_readme)
     """
     files: "dict[str, bytes]" = {}
-    files["report.tex"] = generate_latex(data).encode("utf-8")
+    files["main.tex"] = generate_main_tex(data).encode("utf-8")
+    files["report.tex"] = generate_report_body(data).encode("utf-8")
     files["niehs.cls"] = _read_class_file().encode("utf-8")
     figures = _collect_figure_files(data)
     if figures:

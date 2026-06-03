@@ -24,7 +24,7 @@ Attribution rules (mirroring ADR-0005's editability policy):
     edit).
 
 This module is pure (operates on two strings); the git/stand-in wrapper that
-fetches the two report.tex revisions lives in overleaf_sync.
+fetches the two report.tex revisions lives in roundtrip.transport.
 """
 
 from __future__ import annotations
@@ -32,18 +32,15 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Imports
 # ---------------------------------------------------------------------------
-import re
-
-from document_overrides import region_hash, set_override
+from .anchors import BEGIN_RE as _BEGIN_RE, END_RE as _END_RE, begin_line, end_line
+from .overrides import region_hash, set_override
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-# The sentinel lines latex_generator emits (kept in sync with _ANCHOR_PREFIX
-# there).  Group 1 = kind (node|item), group 2 = anchor id.
-_BEGIN_RE = re.compile(r"^%% rlm:begin (node|item) (.+)$")
-_END_RE = re.compile(r"^%% rlm:end (node|item) (.+)$")
+# Sentinel patterns come from roundtrip.anchors (the single owner of the
+# format), so the reader here can't drift from the writer (the app generator).
 
 # Sentinel used to mask a direct child's span when computing a region's OWN
 # text, so a child edit doesn't read as a parent edit.  NUL can't occur in the
@@ -132,11 +129,9 @@ def parse_regions(tex: str) -> "tuple[dict[str, Region], list[str]]":
             regions[aid] = region
             # The child's literal lines also belong to the parent's literal body.
             if stack:
-                begin = f"%% rlm:begin {kind} {aid}"
-                end = f"%% rlm:end {kind} {aid}"
-                stack[-1]["literal"].append(begin)
+                stack[-1]["literal"].append(begin_line(kind, aid))
                 stack[-1]["literal"].extend(frame["literal"])
-                stack[-1]["literal"].append(end)
+                stack[-1]["literal"].append(end_line(kind, aid))
         else:
             if stack:
                 stack[-1]["own"].append(ln)

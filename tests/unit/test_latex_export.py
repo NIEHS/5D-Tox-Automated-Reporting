@@ -30,7 +30,7 @@ from latex_export import (
     CLASS_FILE,
     build_overleaf_bundle,
 )
-from latex_generator import generate_latex
+from latex_generator import generate_main_tex, generate_report_body
 from report_data import scaffold_report_data
 
 
@@ -72,9 +72,11 @@ def test_bundle_is_a_valid_zip(bundle_path):
 
 
 def test_bundle_contains_required_files(bundle_path):
-    """All four required entries must be present at the zip root."""
+    """All required entries must be present at the zip root (Option B split:
+    main.tex is the entry, report.tex the body)."""
     with zipfile.ZipFile(bundle_path) as zf:
         names = set(zf.namelist())
+    assert "main.tex" in names
     assert "report.tex" in names
     assert "niehs.cls" in names
     assert "figures/.gitkeep" in names
@@ -99,16 +101,21 @@ def test_bundle_has_no_top_level_directory(bundle_path):
 # Tests — content fidelity
 # ---------------------------------------------------------------------------
 
-def test_report_tex_matches_generator_output(bundle_path, scaffold):
+def test_split_tex_matches_generator_output(bundle_path, scaffold):
     """
-    The .tex inside the zip must be exactly what generate_latex would
-    produce for the same data — the bundler is a thin wrapper, not a
-    second renderer.
+    The .tex files inside the zip must be exactly what the generator produces
+    for the same data — the bundler is a thin wrapper, not a second renderer.
+    Option B: report.tex is the body, main.tex is the preamble that \\inputs it.
     """
     with zipfile.ZipFile(bundle_path) as zf:
-        tex_in_zip = zf.read("report.tex").decode("utf-8")
-    expected = generate_latex(scaffold)
-    assert tex_in_zip == expected
+        report_in_zip = zf.read("report.tex").decode("utf-8")
+        main_in_zip = zf.read("main.tex").decode("utf-8")
+    assert report_in_zip == generate_report_body(scaffold)
+    assert main_in_zip == generate_main_tex(scaffold)
+    # main.tex is the entry that pulls in the body; report.tex is body-only
+    # (no preamble of its own).
+    assert "\\input{report}" in main_in_zip
+    assert "\\documentclass" not in report_in_zip
 
 
 def test_class_file_matches_source(bundle_path):

@@ -235,3 +235,184 @@ landable:
   bookkeeping in part 3.
 - **v2: capture data/table edits as data-correction proposals** rather than
   discarding them — closing the loop on policy (A) without re-keying.
+
+---
+
+## Amendment 1 (2026-06-03): topology, turn-taking, and the library boundary
+
+Implementation + a series of design conversations settled three things the
+original draft left open or got slightly wrong. This amendment supersedes the
+matching parts above.
+
+### A. Transport topology — git-bridge is the live surface; GitHub is an archive
+
+The original draft treated GitHub as a possible hub. The decided topology
+instead makes the app talk to Overleaf **directly** via git-bridge, with GitHub
+as a passive backup — two remotes on one local clone:
+
+```
+                         git-bridge (live, master-only)
+   App ── local clone ──⇄  Overleaf            (the editing surface)
+              │
+              └── push mirror ──▶  GitHub repo  (archive, full history, multi-branch)
+```
+
+- **git-bridge** exposes each Overleaf project as a **single-branch (`master`)**
+  git remote at `https://git.overleaf.com/<project-id>` — the same id as the web
+  URL `…/project/<id>`, so the git URL is *derivable* from the project URL we
+  already store in the binding. Pushing to it updates the Overleaf editor
+  directly (no human sync step). **Overleaf cannot show multiple branches**, so
+  any branch/version structure lives on the GitHub side, not in Overleaf.
+- **GitHub** is repurposed from "hub" to **passive, write-only archive**: the app
+  mirrors the clone there after every operation. It is *out of the round-trip
+  loop* (never read back; Overleaf is the only source of committee edits), so it
+  adds no manual sync hop. It gives durable backup, full attributed provenance
+  (richer than git-bridge's coarse per-sync history), and a real multi-branch
+  home for per-turn tags.
+
+### B. The three roles — and why Overleaf is a buffer, not a cache
+
+- **System of record:** the app's content model (integrated data + per-node
+  overrides).
+- **Durable archive:** the GitHub mirror.
+- **Live exchange buffer:** the Overleaf project (via git-bridge). It is
+  *mostly* a disposable, reconstructible projection — **except** it transiently
+  holds the **only** copy of committee edits (born in Overleaf, not yet pulled).
+  So it is a write-buffer that is authoritative *in transit*, not a cache.
+  **Operational consequence (load-bearing rule): always pull + reconcile before
+  overwriting Overleaf** (placeholder swap, new version, anything) or the one
+  copy of un-pulled edits is lost.
+
+### C. Turn-taking by placeholder swap — the committee never touches the app
+
+Hard constraints on Overleaf Cloud: **no API or git-bridge signal for presence
+or locking**, and **no way to set the editor read-only programmatically**. And
+the committee works *only* in Overleaf — they never use the app. Therefore the
+original click-to-acquire lock does not fit (they can't participate), and a
+code-only mutex over their typing is impossible.
+
+Decided model: a per-report **turn flag** (`APP` / `COMMITTEE`) whose transition
+is a **document swap on `master`**:
+
+- **→ APP** (take a turn): pull + reconcile committee edits → push a
+  **placeholder/banner** document ("the automated system is preparing this
+  report; nothing to edit"). The real report is now staged only in the app's
+  local clone, so **there is effectively nothing to edit in Overleaf** — stray
+  keystrokes hit a throwaway placeholder. The app does its work locally.
+- **→ COMMITTEE** (hand off): push the finished editable document → the committee
+  reviews/edits in Overleaf.
+
+Enforcement, honestly stated:
+- **App side is fully enforced in code:** the app refuses to push while the flag
+  is `COMMITTEE`.
+- **Committee side is the strongest *automated* approximation, not a hard lock:**
+  during the app's turn the report content isn't in Overleaf at all (placeholder
+  only), and **reconcile-before-overwrite** makes any out-of-turn edit
+  non-destructive (captured as an override, or surfaced as a conflict). A true
+  hard lock requires the **manual Editor→Viewer share toggle** in Overleaf — the
+  only thing that makes the editor reject keystrokes — offered as "hard mode."
+
+This supersedes the per-user checkout lock (`edit_lock`), which assumed app-side
+editors; that module becomes the turn-flag store.
+
+### D. The behaviors are a domain-agnostic library — `roundtrip`
+
+The round-trip is **independent of LaTeX, Overleaf, and reports**: it is
+"sync a machine-generated document that humans edit in a git-backed editor."
+The mechanics are extracted into an **in-repo package, `roundtrip/`**, with a
+hard rule: **nothing in it imports app code** (no `latex_*`, `report_data`,
+`document_tree`, no knowledge of `sessions/`, `report.tex`, or DocNode).
+
+| `roundtrip/` (generic) | App (rlm-bmdx) supplies |
+|---|---|
+| `anchors` — sentinel convention (`wrap`, `BEGIN_RE`/`END_RE`), comment-syntax-parameterizable | the generator that emits anchored text (`latex_generator`, calling `anchors.wrap`) |
+| `reconcile` — parse regions, diff baseline↔edited, innermost-wins attribution + structural drift | how overrides are *applied* at render time (the renderer prefers an override) |
+| `overrides` — per-region store + `region_hash` stale detection | binding config (which remotes), placeholder/banner content |
+| `transport` — clone + live remote (+ archive remote), push/pull/mirror, local stand-in | session/cache layout, the bundle composition |
+| `lock` — turn flag | |
+
+The one coupling made explicit: **`roundtrip.anchors` owns the sentinel format**,
+imported by the app's generator, so writer and reader can't drift.
+
+**Timing decision: extract the boundary now, package later.** Move the modules
+behind the `roundtrip/` package now (no app imports, no behavior change) — that
+gets the design benefit and forces an honest interface. Lift it to a standalone
+installable repo *only* once the turn-taking/placeholder/archive design is built
+and stable **and** a second consumer (or open-sourcing) appears — extracting a
+versioned package mid-design would just churn its API. The in-repo default
+storage location (`<repo>/sessions`) is the one remaining soft seam; it is an
+injectable default (`sessions_dir=`), not an app import.
+
+### Implementation status (2026-06-03)
+
+**Built and committed (against the local stand-in and the real GitHub remote):**
+anchored projection (`%% rlm:` sentinels, PDF byte-identical); override store +
+renderer overlay; reconciler (diff × sentinel → overrides); local git stand-in
++ real-remote `push_document`; report↔project binding; the Report-tab Overleaf
+hand-off UI (no in-app preview; "Open in Overleaf" + link-a-project) with the
+checkout lock; the `main.tex`/`report.tex` Option-B split.
+
+**Designed here, not yet built:** git-bridge as the live remote (vs the GitHub
+remote currently bound); the **GitHub archive** second remote + per-turn tags;
+the **turn-taking placeholder-swap** protocol (the `edit_lock` → turn-flag
+reframe); the app-wired **Send / Fetch** endpoints (push, and pull+reconcile)
+with the lock check and reconcile-before-overwrite; auto-derivation of the
+git-bridge URL from the project URL.
+
+**This amendment's structural step (now):** extract the built modules into the
+`roundtrip/` package (no behavior change).
+
+---
+
+## Amendment 1a (2026-06-03): provisioning + the operator runbook
+
+Concrete settlement of Amendment 1 for the git-bridge transport.
+
+### Identity & provisioning (one human paste, ever)
+- **GitHub working/archive repo:** name derived from the test-article id by
+  convention (e.g. `…-<DTXSID>`) — fully automatic; the Overleaf project *title*
+  is set to the same string.
+- **Overleaf project id is opaque and NOT derivable** — Overleaf has no
+  title-based URL and no Cloud API to resolve title→id. So provisioning is:
+  app creates the convention-named GitHub repo + pushes the initial bundle →
+  **human imports that repo into Overleaf once** (New Project → Import from
+  GitHub) → **human pastes the resulting `overleaf.com/project/<id>` back into
+  the app once.** From that id the app derives BOTH the web URL ("Open in
+  Overleaf") and the git-bridge endpoint `git.overleaf.com/<id>` — so the two
+  can never drift (the failure mode that bit us when project_url and git_remote
+  were set independently).
+
+### Two remotes, two roles (on one local clone)
+- **Overleaf via git-bridge** — the live waypoint. **Single-branch (`master`).**
+  Holds exactly one flat state at a time: the banner (app's turn) or the
+  editable report (committee's turn).
+- **GitHub** — the app user's working repo (branches, multiple commits) AND the
+  full-history archive. The committee never touches it.
+
+### Turn-taking runbook (the operator sequence)
+1. **Take turn:** pull + reconcile any committee edits (mandatory — drain
+   before clobber), then push the **"🔒 Locked by Administrator"** banner to the
+   Overleaf project. The real report is now staged only on GitHub/local, so
+   there is nothing real to edit in Overleaf.
+2. **Work:** commit/branch freely on GitHub; regenerate; etc. Overleaf shows the
+   banner throughout. Overleaf and GitHub intentionally diverge here.
+3. **Hand off:** push the finished editable document to BOTH the Overleaf
+   project (git-bridge, replacing the banner) AND GitHub (archive). They
+   converge.
+4. **Committee edits** in Overleaf (`master` only).
+5. **Next cycle:** back to step 1 — pull their edits from Overleaf, reconcile,
+   then banner.
+
+### Mutual exclusion — what's enforced vs cooperative
+- **Committee-editing-during-app's-turn: enforced** by the banner (nothing real
+  to edit).
+- **App-taking-turn-during-committee-editing: NOT code-enforceable** — Overleaf
+  exposes no presence/locking signal. Guards: (a) out-of-band turn convention,
+  (b) reconcile-before-banner makes a mistimed take-turn *non-destructive*
+  (worst case: a surprised editor, not lost work), (c) the manual Editor→Viewer
+  share toggle as the only hard lock.
+
+### Credentials
+git-bridge auth = an Overleaf git token (account-scoped on Cloud), supplied to
+the server as `OVERLEAF_GIT_TOKEN`, never in code. GitHub archive auth = the
+existing git credential helper.

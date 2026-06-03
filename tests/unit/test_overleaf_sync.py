@@ -21,7 +21,7 @@ import subprocess
 
 import pytest
 
-import overleaf_sync as ovs
+import roundtrip.transport as ovs
 
 
 _DTXSID = "DTXSIDTEST"
@@ -98,7 +98,7 @@ def test_full_round_trip(tmp_path, doc_dir):
 def test_round_trip_reconciles_into_overrides(tmp_path, doc_dir):
     """The payoff: push -> committee edit -> pull -> reconcile writes the right
     override, attributing the edit to the 'summary' anchor (background untouched)."""
-    import document_overrides as do
+    import roundtrip.overrides as do
 
     root = tmp_path
     sessions = tmp_path / "sessions"  # keep the override store out of the real tree

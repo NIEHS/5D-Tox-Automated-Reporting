@@ -1074,8 +1074,96 @@ async function initReportTab() {
         setup.style.display = '';
     }
 
+    // Send / Fetch need a bound git remote (the push/pull target).
+    const hasRemote = !!(binding && binding.git_remote);
+    const sendBtn = document.getElementById('btn-send');
+    const fetchBtn = document.getElementById('btn-fetch');
+    if (sendBtn) sendBtn.disabled = !hasRemote;
+    if (fetchBtn) fetchBtn.disabled = !hasRemote;
+
     // Reflect who (if anyone) currently has the report open in Overleaf.
     await refreshEditLock();
+}
+
+/**
+ * Set the Send/Fetch result line with a visible state.
+ * state: '' (in-progress, neutral) | 'ok' (green success) | 'err' (red).
+ */
+function _setSyncStatus(msg, state) {
+    const el = document.getElementById('sync-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'sync-status' + (state ? ' ' + state : '');
+}
+
+/**
+ * Send to Overleaf: regenerate from cache and push to the bound git remote.
+ * The server blocks if another user holds the edit lock, or if the committee
+ * has edited since the last send (then run Fetch first).
+ */
+async function sendToOverleaf() {
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
+    const btn = document.getElementById('btn-send');
+    if (btn) btn.disabled = true;
+    _setSyncStatus('Sending to Overleaf…', '');
+    const body = {
+        chemical_name: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.name) || '',
+        casrn: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.casrn) || '',
+    };
+    try {
+        const resp = await fetch(`/api/send-to-overleaf/${encodeURIComponent(dtxsid)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            _setSyncStatus(data.error || 'Send failed.', 'err');
+        } else {
+            _setSyncStatus(
+                `✓ Sent to Overleaf (commit ${String(data.pushed).slice(0, 8)}). ` +
+                `Now in Overleaf open Menu → GitHub → “Pull GitHub changes” to see it.`,
+                'ok');
+        }
+    } catch (e) {
+        _setSyncStatus(`Send error: ${e.message}`, 'err');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+    refreshEditLock();
+}
+
+/**
+ * Fetch committee edits: pull the bound remote and reconcile the committee's
+ * Overleaf edits into per-region overrides (preserved on the next regenerate).
+ */
+async function fetchFromOverleaf() {
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
+    const btn = document.getElementById('btn-fetch');
+    if (btn) btn.disabled = true;
+    _setSyncStatus('Fetching committee edits…', '');
+    try {
+        const resp = await fetch(`/api/fetch-from-overleaf/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            _setSyncStatus(data.error || 'Fetch failed.', 'err');
+        } else {
+            const written = data.written || [];
+            let msg = written.length
+                ? `✓ Fetched — ${written.length} region(s) updated from committee edits: ${written.join(', ')}.`
+                : '✓ Fetched — no committee edits to reconcile.';
+            if ((data.structural || []).length) {
+                msg += ` ⚠ ${data.structural.length} structural change(s) need review (not auto-applied).`;
+            }
+            _setSyncStatus(msg, 'ok');
+        }
+    } catch (e) {
+        _setSyncStatus(`Fetch error: ${e.message}`, 'err');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+    refreshEditLock();
 }
 
 /**

@@ -46,13 +46,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from latex_export import DOCUMENTS_DIR
+# NOTE: this module imports NO app code — the document directory it pushes is
+# passed in by the caller (doc_dir=), so the library stays domain-agnostic.
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_REPO_ROOT = Path(__file__).resolve().parent
+# parent.parent: this module lives one level down in the roundtrip/ package, so
+# the dev-scaffolding roots below still resolve under the repo root.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Gitignored dev scaffolding roots (overridable in tests via `root=`).
 _STANDIN_ROOT = _REPO_ROOT / ".overleaf-standin"
@@ -190,14 +193,17 @@ def set_binding(
     *,
     project_url: "str | None" = None,
     git_remote: "str | None" = None,
+    baseline_commit: "str | None" = None,
     sessions_dir: "Path | None" = None,
 ) -> dict:
     """
-    Merge project_url / git_remote into a report's binding and persist it.
+    Merge fields into a report's binding and persist it.
 
-    Only the provided fields are updated (pass one or both), so the UI can set
-    the project URL without clobbering a remote set elsewhere.  Returns the
-    merged binding.
+    Only the provided fields are updated, so the UI can set the project URL
+    without clobbering a remote, and a Send can record `baseline_commit` (the
+    sha it just pushed — the reconciler diffs pulled-back edits against it, and
+    Send's staleness guard compares the remote head to it) without touching the
+    rest.  Returns the merged binding.
     """
     base = Path(sessions_dir) if sessions_dir is not None else _SESSIONS_DIR
     binding = get_binding(dtxsid, sessions_dir=sessions_dir)
@@ -205,6 +211,8 @@ def set_binding(
         binding["project_url"] = project_url
     if git_remote is not None:
         binding["git_remote"] = git_remote
+    if baseline_commit is not None:
+        binding["baseline_commit"] = baseline_commit
     path = base / dtxsid / _BINDING_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(binding, indent=2) + "\n")
@@ -244,6 +252,18 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
       - fresh clone of the LOCAL stand-in (empty bare) → `git init` + remote add.
     """
     branch = _BRANCH
+
+    def _onto_branch() -> None:
+        # Put the clone on `branch`, synced to the remote tip if the remote has
+        # it, else create `branch` (handles an EMPTY remote — no main yet — so
+        # the first push can create it).  -f discards any local state from a
+        # previous (stand-in) life.
+        _git(["fetch", "-q", "origin"], cwd=clone)
+        if f"origin/{branch}" in _git(["branch", "-r"], cwd=clone):
+            _git(["checkout", "-q", "-f", "-B", branch, f"origin/{branch}"], cwd=clone)
+        else:
+            _git(["checkout", "-q", "-B", branch], cwd=clone)
+
     if (clone / ".git").exists():
         try:
             current = _git(["remote", "get-url", "origin"], cwd=clone)
@@ -254,15 +274,16 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
                 _git(["remote", "set-url", "origin", remote_url], cwd=clone)
             else:
                 _git(["remote", "add", "origin", remote_url], cwd=clone)
-        _git(["fetch", "-q", "origin"], cwd=clone)
-        if f"origin/{branch}" in _git(["branch", "-r"], cwd=clone):
-            # -f discards any local state from a previous (stand-in) life.
-            _git(["checkout", "-q", "-f", "-B", branch, f"origin/{branch}"], cwd=clone)
+        _onto_branch()
         return
 
     if is_external:
+        # Clone WITHOUT -b: a populated repo checks out its default branch; an
+        # EMPTY one clones cleanly (no "branch not found"), and _onto_branch()
+        # then settles us on `branch` either way.
         clone.parent.mkdir(parents=True, exist_ok=True)
-        _git(["clone", "-q", "-b", branch, remote_url, str(clone)], cwd=clone.parent)
+        _git(["clone", "-q", remote_url, str(clone)], cwd=clone.parent)
+        _onto_branch()
     else:
         clone.mkdir(parents=True, exist_ok=True)
         _git(["init", "-q", "-b", branch], cwd=clone)
@@ -271,27 +292,28 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
 
 def push_document(
     dtxsid: str,
+    doc_dir: Path,
     *,
     remote: "str | None" = None,
-    doc_dir: "Path | None" = None,
     root: Path = _REPO_ROOT,
     message: str = "app: sync generated report",
 ) -> str:
     """
-    Push the dev document bundle to the project remote (the "send to Overleaf").
+    Push a document bundle to the project remote (the "send to Overleaf").
 
-    `remote` selects the target:
+    `doc_dir` is the directory whose contents are mirrored up — supplied by the
+    caller (the app passes its documents/<dtxsid>/), so this library module
+    stays domain-agnostic.  `remote` selects the target:
       - None (default) → the LOCAL stand-in bare repo (offline dev/testing);
-      - a URL → the real project remote (e.g. the GitHub repo Overleaf syncs
-        with, or a git-bridge URL).  The existing project is cloned so our push
-        fast-forwards on top of its history; auth is the ambient git credential
-        helper (no token in code).
+      - a URL → the real project remote (a git-bridge URL, or a GitHub repo).
+        The existing project is cloned so our push fast-forwards on top of its
+        history; auth is the ambient git credential helper (no token in code).
 
-    Mirrors documents/<dtxsid>/ into the working clone, commits any change, and
-    pushes.  Returns the pushed commit sha — the baseline the reconciler diffs
+    Mirrors doc_dir into the working clone, commits any change, and pushes.
+    Returns the pushed commit sha — the baseline the reconciler diffs
     pulled-back edits against.
     """
-    doc_dir = doc_dir or (DOCUMENTS_DIR / dtxsid)
+    doc_dir = Path(doc_dir)
     if not doc_dir.exists():
         raise FileNotFoundError(
             f"No dev document at {doc_dir} — run sync_document({dtxsid!r}) first."
@@ -331,6 +353,24 @@ def read_clone_report(dtxsid: str, *, root: Path = _REPO_ROOT) -> str:
     return (_clone_path(dtxsid, root) / "report.tex").read_text()
 
 
+def remote_head(dtxsid: str, *, root: Path = _REPO_ROOT) -> "str | None":
+    """
+    Fetch and return the remote's current branch-tip sha, or None if there's no
+    working clone yet / the remote has no branch.
+
+    Used by Send's staleness guard: if this differs from the recorded baseline,
+    the committee has pushed edits we haven't fetched, so Send must refuse and
+    ask the caller to Fetch first (reconcile-before-overwrite).
+    """
+    clone = _clone_path(dtxsid, root)
+    if not (clone / ".git").exists():
+        return None
+    _git(["fetch", "-q", "origin"], cwd=clone)
+    if f"origin/{_BRANCH}" not in _git(["branch", "-r"], cwd=clone):
+        return None
+    return _git(["rev-parse", f"origin/{_BRANCH}"], cwd=clone)
+
+
 def report_at(dtxsid: str, sha: str, *, root: Path = _REPO_ROOT) -> str:
     """
     Read report.tex as of a specific commit in the working clone.
@@ -359,9 +399,9 @@ def reconcile_from_clone(
     reconcile summary {written, structural, parse_warnings}.
 
     `sessions_dir` is forwarded to the override store (defaults to the real
-    sessions/ via document_overrides); tests redirect it to a tmp dir.
+    sessions/ via roundtrip.overrides); tests redirect it to a tmp dir.
     """
-    from document_reconcile import apply_reconcile
+    from .reconcile import apply_reconcile
 
     baseline_tex = report_at(dtxsid, baseline_sha, root=root)
     edited_tex = read_clone_report(dtxsid, root=root)

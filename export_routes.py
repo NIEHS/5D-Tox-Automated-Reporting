@@ -235,7 +235,7 @@ async def api_sync_document(dtxsid: str, request: Request):
 @router.get("/api/overleaf-binding/{dtxsid}")
 async def api_get_overleaf_binding(dtxsid: str):
     """Return the report's Overleaf binding {project_url?, git_remote?} ({} if unset)."""
-    from overleaf_sync import get_binding
+    from roundtrip.transport import get_binding
     if safe_filename(dtxsid) != dtxsid:
         return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
     return JSONResponse(get_binding(dtxsid))
@@ -248,7 +248,7 @@ async def api_set_overleaf_binding(dtxsid: str, request: Request):
     the provided fields are updated.  The project_url drives the "Open in
     Overleaf" link; git_remote is the push/pull target.
     """
-    from overleaf_sync import set_binding
+    from roundtrip.transport import set_binding
     if safe_filename(dtxsid) != dtxsid:
         return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
     try:
@@ -273,7 +273,7 @@ async def api_set_overleaf_binding(dtxsid: str, request: Request):
 @router.get("/api/edit-lock/{dtxsid}")
 async def api_get_edit_lock(dtxsid: str):
     """Return the report's current checkout lock ({lock: null} if free)."""
-    from edit_lock import get_lock
+    from roundtrip.lock import get_lock
     if safe_filename(dtxsid) != dtxsid:
         return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
     return JSONResponse({"lock": get_lock(dtxsid)})
@@ -286,7 +286,7 @@ async def api_acquire_edit_lock(dtxsid: str, request: Request):
     when taken (free, or already held by the same user); 409 + acquired:false
     when another user holds it (the response carries that holder for the UI).
     """
-    from edit_lock import acquire_lock
+    from roundtrip.lock import acquire_lock
     if safe_filename(dtxsid) != dtxsid:
         return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
     user = request.query_params.get("user", "")
@@ -303,13 +303,136 @@ async def api_release_edit_lock(dtxsid: str, request: Request):
     Release the checkout lock.  The holder releases their own lock; ?force=1
     breaks a stale lock left by someone who closed their tab without releasing.
     """
-    from edit_lock import release_lock, get_lock
+    from roundtrip.lock import release_lock, get_lock
     if safe_filename(dtxsid) != dtxsid:
         return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
     user = request.query_params.get("user", "")
     force = request.query_params.get("force") == "1"
     released = release_lock(dtxsid, user, force=force)
     return JSONResponse({"released": released, "lock": get_lock(dtxsid)})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/send-to-overleaf/{dtxsid} — regenerate + push to the bound remote
+# ---------------------------------------------------------------------------
+
+@router.post("/api/send-to-overleaf/{dtxsid}")
+async def api_send_to_overleaf(dtxsid: str, request: Request):
+    """
+    "Send to Overleaf": regenerate the dev document from cache and push it to the
+    report's bound git remote (the GitHub repo Overleaf syncs with, or a
+    git-bridge URL).
+
+    Guards (the round-trip safety rules):
+      - **lock:** refuse if ANOTHER user holds the edit lock (don't push over a
+        session someone else opened).
+      - **staleness (reconcile-before-overwrite):** if the remote has advanced
+        past our recorded baseline, the committee pushed edits we haven't
+        fetched — refuse with 409 so the caller runs Fetch first.
+
+    Optional JSON body {chemical_name, casrn} labels the title page.
+    """
+    from roundtrip.transport import get_binding, set_binding, push_document, remote_head
+    from roundtrip.lock import get_lock
+    from latex_export import sync_document, DOCUMENTS_DIR
+
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+
+    binding = get_binding(dtxsid)
+    remote = binding.get("git_remote")
+    if not remote:
+        return JSONResponse(
+            {"error": "This report has no git remote bound — link a project first."},
+            status_code=400,
+        )
+
+    user = (request.query_params.get("user", "").strip() or "anonymous")
+    lock = get_lock(dtxsid)
+    if lock and lock.get("locked_by") != user:
+        return JSONResponse(
+            {"error": f"Locked by {lock['locked_by']} — they have the report open.",
+             "lock": lock},
+            status_code=409,
+        )
+
+    baseline = binding.get("baseline_commit")
+    if baseline:
+        try:
+            head = remote_head(dtxsid)
+        except Exception:
+            head = None
+        if head and head != baseline:
+            return JSONResponse(
+                {"error": "The committee has edited in Overleaf since the last send. "
+                          "Fetch their edits first, then send.",
+                 "needs_fetch": True},
+                status_code=409,
+            )
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    chemical_name = body.get("chemical_name") or "Test Article"
+    casrn = body.get("casrn") or "000-00-0"
+
+    try:
+        sync_document(dtxsid, chemical_name=chemical_name, casrn=casrn)
+        sha = push_document(dtxsid, DOCUMENTS_DIR / dtxsid, remote=remote)
+        set_binding(dtxsid, baseline_commit=sha)
+    except Exception as e:
+        logging.exception("Send to Overleaf failed for %s", dtxsid)
+        return JSONResponse({"error": f"Send failed: {e}"}, status_code=500)
+
+    return JSONResponse({"pushed": sha, "remote": remote})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/fetch-from-overleaf/{dtxsid} — pull committee edits + reconcile
+# ---------------------------------------------------------------------------
+
+@router.post("/api/fetch-from-overleaf/{dtxsid}")
+async def api_fetch_from_overleaf(dtxsid: str):
+    """
+    "Fetch committee edits": pull the bound remote into the working clone and
+    reconcile the committee's edits against the recorded baseline, writing
+    per-region overrides (which the next regenerate preserves).
+
+    Returns {written, structural, head}: the anchor ids that gained an override,
+    any structural-drift warnings, and the new clone head.
+    """
+    from roundtrip.transport import get_binding, pull_document, reconcile_from_clone
+    from roundtrip.transport import _clone_path, _REPO_ROOT  # clone-existence check
+
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+
+    binding = get_binding(dtxsid)
+    if not binding.get("git_remote"):
+        return JSONResponse(
+            {"error": "This report has no git remote bound — link a project first."},
+            status_code=400,
+        )
+    if not (_clone_path(dtxsid, _REPO_ROOT) / ".git").exists():
+        return JSONResponse(
+            {"error": "Nothing to fetch yet — send the report to Overleaf first."},
+            status_code=409,
+        )
+
+    try:
+        _clone, head = pull_document(dtxsid)
+        baseline = binding.get("baseline_commit")
+        if baseline:
+            summary = reconcile_from_clone(dtxsid, baseline)
+        else:
+            summary = {"written": [], "structural": [], "parse_warnings": [],
+                       "note": "no baseline recorded yet — nothing to attribute"}
+    except Exception as e:
+        logging.exception("Fetch from Overleaf failed for %s", dtxsid)
+        return JSONResponse({"error": f"Fetch failed: {e}"}, status_code=500)
+
+    return JSONResponse({**summary, "head": head})
 
 
 # ---------------------------------------------------------------------------

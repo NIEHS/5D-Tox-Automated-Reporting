@@ -21,7 +21,7 @@ import re
 
 import pytest
 
-import document_overrides as do
+import roundtrip.overrides as do
 from latex_generator import generate_latex
 from report_data import scaffold_report_data
 

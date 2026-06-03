@@ -13,8 +13,8 @@ Proves the reconciler classifies edits to an anchored report.tex correctly:
     BASELINE region, so the renderer's stale-check lines up).
 """
 
-import document_overrides as do
-from document_reconcile import reconcile, apply_reconcile
+import roundtrip.overrides as do
+from roundtrip.reconcile import reconcile, apply_reconcile
 
 
 def _wrap(kind: str, aid: str, body: str) -> str:

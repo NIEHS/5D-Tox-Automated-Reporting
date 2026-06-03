@@ -11,15 +11,18 @@ generated from session data.  Drop it into Overleaf to compile.
 4. Click **Recompile** (top of the editor) — the PDF appears in the right
    pane.
 
-The main file is `report.tex`.  The class file `niehs.cls` defines the
-NIEHS styling (page geometry, table layout, footnote chrome) and lives
-alongside the .tex; you don't need to touch it.
+The main file is `main.tex` (Overleaf's default main document) — it holds the
+preamble and `\input`s `report.tex`, which carries the report body.  Edit the
+prose in `report.tex`.  The class file `niehs.cls` defines the NIEHS styling
+(page geometry, table layout, footnote chrome) and lives alongside; you don't
+need to touch it.
 
 ## What's in the bundle
 
 | File                | Purpose                                                |
 |---------------------|--------------------------------------------------------|
-| `report.tex`        | The report itself.  Edit this in Overleaf to revise.   |
+| `main.tex`          | Entry document: preamble + `\input{report}`.  Compile this. |
+| `report.tex`        | The report body.  Edit this in Overleaf to revise prose.|
 | `niehs.cls`         | NIEHS document class.  Hand-edit only for style tweaks.|
 | `figures/`          | Genomics charts (UMAP, cluster scatter) as PDFs.       |
 | `README.md`         | This file.                                             |

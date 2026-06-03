@@ -75,7 +75,8 @@ from document_tree import (
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
-from document_overrides import region_hash
+from roundtrip.overrides import region_hash
+from roundtrip.anchors import wrap as _anchor
 from cross_references import resolve_xrefs_latex
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
@@ -1136,41 +1137,15 @@ _DISPATCH: dict[str, object] = {
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# ADR-0005 round-trip anchors
+# ADR-0005 round-trip anchors + override overlay
 # ---------------------------------------------------------------------------
 # Every rendered node (and each sub-addressable genomics content item) is
-# wrapped in a pair of sentinel COMMENTS keyed to its stable id.  These delimit
-# a region of report.tex so the round-trip reconciliation step can map an edited
-# region of the .tex back to the node / content-item that owns it — the
-# region<->node map behind "git-diff x sentinel" edit attribution (ADR-0005).
-#
-# Grain + key:
-#   - "node" → a DocNode, keyed by node.id
-#   - "item" → a genomics content item, keyed by "<node-id>::<item-id>"
-#
-# Because they are LaTeX comments they produce NO typeset output: adding them
-# leaves the compiled PDF byte-identical; only the .tex source gains the markers.
-# The reconciler parses lines beginning with this prefix.
-_ANCHOR_PREFIX = "%% rlm:"
-
-
-def _anchor(kind: str, anchor_id: str, body: str) -> str:
-    """
-    Wrap a rendered chunk in paired begin/end sentinel comments (see above).
-
-    Args:
-        kind:      "node" or "item" — the grain the anchor_id is keyed at.
-        anchor_id: the stable id (node.id, or "<node-id>::<item-id>").
-        body:      the rendered LaTeX chunk to delimit.
-
-    Returns the chunk bracketed by `%% rlm:begin <kind> <id>` /
-    `%% rlm:end <kind> <id>` comment lines.
-    """
-    return (
-        f"{_ANCHOR_PREFIX}begin {kind} {anchor_id}\n"
-        f"{body}\n"
-        f"{_ANCHOR_PREFIX}end {kind} {anchor_id}"
-    )
+# wrapped in a pair of sentinel COMMENTS keyed to its stable id, so the
+# round-trip reconciler can map an edited .tex region back to the node it owns.
+# The sentinel FORMAT lives in roundtrip.anchors (imported as `_anchor` at the
+# top of this module) — owned there so writer (this generator) and reader (the
+# reconciler) can't drift.  The override overlay below is app-side: it decides
+# how a stored human edit replaces freshly generated content at render time.
 
 
 def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict) -> str:
@@ -1368,46 +1343,74 @@ def generate_latex(
         return _fragment_skeleton("\n\n".join(body_chunks))
 
     # ── Full-report path ─────────────────────────────────────────────
-    # Pull title metadata from the data dict.  marshal_export_data fills
-    # these in from session test-article forms; scaffold_report_data also
-    # provides defaults for the smoke-test path.
+    # Self-contained document = the same skeleton wrapped around the body.
+    # Kept for tests, fragment previews, and any caller that wants one file.
+    title, author, running_header = _doc_metadata(data)
+    return _document_skeleton(
+        title=title, author=author,
+        body=generate_report_body(data), running_header=running_header,
+    )
+
+
+def _doc_metadata(data: dict) -> "tuple[str, str, str]":
+    """
+    (title, author, running_header) for the document skeleton, escaped.
+
+    marshal_export_data fills these from the session test-article forms;
+    scaffold_report_data supplies smoke-test defaults.  running_header is the
+    dedicated never-abbreviated title form (same source the HTML preview uses,
+    so both surfaces show an identical header), falling back to the title.
+    """
     title = _escape_latex(data.get("title", "5dToxReport"))
     author = _escape_latex(
         data.get("author", "NIEHS Division of Translational Toxicology")
     )
-    # Running header = the dedicated "running_header" field (the full,
-    # never-abbreviated title form report_data.py sets), falling back to
-    # the plain title.  Same source the HTML preview uses, so both output
-    # surfaces show the identical header.
     running_header = _escape_latex(
         data.get("running_header") or data.get("title", "5dToxReport")
     )
+    return title, author, running_header
 
-    # Walk every top-level node in document order.  Each call to _walk
-    # returns one chunk for the node itself plus chunks for all its
-    # descendants, already flattened in document order.
-    #
-    # Page numbering switches from roman (front matter) to arabic (body) at
-    # the body's first top-level node — the boundary the tree owns via
-    # first_body_node_id() (the first node with region == "body", set by the
-    # template's region containers, ADR-0004 amendment d).  We ask the tree
-    # for that id rather than re-deriving "region == body" here, so the LaTeX
-    # and HTML renderers can't drift on where the switch lands.  The body's
-    # first page (Background) becomes arabic page 1, matching NIEHS Report 10.
-    # \clearpage flushes any pending floats first so the switch lands on the
-    # body's opening page, not a stray float page.
+
+def generate_report_body(data: dict) -> str:
+    r"""
+    Render just the report BODY — sections + round-trip anchors, no preamble.
+
+    This is `report.tex` in the split (Option B) Overleaf bundle: `main.tex`
+    holds the preamble and `\input{report}`s this.  Keeping the body in its own
+    file makes the structure/prose boundary physical — the preamble (main.tex)
+    is app-owned, the anchored body (report.tex) is what the committee edits and
+    the reconciler diffs.
+
+    Page numbering switches from roman (front matter) to arabic (body) at the
+    body's first top-level node — the boundary the tree owns via
+    first_body_node_id() (region == "body", ADR-0004 amendment d) so the LaTeX
+    and HTML renderers can't drift on where the switch lands.  \clearpage
+    flushes pending floats so the switch lands on the body's opening page.
+    """
     body_first_id = first_body_node_id()
     body_chunks: list[str] = []
     for top in DOCUMENT_TREE:
         if top.id == body_first_id:
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
         body_chunks.extend(_walk(top, data))
+    # Paragraph break between every chunk; LaTeX collapses consecutive blank
+    # lines into one paragraph break, so this is safe even when chunks end in
+    # newlines.
+    return "\n\n".join(body_chunks)
 
-    # Paragraph break between every chunk.  LaTeX collapses consecutive
-    # blank lines into a single paragraph break, so this is safe even
-    # when chunks already end in newlines.
-    body = "\n\n".join(body_chunks)
 
+def generate_main_tex(data: dict) -> str:
+    r"""
+    Render `main.tex` — the Overleaf entry document for the split bundle.
+
+    Same preamble/skeleton as the self-contained generate_latex, but its body is
+    just `\input{report}` (no extension → LaTeX reads report.tex).  This matches
+    Overleaf's default main-document convention (main.tex), so no per-project
+    "set main document" step is needed, and it keeps the editable, anchored body
+    isolated in report.tex.
+    """
+    title, author, running_header = _doc_metadata(data)
     return _document_skeleton(
-        title=title, author=author, body=body, running_header=running_header
+        title=title, author=author,
+        body="\\input{report}", running_header=running_header,
     )

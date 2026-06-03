@@ -62,9 +62,11 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-# Session caches live under <repo>/sessions/<dtxsid>/ — resolved relative to
-# this module so callers can run from any working directory.
-_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+# Default storage root: <repo>/sessions/<dtxsid>/.  This is the one in-repo
+# "soft seam" the library keeps (a path default, not an app import); callers
+# override it with sessions_dir=.  parent.parent because this module lives one
+# level down in the roundtrip/ package.
+_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent.parent / "sessions"
 
 # Per-session override file name (sits alongside the other session-cache JSON).
 _OVERRIDES_FILENAME = "_document_overrides.json"

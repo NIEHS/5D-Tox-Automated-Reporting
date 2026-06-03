@@ -2996,6 +2996,29 @@ td.data-gap, th.data-gap {
 }
 .edit-lock-banner .btn-small { margin-left: 0.5rem; }
 
+/* Result line for Send / Fetch (commit pushed, regions reconciled, warnings).
+   Neutral while in progress; clearly green on success, red on error so the
+   outcome is unmissable. */
+.sync-status {
+    margin: 0.5rem 0;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+    min-height: 1.2em;
+}
+.sync-status.ok {
+    color: #166534;
+    background: #f0fdf4;
+    border-left: 4px solid #16a34a;
+    font-weight: 600;
+}
+.sync-status.err {
+    color: #991b1b;
+    background: #fef2f2;
+    border-left: 4px solid #dc2626;
+    font-weight: 600;
+}
+
 
 /* ----------------------------------------------------------------
  * Blocking overlay — full-viewport curtain shown during side-effect

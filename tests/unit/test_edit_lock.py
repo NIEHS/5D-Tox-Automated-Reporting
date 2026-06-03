@@ -9,7 +9,7 @@ Proves the lock semantics the "Open in Overleaf" flow relies on:
   - with no ?user= (open mode) the holder is "anonymous".
 """
 
-import edit_lock as el
+import roundtrip.lock as el
 
 
 def test_acquire_blocks_other_and_releases(tmp_path):
