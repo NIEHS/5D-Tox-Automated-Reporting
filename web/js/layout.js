@@ -10,7 +10,7 @@
 //
 // Globals used (defined elsewhere):
 //   Alpine.store('app')      — Alpine store from state.js
-//   ensureFullPreview, scrollPreviewToNode — from export.js (side-pane preview)
+//   initReportTab            — from export.js (loads the Overleaf binding)
 //   renderGenomicsCharts     — function from genomics_charts.js
 
 /* ================================================================
@@ -64,18 +64,6 @@ function navigateToNode(navId) {
         Alpine.store('app').activeSection = navId;
     }
 
-    // Hide the entire PDF preview pane on sections that have no
-    // document content (Chemical ID, Data).  Show it on everything else.
-    const noPreviewSections = ['chem-id', 'data'];
-    const previewPane = document.getElementById('preview-pane');
-    if (previewPane) {
-        previewPane.style.display = noPreviewSections.includes(navId) ? 'none' : '';
-    }
-
-    // (The legacy fixed-position Report PDF viewer is retired: the side
-    // preview pane now always shows the full paginated report, so there's
-    // no separate Report viewer to expand/collapse here.)
-
     // Scroll the content pane to the top when switching views
     const pane = document.querySelector('.content-pane');
     if (pane) pane.scrollTop = 0;
@@ -93,32 +81,11 @@ function navigateToNode(navId) {
         if (el) el.classList.toggle('visible', navId === id);
     }
 
-    // --- Full report preview ---
-    // The side preview always shows the FULL paginated report; the navigation just
-    // scrolls it to the active section.  chem-id/data have no document
-    // content (the preview pane is hidden for them above), so skip them.
-    const NON_PREVIEW_NODES = new Set(['chem-id', 'data']);
-    if (!NON_PREVIEW_NODES.has(navId)) {
-        if (typeof ensureFullPreview === 'function') ensureFullPreview();
-        if (typeof scrollPreviewToNode === 'function') {
-            // 'report' = the whole document → scroll to the top (cover).
-            scrollPreviewToNode(navId === 'report' ? 'cover' : navId);
-        }
-    }
-
-    // Enable/label the orientation toggle for the newly active section.
-    if (typeof updateOrientationButton === 'function') updateOrientationButton();
+    // Entering the Report tab → load the Overleaf binding so the
+    // "Open in Overleaf" link / link-a-project prompt reflect current state.
+    if (navId === 'report' && typeof initReportTab === 'function') initReportTab();
 }
 
-
-/**
- * Toggle the persistent PDF preview pane visibility.
- */
-function togglePreviewPane() {
-    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
-        Alpine.store('app').previewVisible = !Alpine.store('app').previewVisible;
-    }
-}
 
 /**
  * Toggle the HTML content pane visibility.
@@ -128,99 +95,6 @@ function toggleContentPane() {
         Alpine.store('app').contentVisible = !Alpine.store('app').contentVisible;
     }
 }
-
-/**
- * Recompile the preview for the current active section.
- */
-function recompilePreview() {
-    // Force a full rebuild of the preview (the Recompile button), then
-    // re-scroll to the active section.
-    if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
-    const navId = Alpine?.store('app')?.activeSection;
-    if (navId && typeof scrollPreviewToNode === 'function') scrollPreviewToNode(navId);
-}
-
-
-/* ================================================================
- * initPaneSplitter — draggable divider between the preview pane and
- * the content (work) pane.
- *
- * Drag the splitter to resize the two panes.  Drag it to either edge
- * to snap-collapse that side (preview → 0 gives the work pane the full
- * width; content → 0 gives the preview the full width).  The splitter
- * itself never disappears, so a collapsed pane can always be dragged
- * back open.  The chosen width persists to localStorage.
- *
- * Mechanism: the preview pane's flex-basis is set in pixels; the content
- * pane (flex: 1) absorbs the remainder.  See .preview-pane / .pane-splitter
- * in style.css.
- * ================================================================ */
-function initPaneSplitter() {
-    const splitter = document.getElementById('pane-splitter');
-    const preview = document.getElementById('preview-pane');
-    const layout = document.getElementById('app-container');
-    const sidebar = document.querySelector('.sidebar');
-    if (!splitter || !preview || !layout) return;
-
-    const KEY = 'previewPaneWidthPx';
-    const SNAP = 48;     // within this many px of an edge → collapse that side
-    const MIN_PANE = 140; // smallest width a non-collapsed pane keeps
-
-    // Restore the persisted width (px).  Left at the CSS default (45%) if none.
-    const saved = parseInt(localStorage.getItem(KEY) || '', 10);
-    if (!isNaN(saved)) preview.style.flexBasis = saved + 'px';
-
-    let dragging = false;
-
-    const onMove = (e) => {
-        if (!dragging) return;
-        const rect = layout.getBoundingClientRect();
-        const sidebarW = sidebar ? sidebar.getBoundingClientRect().width : 0;
-        const splitterW = splitter.getBoundingClientRect().width;
-        // Width available to share between preview + content.
-        const avail = rect.width - sidebarW - splitterW;
-        // Desired preview width = pointer position measured from the right
-        // edge of the sidebar (the preview pane's left edge).
-        let w = e.clientX - rect.left - sidebarW;
-        if (w < SNAP) {
-            w = 0;                          // snap: collapse the preview
-        } else if (w > avail - SNAP) {
-            w = avail;                      // snap: collapse the content pane
-        } else {
-            w = Math.max(MIN_PANE, Math.min(w, avail - MIN_PANE));
-        }
-        preview.style.flexBasis = w + 'px';
-        e.preventDefault();
-    };
-
-    const onUp = () => {
-        if (!dragging) return;
-        dragging = false;
-        document.body.classList.remove('splitter-dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        const w = parseInt(preview.style.flexBasis, 10);
-        if (!isNaN(w)) localStorage.setItem(KEY, String(w));
-    };
-
-    splitter.addEventListener('mousedown', (e) => {
-        dragging = true;
-        document.body.classList.add('splitter-dragging');
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-        e.preventDefault();
-    });
-
-    // Double-click resets to the CSS default split.
-    splitter.addEventListener('dblclick', () => {
-        preview.style.flexBasis = '45%';
-        localStorage.removeItem(KEY);
-    });
-}
-
-// Wire the splitter once the DOM is ready (the app container starts hidden
-// behind the login gate, but attaching listeners + restoring width is safe).
-document.addEventListener('DOMContentLoaded', initPaneSplitter);
 
 
 /* ================================================================
@@ -284,44 +158,11 @@ function isOrientableNode(navId) {
     return !!nodeCapabilities(navId).orientable;
 }
 
-// Toggle the active section's orientation, then rebuild + re-scroll the
-// preview so the rotation shows immediately.
-function toggleActiveOrientation() {
-    const navId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
-    if (!navId || !isOrientableNode(navId)) return;
-    const map = getOrientations();
-    if (map[navId] === 'landscape') {
-        delete map[navId];                 // back to portrait (the default)
-    } else {
-        map[navId] = 'landscape';
-    }
-    _saveOrientations(map);
-    if (typeof markReportDirty === 'function') markReportDirty();
-    if (typeof ensureFullPreview === 'function') ensureFullPreview(true);
-    if (typeof scrollPreviewToNode === 'function') scrollPreviewToNode(navId);
-    updateOrientationButton();
-}
-
-// Sync the toolbar button's enabled state + label to the active section:
-// disabled for non-orientable sections; otherwise shows the action that
-// flipping would perform.
-function updateOrientationButton() {
-    const btn = document.getElementById('btn-orientation');
-    if (!btn) return;
-    const navId = Alpine && Alpine.store('app') && Alpine.store('app').activeSection;
-    const orientable = navId && isOrientableNode(navId);
-    btn.disabled = !orientable;
-    if (!orientable) {
-        btn.textContent = 'Orientation';
-        btn.title = 'Select a table, chart, or figure section to change its page orientation';
-        return;
-    }
-    const isLandscape = getOrientations()[navId] === 'landscape';
-    btn.textContent = isLandscape ? '↻ Portrait' : '↻ Landscape';
-    btn.title = isLandscape
-        ? 'Switch this page back to portrait'
-        : 'Switch this page to landscape';
-}
+// NOTE: the per-node orientation TOGGLE UI lived in the removed preview
+// toolbar.  Orientation is now authored in the YAML template (node.orientation)
+// and rendered server-side; getOrientations() above is still read into the
+// export payload so any persisted user overrides continue to apply, but there
+// is no longer an in-app control to set them.
 
 /* ================================================================
  * initScrollSpy — no-op stub.

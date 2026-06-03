@@ -229,6 +229,41 @@ async def api_sync_document(dtxsid: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# GET/POST /api/overleaf-binding/{dtxsid} — link a report to its Overleaf project
+# ---------------------------------------------------------------------------
+
+@router.get("/api/overleaf-binding/{dtxsid}")
+async def api_get_overleaf_binding(dtxsid: str):
+    """Return the report's Overleaf binding {project_url?, git_remote?} ({} if unset)."""
+    from overleaf_sync import get_binding
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    return JSONResponse(get_binding(dtxsid))
+
+
+@router.post("/api/overleaf-binding/{dtxsid}")
+async def api_set_overleaf_binding(dtxsid: str, request: Request):
+    """
+    Set the report's Overleaf binding.  Body: {project_url?, git_remote?} — only
+    the provided fields are updated.  The project_url drives the "Open in
+    Overleaf" link; git_remote is the push/pull target.
+    """
+    from overleaf_sync import set_binding
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    binding = set_binding(
+        dtxsid,
+        project_url=body.get("project_url"),
+        git_remote=body.get("git_remote"),
+    )
+    return JSONResponse(binding)
+
+
+# ---------------------------------------------------------------------------
 # POST /api/preview-latex-html — render a section subtree to HTML
 # ---------------------------------------------------------------------------
 

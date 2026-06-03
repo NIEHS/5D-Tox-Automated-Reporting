@@ -1,10 +1,11 @@
-// export.js — Overleaf export, full-report preview, file preview modals
+// export.js — Overleaf export + hand-off, file preview modals
 //
 // Extracted from main.js.  These functions handle:
 //   - Document export (exportDocument) — .tex bundle for Overleaf
 //   - Shared payload builder (buildExportPayload)
 //   - Genomics export payload assembly (buildGenomicsExportSections)
-//   - Full report preview in the side pane (ensureFullPreview, scrollPreviewToNode)
+//   - Report tab Overleaf hand-off (initReportTab, saveOverleafBinding) —
+//     the app links out to Overleaf; there is no in-app preview
 //   - Export button gating (updateExportButton)
 //   - Clipboard copying (copyToClipboard)
 //   - File preview modal (openPreviewModal, closePreviewModal, render helpers)
@@ -837,20 +838,17 @@ function renderXlsxPreview(data, container) {
 
 
 /* =================================================================
- * Full-report preview — dirty tracking
+ * Report dirty tracking (vestigial)
  *
- * reportDirty flips true on any approve/unapprove so the next navigation
- * (or the Recompile button) rebuilds the side-pane preview with fresh
- * content; ensureFullPreview() reads it to decide whether to recompile.
+ * markReportDirty() is still called from every approve/unapprove action
+ * across the app.  With the in-app preview removed it no longer drives a
+ * re-render, but it is kept as a harmless no-op so those many call sites
+ * keep working — and as a hook a future "report changed since last sent to
+ * Overleaf" indicator could read.
  * ================================================================= */
 
 let reportDirty = true;
 
-/**
- * Mark the report as needing a re-render.  Called from every
- * approve/unapprove action so the next navigation (or Recompile) rebuilds
- * the full side-pane preview.  ensureFullPreview() reads this flag.
- */
 function markReportDirty() {
     reportDirty = true;
 }
@@ -864,8 +862,8 @@ function markReportDirty() {
  * table_data), methods, BMD summary, genomics, summary, and chart
  * images.  Returns a plain object ready to POST to /api/export-overleaf-bundle.
  *
- * Used by ensureFullPreview() (the side-pane preview) and exportDocument()
- * (the Overleaf .tex bundle), so the payload assembly isn't duplicated.
+ * Used by exportDocument() (the Overleaf .tex bundle); kept as the single
+ * payload assembler so the export isn't duplicated.
  *
  * Chart images are rendered server-side — the server calls
  * render_chart_images() in genomics_viz.py for all organ×sex combos
@@ -1025,89 +1023,89 @@ async function buildExportPayload() {
 
 
 /* ================================================================
- * Full report preview (side pane)
+ * Report tab \u2014 Overleaf hand-off (no in-app preview)
  *
- * Per the generate-then-polish-in-Overleaf model, the side preview pane
- * always shows the FULL paginated report (never a per-section fragment).
- * The navigation scrolls it to the active section via scrollPreviewToNode().
+ * There is no local report preview: the committee reviews and edits the
+ * compiled report in Overleaf.  The Report tab links out to the bound
+ * Overleaf project.  initReportTab() (called from navigateToNode when the
+ * Report tab opens) loads the per-report binding and either enables the
+ * "Open in Overleaf" link or shows the link-a-project prompt.
  * ================================================================ */
 
-// Guard against overlapping compiles (a recompile fired while one is
-// already in flight).
-let _fullPreviewRendering = false;
+/**
+ * Current session dtxsid, or "" when no chemical is entered yet.
+ */
+function _currentDtxsid() {
+    return (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.dtxsid) || '';
+}
 
 /**
- * Render the full paginated report into the side preview pane
- * (#preview-pdf-frame).
- *
- * Guarded by reportDirty: once rendered, navigating between sections does
- * NOT recompile -- the navigation just scrolls the existing preview.  Pass
- * force=true (the Recompile button) to rebuild regardless.  markReportDirty()
- * (called on every approve/unapprove) flips reportDirty so the next
- * navigation rebuilds with fresh content.
- *
- * Builds the same payload as the export bundle but WITHOUT section_filter,
- * so the server returns the whole report.  With no generated content yet,
- * the server still returns the full scaffolded structure (placeholders),
- * so the preview is always populated.
- *
- * @param {boolean} force - recompile even if the preview is current
+ * Load the report's Overleaf binding and reflect it in the Report tab:
+ * a bound project shows "Open in Overleaf"; an unbound one shows the
+ * link-a-project prompt.  (fetch is wrapped to add ?user= automatically.)
  */
-async function ensureFullPreview(force = false) {
-    const frame = document.getElementById('preview-pdf-frame');
-    if (!frame) return;
-    // Already current (rendered + not dirty) and not forced -> nothing to do.
-    if (!force && frame.srcdoc && !reportDirty) return;
-    if (_fullPreviewRendering) return;
-    _fullPreviewRendering = true;
+async function initReportTab() {
+    const link = document.getElementById('open-in-overleaf');
+    const setup = document.getElementById('overleaf-link-setup');
+    if (!link || !setup) return;
 
-    const status = document.getElementById('preview-status');
-    if (status) status.textContent = 'Rendering preview\u2026';
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) {
+        // No session yet \u2192 nothing to link.
+        link.style.display = 'none';
+        setup.style.display = 'none';
+        return;
+    }
+
+    let binding = {};
     try {
-        const payload = await buildExportPayload();  // full report (no section_filter)
-        const resp = await fetch('/api/preview-latex-html', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!resp.ok) {
-            const err = await resp.json().catch(() => ({}));
-            if (status) status.textContent = err.error || 'Preview failed';
-            return;
-        }
-        frame.srcdoc = await resp.text();
-        reportDirty = false;
-        if (status) status.textContent = '';
+        const resp = await fetch(`/api/overleaf-binding/${encodeURIComponent(dtxsid)}`);
+        if (resp.ok) binding = await resp.json();
     } catch (e) {
-        if (status) status.textContent = `Preview error: ${e.message}`;
-    } finally {
-        _fullPreviewRendering = false;
+        /* unbound / offline \u2192 treat as no binding */
+    }
+
+    if (binding && binding.project_url) {
+        link.href = binding.project_url;
+        link.style.display = '';
+        setup.style.display = 'none';
+    } else {
+        link.style.display = 'none';
+        setup.style.display = '';
     }
 }
 
 /**
- * Scroll the full preview to a navigation node's section anchor.
- *
- * html_generator emits a zero-height <span id="sec-<nodeId>"> before each
- * node (see _walk).  Poll briefly for it because Paged.js paginates
- * asynchronously: right after a (re)compile the anchor may not exist yet.
- * The srcdoc iframe is same-origin, so contentDocument access is allowed.
- *
- * @param {string} navId - the navigation node ID to scroll to
+ * Save the Overleaf project URL (and optional git remote) the user pasted,
+ * then refresh the Report tab so "Open in Overleaf" appears.
  */
-function scrollPreviewToNode(navId) {
-    const frame = document.getElementById('preview-pdf-frame');
-    if (!frame || !navId) return;
-    let tries = 0;
-    const MAX_TRIES = 50;  // ~5s; covers a from-scratch Paged.js render
-    const tick = () => {
-        const doc = frame.contentDocument;
-        const el = doc && doc.getElementById('sec-' + navId);
-        if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+async function saveOverleafBinding() {
+    const status = document.getElementById('overleaf-link-status');
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) {
+        if (status) status.textContent = 'Enter a chemical first.';
+        return;
+    }
+    const projectUrl = (document.getElementById('overleaf-project-url')?.value || '').trim();
+    const gitRemote = (document.getElementById('overleaf-git-remote')?.value || '').trim();
+    if (!projectUrl) {
+        if (status) status.textContent = 'Paste the Overleaf project URL.';
+        return;
+    }
+    if (status) status.textContent = 'Saving\u2026';
+    try {
+        const resp = await fetch(`/api/overleaf-binding/${encodeURIComponent(dtxsid)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_url: projectUrl, git_remote: gitRemote || null }),
+        });
+        if (!resp.ok) {
+            if (status) status.textContent = 'Save failed.';
             return;
         }
-        if (tries++ < MAX_TRIES) setTimeout(tick, 100);
-    };
-    tick();
+        if (status) status.textContent = '';
+        await initReportTab();  // reveal "Open in Overleaf"
+    } catch (e) {
+        if (status) status.textContent = `Error: ${e.message}`;
+    }
 }

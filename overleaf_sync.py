@@ -40,6 +40,7 @@ from __future__ import annotations
 # shutil/tempfile/pathlib — mirror the bundle into the clone; throwaway clone
 #              for the simulated committee edit.
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -71,6 +72,13 @@ _COMMITTEE_AUTHOR = ("NIEHS Committee", "committee@niehs.example")
 # "Overleaf project" (everything else — report.tex, niehs.cls, figures/,
 # README.md — is the bundle the committee sees).
 _NOT_FOR_OVERLEAF = {".rlm-sync.json"}
+
+# Per-session binding linking a report to its Overleaf project: the human-facing
+# project URL (for the "Open in Overleaf" link) and the git remote we push/pull
+# (the GitHub repo Overleaf syncs with, or a git-bridge URL).  Stored alongside
+# the session cache so it survives across runs.
+_SESSIONS_DIR = _REPO_ROOT / "sessions"
+_BINDING_FILENAME = "_overleaf_binding.json"
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +165,54 @@ def _has_staged_changes(repo: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Public API — report ↔ Overleaf project binding
+# ---------------------------------------------------------------------------
+
+def get_binding(dtxsid: str, *, sessions_dir: "Path | None" = None) -> dict:
+    """
+    Return a report's Overleaf binding {project_url?, git_remote?}, or {} if
+    unbound / unreadable.  Used by the UI to enable the "Open in Overleaf" link
+    and by push/pull to find the remote without it being passed each call.
+    """
+    base = Path(sessions_dir) if sessions_dir is not None else _SESSIONS_DIR
+    path = base / dtxsid / _BINDING_FILENAME
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def set_binding(
+    dtxsid: str,
+    *,
+    project_url: "str | None" = None,
+    git_remote: "str | None" = None,
+    sessions_dir: "Path | None" = None,
+) -> dict:
+    """
+    Merge project_url / git_remote into a report's binding and persist it.
+
+    Only the provided fields are updated (pass one or both), so the UI can set
+    the project URL without clobbering a remote set elsewhere.  Returns the
+    merged binding.
+    """
+    base = Path(sessions_dir) if sessions_dir is not None else _SESSIONS_DIR
+    binding = get_binding(dtxsid, sessions_dir=sessions_dir)
+    if project_url is not None:
+        binding["project_url"] = project_url
+    if git_remote is not None:
+        binding["git_remote"] = git_remote
+    path = base / dtxsid / _BINDING_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(binding, indent=2) + "\n")
+    return binding
+
+
+# ---------------------------------------------------------------------------
+# Public API — transport (local stand-in today, real remote when set)
 # ---------------------------------------------------------------------------
 
 def init_standin(dtxsid: str, *, root: Path = _REPO_ROOT) -> Path:
@@ -175,38 +230,82 @@ def init_standin(dtxsid: str, *, root: Path = _REPO_ROOT) -> Path:
     return standin
 
 
+def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
+    """
+    Make `clone` a working checkout whose origin is `remote_url`, synced to the
+    remote's current branch tip (so a commit pushed on top fast-forwards).
+
+    Handles three cases:
+      - clone already exists → (re)point origin if it changed (e.g. switching a
+        stand-in clone over to the real Overleaf/GitHub remote) and hard-reset to
+        origin/<branch> when the remote has it;
+      - fresh clone of an EXTERNAL remote (real project) → `git clone` so we get
+        its existing history + content;
+      - fresh clone of the LOCAL stand-in (empty bare) → `git init` + remote add.
+    """
+    branch = _BRANCH
+    if (clone / ".git").exists():
+        try:
+            current = _git(["remote", "get-url", "origin"], cwd=clone)
+        except RuntimeError:
+            current = ""
+        if current != remote_url:
+            if current:
+                _git(["remote", "set-url", "origin", remote_url], cwd=clone)
+            else:
+                _git(["remote", "add", "origin", remote_url], cwd=clone)
+        _git(["fetch", "-q", "origin"], cwd=clone)
+        if f"origin/{branch}" in _git(["branch", "-r"], cwd=clone):
+            # -f discards any local state from a previous (stand-in) life.
+            _git(["checkout", "-q", "-f", "-B", branch, f"origin/{branch}"], cwd=clone)
+        return
+
+    if is_external:
+        clone.parent.mkdir(parents=True, exist_ok=True)
+        _git(["clone", "-q", "-b", branch, remote_url, str(clone)], cwd=clone.parent)
+    else:
+        clone.mkdir(parents=True, exist_ok=True)
+        _git(["init", "-q", "-b", branch], cwd=clone)
+        _git(["remote", "add", "origin", remote_url], cwd=clone)
+
+
 def push_document(
     dtxsid: str,
     *,
+    remote: "str | None" = None,
     doc_dir: "Path | None" = None,
     root: Path = _REPO_ROOT,
     message: str = "app: sync generated report",
 ) -> str:
     """
-    Push the dev document bundle to the stand-in remote (the "send to Overleaf").
+    Push the dev document bundle to the project remote (the "send to Overleaf").
 
-    Ensures the remote + working clone exist, mirrors documents/<dtxsid>/ into
-    the clone, commits any change, and pushes.  Returns the pushed commit sha —
-    the baseline the reconciler diffs pulled-back edits against.
+    `remote` selects the target:
+      - None (default) → the LOCAL stand-in bare repo (offline dev/testing);
+      - a URL → the real project remote (e.g. the GitHub repo Overleaf syncs
+        with, or a git-bridge URL).  The existing project is cloned so our push
+        fast-forwards on top of its history; auth is the ambient git credential
+        helper (no token in code).
+
+    Mirrors documents/<dtxsid>/ into the working clone, commits any change, and
+    pushes.  Returns the pushed commit sha — the baseline the reconciler diffs
+    pulled-back edits against.
     """
-    standin = init_standin(dtxsid, root=root)
     doc_dir = doc_dir or (DOCUMENTS_DIR / dtxsid)
     if not doc_dir.exists():
         raise FileNotFoundError(
             f"No dev document at {doc_dir} — run sync_document({dtxsid!r}) first."
         )
 
+    remote_url = remote if remote is not None else str(init_standin(dtxsid, root=root))
     clone = _clone_path(dtxsid, root)
-    if not (clone / ".git").exists():
-        clone.mkdir(parents=True, exist_ok=True)
-        _git(["init", "-q", "-b", _BRANCH], cwd=clone)
-        _git(["remote", "add", "origin", str(standin)], cwd=clone)
+    _ensure_clone(clone, remote_url, is_external=remote is not None)
 
     _mirror_bundle(doc_dir, clone)
     _git(["add", "-A"], cwd=clone)
     if _has_staged_changes(clone):
         _git(["commit", "-q", "-m", message], cwd=clone, author=_APP_AUTHOR)
-    # -u sets upstream on the first push so later pull/push need no refspec.
+    # -u sets upstream so later pull/push need no refspec.
     _git(["push", "-q", "-u", "origin", _BRANCH], cwd=clone)
     return _git(["rev-parse", "HEAD"], cwd=clone)
 

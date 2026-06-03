@@ -129,12 +129,6 @@ document.addEventListener('alpine:init', () => {
         // so the Chemical ID form is visible on page load.
         activeSection: 'chem-id',
 
-        // --- PDF preview pane visibility ---
-        // Starts expanded.  Auto-collapsed when viewing Chemical ID or
-        // Data sections (no PDF to preview there), auto-expanded on
-        // navigation to any results section.  See layout.js navigateToNode().
-        previewVisible: true,
-
         // --- Content pane visibility ---
         // Always visible — the content pane is the primary editing surface.
         contentVisible: true,
