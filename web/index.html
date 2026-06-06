@@ -894,6 +894,10 @@
         <section data-nav-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
+                <!-- Provision: create-or-adopt the convention-named GitHub repo
+                     (<DTXSID>-5D-Tox), push the bundle, set the binding. Run
+                     once per report; then Import from GitHub in Overleaf. -->
+                <button onclick="provisionReport()" class="btn-action" id="btn-provision">Provision GitHub repo</button>
                 <!-- openInOverleaf() acquires the single-writer checkout lock
                      before opening the project; if another user holds it, it
                      blocks and the banner below shows who. -->
@@ -1014,7 +1018,7 @@
     <script src="/js/settings.js?v=4"></script>
     <script src="/js/layout.js?v=6"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=9"></script>
+    <script src="/js/export.js?v=10"></script>
     <script src="/js/genomics.js?v=11"></script>
     <script src="/js/genomics_charts.js?v=4"></script>
     <!-- filepool.js split into upload.js, validation.js, cards.js -->

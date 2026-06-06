@@ -30,6 +30,26 @@ from extract import OllamaEndpoint, LOCAL_OLLAMA, REMOTE_OLLAMA, normalize_gene,
 # AnthropicEndpoint — Claude API endpoint
 # ---------------------------------------------------------------------------
 
+def resolve_anthropic_api_key() -> "str | None":
+    """
+    Resolve the Anthropic API key: the ANTHROPIC_API_KEY env var if set, else
+    the contents of ~/.anthropic/api_key, else None.
+
+    Env wins (so a Cloud Run / deployment-injected key still takes precedence);
+    the file is a convenience fallback for local use.  The single chokepoint
+    every Anthropic client construction passes its api_key through, so the key
+    source can't drift between call sites.  Returns None when neither is present
+    (the SDK then raises its own clear "no api key" error).
+    """
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        return key
+    path = Path.home() / ".anthropic" / "api_key"
+    if path.exists():
+        return path.read_text().strip() or None
+    return None
+
+
 @dataclass
 class AnthropicEndpoint:
     name: str
@@ -41,7 +61,7 @@ class AnthropicEndpoint:
                  temperature: float | None = None) -> str:
         import anthropic
         temp = temperature if temperature is not None else self.temperature
-        client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
+        client = anthropic.Anthropic(api_key=resolve_anthropic_api_key())
         messages = [{"role": "user", "content": prompt}]
         kwargs = {
             "model": self.model,
@@ -55,7 +75,7 @@ class AnthropicEndpoint:
         return response.content[0].text if response.content else ""
 
     def is_available(self) -> bool:
-        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+        return bool(resolve_anthropic_api_key())
 
 
 # ---------------------------------------------------------------------------

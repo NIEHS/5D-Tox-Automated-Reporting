@@ -1097,6 +1097,44 @@ function _setSyncStatus(msg, state) {
 }
 
 /**
+ * Provision the report's GitHub repo (create-or-adopt), push the bundle, set
+ * the binding. Run once per report; then Import from GitHub in Overleaf and
+ * paste the project URL into "link a project".
+ */
+async function provisionReport() {
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
+    const btn = document.getElementById('btn-provision');
+    if (btn) btn.disabled = true;
+    _setSyncStatus('Provisioning GitHub repo…', '');
+    const body = {
+        chemical_name: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.name) || '',
+        casrn: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.casrn) || '',
+    };
+    try {
+        const resp = await fetch(`/api/provision-report/${encodeURIComponent(dtxsid)}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            _setSyncStatus(data.error || 'Provision failed.', 'err');
+        } else {
+            const verb = data.created ? 'Created' : 'Adopted';
+            _setSyncStatus(
+                `✓ ${verb} ${data.repo}. Next: in Overleaf, New Project → Import from GitHub → ` +
+                `${data.slug}, then paste the project URL into "link a project".`,
+                'ok');
+        }
+    } catch (e) {
+        _setSyncStatus(`Provision error: ${e.message}`, 'err');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+    initReportTab();  // refresh binding-derived button states
+}
+
+/**
  * Send to Overleaf: regenerate from cache and push to the bound git remote.
  * The server blocks if another user holds the edit lock, or if the committee
  * has edited since the last send (then run Fetch first).

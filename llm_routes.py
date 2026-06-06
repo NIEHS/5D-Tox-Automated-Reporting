@@ -784,7 +784,8 @@ async def generate_apical_bmd_narrative_async(
 
     try:
         from anthropic import AsyncAnthropic
-        client = AsyncAnthropic()
+        from interpret import resolve_anthropic_api_key
+        client = AsyncAnthropic(api_key=resolve_anthropic_api_key())
         response = await client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=600,

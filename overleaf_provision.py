@@ -19,7 +19,14 @@ derived.
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
+
+# Where per-session bindings live (sessions/<dtxsid>/_overleaf_binding.json) —
+# scanned by the reverse soft-link below.  Resolved relative to this module.
+_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+_BINDING_FILENAME = "_overleaf_binding.json"
 
 # An Overleaf project id is a 24-char hex string (a Mongo ObjectId).  We accept
 # either a bare id or any overleaf URL that contains `/project/<id>`.
@@ -55,3 +62,29 @@ def web_url(ref: str) -> str:
 def git_bridge_url(ref: str) -> str:
     """git-bridge push/pull endpoint for a project ref (single-branch master)."""
     return _GIT_BASE + extract_project_id(ref)
+
+
+def dtxsid_for_project(ref: str, *, sessions_dir: "Path | None" = None) -> "str | None":
+    """
+    Reverse soft-link: which report (dtxsid) is bound to this Overleaf project?
+
+    Derived, not stored — scans the per-session bindings for one whose
+    project_url resolves to the same opaque id, so there's no separate index to
+    drift out of sync.  Returns the dtxsid, or None if no report is bound to it.
+    Useful for attributing an incoming Overleaf project back to its report.
+    """
+    try:
+        target = extract_project_id(ref)
+    except ValueError:
+        return None
+    base = Path(sessions_dir) if sessions_dir is not None else _DEFAULT_SESSIONS_DIR
+    if not base.exists():
+        return None
+    for binding_file in base.glob(f"*/{_BINDING_FILENAME}"):
+        try:
+            url = (json.loads(binding_file.read_text()) or {}).get("project_url")
+            if url and extract_project_id(url) == target:
+                return binding_file.parent.name
+        except (ValueError, json.JSONDecodeError, OSError):
+            continue
+    return None

@@ -436,6 +436,71 @@ async def api_fetch_from_overleaf(dtxsid: str):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/provision-report/{dtxsid} — originate (or adopt) the report's repo
+# ---------------------------------------------------------------------------
+
+@router.post("/api/provision-report/{dtxsid}")
+async def api_provision_report(dtxsid: str, request: Request):
+    """
+    Provision the report's GitHub repo, app-driven (ADR-0005 Am.1a).
+
+    create-or-adopt: if the convention-named repo (<DTXSID>-5D-Tox) already
+    exists it's adopted; otherwise it's created.  Then the current dev document
+    is regenerated and pushed, and the binding's git_remote is set.  Returns
+    whether it created vs adopted so the UI can say which.
+
+    After this, the human does the one manual step — Import from GitHub in
+    Overleaf — and pastes the project URL back via /api/overleaf-binding.
+
+    Optional body {chemical_name, casrn, private}.
+    """
+    from github_provision import ensure_repo, repo_slug
+    from latex_export import sync_document, DOCUMENTS_DIR
+    from roundtrip.transport import push_document, set_binding
+
+    if safe_filename(dtxsid) != dtxsid:
+        return JSONResponse({"error": f"Invalid dtxsid: {dtxsid!r}"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    chemical_name = body.get("chemical_name") or "Test Article"
+    casrn = body.get("casrn") or "000-00-0"
+    private = body.get("private", True)
+
+    try:
+        created, repo_url = ensure_repo(
+            dtxsid, private=private,
+            description=f"5-Day Tox report — {dtxsid}. Overleaf round-trip via rlm-bmdx.",
+        )
+        sync_document(dtxsid, chemical_name=chemical_name, casrn=casrn)
+        sha = push_document(dtxsid, DOCUMENTS_DIR / dtxsid, remote=repo_url)
+        set_binding(dtxsid, git_remote=repo_url, baseline_commit=sha)
+    except Exception as e:
+        logging.exception("Provision failed for %s", dtxsid)
+        return JSONResponse({"error": f"Provision failed: {e}"}, status_code=500)
+
+    return JSONResponse({
+        "created": created,
+        "adopted": not created,
+        "repo": repo_url,
+        "slug": repo_slug(dtxsid),
+        "pushed": sha,
+    })
+
+
+# ---------------------------------------------------------------------------
+# GET /api/report-for-project/{project_id} — reverse soft-link (id → dtxsid)
+# ---------------------------------------------------------------------------
+
+@router.get("/api/report-for-project/{project_id}")
+async def api_report_for_project(project_id: str):
+    """Resolve an Overleaf project id back to the report (dtxsid) bound to it."""
+    from overleaf_provision import dtxsid_for_project
+    return JSONResponse({"dtxsid": dtxsid_for_project(project_id)})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/preview-latex-html — render a section subtree to HTML
 # ---------------------------------------------------------------------------
 
