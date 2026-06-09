@@ -293,11 +293,22 @@ def test_level_3_nodes_emit_h4(scaffold):
 # Tables
 # ---------------------------------------------------------------------------
 
-def test_bmd_summary_table_with_real_session(session_data):
+def test_bmd_summary_table_renders_every_endpoint(session_data):
     """
-    DTXSID50469320 has 28 apical endpoints in its BMD summary.  The
-    HTML output must carry that exact row count.
+    The BMD summary table must render exactly one <tr> per endpoint in the
+    source data.
+
+    This is a renderer row-FIDELITY check, deliberately derived from the
+    session data rather than a hardcoded count: the DTXSID50469320 session has
+    been regenerated (it now carries 42 endpoints, not the 28 of the original
+    snapshot — the same endpoint can appear once per platform), and a magic
+    constant would go stale on every such regeneration while telling us nothing
+    about whether the renderer dropped or duplicated rows.  Pinning to
+    len(endpoints) catches a real renderer regression (a lost or doubled row)
+    without breaking when the upstream data legitimately changes.
     """
+    expected_rows = len(session_data["bmd_summary"]["endpoints"])
+    assert expected_rows > 0, "fixture has no BMD-summary endpoints to render"
     html = generate_html(session_data, section_filter="bmd-summary")
     assert "<table" in html
     assert "<caption>Table" in html
@@ -306,7 +317,7 @@ def test_bmd_summary_table_with_real_session(session_data):
     tbody_end = html.find("</tbody>", tbody_start)
     assert tbody_start > 0 and tbody_end > tbody_start
     tbody = html[tbody_start:tbody_end]
-    assert tbody.count("<tr>") == 28
+    assert tbody.count("<tr>") == expected_rows
 
 
 def test_apical_table_uses_niehstable_class(session_data):
