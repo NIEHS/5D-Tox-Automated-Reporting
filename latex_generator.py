@@ -81,6 +81,9 @@ from render_common import (
     LATEX_OMITS,
     incidence_table_plan,
     apical_table_plan,
+    unified_narrative_paragraphs,
+    bmd_summary_plan,
+    BMD_SUMMARY_HEADERS,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -669,19 +672,9 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     The narrative lives at data["unified_narratives"][node.narrative_key]
     when narrative_key is set.  Falls back to a placeholder when missing.
     """
-    paragraphs: list[str] = []
-    if node.narrative_key:
-        unified = data.get("unified_narratives", {})
-        if isinstance(unified, dict):
-            entry = unified.get(node.narrative_key)
-            # Entries may be a list of strings (legacy) or a dict with a
-            # "paragraphs" key.  Handle both.
-            if isinstance(entry, list):
-                paragraphs = entry
-            elif isinstance(entry, dict):
-                paragraphs = entry.get("paragraphs", []) or []
-
-    body = _render_paragraphs(paragraphs)
+    # ADR-0006 Amendment 1: the narrative-paragraph selection is the shared
+    # render_common EXTRACT; only the heading/pending markup is LaTeX emit.
+    body = _render_paragraphs(unified_narrative_paragraphs(node, data))
     if not body:
         body = f"\\emph{{[Narrative pending: {_escape_latex(node.title)}]}}"
     return f"{_heading(node.level, node.title)}\n\n{body}"
@@ -698,39 +691,28 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     data["bmd_summary"] = {"paragraphs": [...], "endpoints": [...]}.
     Each endpoint dict has: sex, endpoint, bmd, bmdl, loel, noel, direction.
     """
-    summary = data.get("bmd_summary", {}) or {}
-    endpoints = summary.get("endpoints", []) or []
-    paragraphs = summary.get("paragraphs", []) or []
-
+    # ADR-0006 Amendment 1: prose, per-endpoint rows, and caption are the shared
+    # render_common.bmd_summary_plan EXTRACT; this only EMITs the LaTeX (the
+    # column-alignment spec stays here — it's presentation).
+    plan = bmd_summary_plan(node, data)
     heading = _heading(node.level, node.title)
-    prose = _render_paragraphs(paragraphs)
+    prose = _render_paragraphs(plan.paragraphs)
 
-    if not endpoints:
+    if plan.rows is None:
         body = prose or f"\\emph{{[BMD summary endpoints pending: {_escape_latex(node.title)}]}}"
         return f"{heading}\n\n{body}"
 
-    headers = ["Sex", "Endpoint", "BMD", "BMDL", "LOEL", "NOEL", "Direction"]
     colspec = "l l r r r r l"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(headers), "\\midrule"]
-    for ep in endpoints:
-        cells = [
-            str(ep.get("sex", "")),
-            str(ep.get("endpoint", "")),
-            str(ep.get("bmd", "—") or "—"),
-            str(ep.get("bmdl", "—") or "—"),
-            str(ep.get("loel", "—") or "—"),
-            str(ep.get("noel", "—") or "—"),
-            str(ep.get("direction", "")),
-        ]
+             _emit_tabular_row(list(BMD_SUMMARY_HEADERS)), "\\midrule"]
+    for cells in plan.rows:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     tabular = "\n".join(lines)
 
-    caption = _table_caption(node, node.title)
     block = (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{caption}}}\n"
+        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
         f"{tabular}\n"
         f"\\end{{niehstable}}"
     )

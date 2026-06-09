@@ -378,6 +378,88 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
 
 
 # ---------------------------------------------------------------------------
+# Results-section extractors (ADR-0006 Amendment 1 — completing the IR)
+# ---------------------------------------------------------------------------
+
+def unified_narrative_paragraphs(node: DocNode, data: dict) -> list[str]:
+    """
+    Resolve the prose paragraphs for a narrative+tables group node.
+
+    The narrative lives at data["unified_narratives"][node.narrative_key] when
+    the node carries a narrative_key; the stored entry is either a legacy list
+    of strings or a dict with a "paragraphs" key.  Returns [] when absent — the
+    emitter decides what an empty body means (its placeholder), since emptiness
+    is format-dependent.
+    """
+    if not node.narrative_key:
+        return []
+    unified = data.get("unified_narratives", {})
+    if not isinstance(unified, dict):
+        return []
+    entry = unified.get(node.narrative_key)
+    if isinstance(entry, list):
+        return entry
+    if isinstance(entry, dict):
+        return entry.get("paragraphs", []) or []
+    return []
+
+
+# Column meaning of the apical-endpoint BMD summary table — semantic vocabulary
+# shared by both surfaces; each emitter renders these labels in its own markup
+# (and LaTeX adds its own column-alignment spec, which is presentation).
+BMD_SUMMARY_HEADERS: tuple[str, ...] = (
+    "Sex", "Endpoint", "BMD", "BMDL", "LOEL", "NOEL", "Direction",
+)
+
+
+@dataclass(frozen=True)
+class BmdSummaryPlan:
+    """
+    Markup-free description of the Apical Endpoint BMD Summary node.
+
+    Fields:
+        caption:    plain-text "Table N. ..." caption.
+        paragraphs: the summary prose (rendered above the table, and on its own
+                    when there are no endpoints).
+        rows:       one cell-string list per endpoint in BMD_SUMMARY_HEADERS
+                    order, or None when the session has no endpoints yet (the
+                    emitter then shows prose-or-placeholder, no table).
+    """
+    caption: str
+    paragraphs: list[str]
+    rows: list[list[str]] | None
+
+
+def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
+    """
+    EXTRACT for the BMD summary: prose + one row per endpoint, format-agnostic.
+
+    rows is None (not []) when there are no endpoints, so the emitter can
+    distinguish "no table at all" from "an empty table."
+    """
+    summary = data.get("bmd_summary", {}) or {}
+    endpoints = summary.get("endpoints", []) or []
+    paragraphs = summary.get("paragraphs", []) or []
+
+    rows: list[list[str]] | None = None
+    if endpoints:
+        rows = [
+            [
+                str(ep.get("sex", "")),
+                str(ep.get("endpoint", "")),
+                str(ep.get("bmd", "—") or "—"),
+                str(ep.get("bmdl", "—") or "—"),
+                str(ep.get("loel", "—") or "—"),
+                str(ep.get("noel", "—") or "—"),
+                str(ep.get("direction", "")),
+            ]
+            for ep in endpoints
+        ]
+
+    return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows)
+
+
+# ---------------------------------------------------------------------------
 # Dispatch registry — the canonical set of renderable node types (ADR-0006 #3)
 # ---------------------------------------------------------------------------
 # Before ADR-0006 #3, each renderer kept its own _DISPATCH table and the two

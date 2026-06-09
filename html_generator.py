@@ -62,6 +62,9 @@ from render_common import (
     assert_dispatch_covers,
     incidence_table_plan,
     apical_table_plan,
+    unified_narrative_paragraphs,
+    bmd_summary_plan,
+    BMD_SUMMARY_HEADERS,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -731,54 +734,35 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     Emits the heading + unified narrative paragraphs.  Child table nodes
     are walked separately by _walk.
     """
-    paragraphs: list = []
-    if node.narrative_key:
-        unified = data.get("unified_narratives", {})
-        if isinstance(unified, dict):
-            entry = unified.get(node.narrative_key)
-            if isinstance(entry, list):
-                paragraphs = entry
-            elif isinstance(entry, dict):
-                paragraphs = entry.get("paragraphs", []) or []
-    body = _render_paragraphs(paragraphs)
+    # ADR-0006 Amendment 1: the narrative-paragraph selection is the shared
+    # render_common EXTRACT; only the heading/pending markup is HTML emit.
+    body = _render_paragraphs(unified_narrative_paragraphs(node, data))
     if not body:
         body = _pending(f"Narrative pending: {node.title}")
     return f"{_heading(node.level, node.title)}\n{body}"
 
 
 def _render_bmd_summary(node: DocNode, data: dict) -> str:
-    """Apical Endpoint Benchmark Dose Summary table."""
-    summary = data.get("bmd_summary", {}) or {}
-    endpoints = summary.get("endpoints", []) or []
-    paragraphs = summary.get("paragraphs", []) or []
+    """
+    Apical Endpoint Benchmark Dose Summary table.
 
+    ADR-0006 Amendment 1: prose, per-endpoint rows, and caption are the shared
+    render_common.bmd_summary_plan EXTRACT; this only EMITs the HTML.
+    """
+    plan = bmd_summary_plan(node, data)
     heading = _heading(node.level, node.title)
-    prose = _render_paragraphs(paragraphs)
+    prose = _render_paragraphs(plan.paragraphs)
 
-    if not endpoints:
+    if plan.rows is None:
         body = prose or _pending(f"BMD summary endpoints pending: {node.title}")
         return f"{heading}\n{body}"
 
-    headers = ["Sex", "Endpoint", "BMD", "BMDL", "LOEL", "NOEL", "Direction"]
-    body_rows = []
-    for ep in endpoints:
-        cells = [
-            ep.get("sex", ""),
-            ep.get("endpoint", ""),
-            ep.get("bmd", "—") or "—",
-            ep.get("bmdl", "—") or "—",
-            ep.get("loel", "—") or "—",
-            ep.get("noel", "—") or "—",
-            ep.get("direction", ""),
-        ]
-        body_rows.append(_emit_table_row([str(c) for c in cells]))
-
-    caption = _table_caption(node, node.title)
+    body_rows = "".join(_emit_table_row(cells) for cells in plan.rows)
     table = (
         '<table class="niehstable">'
-        f"<caption>{_esc(caption)}</caption>"
-        f"{_emit_table_header(headers)}"
-        f"<tbody>{''.join(body_rows)}</tbody>"
+        f"<caption>{_esc(plan.caption)}</caption>"
+        f"{_emit_table_header(list(BMD_SUMMARY_HEADERS))}"
+        f"<tbody>{body_rows}</tbody>"
         "</table>"
     )
     chunks = [c for c in (heading, prose, table) if c]
