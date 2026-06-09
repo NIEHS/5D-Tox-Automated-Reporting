@@ -1,6 +1,7 @@
 # 0006 — Unify the HTML and LaTeX renderers behind one tree walk
 
-- **Status:** Proposed (2026-06-09)
+- **Status:** Proposed (2026-06-09); **Amended 1** (2026-06-09) — reframes the
+  shared layer as a semantic IR (see Amendment 1). Steps 1–3 + 4a/4b implemented.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0003](0003-document-component-model.md) (the `DocNode`
   document-component model whose tree both renderers walk — this ADR is about
@@ -222,3 +223,106 @@ equal.
    `genomics_section`) to extract/emit one at a time.
 5. Trim the parity test to a smoke check; collapse the remaining `_walk`
    reimplementations in `report_data`/`data_gatherer` onto `walk_tree`.
+
+## Amendment 1 (2026-06-09) — the shared layer is a semantic IR, not a dedup trick
+
+Steps 1–3 and 4a/4b shipped as written, and in building them the real thesis of
+this ADR became clear — sharper than "remove ~500 duplicated lines." Recording
+it here because it changes what *correct* means and re-scopes the remaining work.
+
+### The thesis
+
+The `render_common` "plans" (`FrontMatterPlan`, `IncidenceTablePlan`,
+`ApicalTablePlan`, …) are not refactoring helpers that happen to be shared. They
+are fragments of **one thing: a markup-free, semantic description of the
+report** — an intermediate representation (IR). HTML and LaTeX are two
+**projections** of that IR.
+
+The most important property of emitting HTML and LaTeX in parallel is **not**
+that the code is deduplicated — it is that both surfaces are provably *describing
+the same study*, because they read from the same description. A drift between the
+two outputs is not a code smell; it is a **semantic inconsistency** — the two
+artifacts making different claims about the data. Deduplication is a side effect.
+Semantic fidelity across surfaces is the goal.
+
+### The boundary rule (supersedes the narrower "escaping stays in emit")
+
+There are **three** concerns, not two, and each has a home:
+
+1. **Semantics → the IR.** Anything where a disagreement between surfaces would
+   mean they describe *different studies*: which endpoints, which rows, which
+   dose grid, which figure (identity, number, caption text), and crucially
+   *whether a section has content at all*.
+2. **Presentation → the emitter.** Anything two surfaces may legitimately render
+   differently while still agreeing on meaning: escaping, `<table>` vs
+   `tabular`, the `~`-vs-space dose label, `\adjustbox` vs CSS, the `n-row` CSS
+   hook, a chart *embedded* as base64 (HTML) vs *referenced* as `figures/<file>`
+   (LaTeX).
+3. **Transport → the emitter.** Concerns that belong to one surface's downstream
+   pipeline, not to meaning: the ADR-0005 per-item override substitution and
+   round-trip anchor sentinels are LaTeX-only because only the `.tex` round-trips
+   through Overleaf. These correctly stay in the LaTeX emitter and never enter
+   the IR.
+
+Litmus test: *if two surfaces could legitimately disagree on it, it is not
+semantics.* If a disagreement would make them describe different studies, it is.
+
+### What the rule re-decides
+
+- **The empty-string-paragraph divergence (noted under step 2) is a semantic
+  bug, not an edge case.** Today HTML renders `<p></p>` (content present) where
+  LaTeX renders `[Section pending]` (content absent) — the two surfaces *disagree
+  about whether the section has content*. The "content present / absent"
+  decision must move *into* the IR (a `front_matter_plan` that resolves to
+  `kind="none"` identically for both), so both surfaces answer it the same way.
+  It was deliberately preserved during the refactor (never change behavior inside
+  a structural refactor); it should now be fixed as its own change.
+- **`is_n_row`, dose-label spacing, table wrapping, chart embed-vs-reference,
+  the override/anchor wrapping**: all correctly *outside* the IR — presentation
+  or transport. Both surfaces already agree on the underlying meaning.
+- **The genomics handler (step 4c) is not a "partial migration compromise."** It
+  is the rule applied correctly: the **semantic core** (intro/entries/role
+  selection, the gene-set and gene table *rows*, each chart's identity + number
+  + caption text) moves to the IR; the **presentation** (embed vs file
+  reference, `\subsubsection` vs `<h4>`, adjustbox) and **transport** (per-item
+  override + anchor) stay in the emitters. A "fully shared genomics handler"
+  would be wrong — it would force transport concerns into the IR.
+
+### How correctness is judged (changes the test strategy)
+
+Per-renderer byte-stability ("this renderer matches its old self," which is how
+steps 1–4b were verified) is the *weak* guarantee — right for a behavior-
+preserving refactor, but it cannot catch the two surfaces drifting *together*
+away from the data. The **strong** guarantee is **cross-surface semantic
+parity**: extract the semantic facts from each output (endpoint set, captions,
+figure numbers, row counts, content-present decisions) and assert the two
+surfaces — and the IR — agree. The node-type registry (step 3) is the semantic
+**vocabulary**; the parity test is the proof both projections honor it. This
+parity test should replace "trust the byte-diff" as the standing guard.
+
+### Why this is a prerequisite, not competing cleanup
+
+This is the [ADR-0004](0004-bits-jats-export-surface.md) framing — "BITS/JATS as
+a projection only" — generalized: **BITS, HTML, and LaTeX are all projections of
+one content model.** The BITS export surface ADR-0004 envisions cannot be built
+while the semantic description is re-derived inside each renderer; it needs the
+IR to exist as a first-class artifact to project from. Completing this IR is
+therefore the enabler for ADR-0004, not a refactor that competes with it.
+
+### Re-scoped remaining work (replaces the line-count framing of steps 4–5)
+
+The goal is no longer "dedupe the handlers" but "make the IR complete and
+provably faithful":
+
+- **Complete the IR.** Every node type still reading the `data` dict directly
+  inside a renderer — `bmd-summary`, `toc`, `tables-list`, `narrative+tables`,
+  `appendix`, and the genomics semantic core — gets a plan in `render_common`.
+  Only then is the architecture truly "one model, N projections."
+- **Add the cross-surface semantic-parity test** and demote byte-diffing to a
+  refactor-time check.
+- **Fix the empty-paragraph semantic inconsistency** in the IR (deliberately,
+  outside any refactor).
+- **Genomics (4c):** extract the semantic core per the boundary rule above;
+  leave presentation + the ADR-0005 transport in the emitters, and add a
+  targeted test that the per-item override + stale-hash attribution still fires
+  (the byte/parity diffs won't exercise that branch).
