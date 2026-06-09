@@ -40,7 +40,7 @@ from document_node import DocNode
 # Render-time numeric re-rounding for mean ± SE cells — already the shared
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
-from table_builder_common import format_mean_se_display
+from table_builder_common import format_mean_se_display, format_display_number
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +516,129 @@ def methods_subsection_content(
                     table if isinstance(table, dict) else None,
                 )
     return [], None
+
+
+# ---------------------------------------------------------------------------
+# Genomics-section extractors (ADR-0006 Amendment 1 — semantic core only)
+# ---------------------------------------------------------------------------
+# The genomics handler's PRESENTATION (inline base64 <figure> vs
+# \includegraphics file reference, <h4> vs \subsubsection, table wrapping) and
+# its TRANSPORT (the ADR-0005 per-item override + round-trip anchors, LaTeX
+# only) stay in the emitters.  Only the semantic core is shared here: which
+# role, which intro, which entries, the gene/gene-set table ROWS, the
+# description (label, text) pairs, and each chart's "Figure N." caption text.
+
+# Column meaning of the two genomics tables (semantic vocabulary; each emitter
+# supplies its own markup and — LaTeX — column alignment).
+GENE_SET_TABLE_HEADERS: tuple[str, ...] = (
+    "Rank", "GO ID", "Term", "BMD", "BMDL", "Genes", "Direction",
+)
+GENE_TABLE_HEADERS: tuple[str, ...] = (
+    "Rank", "Gene", "BMD", "BMDL", "Direction", "Fold Change",
+)
+
+
+def genomics_role(node: DocNode) -> str:
+    """'gene_set' for the Gene Set BMD section node, 'gene' otherwise."""
+    return "gene_set" if node.id == "gene-sets" else "gene"
+
+
+def genomics_intro_paragraphs(node: DocNode, data: dict) -> list[str]:
+    """
+    The top-of-section narrative paragraphs for a genomics section, from
+    data["gene_set_narrative"] / ["gene_narrative"] (a legacy list or a dict
+    with a "paragraphs" list).  [] when absent.
+    """
+    key = "gene_set_narrative" if genomics_role(node) == "gene_set" else "gene_narrative"
+    top = data.get(key)
+    if isinstance(top, list):
+        return top
+    if isinstance(top, dict) and isinstance(top.get("paragraphs"), list):
+        return top["paragraphs"]
+    return []
+
+
+def genomics_entries(node: DocNode, data: dict) -> list[dict]:
+    """The data["genomics_sections"] entries whose type matches this node's role."""
+    role = genomics_role(node)
+    return [s for s in (data.get("genomics_sections", []) or []) if s.get("type") == role]
+
+
+def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
+    """
+    Rows for the top-gene-sets table of one (organ, sex) entry, in
+    GENE_SET_TABLE_HEADERS order.  None when the entry has no gene sets yet (the
+    emitter shows its pending placeholder, which carries the organ/sex).
+    """
+    rows = entry.get("gene_sets", []) or []
+    if not rows:
+        return None
+    return [
+        [
+            str(r.get("rank", "")),
+            str(r.get("go_id", "")),
+            str(r.get("go_term", "")),
+            str(format_display_number(r.get("bmd"))),
+            str(format_display_number(r.get("bmdl"))),
+            str(r.get("n_genes", "")),
+            str(r.get("direction", "")),
+        ]
+        for r in rows
+    ]
+
+
+def gene_table_rows(entry: dict) -> list[list[str]] | None:
+    """
+    Rows for the top-genes table of one (organ, sex) entry, in
+    GENE_TABLE_HEADERS order.  None when the entry has no genes yet.
+    """
+    rows = entry.get("top_genes", []) or []
+    if not rows:
+        return None
+    return [
+        [
+            str(r.get("rank", "")),
+            str(r.get("gene") or r.get("gene_symbol", "")),
+            str(format_display_number(r.get("bmd"))),
+            str(format_display_number(r.get("bmdl"))),
+            str(r.get("direction", "")),
+            str(format_display_number(r.get("fold_change"))),
+        ]
+        for r in rows
+    ]
+
+
+def genomics_description_items(descriptions) -> list[tuple[str, str]]:
+    """
+    Normalise a go-term / gene definition list into [(label, text)], dropping
+    entries with neither.  label falls back across label/go_term/gene/go_id;
+    text across text/description.  Each emitter renders the markup (<dl> / LaTeX).
+    """
+    out: list[tuple[str, str]] = []
+    for d in descriptions or []:
+        if not isinstance(d, dict):
+            continue
+        label = d.get("label") or d.get("go_term") or d.get("gene") or d.get("go_id") or ""
+        text = d.get("text") or d.get("description") or ""
+        if not (label or text):
+            continue
+        out.append((label, text))
+    return out
+
+
+def genomics_chart_caption(chart: dict) -> str:
+    """
+    The visible "Figure N. <descriptive>" caption text for a genomics chart
+    (ADR-0004 amendment (e)).  The trailing rstrip drops the dangling space when
+    the descriptive caption is empty.  Returns the bare descriptive caption when
+    no figure number is assigned.  This is the figure's IDENTITY text — shared;
+    whether it becomes an <figcaption> or a LaTeX caption is the emitter's job.
+    """
+    text = chart.get("caption", "")
+    fig_num = chart.get("figure_number")
+    if fig_num is not None:
+        text = f"Figure {fig_num}. {text}".rstrip()
+    return text
 
 
 # ---------------------------------------------------------------------------

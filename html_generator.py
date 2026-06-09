@@ -68,6 +68,15 @@ from render_common import (
     appendix_roster_rows,
     ANIMAL_ROSTER_HEADERS,
     methods_subsection_content,
+    genomics_role,
+    genomics_intro_paragraphs,
+    genomics_entries,
+    gene_set_table_rows,
+    gene_table_rows,
+    genomics_description_items,
+    genomics_chart_caption,
+    GENE_SET_TABLE_HEADERS,
+    GENE_TABLE_HEADERS,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -790,22 +799,18 @@ def _render_incidence_table(node: DocNode, data: dict) -> str:
 
 
 def _render_genomics_section(node: DocNode, data: dict) -> str:
-    """Gene Set or Gene BMD section — per-(organ, sex) subsections."""
-    role = "gene_set" if node.id == "gene-sets" else "gene"
-    heading = _heading(node.level, node.title)
-    top_narrative_key = "gene_set_narrative" if role == "gene_set" else "gene_narrative"
-    top_nar = data.get(top_narrative_key)
-    intro_paragraphs: list = []
-    if isinstance(top_nar, list):
-        intro_paragraphs = top_nar
-    elif isinstance(top_nar, dict) and isinstance(top_nar.get("paragraphs"), list):
-        intro_paragraphs = top_nar["paragraphs"]
-    intro = _render_paragraphs(intro_paragraphs)
+    """
+    Gene Set or Gene BMD section — per-(organ, sex) subsections.
 
-    entries = [
-        s for s in (data.get("genomics_sections", []) or [])
-        if s.get("type") == role
-    ]
+    ADR-0006 Amendment 1: role / intro / entries selection and the table rows
+    are the shared EXTRACT; the <h4> markup, the per-item loop, the inline
+    base64 chart figure, and the landscape wrap are HTML emit.
+    """
+    role = genomics_role(node)
+    heading = _heading(node.level, node.title)
+    intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
+
+    entries = genomics_entries(node, data)
     if not entries:
         body = intro or _pending(f"Genomics data pending: {node.title}")
         return f"{heading}\n{body}"
@@ -858,14 +863,10 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
         png = chart.get("png_b64", "")
         src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
         # ADR-0004 amendment (e) — visible figcaption gets the "Figure N."
-        # prefix; the <img alt> stays the descriptive caption alone, which is
-        # the accessibility/BITS <alt-text> role (independent of the label).
+        # prefix (shared genomics_chart_caption); the <img alt> stays the
+        # descriptive caption alone, the accessibility/BITS <alt-text> role.
         descriptive = chart.get("caption", "")
-        fig_num = chart.get("figure_number")
-        display = (
-            f"Figure {fig_num}. {descriptive}".rstrip()
-            if fig_num is not None else descriptive
-        )
+        display = genomics_chart_caption(chart)
         return (
             f'<figure class="genomics-chart">'
             f'<img src="{src}" alt="{_esc(descriptive)}">'
@@ -881,77 +882,43 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
 
 
 def _render_gene_set_table(entry: dict) -> str:
-    """Top-gene-sets table for one (organ, sex)."""
-    rows = entry.get("gene_sets", []) or []
-    if not rows:
+    """Top-gene-sets table for one (organ, sex). Rows from the shared EXTRACT."""
+    rows = gene_set_table_rows(entry)
+    if rows is None:
         return _pending(
             f"Top gene sets pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
         )
-    headers = ["Rank", "GO ID", "Term", "BMD", "BMDL", "Genes", "Direction"]
-    body_rows = []
-    for r in rows:
-        cells = [
-            r.get("rank", ""),
-            r.get("go_id", ""),
-            r.get("go_term", ""),
-            format_display_number(r.get("bmd")),
-            format_display_number(r.get("bmdl")),
-            r.get("n_genes", ""),
-            r.get("direction", ""),
-        ]
-        body_rows.append(_emit_table_row([str(c) for c in cells]))
+    body_rows = "".join(_emit_table_row(r) for r in rows)
     return (
         '<table class="niehstable">'
-        f"{_emit_table_header(headers)}"
-        f"<tbody>{''.join(body_rows)}</tbody>"
+        f"{_emit_table_header(list(GENE_SET_TABLE_HEADERS))}"
+        f"<tbody>{body_rows}</tbody>"
         "</table>"
     )
 
 
 def _render_gene_table(entry: dict) -> str:
-    """Top-genes table for one (organ, sex)."""
-    rows = entry.get("top_genes", []) or []
-    if not rows:
+    """Top-genes table for one (organ, sex). Rows from the shared EXTRACT."""
+    rows = gene_table_rows(entry)
+    if rows is None:
         return _pending(
             f"Top genes pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
         )
-    headers = ["Rank", "Gene", "BMD", "BMDL", "Direction", "Fold Change"]
-    body_rows = []
-    for r in rows:
-        cells = [
-            r.get("rank", ""),
-            r.get("gene") or r.get("gene_symbol", ""),
-            format_display_number(r.get("bmd")),
-            format_display_number(r.get("bmdl")),
-            r.get("direction", ""),
-            format_display_number(r.get("fold_change")),
-        ]
-        body_rows.append(_emit_table_row([str(c) for c in cells]))
+    body_rows = "".join(_emit_table_row(r) for r in rows)
     return (
         '<table class="niehstable">'
-        f"{_emit_table_header(headers)}"
-        f"<tbody>{''.join(body_rows)}</tbody>"
+        f"{_emit_table_header(list(GENE_TABLE_HEADERS))}"
+        f"<tbody>{body_rows}</tbody>"
         "</table>"
     )
 
 
 def _render_description_list(descriptions: list) -> str:
     """A <dl> of go-term or gene definitions for the genomics section."""
-    items: list[str] = []
-    for d in descriptions:
-        if not isinstance(d, dict):
-            continue
-        label = (
-            d.get("label")
-            or d.get("go_term")
-            or d.get("gene")
-            or d.get("go_id")
-            or ""
-        )
-        text = d.get("text") or d.get("description") or ""
-        if not (label or text):
-            continue
-        items.append(f"<dt>{_esc(label)}</dt><dd>{_esc(text)}</dd>")
+    items = [
+        f"<dt>{_esc(label)}</dt><dd>{_esc(text)}</dd>"
+        for label, text in genomics_description_items(descriptions)
+    ]
     if not items:
         return ""
     return f'<dl class="description-list">{"".join(items)}</dl>'

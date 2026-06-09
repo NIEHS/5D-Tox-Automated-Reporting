@@ -86,6 +86,15 @@ from render_common import (
     BMD_SUMMARY_HEADERS,
     appendix_roster_rows,
     methods_subsection_content,
+    genomics_role,
+    genomics_intro_paragraphs,
+    genomics_entries,
+    gene_set_table_rows,
+    gene_table_rows,
+    genomics_description_items,
+    genomics_chart_caption,
+    GENE_SET_TABLE_HEADERS,
+    GENE_TABLE_HEADERS,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -775,24 +784,15 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     When the payload arrays are empty (scaffold), we emit a heading +
     placeholder for that organ-sex so the structure stays visible.
     """
-    role = "gene_set" if node.id == "gene-sets" else "gene"
+    # ADR-0006 Amendment 1: role / intro / entries selection and the table rows
+    # are the shared EXTRACT; the \subsubsection markup, the per-item loop, the
+    # \includegraphics chart, the landscape wrap, and the ADR-0005 override +
+    # anchor (transport) are LaTeX emit.
+    role = genomics_role(node)
     heading = _heading(node.level, node.title)
-    # Top-level narrative (data["gene_set_narrative"] or data["gene_narrative"])
-    # may be a dict {by_organ: {...}} or a list of paragraphs; we treat
-    # only the list / paragraphs-bearing case at the section level.
-    top_narrative_key = "gene_set_narrative" if role == "gene_set" else "gene_narrative"
-    top_nar = data.get(top_narrative_key)
-    intro_paragraphs: list[str] = []
-    if isinstance(top_nar, list):
-        intro_paragraphs = top_nar
-    elif isinstance(top_nar, dict) and isinstance(top_nar.get("paragraphs"), list):
-        intro_paragraphs = top_nar["paragraphs"]
-    intro = _render_paragraphs(intro_paragraphs)
+    intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
-    entries = [
-        s for s in (data.get("genomics_sections", []) or [])
-        if s.get("type") == role
-    ]
+    entries = genomics_entries(node, data)
     if not entries:
         body = intro or f"\\emph{{[Genomics data pending: {_escape_latex(node.title)}]}}"
         return f"{heading}\n\n{body}"
@@ -870,14 +870,9 @@ def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
     )
     if not chart or not chart.get("filename"):
         return ""
-    # ADR-0004 amendment (e) — prefix the caption with "Figure N." using the
-    # positional figure_number assigned at chart-attach time; the trailing
-    # rstrip drops the dangling space when the descriptive caption is empty.
-    caption_text = chart.get("caption", "")
-    fig_num = chart.get("figure_number")
-    if fig_num is not None:
-        caption_text = f"Figure {fig_num}. {caption_text}".rstrip()
-    caption = _escape_latex(caption_text)
+    # ADR-0004 amendment (e) — the "Figure N." caption text is the shared
+    # genomics_chart_caption EXTRACT; here we only escape it for LaTeX.
+    caption = _escape_latex(genomics_chart_caption(chart))
     return (
         "\\begin{center}\n"
         f"\\includegraphics[width=0.85\\linewidth]{{figures/{chart['filename']}}}\\\\\n"
@@ -892,24 +887,14 @@ def _render_gene_set_table(entry: dict) -> str:
     section.  Schema (per gene_sets[i]):
       rank, go_id, go_term, bmd, bmdl, n_genes, direction.
     """
-    rows = entry.get("gene_sets", []) or []
-    if not rows:
+    rows = gene_set_table_rows(entry)
+    if rows is None:
         return f"\\emph{{[Top gene sets pending: {_escape_latex(entry.get('organ', ''))}, {_escape_latex(entry.get('sex', ''))}]}}"
 
-    headers = ["Rank", "GO ID", "Term", "BMD", "BMDL", "Genes", "Direction"]
     colspec = "l l l r r r l"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(headers), "\\midrule"]
-    for r in rows:
-        cells = [
-            str(r.get("rank", "")),
-            str(r.get("go_id", "")),
-            str(r.get("go_term", "")),
-            format_display_number(r.get("bmd")),
-            format_display_number(r.get("bmdl")),
-            str(r.get("n_genes", "")),
-            str(r.get("direction", "")),
-        ]
+             _emit_tabular_row(list(GENE_SET_TABLE_HEADERS)), "\\midrule"]
+    for cells in rows:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
@@ -928,23 +913,14 @@ def _render_gene_table(entry: dict) -> str:
     Schema (per top_genes[i]):
       rank, gene, bmd, bmdl, direction, fold_change.
     """
-    rows = entry.get("top_genes", []) or []
-    if not rows:
+    rows = gene_table_rows(entry)
+    if rows is None:
         return f"\\emph{{[Top genes pending: {_escape_latex(entry.get('organ', ''))}, {_escape_latex(entry.get('sex', ''))}]}}"
 
-    headers = ["Rank", "Gene", "BMD", "BMDL", "Direction", "Fold Change"]
     colspec = "l l r r l r"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(headers), "\\midrule"]
-    for r in rows:
-        cells = [
-            str(r.get("rank", "")),
-            str(r.get("gene", "")),
-            format_display_number(r.get("bmd")),
-            format_display_number(r.get("bmdl")),
-            str(r.get("direction", "")),
-            format_display_number(r.get("fold_change")),
-        ]
+             _emit_tabular_row(list(GENE_TABLE_HEADERS)), "\\midrule"]
+    for cells in rows:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
@@ -965,23 +941,10 @@ def _render_description_list(descriptions: list) -> str:
     {"go_term", "description"} or {"gene", "description"}.  We try
     several common shapes.
     """
-    items = []
-    for d in descriptions:
-        if not isinstance(d, dict):
-            continue
-        label = (
-            d.get("label")
-            or d.get("go_term")
-            or d.get("gene")
-            or d.get("go_id")
-            or ""
-        )
-        text = d.get("text") or d.get("description") or ""
-        if not (label or text):
-            continue
-        items.append(
-            f"\\noindent\\textbf{{{_escape_latex(label)}}}: {_escape_latex(text)}"
-        )
+    items = [
+        f"\\noindent\\textbf{{{_escape_latex(label)}}}: {_escape_latex(text)}"
+        for label, text in genomics_description_items(descriptions)
+    ]
     return "\n\n".join(items)
 
 
