@@ -75,7 +75,14 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
-from render_common import front_matter_plan, assert_dispatch_covers, LATEX_OMITS
+from render_common import (
+    front_matter_plan,
+    assert_dispatch_covers,
+    LATEX_OMITS,
+    incidence_table_plan,
+    find_apical_section as _find_apical_section,
+    table_caption as _table_caption,
+)
 from genomics_content import genomics_content_plan
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
@@ -565,51 +572,14 @@ def _format_dose_label(dose, unit: str) -> str:
     return f"{_escape_latex(str(dose))}~{unit_part}"
 
 
-def _table_caption(node: DocNode, base_caption: str) -> str:
-    """
-    Prefix the caption with "Table N. " using the auto-assigned table_number
-    from the document tree.  Strips any leftover Typst-era placeholders like
-    "{compound}" or "{sex}" that the data builders may have emitted.
-
-    ADR-0004 amendment (a) — de-overloaded caption: prefer the addressable
-    item's own `caption` (template / item-authored, the BITS <caption><p>
-    role) over the data-overlay base caption; fall back when not set, so the
-    existing data-driven path is preserved unchanged.
-    """
-    cleaned = (node.caption or base_caption or "")
-    # Replace placeholder patterns left over from Typst-style templating.
-    cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
-    cleaned = cleaned.strip()
-    if node.table_number is not None:
-        return f"Table {node.table_number}. {cleaned}" if cleaned else f"Table {node.table_number}"
-    return cleaned
+# _table_caption / _find_apical_section now live in render_common (ADR-0006 #4)
+# and are imported above under their old private names, so every handler that
+# calls them is unchanged.
 
 
 # ---------------------------------------------------------------------------
 # Apical / dose-response tables
 # ---------------------------------------------------------------------------
-
-def _find_apical_section(node: DocNode, data: dict) -> dict | None:
-    """
-    Locate the apical_sections entry whose platform matches this table
-    node's platform field.  Returns the matching dict or None.
-
-    apical_sections is the flat list marshal_export_data produces from
-    session state.  Each entry has a "platform" key ("Body Weight",
-    "Clinical Chemistry", etc.) that we match against node.platform.
-    Title-based fallback handles the legacy scaffold form where some
-    entries don't carry a platform.
-    """
-    sections = data.get("apical_sections", []) or []
-    for sec in sections:
-        if sec.get("platform") and sec["platform"] == node.platform:
-            return sec
-    # Fallback: title-based match against the section's title key.
-    for sec in sections:
-        if sec.get("title") and node.platform in sec.get("title", ""):
-            return sec
-    return None
-
 
 def _render_apical_table(node: DocNode, data: dict) -> str:
     r"""
@@ -815,36 +785,25 @@ def _render_incidence_table(node: DocNode, data: dict) -> str:
 
     Falls through to a placeholder when data is missing.
     """
-    section = _find_apical_section(node, data)
-    if not section:
-        return _emit_table_placeholder(node)
-    rows = section.get("incidence_rows", []) or section.get("rows", []) or []
-    if not rows:
+    plan = incidence_table_plan(node, data)
+    if plan is None:
         return _emit_table_placeholder(node)
 
-    doses = section.get("doses", []) or []
-    dose_unit = section.get("dose_unit", "mg/kg")
-    headers = ["Observation"] + [_format_dose_label(d, dose_unit) for d in doses]
+    headers = ["Observation"] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
     ncols = len(headers)
     colspec = "l" + "c" * (ncols - 1)
 
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
              _emit_tabular_row(headers, raw=True), "\\midrule"]
-    for row in rows:
-        label = row.get("observation") or row.get("label") or ""
-        counts = row.get("counts") or row.get("values") or []
-        cells = [str(label), *[str(c) for c in counts]]
-        while len(cells) < ncols:
-            cells.append("0")
+    for cells in plan.rows:
         lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     tabular = "\n".join(lines)
 
-    notes = _emit_table_footnotes(section.get("footnotes", []))
-    caption = _table_caption(node, section.get("caption", "") or node.title)
+    notes = _emit_table_footnotes(plan.footnotes)
     return (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{caption}}}\n"
+        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
         f"{tabular}"
         f"{notes}\n"
         f"\\end{{niehstable}}"

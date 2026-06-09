@@ -144,6 +144,120 @@ def front_matter_plan(node: DocNode, data: dict) -> FrontMatterPlan:
 
 
 # ---------------------------------------------------------------------------
+# Table extractors (ADR-0006 step 4) — shared lookup + markup-free plans
+# ---------------------------------------------------------------------------
+# The table handlers historically duplicated their section lookup, caption
+# building, and row assembly across both renderers, differing only in the
+# markup (and in dose-label formatting, which genuinely differs: LaTeX uses a
+# "~" non-breaking space and escapes the unit, HTML uses a plain space — so the
+# emitters keep their own _format_dose_label and the plans carry RAW dose values
+# rather than pre-formatted column labels).
+
+def find_apical_section(node: DocNode, data: dict) -> dict | None:
+    """
+    Locate the apical_sections entry whose platform matches this table node.
+
+    apical_sections is the flat list marshal_export_data produces from session
+    state; each entry has a "platform" key ("Body Weight", "Clinical
+    Chemistry", ...) matched against node.platform.  A title-based fallback
+    handles the legacy scaffold form where some entries carry no platform.
+
+    Returns the matching dict, or None when nothing matches (the caller then
+    emits a placeholder).
+    """
+    sections = data.get("apical_sections", []) or []
+    for sec in sections:
+        if sec.get("platform") and sec["platform"] == node.platform:
+            return sec
+    # Fallback: title-based match against the section's title key.
+    for sec in sections:
+        if sec.get("title") and node.platform in sec.get("title", ""):
+            return sec
+    return None
+
+
+def table_caption(node: DocNode, base_caption: str) -> str:
+    """
+    Build the plain-text table caption, prefixed with "Table N. " from the
+    auto-assigned table_number (document tree position).
+
+    Strips leftover Typst-era placeholder tokens ("{sex}", "{compound}").  Per
+    ADR-0004 amendment (a) the node's own authored `caption` wins over the
+    data-overlay base caption, falling back to it when unset.
+
+    Returns plain text — escaping (HTML) or non-escaping (the LaTeX niehstable
+    env consumes it raw) is the emitter's concern, which is why this is shared.
+    """
+    cleaned = (node.caption or base_caption or "")
+    cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
+    cleaned = cleaned.strip()
+    if node.table_number is not None:
+        return f"Table {node.table_number}. {cleaned}" if cleaned else f"Table {node.table_number}"
+    return cleaned
+
+
+@dataclass(frozen=True)
+class IncidenceTablePlan:
+    """
+    Markup-free description of a clinical-observations incidence table (one row
+    per observation, one column per dose group).
+
+    Fields:
+        node_id:   stable node id (LaTeX keys its niehstable env on it).
+        caption:   plain-text "Table N. ..." caption (see table_caption).
+        doses:     RAW dose values; each emitter formats its own column labels
+                   (HTML "0 mg/kg" vs LaTeX "0~mg/kg") via its _format_dose_label.
+        dose_unit: unit string for those labels.
+        rows:      one cell-string list per observation, already padded to
+                   1 + len(doses) columns (missing counts filled with "0").
+        footnotes: raw footnote dicts; the emitter renders the markup.
+    """
+    node_id: str
+    caption: str
+    doses: list
+    dose_unit: str
+    rows: list[list[str]]
+    footnotes: list
+
+
+def incidence_table_plan(node: DocNode, data: dict) -> IncidenceTablePlan | None:
+    """
+    EXTRACT for the incidence table: resolve the section, assemble padded cell
+    rows, and build the caption — all format-agnostic.
+
+    Returns None when the section is missing or carries no rows; the emitter
+    turns that into its placeholder (preserving both renderers' old behavior of
+    emitting a placeholder in either case).
+    """
+    section = find_apical_section(node, data)
+    if not section:
+        return None
+    rows_src = section.get("incidence_rows", []) or section.get("rows", []) or []
+    if not rows_src:
+        return None
+
+    doses = section.get("doses", []) or []
+    dose_unit = section.get("dose_unit", "mg/kg")
+    # Column count = the Observation label column plus one per dose group; rows
+    # are padded to this so a short counts list still fills every dose column.
+    ncols = 1 + len(doses)
+
+    rows: list[list[str]] = []
+    for row in rows_src:
+        label = row.get("observation") or row.get("label") or ""
+        counts = row.get("counts") or row.get("values") or []
+        cells = [str(label), *[str(c) for c in counts]]
+        while len(cells) < ncols:
+            cells.append("0")
+        rows.append(cells)
+
+    caption = table_caption(node, section.get("caption", "") or node.title)
+    return IncidenceTablePlan(
+        node.id, caption, doses, dose_unit, rows, section.get("footnotes", []) or []
+    )
+
+
+# ---------------------------------------------------------------------------
 # Dispatch registry — the canonical set of renderable node types (ADR-0006 #3)
 # ---------------------------------------------------------------------------
 # Before ADR-0006 #3, each renderer kept its own _DISPATCH table and the two

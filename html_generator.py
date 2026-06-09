@@ -57,7 +57,13 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
-from render_common import front_matter_plan, assert_dispatch_covers
+from render_common import (
+    front_matter_plan,
+    assert_dispatch_covers,
+    incidence_table_plan,
+    find_apical_section as _find_apical_section,
+    table_caption as _table_caption,
+)
 from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
@@ -470,22 +476,9 @@ def _format_dose_label(dose, unit: str) -> str:
     return f"{dose} {unit}"
 
 
-def _table_caption(node: DocNode, base_caption: str) -> str:
-    """
-    Prefix the caption with "Table N. " from the auto-assigned table_number,
-    mirroring latex_generator's behavior.  Strips any leftover {compound} /
-    {sex} placeholder tokens.
-
-    ADR-0004 amendment (a) — de-overloaded caption: prefer the addressable
-    item's own `caption` (the BITS <caption><p> role) over the data-overlay
-    base caption; fall back when not set, preserving the data-driven path.
-    """
-    cleaned = (node.caption or base_caption or "")
-    cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
-    cleaned = cleaned.strip()
-    if node.table_number is not None:
-        return f"Table {node.table_number}. {cleaned}" if cleaned else f"Table {node.table_number}"
-    return cleaned
+# _table_caption / _find_apical_section now live in render_common (ADR-0006 #4)
+# and are imported above under their old private names, so every handler that
+# calls them is unchanged.
 
 
 # ---------------------------------------------------------------------------
@@ -678,18 +671,6 @@ def _render_toc(node: DocNode, data: dict) -> str:
 # incidence-table, genomics-section)
 # ---------------------------------------------------------------------------
 
-def _find_apical_section(node: DocNode, data: dict) -> Optional[dict]:
-    """Same platform-match lookup the LaTeX handler uses."""
-    sections = data.get("apical_sections", []) or []
-    for sec in sections:
-        if sec.get("platform") and sec["platform"] == node.platform:
-            return sec
-    for sec in sections:
-        if sec.get("title") and node.platform in sec.get("title", ""):
-            return sec
-    return None
-
-
 def _render_apical_table(node: DocNode, data: dict) -> str:
     """
     Apical dose-response table — HTML mirror of latex_generator's
@@ -835,35 +816,25 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
 
 
 def _render_incidence_table(node: DocNode, data: dict) -> str:
-    """Clinical Observations incidence table — observation × dose group."""
-    section = _find_apical_section(node, data)
-    if not section:
+    """
+    Clinical Observations incidence table — observation × dose group.
+
+    ADR-0006 #4: the section lookup, row assembly, and caption are the shared
+    render_common.incidence_table_plan EXTRACT; this function only EMITs the
+    HTML (and formats the dose-column labels with the HTML _format_dose_label).
+    """
+    plan = incidence_table_plan(node, data)
+    if plan is None:
         return _emit_table_placeholder(node)
-    rows = section.get("incidence_rows", []) or section.get("rows", []) or []
-    if not rows:
-        return _emit_table_placeholder(node)
 
-    doses = section.get("doses", []) or []
-    dose_unit = section.get("dose_unit", "mg/kg")
-    headers = ["Observation"] + [_format_dose_label(d, dose_unit) for d in doses]
-    ncols = len(headers)
-
-    body_rows = []
-    for row in rows:
-        label = row.get("observation") or row.get("label") or ""
-        counts = row.get("counts") or row.get("values") or []
-        cells = [str(label), *[str(c) for c in counts]]
-        while len(cells) < ncols:
-            cells.append("0")
-        body_rows.append(_emit_table_row(cells))
-
-    caption = _table_caption(node, section.get("caption", "") or node.title)
-    notes = _emit_table_footnotes(section.get("footnotes", []))
+    headers = ["Observation"] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
+    body_rows = "".join(_emit_table_row(cells) for cells in plan.rows)
+    notes = _emit_table_footnotes(plan.footnotes)
     return (
         '<table class="niehstable">'
-        f"<caption>{_esc(caption)}</caption>"
+        f"<caption>{_esc(plan.caption)}</caption>"
         f"{_emit_table_header(headers)}"
-        f"<tbody>{''.join(body_rows)}</tbody>"
+        f"<tbody>{body_rows}</tbody>"
         "</table>"
         f"{notes}"
     )
