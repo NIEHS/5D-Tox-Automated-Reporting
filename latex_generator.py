@@ -72,6 +72,7 @@ from document_tree import (
     DocNode,
     find_node,
     first_body_node_id,
+    walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
@@ -1172,38 +1173,45 @@ def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict)
 
 def _walk(node: DocNode, data: dict) -> list[str]:
     """
-    Render one node, then recurse into its children.
+    Render a node and its descendants to a flat, document-ordered list of
+    LaTeX chunks; the caller joins them with blank lines to produce the body.
 
-    The handler is responsible for the node's own output.  Children are
-    walked here, after the parent's chunk, preserving document order.
-    Returns a flat list of LaTeX chunks; the caller joins them with blank
-    lines to produce the final body.
+    The traversal (visit node, then recurse children in order) is the shared
+    ``walk_tree`` primitive (ADR-0006); only the per-node emit below — the
+    landscape wrap, the ADR-0005 override substitution, and the round-trip
+    anchor sentinels — is LaTeX-specific and lives here.  Same traversal as
+    html_generator._walk.
+
+    We close over a local ``chunks`` accumulator and append from the
+    ``_visit`` callback, because ``walk_tree`` is side-effect-only.
     """
-    handler = _DISPATCH.get(node.node_type, _render_unimplemented)
     chunks: list[str] = []
-    chunk = handler(node, data)
-    if chunk:
-        # Per-node landscape: wrap this node's output in pdflscape's
-        # landscape environment when the user flipped it AND the node's
-        # semantic type is orientable (capability dictionary).  Gating on the
-        # capability ignores stale/invalid overlay flags — the dictionary is
-        # authoritative on both the UI and render sides.  pdflscape rotates
-        # both the content and the PDF page, so Overleaf shows it landscape.
-        if landscape_requested(node.node_type, node.id, data.get("orientations"),
-                               default=node.orientation):
-            chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
-        # ADR-0005: if a human owns this region (edited and reconciled into the
-        # override store), emit their version verbatim instead of the generated
-        # one.  Applied AFTER the orientation wrap so the override region matches
-        # exactly what sits between the sentinels.
-        chunk = _apply_override(chunk, data.get("overrides") or {}, node.id, data)
-        # Then bracket the whole node block in begin/end sentinels keyed to
-        # node.id, so the round-trip reconciler can attribute an edited region
-        # back to this node.  Inert in the PDF.
-        chunk = _anchor("node", node.id, chunk)
-        chunks.append(chunk)
-    for child in node.children:
-        chunks.extend(_walk(child, data))
+
+    def _visit(n: DocNode) -> None:
+        handler = _DISPATCH.get(n.node_type, _render_unimplemented)
+        chunk = handler(n, data)
+        if chunk:
+            # Per-node landscape: wrap this node's output in pdflscape's
+            # landscape environment when the user flipped it AND the node's
+            # semantic type is orientable (capability dictionary).  Gating on the
+            # capability ignores stale/invalid overlay flags — the dictionary is
+            # authoritative on both the UI and render sides.  pdflscape rotates
+            # both the content and the PDF page, so Overleaf shows it landscape.
+            if landscape_requested(n.node_type, n.id, data.get("orientations"),
+                                   default=n.orientation):
+                chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+            # ADR-0005: if a human owns this region (edited and reconciled into the
+            # override store), emit their version verbatim instead of the generated
+            # one.  Applied AFTER the orientation wrap so the override region matches
+            # exactly what sits between the sentinels.
+            chunk = _apply_override(chunk, data.get("overrides") or {}, n.id, data)
+            # Then bracket the whole node block in begin/end sentinels keyed to
+            # node.id, so the round-trip reconciler can attribute an edited region
+            # back to this node.  Inert in the PDF.
+            chunk = _anchor("node", n.id, chunk)
+            chunks.append(chunk)
+
+    walk_tree([node], _visit)
     return chunks
 
 

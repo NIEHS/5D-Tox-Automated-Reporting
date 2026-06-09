@@ -82,6 +82,44 @@ def first_body_node_id(tree: list[DocNode] | None = None) -> str | None:
 # Tree utilities
 # ---------------------------------------------------------------------------
 
+def walk_tree(nodes: list[DocNode], visit) -> None:
+    """
+    Pre-order depth-first walk of a DocNode forest.
+
+    Calls ``visit(node)`` on every node in document order — a node is visited
+    BEFORE its children, and siblings are visited in list order.  This is the
+    one canonical traversal of the document tree (ADR-0006): the renderers,
+    the data gatherer, and the export marshaller each used to re-derive "look
+    at this node, then recurse into ``node.children``" by hand, which let the
+    traversals drift apart.  Centralising it here makes the tree
+    (Architectural Invariant #2) own its own iteration order.
+
+    The walk is intentionally side-effect-only: it returns nothing and does
+    not collect results.  Callers that need to accumulate output (e.g. a
+    renderer building a list of markup chunks) close over their own
+    accumulator inside ``visit`` and append to it — see html_generator._walk
+    and latex_generator._walk.  Keeping accumulation out of the primitive is
+    what lets one walk serve callers that produce wildly different outputs.
+
+    Args:
+        nodes: the forest to walk — a list of top-level DocNodes.  Pass a
+            single node as a one-element list (``walk_tree([node], visit)``)
+            to walk one subtree.
+        visit: a callable invoked once per node as ``visit(node)``.  Its
+            return value is ignored; any output it produces is its own
+            responsibility (typically by mutating a closed-over accumulator).
+
+    Returns:
+        None.  This primitive exists for its traversal order, not a value.
+    """
+    for node in nodes:
+        # Pre-order: the node itself is handled before we descend.  Renderers
+        # rely on this so a section's heading/intro chunk lands ahead of its
+        # children's chunks, preserving document order in the flat output.
+        visit(node)
+        walk_tree(node.children, visit)
+
+
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     """
     Walk the tree in document order and assign table_number to each

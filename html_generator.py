@@ -54,6 +54,7 @@ from document_tree import (
     DocNode,
     find_node,
     first_body_node_id,
+    walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from genomics_content import genomics_content_plan
@@ -1162,30 +1163,42 @@ _DISPATCH: dict[str, object] = {
 
 def _walk(node: DocNode, data: dict) -> list[str]:
     """
-    Render one node, then recurse into its children.  Same flow as
-    latex_generator._walk; only the handlers differ.
+    Render a node and its descendants to a flat, document-ordered list of
+    HTML chunks.
+
+    The traversal itself (visit node, then recurse children in order) is the
+    shared ``walk_tree`` primitive (ADR-0006); only the per-node rendering
+    below — the HTML-specific anchor span and landscape wrapping — lives here.
+    This is the seam the ADR-0006 unification splits on: the walk is common,
+    the emit is format-specific.  Same traversal as latex_generator._walk.
+
+    We close over a local ``chunks`` accumulator and append to it from the
+    ``_visit`` callback, because ``walk_tree`` is side-effect-only and does
+    not collect a return value.
     """
-    handler = _DISPATCH.get(node.node_type, _render_unimplemented)
     chunks: list[str] = []
-    chunk = handler(node, data)
-    if chunk:
-        # Zero-height anchor before each node so the navigation panel can scroll the
-        # full preview to this section (frame.contentDocument
-        # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves
-        # the actual DOM nodes into page boxes, preserving these ids, so
-        # the scroll target survives pagination.
-        chunks.append(f'<span id="sec-{_esc(node.id)}" class="sec-anchor"></span>')
-        # Per-node landscape: wrap in a .landscape-block (assigned to the
-        # landscape @page) when the user flipped it AND the node's semantic
-        # type is orientable (capability dictionary).  Gating on the
-        # capability ignores stale/invalid overlay flags — the dictionary is
-        # authoritative on both the UI and render sides.
-        if landscape_requested(node.node_type, node.id, data.get("orientations"),
-                               default=node.orientation):
-            chunk = f'<div class="landscape-block">{chunk}</div>'
-        chunks.append(chunk)
-    for child in node.children:
-        chunks.extend(_walk(child, data))
+
+    def _visit(n: DocNode) -> None:
+        handler = _DISPATCH.get(n.node_type, _render_unimplemented)
+        chunk = handler(n, data)
+        if chunk:
+            # Zero-height anchor before each node so the navigation panel can scroll the
+            # full preview to this section (frame.contentDocument
+            # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves
+            # the actual DOM nodes into page boxes, preserving these ids, so
+            # the scroll target survives pagination.
+            chunks.append(f'<span id="sec-{_esc(n.id)}" class="sec-anchor"></span>')
+            # Per-node landscape: wrap in a .landscape-block (assigned to the
+            # landscape @page) when the user flipped it AND the node's semantic
+            # type is orientable (capability dictionary).  Gating on the
+            # capability ignores stale/invalid overlay flags — the dictionary is
+            # authoritative on both the UI and render sides.
+            if landscape_requested(n.node_type, n.id, data.get("orientations"),
+                                   default=n.orientation):
+                chunk = f'<div class="landscape-block">{chunk}</div>'
+            chunks.append(chunk)
+
+    walk_tree([node], _visit)
     return chunks
 
 
