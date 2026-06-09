@@ -65,6 +65,9 @@ from render_common import (
     unified_narrative_paragraphs,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
+    appendix_roster_rows,
+    ANIMAL_ROSTER_HEADERS,
+    methods_subsection_content,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -551,16 +554,12 @@ def _render_methods_subsection(node: DocNode, data: dict) -> str:
     flat list keyed by heading (title-match).  Mirrors the LaTeX
     handler's lookup strategy.
     """
-    body = ""
-    methods = data.get("methods", {})
-    if isinstance(methods, dict):
-        for section in methods.get("sections", []):
-            if section.get("heading") == node.title:
-                body = _render_paragraphs(section.get("paragraphs", []))
-                table_inline = section.get("table")
-                if isinstance(table_inline, dict):
-                    body = (body + "\n" + _render_inline_table(table_inline)).strip()
-                break
+    # ADR-0006 Amendment 1: the heading-match lookup is the shared EXTRACT; the
+    # paragraph/inline-table markup and pending fallback are HTML emit.
+    paragraphs, inline = methods_subsection_content(node, data)
+    body = _render_paragraphs(paragraphs)
+    if inline is not None:
+        body = (body + "\n" + _render_inline_table(inline)).strip()
     if not body:
         body = _pending(f"Section pending: {node.title}")
     return f"{_heading(node.level, node.title)}\n{body}"
@@ -592,30 +591,26 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
-    """Appendix node — Appendix B renders the animal roster; others stub out."""
+    """
+    Appendix node — Appendix B renders the animal roster; others stub out.
+
+    ADR-0006 Amendment 1: the "which appendix carries the roster" decision and
+    the roster rows are the shared appendix_roster_rows EXTRACT; only the HTML
+    table markup (and the stub) are emit here.  The HTML roster scrolls — no
+    pagination — unlike the LaTeX longtable.
+    """
     heading = _heading(node.level, node.title)
-    if node.id == "appendix-b" and data.get("appendix_animals"):
-        return f"{heading}\n{_render_animal_identifiers(data['appendix_animals'])}"
+    rows = appendix_roster_rows(node, data)
+    if rows is not None:
+        body_rows = "".join(_emit_table_row(r) for r in rows)
+        roster = (
+            '<table class="niehstable">'
+            + _emit_table_header(list(ANIMAL_ROSTER_HEADERS))
+            + f"<tbody>{body_rows}</tbody></table>"
+        )
+        return f"{heading}\n{roster}"
     body = f'<div class="appendix-stub">Appendix body pending: {_esc(node.title)}</div>'
     return f"{heading}\n{body}"
-
-
-def _render_animal_identifiers(rows: list) -> str:
-    """The Appendix B animal roster as a table (HTML scrolls; no pagination)."""
-    def _dose(v):
-        if isinstance(v, (int, float)):
-            return str(int(v)) if float(v).is_integer() else str(v)
-        return "—"
-    headers = ["Animal ID", "Sex", "Dose (mg/kg)"]
-    body_rows = [
-        _emit_table_row([str(r.get("animal_id", "")), str(r.get("sex", "")), _dose(r.get("dose"))])
-        for r in rows
-    ]
-    return (
-        '<table class="niehstable">'
-        + _emit_table_header(headers)
-        + f"<tbody>{''.join(body_rows)}</tbody></table>"
-    )
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:

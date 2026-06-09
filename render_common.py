@@ -459,6 +459,65 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
     return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows)
 
 
+# Column meaning of the Appendix B animal roster (semantic vocabulary shared by
+# both surfaces; the LaTeX longtable header is laid out separately — presentation).
+ANIMAL_ROSTER_HEADERS: tuple[str, ...] = ("Animal ID", "Sex", "Dose (mg/kg)")
+
+
+def _roster_dose(dose) -> str:
+    """Format a roster dose: drop a trailing ".0" on whole numbers, else "—"."""
+    if isinstance(dose, (int, float)):
+        return str(int(dose)) if float(dose).is_integer() else str(dose)
+    return "—"
+
+
+def appendix_roster_rows(node: DocNode, data: dict) -> list[list[str]] | None:
+    """
+    EXTRACT for the Appendix B animal roster: one [animal_id, sex, dose] row per
+    animal, format-agnostic (raw strings; each emitter escapes).
+
+    Returns None for any appendix other than B, or when the session supplied no
+    roster — the emitter then shows its "[Appendix body pending]" stub.  The
+    "Appendix B carries the roster" decision is the semantic part and lives here.
+    """
+    if node.id != "appendix-b" or not data.get("appendix_animals"):
+        return None
+    return [
+        [str(r.get("animal_id", "")), str(r.get("sex", "")), _roster_dose(r.get("dose"))]
+        for r in data["appendix_animals"]
+    ]
+
+
+def methods_subsection_content(
+    node: DocNode, data: dict
+) -> tuple[list[str], dict | None]:
+    """
+    EXTRACT for a Materials & Methods subsection: locate the methods section
+    whose heading matches this node's title and return its (paragraphs,
+    inline_table).
+
+    The methods content lives at data["methods"]["sections"] as a flat list of
+    {heading, paragraphs, [table]} dicts, keyed by the human-readable heading
+    (the title is canonical — see the handler docstrings).  The inline table,
+    when present, is already in a neutral {caption, headers, rows, footnotes}
+    shape that each emitter renders in its own markup, so it is passed through
+    as-is rather than re-modelled here.
+
+    Returns ([], None) when no section matches (the emitter shows its pending
+    placeholder — emptiness is format-dependent, so that decision stays in emit).
+    """
+    methods = data.get("methods", {})
+    if isinstance(methods, dict):
+        for section in methods.get("sections", []):
+            if section.get("heading") == node.title:
+                table = section.get("table")
+                return (
+                    section.get("paragraphs", []) or [],
+                    table if isinstance(table, dict) else None,
+                )
+    return [], None
+
+
 # ---------------------------------------------------------------------------
 # Dispatch registry — the canonical set of renderable node types (ADR-0006 #3)
 # ---------------------------------------------------------------------------

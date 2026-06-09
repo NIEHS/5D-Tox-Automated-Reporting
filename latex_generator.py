@@ -84,6 +84,8 @@ from render_common import (
     unified_narrative_paragraphs,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
+    appendix_roster_rows,
+    methods_subsection_content,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -356,19 +358,14 @@ def _render_methods_subsection(node: DocNode, data: dict) -> str:
     readable heading.  Carrying a separate "methods_key" field through
     the data dict would duplicate that — the title is already canonical.
     """
-    body = ""
-    methods = data.get("methods", {})
-    if isinstance(methods, dict):
-        for section in methods.get("sections", []):
-            if section.get("heading") == node.title:
-                body = _render_paragraphs(section.get("paragraphs", []))
-                # If the section carries an inline table (e.g., the Final
-                # Sample Counts table that appears under Transcriptomics
-                # → Sample Collection), render it after the prose.
-                table_inline = section.get("table")
-                if isinstance(table_inline, dict):
-                    body = (body + "\n\n" + _render_inline_table(table_inline)).strip()
-                break
+    # ADR-0006 Amendment 1: the heading-match lookup is the shared EXTRACT; the
+    # paragraph/inline-table markup and pending fallback are LaTeX emit.  The
+    # inline table (e.g. the Final Sample Counts table under Transcriptomics →
+    # Sample Collection) renders after the prose.
+    paragraphs, inline = methods_subsection_content(node, data)
+    body = _render_paragraphs(paragraphs)
+    if inline is not None:
+        body = (body + "\n\n" + _render_inline_table(inline)).strip()
     if not body:
         body = f"\\emph{{[Section pending: {_escape_latex(node.title)}]}}"
     return f"{_heading(node.level, node.title)}\n\n{body}"
@@ -443,19 +440,29 @@ def _render_appendix(node: DocNode, data: dict) -> str:
     "[Appendix body pending]" line so the author knows to expect content.
     """
     heading = _heading(node.level, node.title)
-    if node.id == "appendix-b" and data.get("appendix_animals"):
-        return f"{heading}\n\n{_render_animal_identifiers(data['appendix_animals'])}"
+    rows = appendix_roster_rows(node, data)
+    if rows is not None:
+        return f"{heading}\n\n{_emit_animal_roster(rows)}"
     body = f"\\emph{{[Appendix body pending: {_escape_latex(node.title)}]}}"
     return f"{heading}\n\n{body}"
 
 
-def _render_animal_identifiers(rows: list) -> str:
+def _emit_animal_roster(rows: list[list[str]]) -> str:
     r"""
-    The Appendix B animal roster as a page-breaking longtable.
+    EMIT the Appendix B animal roster as a page-breaking longtable.
 
     ~300 animals don't fit one page, and the niehstable float can't break
     across pages — so this uses longtable (loaded by niehs.cls), whose
-    \endhead repeats the column header on every page.
+    \endhead repeats the column header on every page.  Rows come pre-built
+    (animal_id, sex, dose) from appendix_roster_rows (ADR-0006 Amendment 1).
+
+    NOTE (pre-existing divergence, preserved deliberately): the animal_id and
+    sex cells are escaped here AND again inside _emit_tabular_row — a latent
+    double-escape that has no effect on the real roster (numeric/plain IDs,
+    "Male"/"Female") but would differ from the HTML single-escape for an id
+    with LaTeX specials.  Kept byte-for-byte so this stays a pure refactor;
+    flagged as a candidate for the same IR convergence as the empty-paragraph
+    inconsistency (ADR-0006 Amendment 1).
     """
     head = (
         "\\begin{longtable}{l l r}\n"
@@ -465,21 +472,10 @@ def _render_animal_identifiers(rows: list) -> str:
         "\\endhead\n"
     )
     body = "\n".join(
-        _emit_tabular_row([
-            _escape_latex(str(r.get("animal_id", ""))),
-            _escape_latex(str(r.get("sex", ""))),
-            _format_dose_value(r.get("dose")),
-        ])
+        _emit_tabular_row([_escape_latex(r[0]), _escape_latex(r[1]), r[2]])
         for r in rows
     )
     return head + body + "\n\\bottomrule\n\\end{longtable}"
-
-
-def _format_dose_value(dose) -> str:
-    """Format a numeric dose for the roster: drop a trailing .0, else as-is."""
-    if isinstance(dose, (int, float)):
-        return str(int(dose)) if float(dose).is_integer() else str(dose)
-    return "—"
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:
