@@ -59,6 +59,7 @@ from document_tree import (
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from render_common import (
     front_matter_plan,
+    has_paragraph_content,
     assert_dispatch_covers,
     incidence_table_plan,
     apical_table_plan,
@@ -563,10 +564,11 @@ def _render_methods_subsection(node: DocNode, data: dict) -> str:
     flat list keyed by heading (title-match).  Mirrors the LaTeX
     handler's lookup strategy.
     """
-    # ADR-0006 Amendment 1: the heading-match lookup is the shared EXTRACT; the
-    # paragraph/inline-table markup and pending fallback are HTML emit.
+    # ADR-0006 Amendment 1: the heading-match lookup and content-present
+    # decision are shared; the markup is HTML emit.  A section with no real
+    # paragraph text and no inline table is "pending" on both surfaces.
     paragraphs, inline = methods_subsection_content(node, data)
-    body = _render_paragraphs(paragraphs)
+    body = _render_paragraphs(paragraphs) if has_paragraph_content(paragraphs) else ""
     if inline is not None:
         body = (body + "\n" + _render_inline_table(inline)).strip()
     if not body:
@@ -738,10 +740,12 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     Emits the heading + unified narrative paragraphs.  Child table nodes
     are walked separately by _walk.
     """
-    # ADR-0006 Amendment 1: the narrative-paragraph selection is the shared
-    # render_common EXTRACT; only the heading/pending markup is HTML emit.
-    body = _render_paragraphs(unified_narrative_paragraphs(node, data))
-    if not body:
+    # ADR-0006 Amendment 1: the narrative-paragraph selection AND the
+    # content-present decision are shared; only the markup is HTML emit.
+    paragraphs = unified_narrative_paragraphs(node, data)
+    if has_paragraph_content(paragraphs):
+        body = _render_paragraphs(paragraphs)
+    else:
         body = _pending(f"Narrative pending: {node.title}")
     return f"{_heading(node.level, node.title)}\n{body}"
 

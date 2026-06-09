@@ -77,6 +77,7 @@ from document_tree import (
 from render_capabilities import landscape_requested, content_item_landscape_requested
 from render_common import (
     front_matter_plan,
+    has_paragraph_content,
     assert_dispatch_covers,
     LATEX_OMITS,
     incidence_table_plan,
@@ -367,12 +368,12 @@ def _render_methods_subsection(node: DocNode, data: dict) -> str:
     readable heading.  Carrying a separate "methods_key" field through
     the data dict would duplicate that — the title is already canonical.
     """
-    # ADR-0006 Amendment 1: the heading-match lookup is the shared EXTRACT; the
-    # paragraph/inline-table markup and pending fallback are LaTeX emit.  The
-    # inline table (e.g. the Final Sample Counts table under Transcriptomics →
-    # Sample Collection) renders after the prose.
+    # ADR-0006 Amendment 1: the heading-match lookup and content-present
+    # decision are shared; the markup is LaTeX emit.  The inline table (e.g. the
+    # Final Sample Counts table under Transcriptomics → Sample Collection)
+    # renders after the prose.
     paragraphs, inline = methods_subsection_content(node, data)
-    body = _render_paragraphs(paragraphs)
+    body = _render_paragraphs(paragraphs) if has_paragraph_content(paragraphs) else ""
     if inline is not None:
         body = (body + "\n\n" + _render_inline_table(inline)).strip()
     if not body:
@@ -465,13 +466,11 @@ def _emit_animal_roster(rows: list[list[str]]) -> str:
     \endhead repeats the column header on every page.  Rows come pre-built
     (animal_id, sex, dose) from appendix_roster_rows (ADR-0006 Amendment 1).
 
-    NOTE (pre-existing divergence, preserved deliberately): the animal_id and
-    sex cells are escaped here AND again inside _emit_tabular_row — a latent
-    double-escape that has no effect on the real roster (numeric/plain IDs,
-    "Male"/"Female") but would differ from the HTML single-escape for an id
-    with LaTeX specials.  Kept byte-for-byte so this stays a pure refactor;
-    flagged as a candidate for the same IR convergence as the empty-paragraph
-    inconsistency (ADR-0006 Amendment 1).
+    Each cell is escaped exactly once (by _emit_tabular_row) — matching the
+    HTML roster's single-escape.  This converges a pre-existing divergence:
+    the old code pre-escaped animal_id/sex and then _emit_tabular_row escaped
+    them again (a latent double-escape, harmless for plain IDs but wrong for an
+    id carrying LaTeX specials).
     """
     head = (
         "\\begin{longtable}{l l r}\n"
@@ -480,10 +479,7 @@ def _emit_animal_roster(rows: list[list[str]]) -> str:
         "\\midrule\n"
         "\\endhead\n"
     )
-    body = "\n".join(
-        _emit_tabular_row([_escape_latex(r[0]), _escape_latex(r[1]), r[2]])
-        for r in rows
-    )
+    body = "\n".join(_emit_tabular_row(r) for r in rows)
     return head + body + "\n\\bottomrule\n\\end{longtable}"
 
 
@@ -677,10 +673,12 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     The narrative lives at data["unified_narratives"][node.narrative_key]
     when narrative_key is set.  Falls back to a placeholder when missing.
     """
-    # ADR-0006 Amendment 1: the narrative-paragraph selection is the shared
-    # render_common EXTRACT; only the heading/pending markup is LaTeX emit.
-    body = _render_paragraphs(unified_narrative_paragraphs(node, data))
-    if not body:
+    # ADR-0006 Amendment 1: the narrative-paragraph selection AND the
+    # content-present decision are shared; only the markup is LaTeX emit.
+    paragraphs = unified_narrative_paragraphs(node, data)
+    if has_paragraph_content(paragraphs):
+        body = _render_paragraphs(paragraphs)
+    else:
         body = f"\\emph{{[Narrative pending: {_escape_latex(node.title)}]}}"
     return f"{_heading(node.level, node.title)}\n\n{body}"
 

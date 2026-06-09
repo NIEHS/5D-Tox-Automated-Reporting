@@ -78,6 +78,21 @@ class FrontMatterPlan:
 # Extractors — pure, markup-free
 # ---------------------------------------------------------------------------
 
+def has_paragraph_content(paragraphs) -> bool:
+    """
+    Does this paragraph list carry any real content?
+
+    True iff at least one entry has non-whitespace text.  This is the
+    "content present / absent" decision the IR owns (ADR-0006 Amendment 1):
+    before, each emitter inferred it from format-dependent emptiness — HTML
+    rendered a single empty-string paragraph as "<p></p>" (treated as present)
+    while LaTeX rendered it as "" (treated as absent, → pending), so the two
+    surfaces silently disagreed about whether a section had content.  Deciding
+    it once here makes both projections agree.
+    """
+    return any((p or "").strip() for p in (paragraphs or []))
+
+
 def labeled_section_parts(sections) -> list[tuple[str, str]]:
     """
     Normalise a structured-abstract "sections" list into [(label, text)],
@@ -142,7 +157,10 @@ def front_matter_plan(node: DocNode, data: dict) -> FrontMatterPlan:
         if parts:
             return FrontMatterPlan(node.level, node.title, "labeled", labeled_parts=parts)
         paragraphs = content.get("paragraphs", []) or []
-        if paragraphs:
+        # has_paragraph_content (not bare truthiness): a list of only empty
+        # strings carries no content and must resolve to "none" on BOTH
+        # surfaces, not "<p></p>" on one and pending on the other.
+        if has_paragraph_content(paragraphs):
             return FrontMatterPlan(node.level, node.title, "paragraphs", paragraphs=paragraphs)
     return FrontMatterPlan(node.level, node.title, "none")
 

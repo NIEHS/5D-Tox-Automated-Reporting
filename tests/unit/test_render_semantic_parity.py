@@ -28,9 +28,12 @@ import re
 
 import pytest
 
+import html_generator
+import latex_generator
 from latex_export import load_session_data
 from html_generator import generate_html
 from latex_generator import generate_latex
+from document_node import DocNode
 from document_tree import DOCUMENT_TREE, find_node
 from render_common import bmd_summary_plan
 
@@ -189,3 +192,46 @@ def test_bmd_summary_endpoints_match_ir_on_both_surfaces(session_data):
     for _sex, endpoint in expected:
         assert endpoint in html_full, f"endpoint {endpoint!r} absent from HTML"
         assert endpoint in tex_full, f"endpoint {endpoint!r} absent from LaTeX"
+
+
+# ---------------------------------------------------------------------------
+# Parity: the content-present / escaping decisions agree (Amendment 1 fixes)
+# ---------------------------------------------------------------------------
+# These pin the three latent inconsistencies the IR converged.  Each would have
+# FAILED before the fix — they probe a divergence the full-session byte-diff and
+# the number/endpoint checks above can't reach.
+
+def test_blank_paragraph_section_is_pending_on_both_surfaces():
+    """
+    A section whose paragraphs are all blank carries no content, so BOTH
+    surfaces must treat it as pending — previously HTML rendered "<p></p>"
+    (content present) while LaTeX showed pending (absent).  Fixed by the shared
+    render_common.has_paragraph_content decision.
+    """
+    node = DocNode(id="foreword", title="Foreword", node_type="front-matter",
+                   level=1, data_key="foreword")
+    data = {"foreword": {"paragraphs": ["", "   "]}}
+
+    html = html_generator._render_front_matter(node, data)
+    tex = latex_generator._render_front_matter(node, data)
+
+    assert "<p></p>" not in html, "HTML still renders a spurious empty paragraph"
+    assert ("pending" in html.lower()) and ("pending" in tex.lower()), (
+        "the surfaces disagree on whether a blank-paragraph section has content"
+    )
+
+
+def test_roster_cell_escaping_is_single_on_both_surfaces():
+    """
+    An animal_id carrying a LaTeX special is escaped exactly once on both
+    surfaces — previously the LaTeX roster double-escaped (pre-escape +
+    _emit_tabular_row), diverging from HTML's single-escape.
+    """
+    node = DocNode(id="appendix-b", title="Animal Identifiers",
+                   node_type="appendix", level=1)
+    data = {"appendix_animals": [{"animal_id": "A_1", "sex": "Male", "dose": 0}]}
+
+    tex = latex_generator._render_appendix(node, data)
+
+    assert r"A\_1" in tex, "expected the single-escaped id A\\_1"
+    assert r"\textbackslash" not in tex, "id was double-escaped (the old divergence)"
