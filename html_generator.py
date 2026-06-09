@@ -61,6 +61,7 @@ from render_common import (
     front_matter_plan,
     assert_dispatch_covers,
     incidence_table_plan,
+    apical_table_plan,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -673,70 +674,39 @@ def _render_toc(node: DocNode, data: dict) -> str:
 
 def _render_apical_table(node: DocNode, data: dict) -> str:
     """
-    Apical dose-response table — HTML mirror of latex_generator's
-    _render_apical_table.  Identical row-iteration logic so the LaTeX
-    and HTML views show the same data shape.
+    Apical dose-response table.
 
-    Reads from the same apical_sections entry, uses the same n-row /
-    data-row / sex-separator structure, formats values the same way.
+    ADR-0006 #4: the section lookup, dose grid, and Male/Female cell rows are
+    the shared render_common.apical_table_plan EXTRACT; this function only EMITs
+    the HTML — the dose-column + BMD/BMDL headers (HTML uses the unicode ₁Std
+    subscript and a plain space), the sex-separator rows, and the n-row CSS hook.
     """
-    section = _find_apical_section(node, data)
-    if not section or not section.get("table_data"):
+    plan = apical_table_plan(node, data)
+    if plan is None:
         return _emit_table_placeholder(node)
-
-    table_data = section.get("table_data", {})
-    male_rows = table_data.get("Male", []) or []
-    female_rows = table_data.get("Female", []) or []
-    if not male_rows and not female_rows:
-        return _emit_table_placeholder(node)
-
-    dose_unit = section.get("dose_unit", "mg/kg")
-    first_col = section.get("first_col_header", "Endpoint")
-
-    ref_row = (male_rows or female_rows)[0]
-    doses = ref_row.get("doses", []) or []
 
     headers = (
-        [first_col]
-        + [_format_dose_label(d, dose_unit) for d in doses]
-        + [f"BMD₁Std ({dose_unit})", f"BMDL₁Std ({dose_unit})"]
+        [plan.first_col]
+        + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
+        + [f"BMD₁Std ({plan.dose_unit})", f"BMDL₁Std ({plan.dose_unit})"]
     )
-    ncols = len(headers)
 
     body_rows: list[str] = []
-    for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
-        if not rows:
-            continue
+    for block in plan.sex_blocks:
         # Sex separator row spanning all columns.
         body_rows.append(
-            f'<tr class="sex-separator"><td colspan="{ncols}">'
-            f"<strong>{_esc(sex_label)}</strong></td></tr>"
+            f'<tr class="sex-separator"><td colspan="{plan.ncols}">'
+            f"<strong>{_esc(block.sex_label)}</strong></td></tr>"
         )
-        for row in rows:
-            label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
-            values = row.get("values", []) or []
-            bmd = row.get("bmd", "—") or "—"
-            bmdl = row.get("bmdl", "—") or "—"
-            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
-            # precision at render time (mirrors the LaTeX path for dual-path
-            # parity); n counts, incidence, and NA/ND/— pass through unchanged.
-            cells = [
-                str(label),
-                *[format_mean_se_display(str(v)) for v in values],
-                str(bmd),
-                str(bmdl),
-            ]
-            while len(cells) < ncols:
-                cells.append("—")
-            tr_class = "n-row" if row.get("is_n_row") else ""
-            body_rows.append(_emit_table_row(cells, tr_class=tr_class))
+        for row in block.rows:
+            tr_class = "n-row" if row.is_n_row else ""
+            body_rows.append(_emit_table_row(row.cells, tr_class=tr_class))
 
     head = _emit_table_header(headers)
-    notes = _emit_table_footnotes(section.get("footnotes", []))
-    caption = _table_caption(node, section.get("caption", ""))
+    notes = _emit_table_footnotes(plan.footnotes)
     return (
         '<table class="niehstable">'
-        f"<caption>{_esc(caption)}</caption>"
+        f"<caption>{_esc(plan.caption)}</caption>"
         f"{head}"
         f"<tbody>{''.join(body_rows)}</tbody>"
         "</table>"

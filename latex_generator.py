@@ -80,6 +80,7 @@ from render_common import (
     assert_dispatch_covers,
     LATEX_OMITS,
     incidence_table_plan,
+    apical_table_plan,
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
@@ -602,70 +603,36 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     Scaffold data has empty table_data; we emit a placeholder so the
     section is visible in the TOC and \listoftables.
     """
-    section = _find_apical_section(node, data)
-    if not section or not section.get("table_data"):
+    plan = apical_table_plan(node, data)
+    if plan is None:
         return _emit_table_placeholder(node)
 
-    table_data = section.get("table_data", {})
-    male_rows = table_data.get("Male", []) or []
-    female_rows = table_data.get("Female", []) or []
-    if not male_rows and not female_rows:
-        return _emit_table_placeholder(node)
-
-    dose_unit = section.get("dose_unit", "mg/kg")
-    first_col = section.get("first_col_header", "Endpoint")
-
-    # Pull the dose list from the first row that has it — all rows share
-    # the same dose grid (it's the column structure).
-    ref_row = (male_rows or female_rows)[0]
-    doses = ref_row.get("doses", []) or []
-
-    headers = [first_col] + [_format_dose_label(d, dose_unit) for d in doses] + [
-        f"BMD\\textsubscript{{1Std}} ({_escape_latex(dose_unit)})",
-        f"BMDL\\textsubscript{{1Std}} ({_escape_latex(dose_unit)})",
+    headers = [plan.first_col] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + [
+        f"BMD\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
+        f"BMDL\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
     ]
-    ncols = len(headers)
-    colspec = "l" + "c" * (ncols - 1)
+    colspec = "l" + "c" * (plan.ncols - 1)
 
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
              _emit_tabular_row(headers, raw=True), "\\midrule"]
 
-    for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
-        if not rows:
-            continue
+    for block in plan.sex_blocks:
         # Bold separator row spanning all columns.
         lines.append(
-            f"\\multicolumn{{{ncols}}}{{l}}{{\\textbf{{{sex_label}}}}} \\\\"
+            f"\\multicolumn{{{plan.ncols}}}{{l}}{{\\textbf{{{block.sex_label}}}}} \\\\"
         )
-        for row in rows:
-            label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
-            values = row.get("values", []) or []
-            bmd = row.get("bmd", "—") or "—"
-            bmdl = row.get("bmdl", "—") or "—"
-            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
-            # precision at render time (format_mean_se_display leaves n counts,
-            # incidence, and NA/ND/— sentinels untouched).  bmd/bmdl are not
-            # mean ± SE pairs, so they pass through unchanged either way.
-            cells = [
-                str(label),
-                *[format_mean_se_display(str(v)) for v in values],
-                str(bmd),
-                str(bmdl),
-            ]
-            # Pad shorter rows to ncols so the tabular doesn't error.
-            while len(cells) < ncols:
-                cells.append("—")
-            lines.append(_emit_tabular_row(cells))
+        for row in block.rows:
+            # n-row distinction is HTML-only; LaTeX emits every row the same.
+            lines.append(_emit_tabular_row(row.cells))
 
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     tabular = "\n".join(lines)
 
-    notes = _emit_table_footnotes(section.get("footnotes", []))
-    caption = _table_caption(node, section.get("caption", ""))
+    notes = _emit_table_footnotes(plan.footnotes)
 
     return (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{caption}}}\n"
+        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
         f"{tabular}"
         f"{notes}\n"
         f"\\end{{niehstable}}"

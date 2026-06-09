@@ -37,6 +37,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from document_node import DocNode
+# Render-time numeric re-rounding for mean ± SE cells — already the shared
+# formatter both renderers used; the apical extractor applies it once here so
+# both surfaces get identical cell text.
+from table_builder_common import format_mean_se_display
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +258,122 @@ def incidence_table_plan(node: DocNode, data: dict) -> IncidenceTablePlan | None
     caption = table_caption(node, section.get("caption", "") or node.title)
     return IncidenceTablePlan(
         node.id, caption, doses, dose_unit, rows, section.get("footnotes", []) or []
+    )
+
+
+@dataclass(frozen=True)
+class ApicalRow:
+    """
+    One data row of an apical dose-response table.
+
+    cells:    full cell-string list, already padded to the table's column count
+              (mean ± SE values re-rounded via format_mean_se_display, BMD/BMDL
+              appended, short rows filled with "—").
+    is_n_row: True for the per-dose N-count row.  Only the HTML emitter uses
+              this (to tag the <tr> with class="n-row"); the LaTeX emitter
+              ignores it — a pre-existing divergence preserved by carrying the
+              flag in the plan rather than acting on it here.
+    """
+    cells: list[str]
+    is_n_row: bool
+
+
+@dataclass(frozen=True)
+class ApicalSexBlock:
+    """A Male or Female group within an apical table: a label + its data rows."""
+    sex_label: str
+    rows: list[ApicalRow]
+
+
+@dataclass(frozen=True)
+class ApicalTablePlan:
+    """
+    Markup-free description of an apical dose-response table.
+
+    The emitters build their own column headers (the dose labels and the
+    "BMD/BMDL ... (unit)" columns differ per format — unicode subscript + plain
+    space in HTML, \\textsubscript + "~" + escaping in LaTeX) and their own
+    sex-separator rows, but consume the shared per-row cells below.
+
+    Fields:
+        node_id:   stable node id (LaTeX keys its niehstable env on it).
+        caption:   plain-text "Table N. ..." caption.
+        first_col: first-column header ("Endpoint" / "Study Day").
+        dose_unit: unit for the dose-column labels and the BMD/BMDL columns.
+        doses:     RAW dose values (emitter formats the column labels).
+        ncols:     total column count = 1 (label) + len(doses) + 2 (BMD, BMDL);
+                   the value rows are already padded to this.
+        sex_blocks: present sexes in Male, Female order (empty sexes dropped).
+        footnotes: raw footnote dicts; the emitter renders the markup.
+    """
+    node_id: str
+    caption: str
+    first_col: str
+    dose_unit: str
+    doses: list
+    ncols: int
+    sex_blocks: list[ApicalSexBlock]
+    footnotes: list
+
+
+def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
+    """
+    EXTRACT for the apical dose-response table: section lookup, dose grid, and
+    the Male/Female row cells — all format-agnostic.
+
+    Returns None when the section, its table_data, or both sex row lists are
+    missing, so the emitter renders its placeholder (preserving the old
+    behavior of a placeholder in any of those cases).
+    """
+    section = find_apical_section(node, data)
+    if not section or not section.get("table_data"):
+        return None
+
+    table_data = section.get("table_data", {})
+    male_rows = table_data.get("Male", []) or []
+    female_rows = table_data.get("Female", []) or []
+    if not male_rows and not female_rows:
+        return None
+
+    dose_unit = section.get("dose_unit", "mg/kg")
+    first_col = section.get("first_col_header", "Endpoint")
+
+    # All rows share the same dose grid (it IS the column structure); pull it
+    # from the first row that carries one.
+    ref_row = (male_rows or female_rows)[0]
+    doses = ref_row.get("doses", []) or []
+    # Columns: label + one per dose + the two BMD/BMDL trailing columns.
+    ncols = 1 + len(doses) + 2
+
+    sex_blocks: list[ApicalSexBlock] = []
+    for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
+        if not rows:
+            continue
+        built: list[ApicalRow] = []
+        for row in rows:
+            label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
+            values = row.get("values", []) or []
+            bmd = row.get("bmd", "—") or "—"
+            bmdl = row.get("bmdl", "—") or "—"
+            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
+            # precision at render time (format_mean_se_display leaves n counts,
+            # incidence, and NA/ND/— sentinels untouched).  bmd/bmdl are not
+            # mean ± SE pairs and pass through unchanged.
+            cells = [
+                str(label),
+                *[format_mean_se_display(str(v)) for v in values],
+                str(bmd),
+                str(bmdl),
+            ]
+            while len(cells) < ncols:
+                cells.append("—")
+            built.append(ApicalRow(cells=cells, is_n_row=bool(row.get("is_n_row"))))
+        sex_blocks.append(ApicalSexBlock(sex_label=sex_label, rows=built))
+
+    caption = table_caption(node, section.get("caption", ""))
+    return ApicalTablePlan(
+        node.id, caption, first_col, dose_unit, doses, ncols, sex_blocks,
+        section.get("footnotes", []) or [],
     )
 
 
