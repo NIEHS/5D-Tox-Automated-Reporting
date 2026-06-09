@@ -57,7 +57,7 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
-from render_common import front_matter_plan
+from render_common import front_matter_plan, assert_dispatch_covers
 from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
@@ -1151,6 +1151,11 @@ _DISPATCH: dict[str, object] = {
     "bmd-summary":      _render_bmd_summary,
     "genomics-section": _render_genomics_section,
 }
+
+# ADR-0006 #3: fail loudly at import if this table drifts from the canonical
+# registry.  HTML implements every renderable type (it builds its own cover and
+# title page), so no omissions are allowed.
+assert_dispatch_covers(_DISPATCH, renderer="HTML")
 
 
 # ---------------------------------------------------------------------------

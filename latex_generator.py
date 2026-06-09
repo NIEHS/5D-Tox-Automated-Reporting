@@ -75,7 +75,7 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
-from render_common import front_matter_plan
+from render_common import front_matter_plan, assert_dispatch_covers, LATEX_OMITS
 from genomics_content import genomics_content_plan
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
@@ -1125,6 +1125,11 @@ _DISPATCH: dict[str, object] = {
     "bmd-summary":       _render_bmd_summary,
     "genomics-section":  _render_genomics_section,
 }
+
+# ADR-0006 #3: fail loudly at import if this table drifts from the canonical
+# registry.  LaTeX omits cover/title-page (handled by \maketitle, decision #6),
+# declared via LATEX_OMITS rather than left as a silent gap.
+assert_dispatch_covers(_DISPATCH, renderer="LaTeX", allow_omit=LATEX_OMITS)
 
 
 # ---------------------------------------------------------------------------

@@ -141,3 +141,91 @@ def front_matter_plan(node: DocNode, data: dict) -> FrontMatterPlan:
         if paragraphs:
             return FrontMatterPlan(node.level, node.title, "paragraphs", paragraphs=paragraphs)
     return FrontMatterPlan(node.level, node.title, "none")
+
+
+# ---------------------------------------------------------------------------
+# Dispatch registry — the canonical set of renderable node types (ADR-0006 #3)
+# ---------------------------------------------------------------------------
+# Before ADR-0006 #3, each renderer kept its own _DISPATCH table and the two
+# were forced to agree only by tests/unit/test_renderer_dispatch_parity.py —
+# a guard bolted onto a problem the structure didn't prevent.  This registry IS
+# that structure: one canonical list both renderers validate their dispatch
+# against at IMPORT time, so a node type added to one renderer but not the other
+# (the silent-fall-through-to-"[Section pending]" bug) becomes a loud failure on
+# import, not a surprise on Overleaf.
+
+# Every node_type the report tree can contain and that a renderer is expected to
+# emit.  Adding a node type to the document tree means adding it here AND giving
+# both renderers an emitter for it (or declaring a structural omission below).
+RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
+    "cover",
+    "title-page",
+    "front-matter",
+    "narrative",
+    "heading-only",
+    "appendix",
+    "tables-list",
+    "toc",
+    "narrative+tables",
+    "table",
+    "incidence-table",
+    "bmd-summary",
+    "genomics-section",
+})
+
+# Node types a renderer may legitimately NOT implement, with the structural
+# reason.  The LaTeX renderer builds the title page with \maketitle (ADR-0003
+# decision #6), so its cover / title-page tree nodes intentionally emit nothing;
+# this is the single documented divergence between the two surfaces.
+LATEX_OMITS: frozenset[str] = frozenset({"cover", "title-page"})
+
+
+class RenderDispatchError(RuntimeError):
+    """
+    Raised at import time when a renderer's dispatch table does not match the
+    canonical RENDERABLE_NODE_TYPES registry — either it's missing an emitter
+    for a registered type, or it registers a type the registry doesn't know
+    about (which means the registry is stale).  Either way the two output
+    surfaces would silently disagree, so we fail loudly instead.
+    """
+
+
+def assert_dispatch_covers(
+    dispatch, *, renderer: str, allow_omit: frozenset[str] = frozenset()
+) -> None:
+    """
+    Verify a renderer's dispatch table exactly matches the registry.
+
+    Called by each renderer immediately after it defines its `_DISPATCH`, so a
+    coverage gap is an import-time RenderDispatchError rather than a silent
+    "[Section pending]" placeholder discovered later on one surface only.
+
+    Args:
+        dispatch:   the renderer's node_type → handler mapping (any object whose
+                    iteration yields the registered node_type keys — a dict).
+        renderer:   human-readable renderer name for the error message
+                    (e.g. "HTML", "LaTeX").
+        allow_omit: node types this renderer is permitted to skip because it
+                    handles them structurally elsewhere (LaTeX passes
+                    LATEX_OMITS for cover/title-page).
+
+    Raises:
+        RenderDispatchError: if any registered type (minus allow_omit) has no
+            emitter, or if the table registers a type outside the registry.
+    """
+    keys = set(dispatch)
+    missing = RENDERABLE_NODE_TYPES - keys - allow_omit
+    if missing:
+        raise RenderDispatchError(
+            f"{renderer} renderer is missing emitters for registered node "
+            f"types: {sorted(missing)}. Add a handler, or — if this renderer "
+            f"handles them structurally — pass them in allow_omit."
+        )
+    unknown = keys - RENDERABLE_NODE_TYPES
+    if unknown:
+        raise RenderDispatchError(
+            f"{renderer} renderer registers node types absent from the "
+            f"canonical RENDERABLE_NODE_TYPES registry: {sorted(unknown)}. "
+            f"Add them to render_common.RENDERABLE_NODE_TYPES so the other "
+            f"renderer is required to handle them too."
+        )
