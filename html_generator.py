@@ -57,6 +57,7 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
+from render_common import front_matter_plan
 from genomics_content import genomics_content_plan
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
@@ -503,42 +504,37 @@ def _render_front_matter(node: DocNode, data: dict) -> str:
     """
     Front matter section (foreword, about, peer review, publication
     details, acknowledgments, abstract).  Heading + paragraphs.
+
+    ADR-0006: the content-source decision (labeled-sections vs paragraphs vs
+    nothing) is the shared render_common.front_matter_plan EXTRACT; only the
+    HTML markup below — and the format-dependent "empty body → pending"
+    fallback — is EMIT and lives here.
     """
-    body = ""
-    if node.data_key:
-        content = data.get(node.data_key)
-        if isinstance(content, dict):
-            # The abstract is structured labeled sections (Background / Methods
-            # / Results / Summary); other front matter is flat paragraphs.
-            if content.get("sections"):
-                body = _render_labeled_sections(content["sections"])
-            if not body:
-                body = _render_paragraphs(content.get("paragraphs", []))
+    plan = front_matter_plan(node, data)
+    if plan.kind == "labeled":
+        body = _render_labeled_sections(plan.labeled_parts)
+    else:
+        # "paragraphs" carries the flat list; "none" carries [] → "" → pending.
+        body = _render_paragraphs(plan.paragraphs)
     if not body:
         body = _pending(f"Section pending: {node.title}")
     return f"{_heading(node.level, node.title)}\n{body}"
 
 
-def _render_labeled_sections(sections: list) -> str:
+def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
     """
-    Render structured-abstract sections ({label, text}) as paragraphs with a
-    bold run-in label.  Empty-text sections (e.g. a Methods abstract with no
-    MethodsContext) are skipped, so a partial abstract renders only what has
-    content.
+    EMIT normalised labeled-section parts as <p> blocks with a bold run-in
+    label.  Input is the (label, text) list from render_common.front_matter_plan
+    (already filtered to non-empty text); a "" label renders an unlabeled
+    paragraph.
     """
-    parts: list[str] = []
-    for sec in sections or []:
-        if not isinstance(sec, dict):
-            continue
-        text = (sec.get("text") or "").strip()
-        if not text:
-            continue
-        label = (sec.get("label") or "").strip()
+    out: list[str] = []
+    for label, text in parts:
         if label:
-            parts.append(f"<p><strong>{_esc(label)}.</strong> {_esc(text)}</p>")
+            out.append(f"<p><strong>{_esc(label)}.</strong> {_esc(text)}</p>")
         else:
-            parts.append(f"<p>{_esc(text)}</p>")
-    return "".join(parts)
+            out.append(f"<p>{_esc(text)}</p>")
+    return "".join(out)
 
 
 def _render_narrative(node: DocNode, data: dict) -> str:

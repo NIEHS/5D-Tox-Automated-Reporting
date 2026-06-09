@@ -75,6 +75,7 @@ from document_tree import (
     walk_tree,
 )
 from render_capabilities import landscape_requested, content_item_landscape_requested
+from render_common import front_matter_plan
 from genomics_content import genomics_content_plan
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
@@ -280,46 +281,39 @@ def _render_front_matter(node: DocNode, data: dict) -> str:
     list of strings — same shape Typst consumes.  If content is missing or
     empty, we emit a "[Section pending]" placeholder so the structure
     stays visible (decision #8).
+
+    ADR-0006: the content-source decision (labeled-sections vs paragraphs vs
+    nothing) is the shared render_common.front_matter_plan EXTRACT; only the
+    LaTeX markup below — and the format-dependent "empty body → pending"
+    fallback — is EMIT and lives here.
     """
-    body = ""
-    if node.data_key:
-        content = data.get(node.data_key)
-        if isinstance(content, dict):
-            # The abstract is a structured set of labeled sections
-            # (Background / Methods / Results / Summary); every other
-            # front-matter section is a flat paragraph list.  Render whichever
-            # shape actually carries content.
-            if content.get("sections"):
-                body = _render_labeled_sections(content["sections"])
-            if not body:
-                body = _render_paragraphs(content.get("paragraphs", []))
+    plan = front_matter_plan(node, data)
+    if plan.kind == "labeled":
+        body = _render_labeled_sections(plan.labeled_parts)
+    else:
+        # "paragraphs" carries the flat list; "none" carries [] → "" → pending.
+        body = _render_paragraphs(plan.paragraphs)
     if not body:
         body = f"\\emph{{[Section pending: {_escape_latex(node.title)}]}}"
     return f"{_heading(node.level, node.title)}\n\n{body}"
 
 
-def _render_labeled_sections(sections: list) -> str:
+def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
     r"""
-    Render structured-abstract sections ({label, text}) as paragraphs with a
-    bold run-in label (e.g. "\textbf{Background.} ...").  Empty-text sections
-    (such as a Methods abstract with no MethodsContext) are skipped, so a
-    partial abstract renders only the parts that have content.
+    EMIT normalised labeled-section parts as paragraphs with a bold run-in
+    label (e.g. "\textbf{Background.} ...").  Input is the (label, text) list
+    from render_common.front_matter_plan (already filtered to non-empty text);
+    a "" label renders an unlabeled paragraph.
     """
-    parts: list[str] = []
-    for sec in sections or []:
-        if not isinstance(sec, dict):
-            continue
-        text = (sec.get("text") or "").strip()
-        if not text:
-            continue
-        label = (sec.get("label") or "").strip()
+    out: list[str] = []
+    for label, text in parts:
         if label:
-            parts.append(
+            out.append(
                 f"\\noindent\\textbf{{{_escape_latex(label)}.}} {_escape_latex(text)}"
             )
         else:
-            parts.append(_escape_latex(text))
-    return "\n\n".join(parts)
+            out.append(_escape_latex(text))
+    return "\n\n".join(out)
 
 
 def _render_narrative(node: DocNode, data: dict) -> str:
