@@ -100,16 +100,22 @@ boundary, not deep in a table builder.)
 
 The author needs a fast in-browser **HTML preview**; the published artifact is
 an **Overleaf-ready LaTeX bundle** (`report.tex` + class file + `figures/`). Both
-are *projections of the same `DocNode` tree* through two renderers
-(`html_generator.py`, `latex_generator.py`) that share the structural decisions
-(content-item plans, orientation gating, the front/body page-numbering
-boundary). The hard rule is **rendering parity must be backed by assembly
-parity**: content is assembled into the data dict the same way for both paths
-(`marshal_export_data` for the web/preview path, `load_session_data` for the
-session-export path), so a section can't render on one surface and silently
-degrade on the other. A planned third surface, **BITS/JATS** XML for
-PMC/Bookshelf submission, is a *projection only* — the model already carries
-what it needs (ADR-0004).
+are *projections of the same `DocNode` tree*. The two renderers
+(`html_generator.py`, `latex_generator.py`) are thin **emit** layers over a
+shared semantic **IR** (`render_common.py`): one tree walk (`walk_tree`, owned
+by `document_tree`) and a markup-free *plan* per node type that decides *what*
+to render; each renderer decides only *how* (its markup and escaping). Parity is
+enforced structurally, not by convention — a node-type registry fails at import
+if a type lacks an emitter on either surface, and a cross-surface
+semantic-parity test asserts both surfaces *and* the IR agree on the same facts
+(table/figure numbers, BMD endpoints). This is **ADR-0006**: drift between the
+preview and the Overleaf hand-off is the failure it removes. Underneath,
+assembly parity still holds — content is assembled into the data dict the same
+way for both paths (`marshal_export_data` for the web/preview path,
+`load_session_data` for the session-export path). A planned third surface,
+**BITS/JATS** XML for PMC/Bookshelf submission, is a *projection only* — the
+model already carries what it needs (ADR-0004), and the IR is the artifact it
+projects from.
 
 ### The transcriptomic interpretation must be credible → it is KB-grounded
 
@@ -169,7 +175,8 @@ contradicts one, surface it explicitly rather than silently overriding.
 | [0002](docs/adr/0002-decompose-api-process-integrated.md) | Decompose the `api_process_integrated` god function into labeled layers. |
 | [0003](docs/adr/0003-document-component-model.md) | Composable document-component model — catalog + data-driven template + instantiated tree + sub-addressable content. |
 | [0004](docs/adr/0004-bits-jats-export-surface.md) | BITS/JATS as a third export surface for PMC/Bookshelf — a projection of the model, not a parallel one. |
+| [0005](docs/adr/0005-overleaf-round-trip-content-sync.md) | Overleaf round-trip: committee edits in Overleaf reconcile back into the content model via stable per-node anchors, with the author in the middle. |
+| [0006](docs/adr/0006-unify-html-latex-renderers.md) | Unify the HTML/LaTeX renderers behind one semantic IR (`render_common`) + a shared `walk_tree`; both surfaces are thin projections, with parity enforced by a node-type registry and a cross-surface parity test. |
 
 > **Note (2026-05):** the report's output pivoted from Typst/PDF to
-> **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface. The
-> README's older "via Typst" phrasing is stale relative to this document.
+> **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface.

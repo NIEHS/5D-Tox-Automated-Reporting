@@ -84,7 +84,7 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 | `llm_routes.py` | LLM generation endpoints (background, methods, genomics narrative, summary) |
 | `export_routes.py` | Export the Overleaf LaTeX bundle (`.zip`); serve the HTML preview for a TOC subtree |
 
-**Report structure and rendering** (the document-component model — ADR-0003/0004):
+**Report structure and rendering** (the document-component model — ADR-0003/0004; renderer unification — ADR-0006):
 
 | Module | Purpose |
 |--------|---------|
@@ -92,8 +92,9 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 | `document_template.py` | Loads a YAML template (`templates/*.yaml`) and instantiates it into the `DocNode` tree, validating against the catalog at load time |
 | `render_capabilities.py` | The component catalog — each component type's capabilities, allowed children, required bindings, and content kinds |
 | `report_data.py` | Data assembly — overlays session/request content onto the report scaffold and produces the dict both renderers consume (`marshal_export_data` web path, `load_session_data` session path) |
-| `html_generator.py` | Renders the tree to the in-app HTML preview |
-| `latex_generator.py` | Renders the tree to LaTeX (`report.tex`) |
+| `render_common.py` | The shared semantic IR (ADR-0006): markup-free per-node *plans* + the dispatch registry that both renderers project from, so HTML and LaTeX can't drift |
+| `html_generator.py` | Emits the in-app HTML preview from the IR (walks the tree via `document_tree.walk_tree`) |
+| `latex_generator.py` | Emits LaTeX (`report.tex`) from the IR (same shared walk) |
 | `latex_export.py` | Assembles the Overleaf bundle (`report.tex` + `niehs.cls` + `figures/`) as a `.zip` |
 | `genomics_content.py` / `genomics_charts.py` | Shared genomics content-item plan and chart-image assembly, consumed by both renderers |
 | `cross_references.py` | In-text cross-reference resolution, shared by both renderers |
