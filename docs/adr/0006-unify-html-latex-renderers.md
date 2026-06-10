@@ -1,7 +1,14 @@
 # 0006 — Unify the HTML and LaTeX renderers behind one tree walk
 
-- **Status:** Proposed (2026-06-09); **Amended 1** (2026-06-09) — reframes the
-  shared layer as a semantic IR (see Amendment 1). Steps 1–3 + 4a/4b implemented.
+- **Status:** Implemented (2026-06-10). Proposed 2026-06-09; **Amended 1**
+  2026-06-09 (reframes the shared layer as a semantic IR — see Amendment 1).
+  Fully landed on `latex/tracer-bullet`: `walk_tree` (step 1) → extract/emit
+  (step 2) → node-type registry (step 3) → the table handlers and the rest of
+  the IR for every data-bearing node type (steps 4a–4c + Amendment 1) →
+  cross-surface semantic-parity guard → the three latent inconsistencies
+  converged in the IR → the last `_walk` duplicate folded onto `walk_tree`
+  (step 5). Every refactor commit verified byte-identical old-vs-new on the real
+  DTXSID50469320 session; every deliberate convergence covered by a parity test.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0003](0003-document-component-model.md) (the `DocNode`
   document-component model whose tree both renderers walk — this ADR is about
