@@ -1508,7 +1508,7 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
     # must not contribute entries.  walk_tree always recurses, so it can't
     # express that pruning; the manual recursion below keeps the intent explicit
     # rather than relying on those node types happening to be childless today.
-    def _walk(nodes: list):
+    def _walk_toc(nodes: list):
         """
         Recursively walk tree nodes, emitting toc_entries for headings
         (level >= 1) and table_entries for table nodes with numbers.  Does not
@@ -1557,9 +1557,9 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
 
             # Recurse into children
             if node.children:
-                _walk(node.children)
+                _walk_toc(node.children)
 
-    _walk(DOCUMENT_TREE)
+    _walk_toc(DOCUMENT_TREE)
 
     return toc_entries, table_entries
 

@@ -118,13 +118,13 @@ def test_table_numbers_agree_across_surfaces(session_data):
     # caption (real table or "[data pending]" placeholder both carry it).
     expected: set[int] = set()
 
-    def _collect(nodes):
+    def _collect_tree_table_numbers(nodes):
         for n in nodes:
             if getattr(n, "table_number", None) is not None:
                 expected.add(n.table_number)
-            _collect(n.children)
+            _collect_tree_table_numbers(n.children)
 
-    _collect(DOCUMENT_TREE)
+    _collect_tree_table_numbers(DOCUMENT_TREE)
 
     assert html_nums == latex_nums, (
         f"table-number drift between surfaces: HTML-only={html_nums - latex_nums}, "

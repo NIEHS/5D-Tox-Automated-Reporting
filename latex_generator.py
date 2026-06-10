@@ -667,7 +667,7 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     H2 group under Results (Animal Condition, Clinical Pathology, etc.).
 
     Emits the group heading plus the unified narrative paragraphs.  Child
-    table nodes are walked separately by _walk and render through
+    table nodes are walked separately by _walk_latex and render through
     _render_apical_table or _render_incidence_table.
 
     The narrative lives at data["unified_narratives"][node.narrative_key]
@@ -1035,7 +1035,7 @@ def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict)
     return override.get("latex_region", generated)
 
 
-def _walk(node: DocNode, data: dict) -> list[str]:
+def _walk_latex(node: DocNode, data: dict) -> list[str]:
     """
     Render a node and its descendants to a flat, document-ordered list of
     LaTeX chunks; the caller joins them with blank lines to produce the body.
@@ -1044,7 +1044,7 @@ def _walk(node: DocNode, data: dict) -> list[str]:
     ``walk_tree`` primitive (ADR-0006); only the per-node emit below — the
     landscape wrap, the ADR-0005 override substitution, and the round-trip
     anchor sentinels — is LaTeX-specific and lives here.  Same traversal as
-    html_generator._walk.
+    html_generator._walk_html.
 
     We close over a local ``chunks`` accumulator and append from the
     ``_visit`` callback, because ``walk_tree`` is side-effect-only.
@@ -1211,7 +1211,7 @@ def generate_latex(
             # show a blank preview than 500 the request.
             body = f"% No node found for section_filter={section_filter!r}\n"
             return _fragment_skeleton(body)
-        body_chunks = _walk(node, data)
+        body_chunks = _walk_latex(node, data)
         return _fragment_skeleton("\n\n".join(body_chunks))
 
     # ── Full-report path ─────────────────────────────────────────────
@@ -1264,7 +1264,7 @@ def generate_report_body(data: dict) -> str:
     for top in DOCUMENT_TREE:
         if top.id == body_first_id:
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
-        body_chunks.extend(_walk(top, data))
+        body_chunks.extend(_walk_latex(top, data))
     # Paragraph break between every chunk; LaTeX collapses consecutive blank
     # lines into one paragraph break, so this is safe even when chunks end in
     # newlines.

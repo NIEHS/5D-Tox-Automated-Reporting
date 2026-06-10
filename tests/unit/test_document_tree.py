@@ -113,14 +113,14 @@ class TestComputeTableNumbers:
 
         table_numbers = []
 
-        def _collect(nodes):
+        def _collect_results_table_numbers(nodes):
             for n in nodes:
                 if n.table_number is not None:
                     table_numbers.append(n.table_number)
                 if n.children:
-                    _collect(n.children)
+                    _collect_results_table_numbers(n.children)
 
-        _collect(results.children)
+        _collect_results_table_numbers(results.children)
         assert len(table_numbers) > 0
         # Table numbers should start at 2 (Table 1 = sample counts, inline)
         assert table_numbers[0] == 2

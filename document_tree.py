@@ -97,8 +97,8 @@ def walk_tree(nodes: list[DocNode], visit) -> None:
     The walk is intentionally side-effect-only: it returns nothing and does
     not collect results.  Callers that need to accumulate output (e.g. a
     renderer building a list of markup chunks) close over their own
-    accumulator inside ``visit`` and append to it — see html_generator._walk
-    and latex_generator._walk.  Keeping accumulation out of the primitive is
+    accumulator inside ``visit`` and append to it — see html_generator._walk_html
+    and latex_generator._walk_latex.  Keeping accumulation out of the primitive is
     what lets one walk serve callers that produce wildly different outputs.
 
     Args:
@@ -137,7 +137,7 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     # Apical tables start at 2.
     counter = 2
 
-    def _walk(nodes: list[DocNode]) -> None:
+    def _walk_results_tables(nodes: list[DocNode]) -> None:
         nonlocal counter
         for node in nodes:
             if node.node_type == "table":
@@ -147,12 +147,12 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
                 node.table_number = counter
                 counter += 1
             if node.children:
-                _walk(node.children)
+                _walk_results_tables(node.children)
 
     # Only count tables in the Results section
     for node in tree:
         if node.id == "results":
-            _walk(node.children)
+            _walk_results_tables(node.children)
             break
 
 

@@ -157,7 +157,7 @@ h2 { font-size: 19px; margin: 28px 0 10px; border-bottom: 1px solid #e2e0db; pad
 h3 { font-size: 16px; margin: 22px 0 8px; color: #2c5282; }
 h4 { font-size: 14px; margin: 16px 0 6px; color: #4a5568; font-weight: 600; }
 p { margin: 0 0 10px; }
-/* Invisible per-section scroll target for navigation-panel scrolling — see _walk. */
+/* Invisible per-section scroll target for navigation-panel scrolling — see _walk_html. */
 .sec-anchor { display: block; height: 0; margin: 0; padding: 0; }
 em.pending {
   color: #b7791f;
@@ -300,7 +300,7 @@ _PAGED_MEDIA_CSS: str = """
 }
 .report-mainmatter { page: mainmatter; counter-reset: page 1; break-before: page; }
 /* Landscape pages — wide tables / charts / figures the user flipped to
-   landscape (see _walk + the orientations map).  A .landscape-block is
+   landscape (see _walk_html + the orientations map).  A .landscape-block is
    assigned this named landscape page and forced onto its own page(s);
    content after it returns to the default portrait page.  Keeps the
    preview's rotated pages in sync with pdflscape on the LaTeX side.  Arabic
@@ -738,7 +738,7 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     """
     H2 group under Results (Animal Condition, Clinical Pathology, etc.).
     Emits the heading + unified narrative paragraphs.  Child table nodes
-    are walked separately by _walk.
+    are walked separately by _walk_html.
     """
     # ADR-0006 Amendment 1: the narrative-paragraph selection AND the
     # content-present decision are shared; only the markup is HTML emit.
@@ -1053,7 +1053,7 @@ assert_dispatch_covers(_DISPATCH, renderer="HTML")
 # Tree walk
 # ---------------------------------------------------------------------------
 
-def _walk(node: DocNode, data: dict) -> list[str]:
+def _walk_html(node: DocNode, data: dict) -> list[str]:
     """
     Render a node and its descendants to a flat, document-ordered list of
     HTML chunks.
@@ -1062,7 +1062,7 @@ def _walk(node: DocNode, data: dict) -> list[str]:
     shared ``walk_tree`` primitive (ADR-0006); only the per-node rendering
     below — the HTML-specific anchor span and landscape wrapping — lives here.
     This is the seam the ADR-0006 unification splits on: the walk is common,
-    the emit is format-specific.  Same traversal as latex_generator._walk.
+    the emit is format-specific.  Same traversal as latex_generator._walk_latex.
 
     We close over a local ``chunks`` accumulator and append to it from the
     ``_visit`` callback, because ``walk_tree`` is side-effect-only and does
@@ -1228,7 +1228,7 @@ def generate_html(
                 f"<code>{_esc(section_filter)}</code></em></p>"
             )
             return _fragment_skeleton(body)
-        body = "\n".join(_walk(node, data))
+        body = "\n".join(_walk_html(node, data))
         return _fragment_skeleton(body, running_header=node.title or "")
 
     # Full-document path — walk every top-level node in tree order, split at
@@ -1252,7 +1252,7 @@ def generate_html(
     for top in DOCUMENT_TREE:
         if top.id == body_first_id:
             in_body = True
-        (body_chunks if in_body else front_chunks).extend(_walk(top, data))
+        (body_chunks if in_body else front_chunks).extend(_walk_html(top, data))
     body = "\n".join(front_chunks)
     if body_chunks:
         body += (

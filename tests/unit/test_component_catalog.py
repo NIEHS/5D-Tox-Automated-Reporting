@@ -33,16 +33,16 @@ from render_capabilities import (
 _DOCNODE_FIELDS = {f.name for f in fields(DocNode)}
 
 
-def _walk(nodes, depth=1):
+def _walk_catalog(nodes, depth=1):
     """Yield (node, depth) for every node, top-level nodes at depth 1."""
     for node in nodes:
         yield node, depth
-        yield from _walk(node.children, depth + 1)
+        yield from _walk_catalog(node.children, depth + 1)
 
 
 def test_every_tree_node_type_is_in_the_catalog():
     """No node in the tree may use a type the catalog doesn't define."""
-    for node, _ in _walk(DOCUMENT_TREE):
+    for node, _ in _walk_catalog(DOCUMENT_TREE):
         assert node.node_type in COMPONENT_CATALOG, (
             f"node {node.id!r} uses type {node.node_type!r} absent from the catalog"
         )
@@ -50,7 +50,7 @@ def test_every_tree_node_type_is_in_the_catalog():
 
 def test_headingless_flag_matches_tree_levels():
     """A type is headingless iff its nodes carry level 0 in the tree."""
-    for node, _ in _walk(DOCUMENT_TREE):
+    for node, _ in _walk_catalog(DOCUMENT_TREE):
         assert is_headingless(node.node_type) == (node.level == 0), (
             f"headingless({node.node_type})={is_headingless(node.node_type)} but "
             f"node {node.id!r} has level {node.level}"
@@ -62,7 +62,7 @@ def test_level_derivable_from_headingless_and_depth():
     The instantiator derives level instead of authoring it.  Prove the rule
     reproduces every level in today's tree.
     """
-    for node, depth in _walk(DOCUMENT_TREE):
+    for node, depth in _walk_catalog(DOCUMENT_TREE):
         expected = 0 if is_headingless(node.node_type) else depth
         assert node.level == expected, (
             f"node {node.id!r}: level={node.level} but rule yields {expected} "
@@ -72,7 +72,7 @@ def test_level_derivable_from_headingless_and_depth():
 
 def test_tree_nesting_obeys_allowed_children():
     """Every parent→child edge in the tree is permitted by the catalog."""
-    for node, _ in _walk(DOCUMENT_TREE):
+    for node, _ in _walk_catalog(DOCUMENT_TREE):
         for child in node.children:
             assert is_allowed_child(node.node_type, child.node_type), (
                 f"{child.node_type!r} (node {child.id!r}) is not an allowed child "
@@ -128,7 +128,7 @@ def test_required_bindings_satisfied_by_tree():
     Every node in the real tree supplies the bindings its type requires — so
     the catalog never asserts a requirement the gold-standard tree violates.
     """
-    for node, _ in _walk(DOCUMENT_TREE):
+    for node, _ in _walk_catalog(DOCUMENT_TREE):
         for binding in required_bindings_for(node.node_type):
             value = getattr(node, binding)
             assert value not in (None, ""), (

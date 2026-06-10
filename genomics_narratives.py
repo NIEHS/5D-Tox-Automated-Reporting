@@ -80,13 +80,13 @@ def _collect_table_numbers(parent_id: str) -> list[int]:
         return []
     nums: list[int] = []
 
-    def _walk(n):
+    def _walk_table_numbers(n):
         if n.table_number is not None:
             nums.append(n.table_number)
         for c in n.children:
-            _walk(c)
+            _walk_table_numbers(c)
 
-    _walk(node)
+    _walk_table_numbers(node)
     return nums
 
 

@@ -288,17 +288,17 @@ def _flatten_pugview_sections(view: dict) -> list[dict]:
     """
     results = []
 
-    def _walk(obj):
+    def _walk_pugview_sections(obj):
         if isinstance(obj, dict):
             if "TOCHeading" in obj:
                 results.append(obj)
             for v in obj.values():
-                _walk(v)
+                _walk_pugview_sections(v)
         elif isinstance(obj, list):
             for item in obj:
-                _walk(item)
+                _walk_pugview_sections(item)
 
-    _walk(view)
+    _walk_pugview_sections(view)
     return results
 
 
@@ -309,7 +309,7 @@ def _extract_pugview_text(section: dict) -> str:
     """
     texts = []
 
-    def _walk(obj):
+    def _walk_pugview_text(obj):
         if isinstance(obj, dict):
             # StringWithMarkup is PUG View's text container
             if "String" in obj:
@@ -319,12 +319,12 @@ def _extract_pugview_text(section: dict) -> str:
                     if isinstance(item, dict) and "String" in item:
                         texts.append(item["String"])
             for v in obj.values():
-                _walk(v)
+                _walk_pugview_text(v)
         elif isinstance(obj, list):
             for item in obj:
-                _walk(item)
+                _walk_pugview_text(item)
 
-    _walk(section)
+    _walk_pugview_text(section)
     return "\n".join(texts)
 
 
