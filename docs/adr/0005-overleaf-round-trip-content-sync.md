@@ -416,3 +416,105 @@ Concrete settlement of Amendment 1 for the git-bridge transport.
 git-bridge auth = an Overleaf git token (account-scoped on Cloud), supplied to
 the server as `OVERLEAF_GIT_TOKEN`, never in code. GitHub archive auth = the
 existing git credential helper.
+
+---
+
+## Amendment 2 (2026-06-09): GitHub-in-the-middle is the live transport
+
+**This amendment reverses the central topology call of Amendment 1A.** Am.1A
+made git-bridge the live surface and GitHub a passive, write-only archive *out
+of the loop*. The implemented and decided design is the opposite: **GitHub is
+the hub the app reads and writes, and Overleaf reaches the content only through
+its own GitHub integration.** git-bridge is demoted to an optional fallback the
+binding *can* hold but does not.
+
+### The decided topology
+
+```
+   App ── local clone ──⇄  GitHub repo  ──⇄  Overleaf
+            (push/pull,        (the hub:        (GitHub sync:
+             via git creds)     branches +       human-driven
+                                full history)    pull/push in
+                                                 the Overleaf menu)
+```
+
+The app's only network peer is the **GitHub repo**
+(`github.com/<owner>/<DTXSID>-5D-Tox`, originated/adopted by
+`github_provision.ensure_repo`). Overleaf is linked to that same repo via
+Overleaf's built-in **GitHub sync**; the committee's edits travel
+Overleaf → GitHub → app, and generated updates travel app → GitHub → Overleaf.
+
+### Why we reversed Am.1A
+
+- **Tier independence — the feasibility gate, settled the cheap way.** git-bridge
+  is premium-Cloud / Server-Pro-4.0+-gated (Open Question #1). The
+  GitHub-import + GitHub-sync path needs **no special Overleaf tier** and no
+  `OVERLEAF_GIT_TOKEN` provisioning dance — it works on the account we already
+  have. Am.1A's "if unavailable, degrade to manual import/export" is, in
+  practice, the path that is *always* available, so we made it the primary one.
+- **One remote, not two.** Am.1A needed a *separate* archive remote to get
+  branches, full attributed history, and per-turn tags, because git-bridge is
+  single-branch and coarse-grained. With GitHub as the hub, those properties are
+  **native to the one remote we already talk to** — the "hub" and the "archive"
+  collapse into a single repo. Less to provision, nothing to keep mirrored in
+  lockstep.
+- **One credential.** Auth is the existing **git credential helper** for GitHub
+  (already present for every other repo op). `OVERLEAF_GIT_TOKEN` moves to the
+  dormant git-bridge fallback only.
+
+### The cost we re-accept: a human sync hop on the Overleaf side
+
+git-bridge's one real advantage was that an app push **updated the Overleaf
+editor directly, with no human step**. Overleaf's GitHub sync is **menu-driven**
+(a person clicks *Menu → GitHub → pull* to ingest app updates, and *→ push* to
+send committee edits back to GitHub). So every turn boundary now includes a
+human clicking sync in Overleaf. We accept this: the committee is already
+in-Overleaf and human-in-the-loop by design (Am.1 §C), the turns are coarse
+(not keystroke-live), and tier-independence is worth one click per handoff.
+
+### How this changes the Amendment 1A constraints
+
+- **"GitHub is out of the round-trip loop, never read back" (Am.1 §A/§B) — void.**
+  GitHub is now squarely *in* the loop and is read back on every Fetch: it is the
+  channel committee edits arrive through. It is no longer a write-only mirror.
+- **Single-writer-into-Overleaf — still required, contended object moves.** The
+  turn-taking placeholder swap (Am.1 §C) is unchanged in spirit, but the single
+  flat state now lives on the **GitHub branch Overleaf's sync tracks** (one
+  branch), not on a git.overleaf `master`. The app's other branches simply
+  aren't the tracked branch, so Am.1A's "Overleaf cannot show multiple branches"
+  worry is satisfied *for free* — Overleaf follows one branch and ignores the
+  rest.
+- **Reconcile-before-overwrite — still load-bearing, danger window grows by one
+  hop.** The only copy of un-pulled committee edits now sits in the **Overleaf
+  project until a human clicks GitHub-push**; the app's Fetch only sees edits
+  that have already reached GitHub. So "always pull + reconcile before
+  overwriting" (Am.1 §B) now also depends on the committee having synced their
+  edits up. The `remote_head` vs `baseline_commit` staleness guard
+  (`transport.py`) enforces the app side: Send refuses if GitHub's tip has moved
+  past the recorded baseline — i.e. if edits arrived we haven't reconciled.
+
+### What this did *not* touch — the library boundary paid off
+
+Because the round-trip mechanics were extracted into the transport-agnostic
+`roundtrip/` package (Am.1 §D), swapping the live remote from git-bridge to
+GitHub changed **only the binding's `git_remote` URL and the provisioning
+module** — exactly as `transport.py`'s header promised ("only the remote URL
+changes; nothing else here moves"). The anchored projection, the reconciler, the
+override store, and the turn flag are all unchanged: they operate on a git remote
+without caring whether it is git.overleaf or github.com.
+
+### Code state confirming this amendment
+
+- The live binding (`sessions/<dtxsid>/_overleaf_binding.json`) carries
+  `git_remote: https://github.com/daniel-sciome/DTXSID50469320-5D-Tox` — a GitHub
+  URL, not `git.overleaf.com`.
+- `transport.py` documents the remote as "**the GitHub repo Overleaf syncs
+  with**, or a git-bridge URL."
+- `github_provision.py` exists solely to originate/adopt that hub repo and
+  returns the URL stored as `git_remote`.
+
+### Credentials (superseding the Am.1A note)
+
+Primary transport auth = the **GitHub credential helper** (already configured).
+`OVERLEAF_GIT_TOKEN` is required **only** if the dormant git-bridge fallback is
+ever activated for a given report.
