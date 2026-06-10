@@ -1047,7 +1047,7 @@ def _build_methods_sections_from_tree() -> list[dict]:
     added or reordered in document_tree.py, the scaffold PDF picks
     it up automatically.
     """
-    from document_tree import find_node
+    from document_tree import find_node, walk_tree
 
     methods_node = find_node("methods")
     if not methods_node or not methods_node.children:
@@ -1055,19 +1055,17 @@ def _build_methods_sections_from_tree() -> list[dict]:
 
     sections: list[dict] = []
 
-    def _walk(nodes: list) -> None:
-        for node in nodes:
-            # Skip the "methods" heading-only parent — its children are
-            # the actual H2/H3 sections we want.
-            sections.append({
-                "level": node.level,
-                "heading": node.title,
-                "paragraphs": [],
-            })
-            if node.children:
-                _walk(node.children)
+    # Pre-order walk of the methods subtree (excluding the heading-only
+    # "methods" parent — we start from its children).  Uses the shared
+    # walk_tree primitive (ADR-0006) rather than a local re-implementation.
+    def _visit(node) -> None:
+        sections.append({
+            "level": node.level,
+            "heading": node.title,
+            "paragraphs": [],
+        })
 
-    _walk(methods_node.children)
+    walk_tree(methods_node.children, _visit)
     return sections
 
 
@@ -1504,10 +1502,17 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
         # Check child tables
         return any(_is_ready(c) for c in node.children)
 
-    def _walk(nodes: list, skip_level_0: bool = False):
+    # This is a PRUNED walk, deliberately NOT the shared document_tree.walk_tree
+    # (ADR-0006): it does not descend into cover / title-page / tables-list /
+    # appendix nodes — those are TOC leaves (or excluded), and their subtrees
+    # must not contribute entries.  walk_tree always recurses, so it can't
+    # express that pruning; the manual recursion below keeps the intent explicit
+    # rather than relying on those node types happening to be childless today.
+    def _walk(nodes: list):
         """
         Recursively walk tree nodes, emitting toc_entries for headings
-        (level >= 1) and table_entries for table nodes with numbers.
+        (level >= 1) and table_entries for table nodes with numbers.  Does not
+        descend into structural / appendix nodes (see the note above).
         """
         for node in nodes:
             # Skip structural pages (cover, title) — they're not TOC entries
