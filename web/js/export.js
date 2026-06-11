@@ -1,11 +1,12 @@
-// export.js — Overleaf export + hand-off, file preview modals
+// export.js — bundle export + GitHub repo hand-off, file preview modals
 //
 // Extracted from main.js.  These functions handle:
-//   - Document export (exportDocument) — .tex bundle for Overleaf
+//   - Document export (exportDocument) — .tex bundle (zip) for offline/first-time
 //   - Shared payload builder (buildExportPayload)
 //   - Genomics export payload assembly (buildGenomicsExportSections)
-//   - Report tab Overleaf hand-off (initReportTab, saveOverleafBinding) —
-//     the app links out to Overleaf; there is no in-app preview
+//   - Report tab GitHub-repo hand-off (initReportTab, commitLocal, pushToGitHub,
+//     pullFromGitHub, refreshRepoStatus, saveRepoBinding) — the app commits and
+//     pushes the rendered working copy to the report's GitHub repo (ADR-0005 Am.3)
 //   - Export button gating (updateExportButton)
 //   - Clipboard copying (copyToClipboard)
 //   - File preview modal (openPreviewModal, closePreviewModal, render helpers)
@@ -186,7 +187,7 @@ async function exportDocument() {
         hideBlockingSpinner();
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Export to Overleaf';
+            btn.textContent = 'Export Bundle (.zip)';
         }
     }
 }
@@ -1023,13 +1024,15 @@ async function buildExportPayload() {
 
 
 /* ================================================================
- * Report tab \u2014 Overleaf hand-off (no in-app preview)
+ * Report tab \u2014 GitHub repo hand-off (ADR-0005 Am.3)
  *
- * There is no local report preview: the committee reviews and edits the
- * compiled report in Overleaf.  The Report tab links out to the bound
- * Overleaf project.  initReportTab() (called from navigateToNode when the
- * Report tab opens) loads the per-report binding and either enables the
- * "Open in Overleaf" link or shows the link-a-project prompt.
+ * The app talks only to the report's GitHub repo; Overleaf is a downstream
+ * consumer the human wires up via Overleaf's own GitHub sync.  Commit Local
+ * commits the rendered working copy to the local clone; Push to GitHub ships
+ * those commits; Pull from GitHub brings committee edits back + reconciles.
+ * initReportTab() (called from navigateToNode when the Report tab opens) loads
+ * the per-report repo binding and derives which controls to enable from
+ * /api/repo-status.
  * ================================================================ */
 
 /**
@@ -1040,49 +1043,39 @@ function _currentDtxsid() {
 }
 
 /**
- * Load the report's Overleaf binding and reflect it in the Report tab:
- * a bound project shows "Open in Overleaf"; an unbound one shows the
- * link-a-project prompt.  (fetch is wrapped to add ?user= automatically.)
+ * Load the report's repo binding and reflect it in the Report tab: a bound repo
+ * enables the controls (their finer state is derived in refreshRepoStatus); an
+ * unbound one shows the link-a-repo prompt.
  */
 async function initReportTab() {
-    const link = document.getElementById('open-in-overleaf');
-    const setup = document.getElementById('overleaf-link-setup');
-    if (!link || !setup) return;
+    const setup = document.getElementById('repo-link-setup');
+    if (!setup) return;
 
     const dtxsid = _currentDtxsid();
     if (!dtxsid) {
         // No session yet \u2192 nothing to link.
-        link.style.display = 'none';
         setup.style.display = 'none';
         return;
     }
 
     let binding = {};
     try {
-        const resp = await fetch(`/api/overleaf-binding/${encodeURIComponent(dtxsid)}`);
+        const resp = await fetch(`/api/repo-binding/${encodeURIComponent(dtxsid)}`);
         if (resp.ok) binding = await resp.json();
     } catch (e) {
         /* unbound / offline \u2192 treat as no binding */
     }
 
-    if (binding && binding.project_url) {
-        link.href = binding.project_url;
-        link.style.display = '';
-        setup.style.display = 'none';
-    } else {
-        link.style.display = 'none';
-        setup.style.display = '';
-    }
-
-    // Send / Fetch need a bound git remote (the push/pull target).
     const hasRemote = !!(binding && binding.git_remote);
-    const sendBtn = document.getElementById('btn-send');
-    const fetchBtn = document.getElementById('btn-fetch');
-    if (sendBtn) sendBtn.disabled = !hasRemote;
-    if (fetchBtn) fetchBtn.disabled = !hasRemote;
+    // Unbound \u2192 show the paste-a-remote prompt; bound \u2192 hide it.
+    setup.style.display = hasRemote ? 'none' : '';
 
-    // Reflect who (if anyone) currently has the report open in Overleaf.
-    await refreshEditLock();
+    // Export works from the working copy regardless of repo binding.
+    const exportBtn = document.getElementById('btn-export');
+    if (exportBtn) exportBtn.disabled = false;
+
+    // Derive Commit/Push/Pull enable-states from the clone's git status.
+    await refreshRepoStatus(hasRemote);
 }
 
 /**
@@ -1097,33 +1090,30 @@ function _setSyncStatus(msg, state) {
 }
 
 /**
- * Provision the report's GitHub repo (create-or-adopt), push the bundle, set
- * the binding. Run once per report; then Import from GitHub in Overleaf and
- * paste the project URL into "link a project".
+ * Create or adopt the report's GitHub repo and bind it (init only — no content
+ * is pushed here). Run once per report; content lands later via Commit Local →
+ * Push to GitHub, after which the human does the one-time Import from GitHub in
+ * Overleaf.
  */
 async function provisionReport() {
     const dtxsid = _currentDtxsid();
     if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
     const btn = document.getElementById('btn-provision');
     if (btn) btn.disabled = true;
-    _setSyncStatus('Provisioning GitHub repo…', '');
-    const body = {
-        chemical_name: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.name) || '',
-        casrn: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.casrn) || '',
-    };
+    _setSyncStatus('Creating / linking GitHub repo…', '');
     try {
         const resp = await fetch(`/api/provision-report/${encodeURIComponent(dtxsid)}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({}),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
             _setSyncStatus(data.error || 'Provision failed.', 'err');
         } else {
-            const verb = data.created ? 'Created' : 'Adopted';
+            const verb = data.created ? 'Created' : 'Linked';
             _setSyncStatus(
-                `✓ ${verb} ${data.repo}. Next: in Overleaf, New Project → Import from GitHub → ` +
-                `${data.slug}, then paste the project URL into "link a project".`,
+                `✓ ${verb} ${data.repo}. Next: Commit Local, then Push to GitHub. ` +
+                `Once pushed, in Overleaf do New Project → Import from GitHub → ${data.slug}.`,
                 'ok');
         }
     } catch (e) {
@@ -1135,188 +1125,183 @@ async function provisionReport() {
 }
 
 /**
- * Send to Overleaf: regenerate from cache and push to the bound git remote.
- * The server blocks if another user holds the edit lock, or if the committee
- * has edited since the last send (then run Fetch first).
+ * Commit Local: render the current working copy (the same payload the HTML view
+ * uses) and commit it to the local clone. No network — Push to GitHub ships it.
  */
-async function sendToOverleaf() {
+async function commitLocal() {
     const dtxsid = _currentDtxsid();
     if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
-    const btn = document.getElementById('btn-send');
+    const btn = document.getElementById('btn-commit');
     if (btn) btn.disabled = true;
-    _setSyncStatus('Sending to Overleaf…', '');
-    const body = {
-        chemical_name: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.name) || '',
-        casrn: (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.casrn) || '',
-    };
+    _setSyncStatus('Rendering working copy + committing locally…', '');
     try {
-        const resp = await fetch(`/api/send-to-overleaf/${encodeURIComponent(dtxsid)}`, {
+        // Same payload the HTML view / Export Bundle render from — this is the
+        // single source of truth (ADR-0005 Am.3 §B).
+        const payload = await buildExportPayload();
+        const resp = await fetch(`/api/commit-local/${encodeURIComponent(dtxsid)}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify(payload),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-            _setSyncStatus(data.error || 'Send failed.', 'err');
-        } else {
+            _setSyncStatus(data.error || 'Commit failed.', 'err');
+        } else if (data.committed) {
+            const n = data.ahead || 0;
             _setSyncStatus(
-                `✓ Sent to Overleaf (commit ${String(data.pushed).slice(0, 8)}). ` +
-                `Now in Overleaf open Menu → GitHub → “Pull GitHub changes” to see it.`,
+                `✓ Committed locally (${String(data.head).slice(0, 8)}). ` +
+                `${n} local commit${n === 1 ? '' : 's'} ready to Push to GitHub.`,
                 'ok');
+        } else {
+            _setSyncStatus('Working copy already committed — nothing new to record.', 'ok');
         }
     } catch (e) {
-        _setSyncStatus(`Send error: ${e.message}`, 'err');
+        _setSyncStatus(`Commit error: ${e.message}`, 'err');
     } finally {
         if (btn) btn.disabled = false;
     }
-    refreshEditLock();
+    refreshRepoStatus(true);
 }
 
 /**
- * Fetch committee edits: pull the bound remote and reconcile the committee's
- * Overleaf edits into per-region overrides (preserved on the next regenerate).
+ * Push to GitHub: ship the clone's accumulated local commits to the bound remote.
+ * The server refuses (409) if the committee has pushed edits past our baseline —
+ * then run Pull from GitHub first.
  */
-async function fetchFromOverleaf() {
+async function pushToGitHub() {
     const dtxsid = _currentDtxsid();
     if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
-    const btn = document.getElementById('btn-fetch');
+    const btn = document.getElementById('btn-push');
     if (btn) btn.disabled = true;
-    _setSyncStatus('Fetching committee edits…', '');
+    _setSyncStatus('Pushing to GitHub…', '');
     try {
-        const resp = await fetch(`/api/fetch-from-overleaf/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
+        const resp = await fetch(`/api/push-to-github/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-            _setSyncStatus(data.error || 'Fetch failed.', 'err');
+            _setSyncStatus(data.error || 'Push failed.', 'err');
+        } else {
+            _setSyncStatus(
+                `✓ Pushed to GitHub (commit ${String(data.pushed).slice(0, 8)}). ` +
+                `In Overleaf, Menu → GitHub → “Pull GitHub changes” to see it.`,
+                'ok');
+        }
+    } catch (e) {
+        _setSyncStatus(`Push error: ${e.message}`, 'err');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+    refreshRepoStatus(true);
+}
+
+/**
+ * Pull from GitHub: pull the bound remote and reconcile the committee's edits
+ * (made in Overleaf, synced up to GitHub) into per-region overrides (preserved
+ * on the next render).
+ */
+async function pullFromGitHub() {
+    const dtxsid = _currentDtxsid();
+    if (!dtxsid) { _setSyncStatus('Enter a chemical first.', 'err'); return; }
+    const btn = document.getElementById('btn-pull');
+    if (btn) btn.disabled = true;
+    _setSyncStatus('Pulling committee edits from GitHub…', '');
+    try {
+        const resp = await fetch(`/api/pull-from-github/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            _setSyncStatus(data.error || 'Pull failed.', 'err');
         } else {
             const written = data.written || [];
             let msg = written.length
-                ? `✓ Fetched — ${written.length} region(s) updated from committee edits: ${written.join(', ')}.`
-                : '✓ Fetched — no committee edits to reconcile.';
+                ? `✓ Pulled — ${written.length} region(s) updated from committee edits: ${written.join(', ')}.`
+                : '✓ Pulled — no committee edits to reconcile.';
             if ((data.structural || []).length) {
                 msg += ` ⚠ ${data.structural.length} structural change(s) need review (not auto-applied).`;
             }
             _setSyncStatus(msg, 'ok');
         }
     } catch (e) {
-        _setSyncStatus(`Fetch error: ${e.message}`, 'err');
+        _setSyncStatus(`Pull error: ${e.message}`, 'err');
     } finally {
         if (btn) btn.disabled = false;
     }
-    refreshEditLock();
+    refreshRepoStatus(true);
 }
 
 /**
- * Fetch + render the checkout-lock banner: who has the report open in Overleaf,
- * with a Release control.  Disables "Open in Overleaf" when another user holds
- * the lock (openInOverleaf also blocks server-side on a 409).
+ * Derive the Commit/Push/Pull control states from the clone's git status
+ * (ADR-0005 Am.3 §F) — the phase is read from artifacts, never set imperatively.
+ *
+ *   - Commit Local : enabled whenever a repo is bound (the working copy can
+ *                    always be (re)committed; a no-op commit just reports so).
+ *   - Push to GitHub: enabled when there are unpushed local commits AND the
+ *                     remote hasn't moved past our baseline.
+ *   - Pull from GitHub: enabled once a clone exists; highlighted when the remote
+ *                     has advanced (committee edits await reconcile).
+ *
+ * `hasRemote` is passed by the caller (it already has the binding) to avoid a
+ * redundant fetch.
  */
-async function refreshEditLock() {
-    const banner = document.getElementById('edit-lock-banner');
-    const link = document.getElementById('open-in-overleaf');
-    if (!banner) return;
+async function refreshRepoStatus(hasRemote) {
+    const commitBtn = document.getElementById('btn-commit');
+    const pushBtn = document.getElementById('btn-push');
+    const pullBtn = document.getElementById('btn-pull');
     const dtxsid = _currentDtxsid();
-    if (!dtxsid) { banner.style.display = 'none'; return; }
 
-    let lock = null;
-    try {
-        const resp = await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}`);
-        if (resp.ok) lock = (await resp.json()).lock;
-    } catch (e) {
-        /* treat as unlocked */
-    }
-
-    if (!lock) {
-        banner.style.display = 'none';
-        if (link) link.classList.remove('disabled');
+    // Unbound or no session → every repo control is disabled.
+    if (!dtxsid || !hasRemote) {
+        if (commitBtn) commitBtn.disabled = true;
+        if (pushBtn) pushBtn.disabled = true;
+        if (pullBtn) pullBtn.disabled = true;
         return;
     }
 
-    // Server records "anonymous" when the user gate is off; mirror that here.
-    const me = getStoredUser() || 'anonymous';
-    const mine = lock.locked_by === me;
-    const since = lock.since ? new Date(lock.since).toLocaleString() : '';
-    banner.style.display = '';
-    if (mine) {
-        banner.className = 'edit-lock-banner mine';
-        banner.innerHTML = `You have this open in Overleaf (since ${escapeHtml(since)}). ` +
-            `<button class="btn-small" onclick="releaseEditLock()">Done editing (release)</button>`;
-        if (link) link.classList.remove('disabled');
-    } else {
-        banner.className = 'edit-lock-banner held';
-        banner.innerHTML = `Locked by <strong>${escapeHtml(lock.locked_by)}</strong> since ${escapeHtml(since)}. ` +
-            `Other authors can't open it until it's released. ` +
-            `<button class="btn-small" onclick="releaseEditLock(true)">Force release</button>`;
-        if (link) link.classList.add('disabled');
-    }
-}
+    if (commitBtn) commitBtn.disabled = false;
 
-/**
- * Acquire the checkout lock, then open the Overleaf project.  Blocks (and shows
- * who holds it) when another user already has the report open.
- */
-async function openInOverleaf(event) {
-    if (event) event.preventDefault();
-    const link = document.getElementById('open-in-overleaf');
-    const dtxsid = _currentDtxsid();
-    const url = link && link.getAttribute('href');
-    if (!dtxsid || !url || url === '#') return false;
+    let status = { has_clone: false, ahead: 0, needs_pull: false };
     try {
-        const resp = await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}`, { method: 'POST' });
-        const data = await resp.json().catch(() => ({}));
-        await refreshEditLock();
-        if (!resp.ok || !data.acquired) return false;  // held by another → blocked
+        const resp = await fetch(`/api/repo-status/${encodeURIComponent(dtxsid)}`);
+        if (resp.ok) status = await resp.json();
     } catch (e) {
-        return false;  // couldn't take the lock → don't open
+        /* network hiccup → leave Push/Pull disabled below */
     }
-    window.open(url, '_blank', 'noopener');
-    return false;
+
+    // Push only when there's something unpushed and the remote hasn't moved.
+    if (pushBtn) pushBtn.disabled = !(status.ahead > 0) || status.needs_pull;
+    // Pull once a clone exists; emphasise when the remote has advanced.
+    if (pullBtn) {
+        pullBtn.disabled = !status.has_clone;
+        pullBtn.classList.toggle('primary', !!status.needs_pull);
+    }
 }
 
 /**
- * Release the checkout lock (force=true breaks a stale lock left by someone who
- * closed their tab), then refresh the banner.
+ * Save the git remote the user pasted, then refresh the Report tab so the
+ * Commit/Push/Pull controls activate.
  */
-async function releaseEditLock(force = false) {
-    const dtxsid = _currentDtxsid();
-    if (!dtxsid) return;
-    const suffix = force ? '?force=1' : '';
-    try {
-        await fetch(`/api/edit-lock/${encodeURIComponent(dtxsid)}${suffix}`, { method: 'DELETE' });
-    } catch (e) {
-        /* ignore — refresh will show actual state */
-    }
-    await refreshEditLock();
-}
-
-/**
- * Save the Overleaf project URL (and optional git remote) the user pasted,
- * then refresh the Report tab so "Open in Overleaf" appears.
- */
-async function saveOverleafBinding() {
-    const status = document.getElementById('overleaf-link-status');
+async function saveRepoBinding() {
+    const status = document.getElementById('repo-link-status');
     const dtxsid = _currentDtxsid();
     if (!dtxsid) {
         if (status) status.textContent = 'Enter a chemical first.';
         return;
     }
-    const projectUrl = (document.getElementById('overleaf-project-url')?.value || '').trim();
-    const gitRemote = (document.getElementById('overleaf-git-remote')?.value || '').trim();
-    if (!projectUrl) {
-        if (status) status.textContent = 'Paste the Overleaf project URL.';
+    const gitRemote = (document.getElementById('repo-git-remote')?.value || '').trim();
+    if (!gitRemote) {
+        if (status) status.textContent = 'Paste the GitHub repo URL.';
         return;
     }
     if (status) status.textContent = 'Saving\u2026';
     try {
-        const resp = await fetch(`/api/overleaf-binding/${encodeURIComponent(dtxsid)}`, {
+        const resp = await fetch(`/api/repo-binding/${encodeURIComponent(dtxsid)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project_url: projectUrl, git_remote: gitRemote || null }),
+            body: JSON.stringify({ git_remote: gitRemote }),
         });
         if (!resp.ok) {
             if (status) status.textContent = 'Save failed.';
             return;
         }
         if (status) status.textContent = '';
-        await initReportTab();  // reveal "Open in Overleaf"
+        await initReportTab();  // activate the controls
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
     }

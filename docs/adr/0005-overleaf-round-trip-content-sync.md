@@ -518,3 +518,145 @@ without caring whether it is git.overleaf or github.com.
 Primary transport auth = the **GitHub credential helper** (already configured).
 `OVERLEAF_GIT_TOKEN` is required **only** if the dormant git-bridge fallback is
 ever activated for a given report.
+
+## Amendment 3 (2026-06-11): the app speaks git, not Overleaf — single source, deferred push
+
+**This amendment makes two corrections that Amendment 2 implied but did not
+finish.** Am.2 moved the live transport to GitHub but left the *outbound* path
+carrying two regressions from the older design: (a) the push rendered from a
+**different data source** than the in-app view, so "what you see" was not "what
+you push"; and (b) the operational vocabulary still said *Overleaf* even though
+the app, post-Am.2, has **no Overleaf peer at all** — its only network peer is a
+git remote. This amendment settles both, plus the turn model (commit and push
+are now separate) and the single-user simplification.
+
+### A. The app's entire surface is a git repo — Overleaf is invisible to it
+
+After Am.2 the app makes **only `git` subprocess calls** (`clone`/`add`/`commit`/
+`push`/`fetch`/`pull`) against `binding.git_remote`. There is no Overleaf API,
+no `overleaf.com` request, nothing the app can *do* to Overleaf. Overleaf is a
+**downstream consumer the human wires up once** (Overleaf's own GitHub-sync),
+and the rendering + editing surface for the committee — entirely outside the
+app's reach.
+
+Therefore the app's operational vocabulary must be **repo-centric**, not
+Overleaf-centric. Overleaf survives only in *human-facing prose* ("the repo your
+Overleaf project syncs from"), never in a button label, route name, variable,
+or filename. Concretely:
+
+| Old (Overleaf-framed) | New (repo-framed) |
+|---|---|
+| "Send to Overleaf" button / `/api/send-to-overleaf` | **"Commit Local"** + **"Push to GitHub"** (split — see §C) |
+| "Fetch from Overleaf" / `/api/fetch-from-overleaf` | **"Pull from GitHub"** / `/api/pull-from-github` |
+| "Open in Overleaf" button + `openInOverleaf()` + checkout lock | **removed** (see §D) |
+| "Export to Overleaf (.zip)" | **"Export Bundle (.zip)"** (kept — offline/first-time escape hatch) |
+| `/api/overleaf-binding`, `_overleaf_binding.json`, `binding.project_url` | `/api/repo-binding`, `_repo_binding.json`, **`project_url` dropped** (only `git_remote` remains) |
+
+The binding-file rename carries a **back-compat read**: load `_repo_binding.json`
+if present, else fall back to the legacy `_overleaf_binding.json`, and write the
+new name going forward. Existing sessions keep working without a migration step.
+The `roundtrip/` package keeps its name (it is the round-trip *mechanism*, which
+is real and unchanged) but its docstrings drop "the send to Overleaf" glosses.
+
+### B. One source of truth for the outbound render: the in-app working copy
+
+The bug this amendment exists to kill: the **HTML working copy** (what the user
+sees in the app) and the **pushed LaTeX** were rendered from two different
+inputs, so they silently diverged.
+
+- HTML working copy + "Export Bundle" rendered from the **browser's in-memory
+  store**, posted in the request body → `marshal_export_data(body)`.
+- The push rendered from **on-disk session caches**, re-read fresh →
+  `sync_document()` → `load_session_data(dtxsid)`.
+
+When the store and the disk caches drift, the push is wrong while the view looks
+right. This is **not section-specific** — it was first observed in the genomics
+gene-set tables (the on-disk genomics cache had empty `gene_sets`; the store had
+them) and in Materials & Methods, but it is structural: *any* section can drift.
+It is one seam producing N symptoms.
+
+**Decision: the push renders from the same working copy the view renders from.**
+The repo-push route accepts the posted body and runs
+`marshal_export_data(body) → generate_latex → write bundle → git commit` —
+byte-identical to the Export-Bundle path, just followed by a commit. **`load_session_data`
+is retired from the push path entirely.** With one input, "what you see is what
+you commit" holds *by construction*, not by the two renderers happening to agree.
+
+This makes the outbound push **browser-originated by design**. That is
+acceptable and intended: scripted/headless pushing existed only for testing, and
+real usage is always the single human at the browser. `load_session_data` remains
+available for any offline CLI/testing render, but it is no longer on the live
+path.
+
+### C. Commit and push are separate turns (deferred push)
+
+`push_document()` already performed *mirror → add → commit → push* in sequence;
+this amendment **splits that seam** and surfaces both halves:
+
+- **"Commit Local"** = mirror the working copy into the local clone → `add` →
+  `commit`. **No network.** Local commits accumulate on the clone.
+- **"Push to GitHub"** = `push` the accumulated local commits to `git_remote`.
+
+The **local repo is the existing clone** (`.overleaf-clone/<dtxsid>` — to be
+renamed `.repo-clone/<dtxsid>` under §A's hygiene pass), which is already a real
+git working tree bound to the remote. `documents/<dtxsid>/` is **not** made a
+repo: it is already tracked by the main rlm-bmdx project repo and a nested repo
+there would collide.
+
+**`baseline_commit` semantics are unchanged and pin to the last *pushed* sha**
+(what Overleaf imported). Commit Local **must not** touch `baseline_commit`; only
+Push to GitHub advances it. The **reconcile-before-overwrite staleness guard
+(Am.2) moves to the Push button** — Push refuses with 409 if `remote_head` has
+advanced past `baseline_commit` (committee edits arrived un-reconciled), directing
+the user to Pull from GitHub first. Commit Local needs no guard; it is purely
+local.
+
+### D. Single-user: the checkout lock is removed
+
+The app is **single-user**; all multi-author editing happens in **Overleaf**,
+which has its own concurrency model. The single-writer **checkout lock** (Am.1
+§C, acquired by the now-deleted "Open in Overleaf") guarded against two *app*
+users clobbering each other — a contention that no longer exists. It is removed
+along with `openInOverleaf()` and the lock banner. (`roundtrip/lock.py` may be
+retired or left dormant; no live path calls it.)
+
+### E. Provision is init-only
+
+`/api/provision-report` today also runs `sync_document` + push. Under this
+amendment it **only creates/adopts the repo and sets `git_remote`** — repo
+origination, nothing else. The first content reaches the repo through the normal
+**Commit Local → Push to GitHub** turn, identical to every later turn. There is
+no special first-push path.
+
+### F. UI status is derived, never set (ADR-0005 × the UI-state invariant)
+
+The button-enable states fall directly out of the clone's git status, so the
+phase is *derived* (consistent with the project's "phase is derived, never
+imperatively set" rule):
+
+| Derived state | Computed from | Action offered |
+|---|---|---|
+| Working copy has uncommitted changes | rendered body ≠ clone `HEAD` tree | **Commit Local** |
+| Local commits not yet pushed | `git rev-list --count @{u}..HEAD` > 0 | **Push to GitHub** |
+| In sync with origin | ahead = 0 and behind = 0 | — |
+| Origin moved past baseline | `remote_head` ≠ `baseline_commit` | **Pull from GitHub** (then reconcile) |
+
+### What this does *not* touch
+
+The **round-trip itself survives unchanged** — it was always repo-based. The
+human still edits in Overleaf; Overleaf still pushes to GitHub; the app still
+pulls from GitHub and reconciles committee edits against `baseline_commit` via
+the anchored projection + override store (Am.1 §B–C, Am.2). This amendment
+renames the *outbound* operations to match what the app actually talks to and
+collapses the outbound render to a single source; it leaves the *inbound*
+reconcile mechanics, the anchor grain, and the override store exactly where Am.2
+left them.
+
+### Status of this amendment
+
+**Proposed (2026-06-11)** — decisions locked (single-user → no lock; keep Export
+Bundle; do the `_repo_binding.json` rename with back-compat). Implementation
+pending: split `push_document`, repoint the push route at `marshal_export_data(body)`,
+the vocabulary/rename sweep across `web/`, `export_routes.py`, `roundtrip/`, and
+`*_binding.json`, removal of the lock + "Open in Overleaf", and the
+provision-is-init-only trim.

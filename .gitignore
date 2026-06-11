@@ -18,7 +18,11 @@ tests/screenshots/
 # SSH artifacts
 svobodadl@*
 
-# Overleaf round-trip dev scaffolding (ADR-0005): local stand-in remote and
-# the app's working clone. Ephemeral dev-only state, never committed.
+# Git round-trip dev scaffolding (ADR-0005): local stand-in remote and the
+# app's working clone. Ephemeral dev-only state, never committed.
+# Renamed from .overleaf-* to .repo-* (Am.3); legacy names kept ignored so an
+# un-migrated checkout doesn't accidentally stage the old dirs.
+.repo-standin/
+.repo-clone/
 .overleaf-standin/
 .overleaf-clone/

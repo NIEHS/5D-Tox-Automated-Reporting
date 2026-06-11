@@ -1,18 +1,21 @@
 """
 overleaf_provision.py — Overleaf-specific addressing helpers (ADR-0005 Am.1a).
 
+DORMANT as of Am.3.  The live transport is GitHub (Am.2) and the app no longer
+talks to Overleaf at all — it dropped the "Open in Overleaf" link and the
+`project_url` binding field this module's reverse-link depends on.  These helpers
+survive only for the optional git-bridge fallback (a report whose remote is a
+git.overleaf.com URL); no live path imports them.
+
 This is the APP-side Overleaf adapter; it deliberately does NOT live in the
 domain-agnostic `roundtrip` package.  Its whole job is to make a report's
 identity drift-proof: a report is pinned to ONE opaque Overleaf project id, and
-both URLs the app uses are *derived* from it —
+both URLs are *derived* from it —
 
-    web   ("Open in Overleaf")  →  https://www.overleaf.com/project/<id>
+    web   (project page)         →  https://www.overleaf.com/project/<id>
     git   (git-bridge push/pull) →  https://git.overleaf.com/<id>
 
-— so the "Open" target and the "Send" target can never point at different
-projects (the inconsistency that bit us when they were stored independently).
-
-The opaque id is the one thing a human must supply once (Overleaf has no
+The opaque id is the one thing a human would supply once (Overleaf has no
 title-based URL and no Cloud API to resolve a title→id); everything else is
 derived.
 """
@@ -23,10 +26,13 @@ import json
 import re
 from pathlib import Path
 
-# Where per-session bindings live (sessions/<dtxsid>/_overleaf_binding.json) —
+# Where per-session bindings live (sessions/<dtxsid>/_repo_binding.json) —
 # scanned by the reverse soft-link below.  Resolved relative to this module.
+# `_repo_binding.json` is the Am.3 name; `_overleaf_binding.json` is the legacy
+# name we still read so pre-rename sessions resolve.
 _DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
-_BINDING_FILENAME = "_overleaf_binding.json"
+_BINDING_FILENAME = "_repo_binding.json"
+_LEGACY_BINDING_FILENAME = "_overleaf_binding.json"
 
 # An Overleaf project id is a 24-char hex string (a Mongo ObjectId).  We accept
 # either a bare id or any overleaf URL that contains `/project/<id>`.
@@ -80,7 +86,9 @@ def dtxsid_for_project(ref: str, *, sessions_dir: "Path | None" = None) -> "str 
     base = Path(sessions_dir) if sessions_dir is not None else _DEFAULT_SESSIONS_DIR
     if not base.exists():
         return None
-    for binding_file in base.glob(f"*/{_BINDING_FILENAME}"):
+    binding_files = list(base.glob(f"*/{_BINDING_FILENAME}")) + \
+        list(base.glob(f"*/{_LEGACY_BINDING_FILENAME}"))
+    for binding_file in binding_files:
         try:
             url = (json.loads(binding_file.read_text()) or {}).get("project_url")
             if url and extract_project_id(url) == target:

@@ -193,7 +193,7 @@
                 <!-- ============================================ -->
                 <h2>Step 10 &mdash; Export</h2>
 
-                <p>The <strong>Report</strong> tab is the hand-off to Overleaf, where the committee reviews and edits the compiled report. Use <strong>Open in Overleaf</strong> to open the linked project, or <strong>Export to Overleaf (.zip)</strong> to download a bundle for creating the project the first time. There is no in-app preview — Overleaf is the rendering surface.</p>
+                <p>The <strong>Report</strong> tab hands the report off through its GitHub repo. <strong>Create/Link GitHub repo</strong> sets up the repo; <strong>Commit Local</strong> commits the current working copy to the local clone; <strong>Push to GitHub</strong> ships it; <strong>Pull from GitHub</strong> brings the committee's edits back and reconciles them. The committee reviews and edits in Overleaf, which syncs to that same GitHub repo. <strong>Export Bundle (.zip)</strong> downloads the bundle for offline or first-time setup.</p>
 
                 <hr>
 
@@ -306,10 +306,9 @@
              Sections use x-show bound to Alpine store readiness flags
              for automatic show/hide.
              ================================================================ -->
-        <!-- In-app report preview removed: the committee reviews and edits the
-             compiled report in Overleaf (reached via the "Open in Overleaf"
-             link on the Report tab).  The app no longer renders a local preview
-             surface, so the content pane spans the full width. -->
+        <!-- The committee reviews and edits the compiled report in Overleaf,
+             which syncs to the report's GitHub repo; the app commits/pushes the
+             rendered working copy to that repo from the Report tab. -->
 
         <!-- ================================================================
              Content Pane — always visible, scrollable editing surface.
@@ -885,48 +884,43 @@
             <h1>Appendix F. Supplemental Data</h1>
         </div>
 
-        <!-- Report view — the hand-off point to Overleaf.  There is no in-app
-             preview: the committee reviews and edits the compiled report in
-             Overleaf.  "Open in Overleaf" opens the linked project; "Export to
-             Overleaf" downloads the .zip bundle (used to create the project the
-             first time).  initReportTab() (export.js) loads the binding to
-             enable the link / show the link-a-project prompt. -->
+        <!-- Report view — the git-repo hand-off (ADR-0005 Am.3).  The app talks
+             only to the report's GitHub repo; Overleaf is a downstream consumer
+             the human wires up via Overleaf's own GitHub sync.  Commit Local
+             commits the rendered working copy to the local clone; Push to GitHub
+             ships those commits; Pull from GitHub brings committee edits back +
+             reconciles.  Export Bundle (.zip) is the offline/first-time escape
+             hatch.  initReportTab() (export.js) loads the binding + derives which
+             controls to enable from /api/repo-status. -->
         <section data-nav-id="report" id="report-view-section"
                  x-data x-show="$store.app.activeSection === 'report'">
             <div class="report-toolbar">
                 <!-- Provision: create-or-adopt the convention-named GitHub repo
-                     (<DTXSID>-5D-Tox), push the bundle, set the binding. Run
-                     once per report; then Import from GitHub in Overleaf. -->
-                <button onclick="provisionReport()" class="btn-action" id="btn-provision">Provision GitHub repo</button>
-                <!-- openInOverleaf() acquires the single-writer checkout lock
-                     before opening the project; if another user holds it, it
-                     blocks and the banner below shows who. -->
-                <a id="open-in-overleaf" class="btn-action primary" target="_blank"
-                   rel="noopener" href="#" style="display:none"
-                   onclick="return openInOverleaf(event)">Open in Overleaf</a>
-                <!-- Send: regenerate from cache + push to the bound remote.
-                     Fetch: pull the committee's edits + reconcile into overrides.
-                     Both enabled only when the report is bound to a git remote. -->
-                <button onclick="sendToOverleaf()" class="btn-action" id="btn-send" disabled>Send to Overleaf</button>
-                <button onclick="fetchFromOverleaf()" class="btn-action" id="btn-fetch" disabled>Fetch committee edits</button>
-                <button onclick="exportDocument()" class="btn-action" id="btn-export" disabled>Export to Overleaf (.zip)</button>
+                     (<DTXSID>-5D-Tox) and bind it. Init only — no push. Run once
+                     per report. -->
+                <button onclick="provisionReport()" class="btn-action" id="btn-provision">Create/Link GitHub repo</button>
+                <!-- Commit Local: render the working copy + commit to the local
+                     clone (no network). Push to GitHub: ship local commits.
+                     Pull from GitHub: pull committee edits + reconcile.  All
+                     enabled only when the report is bound to a GitHub repo;
+                     Push/Pull states are derived from /api/repo-status. -->
+                <button onclick="commitLocal()" class="btn-action" id="btn-commit" disabled>Commit Local</button>
+                <button onclick="pushToGitHub()" class="btn-action primary" id="btn-push" disabled>Push to GitHub</button>
+                <button onclick="pullFromGitHub()" class="btn-action" id="btn-pull" disabled>Pull from GitHub</button>
+                <button onclick="exportDocument()" class="btn-action" id="btn-export" disabled>Export Bundle (.zip)</button>
             </div>
-            <!-- Checkout-lock banner: who currently has the report open in
-                 Overleaf, with a Release control (refreshed by initReportTab). -->
-            <div class="edit-lock-banner" id="edit-lock-banner" style="display:none"></div>
-            <!-- Result line for Send / Fetch (commit pushed, regions reconciled). -->
+            <!-- Result line for Commit / Push / Pull (commit sha, ahead count,
+                 regions reconciled). -->
             <div class="sync-status" id="sync-status"></div>
-            <!-- Link-a-project prompt: shown when the report has no bound
-                 Overleaf project yet.  Paste the project URL (and optionally the
-                 git remote we push/pull) and Save → enables "Open in Overleaf". -->
-            <div class="overleaf-link-setup" id="overleaf-link-setup" style="display:none">
-                <p class="front-matter-note">This report isn't linked to an Overleaf project yet. Paste its URL to enable <strong>Open in Overleaf</strong>.</p>
-                <input type="url" id="overleaf-project-url" class="text-input"
-                       placeholder="https://www.overleaf.com/project/…" />
-                <input type="url" id="overleaf-git-remote" class="text-input"
-                       placeholder="git remote (optional, e.g. https://github.com/…)" />
-                <button class="btn-small" onclick="saveOverleafBinding()">Save link</button>
-                <span id="overleaf-link-status"></span>
+            <!-- Link-a-repo prompt: shown when the report has no bound GitHub
+                 repo yet.  Paste the git remote and Save → enables the controls.
+                 (Most reports get this automatically from Create/Link above.) -->
+            <div class="repo-link-setup" id="repo-link-setup" style="display:none">
+                <p class="front-matter-note">This report isn't linked to a GitHub repo yet. Use <strong>Create/Link GitHub repo</strong> above, or paste a git remote:</p>
+                <input type="url" id="repo-git-remote" class="text-input"
+                       placeholder="git remote, e.g. https://github.com/owner/DTXSID…-5D-Tox" />
+                <button class="btn-small" onclick="saveRepoBinding()">Save link</button>
+                <span id="repo-link-status"></span>
             </div>
         </section>
 

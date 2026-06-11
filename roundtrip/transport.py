@@ -11,17 +11,27 @@ changes; nothing else here moves.
 
 The three roles
 ---------------
-  - **stand-in remote** (`.overleaf-standin/<dtxsid>.git`, a *bare* repo) — plays
-    "the Overleaf project."  Later: the real git-bridge URL.
-  - **working clone** (`.overleaf-clone/<dtxsid>/`) — the app's local checkout of
-    that project.  push commits the freshly-generated bundle here and sends it
-    up; pull brings committee edits down here, where the reconciler diffs them
-    against the baseline.
+  - **stand-in remote** (`.repo-standin/<dtxsid>.git`, a *bare* repo) — plays
+    "the report's git repo" for offline dev/testing.  Later/live: the real
+    GitHub remote URL.
+  - **working clone** (`.repo-clone/<dtxsid>/`) — the app's local checkout of
+    that repo.  `commit_document` commits the freshly-generated bundle here
+    (local only); `push_committed` sends the accumulated commits up; pull brings
+    committee edits down here, where the reconciler diffs them against the
+    baseline.
   - **the dev document** (`documents/<dtxsid>/`, tracked in the main repo) — the
-    app's generated source, copied into the clone on push.
+    app's generated source, copied into the clone on commit.
 
-Both `.overleaf-standin/` and `.overleaf-clone/` are gitignored dev scaffolding,
+Both `.repo-standin/` and `.repo-clone/` are gitignored dev scaffolding,
 NOT product artifacts.
+
+Commit vs push (ADR-0005 Am.3)
+------------------------------
+`commit_document` and `push_committed` are deliberately separate so the app can
+expose "Commit Local" (a purely local commit, no network) and "Push to GitHub"
+(ship the accumulated local commits) as distinct user actions.  `push_document`
+remains as a convenience that does both in sequence (used by older callers and
+the offline test suite).
 
 What this module does NOT do
 ----------------------------
@@ -58,8 +68,10 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Gitignored dev scaffolding roots (overridable in tests via `root=`).
-_STANDIN_ROOT = _REPO_ROOT / ".overleaf-standin"
-_CLONE_ROOT = _REPO_ROOT / ".overleaf-clone"
+# Renamed from .overleaf-* to .repo-* (ADR-0005 Am.3): the app talks to a git
+# repo, not to Overleaf, so the scaffolding is named for what it is.
+_STANDIN_ROOT = _REPO_ROOT / ".repo-standin"
+_CLONE_ROOT = _REPO_ROOT / ".repo-clone"
 
 # We pin an explicit branch so first-push / clone behaviour is deterministic
 # regardless of the host git's init.defaultBranch.
@@ -72,16 +84,21 @@ _APP_AUTHOR = ("rlm-bmdx app", "app@rlm-bmdx.local")
 _COMMITTEE_AUTHOR = ("NIEHS Committee", "committee@niehs.example")
 
 # Files in the dev document that are app-internal and must NOT be sent to the
-# "Overleaf project" (everything else — report.tex, niehs.cls, figures/,
+# report's git repo (everything else — report.tex, niehs.cls, figures/,
 # README.md — is the bundle the committee sees).
-_NOT_FOR_OVERLEAF = {".rlm-sync.json"}
+_NOT_FOR_REPO = {".rlm-sync.json"}
 
-# Per-session binding linking a report to its Overleaf project: the human-facing
-# project URL (for the "Open in Overleaf" link) and the git remote we push/pull
-# (the GitHub repo Overleaf syncs with, or a git-bridge URL).  Stored alongside
-# the session cache so it survives across runs.
+# Per-session binding linking a report to its git repo.  Only `git_remote` (the
+# GitHub repo we push/pull) and `baseline_commit` matter to the app — Overleaf
+# is a downstream consumer the app never talks to (ADR-0005 Am.3).  Stored
+# alongside the session cache so it survives across runs.
+#
+# Renamed from _overleaf_binding.json → _repo_binding.json (Am.3).  We READ the
+# legacy name when the new one is absent so existing sessions keep working, and
+# always WRITE the new name going forward — no migration step required.
 _SESSIONS_DIR = _REPO_ROOT / "sessions"
-_BINDING_FILENAME = "_overleaf_binding.json"
+_BINDING_FILENAME = "_repo_binding.json"
+_LEGACY_BINDING_FILENAME = "_overleaf_binding.json"
 
 
 # ---------------------------------------------------------------------------
@@ -123,12 +140,12 @@ def _git(
 
 def _standin_path(dtxsid: str, root: Path) -> Path:
     """Path of the bare stand-in remote for a session."""
-    return root / ".overleaf-standin" / f"{dtxsid}.git"
+    return root / ".repo-standin" / f"{dtxsid}.git"
 
 
 def _clone_path(dtxsid: str, root: Path) -> Path:
     """Path of the app's working clone for a session."""
-    return root / ".overleaf-clone" / dtxsid
+    return root / ".repo-clone" / dtxsid
 
 
 def _mirror_bundle(src_doc_dir: Path, clone_dir: Path) -> None:
@@ -136,7 +153,7 @@ def _mirror_bundle(src_doc_dir: Path, clone_dir: Path) -> None:
     Make the clone's working tree mirror the dev document bundle.
 
     Clears everything in the clone except its .git, then copies every entry of
-    the dev document except the app-internal sidecar — so the "Overleaf project"
+    the dev document except the app-internal sidecar — so the report's git repo
     receives exactly the bundle (report.tex, niehs.cls, figures/, README.md) and
     deletions upstream propagate.
     """
@@ -148,7 +165,7 @@ def _mirror_bundle(src_doc_dir: Path, clone_dir: Path) -> None:
         else:
             entry.unlink()
     for entry in src_doc_dir.iterdir():
-        if entry.name in _NOT_FOR_OVERLEAF or entry.name == ".git":
+        if entry.name in _NOT_FOR_REPO or entry.name == ".git":
             continue
         dest = clone_dir / entry.name
         if entry.is_dir():
@@ -168,19 +185,27 @@ def _has_staged_changes(repo: Path) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Public API — report ↔ Overleaf project binding
+# Public API — report ↔ git repo binding
 # ---------------------------------------------------------------------------
 
 def get_binding(dtxsid: str, *, sessions_dir: "Path | None" = None) -> dict:
     """
-    Return a report's Overleaf binding {project_url?, git_remote?}, or {} if
-    unbound / unreadable.  Used by the UI to enable the "Open in Overleaf" link
-    and by push/pull to find the remote without it being passed each call.
+    Return a report's repo binding {git_remote?, baseline_commit?}, or {} if
+    unbound / unreadable.  Used by the UI to enable the Commit/Push controls and
+    by push/pull to find the remote without it being passed each call.
+
+    Reads the current `_repo_binding.json`; falls back to the legacy
+    `_overleaf_binding.json` for sessions created before the Am.3 rename (we then
+    re-write under the new name on the next set_binding).
     """
     base = Path(sessions_dir) if sessions_dir is not None else _SESSIONS_DIR
     path = base / dtxsid / _BINDING_FILENAME
     if not path.exists():
-        return {}
+        legacy = base / dtxsid / _LEGACY_BINDING_FILENAME
+        if legacy.exists():
+            path = legacy
+        else:
+            return {}
     try:
         data = json.loads(path.read_text())
         return data if isinstance(data, dict) else {}
@@ -191,24 +216,25 @@ def get_binding(dtxsid: str, *, sessions_dir: "Path | None" = None) -> dict:
 def set_binding(
     dtxsid: str,
     *,
-    project_url: "str | None" = None,
     git_remote: "str | None" = None,
     baseline_commit: "str | None" = None,
     sessions_dir: "Path | None" = None,
 ) -> dict:
     """
-    Merge fields into a report's binding and persist it.
+    Merge fields into a report's binding and persist it (always under the new
+    `_repo_binding.json` name).
 
-    Only the provided fields are updated, so the UI can set the project URL
-    without clobbering a remote, and a Send can record `baseline_commit` (the
+    Only the provided fields are updated, so the UI can set the git remote
+    without clobbering the baseline, and a Push can record `baseline_commit` (the
     sha it just pushed — the reconciler diffs pulled-back edits against it, and
-    Send's staleness guard compares the remote head to it) without touching the
+    Push's staleness guard compares the remote head to it) without touching the
     rest.  Returns the merged binding.
+
+    `project_url` is intentionally gone (Am.3): the app talks only to the git
+    remote and has no use for an Overleaf URL.
     """
     base = Path(sessions_dir) if sessions_dir is not None else _SESSIONS_DIR
     binding = get_binding(dtxsid, sessions_dir=sessions_dir)
-    if project_url is not None:
-        binding["project_url"] = project_url
     if git_remote is not None:
         binding["git_remote"] = git_remote
     if baseline_commit is not None:
@@ -290,6 +316,116 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
         _git(["remote", "add", "origin", remote_url], cwd=clone)
 
 
+def _ahead_count(clone: Path) -> int:
+    """
+    How many local commits sit on top of the pushed remote tip.
+
+    Counts `origin/<branch>..HEAD` when the remote branch is known locally
+    (i.e. we have pushed/fetched it at least once); before the first push the
+    remote branch doesn't exist yet, so every local commit is unpushed and we
+    count the whole of HEAD.  Returns 0 when there's no HEAD yet (empty clone)
+    or anything goes wrong — a status read must never raise.
+    """
+    try:
+        # No commit on HEAD yet → nothing local, nothing to push.
+        _git(["rev-parse", "--verify", "-q", "HEAD"], cwd=clone)
+    except RuntimeError:
+        return 0
+    try:
+        if f"origin/{_BRANCH}" in _git(["branch", "-r"], cwd=clone):
+            return int(_git(["rev-list", "--count", f"origin/{_BRANCH}..HEAD"], cwd=clone))
+        return int(_git(["rev-list", "--count", "HEAD"], cwd=clone))
+    except (RuntimeError, ValueError):
+        return 0
+
+
+def commit_document(
+    dtxsid: str,
+    doc_dir: Path,
+    *,
+    remote: "str | None" = None,
+    root: Path = _REPO_ROOT,
+    message: str = "app: sync generated report",
+) -> dict:
+    """
+    "Commit Local" — mirror the dev document bundle into the working clone and
+    commit it there.  **No network.**
+
+    `doc_dir` is the directory whose contents are mirrored (the app passes its
+    documents/<dtxsid>/, freshly rendered from the in-app working copy), so this
+    library module stays domain-agnostic.  `remote` selects which repo the clone
+    is bound to:
+      - None (default) → the LOCAL stand-in bare repo (offline dev/testing);
+      - a URL → the real GitHub remote.  The existing repo is cloned so later
+        commits fast-forward on top of its history; auth is the ambient git
+        credential helper (no token in code).
+
+    Mirrors doc_dir into the clone, stages, and commits when there's anything to
+    record.  Returns {"head": <local HEAD sha>, "committed": <bool>, "ahead":
+    <unpushed-commit count>}.  Does NOT touch the binding baseline — that's
+    pinned to the last *pushed* sha by push_committed (ADR-0005 Am.3 §C).
+    """
+    doc_dir = Path(doc_dir)
+    if not doc_dir.exists():
+        raise FileNotFoundError(
+            f"No dev document at {doc_dir} — render the bundle into it first."
+        )
+
+    remote_url = remote if remote is not None else str(init_standin(dtxsid, root=root))
+    clone = _clone_path(dtxsid, root)
+    _ensure_clone(clone, remote_url, is_external=remote is not None)
+
+    _mirror_bundle(doc_dir, clone)
+    _git(["add", "-A"], cwd=clone)
+    committed = _has_staged_changes(clone)
+    if committed:
+        _git(["commit", "-q", "-m", message], cwd=clone, author=_APP_AUTHOR)
+    return {
+        "head": _git(["rev-parse", "HEAD"], cwd=clone),
+        "committed": committed,
+        "ahead": _ahead_count(clone),
+    }
+
+
+def push_committed(dtxsid: str, *, root: Path = _REPO_ROOT) -> str:
+    """
+    "Push to GitHub" — push the working clone's accumulated local commits to the
+    bound remote.  Returns the pushed commit sha (the baseline the reconciler
+    diffs pulled-back edits against).
+
+    Requires a clone to exist (commit_document creates it).  The staleness guard
+    (refuse if the remote advanced past the recorded baseline) lives in the
+    caller — this function just ships what's local.
+    """
+    clone = _clone_path(dtxsid, root)
+    if not (clone / ".git").exists():
+        raise FileNotFoundError(
+            f"No working clone at {clone} — Commit Local before pushing."
+        )
+    # -u sets upstream so later pull/push need no refspec.
+    _git(["push", "-q", "-u", "origin", _BRANCH], cwd=clone)
+    return _git(["rev-parse", "HEAD"], cwd=clone)
+
+
+def repo_status(dtxsid: str, *, root: Path = _REPO_ROOT) -> dict:
+    """
+    Local, network-free view of the clone for the UI's derived status.
+
+    Returns {"has_clone": bool, "head": <sha|None>, "ahead": <int>}.  `ahead` is
+    how many local commits are not yet pushed.  The remote-side "did the
+    committee move past our baseline?" check needs the network (remote_head) and
+    is combined by the route, not here, so this stays cheap to poll.
+    """
+    clone = _clone_path(dtxsid, root)
+    if not (clone / ".git").exists():
+        return {"has_clone": False, "head": None, "ahead": 0}
+    try:
+        head = _git(["rev-parse", "HEAD"], cwd=clone)
+    except RuntimeError:
+        head = None
+    return {"has_clone": True, "head": head, "ahead": _ahead_count(clone)}
+
+
 def push_document(
     dtxsid: str,
     doc_dir: Path,
@@ -299,37 +435,15 @@ def push_document(
     message: str = "app: sync generated report",
 ) -> str:
     """
-    Push a document bundle to the project remote (the "send to Overleaf").
+    Back-compat convenience: commit the bundle locally, then push — the old
+    one-shot behaviour.  Retained for the offline test suite and any caller that
+    genuinely wants both halves at once; the live app uses the separate
+    commit_document / push_committed actions (ADR-0005 Am.3).
 
-    `doc_dir` is the directory whose contents are mirrored up — supplied by the
-    caller (the app passes its documents/<dtxsid>/), so this library module
-    stays domain-agnostic.  `remote` selects the target:
-      - None (default) → the LOCAL stand-in bare repo (offline dev/testing);
-      - a URL → the real project remote (a git-bridge URL, or a GitHub repo).
-        The existing project is cloned so our push fast-forwards on top of its
-        history; auth is the ambient git credential helper (no token in code).
-
-    Mirrors doc_dir into the working clone, commits any change, and pushes.
-    Returns the pushed commit sha — the baseline the reconciler diffs
-    pulled-back edits against.
+    Returns the pushed commit sha.
     """
-    doc_dir = Path(doc_dir)
-    if not doc_dir.exists():
-        raise FileNotFoundError(
-            f"No dev document at {doc_dir} — run sync_document({dtxsid!r}) first."
-        )
-
-    remote_url = remote if remote is not None else str(init_standin(dtxsid, root=root))
-    clone = _clone_path(dtxsid, root)
-    _ensure_clone(clone, remote_url, is_external=remote is not None)
-
-    _mirror_bundle(doc_dir, clone)
-    _git(["add", "-A"], cwd=clone)
-    if _has_staged_changes(clone):
-        _git(["commit", "-q", "-m", message], cwd=clone, author=_APP_AUTHOR)
-    # -u sets upstream so later pull/push need no refspec.
-    _git(["push", "-q", "-u", "origin", _BRANCH], cwd=clone)
-    return _git(["rev-parse", "HEAD"], cwd=clone)
+    commit_document(dtxsid, doc_dir, remote=remote, root=root, message=message)
+    return push_committed(dtxsid, root=root)
 
 
 def pull_document(dtxsid: str, *, root: Path = _REPO_ROOT) -> "tuple[Path, str]":

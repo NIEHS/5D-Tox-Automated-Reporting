@@ -13,8 +13,8 @@ What this proves
     report.tex now carries the committee edit while the baseline did not.
     That pair (baseline sha, edited clone) is exactly the reconciler's input.
 
-Everything runs against a tmp `root`, so no real .overleaf-standin/ /
-.overleaf-clone/ are touched and the test needs no network or Overleaf.
+Everything runs against a tmp `root`, so no real .repo-standin/ /
+.repo-clone/ are touched and the test needs no network or Overleaf.
 """
 
 import subprocess
@@ -67,7 +67,7 @@ def test_full_round_trip(tmp_path, doc_dir):
     assert baseline  # a sha
 
     # The bundle reached the clone; the app-internal sidecar did NOT.
-    clone = root / ".overleaf-clone" / _DTXSID
+    clone = root / ".repo-clone" / _DTXSID
     assert (clone / "report.tex").exists()
     assert (clone / "niehs.cls").exists()
     assert not (clone / ".rlm-sync.json").exists()

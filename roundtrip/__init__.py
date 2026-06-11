@@ -28,6 +28,9 @@ from .reconcile import Region, ReconcileResult, parse_regions, reconcile, apply_
 from .lock import get_lock, acquire_lock, release_lock
 from .transport import (
     init_standin,
+    commit_document,
+    push_committed,
+    repo_status,
     push_document,
     pull_document,
     read_clone_report,
@@ -45,7 +48,8 @@ __all__ = [
     "clear_override", "get_override",
     "Region", "ReconcileResult", "parse_regions", "reconcile", "apply_reconcile",
     "get_lock", "acquire_lock", "release_lock",
-    "init_standin", "push_document", "pull_document", "read_clone_report",
+    "init_standin", "commit_document", "push_committed", "repo_status",
+    "push_document", "pull_document", "read_clone_report",
     "report_at", "remote_head", "reconcile_from_clone", "simulate_overleaf_edit",
     "get_binding", "set_binding",
 ]
