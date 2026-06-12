@@ -76,5 +76,12 @@ from .experiment_metadata import (
 # ── Java bridge (classpath / paths) ──────────────────────────────────────
 from .java_bridge import build_classpath, BMDX_PROJECT, JAVA_HELPER_DIR
 
+# ── Clinical observation incidence tables ─────────────────────────────────
+from .clinical_observations import (
+    IncidenceRow,
+    build_clinical_obs_tables,
+    add_incidence_table_to_doc,
+)
+
 # ── BM2 cache (optional LMDB memoisation of Java exports) ────────────────
 from . import bm2_cache
