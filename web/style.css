@@ -2075,6 +2075,7 @@ header p {
 .sidebar {
     width: 280px;
     min-width: 280px;
+    flex-shrink: 0;
     height: 100vh;
     position: sticky;
     top: 0;
@@ -2141,7 +2142,6 @@ header p {
 .content-pane {
     flex: 1;
     padding: 2rem 1.5rem;
-    max-width: 100%;
     overflow-x: hidden;
     min-width: 0; /* prevent flex child from overflowing */
 }
@@ -2936,33 +2936,36 @@ td.data-gap, th.data-gap {
    the resize handle upward — overflow is visible so the container
    can extend above the section boundary. */
 #report-view-section {
-    background: #525659;
-    margin-left: calc(-50vw + 50%);
-    margin-right: calc(-50vw + 50%);
-    width: 100vw;
     position: relative;
 }
 
-/* --- Report toolbar — button bar above the PDF viewer --- */
+/* --- Report toolbar — button bar matching .view-controls style --- */
 .report-toolbar {
     display: flex;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 0;
-    background: #3c3f41;
-    border-bottom: 1px solid #2a2d2f;
-    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--c-bg-white);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    flex-wrap: wrap;
 }
 .report-toolbar .btn-action {
-    background: #fff;
-    color: #333;
-    border: 1px solid #ccc;
-    padding: 5px 16px;
-    border-radius: 4px;
-    font-size: 13px;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--c-text-secondary);
     cursor: pointer;
+    transition: all 0.15s;
 }
-.report-toolbar .btn-action:hover { background: #f0f0f0; }
+.report-toolbar .btn-action:hover {
+    background: var(--c-bg);
+    border-color: var(--c-text-placeholder);
+}
 .report-toolbar .btn-action.primary {
     background: var(--c-primary);
     color: #fff;
@@ -2972,7 +2975,8 @@ td.data-gap, th.data-gap {
     background: var(--c-primary-hover);
 }
 /* A disabled toolbar control (e.g. Push when there's nothing to push). */
-.report-toolbar .btn-action.disabled {
+.report-toolbar .btn-action.disabled,
+.report-toolbar .btn-action[disabled] {
     opacity: 0.5;
     pointer-events: none;
 }

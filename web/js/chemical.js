@@ -619,13 +619,12 @@ async function restoreSession(data) {
     AppStore.dispatch('pool.transition', restoredPhase);
 
     // --- Re-run integrated pipeline if pool was approved ---
-    // Always re-run autoProcessPool on restore when the pool is approved,
-    // even if there are no pending files.  This recreates domain-split
-    // apical section cards (body_weight, organ_weights, hormones, etc.)
-    // from the integrated data, replacing the old monolithic per-file
-    // sections that had wrong headers.  The pipeline is idempotent:
-    // sections already in apicalSections are skipped.
-    if (animalReportApproved) {
+    // Recreate domain-split apical section cards from the integrated data.
+    // The pipeline is idempotent: sections already in apicalSections are
+    // skipped.  Skip when a ?no-process query param is present (CSS/layout
+    // iteration shortcut).
+    const skipProcess = new URLSearchParams(window.location.search).has('no-process');
+    if (animalReportApproved && !skipProcess) {
         await autoProcessPool();
     }
 
