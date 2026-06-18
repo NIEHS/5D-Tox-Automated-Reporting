@@ -29,6 +29,7 @@ sums to less than bg_total, so the margin-consistency assertion fails.
 import pytest
 from scipy.stats import fisher_exact
 
+import enrichment_stats
 import interpret
 
 
@@ -84,13 +85,13 @@ def captured_tables(monkeypatch):
     """Spy on fisher_exact, recording every 2x2 table while still returning a
     real p-value so the BH/filter tail behaves normally."""
     tables: list[list[list[int]]] = []
-    real = interpret.fisher_exact
+    real = enrichment_stats.fisher_exact
 
     def _spy(table, **kwargs):
         tables.append([list(table[0]), list(table[1])])
         return real(table, **kwargs)
 
-    monkeypatch.setattr(interpret, "fisher_exact", _spy)
+    monkeypatch.setattr(enrichment_stats, "fisher_exact", _spy)
     return tables
 
 
