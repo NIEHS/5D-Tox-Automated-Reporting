@@ -104,6 +104,15 @@ class ToxKBQuerier:
     def close(self):
         self.con.close()
 
+    def __enter__(self) -> "ToxKBQuerier":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        # Always release the duckdb connection, even when the with-body raises;
+        # don't suppress the exception (return falsy).
+        self.close()
+        return False
+
     def gene_pathways(self, gene: str) -> list[dict]:
         rows = self.con.execute(
             "SELECT pathway_db, pathway_id, pathway_name, species "
@@ -1152,13 +1161,10 @@ def build_genomics_interpretation(
     if "bmd" in df.columns:
         df["bmd"] = pd.to_numeric(df["bmd"], errors="coerce")
 
-    kb = ToxKBQuerier(db_path)
-    try:
+    # ToxKBQuerier opens a duckdb connection; the context manager closes it
+    # even if analyze() raises, to avoid leaking file handles.
+    with ToxKBQuerier(db_path) as kb:
         result = analyze(df, kb, fdr_cutoff)
-    finally:
-        # ToxKBQuerier opens a duckdb connection — ensure it's closed even
-        # if analyze() raises, to avoid leaking file handles.
-        kb.close()
 
     # Return the formatted context text plus a serializable snapshot of the
     # raw enrichment results.  The snapshot enables caching without re-running
@@ -1976,14 +1982,16 @@ def interpret(
     print(f"  {len(df)} genes loaded (BMD range: {df['bmd'].min():.3g} - {df['bmd'].max():.3g})")
 
     print(f"Connecting to knowledge base: {db_path}")
-    kb = ToxKBQuerier(db_path)
+    # The KB connection is only needed to build `result`; the context manager
+    # releases the duckdb handle as soon as that's done (and even if a query
+    # raises), so the long narrative/output phase below holds no DB connection.
+    with ToxKBQuerier(db_path) as kb:
+        # Check how many genes are in the KB
+        in_kb = sum(1 for g in df["gene_symbol"] if kb.gene_evidence(g)["evidence"] is not None)
+        print(f"  {in_kb}/{len(df)} genes found in KB")
 
-    # Check how many genes are in the KB
-    in_kb = sum(1 for g in df["gene_symbol"] if kb.gene_evidence(g)["evidence"] is not None)
-    print(f"  {in_kb}/{len(df)} genes found in KB")
-
-    print("Building interpretation context...")
-    result = analyze(df, kb, fdr_cutoff)
+        print("Building interpretation context...")
+        result = analyze(df, kb, fdr_cutoff)
 
     # --- Multi-model mode ---
     if models:
@@ -2057,7 +2065,6 @@ def interpret(
             all_docx = docx_p.parent / f"{docx_p.stem}_all{docx_p.suffix}"
             build_interpretation_docx(result, str(all_docx))
 
-        kb.close()
         return all_md_text
 
     # --- Single-model mode (backward compatible) ---
@@ -2077,7 +2084,6 @@ def interpret(
     out.write_text(report)
     print(f"Markdown saved to {output_path}")
 
-    kb.close()
     return report
 
 

@@ -47,6 +47,13 @@ def test_build_genomics_interpretation_coerces_string_nan_bmd(monkeypatch):
         def close(self):
             pass
 
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.close()
+            return False
+
     # Stub analyze() to capture the DataFrame it receives and run the exact
     # operations that used to raise on a mixed float/str column.
     def _fake_analyze(df, kb, fdr_cutoff=0.05):
@@ -97,6 +104,13 @@ def test_min_max_over_all_string_nan_does_not_raise(monkeypatch):
 
         def close(self):
             pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.close()
+            return False
 
     def _fake_analyze(df, kb, fdr_cutoff=0.05):
         return AnalysisResult(
