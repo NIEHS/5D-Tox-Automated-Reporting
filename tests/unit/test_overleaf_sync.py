@@ -137,3 +137,82 @@ def test_push_requires_doc_dir(tmp_path):
 def test_pull_before_push_errors(tmp_path):
     with pytest.raises(FileNotFoundError):
         ovs.pull_document(_DTXSID, root=tmp_path)
+
+
+def _set_report(doc_dir, marker: str) -> None:
+    """Rewrite the doc bundle's report.tex with a distinct summary marker."""
+    (doc_dir / "report.tex").write_text(_REPORT.replace("ORIGINAL SUMMARY", marker))
+
+
+def test_commit_local_accumulates_unpushed_commits(tmp_path, doc_dir):
+    """ADR-0005 Am.3: repeated Commit Local (no Push between) must ACCUMULATE
+    local commits, not silently discard the earlier ones.
+
+    Regression for the `_ensure_clone` hard-reset bug: it ran
+    `checkout -f -B main origin/main` on every commit_document, so a second
+    Commit Local reset HEAD back to the pushed tip and the first un-pushed
+    commit vanished (ahead stuck at 1 forever).
+    """
+    root = tmp_path
+
+    # Establish a pushed baseline so origin/main exists (the precondition that
+    # made the old hard-reset destructive).
+    _set_report(doc_dir, "V1 SUMMARY")
+    ovs.push_document(_DTXSID, doc_dir=doc_dir, root=root)
+
+    # Two Commit Locals, no Push between them — each a distinct edit.
+    _set_report(doc_dir, "V2 SUMMARY")
+    r2 = ovs.commit_document(_DTXSID, doc_dir, root=root)
+    assert r2["committed"] and r2["ahead"] == 1
+
+    _set_report(doc_dir, "V3 SUMMARY")
+    r3 = ovs.commit_document(_DTXSID, doc_dir, root=root)
+    assert r3["committed"]
+    # The payoff: BOTH local commits are unpushed and present.  Pre-fix this
+    # was 1 — the V2 commit was reset away by the V3 Commit Local.
+    assert r3["ahead"] == 2
+
+    # And V2's content survives one commit back in history (not overwritten out).
+    clone = root / ".repo-clone" / _DTXSID
+    parent = subprocess.run(
+        ["git", "show", "HEAD~1:report.tex"],
+        cwd=str(clone), capture_output=True, text=True,
+    ).stdout
+    assert "V2 SUMMARY" in parent
+    head = ovs.read_clone_report(_DTXSID, root=root)
+    assert "V3 SUMMARY" in head
+
+
+def test_commit_local_does_not_swallow_committee_edits(tmp_path, doc_dir):
+    """Commit Local is documented "No network": it must NOT fetch the committee's
+    advanced remote and base the local commit on top of it.  Doing so silently
+    bypassed the Push reconcile-before-overwrite guard and buried unreconciled
+    committee edits in our history.
+    """
+    root = tmp_path
+
+    # Baseline keeps the default "ORIGINAL SUMMARY" so the committee edit below
+    # has a region to rewrite.
+    ovs.push_document(_DTXSID, doc_dir=doc_dir, root=root)
+
+    # Committee edits in Overleaf and pushes → origin/main advances.
+    committee_sha = ovs.simulate_overleaf_edit(_DTXSID, _edit_summary, root=root)
+
+    # App does a local-only Commit Local.
+    _set_report(doc_dir, "V2 SUMMARY")
+    ovs.commit_document(_DTXSID, doc_dir, root=root)
+
+    # The committee's commit must NOT be an ancestor of our new HEAD — Commit
+    # Local stayed offline and based the commit on our own last commit, leaving
+    # the committee edit for the explicit Pull+reconcile flow.  Pre-fix the
+    # hard-reset onto origin/main made committee_sha an ancestor (and silently
+    # clobbered the committee text with our render).
+    clone = root / ".repo-clone" / _DTXSID
+    is_ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", committee_sha, "HEAD"],
+        cwd=str(clone), capture_output=True, text=True,
+    ).returncode
+    assert is_ancestor != 0, "Commit Local must not fold in unreconciled committee edits"
+
+    # The Push guard still sees the divergence and forces a Pull first.
+    assert ovs.remote_head(_DTXSID, root=root) == committee_sha

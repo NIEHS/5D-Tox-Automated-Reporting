@@ -271,23 +271,41 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
 
     Handles three cases:
       - clone already exists → (re)point origin if it changed (e.g. switching a
-        stand-in clone over to the real Overleaf/GitHub remote) and hard-reset to
-        origin/<branch> when the remote has it;
+        stand-in clone over to the real Overleaf/GitHub remote).  Only when the
+        remote actually changed do we hard-reset onto origin/<branch>; when it's
+        the same remote we've been committing to, we just settle on `branch`
+        WITHOUT fetching or resetting, so un-pushed local commits survive;
       - fresh clone of an EXTERNAL remote (real project) → `git clone` so we get
         its existing history + content;
       - fresh clone of the LOCAL stand-in (empty bare) → `git init` + remote add.
     """
     branch = _BRANCH
 
-    def _onto_branch() -> None:
-        # Put the clone on `branch`, synced to the remote tip if the remote has
-        # it, else create `branch` (handles an EMPTY remote — no main yet — so
-        # the first push can create it).  -f discards any local state from a
-        # previous (stand-in) life.
+    def _sync_onto_branch() -> None:
+        # DESTRUCTIVE: put the clone on `branch`, hard-synced to the remote tip if
+        # the remote has it, else create `branch` (handles an EMPTY remote — no
+        # main yet — so the first push can create it).  -f discards any local
+        # state from a previous (stand-in) life.  Only safe on a FRESH clone or
+        # when re-pointing to a DIFFERENT remote — never on the steady-state
+        # commit path, where it would silently eat un-pushed local commits.
         _git(["fetch", "-q", "origin"], cwd=clone)
         if f"origin/{branch}" in _git(["branch", "-r"], cwd=clone):
             _git(["checkout", "-q", "-f", "-B", branch, f"origin/{branch}"], cwd=clone)
         else:
+            _git(["checkout", "-q", "-B", branch], cwd=clone)
+
+    def _settle_on_branch() -> None:
+        # NON-DESTRUCTIVE: ensure HEAD is on `branch` without fetching or
+        # resetting, so accumulated local commits (Commit Local before Push) and
+        # any committee history already fetched are preserved.  No-op once we're
+        # already on `branch`, which is the common case.
+        try:
+            head_branch = _git(["symbolic-ref", "--short", "-q", "HEAD"], cwd=clone)
+        except RuntimeError:
+            head_branch = ""
+        if head_branch != branch:
+            # -B without a start-point keeps the current commit, just (re)names
+            # the branch ref to `branch` — no history is discarded.
             _git(["checkout", "-q", "-B", branch], cwd=clone)
 
     if (clone / ".git").exists():
@@ -296,20 +314,27 @@ def _ensure_clone(clone: Path, remote_url: str, *, is_external: bool) -> None:
         except RuntimeError:
             current = ""
         if current != remote_url:
+            # Remote changed (or was missing) — point at the new one and hard-sync
+            # onto its history.  Discarding local state here is correct: commits
+            # made against the OLD remote don't belong on the new one.
             if current:
                 _git(["remote", "set-url", "origin", remote_url], cwd=clone)
             else:
                 _git(["remote", "add", "origin", remote_url], cwd=clone)
-        _onto_branch()
+            _sync_onto_branch()
+        else:
+            # Same remote we've been committing to — preserve un-pushed work.
+            _settle_on_branch()
         return
 
     if is_external:
         # Clone WITHOUT -b: a populated repo checks out its default branch; an
-        # EMPTY one clones cleanly (no "branch not found"), and _onto_branch()
-        # then settles us on `branch` either way.
+        # EMPTY one clones cleanly (no "branch not found"), and _sync_onto_branch()
+        # then settles us on `branch` either way.  Fresh clone → hard-sync is
+        # correct (there's no local work to lose yet).
         clone.parent.mkdir(parents=True, exist_ok=True)
         _git(["clone", "-q", remote_url, str(clone)], cwd=clone.parent)
-        _onto_branch()
+        _sync_onto_branch()
     else:
         clone.mkdir(parents=True, exist_ok=True)
         _git(["init", "-q", "-b", branch], cwd=clone)
