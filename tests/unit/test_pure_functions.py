@@ -9,6 +9,7 @@ Tests pure functions that have no I/O or external dependencies:
   - Hash functions: deterministic cache keys for NTP/sections/BMDS/genomics
 """
 
+import os
 from dataclasses import dataclass, field
 from math import inf
 
@@ -24,6 +25,7 @@ from pool_orchestrator import (
     serialize_incidence_rows,
     _hash_ntp,
     _hash_sections,
+    _hash_sidecars,
     _hash_bmds,
     _hash_genomics,
 )
@@ -314,4 +316,58 @@ class TestHashFunctions:
     def test_hash_genomics_sensitive_to_file(self):
         h1 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_a.bm2")
         h2 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_b.bm2")
+        assert h1 != h2
+
+    # ── stale-sidecar cache key (bug #4) ─────────────────────────────────
+    # The sections stage reads sidecar JSONs + clinical-obs CSVs straight off
+    # disk and uses _meta.imputed_cells; none flow through ntp_hash.  Before
+    # the fix, editing a sidecar left _hash_sections unchanged and a stale
+    # report was served.  These tests assert the key now moves.
+
+    def _make_session(self, tmp_path):
+        files = tmp_path / "files"
+        files.mkdir()
+        sc = files / "body_weight_truth_male.sidecar.json"
+        sc.write_text('{"platform": "Body Weight", "sex": "Male"}')
+        return str(tmp_path), sc
+
+    def test_hash_sidecars_deterministic(self, tmp_path):
+        session_dir, _ = self._make_session(tmp_path)
+        assert _hash_sidecars(session_dir) == _hash_sidecars(session_dir)
+
+    def test_hash_sidecars_sensitive_to_content(self, tmp_path):
+        session_dir, sc = self._make_session(tmp_path)
+        before = _hash_sidecars(session_dir)
+        # Rewrite with a different size + bumped mtime, as an edit would.
+        os.utime(sc, ns=(0, 0))
+        sc.write_text('{"platform": "Body Weight", "sex": "Male", "edited": true}')
+        os.utime(sc, ns=(10**9, 10**9))
+        assert _hash_sidecars(session_dir) != before
+
+    def test_hash_sidecars_sensitive_to_deletion(self, tmp_path):
+        session_dir, sc = self._make_session(tmp_path)
+        before = _hash_sidecars(session_dir)
+        sc.unlink()
+        assert _hash_sidecars(session_dir) != before
+
+    def test_hash_sidecars_includes_extra_paths(self, tmp_path):
+        session_dir, _ = self._make_session(tmp_path)
+        csv = tmp_path / "clinical_obs.csv"
+        csv.write_text("a,b\n1,2\n")
+        without = _hash_sidecars(session_dir)
+        withcsv = _hash_sidecars(session_dir, extra_paths=[str(csv)])
+        assert without != withcsv
+
+    def test_hash_sections_sensitive_to_sidecar_hash(self):
+        """Same NTP/compound/unit but a different sidecar fingerprint must miss."""
+        h1 = _hash_sections("abc123", "TestChem", "mg/kg", sidecar_hash="sidecarA")
+        h2 = _hash_sections("abc123", "TestChem", "mg/kg", sidecar_hash="sidecarB")
+        assert h1 != h2
+
+    def test_hash_sections_sensitive_to_imputed_cells(self):
+        h1 = _hash_sections("abc123", "TestChem", "mg/kg", imputed_cells=None)
+        h2 = _hash_sections(
+            "abc123", "TestChem", "mg/kg",
+            imputed_cells={"Body Weight": {"Male": {"100": 2}}},
+        )
         assert h1 != h2

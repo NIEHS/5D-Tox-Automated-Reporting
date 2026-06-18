@@ -69,6 +69,7 @@ from cache_plumbing import (
     _CHARTS_CACHE_SCHEMA_VERSION,
     _hash_ntp,
     _hash_sections,
+    _hash_sidecars,
     _hash_bmds,
     _hash_genomics,
     _hash_bmd_summary,
@@ -243,8 +244,21 @@ async def api_process_integrated(dtxsid: str, request: Request):
             if hasattr(row, "_bmds_input") and row._bmds_input
         ]
 
-        # Compute per-unit hashes
-        sections_hash = _hash_sections(ntp_hash, compound_name, dose_unit)
+        # Compute per-unit hashes.  The sections stage reads sidecar JSONs
+        # and the clinical-obs CSVs straight off disk and uses
+        # _meta.imputed_cells — none of which flow through ntp_hash — so fold
+        # a fingerprint of those inputs into the sections key, otherwise
+        # editing a sidecar would silently serve a stale report.
+        _meta = integrated.get("_meta", {})
+        sections_sidecar_hash = _hash_sidecars(
+            str(_session_dir(dtxsid)),
+            extra_paths=_meta.get("clinical_obs_files", []),
+        )
+        sections_hash = _hash_sections(
+            ntp_hash, compound_name, dose_unit,
+            sidecar_hash=sections_sidecar_hash,
+            imputed_cells=_meta.get("imputed_cells"),
+        )
         bmds_hash = _hash_bmds(bmds_inputs) if bmds_inputs else "empty"
 
         meta = integrated.get("_meta", {})

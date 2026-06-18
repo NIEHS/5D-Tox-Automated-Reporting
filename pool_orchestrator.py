@@ -150,6 +150,7 @@ from cache_plumbing import (
     _CHARTS_CACHE_SCHEMA_VERSION,
     _hash_ntp,
     _hash_sections,
+    _hash_sidecars,
     _hash_bmds,
     _hash_genomics,
     _hash_bmd_summary,

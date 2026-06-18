@@ -42,6 +42,7 @@ caches.
 import hashlib
 import json
 import logging
+import os
 from dataclasses import asdict
 
 import orjson
@@ -162,15 +163,80 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 7  # bumped: organ-weight + body-weight rows now carry `emphasize` (bold-row rule)
+_SECTIONS_CACHE_SCHEMA_VERSION = 8  # bumped: sidecar + imputed_cells folded into the key (stale-sidecar fix)
 
 
-def _hash_sections(ntp_hash: str, compound_name: str, dose_unit: str) -> str:
+def _fingerprint_files(paths) -> list[list]:
+    """
+    Fingerprint a set of files by (basename, size, mtime_ns) for cache keying.
+
+    Used to detect edits to inputs the sections stage reads straight off disk
+    (sidecar JSONs, clinical-obs CSVs) but that are NOT reflected in the
+    integrated dict — so a content change wouldn't otherwise move any hash.
+    Cheap (one stat() per file, no read) and order-independent (sorted).
+    Missing/unstattable files are skipped, so deleting an input also moves the
+    fingerprint.  Returns a JSON-serializable list of [name, size, mtime_ns].
+    """
+    fp = []
+    for p in paths:
+        try:
+            st = os.stat(p)
+        except OSError:
+            continue
+        fp.append([os.path.basename(p), st.st_size, st.st_mtime_ns])
+    fp.sort()
+    return fp
+
+
+def _hash_sidecars(session_dir: str, extra_paths=None) -> str:
+    """
+    Fingerprint the on-disk inputs the sections stage reads directly.
+
+    The sections stage builds apical/clinical-pathology tables and the
+    body-weight mortality + tissue-concentration sections from sidecar JSON
+    files in {session_dir}/files/ and from the clinical-obs CSVs recorded in
+    _meta.clinical_obs_files.  None of those flow through ntp_hash, so before
+    this was folded in, editing a sidecar served a stale report silently
+    (bug: stale-sidecar cache key).
+
+    Hashes every *.sidecar.json under files/ plus any extra_paths (the
+    clinical-obs CSVs) by (name, size, mtime).  Returns 16-char hex.
+    """
+    paths = []
+    files_dir = os.path.join(session_dir, "files")
+    if os.path.isdir(files_dir):
+        paths.extend(
+            os.path.join(files_dir, f)
+            for f in os.listdir(files_dir)
+            if f.endswith(".sidecar.json")
+        )
+    if extra_paths:
+        paths.extend(extra_paths)
+    fp = _fingerprint_files(paths)
+    return hashlib.sha256(json.dumps(fp, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _hash_sections(
+    ntp_hash: str,
+    compound_name: str,
+    dose_unit: str,
+    sidecar_hash: str = "",
+    imputed_cells=None,
+) -> str:
     """
     Hash inputs that affect section card building.
 
     Depends on NTP stats output (via ntp_hash) plus display parameters
     that affect narrative text.  dtxsid is implicit (cache directory).
+
+    Also folds in:
+      - sidecar_hash: a fingerprint of the sidecar JSONs + clinical-obs CSVs
+        the sections stage reads straight off disk (see _hash_sidecars).
+        Without it, editing a sidecar left the cache key unchanged and a
+        stale report was served.
+      - imputed_cells: the _meta.imputed_cells map, which the
+        clinical-pathology builder uses to footnote imputation-backed BMDs;
+        it is not otherwise reflected in ntp_hash.
 
     A schema_version is folded in so that adding/renaming row-dict fields
     (e.g. the `responsive` flag for clinical-pathology bolding) forces a
@@ -181,6 +247,8 @@ def _hash_sections(ntp_hash: str, compound_name: str, dose_unit: str) -> str:
         "ntp": ntp_hash,
         "compound_name": compound_name,
         "dose_unit": dose_unit,
+        "sidecars": sidecar_hash,
+        "imputed_cells": imputed_cells,
     }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
