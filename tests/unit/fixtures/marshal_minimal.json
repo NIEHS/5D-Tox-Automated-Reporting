@@ -595,101 +595,121 @@
     "sections": [
       {
         "heading": "Study Design",
+        "key": "study_design",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Dose Selection Rationale",
+        "key": "dose_selection",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Chemistry",
+        "key": "chemistry",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Clinical Examinations and Sample Collection",
+        "key": "clinical_exams",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Clinical Observations",
+        "key": "clinical_obs",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Body and Organ Weights",
+        "key": "body_organ_weights",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Clinical Pathology",
+        "key": "clinical_pathology",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Internal Dose Assessment",
+        "key": "internal_dose",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Transcriptomics",
+        "key": "transcriptomics",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Sample Collection for Transcriptomics",
+        "key": "txomics_sample",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "RNA Isolation, Library Creation, and Sequencing",
+        "key": "txomics_rna",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Sequence Data Processing",
+        "key": "txomics_seq_processing",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Sequencing Quality Checks and Outlier Removal",
+        "key": "txomics_qc",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Data Normalization",
+        "key": "txomics_normalization",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Data Analysis",
+        "key": "data_analysis",
         "level": 2,
         "paragraphs": []
       },
       {
         "heading": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "key": "stat_analysis",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology",
+        "key": "bmd_apical",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Benchmark Dose Analysis of Transcriptomics Data",
+        "key": "bmd_genomics",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling",
+        "key": "efdr",
         "level": 3,
         "paragraphs": []
       },
       {
         "heading": "Data Accessibility",
+        "key": "data_accessibility",
         "level": 3,
         "paragraphs": []
       }

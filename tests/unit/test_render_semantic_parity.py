@@ -221,6 +221,55 @@ def test_blank_paragraph_section_is_pending_on_both_surfaces():
     )
 
 
+def test_methods_subsection_matches_by_key_not_title():
+    """
+    A methods subsection's prose is matched to its tree node by the STABLE
+    methods_key, not the display heading.  Rewording the node title (or the
+    section heading) must not unlink the content.
+
+    Regression: methods_subsection_content matched section["heading"] ==
+    node.title — two independently-maintained display strings (the YAML
+    template title vs. SUBSECTION_SKELETON heading_text).  Rewording either one
+    alone silently blanked the subsection on BOTH surfaces.
+    """
+    from render_common import methods_subsection_content
+
+    node = DocNode(id="mm-study-design", title="RENAMED IN TEMPLATE",
+                   node_type="narrative", level=3, methods_key="study_design")
+    # The section carries the stable key; its heading is the OLD/other wording.
+    data = {"methods": {"sections": [
+        {"level": 3, "key": "study_design", "heading": "Study Design",
+         "paragraphs": ["REAL STUDY DESIGN PROSE"]},
+    ]}}
+
+    paragraphs, _ = methods_subsection_content(node, data)
+    assert paragraphs == ["REAL STUDY DESIGN PROSE"], (
+        "methods content must resolve by methods_key even when the title and "
+        "the section heading disagree"
+    )
+
+    # And both surfaces render it as content, not the pending placeholder.
+    html = html_generator._render_methods_subsection(node, data)
+    tex = latex_generator._render_methods_subsection(node, data)
+    assert "REAL STUDY DESIGN PROSE" in html and "REAL STUDY DESIGN PROSE" in tex
+    assert "pending" not in html.lower() and "pending" not in tex.lower()
+
+
+def test_methods_subsection_legacy_heading_fallback():
+    """Legacy section dicts that predate the `key` field still match by
+    heading == title, so old cached sessions keep rendering."""
+    from render_common import methods_subsection_content
+
+    node = DocNode(id="mm-chemistry", title="Chemistry",
+                   node_type="narrative", level=3, methods_key="chemistry")
+    data = {"methods": {"sections": [
+        {"level": 3, "heading": "Chemistry", "paragraphs": ["LEGACY PROSE"]},
+    ]}}
+
+    paragraphs, _ = methods_subsection_content(node, data)
+    assert paragraphs == ["LEGACY PROSE"]
+
+
 def test_roster_cell_escaping_is_single_on_both_surfaces():
     """
     An animal_id carrying a LaTeX special is escaped exactly once on both

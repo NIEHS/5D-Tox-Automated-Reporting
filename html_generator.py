@@ -560,11 +560,11 @@ def _render_narrative(node: DocNode, data: dict) -> str:
 
 def _render_methods_subsection(node: DocNode, data: dict) -> str:
     """
-    M&M subsection — content lives in data["methods"]["sections"] as a
-    flat list keyed by heading (title-match).  Mirrors the LaTeX
-    handler's lookup strategy.
+    M&M subsection — content lives in data["methods"]["sections"], matched
+    to this node by the stable methods_key (see methods_subsection_content).
+    Mirrors the LaTeX handler's lookup strategy.
     """
-    # ADR-0006 Amendment 1: the heading-match lookup and content-present
+    # ADR-0006 Amendment 1: the key-match lookup and content-present
     # decision are shared; the markup is HTML emit.  A section with no real
     # paragraph text and no inline table is "pending" on both surfaces.
     paragraphs, inline = methods_subsection_content(node, data)

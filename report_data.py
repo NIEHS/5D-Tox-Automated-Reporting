@@ -1072,6 +1072,9 @@ def _build_methods_sections_from_tree() -> list[dict]:
         sections.append({
             "level": node.level,
             "heading": node.title,
+            # Stable binding the renderer matches on (methods_subsection_content);
+            # carry it so a future title reword can't unlink a subsection's prose.
+            "key": node.methods_key,
             "paragraphs": [],
         })
 

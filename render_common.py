@@ -510,29 +510,51 @@ def methods_subsection_content(
     node: DocNode, data: dict
 ) -> tuple[list[str], dict | None]:
     """
-    EXTRACT for a Materials & Methods subsection: locate the methods section
-    whose heading matches this node's title and return its (paragraphs,
-    inline_table).
+    EXTRACT for a Materials & Methods subsection: locate this node's methods
+    section and return its (paragraphs, inline_table).
 
     The methods content lives at data["methods"]["sections"] as a flat list of
-    {heading, paragraphs, [table]} dicts, keyed by the human-readable heading
-    (the title is canonical — see the handler docstrings).  The inline table,
-    when present, is already in a neutral {caption, headers, rows, footnotes}
-    shape that each emitter renders in its own markup, so it is passed through
-    as-is rather than re-modelled here.
+    {key, heading, paragraphs, [table]} dicts.  We match on the STABLE `key`
+    (the node's methods_key, matching MethodsSection.key / SUBSECTION_SKELETON)
+    — NOT the display heading.  Both the production methods_report path and the
+    scaffold _build_methods_sections_from_tree path emit that key; matching on
+    it means rewording a subsection title in the template or the skeleton can't
+    silently unlink a subsection's prose (the two heading strings are
+    independently maintained).  The heading match is kept only as a fallback for
+    legacy section dicts that predate the key field.
+
+    The inline table, when present, is already in a neutral {caption, headers,
+    rows, footnotes} shape that each emitter renders in its own markup, so it is
+    passed through as-is rather than re-modelled here.
 
     Returns ([], None) when no section matches (the emitter shows its pending
     placeholder — emptiness is format-dependent, so that decision stays in emit).
     """
     methods = data.get("methods", {})
-    if isinstance(methods, dict):
-        for section in methods.get("sections", []):
-            if section.get("heading") == node.title:
-                table = section.get("table")
-                return (
-                    section.get("paragraphs", []) or [],
-                    table if isinstance(table, dict) else None,
-                )
+    if not isinstance(methods, dict):
+        return [], None
+
+    def _unpack(section: dict) -> tuple[list[str], dict | None]:
+        table = section.get("table")
+        return (
+            section.get("paragraphs", []) or [],
+            table if isinstance(table, dict) else None,
+        )
+
+    sections = methods.get("sections", [])
+
+    # Primary: match on the stable methods_key binding.
+    node_key = node.methods_key
+    if node_key:
+        for section in sections:
+            if section.get("key") == node_key:
+                return _unpack(section)
+
+    # Fallback: legacy section dicts without a `key` — match the display heading.
+    for section in sections:
+        if not section.get("key") and section.get("heading") == node.title:
+            return _unpack(section)
+
     return [], None
 
 

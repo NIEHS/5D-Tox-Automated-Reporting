@@ -358,15 +358,9 @@ def _render_narrative(node: DocNode, data: dict) -> str:
 def _render_methods_subsection(node: DocNode, data: dict) -> str:
     """
     M&M subsection — content lives in data["methods"]["sections"] as a
-    flat list of {level, heading, paragraphs, [table]} dicts.  We match
-    each tree node by title against section.heading.
-
-    Why title-match instead of an explicit key
-    ------------------------------------------
-    Both _build_methods_sections_from_tree (scaffold path) and the
-    production methods_report path produce sections keyed on the human-
-    readable heading.  Carrying a separate "methods_key" field through
-    the data dict would duplicate that — the title is already canonical.
+    flat list of {level, key, heading, paragraphs, [table]} dicts.  The
+    node-to-section match is by the stable methods_key (see
+    methods_subsection_content); the heading is display text only.
     """
     # ADR-0006 Amendment 1: the heading-match lookup and content-present
     # decision are shared; the markup is LaTeX emit.  The inline table (e.g. the
