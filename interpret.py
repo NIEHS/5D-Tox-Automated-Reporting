@@ -188,6 +188,17 @@ class ToxKBQuerier:
         ).fetchone()
         return row[0] if row else 0
 
+    def background_genes(self) -> set[str]:
+        """The enrichment background universe: every distinct gene_symbol in
+        the genes table.  Fisher's exact test is only valid when the responsive
+        set is a subset of this universe, so callers must intersect against it
+        before building 2x2 tables (otherwise out-of-universe genes inflate the
+        'not in pathway' margin and drive the d-cell negative)."""
+        rows = self.con.execute(
+            "SELECT DISTINCT gene_symbol FROM genes",
+        ).fetchall()
+        return {r[0] for r in rows}
+
     def total_pathway_gene_count(self) -> int:
         row = self.con.execute(
             "SELECT COUNT(DISTINCT gene_symbol) FROM pathways",
@@ -267,11 +278,18 @@ def enrich_pathways(
 
     Background = all genes in the KB (genes table).
     """
-    responsive_set = set(responsive_genes)
+    # The responsive set MUST be a subset of the background universe.  Genes
+    # absent from the KB (e.g. probes with no symbol mapping) are not part of
+    # the population Fisher's test draws from; counting them inflates the "not
+    # in pathway" margin (b) and drives the d-cell negative.  Intersecting here
+    # — and measuring bg_total from the same universe — keeps the 2x2 margins
+    # consistent so every cell is non-negative by construction.
+    background = kb.background_genes()
+    bg_total = len(background)
+    responsive_set = set(responsive_genes) & background
     n_responsive = len(responsive_set)
 
     pathway_counts = kb.all_pathway_gene_counts()
-    bg_total = kb.total_gene_count()
 
     # Map each responsive gene to its pathways
     gene_to_pathways: dict[str, set[str]] = {}
@@ -297,10 +315,6 @@ def enrich_pathways(
         pathway_size = pathway_counts.get(pathway_name, 0)
         c = pathway_size - a
         d = bg_total - pathway_size - b
-        if c < 0:
-            c = 0
-        if d < 0:
-            d = 0
 
         _, pval = fisher_exact([[a, b], [c, d]], alternative="greater")
 
@@ -341,11 +355,14 @@ def enrich_go_terms(
     Over-representation analysis for GO terms using Fisher's exact test.
     Same logic as enrich_pathways but against gene_go_terms table.
     """
-    responsive_set = set(responsive_genes)
+    # Restrict to the background universe so the 2x2 margins stay consistent;
+    # see enrich_pathways for the full rationale.
+    background = kb.background_genes()
+    bg_total = len(background)
+    responsive_set = set(responsive_genes) & background
     n_responsive = len(responsive_set)
 
     go_counts = kb.all_go_term_gene_counts()
-    bg_total = kb.total_gene_count()
 
     # Map each responsive gene to its GO terms
     gene_to_go: dict[str, set[str]] = {}
@@ -371,10 +388,6 @@ def enrich_go_terms(
         term_size = go_counts.get(go_id, 0)
         c = term_size - a
         d = bg_total - term_size - b
-        if c < 0:
-            c = 0
-        if d < 0:
-            d = 0
 
         _, pval = fisher_exact([[a, b], [c, d]], alternative="greater")
 
