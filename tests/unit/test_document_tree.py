@@ -142,6 +142,44 @@ class TestComputeTableNumbers:
         assert bg is not None
         assert bg.table_number is None
 
+    def test_incidence_table_is_numbered_in_sequence(self):
+        """An incidence-table is a numbered table type (it renders through
+        niehstable and is xref-able), so it must receive a table_number and not
+        leave a gap in the sequence.
+
+        Regression: compute_table_numbers used to allowlist only "table" and
+        "bmd-summary", so table-clinical-obs (an incidence-table) got None and
+        the surrounding numbers jumped 3 -> 4, dropping it from the List of
+        Tables and rendering it without a "Table N." caption.
+        """
+        import copy
+        tree = copy.deepcopy(DOCUMENT_TREE)
+        compute_table_numbers(tree)
+
+        clin_obs = find_node("table-clinical-obs", tree)
+        assert clin_obs is not None
+        assert clin_obs.node_type == "incidence-table"
+        # It sits third among the numbered tables (body-weight=2, organ-weight=3),
+        # so it must be Table 4 — present and gap-free, not None.
+        assert clin_obs.table_number == 4
+
+        # Whole-tree sweep: every numbered-table node has a number and the full
+        # run is contiguous starting at 2, with no gaps around the incidence row.
+        from document_tree import NUMBERED_TABLE_TYPES, walk_tree
+
+        numbers: list[int] = []
+
+        def _collect(node):
+            if node.node_type in NUMBERED_TABLE_TYPES:
+                assert node.table_number is not None, (
+                    f"{node.id} ({node.node_type}) is a numbered table type but "
+                    "got no table_number"
+                )
+                numbers.append(node.table_number)
+
+        walk_tree(tree, _collect)
+        assert numbers == list(range(2, 2 + len(numbers)))
+
 
 class TestFindNode:
     """Verify find_node locates nodes at any depth."""

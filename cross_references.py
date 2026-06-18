@@ -55,7 +55,7 @@ import re
 from typing import Callable
 
 from document_node import DocNode
-from document_tree import find_node
+from document_tree import NUMBERED_TABLE_TYPES, find_node
 
 
 # ---------------------------------------------------------------------------
@@ -72,8 +72,11 @@ _XREF_RE = re.compile(r"\[\[xref:([\w\-:.]+)\]\]")
 
 # Node types treated as tables for cross-reference purposes — they go through
 # niehstable, which emits \label{tab:<id>}, and they receive a table_number
-# from compute_table_numbers.
-_TABLE_TYPES = frozenset({"table", "incidence-table", "bmd-summary"})
+# from compute_table_numbers.  The producer side (document_tree.
+# NUMBERED_TABLE_TYPES) is the source of truth; we mirror it and assert equality
+# so a type can never be numbered-but-unreferenceable (or vice versa) again.
+_TABLE_TYPES = NUMBERED_TABLE_TYPES
+assert _TABLE_TYPES == frozenset({"table", "incidence-table", "bmd-summary"})
 
 
 # ---------------------------------------------------------------------------

@@ -120,13 +120,23 @@ def walk_tree(nodes: list[DocNode], visit) -> None:
         walk_tree(node.children, visit)
 
 
+# Node types that render through niehstable, emit \label{tab:<id>}, and so
+# must receive a positional table_number.  This is the single producer-side
+# source of truth; cross_references._TABLE_TYPES is the consumer-side mirror and
+# must stay equal to it (see the assertion in cross_references.py).
+NUMBERED_TABLE_TYPES = frozenset({"table", "incidence-table", "bmd-summary"})
+
+
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     """
-    Walk the tree in document order and assign table_number to each
-    node with node_type == "table" or "bmd-summary".
+    Walk the whole tree in document order and assign table_number to every
+    node whose node_type is in NUMBERED_TABLE_TYPES.
 
     Table 1 is always the sample counts table (in Methods), which is
-    handled separately.  The apical tables start at Table 2.
+    handled separately (inline, not a tree node).  The remaining tables start
+    at Table 2 and are numbered in pre-order document order regardless of which
+    section they live under — numbering is positional, not scoped to a section
+    id, so re-parenting or renaming a section can't silently drop a number.
 
     Mutates nodes in place.
     """
@@ -134,26 +144,16 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
         tree = DOCUMENT_TREE
 
     # Table 1 = sample counts (in Methods, not a tree node — it's inline).
-    # Apical tables start at 2.
+    # Every numbered table starts at 2.
     counter = 2
 
-    def _walk_results_tables(nodes: list[DocNode]) -> None:
+    def visit(node: DocNode) -> None:
         nonlocal counter
-        for node in nodes:
-            if node.node_type == "table":
-                node.table_number = counter
-                counter += 1
-            elif node.node_type == "bmd-summary":
-                node.table_number = counter
-                counter += 1
-            if node.children:
-                _walk_results_tables(node.children)
+        if node.node_type in NUMBERED_TABLE_TYPES:
+            node.table_number = counter
+            counter += 1
 
-    # Only count tables in the Results section
-    for node in tree:
-        if node.id == "results":
-            _walk_results_tables(node.children)
-            break
+    walk_tree(tree, visit)
 
 
 def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None:
