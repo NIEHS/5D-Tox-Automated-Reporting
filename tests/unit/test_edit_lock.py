@@ -9,6 +9,9 @@ Proves the lock semantics the "Open in Overleaf" flow relies on:
   - with no ?user= (open mode) the holder is "anonymous".
 """
 
+import pytest
+
+import roundtrip._io as rio
 import roundtrip.lock as el
 
 
@@ -53,3 +56,34 @@ def test_anonymous_holder_in_open_mode(tmp_path):
 
 def test_release_nonexistent_is_false(tmp_path):
     assert el.release_lock("DTXSIDNONE", "alice", sessions_dir=tmp_path) is False
+
+
+def test_failed_lock_write_preserves_prior_holder(tmp_path, monkeypatch):
+    """
+    A crash during the durable commit of a lock write must not corrupt the
+    existing lock: get_lock keeps returning the prior holder, never None.
+
+    Pre-fix (`path.write_text` directly) the target was truncated in place, so a
+    failure mid-write left a garbage file that get_lock swallowed as unlocked —
+    a second user could then steal the checkout.  The atomic write commits via
+    os.replace, so a failure there leaves the original file untouched.
+    """
+    dt = "DTXSIDATOMIC"
+    ok, lock = el.acquire_lock(dt, "alice", sessions_dir=tmp_path)
+    assert ok
+
+    # Simulate the durable-commit step failing.  Re-acquiring as the SAME holder
+    # takes the write path (a different user would be blocked before any write),
+    # so this both proves the atomic write is used AND exercises the failure
+    # branch; the prior file must survive intact.
+    monkeypatch.setattr(rio.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        el.acquire_lock(dt, "alice", sessions_dir=tmp_path)
+
+    monkeypatch.undo()
+    held = el.get_lock(dt, sessions_dir=tmp_path)
+    assert held is not None and held["locked_by"] == "alice"
+    assert held["since"] == lock["since"]
+    # No orphaned temp file left beside the lock.
+    leftovers = list((tmp_path / dt).glob("*.tmp"))
+    assert leftovers == []

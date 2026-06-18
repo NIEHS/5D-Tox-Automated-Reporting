@@ -56,6 +56,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ._io import atomic_write_text
+
 # NOTE: this module imports NO app code — the document directory it pushes is
 # passed in by the caller (doc_dir=), so the library stays domain-agnostic.
 
@@ -240,8 +242,7 @@ def set_binding(
     if baseline_commit is not None:
         binding["baseline_commit"] = baseline_commit
     path = base / dtxsid / _BINDING_FILENAME
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(binding, indent=2) + "\n")
+    atomic_write_text(path, json.dumps(binding, indent=2) + "\n")
     return binding
 
 

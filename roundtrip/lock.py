@@ -28,6 +28,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._io import atomic_write_text
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -101,8 +103,7 @@ def acquire_lock(
     since = current["since"] if (current and current.get("locked_by") == holder) else _now_iso()
     lock = {"locked_by": holder, "since": since}
     path = _lock_path(dtxsid, sessions_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(lock, indent=2) + "\n")
+    atomic_write_text(path, json.dumps(lock, indent=2) + "\n")
     return True, lock
 
 

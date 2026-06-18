@@ -21,6 +21,7 @@ import re
 
 import pytest
 
+import roundtrip._io as rio
 import roundtrip.overrides as do
 from latex_generator import generate_latex
 from report_data import scaffold_report_data
@@ -93,6 +94,37 @@ def test_corrupt_store_is_treated_as_empty(tmp_path):
     store.parent.mkdir(parents=True)
     store.write_text("{ not valid json")
     assert do.load_overrides(dtxsid, sessions_dir=tmp_path) == {}
+
+
+def test_failed_store_write_preserves_prior_overrides(tmp_path, monkeypatch):
+    """
+    A crash during the durable commit of a store write must not lose the human
+    edits already on disk: load_overrides keeps returning the prior mapping.
+
+    Pre-fix (`path.write_text` directly) the target was truncated in place, so a
+    failure mid-write blanked the file and load_overrides swallowed it as
+    "no overrides" — every committed human edit silently gone.  The atomic write
+    commits via os.replace, so a failure there leaves the original intact.
+    """
+    dtxsid = "DTXSIDATOMIC"
+    do.set_override(
+        dtxsid, "summary", "KEEP ME", "basehash0",
+        source="manual", sessions_dir=tmp_path,
+    )
+
+    # Simulate the durable-commit step failing on the next write.
+    monkeypatch.setattr(rio.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        do.set_override(
+            dtxsid, "background", "SECOND EDIT", "basehash1",
+            source="manual", sessions_dir=tmp_path,
+        )
+
+    monkeypatch.undo()
+    overrides = do.load_overrides(dtxsid, sessions_dir=tmp_path)
+    assert overrides.get("summary", {}).get("latex_region") == "KEEP ME"
+    # No orphaned temp file left beside the store.
+    assert list((tmp_path / dtxsid).glob("*.tmp")) == []
 
 
 # ---------------------------------------------------------------------------

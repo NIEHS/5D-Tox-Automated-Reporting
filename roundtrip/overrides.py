@@ -58,6 +58,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._io import atomic_write_text
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -143,12 +145,11 @@ def save_overrides(
     the store is committed).  Returns the path written.
     """
     path = _store_path(dtxsid, sessions_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
     blob = {
         "version": _SCHEMA_VERSION,
         "overrides": {k: overrides[k] for k in sorted(overrides)},
     }
-    path.write_text(json.dumps(blob, indent=2, ensure_ascii=False) + "\n")
+    atomic_write_text(path, json.dumps(blob, indent=2, ensure_ascii=False) + "\n")
     return path
 
 

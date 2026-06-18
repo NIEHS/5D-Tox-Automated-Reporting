@@ -21,6 +21,7 @@ import subprocess
 
 import pytest
 
+import roundtrip._io as rio
 import roundtrip.transport as ovs
 
 
@@ -216,3 +217,31 @@ def test_commit_local_does_not_swallow_committee_edits(tmp_path, doc_dir):
 
     # The Push guard still sees the divergence and forces a Pull first.
     assert ovs.remote_head(_DTXSID, root=root) == committee_sha
+
+
+def test_failed_binding_write_preserves_prior_baseline(tmp_path, monkeypatch):
+    """
+    A crash during the durable commit of a binding write must not corrupt the
+    recorded baseline: get_binding keeps returning the prior remote + baseline,
+    never {}.
+
+    Pre-fix (`path.write_text` directly) the target was truncated in place; a
+    failure mid-write left a garbage binding that get_binding swallowed as
+    UNBOUND — the next set_binding then recorded a WRONG baseline_commit and the
+    UI lost the git remote.  The atomic write commits via os.replace, so a
+    failure there leaves the original binding intact.
+    """
+    dt = "DTXSIDATOMIC"
+    ovs.set_binding(dt, git_remote="git@example:repo.git", baseline_commit="aaaa", sessions_dir=tmp_path)
+
+    # Simulate the durable-commit step failing on the next update.
+    monkeypatch.setattr(rio.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        ovs.set_binding(dt, baseline_commit="bbbb", sessions_dir=tmp_path)
+
+    monkeypatch.undo()
+    binding = ovs.get_binding(dt, sessions_dir=tmp_path)
+    assert binding.get("git_remote") == "git@example:repo.git"
+    assert binding.get("baseline_commit") == "aaaa"
+    # No orphaned temp file left beside the binding.
+    assert list((tmp_path / dt).glob("*.tmp")) == []
