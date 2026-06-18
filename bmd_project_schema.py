@@ -301,13 +301,17 @@ def _is_missing(value: Any) -> bool:
 
     bmdx-pipe / Java serialization leaves a missing individual data point
     as JSON `null` (→ Python None) or, because `json.load` accepts the
-    non-standard `NaN` literal, as a float NaN.  Either form means "no
-    measurement for this animal at this dose".
+    non-standard `NaN` literal, as a float NaN.  Some upstream exports also
+    serialize the missing value as the literal string "NaN" (or a blank
+    string).  Every form means "no measurement for this animal at this dose".
     """
     if value is None:
         return True
     # NaN is the only float that is not equal to itself.
-    return isinstance(value, float) and value != value
+    if isinstance(value, float) and value != value:
+        return True
+    # Some exports stringify the missing marker ("NaN") or leave it blank.
+    return isinstance(value, str) and value.strip().lower() in {"nan", ""}
 
 
 def _detect_imputed_cells(

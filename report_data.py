@@ -58,6 +58,7 @@ Usage:
 """
 
 import json
+import logging
 from pathlib import Path
 
 from table_builder_common import lettered_footnote, finalize_footnotes
@@ -348,6 +349,15 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     elif methods_paragraphs:
         data["methods"] = {"sections": [], "paragraphs": methods_paragraphs}
     # else: scaffold's heading-only methods structure remains
+
+    # Assign positional table numbers on the document tree before any overlay
+    # reads them.  _overlay_apical_sections resolves each section's table number
+    # via _find_table_number(DOCUMENT_TREE, ...), which reads node.table_number;
+    # those fields are None until compute_table_numbers() has run.  Computing
+    # here (rather than relying on a later call leaking numbers across requests)
+    # makes a fresh process produce correct numbers on the first call.
+    from document_tree import compute_table_numbers
+    compute_table_numbers()
 
     _overlay_abstract(data, body)
     _overlay_apical_sections(data, body)
