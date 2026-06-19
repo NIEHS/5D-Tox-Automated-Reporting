@@ -359,6 +359,71 @@ def _build_bmd_summary(
     return apical_bmd_summary, apical_bmd_summary_bmds
 
 
+async def _build_charts(
+    dtxsid, genomics_sections, genomics_hash, bmd_stat, dose_unit,
+):
+    """
+    Layer 2.5 — Charts + Enrichr (depends on genomics output).
+
+    Server-side Plotly rendering of UMAP scatter and cluster scatter
+    charts, plus Enrichr enrichment analysis for each gene-overlap
+    cluster.  Cached as _cache_charts_{hash}.json so that PDF
+    previews and exports never re-render charts or re-call Enrichr.
+
+    The hash is the same as genomics (same inputs determine the
+    gene sets that feed the charts).  Chart images are base64 PNGs.
+    """
+    chart_images = []
+    if genomics_sections:
+        # Bump _CHARTS_CACHE_SCHEMA_VERSION (defined near the other
+        # cache schema constants) when the chart-rendering algorithm
+        # itself changes — e.g. when the jitter formula is fixed.
+        # The chart cache normally tracks the genomics_hash so that
+        # changes to which gene sets exist propagate; mixing in the
+        # charts schema version on top of that lets us invalidate
+        # *only* the chart SVGs/PNGs without forcing the (expensive)
+        # genomics + LLM narrative pipeline to re-run.
+        charts_hash = hashlib.sha256(
+            json.dumps({
+                "genomics_hash": genomics_hash,
+                "charts_schema": _CHARTS_CACHE_SCHEMA_VERSION,
+            }, sort_keys=True).encode()
+        ).hexdigest()[:16]
+        charts_cached = _load_cache(dtxsid, "charts", charts_hash)
+
+        # Schema migration: caches written before SVGs were added to
+        # the chart payload lack `umap_svg`/`cluster_svg`.  Shared
+        # `cache_has_svg` probe + `render_chart_images_for_sections`
+        # batch render live in genomics_viz so this code path and
+        # the session-load migration stay in lockstep.
+        from genomics_viz import (
+            cache_has_svg, render_chart_images_for_sections,
+        )
+
+        if charts_cached and cache_has_svg(charts_cached):
+            chart_images = charts_cached
+        else:
+            if charts_cached:
+                logger.info(
+                    "Chart cache for %s lacks SVG — re-rendering",
+                    dtxsid,
+                )
+            # Run in the thread pool so we don't block the event
+            # loop while Plotly+kaleido serialises figures.
+            loop = asyncio.get_running_loop()
+            chart_images = await loop.run_in_executor(
+                None,
+                lambda: render_chart_images_for_sections(
+                    genomics_sections=genomics_sections,
+                    bmd_stat=bmd_stat,
+                    dose_unit=dose_unit,
+                ),
+            )
+            if chart_images:
+                _save_cache(dtxsid, "charts", charts_hash, chart_images)
+    return chart_images
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -816,61 +881,9 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 2.5 — Charts + Enrichr (depends on genomics output)
         # ══════════════════════════════════════════════════════════════
-        # Server-side Plotly rendering of UMAP scatter and cluster scatter
-        # charts, plus Enrichr enrichment analysis for each gene-overlap
-        # cluster.  Cached as _cache_charts_{hash}.json so that PDF
-        # previews and exports never re-render charts or re-call Enrichr.
-        #
-        # The hash is the same as genomics (same inputs determine the
-        # gene sets that feed the charts).  Chart images are base64 PNGs.
-        chart_images = []
-        if genomics_sections:
-            # Bump _CHARTS_CACHE_SCHEMA_VERSION (defined near the other
-            # cache schema constants) when the chart-rendering algorithm
-            # itself changes — e.g. when the jitter formula is fixed.
-            # The chart cache normally tracks the genomics_hash so that
-            # changes to which gene sets exist propagate; mixing in the
-            # charts schema version on top of that lets us invalidate
-            # *only* the chart SVGs/PNGs without forcing the (expensive)
-            # genomics + LLM narrative pipeline to re-run.
-            charts_hash = hashlib.sha256(
-                json.dumps({
-                    "genomics_hash": genomics_hash,
-                    "charts_schema": _CHARTS_CACHE_SCHEMA_VERSION,
-                }, sort_keys=True).encode()
-            ).hexdigest()[:16]
-            charts_cached = _load_cache(dtxsid, "charts", charts_hash)
-
-            # Schema migration: caches written before SVGs were added to
-            # the chart payload lack `umap_svg`/`cluster_svg`.  Shared
-            # `cache_has_svg` probe + `render_chart_images_for_sections`
-            # batch render live in genomics_viz so this code path and
-            # the session-load migration stay in lockstep.
-            from genomics_viz import (
-                cache_has_svg, render_chart_images_for_sections,
-            )
-
-            if charts_cached and cache_has_svg(charts_cached):
-                chart_images = charts_cached
-            else:
-                if charts_cached:
-                    logger.info(
-                        "Chart cache for %s lacks SVG — re-rendering",
-                        dtxsid,
-                    )
-                # Run in the thread pool so we don't block the event
-                # loop while Plotly+kaleido serialises figures.
-                loop = asyncio.get_running_loop()
-                chart_images = await loop.run_in_executor(
-                    None,
-                    lambda: render_chart_images_for_sections(
-                        genomics_sections=genomics_sections,
-                        bmd_stat=bmd_stat,
-                        dose_unit=dose_unit,
-                    ),
-                )
-                if chart_images:
-                    _save_cache(dtxsid, "charts", charts_hash, chart_images)
+        chart_images = await _build_charts(
+            dtxsid, genomics_sections, genomics_hash, bmd_stat, dose_unit,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3 — BMD summary (depends on NTP + BMDS)
