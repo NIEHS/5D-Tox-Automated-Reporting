@@ -425,6 +425,284 @@ async def _build_charts(
 
 
 # ---------------------------------------------------------------------------
+# Layer 2 units — Sections + BMDS + Genomics + Methods (independent, parallel)
+# ---------------------------------------------------------------------------
+# These four units depend on Layer 1 output but NOT on each other, so the
+# orchestrator launches them concurrently via asyncio.gather.  BMDS (~8min)
+# is the bottleneck; sections (<1s), genomics (~10s), and methods (one LLM
+# call) finish quickly alongside it.  Each takes its pre-loaded cache + hash
+# so the orchestrator owns the cache-key computation.
+
+
+async def _get_sections(
+    dtxsid, integrated, platform_tables, compound_name, dose_unit,
+    sections_cached, sections_hash,
+):
+    """Build section cards with narratives + unified narratives, or return cached."""
+    if sections_cached:
+        return (
+            sections_cached["sections"],
+            sections_cached.get("unified_narratives", {}),
+        )
+    # _build_section_cards is sync (reads sidecar files, generates
+    # narratives from templates) — wrap in executor to avoid
+    # blocking the event loop during parallel execution.
+    loop = asyncio.get_running_loop()
+    # imputed_cells is recorded on _meta by the BMDProject schema's
+    # legacy/truth dedup — see _dedupe_legacy_apical_pre.
+    imputed_cells = integrated.get("_meta", {}).get("imputed_cells")
+    sections = await loop.run_in_executor(
+        None,
+        lambda: _build_section_cards(
+            platform_tables, compound_name, dose_unit,
+            dtxsid=dtxsid, imputed_cells=imputed_cells,
+        ),
+    )
+    # Clinical obs tables bypass Java integration (categorical data).
+    # Built separately and appended as an incidence section card.
+    clin_obs = _build_clinical_obs_section(
+        integrated, compound_name, dose_unit,
+    )
+    if clin_obs:
+        sections.append(clin_obs)
+
+    # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
+    # Tissue Concentration data only exists for Biosampling Animals
+    # and is NOT processed through NTP stats or BMDExpress.  It has
+    # no entries in platform_tables, so it must be built separately
+    # from sidecar data (similar to Clinical Observations).
+    if dtxsid:
+        from table_builder_common import find_sidecar_paths as _find_sidecar
+        from tissue_concentration_table import build_tissue_concentration_table_from_sidecar
+
+        session_dir = str(_session_dir(dtxsid))
+        tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
+        if tc_sidecar_paths:
+            tc_result = build_tissue_concentration_table_from_sidecar(
+                sidecar_paths=tc_sidecar_paths,
+                compound_name=compound_name,
+                dose_unit=dose_unit,
+            )
+            if tc_result and tc_result.get("table_data"):
+                narrative = (
+                    f"Plasma concentrations of {compound_name} were "
+                    f"measured in biosampling animals."
+                )
+                sections.append({
+                    "platform": "Tissue Concentration",
+                    "title": "Tissue Concentration",
+                    "tables_json": tc_result["table_data"],
+                    "narrative": narrative,
+                    "first_col_header": tc_result.get("first_col_header"),
+                    "caption": tc_result.get("caption"),
+                    "footnotes": tc_result.get("footnotes"),
+                    "table_type": tc_result.get("table_type"),
+                })
+                logger.info(
+                    "Tissue Concentration section built from sidecar (%d sexes)",
+                    len(tc_result["table_data"]),
+                )
+
+    # ── Unified cross-platform narratives ─────────────────────────
+    # The NIEHS reference report groups narrative prose into two
+    # unified sections that span multiple platforms, rather than
+    # per-platform isolated narratives.  These are generated here
+    # alongside the per-card narratives (which are kept for backward
+    # compatibility with old approved sessions).
+    from unified_narrative import (
+        extract_mortality,
+        generate_apical_narrative,
+        generate_clinical_pathology_narrative,
+    )
+    from body_weight_table import find_sidecar_paths
+
+    # 1. Load mortality data from body weight sidecars
+    session_dir = str(_session_dir(dtxsid))
+    sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
+    sidecar_mortality = extract_mortality(sidecar_paths) if sidecar_paths else None
+
+    # 2. Load clinical obs incidence for the animal condition paragraph
+    meta = integrated.get("_meta", {})
+    csv_paths = meta.get("clinical_obs_files", [])
+    clin_obs_incidence = None
+    if csv_paths:
+        clin_obs_incidence = build_clinical_obs_tables(csv_paths)
+
+    # 3. Generate the two unified narratives
+    apical_narrative = generate_apical_narrative(
+        platform_tables, compound_name, dose_unit,
+        sidecar_mortality=sidecar_mortality,
+        clinical_obs_incidence=clin_obs_incidence,
+    )
+    clin_path_narrative = generate_clinical_pathology_narrative(
+        platform_tables, compound_name, dose_unit,
+    )
+
+    unified_narratives = {}
+    if apical_narrative:
+        unified_narratives["apical"] = {
+            "title": "Animal Condition, Body Weights, and Organ Weights",
+            "paragraphs": apical_narrative,
+        }
+    if clin_path_narrative:
+        unified_narratives["clinical_pathology"] = {
+            "title": "Clinical Pathology",
+            "paragraphs": clin_path_narrative,
+        }
+
+    _save_cache(dtxsid, "sections", sections_hash, {
+        "sections": sections,
+        "unified_narratives": unified_narratives,
+    })
+    return sections, unified_narratives
+
+
+async def _get_bmds(dtxsid, bmds_inputs, bmds_cached, bmds_hash):
+    """Run pybmds modeling on all endpoints, or return cached."""
+    if bmds_cached:
+        return bmds_cached
+    if not bmds_inputs:
+        return {}
+    loop = asyncio.get_running_loop()
+    results = await loop.run_in_executor(
+        None, run_bmds_for_endpoints, bmds_inputs,
+    )
+    _save_cache(dtxsid, "bmds", bmds_hash, results)
+    return results
+
+
+async def _get_genomics(
+    dtxsid, integrated, bmd_stats, go_pct, go_min_genes, go_max_genes,
+    go_min_bmd, genomics_cached, genomics_hash,
+):
+    """Extract gene expression + GO filtering, or return cached."""
+    if genomics_cached:
+        return genomics_cached
+    result = await _extract_genomics(
+        dtxsid, integrated, bmd_stats,
+        go_pct, go_min_genes, go_max_genes, go_min_bmd,
+    )
+    _save_cache(dtxsid, "genomics", genomics_hash, result)
+    return result
+
+
+async def _get_methods(
+    dtxsid, integrated, fps_for_methods, methods_cached, methods_hash,
+):
+    """
+    Generate Materials and Methods via LLM, or return cached.
+
+    Extracts study metadata from fingerprints, animal report, and
+    .bm2 caches (dose groups, sample sizes, BMDExpress parameters),
+    then calls the LLM to produce structured prose for each NIEHS
+    M&M subsection.  The result is cached so subsequent calls
+    (page reloads, PDF exports) return instantly.
+    """
+    if methods_cached:
+        return methods_cached
+
+    from methods_report import (
+        MethodsReport,
+        MethodsSection,
+        build_methods_prompt,
+        build_subsection_skeleton,
+        build_table1_data,
+        extract_methods_context,
+    )
+    from bmdx_pipe import bm2_cache as _bm2_cache
+
+    # Load identity from session (chemical name, casrn, dtxsid)
+    identity = {"dtxsid": dtxsid}
+    identity_path = _session_dir(dtxsid) / "identity.json"
+    if identity_path.exists():
+        try:
+            identity = json.loads(identity_path.read_text())
+        except Exception:
+            pass
+
+    # Collect .bm2 JSON caches for BMDExpress metadata extraction
+    bm2_jsons = {}
+    session_files_dir = _session_dir(dtxsid) / "files"
+    if session_files_dir.exists():
+        for bm2_path in session_files_dir.glob("*.bm2"):
+            try:
+                cached = _bm2_cache.get_json(str(bm2_path))
+                if cached:
+                    bm2_jsons[bm2_path.stem] = cached
+            except Exception:
+                pass
+
+    # Load animal report from session
+    animal_report_data = None
+    ar_path = _session_dir(dtxsid) / "animal_report.json"
+    if ar_path.exists():
+        try:
+            animal_report_data = json.loads(ar_path.read_text())
+        except Exception:
+            pass
+
+    # Default study params — the NIEHS 5-day gavage protocol
+    study_params = {
+        "vehicle": "corn oil",
+        "route": "gavage",
+        "duration_days": 5,
+        "species": "Sprague Dawley",
+    }
+
+    # Extract structured context from all data sources.
+    # Pass session_dir so biosampling dose groups can be scanned
+    # from sidecar files, and integrated so the genomics assay
+    # (e.g., TempO-Seq) can be identified from chip metadata.
+    ctx = extract_methods_context(
+        identity=identity,
+        fingerprints=fps_for_methods,
+        animal_report=animal_report_data,
+        study_params=study_params,
+        bm2_jsons=bm2_jsons,
+        session_dir=str(_session_dir(dtxsid)),
+        integrated=integrated,
+    )
+
+    # Build and call the LLM
+    system, prompt = build_methods_prompt(ctx)
+    try:
+        subsection_texts = await _llm_generate_json_async(
+            "methods-generator", prompt, system,
+        )
+    except Exception as e:
+        logger.warning("Methods LLM generation failed: %s", e)
+        return None
+
+    # Assemble into structured sections
+    skeleton = build_subsection_skeleton(ctx)
+    sections = []
+    for key, heading, level in skeleton:
+        text = subsection_texts.get(key, "")
+        if not text:
+            continue
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        sections.append(MethodsSection(
+            heading=heading,
+            level=level,
+            key=key,
+            paragraphs=paragraphs,
+        ))
+
+    table1 = build_table1_data(ctx)
+    report = MethodsReport(sections=sections, context=ctx)
+    report_dict = report.to_dict()
+
+    if table1:
+        report_dict["table1"] = table1
+
+    report_dict["section_key"] = "methods"
+    report_dict["model_used"] = "claude-sonnet-4-6"
+
+    _save_cache(dtxsid, "methods", methods_hash, report_dict)
+    return report_dict
+
+
+# ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
 
@@ -589,151 +867,6 @@ async def api_process_integrated(dtxsid: str, request: Request):
         bmds_cached = _load_cache(dtxsid, "bmds", bmds_hash)
         genomics_cached = _load_cache(dtxsid, "genomics", genomics_hash)
 
-        # --- Async wrappers: return cached data or compute + cache ---
-
-        async def _get_sections():
-            """Build section cards with narratives + unified narratives, or return cached."""
-            if sections_cached:
-                return (
-                    sections_cached["sections"],
-                    sections_cached.get("unified_narratives", {}),
-                )
-            # _build_section_cards is sync (reads sidecar files, generates
-            # narratives from templates) — wrap in executor to avoid
-            # blocking the event loop during parallel execution.
-            loop = asyncio.get_running_loop()
-            # imputed_cells is recorded on _meta by the BMDProject schema's
-            # legacy/truth dedup — see _dedupe_legacy_apical_pre.
-            imputed_cells = integrated.get("_meta", {}).get("imputed_cells")
-            sections = await loop.run_in_executor(
-                None,
-                lambda: _build_section_cards(
-                    platform_tables, compound_name, dose_unit,
-                    dtxsid=dtxsid, imputed_cells=imputed_cells,
-                ),
-            )
-            # Clinical obs tables bypass Java integration (categorical data).
-            # Built separately and appended as an incidence section card.
-            clin_obs = _build_clinical_obs_section(
-                integrated, compound_name, dose_unit,
-            )
-            if clin_obs:
-                sections.append(clin_obs)
-
-            # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
-            # Tissue Concentration data only exists for Biosampling Animals
-            # and is NOT processed through NTP stats or BMDExpress.  It has
-            # no entries in platform_tables, so it must be built separately
-            # from sidecar data (similar to Clinical Observations).
-            if dtxsid:
-                from table_builder_common import find_sidecar_paths as _find_sidecar
-                from tissue_concentration_table import build_tissue_concentration_table_from_sidecar
-
-                session_dir = str(_session_dir(dtxsid))
-                tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
-                if tc_sidecar_paths:
-                    tc_result = build_tissue_concentration_table_from_sidecar(
-                        sidecar_paths=tc_sidecar_paths,
-                        compound_name=compound_name,
-                        dose_unit=dose_unit,
-                    )
-                    if tc_result and tc_result.get("table_data"):
-                        narrative = (
-                            f"Plasma concentrations of {compound_name} were "
-                            f"measured in biosampling animals."
-                        )
-                        sections.append({
-                            "platform": "Tissue Concentration",
-                            "title": "Tissue Concentration",
-                            "tables_json": tc_result["table_data"],
-                            "narrative": narrative,
-                            "first_col_header": tc_result.get("first_col_header"),
-                            "caption": tc_result.get("caption"),
-                            "footnotes": tc_result.get("footnotes"),
-                            "table_type": tc_result.get("table_type"),
-                        })
-                        logger.info(
-                            "Tissue Concentration section built from sidecar (%d sexes)",
-                            len(tc_result["table_data"]),
-                        )
-
-            # ── Unified cross-platform narratives ─────────────────────────
-            # The NIEHS reference report groups narrative prose into two
-            # unified sections that span multiple platforms, rather than
-            # per-platform isolated narratives.  These are generated here
-            # alongside the per-card narratives (which are kept for backward
-            # compatibility with old approved sessions).
-            from unified_narrative import (
-                extract_mortality,
-                generate_apical_narrative,
-                generate_clinical_pathology_narrative,
-            )
-            from body_weight_table import find_sidecar_paths
-
-            # 1. Load mortality data from body weight sidecars
-            session_dir = str(_session_dir(dtxsid))
-            sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
-            sidecar_mortality = extract_mortality(sidecar_paths) if sidecar_paths else None
-
-            # 2. Load clinical obs incidence for the animal condition paragraph
-            meta = integrated.get("_meta", {})
-            csv_paths = meta.get("clinical_obs_files", [])
-            clin_obs_incidence = None
-            if csv_paths:
-                clin_obs_incidence = build_clinical_obs_tables(csv_paths)
-
-            # 3. Generate the two unified narratives
-            apical_narrative = generate_apical_narrative(
-                platform_tables, compound_name, dose_unit,
-                sidecar_mortality=sidecar_mortality,
-                clinical_obs_incidence=clin_obs_incidence,
-            )
-            clin_path_narrative = generate_clinical_pathology_narrative(
-                platform_tables, compound_name, dose_unit,
-            )
-
-            unified_narratives = {}
-            if apical_narrative:
-                unified_narratives["apical"] = {
-                    "title": "Animal Condition, Body Weights, and Organ Weights",
-                    "paragraphs": apical_narrative,
-                }
-            if clin_path_narrative:
-                unified_narratives["clinical_pathology"] = {
-                    "title": "Clinical Pathology",
-                    "paragraphs": clin_path_narrative,
-                }
-
-            _save_cache(dtxsid, "sections", sections_hash, {
-                "sections": sections,
-                "unified_narratives": unified_narratives,
-            })
-            return sections, unified_narratives
-
-        async def _get_bmds():
-            """Run pybmds modeling on all endpoints, or return cached."""
-            if bmds_cached:
-                return bmds_cached
-            if not bmds_inputs:
-                return {}
-            loop = asyncio.get_running_loop()
-            results = await loop.run_in_executor(
-                None, run_bmds_for_endpoints, bmds_inputs,
-            )
-            _save_cache(dtxsid, "bmds", bmds_hash, results)
-            return results
-
-        async def _get_genomics():
-            """Extract gene expression + GO filtering, or return cached."""
-            if genomics_cached:
-                return genomics_cached
-            result = await _extract_genomics(
-                dtxsid, integrated, bmd_stats,
-                go_pct, go_min_genes, go_max_genes, go_min_bmd,
-            )
-            _save_cache(dtxsid, "genomics", genomics_hash, result)
-            return result
-
         # --- Materials and Methods (LLM-generated, cached) ---
         # Uses fingerprints + .bm2 metadata + animal report to extract
         # study context, then calls the LLM to produce structured prose
@@ -754,119 +887,6 @@ async def api_process_integrated(dtxsid: str, request: Request):
         methods_hash = _hash_methods(dtxsid, _fps_for_methods)
         methods_cached = _load_cache(dtxsid, "methods", methods_hash)
 
-        async def _get_methods():
-            """
-            Generate Materials and Methods via LLM, or return cached.
-
-            Extracts study metadata from fingerprints, animal report, and
-            .bm2 caches (dose groups, sample sizes, BMDExpress parameters),
-            then calls the LLM to produce structured prose for each NIEHS
-            M&M subsection.  The result is cached so subsequent calls
-            (page reloads, PDF exports) return instantly.
-            """
-            if methods_cached:
-                return methods_cached
-
-            from methods_report import (
-                MethodsReport,
-                MethodsSection,
-                build_methods_prompt,
-                build_subsection_skeleton,
-                build_table1_data,
-                extract_methods_context,
-            )
-            from bmdx_pipe import bm2_cache as _bm2_cache
-
-            # Load identity from session (chemical name, casrn, dtxsid)
-            identity = {"dtxsid": dtxsid}
-            identity_path = _session_dir(dtxsid) / "identity.json"
-            if identity_path.exists():
-                try:
-                    identity = json.loads(identity_path.read_text())
-                except Exception:
-                    pass
-
-            # Collect .bm2 JSON caches for BMDExpress metadata extraction
-            bm2_jsons = {}
-            session_files_dir = _session_dir(dtxsid) / "files"
-            if session_files_dir.exists():
-                for bm2_path in session_files_dir.glob("*.bm2"):
-                    try:
-                        cached = _bm2_cache.get_json(str(bm2_path))
-                        if cached:
-                            bm2_jsons[bm2_path.stem] = cached
-                    except Exception:
-                        pass
-
-            # Load animal report from session
-            animal_report_data = None
-            ar_path = _session_dir(dtxsid) / "animal_report.json"
-            if ar_path.exists():
-                try:
-                    animal_report_data = json.loads(ar_path.read_text())
-                except Exception:
-                    pass
-
-            # Default study params — the NIEHS 5-day gavage protocol
-            study_params = {
-                "vehicle": "corn oil",
-                "route": "gavage",
-                "duration_days": 5,
-                "species": "Sprague Dawley",
-            }
-
-            # Extract structured context from all data sources.
-            # Pass session_dir so biosampling dose groups can be scanned
-            # from sidecar files, and integrated so the genomics assay
-            # (e.g., TempO-Seq) can be identified from chip metadata.
-            ctx = extract_methods_context(
-                identity=identity,
-                fingerprints=_fps_for_methods,
-                animal_report=animal_report_data,
-                study_params=study_params,
-                bm2_jsons=bm2_jsons,
-                session_dir=str(_session_dir(dtxsid)),
-                integrated=integrated,
-            )
-
-            # Build and call the LLM
-            system, prompt = build_methods_prompt(ctx)
-            try:
-                subsection_texts = await _llm_generate_json_async(
-                    "methods-generator", prompt, system,
-                )
-            except Exception as e:
-                logger.warning("Methods LLM generation failed: %s", e)
-                return None
-
-            # Assemble into structured sections
-            skeleton = build_subsection_skeleton(ctx)
-            sections = []
-            for key, heading, level in skeleton:
-                text = subsection_texts.get(key, "")
-                if not text:
-                    continue
-                paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-                sections.append(MethodsSection(
-                    heading=heading,
-                    level=level,
-                    key=key,
-                    paragraphs=paragraphs,
-                ))
-
-            table1 = build_table1_data(ctx)
-            report = MethodsReport(sections=sections, context=ctx)
-            report_dict = report.to_dict()
-
-            if table1:
-                report_dict["table1"] = table1
-
-            report_dict["section_key"] = "methods"
-            report_dict["model_used"] = "claude-sonnet-4-6"
-
-            _save_cache(dtxsid, "methods", methods_hash, report_dict)
-            return report_dict
-
         # Launch all four concurrently — cached units return instantly,
         # uncached units run in parallel (BMDS in thread pool, genomics
         # in thread pool via _extract_genomics, sections in thread pool,
@@ -874,7 +894,19 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # _get_sections returns a 2-tuple: (sections, unified_narratives).
         sections_result, bmds_results, genomics_sections, methods_result = \
             await asyncio.gather(
-                _get_sections(), _get_bmds(), _get_genomics(), _get_methods(),
+                _get_sections(
+                    dtxsid, integrated, platform_tables, compound_name,
+                    dose_unit, sections_cached, sections_hash,
+                ),
+                _get_bmds(dtxsid, bmds_inputs, bmds_cached, bmds_hash),
+                _get_genomics(
+                    dtxsid, integrated, bmd_stats, go_pct, go_min_genes,
+                    go_max_genes, go_min_bmd, genomics_cached, genomics_hash,
+                ),
+                _get_methods(
+                    dtxsid, integrated, _fps_for_methods,
+                    methods_cached, methods_hash,
+                ),
             )
         sections, unified_narratives = sections_result
 
