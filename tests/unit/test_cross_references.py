@@ -13,8 +13,9 @@ Covers:
 
 import re
 
-from cross_references import resolve_xrefs_latex, resolve_xrefs_html
-from latex_generator import _escape_latex
+from cross_references import resolve_xrefs_latex, resolve_xrefs_html, latex_label_key
+from document_node import DocNode
+from latex_generator import _escape_latex, _emit_table_placeholder
 
 
 def test_table_xref_resolves_to_latex_ref():
@@ -68,3 +69,63 @@ def test_escape_latex_integration_resolves_xref_after_escaping():
     out = _escape_latex("see [[xref:bmd-summary]] for the BMD endpoints")
     assert "Table~\\ref{tab:bmd-summary}" in out
     assert "[[xref:bmd-summary]]" not in out
+
+
+# ---------------------------------------------------------------------------
+# latex_label_key — sanitizing node ids for \label{tab:<id>} / \ref{tab:<id>}
+# ---------------------------------------------------------------------------
+
+def test_latex_label_key_is_identity_on_plain_slugs():
+    """Every id in the tree today is a plain [a-z0-9-] slug, so the sanitizer
+    must be the identity on them — otherwise it would change the .tex output."""
+    for slug in ("bmd-summary", "table-clinical-obs", "appendix-a", "results"):
+        assert latex_label_key(slug) == slug
+
+
+def test_latex_label_key_strips_latex_special_chars():
+    r"""An id with a LaTeX-special char (here `&` and `_`) must not survive raw
+    into the key — `_` would expand to subscript math and `&` is an alignment
+    tab, either of which breaks the \label{tab:<id>}."""
+    key = latex_label_key("foo_bar&baz")
+    assert "&" not in key
+    assert "_" not in key
+
+
+def test_niehstable_label_site_strips_special_char_from_id():
+    r"""The niehstable label site (latex_generator) must route node.id through
+    latex_label_key, so a special-char id never reaches \label{tab:<id>} raw.
+
+    RED before the fix: the placeholder spliced node.id directly, so the
+    emitted `\begin{niehstable}{...}` carried a literal `&`.
+    """
+    node = DocNode(id="tbl-a&b", title="Body Weight", level=0,
+                   node_type="incidence-table")
+    placeholder = _emit_table_placeholder(node)
+    m = re.search(r"\\begin\{niehstable\}\{([^}]*)\}", placeholder)
+    assert m, "expected a niehstable environment in the placeholder"
+    assert "&" not in m.group(1), "raw & leaked into the niehstable label key"
+
+
+def test_niehstable_label_matches_ref_for_underscore_id(monkeypatch):
+    r"""The label site (latex_generator) and the ref site (cross_references)
+    must emit the SAME key for the same id, or a \ref won't resolve to its
+    \label.  `_` is the one LaTeX-special char that survives the xref token
+    pattern (\w includes it) AND is a valid node id, so it's the realistic
+    failure: pre-fix the ref emitted `\ref{tab:tbl_foo}` (subscript-math break)
+    while the label emitted the same raw `_`.  Both now route through
+    latex_label_key, collapsing `_` to `-` on both sides.
+
+    RED before the fix: ref carried a raw `_`, mismatching the label key.
+    """
+    table_node = DocNode(id="tbl_foo", title="Body Weight", level=0,
+                         node_type="incidence-table")
+    # The ref site resolves the target via find_node; point it at our node so
+    # the table-typed branch (which emits \ref{tab:...}) is exercised.
+    monkeypatch.setattr("cross_references.find_node", lambda _id: table_node)
+
+    placeholder = _emit_table_placeholder(table_node)
+    label_key = re.search(r"\\begin\{niehstable\}\{([^}]*)\}", placeholder).group(1)
+    assert "_" not in label_key
+
+    ref = resolve_xrefs_latex("see [[xref:tbl_foo]]")
+    assert f"\\ref{{tab:{label_key}}}" in ref

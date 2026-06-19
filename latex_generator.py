@@ -103,7 +103,7 @@ from render_common import (
 from genomics_content import genomics_content_plan
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
-from cross_references import resolve_xrefs_latex
+from cross_references import resolve_xrefs_latex, latex_label_key
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
 # table_builder_common.DISPLAY_DECIMALS).
@@ -631,7 +631,7 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     notes = _emit_table_footnotes(plan.footnotes)
 
     return (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{plan.caption}}}\n"
         f"{tabular}"
         f"{notes}\n"
         f"\\end{{niehstable}}"
@@ -647,7 +647,7 @@ def _emit_table_placeholder(node: DocNode) -> str:
     """
     caption = _table_caption(node, node.title or "")
     return (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{caption}}}\n"
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
         f"\\emph{{[Table data pending: {_escape_latex(node.title)}]}}\n"
         f"\\end{{niehstable}}"
     )
@@ -710,7 +710,7 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     tabular = "\n".join(lines)
 
     block = (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{plan.caption}}}\n"
         f"{tabular}\n"
         f"\\end{{niehstable}}"
     )
@@ -750,7 +750,7 @@ def _render_incidence_table(node: DocNode, data: dict) -> str:
 
     notes = _emit_table_footnotes(plan.footnotes)
     return (
-        f"\\begin{{niehstable}}{{{node.id}}}{{{plan.caption}}}\n"
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{plan.caption}}}\n"
         f"{tabular}"
         f"{notes}\n"
         f"\\end{{niehstable}}"

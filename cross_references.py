@@ -105,6 +105,33 @@ def _broken(target_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# LaTeX label keys
+# ---------------------------------------------------------------------------
+
+# Characters that are special inside a LaTeX `\label{...}` / `\ref{...}` key.
+# A node id carrying any of these would break the .tex when spliced raw into
+# `\begin{niehstable}{<id>}` (which expands to `\label{tab:<id>}`).  We map each
+# to a hyphen so the key stays a plain, ref-able token.
+_LATEX_LABEL_UNSAFE = re.compile(r"[\\&%#$_{}~^]+")
+
+
+def latex_label_key(node_id: str) -> str:
+    r"""
+    Sanitize a DocNode id for use as a LaTeX label/ref key.
+
+    `niehstable` splices its first argument into `\label{tab:<id>}` and this
+    module emits the matching `\ref{tab:<id>}`; both sides MUST agree, so both
+    call this one function on the same id.  LaTeX-special characters
+    (`\ & % # $ _ { } ~ ^`) are collapsed to hyphens — a key like
+    `tab:foo_bar` would otherwise expand `_` to subscript math and break the
+    label.  Current ids are plain `[a-z0-9-]` slugs, so this is the identity
+    on every id in the tree today; it guards against a future template id with
+    a special character (arch #2's index enforces id uniqueness, not charset).
+    """
+    return _LATEX_LABEL_UNSAFE.sub("-", node_id)
+
+
+# ---------------------------------------------------------------------------
 # Public API — one resolver per render surface
 # ---------------------------------------------------------------------------
 
@@ -119,8 +146,10 @@ def resolve_xrefs_latex(text: str) -> str:
         if node.node_type in _TABLE_TYPES:
             # niehstable emits \label{tab:<id>}; \ref{tab:<id>} resolves to the
             # positional number on the second LaTeX pass.  ~ is a non-breaking
-            # space so "Table" and the number never split across a line.
-            return f"Table~\\ref{{tab:{target_id}}}"
+            # space so "Table" and the number never split across a line.  The id
+            # goes through latex_label_key so this ref matches the sanitized key
+            # the niehstable label site emits (latex_generator).
+            return f"Table~\\ref{{tab:{latex_label_key(target_id)}}}"
         # Sections / figures: targets exist but the LaTeX side lacks the
         # corresponding \label{...} hook yet (deferred — see module docstring).
         return _broken(target_id)
