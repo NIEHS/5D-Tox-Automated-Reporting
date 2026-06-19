@@ -229,6 +229,108 @@ def _build_genomics_body_narratives(
     return gene_set_narrative, gene_narrative
 
 
+async def _build_genomics_llm_narratives(
+    dtxsid, genomics_sections, compound_name, bmd_stat, dose_unit,
+):
+    """
+    Layer 3.5a — LLM-generated per-{organ,sex} narratives.
+
+    Runs the shared `generate_genomics_narrative_async` once per
+    organ × sex, in parallel.  Each call does enrichment against
+    bmdx.duckdb (cached in `_cache_interpretation_*.json`) and
+    then one LLM call for the biology interpretation.  Per-sex
+    results are aggregated under each organ into the narrative
+    dict's `by_organ_llm` field so both HTML and PDF render
+    identical analysis under each organ's table.
+    """
+    llm_gs_by_organ: dict[str, list[str]] = {}
+    llm_gene_by_organ: dict[str, list[str]] = {}
+    if genomics_sections:
+        try:
+            from llm_routes import generate_genomics_narrative_async
+
+            # Load identity from session for chemical name — used in
+            # the LLM prompt's "{compound} exposure" phrasing.  Falls
+            # back to the request's compound_name if identity is missing.
+            _identity = {}
+            _identity_path = _session_dir(dtxsid) / "identity.json"
+            if _identity_path.exists():
+                try:
+                    _identity = json.loads(_identity_path.read_text())
+                except Exception:
+                    pass
+            _llm_compound = _identity.get("name", compound_name)
+
+            # Override file: user's Lock/Unlock edits persist here and
+            # WIN over any freshly generated LLM output for the same
+            # organ×kind pair.  Load once; pass into the merge below.
+            _overrides = {"gene_set": {}, "gene_bmd": {}}
+            _overrides_path = (
+                _session_dir(dtxsid) / "genomics_narrative_overrides.json"
+            )
+            if _overrides_path.exists():
+                try:
+                    raw = json.loads(_overrides_path.read_text())
+                    _overrides["gene_set"] = raw.get("gene_set", {}) or {}
+                    _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
+                except Exception:
+                    pass
+
+            async def _one(key, gen_data):
+                """LLM-generate narrative for a single organ×sex."""
+                organ = gen_data.get("organ", "")
+                sex = gen_data.get("sex", "")
+                gs_by_stat = gen_data.get("gene_sets_by_stat") or {}
+                gene_sets_for_llm = gs_by_stat.get(bmd_stat) or []
+                try:
+                    return key, await generate_genomics_narrative_async(
+                        dtxsid=dtxsid,
+                        compound=_llm_compound,
+                        organ=organ,
+                        sex=sex,
+                        gene_sets=gene_sets_for_llm,
+                        top_genes=gen_data.get("top_genes") or [],
+                        all_genes=gen_data.get("all_genes") or [],
+                        total_responsive=gen_data.get("total_responsive_genes", 0),
+                        dose_unit=dose_unit,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "LLM narrative failed for %s: %s", key, e,
+                    )
+                    return key, {"error": str(e)}
+
+            # Parallel fanout — N calls, wall-clock ≈ one LLM call.
+            tasks = [_one(k, v) for k, v in genomics_sections.items()]
+            llm_results = await asyncio.gather(*tasks)
+
+            # Bundle the per-sex LLM results under each organ, then fold
+            # them into per-organ paragraph lists (male-then-female, sex-
+            # labelled) with user overrides winning — all in the shared
+            # `aggregate_organ_llm_narratives` helper so the session-reload
+            # and Regenerate paths stay in lockstep with this one.
+            per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]] = {}
+            for key, llm_out in llm_results:
+                if not llm_out or "error" in llm_out:
+                    continue
+                organ = (genomics_sections[key].get("organ") or "").lower()
+                sex = (genomics_sections[key].get("sex") or "").lower()
+                per_organ_bundles.setdefault(organ, {})[sex] = {
+                    "gs": llm_out.get("gene_set_narrative") or [],
+                    "gn": llm_out.get("gene_narrative") or [],
+                }
+
+            from genomics_narratives import aggregate_organ_llm_narratives
+            llm_gs_by_organ, llm_gene_by_organ = aggregate_organ_llm_narratives(
+                per_organ_bundles, overrides=_overrides,
+            )
+        except Exception as e:
+            logger.warning(
+                "LLM narrative pipeline failed: %s", e,
+            )
+    return llm_gs_by_organ, llm_gene_by_organ
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -767,98 +869,9 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5a — LLM-generated per-{organ,sex} narratives
         # ══════════════════════════════════════════════════════════════
-        # Runs the shared `generate_genomics_narrative_async` once per
-        # organ × sex, in parallel.  Each call does enrichment against
-        # bmdx.duckdb (cached in `_cache_interpretation_*.json`) and
-        # then one LLM call for the biology interpretation.  Per-sex
-        # results are aggregated under each organ into the narrative
-        # dict's `by_organ_llm` field so both HTML and PDF render
-        # identical analysis under each organ's table.
-        llm_gs_by_organ: dict[str, list[str]] = {}
-        llm_gene_by_organ: dict[str, list[str]] = {}
-        if genomics_sections:
-            try:
-                from llm_routes import generate_genomics_narrative_async
-
-                # Load identity from session for chemical name — used in
-                # the LLM prompt's "{compound} exposure" phrasing.  Falls
-                # back to the request's compound_name if identity is missing.
-                _identity = {}
-                _identity_path = _session_dir(dtxsid) / "identity.json"
-                if _identity_path.exists():
-                    try:
-                        _identity = json.loads(_identity_path.read_text())
-                    except Exception:
-                        pass
-                _llm_compound = _identity.get("name", compound_name)
-
-                # Override file: user's Lock/Unlock edits persist here and
-                # WIN over any freshly generated LLM output for the same
-                # organ×kind pair.  Load once; pass into the merge below.
-                _overrides = {"gene_set": {}, "gene_bmd": {}}
-                _overrides_path = (
-                    _session_dir(dtxsid) / "genomics_narrative_overrides.json"
-                )
-                if _overrides_path.exists():
-                    try:
-                        raw = json.loads(_overrides_path.read_text())
-                        _overrides["gene_set"] = raw.get("gene_set", {}) or {}
-                        _overrides["gene_bmd"] = raw.get("gene_bmd", {}) or {}
-                    except Exception:
-                        pass
-
-                async def _one(key, gen_data):
-                    """LLM-generate narrative for a single organ×sex."""
-                    organ = gen_data.get("organ", "")
-                    sex = gen_data.get("sex", "")
-                    gs_by_stat = gen_data.get("gene_sets_by_stat") or {}
-                    gene_sets_for_llm = gs_by_stat.get(bmd_stat) or []
-                    try:
-                        return key, await generate_genomics_narrative_async(
-                            dtxsid=dtxsid,
-                            compound=_llm_compound,
-                            organ=organ,
-                            sex=sex,
-                            gene_sets=gene_sets_for_llm,
-                            top_genes=gen_data.get("top_genes") or [],
-                            all_genes=gen_data.get("all_genes") or [],
-                            total_responsive=gen_data.get("total_responsive_genes", 0),
-                            dose_unit=dose_unit,
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "LLM narrative failed for %s: %s", key, e,
-                        )
-                        return key, {"error": str(e)}
-
-                # Parallel fanout — N calls, wall-clock ≈ one LLM call.
-                tasks = [_one(k, v) for k, v in genomics_sections.items()]
-                llm_results = await asyncio.gather(*tasks)
-
-                # Bundle the per-sex LLM results under each organ, then fold
-                # them into per-organ paragraph lists (male-then-female, sex-
-                # labelled) with user overrides winning — all in the shared
-                # `aggregate_organ_llm_narratives` helper so the session-reload
-                # and Regenerate paths stay in lockstep with this one.
-                per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]] = {}
-                for key, llm_out in llm_results:
-                    if not llm_out or "error" in llm_out:
-                        continue
-                    organ = (genomics_sections[key].get("organ") or "").lower()
-                    sex = (genomics_sections[key].get("sex") or "").lower()
-                    per_organ_bundles.setdefault(organ, {})[sex] = {
-                        "gs": llm_out.get("gene_set_narrative") or [],
-                        "gn": llm_out.get("gene_narrative") or [],
-                    }
-
-                from genomics_narratives import aggregate_organ_llm_narratives
-                llm_gs_by_organ, llm_gene_by_organ = aggregate_organ_llm_narratives(
-                    per_organ_bundles, overrides=_overrides,
-                )
-            except Exception as e:
-                logger.warning(
-                    "LLM narrative pipeline failed: %s", e,
-                )
+        llm_gs_by_organ, llm_gene_by_organ = await _build_genomics_llm_narratives(
+            dtxsid, genomics_sections, compound_name, bmd_stat, dose_unit,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5b — Deterministic body narratives
