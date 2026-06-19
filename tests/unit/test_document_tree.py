@@ -204,6 +204,78 @@ class TestFindNode:
         assert find_node("nonexistent-id") is None
 
 
+class TestNodeIndex:
+    """Verify the id->node index backs find_node and enforces uniqueness."""
+
+    def test_duplicate_id_at_top_level_raises(self):
+        # Two sibling nodes sharing an id must be rejected at build time:
+        # without the index, find_node would silently return the first one for
+        # every caller (pre-order shadowing) with no warning.
+        from document_tree import build_node_index
+
+        dup = [
+            DocNode(id="dup", title="First"),
+            DocNode(id="dup", title="Second"),
+        ]
+        with pytest.raises(ValueError, match="duplicate node id 'dup'"):
+            build_node_index(dup)
+
+    def test_duplicate_id_nested_raises(self):
+        # A duplicate hidden one level down must also be caught — the walk is
+        # whole-tree, not just top-level siblings.
+        from document_tree import build_node_index
+
+        nested = [
+            DocNode(
+                id="parent",
+                title="Parent",
+                children=[DocNode(id="parent", title="Shadow child")],
+            ),
+        ]
+        with pytest.raises(ValueError, match="duplicate node id 'parent'"):
+            build_node_index(nested)
+
+    def test_unique_tree_builds_index_of_every_node(self):
+        from document_tree import build_node_index, walk_tree
+
+        tree = [
+            DocNode(
+                id="root",
+                title="Root",
+                children=[
+                    DocNode(id="a", title="A"),
+                    DocNode(id="b", title="B"),
+                ],
+            ),
+        ]
+        index = build_node_index(tree)
+        ids = []
+        walk_tree(tree, lambda n: ids.append(n.id))
+        assert set(index) == set(ids)
+        # The index holds the live node objects, not copies.
+        assert index["a"].title == "A"
+
+    def test_document_tree_has_no_duplicate_ids(self):
+        # The live default tree must satisfy the uniqueness invariant — if this
+        # fails, the template grew a duplicate id and import itself would now
+        # raise (this is just a friendlier assertion of the same fact).
+        from document_tree import DOCUMENT_TREE, build_node_index, walk_tree
+
+        all_ids = []
+        walk_tree(DOCUMENT_TREE, lambda n: all_ids.append(n.id))
+        # No exception, and the index spans every node exactly once.
+        index = build_node_index(DOCUMENT_TREE)
+        assert len(index) == len(all_ids)
+
+    def test_find_node_default_returns_live_index_object(self):
+        # find_node() with no explicit tree must return the SAME object the
+        # index holds (the O(1) path), not a fresh walk result.
+        from document_tree import DOCUMENT_TREE, build_node_index
+
+        index = build_node_index(DOCUMENT_TREE)
+        assert find_node("background") is index["background"]
+
+
 class TestCollectDataKeys:
     """Verify collect_data_keys gathers keys from a subtree."""
 

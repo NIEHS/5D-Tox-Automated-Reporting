@@ -156,14 +156,50 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     walk_tree(tree, visit)
 
 
+def build_node_index(tree: list[DocNode]) -> dict[str, DocNode]:
+    """
+    Build an ``{id: node}`` lookup over a forest, enforcing id uniqueness.
+
+    Walks the tree in document order and raises ValueError on the first
+    duplicate id.  Node ids must be globally unique: find_node — and every
+    other id-keyed lookup (xref-token resolution, readiness checks, the
+    renderers' section filter) — keys on id alone, so a duplicate would
+    silently shadow, with the first pre-order match winning for all callers
+    and no warning.  Failing here, at build time, turns that latent template
+    authoring bug into a loud error, consistent with this module's fail-fast
+    template loading (see the import-time note on DOCUMENT_TREE).
+    """
+    index: dict[str, DocNode] = {}
+
+    def visit(node: DocNode) -> None:
+        if node.id in index:
+            raise ValueError(
+                f"duplicate node id {node.id!r} in document tree — node ids "
+                "must be unique (find_node and every id-keyed lookup would "
+                "otherwise silently shadow to the first pre-order match)"
+            )
+        index[node.id] = node
+
+    walk_tree(tree, visit)
+    return index
+
+
 def find_node(node_id: str, tree: list[DocNode] | None = None) -> DocNode | None:
     """
     Find a node by its ID anywhere in the tree.
 
     Returns the node, or None if not found.
+
+    For the default tree (DOCUMENT_TREE) this is an O(1) lookup against a
+    prebuilt id->node index (_DOCUMENT_INDEX), not a linear scan.  The index is
+    built once at import and never goes stale: the tree's shape is frozen after
+    build_tree() — nothing in prod mutates node.children — and
+    compute_table_numbers() only sets table_number, not ids.  When an explicit
+    non-default ``tree`` is passed (unit tests, or any future sub-forest), fall
+    back to a linear pre-order walk, since those callers don't share the cache.
     """
     if tree is None:
-        tree = DOCUMENT_TREE
+        return _DOCUMENT_INDEX.get(node_id)
 
     for node in tree:
         if node.id == node_id:
@@ -287,6 +323,13 @@ def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Initialize table numbers on module load
+# Initialize table numbers and the id->node index on module load
 # ---------------------------------------------------------------------------
 compute_table_numbers()
+
+# O(1) id->node lookup for the default tree, used by find_node().  Built once
+# here (eagerly, so a duplicate id fails import like a malformed template) and
+# never invalidated: prod never mutates the tree's shape after build_tree(), so
+# the index can't go stale.  Tests passing an explicit sub-forest bypass this
+# and walk linearly instead.
+_DOCUMENT_INDEX: dict[str, DocNode] = build_node_index(DOCUMENT_TREE)
