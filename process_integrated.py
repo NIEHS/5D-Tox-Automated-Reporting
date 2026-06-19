@@ -331,6 +331,34 @@ async def _build_genomics_llm_narratives(
     return llm_gs_by_organ, llm_gene_by_organ
 
 
+def _build_bmd_summary(
+    dtxsid, ntp_hash, bmds_hash, platform_tables, bmds_results,
+):
+    """
+    Layer 3 — BMD summary (depends on NTP + BMDS).
+
+    Two summary tables: one from BMDExpress 3 results (apical) and
+    one from pybmds results (BMDS).  Both need platform_tables +
+    bmds_results, so they run after Layers 1 and 2 complete.
+    """
+    bmd_summary_hash = _hash_bmd_summary(ntp_hash, bmds_hash)
+    bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
+
+    if bmd_summary_cached:
+        apical_bmd_summary = bmd_summary_cached["apical"]
+        apical_bmd_summary_bmds = bmd_summary_cached["bmds"]
+    else:
+        apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
+        apical_bmd_summary_bmds = _build_bmds_bmd_summary(
+            platform_tables, bmds_results,
+        )
+        _save_cache(dtxsid, "bmd_summary", bmd_summary_hash, {
+            "apical": apical_bmd_summary,
+            "bmds": apical_bmd_summary_bmds,
+        })
+    return apical_bmd_summary, apical_bmd_summary_bmds
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -847,24 +875,9 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 3 — BMD summary (depends on NTP + BMDS)
         # ══════════════════════════════════════════════════════════════
-        # Two summary tables: one from BMDExpress 3 results (apical) and
-        # one from pybmds results (BMDS).  Both need platform_tables +
-        # bmds_results, so they run after Layers 1 and 2 complete.
-        bmd_summary_hash = _hash_bmd_summary(ntp_hash, bmds_hash)
-        bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
-
-        if bmd_summary_cached:
-            apical_bmd_summary = bmd_summary_cached["apical"]
-            apical_bmd_summary_bmds = bmd_summary_cached["bmds"]
-        else:
-            apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
-            apical_bmd_summary_bmds = _build_bmds_bmd_summary(
-                platform_tables, bmds_results,
-            )
-            _save_cache(dtxsid, "bmd_summary", bmd_summary_hash, {
-                "apical": apical_bmd_summary,
-                "bmds": apical_bmd_summary_bmds,
-            })
+        apical_bmd_summary, apical_bmd_summary_bmds = _build_bmd_summary(
+            dtxsid, ntp_hash, bmds_hash, platform_tables, bmds_results,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5a — LLM-generated per-{organ,sex} narratives
