@@ -424,6 +424,56 @@ async def _build_charts(
     return chart_images
 
 
+async def _build_ntp_stats(dtxsid, integrated, bmd_stat):
+    """
+    Layer 1 — NTP stats (depends only on integrated data + bmd_stat).
+
+    This is the foundation: category lookup → filter GE experiments →
+    build_table_data (Java Williams/Dunnett/Jonckheere) → partition
+    by platform → annotate missing animals.  ~5s on miss.
+    """
+    ntp_hash = _hash_ntp(integrated, bmd_stat)
+    ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
+
+    if ntp_cached:
+        platform_tables = _deserialize_platform_tables(ntp_cached)
+    else:
+        cat_lookup = _restore_category_lookup(integrated, bmd_stat)
+        apical_integrated = _filter_gene_expression(integrated)
+        # NOTE: legacy-vs-truth deduplication used to happen here via
+        # _dedup_legacy_apical_experiments().  As of ADR-0001 step 4
+        # that responsibility moved into the BMDProject schema —
+        # load_integrated() returns already-deduped data and
+        # save_integrated() rejects duplicates outright.  No fix-up
+        # is needed in the processing path.
+
+        loop = asyncio.get_running_loop()
+        table_data = await loop.run_in_executor(
+            None, build_table_data, apical_integrated, cat_lookup,
+        )
+
+        source_files = integrated.get("_meta", {}).get("source_files", {})
+        platform_tables = _partition_by_platform(
+            apical_integrated, source_files, table_data,
+        )
+
+        # Annotate missing animals from xlsx study file rosters —
+        # compare bm2 N counts against xlsx Core Animals roster to
+        # detect animals that died before terminal sacrifice.
+        xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
+        if xlsx_rosters:
+            annotate_missing_animals(platform_tables, xlsx_rosters)
+            # Backfill absent dose columns with "–" so every platform
+            # table shows the full study dose design (NIEHS convention).
+            backfill_missing_doses(platform_tables, xlsx_rosters)
+
+        _save_cache(
+            dtxsid, "ntp", ntp_hash,
+            _serialize_platform_tables(platform_tables),
+        )
+    return platform_tables, ntp_hash
+
+
 # ---------------------------------------------------------------------------
 # Layer 2 units — Sections + BMDS + Genomics + Methods (independent, parallel)
 # ---------------------------------------------------------------------------
@@ -778,48 +828,9 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 1 — NTP stats (depends only on integrated data + bmd_stat)
         # ══════════════════════════════════════════════════════════════
-        # This is the foundation: category lookup → filter GE experiments →
-        # build_table_data (Java Williams/Dunnett/Jonckheere) → partition
-        # by platform → annotate missing animals.  ~5s on miss.
-        ntp_hash = _hash_ntp(integrated, bmd_stat)
-        ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
-
-        if ntp_cached:
-            platform_tables = _deserialize_platform_tables(ntp_cached)
-        else:
-            cat_lookup = _restore_category_lookup(integrated, bmd_stat)
-            apical_integrated = _filter_gene_expression(integrated)
-            # NOTE: legacy-vs-truth deduplication used to happen here via
-            # _dedup_legacy_apical_experiments().  As of ADR-0001 step 4
-            # that responsibility moved into the BMDProject schema —
-            # load_integrated() returns already-deduped data and
-            # save_integrated() rejects duplicates outright.  No fix-up
-            # is needed in the processing path.
-
-            loop = asyncio.get_running_loop()
-            table_data = await loop.run_in_executor(
-                None, build_table_data, apical_integrated, cat_lookup,
-            )
-
-            source_files = integrated.get("_meta", {}).get("source_files", {})
-            platform_tables = _partition_by_platform(
-                apical_integrated, source_files, table_data,
-            )
-
-            # Annotate missing animals from xlsx study file rosters —
-            # compare bm2 N counts against xlsx Core Animals roster to
-            # detect animals that died before terminal sacrifice.
-            xlsx_rosters = integrated.get("_meta", {}).get("xlsx_rosters", {})
-            if xlsx_rosters:
-                annotate_missing_animals(platform_tables, xlsx_rosters)
-                # Backfill absent dose columns with "–" so every platform
-                # table shows the full study dose design (NIEHS convention).
-                backfill_missing_doses(platform_tables, xlsx_rosters)
-
-            _save_cache(
-                dtxsid, "ntp", ntp_hash,
-                _serialize_platform_tables(platform_tables),
-            )
+        platform_tables, ntp_hash = await _build_ntp_stats(
+            dtxsid, integrated, bmd_stat,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
