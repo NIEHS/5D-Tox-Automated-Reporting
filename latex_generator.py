@@ -74,11 +74,12 @@ from document_tree import (
     first_body_node_id,
     walk_tree,
 )
-from render_capabilities import landscape_requested, content_item_landscape_requested
+from render_capabilities import content_item_landscape_requested
 from render_common import (
     front_matter_plan,
     has_paragraph_content,
     assert_dispatch_covers,
+    walk_emit,
     LATEX_OMITS,
     incidence_table_plan,
     apical_table_plan,
@@ -1034,43 +1035,34 @@ def _walk_latex(node: DocNode, data: dict) -> list[str]:
     Render a node and its descendants to a flat, document-ordered list of
     LaTeX chunks; the caller joins them with blank lines to produce the body.
 
-    The traversal (visit node, then recurse children in order) is the shared
-    ``walk_tree`` primitive (ADR-0006); only the per-node emit below — the
-    landscape wrap, the ADR-0005 override substitution, and the round-trip
-    anchor sentinels — is LaTeX-specific and lives here.  Same traversal as
-    html_generator._walk_html.
-
-    We close over a local ``chunks`` accumulator and append from the
-    ``_visit`` callback, because ``walk_tree`` is side-effect-only.
+    Thin wrapper over the shared render_common.walk_emit skeleton (ADR-0006):
+    the traversal + accumulator are common, only the LaTeX-specific emit below
+    is passed in.  Same skeleton as html_generator._walk_html.
     """
-    chunks: list[str] = []
+    def _wrap_post(n: DocNode, chunk: str) -> str:
+        # ADR-0005: if a human owns this region (edited and reconciled into the
+        # override store), emit their version verbatim instead of the generated
+        # one.  Applied AFTER the orientation wrap so the override region matches
+        # exactly what sits between the sentinels.
+        chunk = _apply_override(chunk, data.get("overrides") or {}, n.id, data)
+        # Then bracket the whole node block in begin/end sentinels keyed to
+        # node.id, so the round-trip reconciler can attribute an edited region
+        # back to this node.  Inert in the PDF.
+        return _anchor("node", n.id, chunk)
 
-    def _visit(n: DocNode) -> None:
-        handler = _DISPATCH.get(n.node_type, _render_unimplemented)
-        chunk = handler(n, data)
-        if chunk:
-            # Per-node landscape: wrap this node's output in pdflscape's
-            # landscape environment when the user flipped it AND the node's
-            # semantic type is orientable (capability dictionary).  Gating on the
-            # capability ignores stale/invalid overlay flags — the dictionary is
-            # authoritative on both the UI and render sides.  pdflscape rotates
-            # both the content and the PDF page, so Overleaf shows it landscape.
-            if landscape_requested(n.node_type, n.id, data.get("orientations"),
-                                   default=n.orientation):
-                chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
-            # ADR-0005: if a human owns this region (edited and reconciled into the
-            # override store), emit their version verbatim instead of the generated
-            # one.  Applied AFTER the orientation wrap so the override region matches
-            # exactly what sits between the sentinels.
-            chunk = _apply_override(chunk, data.get("overrides") or {}, n.id, data)
-            # Then bracket the whole node block in begin/end sentinels keyed to
-            # node.id, so the round-trip reconciler can attribute an edited region
-            # back to this node.  Inert in the PDF.
-            chunk = _anchor("node", n.id, chunk)
-            chunks.append(chunk)
-
-    walk_tree([node], _visit)
-    return chunks
+    # wrap_post carries the override+anchor that HTML deliberately omits — the
+    # ONE intentional surface divergence (HTML is the on-screen preview, LaTeX
+    # the Overleaf round-trip surface).  See the divergence-#2 TODO in memory.
+    return walk_emit(
+        node, data,
+        walk=walk_tree,
+        dispatch=_DISPATCH,
+        fallback=_render_unimplemented,
+        # pdflscape rotates both the content and the PDF page, so Overleaf shows
+        # it landscape.
+        wrap_landscape=lambda chunk: "\\begin{landscape}\n" + chunk + "\n\\end{landscape}",
+        wrap_post=_wrap_post,
+    )
 
 
 # ---------------------------------------------------------------------------

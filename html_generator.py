@@ -56,11 +56,12 @@ from document_tree import (
     first_body_node_id,
     walk_tree,
 )
-from render_capabilities import landscape_requested, content_item_landscape_requested
+from render_capabilities import content_item_landscape_requested
 from render_common import (
     front_matter_plan,
     has_paragraph_content,
     assert_dispatch_covers,
+    walk_emit,
     incidence_table_plan,
     apical_table_plan,
     unified_narrative_paragraphs,
@@ -1058,40 +1059,29 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
     Render a node and its descendants to a flat, document-ordered list of
     HTML chunks.
 
-    The traversal itself (visit node, then recurse children in order) is the
-    shared ``walk_tree`` primitive (ADR-0006); only the per-node rendering
-    below — the HTML-specific anchor span and landscape wrapping — lives here.
-    This is the seam the ADR-0006 unification splits on: the walk is common,
-    the emit is format-specific.  Same traversal as latex_generator._walk_latex.
-
-    We close over a local ``chunks`` accumulator and append to it from the
-    ``_visit`` callback, because ``walk_tree`` is side-effect-only and does
-    not collect a return value.
+    Thin wrapper over the shared render_common.walk_emit skeleton (ADR-0006):
+    the traversal + accumulator are common, only the HTML-specific emit below
+    is passed in.  Same skeleton as latex_generator._walk_latex — but HTML
+    passes no wrap_post: it is the on-screen preview and deliberately carries
+    neither the ADR-0005 override substitution nor the round-trip anchors that
+    LaTeX (the Overleaf round-trip surface) does.  See the divergence-#2 TODO
+    in memory for the plan to give HTML its own override-substitution wrap_post.
     """
-    chunks: list[str] = []
-
-    def _visit(n: DocNode) -> None:
-        handler = _DISPATCH.get(n.node_type, _render_unimplemented)
-        chunk = handler(n, data)
-        if chunk:
-            # Zero-height anchor before each node so the navigation panel can scroll the
-            # full preview to this section (frame.contentDocument
-            # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves
-            # the actual DOM nodes into page boxes, preserving these ids, so
-            # the scroll target survives pagination.
-            chunks.append(f'<span id="sec-{_esc(n.id)}" class="sec-anchor"></span>')
-            # Per-node landscape: wrap in a .landscape-block (assigned to the
-            # landscape @page) when the user flipped it AND the node's semantic
-            # type is orientable (capability dictionary).  Gating on the
-            # capability ignores stale/invalid overlay flags — the dictionary is
-            # authoritative on both the UI and render sides.
-            if landscape_requested(n.node_type, n.id, data.get("orientations"),
-                                   default=n.orientation):
-                chunk = f'<div class="landscape-block">{chunk}</div>'
-            chunks.append(chunk)
-
-    walk_tree([node], _visit)
-    return chunks
+    return walk_emit(
+        node, data,
+        walk=walk_tree,
+        dispatch=_DISPATCH,
+        fallback=_render_unimplemented,
+        # Zero-height anchor before each node so the navigation panel can scroll
+        # the full preview to this section (frame.contentDocument
+        # .getElementById("sec-<id>").scrollIntoView()).  Paged.js moves the
+        # actual DOM nodes into page boxes, preserving these ids, so the scroll
+        # target survives pagination.
+        emit_pre=lambda n: f'<span id="sec-{_esc(n.id)}" class="sec-anchor"></span>',
+        # Wrap in a .landscape-block (assigned to the landscape @page) when the
+        # user flipped it AND the node's semantic type is orientable.
+        wrap_landscape=lambda chunk: f'<div class="landscape-block">{chunk}</div>',
+    )
 
 
 # ---------------------------------------------------------------------------

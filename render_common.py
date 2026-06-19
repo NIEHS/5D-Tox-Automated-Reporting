@@ -41,6 +41,12 @@ from document_node import DocNode
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
 from table_builder_common import format_mean_se_display, format_display_number
+# The per-node landscape DECISION is format-agnostic (it inspects the node type,
+# the orientation overlay, and the node default) — only the WRAP markup differs.
+# render_capabilities is a clean low-level module that imports nothing from
+# document_tree / the renderers / this module, so importing it here keeps
+# render_common a leaf (the tree walk itself is still passed in, never imported).
+from render_capabilities import landscape_requested
 
 
 # ---------------------------------------------------------------------------
@@ -767,3 +773,86 @@ def assert_dispatch_covers(
             f"Add them to render_common.RENDERABLE_NODE_TYPES so the other "
             f"renderer is required to handle them too."
         )
+
+
+# ---------------------------------------------------------------------------
+# Tree walk + per-node emit (ADR-0006)
+# ---------------------------------------------------------------------------
+
+def walk_emit(
+    node: DocNode,
+    data: dict,
+    *,
+    walk,
+    dispatch,
+    fallback,
+    wrap_landscape,
+    emit_pre=None,
+    wrap_post=None,
+) -> list[str]:
+    r"""
+    Render a node and its descendants to a flat, document-ordered list of
+    markup chunks — the shared skeleton behind latex_generator._walk_latex and
+    html_generator._walk_html.
+
+    The traversal (visit node, then recurse children in order) is the shared
+    ``walk_tree`` primitive (ADR-0006); the per-node EMIT differs by surface and
+    is supplied by the caller as callables.  Both renderers used to hand-write
+    this same accumulator loop, which let the two walks drift — extracting it
+    here is what keeps them in lockstep.
+
+    The accumulator pattern (close over ``chunks`` inside a ``_visit`` callback,
+    because ``walk_tree`` is side-effect-only) lives here once instead of in
+    both renderers.
+
+    Args:
+        node: the subtree root to render (walked as ``[node]``).
+        data: the report data dict, threaded to every handler + wrap callable.
+        walk: the traversal primitive — pass ``document_tree.walk_tree``.  It is
+            a PARAMETER rather than an import so render_common stays a leaf
+            module (importing walk_tree would pull in document_tree's
+            instantiated DOCUMENT_TREE at import time).
+        dispatch: the renderer's ``node_type -> handler`` mapping.
+        fallback: handler used for an unregistered node type
+            (each renderer's ``_render_unimplemented``).
+        wrap_landscape: ``chunk -> chunk`` applied when the node is orientable
+            and the overlay requests landscape.  The DECISION is shared (made
+            here via landscape_requested); only this WRAP markup is per-surface.
+        emit_pre: optional ``node -> str`` whose non-empty result is appended
+            BEFORE the node's own chunk (HTML's scroll-target ``<span>``; LaTeX
+            passes None — it has no pre-chunk).
+        wrap_post: optional ``(node, chunk) -> chunk`` applied AFTER the
+            landscape wrap.  LaTeX passes the ADR-0005 override substitution +
+            round-trip anchor here; HTML passes None.  This None-vs-wrap is the
+            ONE intentional surface divergence (the preview shows generated
+            content only, never human overrides) — see the divergence-#2 TODO
+            in memory ([[project_rlm_arch1_walk_emit]]) for the plan to give
+            HTML its own override-substitution wrap_post.
+
+    Returns:
+        The list of markup chunks in document order; the caller joins them.
+    """
+    chunks: list[str] = []
+
+    def _visit(n: DocNode) -> None:
+        handler = dispatch.get(n.node_type, fallback)
+        chunk = handler(n, data)
+        if not chunk:
+            return
+        if emit_pre is not None:
+            pre = emit_pre(n)
+            if pre:
+                chunks.append(pre)
+        # Per-node landscape: wrap this node's output when the user flipped it
+        # AND the node's semantic type is orientable (capability dictionary).
+        # Gating on the capability ignores stale/invalid overlay flags — the
+        # dictionary is authoritative on both the UI and render sides.
+        if landscape_requested(n.node_type, n.id, data.get("orientations"),
+                               default=n.orientation):
+            chunk = wrap_landscape(chunk)
+        if wrap_post is not None:
+            chunk = wrap_post(n, chunk)
+        chunks.append(chunk)
+
+    walk([node], _visit)
+    return chunks
