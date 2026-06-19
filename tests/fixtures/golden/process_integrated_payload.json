@@ -1,0 +1,246 @@
+{
+  "apical_bmd_narrative": {
+    "analytical": [
+      "MOCK analytical paragraph for the BMD summary."
+    ],
+    "descriptive": [
+      "Exposure to the test chemical resulted in dose-related changes in clinical chemistry and body weight measurements. Reliable BMD values were calculated for 4 endpoints.",
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 3 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, the most sensitive endpoint was SD5 (body weight; BMD = 63.0 mg/kg, BMDL = 48.0 mg/kg)."
+    ],
+    "paragraphs": [
+      "Exposure to the test chemical resulted in dose-related changes in clinical chemistry and body weight measurements. Reliable BMD values were calculated for 4 endpoints.",
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 3 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, the most sensitive endpoint was SD5 (body weight; BMD = 63.0 mg/kg, BMDL = 48.0 mg/kg).",
+      "MOCK analytical paragraph for the BMD summary."
+    ]
+  },
+  "apical_bmd_summary": [
+    {
+      "bmd": "18.5",
+      "bmd_status": "viable",
+      "bmdl": "12.0",
+      "direction": "↑",
+      "endpoint": "ALT",
+      "loel": 100.0,
+      "noel": 10.0,
+      "platform": "Clinical Chemistry",
+      "sex": "Male"
+    },
+    {
+      "bmd": "42.0",
+      "bmd_status": "viable",
+      "bmdl": "28.0",
+      "direction": "↑",
+      "endpoint": "SD5",
+      "loel": 100.0,
+      "noel": 10.0,
+      "platform": "Body Weight",
+      "sex": "Male"
+    },
+    {
+      "bmd": "55.0",
+      "bmd_status": "viable",
+      "bmdl": "40.0",
+      "direction": "↑",
+      "endpoint": "AST",
+      "loel": 100.0,
+      "noel": 10.0,
+      "platform": "Clinical Chemistry",
+      "sex": "Male"
+    },
+    {
+      "bmd": "63.0",
+      "bmd_status": "viable",
+      "bmdl": "48.0",
+      "direction": "↑",
+      "endpoint": "SD5",
+      "loel": 100.0,
+      "noel": 10.0,
+      "platform": "Body Weight",
+      "sex": "Female"
+    }
+  ],
+  "apical_bmd_summary_bmds": [],
+  "bmd_stat_labels": {
+    "median": "Median"
+  },
+  "bmd_stats": [
+    "median"
+  ],
+  "chart_images": null,
+  "gene_narrative": null,
+  "gene_set_narrative": null,
+  "genomics_sections": {},
+  "methods": {
+    "context": {
+      "biosampling_doses": [],
+      "bmdexpress_version": null,
+      "bmds_version": null,
+      "bmr_factor": null,
+      "bmr_type": null,
+      "casrn": "",
+      "chemical_name": "the test chemical",
+      "clin_chem_endpoints": [],
+      "constant_variance": null,
+      "dose_groups": [],
+      "dose_unit": "mg/kg",
+      "dtxsid": "DTXSID_TEST",
+      "duration_days": 5,
+      "fold_change_filter": null,
+      "ge_organs": [],
+      "genomics_assay": null,
+      "genomics_chip": null,
+      "genomics_sample_counts": null,
+      "has_body_weight": false,
+      "has_clin_chem": false,
+      "has_clin_path": false,
+      "has_gene_expression": false,
+      "has_hematology": false,
+      "has_hormones": false,
+      "has_organ_weights": false,
+      "has_tissue_conc": false,
+      "hematology_endpoints": [],
+      "hormone_endpoints": [],
+      "models_fit": null,
+      "n_biosampling": 0,
+      "n_control": 10,
+      "n_per_group": 5,
+      "organ_weight_endpoints": [],
+      "pk_concentrations": null,
+      "pk_half_lives": null,
+      "pk_timepoints": [],
+      "prefilter_method": null,
+      "prefilter_pvalue": null,
+      "route": "gavage",
+      "sexes": [],
+      "species": "Sprague Dawley",
+      "vehicle": "corn oil"
+    },
+    "model_used": "claude-sonnet-4-6",
+    "section_key": "methods",
+    "sections": []
+  },
+  "sections": [
+    {
+      "narrative": [],
+      "platform": "Body Weight",
+      "tables_json": {
+        "Female": [
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "SD5",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "*",
+            "values": {
+              "0": "90.0 ± 4.0",
+              "1": "95.0 ± 3.5",
+              "10": "100.0 ± 5.0",
+              "100": "110.0 ± 6.0"
+            }
+          }
+        ],
+        "Male": [
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "SD5",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "**",
+            "values": {
+              "0": "100.0 ± 5.0",
+              "1": "105.0 ± 4.0",
+              "10": "110.0 ± 6.0",
+              "100": "120.0 ± 7.0"
+            }
+          }
+        ]
+      },
+      "title": "Body Weight"
+    },
+    {
+      "narrative": [],
+      "platform": "Clinical Chemistry",
+      "tables_json": {
+        "Male": [
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "ALT",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "**",
+            "values": {
+              "0": "30.0 ± 2.0",
+              "1": "35.0 ± 3.0",
+              "10": "40.0 ± 4.0",
+              "100": "50.0 ± 5.0**"
+            }
+          },
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "AST",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "**",
+            "values": {
+              "0": "20.0 ± 1.0",
+              "1": "22.0 ± 1.5",
+              "10": "25.0 ± 2.0",
+              "100": "30.0 ± 2.5"
+            }
+          }
+        ]
+      },
+      "title": "Clinical Chemistry"
+    }
+  ],
+  "unified_narratives": {
+    "apical": {
+      "paragraphs": [
+        "Terminal body weight was significantly increased in male rats with a positive trend (Table 2). The BMD and BMDL were 42.0 and 28.0 mg/kg, respectively. Terminal body weight was significantly increased in female rats with a positive trend (Table 2). The BMD and BMDL were 63.0 and 48.0 mg/kg, respectively."
+      ],
+      "title": "Animal Condition, Body Weights, and Organ Weights"
+    },
+    "clinical_pathology": {
+      "paragraphs": [
+        "In male rats, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
+      ],
+      "title": "Clinical Pathology"
+    }
+  }
+}
