@@ -110,6 +110,77 @@ _BMD_STAT_LABELS = {
 
 
 # ---------------------------------------------------------------------------
+# Pipeline layer functions
+# ---------------------------------------------------------------------------
+# Each function is one "Layer" of api_process_integrated, extracted from the
+# old monolithic handler (ADR-0002).  They are module-level so each phase is
+# independently testable; the orchestrator below sequences them, preserving
+# the dependency ordering and the asyncio.gather parallelism.
+
+
+async def _build_apical_bmd_narrative(
+    dtxsid, apical_bmd_summary, methods_result, compound_name, dose_unit,
+):
+    """
+    Layer 3.5c — Apical BMD Summary narratives.
+
+    Two-part narrative for the "Apical Endpoint Benchmark Dose Summary"
+    section:
+      descriptive — programmatic summary of the BMD findings: most
+                    sensitive endpoint, BMD range, per-sex.
+      analytical  — LLM paragraph interpreting biological significance,
+                    organ-system sensitivity, sex differences, and
+                    dose-response coherence.
+    Both are combined into apical_bmd_narrative["paragraphs"] which
+    report_data.py prepends to the BMD summary table.
+    """
+    apical_bmd_narrative: dict = {}
+    if apical_bmd_summary:
+        try:
+            from methods_report import build_apical_bmd_summary_narrative
+            _methods_ctx = (
+                methods_result.get("context") if methods_result else None
+            ) or {}
+            _chem_name = _methods_ctx.get("chemical_name") or compound_name or "the test article"
+            _dur = _methods_ctx.get("study_duration", "subchronic (90-day)")
+            _dose_groups = _methods_ctx.get("dose_groups") or []
+
+            # Descriptive paragraphs (deterministic, no LLM).
+            desc_paras = build_apical_bmd_summary_narrative(
+                apical_bmd_summary,
+                compound_name=_chem_name,
+                dose_unit=dose_unit,
+            )
+
+            # LLM analytical paragraph (async, cached per summary hash).
+            llm_paras: list[str] = []
+            try:
+                from llm_routes import generate_apical_bmd_narrative_async
+                llm_result = await generate_apical_bmd_narrative_async(
+                    dtxsid=dtxsid,
+                    compound_name=_chem_name,
+                    dose_unit=dose_unit,
+                    apical_bmd_summary=apical_bmd_summary,
+                    study_duration=_dur,
+                    dose_groups=_dose_groups,
+                )
+                llm_paras = llm_result.get("paragraphs", [])
+            except Exception as _llm_e:
+                logger.warning("Apical BMD LLM narrative failed: %s", _llm_e)
+
+            apical_bmd_narrative = {
+                "descriptive": desc_paras,
+                "analytical": llm_paras,
+                # Flat paragraphs list for the PDF renderer — descriptive
+                # first, then LLM analytical paragraph(s) below.
+                "paragraphs": desc_paras + llm_paras,
+            }
+        except Exception as _apical_narr_e:
+            logger.warning("Apical BMD narrative build failed: %s", _apical_narr_e)
+    return apical_bmd_narrative
+
+
+# ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
 
@@ -785,58 +856,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5c — Apical BMD Summary narratives
         # ══════════════════════════════════════════════════════════════
-        # Two-part narrative for the "Apical Endpoint Benchmark Dose
-        # Summary" section:
-        #   descriptive — programmatic summary of the BMD findings:
-        #                 most sensitive endpoint, BMD range, per-sex.
-        #   analytical  — LLM paragraph interpreting biological
-        #                 significance, organ-system sensitivity, sex
-        #                 differences, and dose-response coherence.
-        # Both are combined into apical_bmd_narrative["paragraphs"]
-        # which report_data.py prepends to the BMD summary table.
-        apical_bmd_narrative: dict = {}
-        if apical_bmd_summary:
-            try:
-                from methods_report import build_apical_bmd_summary_narrative
-                _methods_ctx = (
-                    methods_result.get("context") if methods_result else None
-                ) or {}
-                _chem_name = _methods_ctx.get("chemical_name") or compound_name or "the test article"
-                _dur = _methods_ctx.get("study_duration", "subchronic (90-day)")
-                _dose_groups = _methods_ctx.get("dose_groups") or []
-
-                # Descriptive paragraphs (deterministic, no LLM).
-                desc_paras = build_apical_bmd_summary_narrative(
-                    apical_bmd_summary,
-                    compound_name=_chem_name,
-                    dose_unit=dose_unit,
-                )
-
-                # LLM analytical paragraph (async, cached per summary hash).
-                llm_paras: list[str] = []
-                try:
-                    from llm_routes import generate_apical_bmd_narrative_async
-                    llm_result = await generate_apical_bmd_narrative_async(
-                        dtxsid=dtxsid,
-                        compound_name=_chem_name,
-                        dose_unit=dose_unit,
-                        apical_bmd_summary=apical_bmd_summary,
-                        study_duration=_dur,
-                        dose_groups=_dose_groups,
-                    )
-                    llm_paras = llm_result.get("paragraphs", [])
-                except Exception as _llm_e:
-                    logger.warning("Apical BMD LLM narrative failed: %s", _llm_e)
-
-                apical_bmd_narrative = {
-                    "descriptive": desc_paras,
-                    "analytical": llm_paras,
-                    # Flat paragraphs list for the PDF renderer — descriptive
-                    # first, then LLM analytical paragraph(s) below.
-                    "paragraphs": desc_paras + llm_paras,
-                }
-            except Exception as _apical_narr_e:
-                logger.warning("Apical BMD narrative build failed: %s", _apical_narr_e)
+        apical_bmd_narrative = await _build_apical_bmd_narrative(
+            dtxsid, apical_bmd_summary, methods_result,
+            compound_name, dose_unit,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
