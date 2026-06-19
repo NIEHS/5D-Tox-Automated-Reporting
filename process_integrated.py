@@ -180,6 +180,55 @@ async def _build_apical_bmd_narrative(
     return apical_bmd_narrative
 
 
+def _build_genomics_body_narratives(
+    genomics_sections, methods_result, compound_name,
+    llm_gs_by_organ, llm_gene_by_organ,
+):
+    """
+    Layer 3.5b — Deterministic body narratives.
+
+    Per-organ findings paragraphs (plus the methodology + caveat
+    intros).  Built by the shared assembler so the HTML in-app
+    view and the PDF render identical prose above each organ's
+    genomics table — no divergence between the two renderers.
+    The LLM output from Layer 3.5a is merged in as `by_organ_llm`.
+    """
+    gene_set_narrative = None
+    gene_narrative = None
+    if genomics_sections:
+        try:
+            from genomics_narratives import build_genomics_body_narratives
+            _methods_ctx = (
+                methods_result.get("context") if methods_result else None
+            )
+            _chem_name = (
+                (_methods_ctx or {}).get("chemical_name")
+                or compound_name
+                or "the test article"
+            )
+            narratives = build_genomics_body_narratives(
+                genomics_sections=genomics_sections,
+                methods_context=_methods_ctx,
+                chemical_name=_chem_name,
+            )
+            gene_set_narrative = narratives.get("gene_set_narrative")
+            gene_narrative = narratives.get("gene_narrative")
+            # Attach the LLM tier under each narrative dict so both
+            # the HTML (read from by_organ_llm) and the PDF (export
+            # payload passes it through to Typst) see the same data.
+            if gene_set_narrative is not None:
+                gene_set_narrative["by_organ_llm"] = llm_gs_by_organ
+            if gene_narrative is not None:
+                gene_narrative["by_organ_llm"] = llm_gene_by_organ
+        except Exception as e:
+            # Non-fatal — the PDF export path still auto-populates
+            # on its own if the in-app response is missing this.
+            logger.warning(
+                "Genomics body narrative assembly failed: %s", e,
+            )
+    return gene_set_narrative, gene_narrative
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -814,44 +863,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5b — Deterministic body narratives
         # ══════════════════════════════════════════════════════════════
-        # Per-organ findings paragraphs (plus the methodology + caveat
-        # intros).  Built by the shared assembler so the HTML in-app
-        # view and the PDF render identical prose above each organ's
-        # genomics table — no divergence between the two renderers.
-        # The LLM output from Layer 3.5a is merged in as `by_organ_llm`.
-        gene_set_narrative = None
-        gene_narrative = None
-        if genomics_sections:
-            try:
-                from genomics_narratives import build_genomics_body_narratives
-                _methods_ctx = (
-                    methods_result.get("context") if methods_result else None
-                )
-                _chem_name = (
-                    (_methods_ctx or {}).get("chemical_name")
-                    or compound_name
-                    or "the test article"
-                )
-                narratives = build_genomics_body_narratives(
-                    genomics_sections=genomics_sections,
-                    methods_context=_methods_ctx,
-                    chemical_name=_chem_name,
-                )
-                gene_set_narrative = narratives.get("gene_set_narrative")
-                gene_narrative = narratives.get("gene_narrative")
-                # Attach the LLM tier under each narrative dict so both
-                # the HTML (read from by_organ_llm) and the PDF (export
-                # payload passes it through to Typst) see the same data.
-                if gene_set_narrative is not None:
-                    gene_set_narrative["by_organ_llm"] = llm_gs_by_organ
-                if gene_narrative is not None:
-                    gene_narrative["by_organ_llm"] = llm_gene_by_organ
-            except Exception as e:
-                # Non-fatal — the PDF export path still auto-populates
-                # on its own if the in-app response is missing this.
-                logger.warning(
-                    "Genomics body narrative assembly failed: %s", e,
-                )
+        gene_set_narrative, gene_narrative = _build_genomics_body_narratives(
+            genomics_sections, methods_result, compound_name,
+            llm_gs_by_organ, llm_gene_by_organ,
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5c — Apical BMD Summary narratives
