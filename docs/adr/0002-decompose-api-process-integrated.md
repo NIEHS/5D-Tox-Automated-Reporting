@@ -1,6 +1,6 @@
 # 0002 — Decompose `api_process_integrated` into per-Layer functions
 
-- **Status:** Proposed (2026-05-25)
+- **Status:** Accepted (2026-05-25; implemented 2026-06-19, commits `6eeccd3..5c25abb`)
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (this
   endpoint loads `integrated.json` through that barrier); rlm-code
@@ -83,6 +83,22 @@ payload shape, and the cache files are all unchanged.
 > **No code is changed by this ADR.** Per the decision to record the design
 > before touching the pipeline, this commit adds only this document. The
 > extraction is a follow-up governed by the commit sequence below.
+
+> **Implementation note (2026-06-19, commits `6eeccd3..5c25abb`).** The
+> decomposition shipped leaf-first (one commit per Layer: 3.5c → 3.5b → 3.5a →
+> 3 → 2.5 → Layer-2 units → Layer 1), each verified behavior-preserving by the
+> golden-payload oracle plus a final 96/96 smart-suite run including the e2e
+> pipeline test. **One deliberate deviation from the design below: the
+> `ProcessContext` dataclass was NOT introduced.** The captured Layer-2 state is
+> threaded as explicit parameters instead — the orchestrator still owns the
+> hash/cache-key preamble and passes each unit its pre-loaded cache + hash. This
+> kept the extracted units consistent with the five leaf layers (which take
+> explicit params) and avoided retrofitting all seven functions. The
+> `ProcessContext` section below is retained as the originally-considered design
+> and remains a clean follow-up if the explicit parameter lists later prove
+> unwieldy. The orchestrator landed at ~243 lines rather than the ~60 targeted
+> here — the residual bulk is the inline Layer-2 preamble, which is the natural
+> home for `ProcessContext` should it be adopted.
 
 ### State threading via a `ProcessContext` dataclass
 
