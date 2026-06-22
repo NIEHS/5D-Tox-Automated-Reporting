@@ -18,8 +18,8 @@ dependencies = [
     "pandas>=2.2.0",
     "pybmds>=25.1",
     "python-docx>=1.2.0",
-    "python-multipart>=0.0.22",
-    "requests>=2.32.5",
+    "python-multipart>=0.0.31",
+    "requests>=2.33.0",
     "scipy>=1.14.0",
     "uvicorn>=0.34.0",
     "watchfiles>=1.1.1",
@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0", "httpx>=0.27"]
+test = ["pytest>=9.0.3", "httpx>=0.27"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -53,7 +53,7 @@ bmdx-pipe = { path = "../bmdx-pipe", editable = true }
 dev = [
     "httpx>=0.28.1",
     "playwright>=1.58.0",
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-playwright>=0.7.2",
 ]
