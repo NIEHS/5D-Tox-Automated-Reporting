@@ -23,6 +23,7 @@ import math
 import pandas as pd
 
 import interpret
+import interpret_analysis
 from interpret import AnalysisResult
 
 
@@ -75,8 +76,8 @@ def test_build_genomics_interpretation_coerces_string_nan_bmd(monkeypatch):
             top_papers=[],
         )
 
-    monkeypatch.setattr(interpret, "ToxKBQuerier", _DummyKB)
-    monkeypatch.setattr(interpret, "analyze", _fake_analyze)
+    monkeypatch.setattr(interpret_analysis, "ToxKBQuerier", _DummyKB)
+    monkeypatch.setattr(interpret_analysis, "analyze", _fake_analyze)
 
     out = interpret.build_genomics_interpretation(
         {"all_genes": _GENE_LIST}, db_path="unused.duckdb",
@@ -122,8 +123,8 @@ def test_min_max_over_all_string_nan_does_not_raise(monkeypatch):
             organ_sig={}, gene_literature=[], top_papers=[],
         )
 
-    monkeypatch.setattr(interpret, "ToxKBQuerier", _DummyKB)
-    monkeypatch.setattr(interpret, "analyze", _fake_analyze)
+    monkeypatch.setattr(interpret_analysis, "ToxKBQuerier", _DummyKB)
+    monkeypatch.setattr(interpret_analysis, "analyze", _fake_analyze)
 
     out = interpret.build_genomics_interpretation(
         {"all_genes": [
