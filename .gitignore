@@ -26,3 +26,8 @@ svobodadl@*
 .repo-clone/
 .overleaf-standin/
 .overleaf-clone/
+
+# Claude Code session transcripts — local working artifacts only. Never
+# commit: they embed full conversation history and have leaked live
+# credentials (HHS audit, 2026-06-22). Rotate any secret that lands here.
+output/session_exports/
