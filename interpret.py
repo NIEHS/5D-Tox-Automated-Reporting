@@ -50,12 +50,43 @@ def resolve_anthropic_api_key() -> "str | None":
     return None
 
 
+def resolve_model_name(model: str) -> str:
+    """Map a canonical model id to the proxy's expected name.
+
+    The LiteLLM proxy uses dot version notation (``claude-sonnet-4.6``) while
+    the app passes hyphenated canonical ids (``claude-sonnet-4-6``); sending the
+    hyphenated form gets a 400 "Invalid model name" from the proxy.  An explicit
+    ANTHROPIC_MODEL_MAP env (``src=dst,src2=dst2``) overrides the auto-remap.
+
+    This is the single chokepoint for the remap — every Anthropic call site must
+    route its model through here (directly or via AnthropicEndpoint) so the
+    proxy never sees an un-remapped id.
+    """
+    import re
+    map_str = os.environ.get("ANTHROPIC_MODEL_MAP", "")
+    if map_str:
+        for entry in map_str.split(","):
+            if "=" in entry:
+                src, dst = entry.strip().split("=", 1)
+                if model == src.strip():
+                    return dst.strip()
+    # Auto-remap: claude-{tier}-{major}-{minor} → claude-{tier}-{major}.{minor}
+    m = re.match(r"^(claude-\w+)-(\d+)-(\d+)$", model)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}.{m.group(3)}"
+    return model
+
+
 @dataclass
 class AnthropicEndpoint:
     name: str
     model: str          # e.g. "claude-sonnet-4-6"
     max_tokens: int = 4096
     temperature: float = 0.3
+
+    def _resolve_model(self) -> str:
+        """Map canonical model IDs to proxy-friendly names via ANTHROPIC_MODEL_MAP env."""
+        return resolve_model_name(self.model)
 
     def generate(self, prompt: str, system: str = "",
                  temperature: float | None = None) -> str:
@@ -64,7 +95,7 @@ class AnthropicEndpoint:
         client = anthropic.Anthropic(api_key=resolve_anthropic_api_key())
         messages = [{"role": "user", "content": prompt}]
         kwargs = {
-            "model": self.model,
+            "model": self._resolve_model(),
             "max_tokens": self.max_tokens,
             "messages": messages,
             "temperature": temp,
@@ -1469,13 +1500,11 @@ def _sanitize_model_name(model: str) -> str:
 
 
 def _write_per_model_output(
-    result: AnalysisResult,
     runs: list[NarrativeRun],
     model: str,
-    base_docx: str | None,
     base_md: str,
 ) -> None:
-    """Write per-model .docx and .md files as each model's runs complete."""
+    """Write per-model .md file as each model's runs complete."""
     safe = _sanitize_model_name(model)
     md_path = Path(base_md)
     model_md = md_path.parent / f"{md_path.stem}_{safe}{md_path.suffix}"
@@ -1491,45 +1520,12 @@ def _write_per_model_output(
     model_md.write_text(md_text)
     print(f"  Saved {model_md}")
 
-    if base_docx:
-        docx_path = Path(base_docx)
-        model_docx = docx_path.parent / f"{docx_path.stem}_{safe}{docx_path.suffix}"
-        _build_per_model_docx(result, runs, model, str(model_docx))
-
-
-def _build_per_model_docx(
-    result: AnalysisResult,
-    runs: list[NarrativeRun],
-    model: str,
-    output_path: str,
-) -> None:
-    """Build a per-model .docx with the model's narrative runs."""
-    from docx import Document
-    from docx.shared import Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from build_docx import add_heading, add_para
-
-    doc = Document()
-    title = doc.add_heading(f"Narratives: {model}", level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    for run in runs:
-        add_heading(doc, f"Run {run.run_index + 1} ({run.elapsed_seconds:.1f}s)", level=1)
-        _render_narrative(doc, run.narrative)
-
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(str(out))
-    print(f"  Saved {output_path}")
-
 
 def generate_all_narratives(
     context: str,
     models: list[str],
     n_runs: int = 3,
-    base_docx: str | None = None,
     base_md: str = "output/interpretation.md",
-    result: AnalysisResult | None = None,
 ) -> list[NarrativeRun]:
     """
     Generate narratives from multiple models in parallel.
@@ -1568,8 +1564,8 @@ def generate_all_narratives(
             print(f"  [{model}] Run {i + 1} done in {elapsed:.1f}s")
 
         # Write per-model output as soon as this model finishes
-        if runs and result is not None:
-            _write_per_model_output(result, runs, model, base_docx, base_md)
+        if runs:
+            _write_per_model_output(runs, model, base_md)
 
         with lock:
             all_runs.extend(runs)
@@ -1672,273 +1668,6 @@ def run_concordance_analysis(
 
 
 # ---------------------------------------------------------------------------
-# Word document export
-# ---------------------------------------------------------------------------
-
-def _render_narrative(doc, text: str) -> None:
-    """Parse LLM narrative (markdown-ish) into Word document elements."""
-    from build_docx import (
-        add_heading as _h, add_para as _p, add_bullet as _b,
-        add_bold_lead as _bl,
-    )
-
-    if not text:
-        _p(doc, "No LLM narrative available.", italic=True)
-        return
-
-    in_code_block = False
-    for line in text.split("\n"):
-        stripped = line.strip()
-
-        # Toggle code blocks — skip their contents
-        if stripped.startswith("```"):
-            in_code_block = not in_code_block
-            continue
-        if in_code_block:
-            continue
-
-        if not stripped:
-            continue
-
-        # Headings (check longer prefixes first)
-        if stripped.startswith("### "):
-            _h(doc, stripped[4:], level=3)
-        elif stripped.startswith("## "):
-            _h(doc, stripped[3:], level=2)
-        elif stripped.startswith("# "):
-            # Skip the top-level title we already rendered
-            if "Dose-Response Interpretation" in stripped:
-                continue
-            _h(doc, stripped[2:], level=2)
-        # Bullets
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            _b(doc, stripped[2:])
-        # Bold-lead patterns: **Key:** rest
-        elif stripped.startswith("**") and "**" in stripped[2:]:
-            end = stripped.index("**", 2)
-            bold_part = stripped[2:end]
-            rest = stripped[end + 2:].lstrip(": ")
-            if rest:
-                _bl(doc, bold_part + ": ", rest)
-            else:
-                _p(doc, bold_part, bold=True)
-        else:
-            _p(doc, stripped)
-
-
-def build_interpretation_docx(result: AnalysisResult, output_path: str) -> None:
-    """Render analysis results into a formatted Word document."""
-    from docx import Document
-    from docx.shared import Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from build_docx import (
-        add_heading, add_para, add_bold_lead, add_bullet, add_table,
-    )
-
-    doc = Document()
-
-    # --- Title Page ---
-    title = doc.add_heading("Dose-Response Interpretation Report", level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    subtitle = doc.add_paragraph()
-    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = subtitle.add_run(
-        f"{len(result.responsive_genes)} genes | "
-        f"BMD range {result.bmd_min:.3g}\u2013{result.bmd_max:.3g} | "
-        f"FDR < {result.fdr_cutoff}"
-    )
-    run.font.size = Pt(12)
-    run.italic = True
-    run.font.name = "Calibri"
-
-    # --- Summary ---
-    add_heading(doc, "Summary", level=1)
-    add_bold_lead(doc, "Gene count: ", str(len(result.responsive_genes)))
-    add_bold_lead(doc, "BMD range: ", f"{result.bmd_min:.3g} \u2013 {result.bmd_max:.3g}")
-    if result.n_up or result.n_down:
-        add_bold_lead(doc, "Direction: ",
-                      f"{result.n_up} up-regulated, {result.n_down} down-regulated")
-    add_bold_lead(doc, "Enriched pathways: ", str(len(result.pw_enriched)))
-    add_bold_lead(doc, "Enriched GO terms: ", str(len(result.go_enriched)))
-
-    # --- LLM Narrative ---
-    if not result.narrative_runs:
-        add_heading(doc, "Interpretation", level=1)
-        _render_narrative(doc, result.llm_narrative)
-
-    # --- Individual Narratives (multi-model mode) ---
-    if result.narrative_runs:
-        add_heading(doc, "Individual Narratives", level=1)
-        # Group runs by model
-        from collections import OrderedDict
-        model_runs: dict[str, list[NarrativeRun]] = OrderedDict()
-        for run in result.narrative_runs:
-            model_runs.setdefault(run.model, []).append(run)
-
-        for model, runs in model_runs.items():
-            add_heading(doc, model, level=2)
-            for run in sorted(runs, key=lambda r: r.run_index):
-                add_heading(doc, f"Run {run.run_index + 1} ({run.elapsed_seconds:.1f}s)", level=3)
-                _render_narrative(doc, run.narrative)
-
-        # --- Generation Summary Table ---
-        add_heading(doc, "Generation Summary", level=1)
-        summary_rows = []
-        for run in result.narrative_runs:
-            summary_rows.append([
-                run.model,
-                str(run.run_index + 1),
-                run.endpoint_name,
-                f"{run.elapsed_seconds:.1f}s",
-            ])
-        add_table(doc,
-                  ["Model", "Run", "Endpoint", "Time"],
-                  summary_rows,
-                  col_widths=[5, 1.5, 4, 2.5])
-
-    # --- Concordance Analysis ---
-    if result.concordance_text:
-        add_heading(doc, "Concordance Analysis", level=1)
-        add_para(doc, f"Analyzed by {result.concordance_model}", italic=True)
-        _render_narrative(doc, result.concordance_text)
-
-    # --- Pathway Enrichment Table ---
-    if result.pw_enriched:
-        add_heading(doc, "Pathway Enrichment", level=1)
-        add_para(doc,
-                 f"Significantly enriched pathways (FDR < {result.fdr_cutoff}), "
-                 "ranked by p-value.",
-                 italic=True)
-        pw_rows = []
-        for i, pw in enumerate(result.pw_enriched[:20], 1):
-            pw_rows.append([
-                str(i),
-                pw["pathway_name"],
-                f"{pw['pvalue']:.2e}",
-                f"{pw['fdr']:.2e}",
-                f"{pw['overlap_count']}/{pw['pathway_size']}",
-                ", ".join(pw["overlap_genes"]),
-            ])
-        add_table(doc,
-                  ["Rank", "Pathway", "p-value", "FDR", "Overlap", "Genes"],
-                  pw_rows,
-                  col_widths=[1.2, 5, 2, 2, 1.8, 5])
-
-    # --- GO Term Enrichment Table ---
-    if result.go_enriched:
-        add_heading(doc, "GO Term Enrichment", level=1)
-        add_para(doc,
-                 f"Significantly enriched GO terms (FDR < {result.fdr_cutoff}), "
-                 "ranked by p-value.",
-                 italic=True)
-        go_rows = []
-        for i, gt in enumerate(result.go_enriched[:20], 1):
-            go_rows.append([
-                str(i),
-                f"{gt['go_term']} [{gt['go_id']}]",
-                f"{gt['pvalue']:.2e}",
-                f"{gt['fdr']:.2e}",
-                f"{gt['overlap_count']}/{gt['term_size']}",
-                ", ".join(gt["overlap_genes"]),
-            ])
-        add_table(doc,
-                  ["Rank", "GO Term", "p-value", "FDR", "Overlap", "Genes"],
-                  go_rows,
-                  col_widths=[1.2, 5, 2, 2, 1.8, 5])
-
-    # --- BMD-Ordered Response Table ---
-    if result.bmd_ordered:
-        add_heading(doc, "BMD-Ordered Response", level=1)
-        add_para(doc,
-                 "Pathways ordered by median benchmark dose "
-                 "(lowest = most sensitive).",
-                 italic=True)
-        bmd_rows = []
-        for entry in result.bmd_ordered:
-            bmd_rows.append([
-                f"{entry['min_bmd']:.3g}\u2013{entry['mean_bmd']:.3g}",
-                entry["pathway"],
-                str(entry["median_bmd"]),
-                ", ".join(entry["genes"]),
-                entry["direction"],
-            ])
-        add_table(doc,
-                  ["BMD Range", "Pathway", "Median BMD", "Genes", "Direction"],
-                  bmd_rows,
-                  col_widths=[2.5, 5, 2.5, 5, 2])
-
-    # --- Organ Signature Table ---
-    if result.organ_sig:
-        add_heading(doc, "Organ Signature", level=1)
-        add_para(doc,
-                 "Organs ranked by enrichment score relative to "
-                 "knowledge base background.",
-                 italic=True)
-        organ_rows = []
-        for organ, info in result.organ_sig.items():
-            genes_str = ", ".join(info["genes"][:10])
-            if len(info["genes"]) > 10:
-                genes_str += f" (+{len(info['genes']) - 10} more)"
-            organ_rows.append([
-                organ.title(),
-                f"{info['score']}x",
-                str(info["count"]),
-                genes_str,
-            ])
-        add_table(doc,
-                  ["Organ", "Enrichment", "Gene Count", "Genes"],
-                  organ_rows,
-                  col_widths=[3, 2.5, 2.5, 9])
-
-    # --- Literature Context ---
-    if result.gene_literature:
-        add_heading(doc, "Literature Context", level=1)
-        for gl in result.gene_literature:
-            ev_label = (f"{gl['evidence']} gene"
-                        if gl['evidence'] else "not in KB")
-            add_heading(doc,
-                        f"{gl['gene']} ({gl['n_papers']} papers, {ev_label})",
-                        level=2)
-            if gl['organs']:
-                add_bold_lead(doc, "Organs: ", ", ".join(gl['organs']))
-            if gl['claims']:
-                for c in gl['claims']:
-                    claim_text = c["claim"][:200]
-                    year = c.get("year", "")
-                    title_short = (c.get("paper_title") or "")[:60]
-                    add_bullet(doc,
-                               f" ({title_short}, {year})",
-                               bold_prefix=f"\"{claim_text}\"")
-
-    # --- Top Papers Table ---
-    if result.top_papers:
-        add_heading(doc, "Top Multi-Gene Papers", level=1)
-        add_para(doc,
-                 "Papers mentioning 2+ responsive genes, "
-                 "ranked by citation count.",
-                 italic=True)
-        paper_rows = []
-        for paper in result.top_papers:
-            paper_rows.append([
-                paper["title"] or "",
-                str(paper["year"] or ""),
-                str(paper["citation_count"]),
-                ", ".join(paper["genes"]),
-            ])
-        add_table(doc,
-                  ["Title", "Year", "Citations", "Genes"],
-                  paper_rows,
-                  col_widths=[7, 1.5, 2, 6.5])
-
-    # Save
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(str(out))
-    print(f"Word document saved to {output_path}")
-
-
-# ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
 
@@ -1970,7 +1699,6 @@ def interpret(
     csv_path: str,
     db_path: str = "bmdx.duckdb",
     output_path: str = "output/interpretation.md",
-    docx_path: str | None = None,
     fdr_cutoff: float = 0.05,
     models: list[str] | None = None,
     n_runs: int = 3,
@@ -2000,9 +1728,7 @@ def interpret(
             context=result.context_text,
             models=models,
             n_runs=n_runs,
-            base_docx=docx_path,
             base_md=output_path,
-            result=result,
         )
         print(f"  {len(result.narrative_runs)} narratives generated.")
 
@@ -2044,36 +1770,11 @@ def interpret(
             conc_md.write_text(conc_md_text)
             print(f"Concordance markdown saved to {conc_md}")
 
-            if docx_path:
-                from docx import Document
-                from docx.enum.text import WD_ALIGN_PARAGRAPH
-                from build_docx import add_heading, add_para
-
-                conc_doc = Document()
-                title = conc_doc.add_heading("Concordance Analysis", level=0)
-                title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                add_para(conc_doc, f"Analyzed by {result.concordance_model}", italic=True)
-                _render_narrative(conc_doc, result.concordance_text)
-                docx_p = Path(docx_path)
-                conc_docx = docx_p.parent / f"{docx_p.stem}_concordance{docx_p.suffix}"
-                conc_docx.parent.mkdir(parents=True, exist_ok=True)
-                conc_doc.save(str(conc_docx))
-                print(f"Concordance docx saved to {conc_docx}")
-
-        if docx_path:
-            docx_p = Path(docx_path)
-            all_docx = docx_p.parent / f"{docx_p.stem}_all{docx_p.suffix}"
-            build_interpretation_docx(result, str(all_docx))
-
         return all_md_text
 
     # --- Single-model mode (backward compatible) ---
     print("Running LLM synthesis...")
     result.llm_narrative = synthesize_interpretation(result.context_text)
-
-    # Build Word document if requested
-    if docx_path:
-        build_interpretation_docx(result, docx_path)
 
     # Write markdown output
     report = result.llm_narrative
@@ -2175,23 +1876,6 @@ def concordance_only(
     conc_md_path.write_text(conc_md_text)
     print(f"\nConcordance markdown saved to {conc_md_path}")
 
-    # Also write docx if python-docx is available
-    try:
-        from docx import Document
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from build_docx import add_heading, add_para
-
-        conc_doc = Document()
-        title = conc_doc.add_heading("Concordance Analysis", level=0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        add_para(conc_doc, f"Analyzed by {conc_model}", italic=True)
-        _render_narrative(conc_doc, conc_text)
-        conc_docx_path = out_dir / "interpretation_concordance.docx"
-        conc_doc.save(str(conc_docx_path))
-        print(f"Concordance docx saved to {conc_docx_path}")
-    except ImportError:
-        pass
-
     return conc_text
 
 
@@ -2206,7 +1890,6 @@ if __name__ == "__main__":
     parser.add_argument("--csv", dest="csv_flag", default=None, help="Path to gene-level BMD results CSV (alternative to positional)")
     parser.add_argument("--db", default="bmdx.duckdb", help="Path to bmdx.duckdb")
     parser.add_argument("--output", default="output/interpretation.md", help="Output markdown path")
-    parser.add_argument("--docx", default=None, help="Output Word document path (.docx)")
     parser.add_argument("--fdr", type=float, default=0.05, help="FDR cutoff for enrichment")
     parser.add_argument(
         "--models", nargs="+", default=None,
@@ -2255,7 +1938,6 @@ if __name__ == "__main__":
             csv_path,
             db_path=args.db,
             output_path=args.output,
-            docx_path=args.docx,
             fdr_cutoff=args.fdr,
             models=args.models,
             n_runs=args.runs,

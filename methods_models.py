@@ -14,8 +14,8 @@ These three types are the wire format between every step in the
 pipeline: extract_methods_context produces a MethodsContext;
 build_methods_prompt + the LLM produce MethodsSection prose;
 MethodsReport.to_dict / from_dict mediates JSON persistence and round-
-trip restore through session_routes; report_data / build_docx consume
-MethodsReport when assembling the final document.
+trip restore through session_routes; report_data consumes MethodsReport
+when assembling the final document.
 
 Pulled out of the original 3232-line methods_report.py so every other
 module in the split can import them without dragging the whole
