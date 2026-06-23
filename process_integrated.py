@@ -43,6 +43,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from dataclasses import dataclass
 
 import orjson
 from fastapi import Request
@@ -110,17 +111,76 @@ _BMD_STAT_LABELS = {
 
 
 # ---------------------------------------------------------------------------
+# Pipeline state
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ProcessContext:
+    """
+    State threaded through the api_process_integrated pipeline (ADR-0002).
+
+    Two field groups: the immutable request inputs parsed once at the top of
+    the orchestrator, and the accumulated state each Layer writes back as it
+    runs.  Each Layer takes this object, reads the inputs (plus any upstream
+    Layer's output it depends on) and writes its own output onto the matching
+    field.  This is an internal implementation detail — NOT the HTTP payload
+    and NOT a persisted schema, so it carries no compatibility obligations.
+
+    bmd_stat (scalar, the primary stat) and bmd_stats (the full list) are kept
+    as SEPARATE fields because their consumers diverge: NTP / charts / the LLM
+    genomics narratives use the scalar, while genomics extraction, the
+    genomics cache key, and the bmd_stats payload key use the list.
+    """
+
+    # --- immutable request inputs ---
+    dtxsid: str
+    integrated: dict
+    compound_name: str
+    dose_unit: str
+    bmd_stats: list
+    bmd_stat: str
+    go_pct: int
+    go_min_genes: int
+    go_max_genes: int
+    go_min_bmd: int
+
+    # --- accumulated state (None until the producing Layer runs) ---
+    platform_tables: dict | None = None
+    ntp_hash: str | None = None
+    bmds_inputs: list | None = None
+    sections_hash: str | None = None
+    bmds_hash: str | None = None
+    genomics_hash: str | None = None
+    methods_hash: str | None = None
+    fps_for_methods: dict | None = None
+    sections: list | None = None
+    unified_narratives: dict | None = None
+    bmds_results: dict | None = None
+    genomics_sections: dict | None = None
+    methods_result: dict | None = None
+    apical_bmd_summary: list | None = None
+    apical_bmd_summary_bmds: list | None = None
+    chart_images: list | None = None
+    llm_gs_by_organ: dict | None = None
+    llm_gene_by_organ: dict | None = None
+    gene_set_narrative: dict | None = None
+    gene_narrative: dict | None = None
+    apical_bmd_narrative: dict | None = None
+
+
+# ---------------------------------------------------------------------------
 # Pipeline layer functions
 # ---------------------------------------------------------------------------
 # Each function is one "Layer" of api_process_integrated, extracted from the
 # old monolithic handler (ADR-0002).  They are module-level so each phase is
 # independently testable; the orchestrator below sequences them, preserving
-# the dependency ordering and the asyncio.gather parallelism.
+# the dependency ordering and the asyncio.gather parallelism.  Each takes the
+# shared ProcessContext, reads its inputs and upstream outputs from it, and
+# writes its own output back onto it.
 
 
-async def _build_apical_bmd_narrative(
-    dtxsid, apical_bmd_summary, methods_result, compound_name, dose_unit,
-):
+async def _build_apical_bmd_narrative(ctx):
     """
     Layer 3.5c — Apical BMD Summary narratives.
 
@@ -134,6 +194,12 @@ async def _build_apical_bmd_narrative(
     Both are combined into apical_bmd_narrative["paragraphs"] which
     report_data.py prepends to the BMD summary table.
     """
+    dtxsid = ctx.dtxsid
+    apical_bmd_summary = ctx.apical_bmd_summary
+    methods_result = ctx.methods_result
+    compound_name = ctx.compound_name
+    dose_unit = ctx.dose_unit
+
     apical_bmd_narrative: dict = {}
     if apical_bmd_summary:
         try:
@@ -177,13 +243,10 @@ async def _build_apical_bmd_narrative(
             }
         except Exception as _apical_narr_e:
             logger.warning("Apical BMD narrative build failed: %s", _apical_narr_e)
-    return apical_bmd_narrative
+    ctx.apical_bmd_narrative = apical_bmd_narrative
 
 
-def _build_genomics_body_narratives(
-    genomics_sections, methods_result, compound_name,
-    llm_gs_by_organ, llm_gene_by_organ,
-):
+def _build_genomics_body_narratives(ctx):
     """
     Layer 3.5b — Deterministic body narratives.
 
@@ -193,6 +256,12 @@ def _build_genomics_body_narratives(
     genomics table — no divergence between the two renderers.
     The LLM output from Layer 3.5a is merged in as `by_organ_llm`.
     """
+    genomics_sections = ctx.genomics_sections
+    methods_result = ctx.methods_result
+    compound_name = ctx.compound_name
+    llm_gs_by_organ = ctx.llm_gs_by_organ
+    llm_gene_by_organ = ctx.llm_gene_by_organ
+
     gene_set_narrative = None
     gene_narrative = None
     if genomics_sections:
@@ -226,12 +295,11 @@ def _build_genomics_body_narratives(
             logger.warning(
                 "Genomics body narrative assembly failed: %s", e,
             )
-    return gene_set_narrative, gene_narrative
+    ctx.gene_set_narrative = gene_set_narrative
+    ctx.gene_narrative = gene_narrative
 
 
-async def _build_genomics_llm_narratives(
-    dtxsid, genomics_sections, compound_name, bmd_stat, dose_unit,
-):
+async def _build_genomics_llm_narratives(ctx):
     """
     Layer 3.5a — LLM-generated per-{organ,sex} narratives.
 
@@ -243,6 +311,12 @@ async def _build_genomics_llm_narratives(
     dict's `by_organ_llm` field so both HTML and PDF render
     identical analysis under each organ's table.
     """
+    dtxsid = ctx.dtxsid
+    genomics_sections = ctx.genomics_sections
+    compound_name = ctx.compound_name
+    bmd_stat = ctx.bmd_stat
+    dose_unit = ctx.dose_unit
+
     llm_gs_by_organ: dict[str, list[str]] = {}
     llm_gene_by_organ: dict[str, list[str]] = {}
     if genomics_sections:
@@ -328,12 +402,11 @@ async def _build_genomics_llm_narratives(
             logger.warning(
                 "LLM narrative pipeline failed: %s", e,
             )
-    return llm_gs_by_organ, llm_gene_by_organ
+    ctx.llm_gs_by_organ = llm_gs_by_organ
+    ctx.llm_gene_by_organ = llm_gene_by_organ
 
 
-def _build_bmd_summary(
-    dtxsid, ntp_hash, bmds_hash, platform_tables, bmds_results,
-):
+def _build_bmd_summary(ctx):
     """
     Layer 3 — BMD summary (depends on NTP + BMDS).
 
@@ -341,7 +414,11 @@ def _build_bmd_summary(
     one from pybmds results (BMDS).  Both need platform_tables +
     bmds_results, so they run after Layers 1 and 2 complete.
     """
-    bmd_summary_hash = _hash_bmd_summary(ntp_hash, bmds_hash)
+    dtxsid = ctx.dtxsid
+    platform_tables = ctx.platform_tables
+    bmds_results = ctx.bmds_results
+
+    bmd_summary_hash = _hash_bmd_summary(ctx.ntp_hash, ctx.bmds_hash)
     bmd_summary_cached = _load_cache(dtxsid, "bmd_summary", bmd_summary_hash)
 
     if bmd_summary_cached:
@@ -356,12 +433,11 @@ def _build_bmd_summary(
             "apical": apical_bmd_summary,
             "bmds": apical_bmd_summary_bmds,
         })
-    return apical_bmd_summary, apical_bmd_summary_bmds
+    ctx.apical_bmd_summary = apical_bmd_summary
+    ctx.apical_bmd_summary_bmds = apical_bmd_summary_bmds
 
 
-async def _build_charts(
-    dtxsid, genomics_sections, genomics_hash, bmd_stat, dose_unit,
-):
+async def _build_charts(ctx):
     """
     Layer 2.5 — Charts + Enrichr (depends on genomics output).
 
@@ -373,6 +449,12 @@ async def _build_charts(
     The hash is the same as genomics (same inputs determine the
     gene sets that feed the charts).  Chart images are base64 PNGs.
     """
+    dtxsid = ctx.dtxsid
+    genomics_sections = ctx.genomics_sections
+    genomics_hash = ctx.genomics_hash
+    bmd_stat = ctx.bmd_stat
+    dose_unit = ctx.dose_unit
+
     chart_images = []
     if genomics_sections:
         # Bump _CHARTS_CACHE_SCHEMA_VERSION (defined near the other
@@ -421,10 +503,10 @@ async def _build_charts(
             )
             if chart_images:
                 _save_cache(dtxsid, "charts", charts_hash, chart_images)
-    return chart_images
+    ctx.chart_images = chart_images
 
 
-async def _build_ntp_stats(dtxsid, integrated, bmd_stat):
+async def _build_ntp_stats(ctx):
     """
     Layer 1 — NTP stats (depends only on integrated data + bmd_stat).
 
@@ -432,6 +514,10 @@ async def _build_ntp_stats(dtxsid, integrated, bmd_stat):
     build_table_data (Java Williams/Dunnett/Jonckheere) → partition
     by platform → annotate missing animals.  ~5s on miss.
     """
+    dtxsid = ctx.dtxsid
+    integrated = ctx.integrated
+    bmd_stat = ctx.bmd_stat
+
     ntp_hash = _hash_ntp(integrated, bmd_stat)
     ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
 
@@ -471,7 +557,8 @@ async def _build_ntp_stats(dtxsid, integrated, bmd_stat):
             dtxsid, "ntp", ntp_hash,
             _serialize_platform_tables(platform_tables),
         )
-    return platform_tables, ntp_hash
+    ctx.platform_tables = platform_tables
+    ctx.ntp_hash = ntp_hash
 
 
 # ---------------------------------------------------------------------------
@@ -484,16 +571,20 @@ async def _build_ntp_stats(dtxsid, integrated, bmd_stat):
 # so the orchestrator owns the cache-key computation.
 
 
-async def _get_sections(
-    dtxsid, integrated, platform_tables, compound_name, dose_unit,
-    sections_cached, sections_hash,
-):
+async def _get_sections(ctx):
     """Build section cards with narratives + unified narratives, or return cached."""
+    dtxsid = ctx.dtxsid
+    integrated = ctx.integrated
+    platform_tables = ctx.platform_tables
+    compound_name = ctx.compound_name
+    dose_unit = ctx.dose_unit
+    sections_hash = ctx.sections_hash
+
+    sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
-        return (
-            sections_cached["sections"],
-            sections_cached.get("unified_narratives", {}),
-        )
+        ctx.sections = sections_cached["sections"]
+        ctx.unified_narratives = sections_cached.get("unified_narratives", {})
+        return
     # _build_section_cards is sync (reads sidecar files, generates
     # narratives from templates) — wrap in executor to avoid
     # blocking the event loop during parallel execution.
@@ -604,41 +695,49 @@ async def _get_sections(
         "sections": sections,
         "unified_narratives": unified_narratives,
     })
-    return sections, unified_narratives
+    ctx.sections = sections
+    ctx.unified_narratives = unified_narratives
 
 
-async def _get_bmds(dtxsid, bmds_inputs, bmds_cached, bmds_hash):
+async def _get_bmds(ctx):
     """Run pybmds modeling on all endpoints, or return cached."""
+    dtxsid = ctx.dtxsid
+    bmds_inputs = ctx.bmds_inputs
+    bmds_hash = ctx.bmds_hash
+
+    bmds_cached = _load_cache(dtxsid, "bmds", bmds_hash)
     if bmds_cached:
-        return bmds_cached
+        ctx.bmds_results = bmds_cached
+        return
     if not bmds_inputs:
-        return {}
+        ctx.bmds_results = {}
+        return
     loop = asyncio.get_running_loop()
     results = await loop.run_in_executor(
         None, run_bmds_for_endpoints, bmds_inputs,
     )
     _save_cache(dtxsid, "bmds", bmds_hash, results)
-    return results
+    ctx.bmds_results = results
 
 
-async def _get_genomics(
-    dtxsid, integrated, bmd_stats, go_pct, go_min_genes, go_max_genes,
-    go_min_bmd, genomics_cached, genomics_hash,
-):
+async def _get_genomics(ctx):
     """Extract gene expression + GO filtering, or return cached."""
+    dtxsid = ctx.dtxsid
+    genomics_hash = ctx.genomics_hash
+
+    genomics_cached = _load_cache(dtxsid, "genomics", genomics_hash)
     if genomics_cached:
-        return genomics_cached
+        ctx.genomics_sections = genomics_cached
+        return
     result = await _extract_genomics(
-        dtxsid, integrated, bmd_stats,
-        go_pct, go_min_genes, go_max_genes, go_min_bmd,
+        dtxsid, ctx.integrated, ctx.bmd_stats,
+        ctx.go_pct, ctx.go_min_genes, ctx.go_max_genes, ctx.go_min_bmd,
     )
     _save_cache(dtxsid, "genomics", genomics_hash, result)
-    return result
+    ctx.genomics_sections = result
 
 
-async def _get_methods(
-    dtxsid, integrated, fps_for_methods, methods_cached, methods_hash,
-):
+async def _get_methods(ctx):
     """
     Generate Materials and Methods via LLM, or return cached.
 
@@ -648,8 +747,15 @@ async def _get_methods(
     M&M subsection.  The result is cached so subsequent calls
     (page reloads, PDF exports) return instantly.
     """
+    dtxsid = ctx.dtxsid
+    integrated = ctx.integrated
+    fps_for_methods = ctx.fps_for_methods
+    methods_hash = ctx.methods_hash
+
+    methods_cached = _load_cache(dtxsid, "methods", methods_hash)
     if methods_cached:
-        return methods_cached
+        ctx.methods_result = methods_cached
+        return
 
     from methods_report import (
         MethodsReport,
@@ -703,7 +809,7 @@ async def _get_methods(
     # Pass session_dir so biosampling dose groups can be scanned
     # from sidecar files, and integrated so the genomics assay
     # (e.g., TempO-Seq) can be identified from chip metadata.
-    ctx = extract_methods_context(
+    methods_ctx = extract_methods_context(
         identity=identity,
         fingerprints=fps_for_methods,
         animal_report=animal_report_data,
@@ -714,17 +820,18 @@ async def _get_methods(
     )
 
     # Build and call the LLM
-    system, prompt = build_methods_prompt(ctx)
+    system, prompt = build_methods_prompt(methods_ctx)
     try:
         subsection_texts = await _llm_generate_json_async(
             "methods-generator", prompt, system,
         )
     except Exception as e:
         logger.warning("Methods LLM generation failed: %s", e)
-        return None
+        ctx.methods_result = None
+        return
 
     # Assemble into structured sections
-    skeleton = build_subsection_skeleton(ctx)
+    skeleton = build_subsection_skeleton(methods_ctx)
     sections = []
     for key, heading, level in skeleton:
         text = subsection_texts.get(key, "")
@@ -738,8 +845,8 @@ async def _get_methods(
             paragraphs=paragraphs,
         ))
 
-    table1 = build_table1_data(ctx)
-    report = MethodsReport(sections=sections, context=ctx)
+    table1 = build_table1_data(methods_ctx)
+    report = MethodsReport(sections=sections, context=methods_ctx)
     report_dict = report.to_dict()
 
     if table1:
@@ -749,7 +856,7 @@ async def _get_methods(
     report_dict["model_used"] = "claude-sonnet-4-6"
 
     _save_cache(dtxsid, "methods", methods_hash, report_dict)
-    return report_dict
+    ctx.methods_result = report_dict
 
 
 # ---------------------------------------------------------------------------
@@ -817,6 +924,22 @@ async def api_process_integrated(dtxsid: str, request: Request):
             status_code=400,
         )
 
+    # Bundle the parsed request inputs into the context object threaded
+    # through every Layer.  Accumulated state (platform_tables, hashes,
+    # cached blobs, each Layer's output) is filled in as the pipeline runs.
+    ctx = ProcessContext(
+        dtxsid=dtxsid,
+        integrated=integrated,
+        compound_name=compound_name,
+        dose_unit=dose_unit,
+        bmd_stats=bmd_stats,
+        bmd_stat=bmd_stat,
+        go_pct=go_pct,
+        go_min_genes=go_min_genes,
+        go_max_genes=go_max_genes,
+        go_min_bmd=go_min_bmd,
+    )
+
     # --- Migrate old monolithic cache files ---
     # The old _processed_cache_{hash}.json format is replaced by per-section
     # caches.  Delete any leftover monolithic files so they don't accumulate.
@@ -828,9 +951,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         # Layer 1 — NTP stats (depends only on integrated data + bmd_stat)
         # ══════════════════════════════════════════════════════════════
-        platform_tables, ntp_hash = await _build_ntp_stats(
-            dtxsid, integrated, bmd_stat,
-        )
+        await _build_ntp_stats(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
@@ -838,11 +959,14 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # These three units depend on Layer 1 output but NOT on each other,
         # so they can run concurrently.  BMDS (~8min) is the bottleneck;
         # sections (<1s) and genomics (~10s) finish quickly alongside it.
+        # The preamble below computes each unit's cache key onto ctx; each
+        # unit loads its own cache from that key.
 
-        # Collect _bmds_input dicts from all TableRows for BMDS modeling
-        bmds_inputs = [
+        # Collect _bmds_input dicts from all TableRows for BMDS modeling.
+        # Runs AFTER Layer 1 so platform_tables is populated.
+        ctx.bmds_inputs = [
             row._bmds_input
-            for sex_rows in platform_tables.values()
+            for sex_rows in ctx.platform_tables.values()
             for rows in sex_rows.values()
             for row in rows
             if hasattr(row, "_bmds_input") and row._bmds_input
@@ -858,25 +982,19 @@ async def api_process_integrated(dtxsid: str, request: Request):
             str(_session_dir(dtxsid)),
             extra_paths=_meta.get("clinical_obs_files", []),
         )
-        sections_hash = _hash_sections(
-            ntp_hash, compound_name, dose_unit,
+        ctx.sections_hash = _hash_sections(
+            ctx.ntp_hash, compound_name, dose_unit,
             sidecar_hash=sections_sidecar_hash,
             imputed_cells=_meta.get("imputed_cells"),
         )
-        bmds_hash = _hash_bmds(bmds_inputs) if bmds_inputs else "empty"
+        ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 
-        meta = integrated.get("_meta", {})
-        ge_source = meta.get("source_files", {}).get("gene_expression")
+        ge_source = _meta.get("source_files", {}).get("gene_expression")
         ge_filename = ge_source.get("filename", "") if ge_source else ""
-        genomics_hash = _hash_genomics(
+        ctx.genomics_hash = _hash_genomics(
             bmd_stats, go_pct, go_min_genes, go_max_genes, go_min_bmd,
             ge_filename,
         )
-
-        # Check each cache independently
-        sections_cached = _load_cache(dtxsid, "sections", sections_hash)
-        bmds_cached = _load_cache(dtxsid, "bmds", bmds_hash)
-        genomics_cached = _load_cache(dtxsid, "genomics", genomics_hash)
 
         # --- Materials and Methods (LLM-generated, cached) ---
         # Uses fingerprints + .bm2 metadata + animal report to extract
@@ -894,69 +1012,46 @@ async def api_process_integrated(dtxsid: str, request: Request):
                 }
             else:
                 _fps_for_methods[fid] = fp
-
-        methods_hash = _hash_methods(dtxsid, _fps_for_methods)
-        methods_cached = _load_cache(dtxsid, "methods", methods_hash)
+        ctx.fps_for_methods = _fps_for_methods
+        ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods)
 
         # Launch all four concurrently — cached units return instantly,
         # uncached units run in parallel (BMDS in thread pool, genomics
         # in thread pool via _extract_genomics, sections in thread pool,
-        # methods via async LLM call).
-        # _get_sections returns a 2-tuple: (sections, unified_narratives).
-        sections_result, bmds_results, genomics_sections, methods_result = \
-            await asyncio.gather(
-                _get_sections(
-                    dtxsid, integrated, platform_tables, compound_name,
-                    dose_unit, sections_cached, sections_hash,
-                ),
-                _get_bmds(dtxsid, bmds_inputs, bmds_cached, bmds_hash),
-                _get_genomics(
-                    dtxsid, integrated, bmd_stats, go_pct, go_min_genes,
-                    go_max_genes, go_min_bmd, genomics_cached, genomics_hash,
-                ),
-                _get_methods(
-                    dtxsid, integrated, _fps_for_methods,
-                    methods_cached, methods_hash,
-                ),
-            )
-        sections, unified_narratives = sections_result
+        # methods via async LLM call).  Each writes its output onto ctx;
+        # they touch disjoint fields so the shared object is safe under
+        # asyncio's single-threaded cooperative scheduling.
+        await asyncio.gather(
+            _get_sections(ctx),
+            _get_bmds(ctx),
+            _get_genomics(ctx),
+            _get_methods(ctx),
+        )
 
         # ══════════════════════════════════════════════════════════════
         # Layer 2.5 — Charts + Enrichr (depends on genomics output)
         # ══════════════════════════════════════════════════════════════
-        chart_images = await _build_charts(
-            dtxsid, genomics_sections, genomics_hash, bmd_stat, dose_unit,
-        )
+        await _build_charts(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3 — BMD summary (depends on NTP + BMDS)
         # ══════════════════════════════════════════════════════════════
-        apical_bmd_summary, apical_bmd_summary_bmds = _build_bmd_summary(
-            dtxsid, ntp_hash, bmds_hash, platform_tables, bmds_results,
-        )
+        _build_bmd_summary(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5a — LLM-generated per-{organ,sex} narratives
         # ══════════════════════════════════════════════════════════════
-        llm_gs_by_organ, llm_gene_by_organ = await _build_genomics_llm_narratives(
-            dtxsid, genomics_sections, compound_name, bmd_stat, dose_unit,
-        )
+        await _build_genomics_llm_narratives(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5b — Deterministic body narratives
         # ══════════════════════════════════════════════════════════════
-        gene_set_narrative, gene_narrative = _build_genomics_body_narratives(
-            genomics_sections, methods_result, compound_name,
-            llm_gs_by_organ, llm_gene_by_organ,
-        )
+        _build_genomics_body_narratives(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Layer 3.5c — Apical BMD Summary narratives
         # ══════════════════════════════════════════════════════════════
-        apical_bmd_narrative = await _build_apical_bmd_narrative(
-            dtxsid, apical_bmd_summary, methods_result,
-            compound_name, dose_unit,
-        )
+        await _build_apical_bmd_narrative(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
@@ -968,27 +1063,27 @@ async def api_process_integrated(dtxsid: str, request: Request):
             for s in bmd_stats
         }
         result_payload = {
-            "sections": sections,
-            "unified_narratives": unified_narratives,
-            "genomics_sections": genomics_sections,
+            "sections": ctx.sections,
+            "unified_narratives": ctx.unified_narratives,
+            "genomics_sections": ctx.genomics_sections,
             # Per-organ body narratives for Gene Set / Gene BMD — HTML
             # renders `by_organ[organ]` above each organ's table; PDF
             # export consumes the same dict via marshal_export_data.
-            "gene_set_narrative": gene_set_narrative,
-            "gene_narrative": gene_narrative,
-            "chart_images": chart_images if chart_images else None,
-            "apical_bmd_summary": apical_bmd_summary,
-            "apical_bmd_summary_bmds": apical_bmd_summary_bmds,
+            "gene_set_narrative": ctx.gene_set_narrative,
+            "gene_narrative": ctx.gene_narrative,
+            "chart_images": ctx.chart_images if ctx.chart_images else None,
+            "apical_bmd_summary": ctx.apical_bmd_summary,
+            "apical_bmd_summary_bmds": ctx.apical_bmd_summary_bmds,
             # Apical BMD Summary section narratives (descriptive +
             # analytical).  The flat "paragraphs" list is consumed by
             # report_data.py and the frontend BMD summary card.
-            "apical_bmd_narrative": apical_bmd_narrative,
+            "apical_bmd_narrative": ctx.apical_bmd_narrative,
             "bmd_stats": list(bmd_stats),
             "bmd_stat_labels": stat_labels,
             # Materials and Methods — LLM-generated structured sections.
             # Included so the frontend can auto-populate the M&M section
             # without requiring a separate generate button click.
-            "methods": methods_result,
+            "methods": ctx.methods_result,
         }
 
         return JSONResponse(result_payload)
