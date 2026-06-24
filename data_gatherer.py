@@ -699,6 +699,11 @@ def gather_mechanism_papers(data: BackgroundData,
         f"{name} ADME pharmacokinetics",
     ]
 
+    s2_headers = {}
+    s2_key = os.environ.get("S2_API_KEY", "")
+    if s2_key:
+        s2_headers["x-api-key"] = s2_key
+
     for query in queries:
         url = f"{S2_BASE}/paper/search"
         params = {
@@ -708,7 +713,7 @@ def gather_mechanism_papers(data: BackgroundData,
         }
         try:
             time.sleep(RATE_LIMIT)
-            r = session.get(url, params=params, timeout=15)
+            r = session.get(url, params=params, timeout=15, headers=s2_headers)
             if r.status_code == 200:
                 results = r.json()
                 for paper in results.get("data", []):
