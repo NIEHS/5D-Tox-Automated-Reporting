@@ -110,7 +110,15 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
         for old in session.glob(f"_cache_{unit}_*.json"):
             if old != cache_path:
                 old.unlink(missing_ok=True)
-        cache_path.write_bytes(orjson.dumps(data))
+        # OPT_NON_STR_KEYS: some payloads carry dicts keyed by floats (e.g. the
+        # methods context's per-dose pk_concentrations / genomics_sample_counts),
+        # which orjson rejects by default with "Dict key must be str".  This
+        # option coerces such keys to their string form on the way out — a
+        # no-op for the all-string payloads (consumers only look these dicts up
+        # / iterate them, never do arithmetic on the keys).  Without it the
+        # methods cache write silently failed, so M&M re-ran the LLM on every
+        # reload instead of being served from cache.
+        cache_path.write_bytes(orjson.dumps(data, option=orjson.OPT_NON_STR_KEYS))
         logger.info("Cached %s for %s (%s)", unit, dtxsid, cache_path.name)
     except Exception:
         logger.warning("Failed to cache %s for %s", unit, dtxsid, exc_info=True)
@@ -330,20 +338,48 @@ def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+# Per-session fields that change every server process / file load and must
+# NOT enter the methods hash, or the cache misses on every restart.  file_id
+# is a fresh uuid4 minted per session load (session_routes); the ts_* stamps
+# are wall-clock.  None of them affect the M&M prose, which is a pure function
+# of which files exist (by name) and their study content.
+_METHODS_VOLATILE_FP_FIELDS = frozenset({
+    "file_id", "ts_added", "ts_filesystem", "ts_internal",
+})
+
+
 def _hash_methods(dtxsid: str, fingerprints: dict) -> str:
     """
     Hash inputs for the Materials and Methods section.
 
-    Depends on the DTXSID (chemical identity) and fingerprint keys
-    (which files are in the pool determines which M&M subsections
-    appear — e.g., Transcriptomics only if gene expression exists).
-    Content of fingerprints matters too (dose groups, endpoints, etc.
-    feed into the LLM prompt), so we hash the full fingerprint dict.
+    Depends on the DTXSID (chemical identity) and which files are in the
+    pool (filenames determine which M&M subsections appear — e.g.,
+    Transcriptomics only if gene expression exists).  Content of
+    fingerprints matters too (dose groups, endpoints, etc. feed into the
+    LLM prompt).
+
+    The hash must be STABLE across server restarts so the cached M&M prose
+    survives a reload instead of re-running the LLM.  The incoming dict is
+    keyed by file_id (a fresh uuid4 each session load) and its values carry
+    the same volatile id plus wall-clock timestamps — hashing those made the
+    key change on every restart, permanently missing the cache.  We therefore
+    re-key by the stable filename and drop the volatile fields, hashing only
+    the study-relevant content that actually shapes the prompt.
     """
-    fp_key = json.dumps(
-        {k: str(v) for k, v in sorted(fingerprints.items())},
-        sort_keys=True,
-    )
+    stable: dict[str, dict] = {}
+    for fp in fingerprints.values():
+        # Tolerate both plain dicts (the process-integrated path) and any
+        # dataclass-shaped fallback by normalizing to a dict first.
+        fp_dict = fp if isinstance(fp, dict) else {
+            k: getattr(fp, k) for k in getattr(fp, "__dataclass_fields__", {})
+        }
+        fname = str(fp_dict.get("filename") or "")
+        stable[fname] = {
+            k: str(v)
+            for k, v in sorted(fp_dict.items())
+            if k not in _METHODS_VOLATILE_FP_FIELDS
+        }
+    fp_key = json.dumps(stable, sort_keys=True)
     key = f"methods:{dtxsid}:{fp_key}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
