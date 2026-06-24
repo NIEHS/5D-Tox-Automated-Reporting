@@ -19,8 +19,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 
+import requests
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -30,10 +32,10 @@ from llm_helpers import llm_generate_json_async
 from style_learning import load_style_profile
 from chem_resolver import ChemicalIdentity
 from data_gatherer import gather_all
-from background_writer import generate_background
+from background_writer import DEFAULT_CLAUDE_MODEL, generate_background
 from server_state import get_pool_fingerprints
 from pool_orchestrator import load_integrated
-from interpret import build_genomics_interpretation
+from interpret import build_genomics_interpretation, resolve_anthropic_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,105 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
+# GET /api/models — live model catalog from the LiteLLM proxy
+# ---------------------------------------------------------------------------
+# The frontend Models modal lists whatever the proxy currently serves, grouped
+# by provider.  The proxy routes every model (Claude, Gemini, Llama, ...)
+# through the Anthropic-format /v1/messages endpoint, so any id here is usable
+# for generation without per-provider routing.
+
+# Embedding/OCR ids the proxy exposes that can't generate prose — hidden so a
+# user can't pick one and hit a confusing failure.
+_NON_CHAT_MODELS = frozenset({
+    "text-embedding-3-large",
+    "text-embedding-3-small",
+    "mxbai-embed-large",
+    "ollama-nomic-embed-text",
+    "mistral-ocr-2505",
+})
+
+# Degraded fallback when the proxy's /v1/models is unreachable — the modal must
+# still open with at least the canonical Claude tiers.
+_FALLBACK_CATEGORIES = [
+    {"name": "Anthropic (Claude)", "models": [
+        "claude-opus-4.8", "claude-sonnet-4-6", "claude-haiku-4.5",
+    ]},
+]
+
+
+def _model_category(model_id: str) -> str:
+    """Infer a provider category from a model id prefix.
+
+    The proxy reports owned_by:"openai" for everything, so the id prefix is the
+    only real signal for grouping.
+    """
+    s = model_id.lower()
+    if s.startswith("azure"):
+        return "Azure (hosted)"
+    if "claude" in s or "fable" in s:
+        return "Anthropic (Claude)"
+    if "gpt" in s or s.startswith(("o1", "o3", "o4")):
+        return "OpenAI (GPT)"
+    if "gemini" in s:
+        return "Google (Gemini)"
+    if "ollama" in s:
+        return "Ollama (local)"
+    if "llama" in s:
+        return "Meta (Llama)"
+    if "mistral" in s or "nemo" in s or "mixtral" in s:
+        return "Mistral"
+    return "Other"
+
+
+@router.get("/api/models")
+async def api_models():
+    """Return the proxy's chat-capable models grouped by provider category.
+
+    Response: {"categories": [{"name": str, "models": [id, ...]}, ...],
+               "degraded": bool}
+    Never raises — on any proxy failure it returns a small static fallback with
+    degraded=True so the UI modal always opens.
+    """
+    base_url = os.environ.get("ANTHROPIC_BASE_URL", "").rstrip("/")
+    api_key = resolve_anthropic_api_key()
+    ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE")
+
+    if not base_url or not api_key:
+        return JSONResponse({"categories": _FALLBACK_CATEGORIES, "degraded": True})
+
+    try:
+        loop = asyncio.get_running_loop()
+        resp = await loop.run_in_executor(None, lambda: requests.get(
+            f"{base_url}/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=15,
+            verify=ca_bundle or True,
+        ))
+        resp.raise_for_status()
+        ids = [m["id"] for m in resp.json().get("data", []) if m.get("id")]
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.warning("Failed to fetch proxy /v1/models: %s", e)
+        return JSONResponse({"categories": _FALLBACK_CATEGORIES, "degraded": True})
+
+    grouped: dict[str, list[str]] = {}
+    for mid in sorted(ids):
+        if mid in _NON_CHAT_MODELS:
+            continue
+        grouped.setdefault(_model_category(mid), []).append(mid)
+
+    # Stable, sensible category order; unknown categories ("Other") sink last.
+    order = [
+        "Anthropic (Claude)", "Azure (hosted)", "OpenAI (GPT)",
+        "Google (Gemini)", "Meta (Llama)", "Mistral", "Ollama (local)", "Other",
+    ]
+    categories = [
+        {"name": name, "models": grouped[name]}
+        for name in order if name in grouped
+    ]
+    return JSONResponse({"categories": categories, "degraded": False})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/generate — full pipeline: gather data + generate background
 # ---------------------------------------------------------------------------
 
@@ -65,7 +166,7 @@ async def api_generate(request: Request):
     Run the full background generation pipeline.
 
     Input JSON:
-      {"identity": {...ChemicalIdentity fields...}, "use_ollama": false, "model": ""}
+      {"identity": {...ChemicalIdentity fields...}, "model": ""}
 
     Returns a streaming SSE response with progress updates, followed by
     the final generated background as JSON.
@@ -77,8 +178,7 @@ async def api_generate(request: Request):
     """
     body = await request.json()
     identity_dict = body.get("identity", {})
-    use_ollama = body.get("use_ollama", False)
-    model = body.get("model", "")
+    model = body.get("model", "") or DEFAULT_CLAUDE_MODEL
 
     if not identity_dict.get("name") and not identity_dict.get("casrn"):
         return JSONResponse(
@@ -127,11 +227,11 @@ async def api_generate(request: Request):
                 })
 
             yield _sse_event("progress", {
-                "message": f"Generating background with {'Ollama' if use_ollama else 'Claude'}..."
+                "message": f"Generating background with {model}..."
             })
 
             result = await loop.run_in_executor(
-                None, generate_background, bg_data, use_ollama, model,
+                None, generate_background, bg_data, model,
                 style_rules or None,
             )
 
@@ -208,6 +308,7 @@ async def api_generate_methods(request: Request):
     identity = body.get("identity", {})
     study_params = body.get("study_params", {})
     animal_report_data = body.get("animal_report")
+    model = body.get("model", "") or DEFAULT_CLAUDE_MODEL
     dtxsid = identity.get("dtxsid", "")
 
     # --- Backwards compatibility: accept old flat fields too ---
@@ -280,7 +381,7 @@ async def api_generate_methods(request: Request):
         # Call Claude and parse the JSON response — keyed by subsection key,
         # e.g. {"study_design": "paragraph text", "dose_selection": "..."}
         subsection_texts = await llm_generate_json_async(
-            "methods-generator", prompt, system,
+            "methods-generator", prompt, system, model=model,
         )
 
         # --- Assemble into MethodsReport ---
@@ -310,7 +411,7 @@ async def api_generate_methods(request: Request):
             report_dict["table1"] = table1
 
         report_dict["section_key"] = "methods"
-        report_dict["model_used"] = "claude-sonnet-4-6"
+        report_dict["model_used"] = model
 
         return JSONResponse(report_dict)
 
@@ -328,7 +429,7 @@ async def api_generate_methods(request: Request):
         report = MethodsReport(sections=sections, context=ctx)
         report_dict = report.to_dict()
         report_dict["section_key"] = "methods"
-        report_dict["model_used"] = "claude-sonnet-4-6"
+        report_dict["model_used"] = model
         report_dict["warning"] = "LLM response was not structured JSON; content placed in single section"
         return JSONResponse(report_dict)
 
@@ -480,6 +581,7 @@ async def api_generate_summary(request: Request):
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
     identity = body.get("identity", {})
+    model = body.get("model", "") or DEFAULT_CLAUDE_MODEL
 
     if not dtxsid:
         return JSONResponse(
@@ -602,7 +704,7 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
     try:
         paragraphs = await llm_generate_json_async(
             "summary-generator", prompt, system,
-            max_tokens=4096,
+            max_tokens=4096, model=model,
         )
         if not isinstance(paragraphs, list):
             paragraphs = [str(paragraphs)]
@@ -610,7 +712,7 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
         return JSONResponse({
             "paragraphs": paragraphs,
             "section_key": "summary",
-            "model_used": "claude-sonnet-4-6",
+            "model_used": model,
         })
 
     except Exception as e:
@@ -784,10 +886,16 @@ async def generate_apical_bmd_narrative_async(
 
     try:
         from anthropic import AsyncAnthropic
-        from interpret import resolve_anthropic_api_key
+        from interpret import resolve_anthropic_api_key, resolve_model_name
+        # Route the model id through the shared remap (hyphen → dot version) so
+        # the proxy accepts it.  This call uses AsyncAnthropic directly rather
+        # than AnthropicEndpoint, so without the remap the proxy rejected
+        # "claude-sonnet-4-6" with a 400 and the analytical paragraph silently
+        # dropped on every run.
         client = AsyncAnthropic(api_key=resolve_anthropic_api_key())
+        proxy_model = resolve_model_name(DEFAULT_CLAUDE_MODEL)
         response = await client.messages.create(
-            model="claude-sonnet-4-6",
+            model=proxy_model,
             max_tokens=600,
             system=_APICAL_BMD_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
@@ -796,7 +904,7 @@ async def generate_apical_bmd_narrative_async(
 
         # Split on blank lines to produce a list of paragraphs.
         paras = [p.strip() for p in raw.split("\n\n") if p.strip()]
-        result = {"paragraphs": paras, "model_used": "claude-sonnet-4-6"}
+        result = {"paragraphs": paras, "model_used": DEFAULT_CLAUDE_MODEL}
 
         # Cache the result.
         cache_path.write_text(json.dumps(result))
@@ -819,6 +927,7 @@ async def generate_genomics_narrative_async(
     total_responsive: int,
     dose_unit: str = "mg/kg",
     force: bool = False,
+    model: str = "",
 ) -> dict:
     """
     LLM-generate narrative paragraphs for a single organ × sex.
@@ -844,6 +953,8 @@ async def generate_genomics_narrative_async(
         }
         or {"error": "..."} on failure.
     """
+    chosen_model = model or DEFAULT_CLAUDE_MODEL
+
     # --- Attempt enrichment analysis via interpret.py pipeline ---
     # The enrichment pipeline queries bmdx.duckdb for pathway/GO/literature
     # evidence, producing a ~200-line structured context block that gives the
@@ -1129,7 +1240,7 @@ Return ONLY valid JSON, no markdown formatting."""
     try:
         result = await llm_generate_json_async(
             "genomics-narrative-generator", prompt, system,
-            max_tokens=4096,
+            max_tokens=4096, model=chosen_model,
         )
 
         # Normalize: ensure both keys are arrays of strings
@@ -1151,7 +1262,7 @@ Return ONLY valid JSON, no markdown formatting."""
                 existing = json.loads(cache_path.read_text())
                 existing["gene_set_narrative"] = gs_narr
                 existing["gene_narrative"] = gene_narr
-                existing["model_used"] = "claude-sonnet-4-6"
+                existing["model_used"] = chosen_model
                 cache_path.write_text(json.dumps(existing))
             except Exception:
                 logger.warning(
@@ -1161,7 +1272,7 @@ Return ONLY valid JSON, no markdown formatting."""
         return {
             "gene_set_narrative": gs_narr,
             "gene_narrative": gene_narr,
-            "model_used": "claude-sonnet-4-6",
+            "model_used": chosen_model,
             "enrichment_available": enrichment_available,
         }
 
@@ -1193,6 +1304,7 @@ async def api_generate_genomics_narrative(request: Request):
         total_responsive=body.get("total_responsive_genes", 0),
         dose_unit=body.get("dose_unit", "mg/kg"),
         force=bool(body.get("force", False)),
+        model=body.get("model", ""),
     )
     if "error" in result:
         return JSONResponse(result, status_code=500)
@@ -1236,6 +1348,7 @@ async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
     organ = (body.get("organ") or "").strip().lower()
     if not organ:
         return JSONResponse({"error": "organ is required"}, status_code=400)
+    model = body.get("model", "")
 
     session_dir = SESSIONS_DIR / dtxsid
     if not session_dir.exists():
@@ -1337,6 +1450,7 @@ async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
                 total_responsive=entry.get("total_responsive_genes", 0),
                 dose_unit=entry.get("dose_unit", "mg/kg"),
                 force=True,
+                model=model,
             )
             return key, out
         except Exception as e:

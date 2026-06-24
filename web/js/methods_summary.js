@@ -55,6 +55,7 @@ async function generateMethods() {
                     species: 'Sprague Dawley',
                 },
                 animal_report: animalReportData,
+                model: selectedModels.methods_summary,
             }),
         });
         const result = await resp.json();
@@ -442,6 +443,7 @@ async function generateSummary() {
             body: JSON.stringify({
                 dtxsid: currentIdentity.dtxsid,
                 identity: currentIdentity,
+                model: selectedModels.methods_summary,
             }),
         });
         const result = await resp.json();

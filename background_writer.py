@@ -14,9 +14,10 @@ Paragraph structure (matches Scott Auerbach's template):
   6. Study purpose (linking to the specific 5-day genomic dose-response study)
 
 LLM selection:
-  - Primary: Claude API (best formal scientific prose) via AnthropicEndpoint
-  - Fallback: Ollama local models via OllamaEndpoint
-  Both endpoint classes are imported from the existing codebase.
+  All models are served through the LiteLLM proxy's Anthropic-format endpoint
+  via AnthropicEndpoint — Claude, Gemini, Llama, and ollama-* alike.  The model
+  id is the only routing input; the caller picks it (defaulting to
+  DEFAULT_CLAUDE_MODEL).
 
 Usage:
     # Usually called from background_server.py, but can be run standalone:
@@ -37,11 +38,10 @@ from data_gatherer import BackgroundData, gather_all
 # Import LLM endpoints from existing codebase
 # ---------------------------------------------------------------------------
 
-# AnthropicEndpoint wraps the Claude API (reads ANTHROPIC_API_KEY from env)
+# AnthropicEndpoint wraps the proxy's Anthropic-format endpoint (reads
+# ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL from env).  Every model — Claude,
+# Gemini, Llama, ollama-* — is served through it, so there is one code path.
 from interpret import AnthropicEndpoint
-
-# OllamaEndpoint wraps local Ollama instances (Qwen, Llama, etc.)
-from extract import OllamaEndpoint, LOCAL_OLLAMA, REMOTE_OLLAMA
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +485,6 @@ def _format_style_rules(style_rules: list[str] | None) -> str:
 # ---------------------------------------------------------------------------
 
 def generate_background(data: BackgroundData,
-                        use_ollama: bool = False,
                         model: str = "",
                         style_rules: list[str] | None = None) -> dict:
     """
@@ -493,8 +492,8 @@ def generate_background(data: BackgroundData,
 
     Args:
         data: BackgroundData from data_gatherer.py
-        use_ollama: If True, use local Ollama instead of Claude
-        model: Override the default model name
+        model: Model id to generate with (routed through the proxy via
+            AnthropicEndpoint).  Falls back to DEFAULT_CLAUDE_MODEL when empty.
         style_rules: Optional list of learned style rule strings to inject
             into the prompt.  When present, a WRITING STYLE PREFERENCES
             section is appended to the prompt before FORMAT REQUIREMENTS.
@@ -522,25 +521,17 @@ def generate_background(data: BackgroundData,
     # Approximate token count (rough: 1 token ≈ 4 chars)
     prompt_tokens_approx = len(prompt) // 4
 
-    if use_ollama:
-        # Try local Ollama endpoints
-        endpoint = _get_ollama_endpoint(model)
-        if not endpoint:
-            raise RuntimeError("No Ollama endpoint available")
-        response = endpoint.generate(prompt, system=system,
-                                     temperature=GENERATION_TEMPERATURE)
-        model_used = f"ollama/{endpoint.model}"
-    else:
-        # Use Claude API (primary — best prose quality)
-        claude_model = model or DEFAULT_CLAUDE_MODEL
-        endpoint = AnthropicEndpoint(
-            name="background-writer",
-            model=claude_model,
-            max_tokens=MAX_TOKENS,
-            temperature=GENERATION_TEMPERATURE,
-        )
-        response = endpoint.generate(prompt, system=system)
-        model_used = f"claude/{claude_model}"
+    # Every model — including ollama-* ids — is served through the proxy's
+    # Anthropic-format endpoint, so a single AnthropicEndpoint path covers all.
+    chosen_model = model or DEFAULT_CLAUDE_MODEL
+    endpoint = AnthropicEndpoint(
+        name="background-writer",
+        model=chosen_model,
+        max_tokens=MAX_TOKENS,
+        temperature=GENERATION_TEMPERATURE,
+    )
+    response = endpoint.generate(prompt, system=system)
+    model_used = chosen_model
 
     if not response:
         raise RuntimeError(f"LLM ({model_used}) returned empty response")
@@ -558,8 +549,7 @@ def generate_background(data: BackgroundData,
     abstract_background = distill_abstract_background(
         body_text=response,
         chemical_name=chemical_display_name,
-        use_ollama=use_ollama,
-        model=model,
+        model=chosen_model,
     )
 
     return {
@@ -570,29 +560,6 @@ def generate_background(data: BackgroundData,
         "model_used": model_used,
         "prompt_tokens_approx": prompt_tokens_approx,
     }
-
-
-def _get_ollama_endpoint(model: str = "") -> OllamaEndpoint | None:
-    """
-    Find an available Ollama endpoint, preferring the local one.
-
-    If a custom model is specified, override the default model on the
-    endpoint before returning it.
-    """
-    for ep in [LOCAL_OLLAMA, REMOTE_OLLAMA]:
-        if ep.is_available():
-            if model:
-                # Create a copy with the custom model
-                return OllamaEndpoint(
-                    name=ep.name,
-                    url=ep.url,
-                    model=model,
-                    timeout=300,  # longer timeout for background generation
-                    weight=ep.weight,
-                )
-            ep.timeout = 300
-            return ep
-    return None
 
 
 def _parse_response(text: str) -> tuple[list[str], list[str]]:
@@ -627,7 +594,6 @@ def _parse_response(text: str) -> tuple[list[str], list[str]]:
 def distill_abstract_background(
     body_text: str,
     chemical_name: str,
-    use_ollama: bool = False,
     model: str = "",
 ) -> str:
     """
@@ -648,7 +614,6 @@ def distill_abstract_background(
         body_text:     The full LLM response from generate_background (the
                        7 paragraphs + References section as one string).
         chemical_name: Test article name for use in the distillation.
-        use_ollama:    If True, route to local Ollama instead of Claude.
         model:         Optional model override.
 
     Returns:
@@ -724,16 +689,15 @@ Rules:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python background_writer.py <identifier> [--ollama] [--model MODEL]")
+        print("Usage: python background_writer.py <identifier> [--model MODEL]")
         print()
         print("Examples:")
         print('  python background_writer.py "95-50-1"')
-        print('  python background_writer.py "1,2-Dichlorobenzene" --ollama')
-        print('  python background_writer.py "95-50-1" --model claude-opus-4-6')
+        print('  python background_writer.py "95-50-1" --model claude-opus-4-8')
+        print('  python background_writer.py "95-50-1" --model ollama-gemma3-27b')
         sys.exit(1)
 
     query = sys.argv[1]
-    use_ollama = "--ollama" in sys.argv
     model = ""
     if "--model" in sys.argv:
         idx = sys.argv.index("--model")
@@ -750,8 +714,8 @@ if __name__ == "__main__":
     bg_data = gather_all(identity)
 
     # Step 3: Generate
-    print(f"\nGenerating background ({'Ollama' if use_ollama else 'Claude'})...")
-    result = generate_background(bg_data, use_ollama=use_ollama, model=model)
+    print(f"\nGenerating background ({model or DEFAULT_CLAUDE_MODEL})...")
+    result = generate_background(bg_data, model=model)
 
     # Print output
     print("\n" + "=" * 70)

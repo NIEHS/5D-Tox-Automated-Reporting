@@ -501,7 +501,7 @@ async function regenerateNarrative(organKey) {
             {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({organ: organKey}),
+                body: JSON.stringify({organ: organKey, model: selectedModels.analysis}),
             },
         );
         if (!resp.ok) {

@@ -152,8 +152,12 @@ async function onFieldBlur(fieldId) {
                 if (sessionData.exists) {
                     await restoreSession(sessionData);
                 }
-            } catch (_) {
-                // Non-critical — session restore is a convenience, not required
+            } catch (err) {
+                // Session restore is a convenience, not required — but a throw
+                // here aborts the pipeline trigger at the END of restoreSession
+                // (autoProcessPool), which is the only thing that renders M&M
+                // and Results on reload.  Surface it instead of swallowing.
+                console.error('Session restore failed:', err);
             }
         }
 
@@ -244,6 +248,16 @@ function updateFrontMatterIdentity() {
  * @param {Object} data — the response from GET /api/session/{dtxsid}
  */
 async function restoreSession(data) {
+    console.log('[RELOAD-TRACE] restoreSession ENTRY', {
+        has_animal_report: !!data.animal_report,
+        has_methods: !!data.methods,
+        genomics_sections: Object.keys(data.genomics_sections || {}).length,
+        genomics_cache: Object.keys(data.genomics_cache || {}).length,
+        fingerprints: Object.keys(data.validation_report?.fingerprints || {}).length,
+    });
+    // --- Restore per-concern model selections (from meta.json) ---
+    seedSelectedModels(data.meta?.models);
+
     // --- Restore background section ---
     if (data.background) {
         const bg = data.background;
@@ -556,10 +570,17 @@ async function restoreSession(data) {
         }
 
         for (const [key, section] of Object.entries(data.genomics_cache)) {
-            const organ = section.organ || key.split('_', 1)[0] || '';
-            const sex = section.sex || key.split('_').slice(-1)[0] || '';
-            genomicsResults[key] = { ...section };
-            createGenomicsCard(key, section, organ, sex, restoreLabels);
+            try {
+                const organ = section.organ || key.split('_', 1)[0] || '';
+                const sex = section.sex || key.split('_').slice(-1)[0] || '';
+                genomicsResults[key] = { ...section };
+                createGenomicsCard(key, section, organ, sex, restoreLabels);
+            } catch (cardErr) {
+                // One malformed cache entry must not abort the rest of
+                // restore — the pipeline trigger at the end of this
+                // function is what renders M&M + Results on reload.
+                console.error(`Genomics cache restore failed for ${key}:`, cardErr);
+            }
         }
     }
 
@@ -624,8 +645,15 @@ async function restoreSession(data) {
     // skipped.  Skip when a ?no-process query param is present (CSS/layout
     // iteration shortcut).
     const skipProcess = new URLSearchParams(window.location.search).has('no-process');
+    console.log('[RELOAD-TRACE] pipeline trigger check', {
+        animalReportApproved, skipProcess, restoredPhase,
+    });
     if (animalReportApproved && !skipProcess) {
+        console.log('[RELOAD-TRACE] calling autoProcessPool()');
         await autoProcessPool();
+        console.log('[RELOAD-TRACE] autoProcessPool() returned');
+    } else {
+        console.log('[RELOAD-TRACE] pipeline trigger SKIPPED — M&M + Results will not render');
     }
 
     updateExportButton();

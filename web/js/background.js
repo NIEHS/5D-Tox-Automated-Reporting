@@ -42,16 +42,13 @@ async function generateBackground() {
     btn.disabled = true;
     btn.textContent = 'Generating...';
 
-    const modelSelect = document.getElementById('model-select');
-    const useOllama = modelSelect.value === 'ollama';
-
     try {
         const resp = await fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 identity: currentIdentity,
-                use_ollama: useOllama,
+                model: selectedModels.background,
             }),
         });
 

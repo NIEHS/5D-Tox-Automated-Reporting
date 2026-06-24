@@ -219,7 +219,7 @@ If no new rules are evident, return an empty array: []"""
                 "You are a writing style analyst. Compare original and edited text "
                 "to identify deliberate style preferences. Output ONLY valid JSON."
             ),
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-4-5",
             max_tokens=2048,
         )
 

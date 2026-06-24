@@ -252,7 +252,20 @@ const idTypeMap = {
 // Used to persist the chemical identity across page reloads so the
 // user doesn't have to re-enter and re-resolve the test article.
 const CHEM_ID_STORAGE_KEY = '5dtox-chem-id';
-const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac', 'model-select'];
+const CHEM_ID_FIELDS = ['name', 'casrn', 'dtxsid', 'cid', 'ec', 'iupac'];
+
+
+// --- Model selections (per generation concern) ---
+// Which LLM model drives each generation concern.  Sent on every generate
+// call and persisted to the session's meta.json.  Seeded from meta.models on
+// session restore (see seedSelectedModels in models_modal.js); defaults to
+// DEFAULT_MODEL until then.
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
+let selectedModels = {
+    background: DEFAULT_MODEL,
+    methods_summary: DEFAULT_MODEL,
+    analysis: DEFAULT_MODEL,
+};
 
 
 // --- Animal report ---

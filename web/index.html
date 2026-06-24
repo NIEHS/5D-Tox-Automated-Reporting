@@ -540,11 +540,9 @@
 
             <!-- Options and Generate button -->
             <div class="options-row">
-                <label for="model-select">LLM:</label>
-                <select id="model-select">
-                    <option value="claude" selected>Claude (recommended)</option>
-                    <option value="ollama">Ollama (local)</option>
-                </select>
+                <button type="button" class="btn-models" id="btn-open-models" onclick="openModelsModal()">
+                    Models&hellip;
+                </button>
                 <button class="btn-generate" id="btn-generate" onclick="generateBackground()" disabled>
                     Generate Background
                 </button>
@@ -976,6 +974,35 @@
         </div>
     </div>
 
+    <!-- ================================================================
+         Model-selection modal — pick the LLM model per generation
+         concern (Background; Methods + Summary; Analysis).  The category
+         lists are populated live from GET /api/models (the LiteLLM proxy
+         catalog) by models_modal.js.  Picks persist to the session's
+         meta.json.
+         ================================================================ -->
+    <div id="models-modal" style="display:none;">
+        <div class="modal-overlay" onclick="closeModelsModal()"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Generation Models</h3>
+                <button class="modal-close" onclick="closeModelsModal()" title="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="models-modal-body">
+                <p class="models-modal-degraded" id="models-modal-degraded" style="display:none;">
+                    Could not reach the model service &mdash; showing a limited fallback list.
+                </p>
+                <div class="models-modal-concerns" id="models-modal-concerns">
+                    <!-- Three concern panels injected by models_modal.js -->
+                </div>
+            </div>
+            <div class="modal-footer models-modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModelsModal()">Cancel</button>
+                <button type="button" class="btn-generate" id="btn-save-models" onclick="saveModelsModal()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript — loaded in dependency order:
          1. state.js  — global variables and constants (no DOM access)
          2. utils.js  — shared UI helpers (show/hide, lock/unlock, apiFetch, etc.)
@@ -1023,6 +1050,7 @@
     <script src="/js/background.js?v=1"></script>
     <script src="/js/methods_summary.js?v=1"></script>
     <script src="/js/pipeline.js?v=8"></script>
+    <script src="/js/models_modal.js?v=1"></script>
     <script src="/js/chemical.js?v=6"></script>
 </body>
 </html>

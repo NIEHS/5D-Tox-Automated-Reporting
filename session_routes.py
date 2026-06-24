@@ -931,6 +931,52 @@ def _resolve_section_key(body: dict) -> tuple[str | None, str | None]:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/session/{dtxsid}/models — persist per-concern model selections
+# ---------------------------------------------------------------------------
+
+# Valid model-selection concerns.  Each maps to a group of LLM generation
+# routes (Background; Methods + Summary; Analysis = genomics narrative).
+_MODEL_CONCERNS = ("background", "methods_summary", "analysis")
+
+
+@router.post("/api/session/{dtxsid}/models")
+async def api_session_models(dtxsid: str, request: Request):
+    """
+    Persist the user's per-concern model selections into meta.json.
+
+    The Models modal lets the user pick a model for each generation concern.
+    The picks travel with the report so a reload (or another machine reading
+    the same session bucket) restores them.  They are merged under a "models"
+    key in meta.json, leaving timestamps and identity fields intact.
+
+    Input JSON: {"background": "...", "methods_summary": "...", "analysis": "..."}
+      Any subset of the three keys may be present; unknown keys are ignored.
+
+    Returns: {"ok": True, "models": {...the merged selections...}}
+    """
+    if not dtxsid:
+        return JSONResponse({"error": "dtxsid is required"}, status_code=400)
+
+    body = await request.json()
+    selections = {
+        k: str(body[k]) for k in _MODEL_CONCERNS
+        if isinstance(body.get(k), str) and body[k]
+    }
+
+    d = session_dir(dtxsid)
+    meta_path = d / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        meta = {"dtxsid": dtxsid, "created_at": now_iso()}
+    meta.setdefault("models", {}).update(selections)
+    meta["updated_at"] = now_iso()
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    return JSONResponse({"ok": True, "models": meta["models"]})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/session/save-section — auto-save without changing approval
 # ---------------------------------------------------------------------------
 
