@@ -33,6 +33,7 @@ from __future__ import annotations
 # Imports
 # ---------------------------------------------------------------------------
 from .anchors import BEGIN_RE as _BEGIN_RE, END_RE as _END_RE, begin_line, end_line
+from .latex_to_html import latex_to_html
 from .overrides import region_hash, set_override
 
 # ---------------------------------------------------------------------------
@@ -215,8 +216,12 @@ def apply_reconcile(
 
     For each attributed content edit, writes an override (latex_region = the
     edited region body; base_hash = region_hash of the baseline region, matching
-    what the renderer recomputes for stale detection).  Structural changes and
-    parse problems are returned for the caller to surface — they are NOT written.
+    what the renderer recomputes for stale detection).  When the edit is in the
+    prose vocabulary the preview understands, an html_region is derived and
+    stored too (divergence #2) so the on-screen preview can render the edit
+    faithfully; otherwise html_region is omitted and the preview shows a "may be
+    stale" marker.  Structural changes and parse problems are returned for the
+    caller to surface — they are NOT written.
 
     Returns a summary dict: {written, structural, parse_warnings}.
     """
@@ -229,6 +234,7 @@ def apply_reconcile(
             anchor_id,
             change["edited_body"],
             region_hash(change["baseline_body"]),
+            html_region=latex_to_html(change["edited_body"]),
             source=source,
             **kwargs,
         )

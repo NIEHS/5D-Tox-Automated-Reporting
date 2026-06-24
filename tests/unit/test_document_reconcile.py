@@ -111,3 +111,32 @@ def test_apply_writes_override(tmp_path):
     # recomputes for the (unchanged) generated region, so it reads "not stale".
     assert ov["base_hash"] == do.region_hash("ORIGINAL SUMMARY")
     assert ov["source"] == "overleaf"
+
+
+# ---------------------------------------------------------------------------
+# html_region derivation (divergence #2, Phase B)
+# ---------------------------------------------------------------------------
+
+def test_apply_stores_html_region_for_prose_edit(tmp_path):
+    """An edit in the supported prose vocabulary gets an html_region too."""
+    base = _wrap("node", "summary", "ORIGINAL")
+    edited = _wrap("node", "summary", "Edited with \\textbf{bold} prose.")
+    apply_reconcile("DTXSIDTEST", base, edited, sessions_dir=tmp_path)
+    ov = do.get_override("DTXSIDTEST", "summary", sessions_dir=tmp_path)
+    assert ov["html_region"] == "<p>Edited with <strong>bold</strong> prose.</p>"
+
+
+def test_apply_omits_html_region_for_untranslatable_edit(tmp_path):
+    """
+    An edit containing markup the conservative translator doesn't handle (a
+    table environment) stores NO html_region — the preview falls back to the
+    Phase A stale marker rather than emitting broken HTML.
+    """
+    base = _wrap("node", "summary", "ORIGINAL")
+    edited = _wrap("node", "summary",
+                   "\\begin{niehstable}{x}\n1 & 2 \\\\\n\\end{niehstable}")
+    apply_reconcile("DTXSIDTEST", base, edited, sessions_dir=tmp_path)
+    ov = do.get_override("DTXSIDTEST", "summary", sessions_dir=tmp_path)
+    assert "html_region" not in ov
+    # The latex_region is still stored verbatim — only the HTML rendering is absent.
+    assert "niehstable" in ov["latex_region"]

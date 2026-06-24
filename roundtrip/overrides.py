@@ -27,6 +27,10 @@ One JSON file per session, sessions/<dtxsid>/_document_overrides.json:
         "<anchor_id>": {
           "latex_region": "<the edited LaTeX region, as it sits between the
                             generator's begin/end sentinels>",
+          "html_region":  "<optional: the edit rendered as HTML for the preview
+                            (divergence #2); absent when the LaTeX->HTML
+                            translator couldn't render it, so the preview falls
+                            back to a stale marker>",
           "base_hash":    "<region_hash() of the GENERATED region this override
                             was derived from — used to detect that the
                             underlying data has since drifted>",
@@ -159,6 +163,7 @@ def set_override(
     latex_region: str,
     base_hash: str,
     *,
+    html_region: "str | None" = None,
     source: str = "overleaf",
     edited_at: "str | None" = None,
     sessions_dir: Path = _DEFAULT_SESSIONS_DIR,
@@ -170,6 +175,13 @@ def set_override(
         anchor_id:    the generator's anchor key (node.id or "<node>::<item>").
         latex_region: the edited LaTeX region (what sits between the sentinels).
         base_hash:    region_hash() of the GENERATED region it was derived from.
+        html_region:  the edit rendered as HTML, for the on-screen preview
+                      (divergence #2).  Derived from latex_region at reconcile
+                      time when the translator recognizes the markup; None when
+                      it can't, so the preview falls back to a "may be stale"
+                      marker rather than emitting broken HTML.  Omitted from the
+                      stored record when None (no schema churn for the common
+                      case / older records).
         source:       provenance tag — "overleaf" / "stand-in" / "manual".
         edited_at:    ISO timestamp; defaults to now (UTC).
 
@@ -182,6 +194,8 @@ def set_override(
         "edited_at": edited_at or _now_iso(),
         "source": source,
     }
+    if html_region is not None:
+        record["html_region"] = html_region
     overrides[anchor_id] = record
     save_overrides(dtxsid, overrides, sessions_dir=sessions_dir)
     return record

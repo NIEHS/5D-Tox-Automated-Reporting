@@ -8,11 +8,12 @@ beyond an injectable default).  rlm-bmdx is its first consumer; the boundary is
 drawn now, a standalone package can be lifted out later.
 
 Layers:
-  - anchors    — the sentinel convention (writer + reader share it here)
-  - overrides  — per-region human-edit store + region_hash stale detection
-  - reconcile  — parse anchored regions, diff baseline↔edited, attribute edits
-  - lock       — single-writer turn flag
-  - transport  — working clone + remote(s): push / pull / mirror / stand-in
+  - anchors       — the sentinel convention (writer + reader share it here)
+  - overrides     — per-region human-edit store + region_hash stale detection
+  - reconcile     — parse anchored regions, diff baseline↔edited, attribute edits
+  - latex_to_html — conservative LaTeX→HTML for the preview-side override render
+  - lock          — single-writer turn flag
+  - transport     — working clone + remote(s): push / pull / mirror / stand-in
 """
 
 from .anchors import PREFIX, BEGIN_RE, END_RE, begin_line, end_line, wrap
@@ -24,6 +25,7 @@ from .overrides import (
     clear_override,
     get_override,
 )
+from .latex_to_html import latex_to_html
 from .reconcile import Region, ReconcileResult, parse_regions, reconcile, apply_reconcile
 from .lock import get_lock, acquire_lock, release_lock
 from .transport import (
@@ -46,6 +48,7 @@ __all__ = [
     "PREFIX", "BEGIN_RE", "END_RE", "begin_line", "end_line", "wrap",
     "region_hash", "load_overrides", "save_overrides", "set_override",
     "clear_override", "get_override",
+    "latex_to_html",
     "Region", "ReconcileResult", "parse_regions", "reconcile", "apply_reconcile",
     "get_lock", "acquire_lock", "release_lock",
     "init_standin", "commit_document", "push_committed", "repo_status",
