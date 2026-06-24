@@ -32,6 +32,67 @@ def resolve_anthropic_api_key() -> "str | None":
     return None
 
 
+def resolve_ca_bundle() -> "str | None":
+    """Resolve the CA bundle path for verifying the LiteLLM proxy's TLS cert.
+
+    The NIEHS proxy presents a cert signed by an NIH-internal CA absent from the
+    public certifi trust store, so an explicit bundle is required.  Returns
+    ``SSL_CERT_FILE`` if set, else ``REQUESTS_CA_BUNDLE``, else None.
+
+    The single chokepoint for CA resolution — mirrors the precedence the
+    /api/models route uses (llm_routes.py) so the two can't drift.  NOTE both
+    must be checked: the Anthropic SDK's httpx client honors ``SSL_CERT_FILE``
+    but NOT ``REQUESTS_CA_BUNDLE`` (only ``requests`` reads the latter), so an
+    env that sets only ``REQUESTS_CA_BUNDLE`` would break SDK calls if we relied
+    on ambient env instead of passing the bundle explicitly.
+    """
+    return os.environ.get("SSL_CERT_FILE") or os.environ.get("REQUESTS_CA_BUNDLE")
+
+
+def _ssl_context_for_bundle(bundle: str):
+    """Build an SSL context trusting the given CA bundle.
+
+    Passed to httpx as ``verify=<context>`` — the supported form in httpx 0.28+
+    (``verify=<str path>`` is deprecated).  Isolated so both builders share it.
+    """
+    import ssl
+    return ssl.create_default_context(cafile=bundle)
+
+
+def build_anthropic_client():
+    """Construct a sync anthropic.Anthropic with explicit key + CA verification.
+
+    When a CA bundle resolves, an httpx.Client verifying against it is passed as
+    the SDK's http_client so TLS to the proxy verifies against the NIH CA (the
+    SDK's default certifi store lacks it → APIConnectionError "Connection
+    error.").  When none resolves, the default client is used (local / non-proxy
+    setups).  Base URL is read by the SDK from ``ANTHROPIC_BASE_URL``
+    automatically.
+    """
+    import anthropic
+    bundle = resolve_ca_bundle()
+    if bundle:
+        import httpx
+        return anthropic.Anthropic(
+            api_key=resolve_anthropic_api_key(),
+            http_client=httpx.Client(verify=_ssl_context_for_bundle(bundle)),
+        )
+    return anthropic.Anthropic(api_key=resolve_anthropic_api_key())
+
+
+def build_async_anthropic_client():
+    """Async counterpart of build_anthropic_client (AsyncAnthropic + AsyncClient)."""
+    import anthropic
+    bundle = resolve_ca_bundle()
+    if bundle:
+        import httpx
+        return anthropic.AsyncAnthropic(
+            api_key=resolve_anthropic_api_key(),
+            http_client=httpx.AsyncClient(verify=_ssl_context_for_bundle(bundle)),
+        )
+    return anthropic.AsyncAnthropic(api_key=resolve_anthropic_api_key())
+
+
 def resolve_model_name(model: str) -> str:
     """Map a canonical model id to the proxy's expected name.
 
@@ -72,9 +133,8 @@ class AnthropicEndpoint:
 
     def generate(self, prompt: str, system: str = "",
                  temperature: float | None = None) -> str:
-        import anthropic
         temp = temperature if temperature is not None else self.temperature
-        client = anthropic.Anthropic(api_key=resolve_anthropic_api_key())
+        client = build_anthropic_client()
         messages = [{"role": "user", "content": prompt}]
         kwargs = {
             "model": self._resolve_model(),
