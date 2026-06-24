@@ -393,6 +393,17 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         if node and is_leaf_table(node):
             data["leaf_preview"] = True
 
+    # User-owned content overrides (ADR-0005 round-trip).  The LaTeX export
+    # path already loads these (latex_export.build_overleaf_bundle); surface
+    # them here too so the HTML preview can mark/render regions a human edited
+    # in Overleaf instead of silently showing regenerated content (divergence
+    # #2).  Keyed by the same anchor ids the generators emit (node.id /
+    # "<node>::<item>").  Empty store → {} → byte-identical to before.
+    dtxsid = body.get("dtxsid", "")
+    if dtxsid:
+        from roundtrip.overrides import load_overrides
+        data["overrides"] = load_overrides(dtxsid)
+
     return data
 
 

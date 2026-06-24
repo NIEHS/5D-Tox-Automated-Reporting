@@ -461,3 +461,87 @@ def test_normalize_apical_section_is_idempotent():
     twice = normalize_apical_section_for_render(once)
     assert once["table_data"] == twice["table_data"]
     assert once["table_data"]["Male"][0]["values"] == ["245.3", "244.8", "240.1"]
+
+
+# ---------------------------------------------------------------------------
+# ADR-0005 round-trip overrides in the preview (divergence #2)
+# ---------------------------------------------------------------------------
+# The preview is the on-screen surface; the .tex is the round-trip surface.
+# When a reviewer edits a region in Overleaf the reconciler stores an override.
+# Before this change the preview silently kept rendering the regenerated
+# content; now it marks the region stale (Phase A) or — when an html_region is
+# stored — renders the edit faithfully (Phase B).
+
+def test_empty_override_store_is_a_noop(scaffold):
+    """No overrides → output identical to passing no override store at all."""
+    baseline = generate_html(scaffold)
+    with_empty = generate_html({**scaffold, "overrides": {}})
+    assert with_empty == baseline
+
+
+def test_node_override_marks_region_stale(scaffold):
+    """
+    An override on a node id (no html_region) wraps that node's chunk in the
+    .override-stale marker and records the id under data["_override_stale"].
+    """
+    data = {
+        **scaffold,
+        "overrides": {
+            "background": {
+                "latex_region": "edited background",
+                "base_hash": "deadbeef",
+            }
+        },
+    }
+    html = generate_html(data)
+    assert 'class="override-stale"' in html
+    assert "background" in data.get("_override_stale", [])
+
+
+def test_node_override_with_html_region_renders_faithfully(scaffold):
+    """
+    When the override carries an html_region, the preview emits it verbatim in
+    an .override-edited block — no stale warning (Phase B faithful render).
+    """
+    data = {
+        **scaffold,
+        "overrides": {
+            "background": {
+                "latex_region": "\\textbf{Edited.}",
+                "html_region": "<p><strong>Edited.</strong></p>",
+                "base_hash": "deadbeef",
+            }
+        },
+    }
+    html = generate_html(data)
+    assert 'class="override-edited"' in html
+    assert "<p><strong>Edited.</strong></p>" in html
+    assert "<strong>Edited.</strong>" in html
+
+
+def test_genomics_item_override_marks_that_item(scaffold):
+    """
+    The composite "<node-id>::<item-id>" item grain is honored too: an override
+    on a genomics content item marks just that item (mirrors latex_generator's
+    item-grain _apply_override).
+    """
+    entry = {
+        "type": "gene_set",
+        "organ": "Liver",
+        "sex": "Male",
+        "narrative": ["Original generated narrative."],
+        "gene_sets": [],
+    }
+    data = {
+        **scaffold,
+        "genomics_sections": [entry],
+        "overrides": {
+            "gene-sets::liver-male-narrative": {
+                "latex_region": "edited narrative",
+                "base_hash": "deadbeef",
+            }
+        },
+    }
+    html = generate_html(data, section_filter="gene-sets")
+    assert 'class="override-stale"' in html
+    assert "gene-sets::liver-male-narrative" in data.get("_override_stale", [])

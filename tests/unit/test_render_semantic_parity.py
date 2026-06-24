@@ -284,3 +284,29 @@ def test_roster_cell_escaping_is_single_on_both_surfaces():
 
     assert r"A\_1" in tex, "expected the single-escaped id A\\_1"
     assert r"\textbackslash" not in tex, "id was double-escaped (the old divergence)"
+
+
+def test_override_recognized_by_same_anchor_id_on_both_surfaces(session_data):
+    """
+    Divergence #2: both surfaces must recognize an ADR-0005 override keyed by
+    the SAME anchor id.  We don't compare markup (LaTeX emits the region verbatim
+    inside sentinels; HTML marks/renders it) — only that the same node.id is
+    honored.  Previously HTML ignored the override store entirely.
+    """
+    edited = "PARITY OVERRIDE MARKER TEXT"
+    data = {
+        **session_data,
+        "overrides": {
+            "background": {"latex_region": edited, "base_hash": "deadbeef"},
+        },
+    }
+    # LaTeX emits the override region verbatim for that node.
+    tex = generate_latex(data)
+    assert edited in tex, "LaTeX did not emit the override region"
+
+    # HTML recognizes the same anchor id — recorded in _override_stale.
+    html_data = dict(data)
+    generate_html(html_data)
+    assert "background" in html_data.get("_override_stale", []), (
+        "HTML preview ignored an override the LaTeX surface honored"
+    )

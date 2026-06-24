@@ -168,6 +168,27 @@ em.pending {
   font-style: normal;
   font-size: 12.5px;
 }
+/* ADR-0005 round-trip overrides in the preview (divergence #2).  A region a
+   human edited in Overleaf either shows the faithful edit (.override-edited)
+   or, when no HTML rendering of the edit is stored yet, the regenerated
+   content flagged as possibly stale (.override-stale).  Amber palette matches
+   the .stale-badge convention elsewhere in the app. */
+.override-stale {
+  border-left: 3px solid #d97706;
+  background: #fffbeb;
+  padding: 2px 8px;
+}
+.override-stale::before {
+  content: "Edited in Overleaf — preview may be stale";
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 4px;
+}
+.override-edited {
+  border-left: 3px solid #2563eb;
+}
 table.niehstable {
   border-collapse: collapse;
   margin: 12px 0 8px;
@@ -838,6 +859,13 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
                 node.id, item["item_id"], data.get("orientations")
             ):
                 chunk = f'<div class="landscape-block">{chunk}</div>'
+            # ADR-0005 item-grain override: a single genomics narrative/table
+            # can be edited + attributed on its own via the composite
+            # "<node-id>::<item-id>" key (mirrors latex_generator).  Applied
+            # here rather than in walk_post because the item grain only exists
+            # inside this handler.
+            item_key = f"{node.id}::{item['item_id']}"
+            chunk = _apply_override_html(chunk, item_key, data)
             blocks.append(chunk)
 
     return "\n".join(b for b in blocks if b)
@@ -1051,6 +1079,48 @@ assert_dispatch_covers(_DISPATCH, renderer="HTML")
 
 
 # ---------------------------------------------------------------------------
+# Round-trip overrides (ADR-0005) — preview side
+# ---------------------------------------------------------------------------
+
+def _apply_override_html(chunk: str, anchor_id: str, data: dict) -> str:
+    """
+    Reflect a human's ADR-0005 round-trip override in the HTML preview.
+
+    The override store keys regions by anchor id (node.id or "<node>::<item>");
+    a record carries the user's edited LaTeX (`latex_region`) and, once Phase B
+    is in place, an `html_region` derived from it.  This is the preview-side
+    counterpart of latex_generator._apply_override, but the surfaces differ:
+
+      - LaTeX is the round-trip surface — it emits the override verbatim AND
+        wraps it in begin/end sentinels so the reconciler can attribute later
+        edits.  The preview is never edited and re-imported, so it needs only
+        the SUBSTITUTION half, never the anchor half.
+      - HTML can't emit raw LaTeX.  When the record has an `html_region` we emit
+        it faithfully; otherwise we keep the generated chunk but mark it so the
+        reviewer knows the on-screen version may be stale relative to the .tex.
+
+    Either way the overridden id is recorded under data["_override_stale"] for
+    parity with the LaTeX drift bookkeeping.  No override → chunk unchanged.
+    """
+    override = (data.get("overrides") or {}).get(anchor_id)
+    if not override:
+        return chunk
+    data.setdefault("_override_stale", []).append(anchor_id)
+    html_region = override.get("html_region")
+    if html_region:
+        return (
+            '<div class="override-edited" '
+            'title="Edited in Overleaf">'
+            f"{html_region}</div>"
+        )
+    return (
+        '<div class="override-stale" '
+        'title="Edited in Overleaf — preview may be stale">'
+        f"{chunk}</div>"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Tree walk
 # ---------------------------------------------------------------------------
 
@@ -1061,11 +1131,15 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
 
     Thin wrapper over the shared render_common.walk_emit skeleton (ADR-0006):
     the traversal + accumulator are common, only the HTML-specific emit below
-    is passed in.  Same skeleton as latex_generator._walk_latex — but HTML
-    passes no wrap_post: it is the on-screen preview and deliberately carries
-    neither the ADR-0005 override substitution nor the round-trip anchors that
-    LaTeX (the Overleaf round-trip surface) does.  See the divergence-#2 TODO
-    in memory for the plan to give HTML its own override-substitution wrap_post.
+    is passed in.  Same skeleton as latex_generator._walk_latex.
+
+    The wrap_post differs from LaTeX by design (divergence #2): LaTeX applies
+    the override substitution AND wraps each node in round-trip anchor sentinels
+    (it is the Overleaf round-trip surface); HTML applies only the override
+    SUBSTITUTION/marker (the preview is never edited and re-imported, so the
+    sentinels would be meaningless).  See _apply_override_html.  Genomics
+    content items carry a second, composite-key override grain applied inside
+    _render_genomics_section, mirroring latex_generator.
     """
     return walk_emit(
         node, data,
@@ -1081,6 +1155,9 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
         # Wrap in a .landscape-block (assigned to the landscape @page) when the
         # user flipped it AND the node's semantic type is orientable.
         wrap_landscape=lambda chunk: f'<div class="landscape-block">{chunk}</div>',
+        # ADR-0005 node-grain override: mark/render a region a human edited in
+        # Overleaf instead of silently showing the regenerated content.
+        wrap_post=lambda n, chunk: _apply_override_html(chunk, n.id, data),
     )
 
 
