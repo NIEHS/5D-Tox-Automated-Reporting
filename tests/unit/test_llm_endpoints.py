@@ -138,3 +138,46 @@ def test_generate_routes_through_builder(monkeypatch):
     assert out == "OK"
     # Model id was remapped to the proxy's dot notation on the way through.
     assert captured["model"] == "claude-sonnet-4.6"
+
+
+def test_generate_retries_without_temperature_when_rejected(monkeypatch):
+    """Models like opus-4.8 reject the temperature param with a 400 saying it is
+    deprecated.  generate() must drop temperature and retry once, not surface the
+    error."""
+    calls = []
+
+    class _Messages:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            if "temperature" in kwargs:
+                raise RuntimeError(
+                    "Error code: 400 - `temperature` is deprecated for this model."
+                )
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(text="OK")]
+            )
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(le, "build_anthropic_client", lambda: _Client())
+    ep = le.AnthropicEndpoint(name="t", model="claude-opus-4-8", max_tokens=16)
+    out = ep.generate("hi")
+    assert out == "OK"
+    assert len(calls) == 2, "expected one failed call then a retry"
+    assert "temperature" in calls[0] and "temperature" not in calls[1]
+
+
+def test_generate_does_not_swallow_unrelated_errors(monkeypatch):
+    """A 400 that is NOT about temperature must propagate, not trigger a retry."""
+    class _Messages:
+        def create(self, **kwargs):
+            raise RuntimeError("Error code: 400 - invalid model name")
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(le, "build_anthropic_client", lambda: _Client())
+    ep = le.AnthropicEndpoint(name="t", model="claude-sonnet-4-6", max_tokens=16)
+    with pytest.raises(RuntimeError, match="invalid model name"):
+        ep.generate("hi")

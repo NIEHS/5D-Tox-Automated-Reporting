@@ -144,7 +144,17 @@ class AnthropicEndpoint:
         }
         if system:
             kwargs["system"] = system
-        response = client.messages.create(**kwargs)
+        try:
+            response = client.messages.create(**kwargs)
+        except Exception as e:
+            # Newer models (e.g. opus-4.8) reject the temperature param outright
+            # ("`temperature` is deprecated for this model.").  Rather than carry
+            # a per-model allow/deny list that rots as models change, react to
+            # what the proxy tells us: drop temperature and retry once.
+            if "temperature" not in str(e).lower():
+                raise
+            kwargs.pop("temperature", None)
+            response = client.messages.create(**kwargs)
         return response.content[0].text if response.content else ""
 
     def is_available(self) -> bool:
