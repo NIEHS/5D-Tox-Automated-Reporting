@@ -271,10 +271,20 @@ async function autoProcessPool() {
     // Fingerprint map from the last validation run — keyed by file ID.
     // Without fingerprints we can't determine section types, so bail out.
     const fingerprints = lastValidationReport?.fingerprints || {};
-    if (Object.keys(fingerprints).length === 0) return;
+    console.log('[RELOAD-TRACE] autoProcessPool ENTRY', {
+        fingerprints: Object.keys(fingerprints).length,
+        dtxsid_field: document.getElementById('dtxsid')?.value?.trim(),
+    });
+    if (Object.keys(fingerprints).length === 0) {
+        console.log('[RELOAD-TRACE] autoProcessPool BAIL — no fingerprints');
+        return;
+    }
 
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
-    if (!dtxsid) return;
+    if (!dtxsid) {
+        console.log('[RELOAD-TRACE] autoProcessPool BAIL — no dtxsid');
+        return;
+    }
 
     showBlockingSpinner('Loading experiment metadata...');
 
@@ -303,10 +313,19 @@ async function autoProcessPool() {
  */
 async function runProcessingPipeline() {
     const fingerprints = lastValidationReport?.fingerprints || {};
-    if (Object.keys(fingerprints).length === 0) return;
+    console.log('[RELOAD-TRACE] runProcessingPipeline ENTRY', {
+        fingerprints: Object.keys(fingerprints).length,
+    });
+    if (Object.keys(fingerprints).length === 0) {
+        console.log('[RELOAD-TRACE] runProcessingPipeline BAIL — no fingerprints');
+        return;
+    }
 
     const dtxsid = document.getElementById('dtxsid')?.value?.trim();
-    if (!dtxsid) return;
+    if (!dtxsid) {
+        console.log('[RELOAD-TRACE] runProcessingPipeline BAIL — no dtxsid');
+        return;
+    }
 
     showBlockingSpinner('Integrating metadata...');
 
@@ -367,9 +386,16 @@ async function runProcessingPipeline() {
             }
         }
 
+        console.log('[RELOAD-TRACE] process-integrated response', { status: resp.status, ok: resp.ok });
         if (resp.ok) {
             const result = await resp.json();
             const sections = result.sections || [];
+            console.log('[RELOAD-TRACE] process-integrated parsed', {
+                sections: sections.length,
+                has_methods: !!(result.methods && result.methods.sections),
+                methods_sections: result.methods?.sections?.length || 0,
+                genomics_sections: Object.keys(result.genomics_sections || {}).length,
+            });
 
             // Create a section card for each platform returned by the server.
             // Each card is wrapped in try/catch so one bad section doesn't
@@ -541,6 +567,7 @@ async function runProcessingPipeline() {
             // the same structure as /api/generate-methods: sections array,
             // context dict, and optional table1.
             if (result.methods && result.methods.sections && result.methods.sections.length > 0) {
+                console.log('[RELOAD-TRACE] rendering M&M', { sections: result.methods.sections.length });
                 methodsData = result.methods;
                 showMethodsSection();
                 displayMethodsSections(result.methods.sections, result.methods.table1 || null);

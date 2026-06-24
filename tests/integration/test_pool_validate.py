@@ -57,6 +57,10 @@ class TestPoolValidate:
         Every fingerprint must have 'platform' and 'data_type' fields —
         this is the core assertion for the domain model refactor.  The old
         monolithic 'domain' field should NOT appear.
+
+        Apical platforms must be non-empty; gene expression is the documented
+        exception (platform is None until integration recovers it from chip
+        metadata).
         """
         from fastapi.testclient import TestClient
         from background_server import app
@@ -76,7 +80,19 @@ class TestPoolValidate:
             assert "data_type" in fp, (
                 f"Fingerprint {file_id} ({fp.get('filename')}) missing 'data_type'"
             )
-            # Platform should be a recognized value, not empty
+            # Gene expression is exempt from the non-empty-platform rule:
+            # platform is intentionally None for transcriptomics (the real
+            # platform, e.g. "S1500+_rat", is recovered from the .bm2 chip
+            # metadata during integration, not guessed from the filename at
+            # fingerprint time).  See detect_platform_and_type in bmdx-pipe:
+            # the "gene.?expression" pattern maps to (None, "gene_expression").
+            if fp.get("data_type") == "gene_expression":
+                assert fp["platform"] is None, (
+                    f"Fingerprint {file_id} ({fp.get('filename')}) is gene "
+                    f"expression but has a non-None platform {fp['platform']!r}"
+                )
+                continue
+            # Every other (apical) platform must be a recognized non-empty value.
             assert fp["platform"], (
                 f"Fingerprint {file_id} ({fp.get('filename')}) has empty platform"
             )

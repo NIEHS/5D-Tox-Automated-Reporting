@@ -28,14 +28,24 @@ def _make_integrated_data():
     Build a realistic integrated BMDProject with experiments across
     two platforms, using the new domain model fields.
     """
+    # Four animals per experiment at doses 0/1/10/100; the per-probe
+    # `responses` lists are parallel to this `treatments` list.
+    treatments = [
+        {"name": "0", "dose": 0.0},
+        {"name": "1", "dose": 1.0},
+        {"name": "10", "dose": 10.0},
+        {"name": "100", "dose": 100.0},
+    ]
     return {
+        "name": "integrated",
         "doseResponseExperiments": [
             {
                 "name": "BodyWeight_Male",
                 "experimentDescription": {
                     "platform": "Body Weight",
-                    "data_type": "tox_study",
+                    "dataType": "tox_study",
                 },
+                "treatments": treatments,
                 "probeResponses": [
                     {"probe": {"id": "SD5"}, "responses": [100, 105, 110, 120]},
                 ],
@@ -44,8 +54,9 @@ def _make_integrated_data():
                 "name": "BodyWeight_Female",
                 "experimentDescription": {
                     "platform": "Body Weight",
-                    "data_type": "tox_study",
+                    "dataType": "tox_study",
                 },
+                "treatments": treatments,
                 "probeResponses": [
                     {"probe": {"id": "SD5"}, "responses": [90, 95, 100, 110]},
                 ],
@@ -54,8 +65,9 @@ def _make_integrated_data():
                 "name": "ClinChem_Male",
                 "experimentDescription": {
                     "platform": "Clinical Chemistry",
-                    "data_type": "tox_study",
+                    "dataType": "tox_study",
                 },
+                "treatments": treatments,
                 "probeResponses": [
                     {"probe": {"id": "ALT"}, "responses": [30, 35, 40, 50]},
                     {"probe": {"id": "AST"}, "responses": [20, 22, 25, 30]},
@@ -63,9 +75,21 @@ def _make_integrated_data():
             },
         ],
         "_meta": {
+            "dtxsid": "DTXSID_TEST",
+            "integrated_at": "2026-01-01T00:00:00+00:00",
             "source_files": {
-                "Body Weight": {"filename": "body_weight_truth_male.txt"},
-                "Clinical Chemistry": {"filename": "clin_chem_truth_male.txt"},
+                "Body Weight|tox_study": {
+                    "file_id": "bw-male-0001",
+                    "filename": "body_weight_truth_male.txt",
+                    "tier": "txt_csv",
+                    "file_count": 2,
+                },
+                "Clinical Chemistry|tox_study": {
+                    "file_id": "cc-male-0001",
+                    "filename": "clin_chem_truth_male.txt",
+                    "tier": "txt_csv",
+                    "file_count": 2,
+                },
             },
         },
     }

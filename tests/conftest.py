@@ -172,9 +172,9 @@ def mock_bmdx_pipe():
     """
     Block all bmdx_pipe functions that invoke Java subprocesses.
 
-    Patches at the import site (e.g., pool_orchestrator.integrate_pool)
-    rather than globally, so each mock documents which external call
-    the test depends on.
+    Patches at the import site (the module where each function is looked
+    up after the pool_orchestrator monolith split) rather than globally,
+    so each mock documents which external call the test depends on.
 
     Returns a namespace with all mocks for per-test configuration
     (e.g., mock_bmdx_pipe.integrate_pool.return_value = {...}).
@@ -182,22 +182,22 @@ def mock_bmdx_pipe():
     patches = {
         # IntegrateProject.java — merges files into unified BMDProject
         "integrate_pool": patch(
-            "pool_orchestrator.integrate_pool",
+            "pool_routes.integrate_pool",
             return_value={"doseResponseExperiments": [], "_meta": {}},
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
         "build_table_data": patch(
-            "pool_orchestrator.build_table_data",
+            "process_integrated.build_table_data",
             return_value={"Male": [], "Female": []},
         ),
         # ExportGenomics.java — gene expression extraction
         "export_genomics": patch(
-            "pool_orchestrator.export_genomics",
+            "processing_helpers.export_genomics",
             return_value={},
         ),
         # ExportCategories.java — BMD category lookup
         "generate_results_narrative": patch(
-            "pool_orchestrator.generate_results_narrative",
+            "processing_helpers.generate_results_narrative",
             return_value=[],
         ),
         # ExportBm2.java — .bm2 deserialization
@@ -207,13 +207,22 @@ def mock_bmdx_pipe():
         ),
         # pybmds — CPU-heavy BMD modeling
         "run_bmds_for_endpoints": patch(
-            "pool_orchestrator.run_bmds_for_endpoints",
+            "process_integrated.run_bmds_for_endpoints",
             return_value={},
         ),
-        # LMDB cache — mock across all importing modules
-        "bm2_cache_session": patch("session_routes.bm2_cache", MagicMock()),
-        "bm2_cache_upload": patch("upload_routes.bm2_cache", MagicMock()),
-        "bm2_cache_llm": patch("llm_routes.bm2_cache", MagicMock()),
+        # LMDB cache — mock across all importing modules.  get_json must
+        # return a JSON-serializable value (the real cache returns a plain
+        # dict on hit, None on miss); a bare MagicMock leaks into the
+        # preview route's orjson.dumps and fails to serialize.
+        "bm2_cache_session": patch(
+            "session_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+        ),
+        "bm2_cache_upload": patch(
+            "upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+        ),
+        "bm2_cache_llm": patch(
+            "llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+        ),
     }
 
     started = {}

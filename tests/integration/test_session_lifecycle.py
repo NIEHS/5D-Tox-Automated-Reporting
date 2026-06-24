@@ -122,13 +122,20 @@ class TestSessionApproveUnapprove:
         assert "approved_at" in data
         assert data["version"] == 1
 
-    def test_unapprove_removes_file(self, sessions_dir):
-        """Unapproving removes the section file."""
+    def test_unapprove_preserves_content_and_clears_flag(self, sessions_dir):
+        """Unapproving preserves the section file but flips approved=False.
+
+        Per commit 8a20a9f ("Decouple disk persistence from approval"),
+        unapprove is a UI lock-state flip — it keeps the on-disk content so
+        the user can re-approve without regenerating.  Deletion is the
+        separate /api/session/discard-section endpoint.
+        """
         from fastapi.testclient import TestClient
         from background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
+        path = sessions_dir / dtxsid / "background.json"
 
         # First approve
         client.post("/api/session/approve", json={
@@ -136,15 +143,19 @@ class TestSessionApproveUnapprove:
             "section_type": "background",
             "data": {"paragraphs": ["Test."]},
         })
-        assert (sessions_dir / dtxsid / "background.json").exists()
+        assert path.exists()
+        assert json.loads(path.read_text())["approved"] is True
 
-        # Then unapprove
+        # Then unapprove — content stays, flag flips to False
         resp = client.post("/api/session/unapprove", json={
             "dtxsid": dtxsid,
             "section_type": "background",
         })
         assert resp.status_code == 200
-        assert not (sessions_dir / dtxsid / "background.json").exists()
+        assert path.exists()
+        data = json.loads(path.read_text())
+        assert data["approved"] is False
+        assert data["paragraphs"] == ["Test."]
 
     def test_approve_methods_section(self, sessions_dir):
         """Approve a methods section — verifies non-background section types work."""
