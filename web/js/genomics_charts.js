@@ -127,12 +127,61 @@ function _observeResize(elementId, aspectRatio) {
  * Outliers (cluster_id < 0) get a neutral gray; valid clusters
  * are mapped to the palette via modular indexing.
  *
+ * `palette`/`outlier` override the module defaults so a configured per-chart
+ * palette (from the resolved style) can be threaded in; both default to the
+ * module-level CLUSTER_COLORS / OUTLIER_COLOR so existing callers are
+ * unaffected.  Mirrors genomics_viz.get_cluster_color.
+ *
  * @param {number} clusterId — the HDBSCAN cluster assignment
+ * @param {string[]} [palette] — optional color cycle
+ * @param {string} [outlier] — optional outlier color
  * @returns {string} hex color string
  */
-function _clusterColor(clusterId) {
-    if (clusterId < 0) return OUTLIER_COLOR;
-    return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length];
+function _clusterColor(clusterId, palette, outlier) {
+    const pal = (palette && palette.length) ? palette : CLUSTER_COLORS;
+    const out = outlier || OUTLIER_COLOR;
+    if (clusterId < 0) return out;
+    return pal[clusterId % pal.length];
+}
+
+
+/* ----------------------------------------------------------------
+ * Live-tab style resolution.
+ *
+ * The interactive "Charts" tab builds its Plotly figures client-side, so it
+ * resolves the SAME effective style the Python export path uses — built-in
+ * defaults <- __CHART_STYLE__.defaults <- types[type] <- instances[key], via
+ * the shared resolveChartStyle (chart_style.js).  Keeping the built-in defaults
+ * here in sync with genomics_viz.*_STYLE_DEFAULTS is what lets a config edit
+ * restyle the live tab and the PDF identically.  When chart_style.js or the
+ * injected globals are absent (stale page), resolveStyle returns the built-ins
+ * so the tab still renders.
+ * ---------------------------------------------------------------- */
+
+const _UMAP_BUILTIN_STYLE = {
+    width: 900, height: 900,
+    paper_bgcolor: '#fff', plot_bgcolor: '#fafafa', gridcolor: '#e8e8e8',
+    palette: CLUSTER_COLORS, outlier_color: OUTLIER_COLOR,
+    marker: { size: 9, opacity: 0.85, line_width: 0.5, line_color: '#fff' },
+    legend: { font_size: 9, bgcolor: 'rgba(255,255,255,0.8)', bordercolor: '#ccc', borderwidth: 1 },
+    margins: { l: 20, r: 20, t: 20, b: 20 },
+};
+
+const _CLUSTER_BUILTIN_STYLE = {
+    width: 1000,
+    paper_bgcolor: '#fff', plot_bgcolor: '#fafafa', gridcolor: '#e8e8e8',
+    palette: CLUSTER_COLORS, outlier_color: OUTLIER_COLOR,
+    marker: { opacity: 0.8, line_width: 0.5, line_color: '#fff' },
+    legend: { font_size: 12 },
+    margins: { l: 80, r: 30, t: 90, b: 60 },
+};
+
+function _resolveStyleFor(type, data, builtin) {
+    const cfg = (typeof window !== 'undefined' && window.__CHART_STYLE__) || {};
+    if (typeof resolveChartStyle === 'function') {
+        return resolveChartStyle(cfg, type, data.organ || '', data.sex || '', builtin);
+    }
+    return builtin;
 }
 
 
@@ -382,6 +431,9 @@ async function renderGenomicsCharts() {
 function _renderUmapChart(geneSets, data) {
     if (!_umapRefData) return;
 
+    const style = _resolveStyleFor('umap', data, _UMAP_BUILTIN_STYLE);
+    const mk = style.marker || {};
+    const leg = style.legend || {};
     const traces = [];
 
     // Layer 1: reference backdrop — all GO terms in the embedding space.
@@ -426,7 +478,7 @@ function _renderUmapChart(geneSets, data) {
 
     for (const cid of sortedCids) {
         const pts = byCluster[cid];
-        const color = _clusterColor(cid);
+        const color = _clusterColor(cid, style.palette, style.outlier_color);
         const name = cid >= 0 ? `Cluster ${cid}` : 'Outlier';
 
         traces.push({
@@ -435,10 +487,11 @@ function _renderUmapChart(geneSets, data) {
             mode: 'markers',
             type: 'scatter',
             marker: {
-                size: 9,
+                size: mk.size != null ? mk.size : 9,
                 color: color,
-                opacity: 0.85,
-                line: { width: 0.5, color: '#fff' },
+                opacity: mk.opacity != null ? mk.opacity : 0.85,
+                line: { width: mk.line_width != null ? mk.line_width : 0.5,
+                        color: mk.line_color || '#fff' },
             },
             name: name,
             text: pts.map(p =>
@@ -465,17 +518,23 @@ function _renderUmapChart(geneSets, data) {
     const pad = (hi - lo) * 0.05;
     const axisRange = [lo - pad, hi + pad];
 
+    // The live tab sizes width/height to the container (responsive square), so
+    // it uses umapWidth/umapHeight, not style.width/height; the rest of the
+    // look (bg, grid, margins, legend) reads from the resolved style.
+    const mg = style.margins || {};
+    const grid = style.gridcolor || '#e8e8e8';
     const layout = {
         autosize: false,
         width: umapWidth,
         height: umapHeight,
-        margin: { l: 20, r: 20, t: 20, b: 20 },
-        paper_bgcolor: '#fff',
-        plot_bgcolor: '#fafafa',
+        margin: { l: mg.l != null ? mg.l : 20, r: mg.r != null ? mg.r : 20,
+                  t: mg.t != null ? mg.t : 20, b: mg.b != null ? mg.b : 20 },
+        paper_bgcolor: style.paper_bgcolor || '#fff',
+        plot_bgcolor: style.plot_bgcolor || '#fafafa',
         // No axis titles or tick labels — UMAP coordinates are arbitrary.
         xaxis: {
             showgrid: true,
-            gridcolor: '#e8e8e8',
+            gridcolor: grid,
             zeroline: false,
             showticklabels: false,
             title: '',
@@ -485,7 +544,7 @@ function _renderUmapChart(geneSets, data) {
         },
         yaxis: {
             showgrid: true,
-            gridcolor: '#e8e8e8',
+            gridcolor: grid,
             zeroline: false,
             showticklabels: false,
             title: '',
@@ -494,11 +553,12 @@ function _renderUmapChart(geneSets, data) {
         hovermode: 'closest',
         // Legend inside the plot area, top-right with semi-transparent bg.
         legend: {
-            font: { size: 9 },
+            font: { size: leg.font_size != null ? leg.font_size : 9 },
             x: 1, y: 1,
             xanchor: 'right', yanchor: 'top',
-            bgcolor: 'rgba(255,255,255,0.8)',
-            bordercolor: '#ccc', borderwidth: 1,
+            bgcolor: leg.bgcolor || 'rgba(255,255,255,0.8)',
+            bordercolor: leg.bordercolor || '#ccc',
+            borderwidth: leg.borderwidth != null ? leg.borderwidth : 1,
         },
     };
 
@@ -609,6 +669,9 @@ async function captureGenomicsChartImages() {
  */
 function _renderClusterChart(geneSets, data, clusters) {
     const doseUnit = reportSettings.dose_unit || 'mg/kg';
+    const style = _resolveStyleFor('cluster', data, _CLUSTER_BUILTIN_STYLE);
+    const mk = style.marker || {};
+    const leg = style.legend || {};
 
     // Build flat list of plottable points, each annotated with both its
     // gene-overlap cluster (y-axis position) and its UMAP semantic cluster
@@ -697,7 +760,7 @@ function _renderClusterChart(geneSets, data, clusters) {
 
     for (const umapCid of sortedUmapCids) {
         const pts = byUmapCluster[umapCid];
-        const color = _clusterColor(umapCid);
+        const color = _clusterColor(umapCid, style.palette, style.outlier_color);
         const name = umapCid >= 0 ? String(umapCid) : 'Outlier';
 
         const jittered_y = pts.map(p => {
@@ -724,8 +787,9 @@ function _renderClusterChart(geneSets, data, clusters) {
             marker: {
                 size: sizes,
                 color: color,
-                opacity: 0.8,
-                line: { width: 0.5, color: '#fff' },
+                opacity: mk.opacity != null ? mk.opacity : 0.8,
+                line: { width: mk.line_width != null ? mk.line_width : 0.5,
+                        color: mk.line_color || '#fff' },
             },
             name: name,
             text: pts.map(p =>
@@ -755,30 +819,42 @@ function _renderClusterChart(geneSets, data, clusters) {
     const clusterWidth = clusterEl.clientWidth || 600;
     const clusterHeight = clusterEl.clientHeight || Math.round(clusterWidth / 1.25);
 
+    // Width/height come from the responsive container; bg/grid/margins/legend
+    // and the axis titles read from the resolved style (with the today-values as
+    // fallbacks).  ${dose_unit} in a configured x-axis title is substituted.
+    const mg = style.margins || {};
+    const grid = style.gridcolor || '#e8e8e8';
+    const xa = style.xaxis || {};
+    const ya = style.yaxis || {};
+    const xTitle = xa.title
+        ? xa.title.replace('${dose_unit}', doseUnit)
+        : `BMD (${doseUnit})`;
+    const yTitle = (ya.title || 'Gene-Overlap Cluster').replace('${dose_unit}', doseUnit);
     const layout = {
         autosize: false,
         width: clusterWidth,
         height: clusterHeight,
-        margin: { l: 80, r: 30, t: 90, b: 60 },
-        paper_bgcolor: '#fff',
-        plot_bgcolor: '#fafafa',
+        margin: { l: mg.l != null ? mg.l : 80, r: mg.r != null ? mg.r : 30,
+                  t: mg.t != null ? mg.t : 90, b: mg.b != null ? mg.b : 60 },
+        paper_bgcolor: style.paper_bgcolor || '#fff',
+        plot_bgcolor: style.plot_bgcolor || '#fafafa',
         shapes: shapes,
         xaxis: {
-            title: { text: `BMD (${doseUnit})` },
-            type: 'log',
+            title: { text: xTitle },
+            type: xa.type || 'log',
             showgrid: true,
-            gridcolor: '#e8e8e8',
+            gridcolor: grid,
         },
         yaxis: {
-            title: { text: 'Gene-Overlap Cluster' },
+            title: { text: yTitle },
             showgrid: true,
-            gridcolor: '#e8e8e8',
+            gridcolor: grid,
             tickvals: tickVals,
             ticktext: tickText,
         },
         hovermode: 'closest',
         legend: {
-            font: { size: 12 },
+            font: { size: leg.font_size != null ? leg.font_size : 12 },
             orientation: 'h',
             x: 0.5, y: 1.02,
             xanchor: 'center', yanchor: 'bottom',

@@ -600,9 +600,25 @@ function _rebuildOrganCharts(organKey) {
 }
 
 /**
- * HTML for one sex's chart block: UMAP + cluster scatter + cluster
- * summary table.  Captions come from the server payload so the HTML
- * and PDF carry identical prose under each figure.
+ * Which chart types to render, in order, for a cache entry.  Prefers the
+ * entry's own `types` list (written by the server, contract C5), then the
+ * injected registry (__CHART_REGISTRY__, contract C8), then the original
+ * umap/cluster pair — so a new data-driven chart type appears in-app with no
+ * edit here, and a stale page still renders the two built-ins.
+ */
+function _chartTypesFor(entry) {
+    if (Array.isArray(entry.types) && entry.types.length) return entry.types;
+    const reg = (typeof window !== 'undefined' && window.__CHART_REGISTRY__) || null;
+    if (Array.isArray(reg) && reg.length) return reg.map(t => t.name);
+    return ['umap', 'cluster'];
+}
+
+/**
+ * HTML for one sex's chart block: one figure per chart type (UMAP + cluster
+ * scatter, plus any data-driven types) + cluster summary table.  Captions come
+ * from the server payload so the HTML and PDF carry identical prose under each
+ * figure.  Figures are driven by the entry's chart types (see _chartTypesFor)
+ * rather than a hardcoded pair, so a new YAML-declared chart type rides through.
  *
  * The `organ-chart-figure` wrapper fixes the SVG to a reasonable
  * display size via CSS (the SVG itself has an intrinsic viewBox, so
@@ -611,11 +627,23 @@ function _rebuildOrganCharts(organKey) {
 function _organChartBlockHtml(entry) {
     const sexTitle = (entry.sex || '').charAt(0).toUpperCase()
                    + (entry.sex || '').slice(1);
-    const umapSvg    = entry.umap_svg    || '';
-    const clusterSvg = entry.cluster_svg || '';
-    const umapCap    = entry.umap_caption    || '';
-    const clusterCap = entry.cluster_caption || '';
     const summary    = entry.cluster_summary || [];
+
+    // One <figure> per chart type, in server order.  Each reads the generic
+    // `<type>_svg` / `<type>_caption` fields; a type with no SVG is skipped.
+    const figuresHtml = _chartTypesFor(entry).map(type => {
+        const svg = entry[`${type}_svg`] || '';
+        if (!svg) return '';
+        const cap = entry[`${type}_caption`] || '';
+        // SVG is injected as raw markup — safe because it came from our own
+        // server, and the IDs are already namespaced to prevent cross-chart
+        // collisions.
+        return `
+                <figure class="organ-chart-figure" data-chart-type="${escapeHtml(type)}">
+                    <div class="organ-chart-svg">${svg}</div>
+                    <figcaption>${escapeHtml(cap)}</figcaption>
+                </figure>`;
+    }).join('');
 
     // Summary table — same shape as the standalone page, kept here so
     // the per-sex block is self-contained.
@@ -645,21 +673,10 @@ function _organChartBlockHtml(entry) {
             </details>`;
     }
 
-    // Note: SVG is injected as raw markup — safe because it came from
-    // our own server, and the IDs are already namespaced to prevent
-    // cross-chart collisions.
     return `
         <div class="organ-chart-pair" data-sex="${escapeHtml(entry.sex || '')}">
             <h4>${escapeHtml(sexTitle)}</h4>
-            <div class="organ-chart-figures">
-                <figure class="organ-chart-figure">
-                    <div class="organ-chart-svg">${umapSvg}</div>
-                    <figcaption>${escapeHtml(umapCap)}</figcaption>
-                </figure>
-                <figure class="organ-chart-figure">
-                    <div class="organ-chart-svg">${clusterSvg}</div>
-                    <figcaption>${escapeHtml(clusterCap)}</figcaption>
-                </figure>
+            <div class="organ-chart-figures">${figuresHtml}
             </div>
             ${summaryHtml}
         </div>`;
