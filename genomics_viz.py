@@ -24,6 +24,9 @@ import numpy as np
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+import chart_registry
+import chart_style
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -144,11 +147,23 @@ _CLUSTER_COLORS = [
 _OUTLIER_COLOR = "#999999"
 
 
-def get_cluster_color(cluster_id: int) -> str:
-    """Return a hex color for a given HDBSCAN cluster ID."""
+def get_cluster_color(
+    cluster_id: int,
+    palette: list[str] | None = None,
+    outlier: str | None = None,
+) -> str:
+    """Return a hex color for a given HDBSCAN cluster ID.
+
+    ``palette``/``outlier`` override the module-global defaults so a configured
+    per-chart palette (WP-1/WP-3) can be threaded in.  Both default to the
+    module globals, so existing callers — including the enrichment endpoints
+    (api_genomics_clusters / api_genomics_cluster_enrichment) — are unaffected.
+    """
+    pal = palette if palette else _CLUSTER_COLORS
+    out = outlier if outlier else _OUTLIER_COLOR
     if cluster_id < 0:
-        return _OUTLIER_COLOR
-    return _CLUSTER_COLORS[cluster_id % len(_CLUSTER_COLORS)]
+        return out
+    return pal[cluster_id % len(pal)]
 
 
 # ---------------------------------------------------------------------------
@@ -478,52 +493,153 @@ async def api_genomics_cluster_enrichment(request: Request):
 # POST /api/genomics-chart-images — render chart PNGs for report embedding
 # ---------------------------------------------------------------------------
 
-def render_chart_images(
+# ---------------------------------------------------------------------------
+# Built-in chart-type style defaults (layer 0)
+# ---------------------------------------------------------------------------
+# These reproduce TODAY's hardcoded literals exactly.  chart_style.resolve_
+# chart_style merges them under the document config's chart_style block; with no
+# config the resolved style equals these, so the render is byte-identical to the
+# pre-feature code.  Per-type because umap and cluster legitimately differ
+# (width 900 vs 1000, legend font 9 vs 12, margins, etc.).
+UMAP_STYLE_DEFAULTS: dict = {
+    "width": 900,
+    "height": 900,
+    "paper_bgcolor": "#ffffff",
+    "plot_bgcolor": "#fafafa",
+    "gridcolor": "#e8e8e8",
+    "palette": list(_CLUSTER_COLORS),
+    "outlier_color": _OUTLIER_COLOR,
+    "marker": {"size": 9, "opacity": 0.85, "line_width": 0.5, "line_color": "#fff"},
+    "legend": {
+        "font_size": 9,
+        "bgcolor": "rgba(255,255,255,0.8)",
+        "bordercolor": "#ccc",
+        "borderwidth": 1,
+    },
+    "margins": {"l": 20, "r": 20, "t": 20, "b": 20},
+    "xaxis": {"title": "", "type": ""},
+    "yaxis": {"title": ""},
+}
+
+# Note: no "height" key — the cluster chart's height is computed from the number
+# of gene-overlap clusters, so it must stay dynamic unless a config explicitly
+# overrides it.  No xaxis.title either — it carries the dose unit and is built
+# per render (f"BMD ({dose_unit})").
+CLUSTER_STYLE_DEFAULTS: dict = {
+    "width": 1000,
+    "paper_bgcolor": "#ffffff",
+    "plot_bgcolor": "#fafafa",
+    "gridcolor": "#e8e8e8",
+    "palette": list(_CLUSTER_COLORS),
+    "outlier_color": _OUTLIER_COLOR,
+    "marker": {"opacity": 0.8, "line_width": 0.5, "line_color": "#fff"},
+    "legend": {"font_size": 12},
+    "margins": {"l": 80, "r": 30, "t": 90, "b": 60},
+    "xaxis": {"type": "log"},
+    "yaxis": {"title": "Gene-Overlap Cluster"},
+}
+
+UMAP_CAPTION_TEMPLATE = (
+    "GO Biological Process categories from the {organ_title} ({sex_title}) "
+    "gene expression analysis projected onto a pre-computed UMAP embedding "
+    "of GO BP terms. Points are colored by HDBSCAN semantic cluster."
+)
+CLUSTER_CAPTION_TEMPLATE = (
+    "GO Biological Process categories from the {organ_title} ({sex_title}) "
+    "analysis plotted by BMD value (x-axis, log scale) against hierarchical "
+    "gene-overlap cluster assignment (y-axis). Marker size reflects the number "
+    "of genes with BMD values in each category. Points are colored by UMAP "
+    "semantic cluster (same palette as the semantic map above). Categories "
+    "are clustered on the y-axis by Jaccard similarity of their gene sets."
+)
+
+# Per-type SVG id-namespacing prefix (keeps umap/cluster output byte-identical:
+# the pre-feature code used "u-"/"c-").  Unknown types fall back to their full
+# name, which is still unique across types.
+_SVG_PREFIX: dict[str, str] = {"umap": "u", "cluster": "c"}
+
+
+def _compute_gene_overlap_clusters(gene_sets: list[dict]) -> dict[str, int]:
+    """
+    Gene-overlap clustering of GO categories (same logic as the
+    /api/genomics-clusters endpoint): agglomerative clustering on pairwise
+    Jaccard distance of gene sets, threshold 0.7.  Returns ``go_id → cluster_id``
+    (outliers / empty gene sets get -1).  Extracted verbatim from the old inline
+    block so the cluster figure builder and the enrichment summary share one
+    deterministic assignment.
+    """
+    from scipy.cluster.hierarchy import linkage as _linkage, fcluster as _fcluster
+    from scipy.spatial.distance import squareform as _squareform
+
+    parsed_cats = []
+    for gs in gene_sets:
+        genes_str = gs.get("genes", "")
+        gene_set = set(g.strip().lower() for g in genes_str.split(";") if g.strip())
+        parsed_cats.append({"go_id": gs["go_id"], "genes": gene_set})
+
+    valid_cats = [p for p in parsed_cats if len(p["genes"]) > 0]
+
+    if len(valid_cats) < 3:
+        return {p["go_id"]: 0 for p in parsed_cats}
+
+    nv = len(valid_cats)
+    dm = np.zeros((nv, nv))
+    for i in range(nv):
+        for j in range(i + 1, nv):
+            a, b = valid_cats[i]["genes"], valid_cats[j]["genes"]
+            inter = len(a & b)
+            union = len(a | b)
+            dm[i, j] = dm[j, i] = 1.0 - (inter / union) if union > 0 else 1.0
+    Z = _linkage(_squareform(dm), method="average")
+    labels = _fcluster(Z, t=0.7, criterion="distance")
+    clusters: dict[str, int] = {}
+    for i, v in enumerate(valid_cats):
+        clusters[v["go_id"]] = int(labels[i]) - 1
+    for p in parsed_cats:
+        if p["go_id"] not in clusters:
+            clusters[p["go_id"]] = -1
+    return clusters
+
+
+# ---------------------------------------------------------------------------
+# Code-registered figure builders (contract C4)
+# ---------------------------------------------------------------------------
+# Each returns a plotly go.Figure; rasterization + SVG-ID namespacing happen
+# once in the dispatcher (render_chart_images).  Every styled literal now reads
+# from the resolved ``style`` dict with the today-value as the fallback, so with
+# no config (style == that type's *_STYLE_DEFAULTS) the figure is unchanged.
+
+
+def build_umap_figure(
     gene_sets: list[dict],
+    *,
     organ: str,
     sex: str,
     dose_unit: str = "mg/kg",
+    style: dict | None = None,
     clusters: dict | None = None,
-    gene_dir: dict[str, str] | None = None,
-) -> dict:
-    """
-    Render UMAP scatter and cluster scatter charts as base64 PNG images.
-
-    Pure function (no HTTP) so it can be called from both the API endpoint
-    and the PDF export pipeline.  Builds two Plotly figures — one UMAP
-    semantic map and one BMD×cluster scatter — renders them to PNG via
-    kaleido, and returns base64-encoded strings with captions.
-
-    Args:
-        gene_sets:  List of gene set dicts, each with go_id, go_term, bmd,
-                    n_genes_with_bmd, direction, genes (semicolon-separated).
-        organ:      Organ name (e.g., "liver").
-        sex:        Sex (e.g., "male").
-        dose_unit:  Dose unit for axis labels (default "mg/kg").
-        clusters:   Optional pre-computed {go_id: cluster_id} mapping.
-                    If None, gene-overlap clusters are computed inline.
-        gene_dir:   Optional all-caps symbol → "up"/"down" map.  Passed
-                    through to enrich_clusters() so cluster summary rows
-                    gain n_up/n_down counts.
-
-    Returns:
-        Dict with keys: umap_png, cluster_png, umap_caption, cluster_caption.
-        PNG values are base64-encoded strings (no data: prefix).
-    """
-    import base64
+    umap_ref: list[dict] | None = None,
+    umap_lookup: dict[str, dict] | None = None,
+) -> "object":
+    """UMAP semantic-map scatter (contract C4).  GO categories projected onto a
+    precomputed UMAP embedding, colored by HDBSCAN semantic cluster."""
     import plotly.graph_objects as go
 
-    # Ensure reference data is loaded
-    _load_umap_reference()
+    style = style or {}
+    ref_data = umap_ref if umap_ref is not None else _UMAP_REF
+    lookup = umap_lookup if umap_lookup is not None else _UMAP_LOOKUP
 
-    organ_title = organ.capitalize() if organ else "Unknown"
-    sex_title = sex.capitalize() if sex else ""
-
-    # ── UMAP scatter plot ──────────────────────────────────────────────
+    palette = style.get("palette")
+    outlier = style.get("outlier_color")
+    mk = style.get("marker") or {}
+    msize = mk.get("size", 9)
+    mopac = mk.get("opacity", 0.85)
+    mlw = mk.get("line_width", 0.5)
+    mlc = mk.get("line_color", "#fff")
 
     # Backdrop: all reference points (faded)
-    ref_x = [p["x"] for p in _UMAP_REF]
-    ref_y = [p["y"] for p in _UMAP_REF]
+    ref_x = [p["x"] for p in ref_data]
+    ref_y = [p["y"] for p in ref_data]
 
     fig_umap = go.Figure()
 
@@ -541,7 +657,7 @@ def render_chart_images(
     analysis_by_cluster: dict[int, list] = {}
     for gs in gene_sets:
         go_id = gs.get("go_id", "")
-        ref = _UMAP_LOOKUP.get(go_id)
+        ref = lookup.get(go_id)
         if not ref:
             continue
         cid = ref.get("cluster", -1)
@@ -555,14 +671,14 @@ def render_chart_images(
 
     for cid in sorted(analysis_by_cluster.keys()):
         pts = analysis_by_cluster[cid]
-        color = get_cluster_color(cid)
+        color = get_cluster_color(cid, palette=palette, outlier=outlier)
         name = f"Cluster {cid}" if cid >= 0 else "Outlier"
         fig_umap.add_trace(go.Scatter(
             x=[p["x"] for p in pts],
             y=[p["y"] for p in pts],
             mode="markers",
-            marker=dict(size=9, color=color, opacity=0.85,
-                        line=dict(width=0.5, color="#fff")),
+            marker=dict(size=msize, color=color, opacity=mopac,
+                        line=dict(width=mlw, color=mlc)),
             name=name,
             text=[f"{p['go_term']}<br>{p['go_id']}" for p in pts],
             hovertemplate="%{text}<extra></extra>",
@@ -577,71 +693,77 @@ def render_chart_images(
     pad = (hi - lo) * 0.05
     axis_range = [lo - pad, hi + pad]
 
+    mg = style.get("margins") or {}
+    grid = style.get("gridcolor", "#e8e8e8")
+    xa = style.get("xaxis") or {}
+    ya = style.get("yaxis") or {}
+    leg = style.get("legend") or {}
+    xtitle = (xa.get("title", "") or "").replace("${dose_unit}", dose_unit)
+    ytitle = (ya.get("title", "") or "").replace("${dose_unit}", dose_unit)
+
     fig_umap.update_layout(
         # Square aspect ratio — same pixel width and height
-        width=900, height=900,
-        margin=dict(l=20, r=20, t=20, b=20),
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#fafafa",
+        width=style.get("width", 900), height=style.get("height", 900),
+        margin=dict(l=mg.get("l", 20), r=mg.get("r", 20),
+                    t=mg.get("t", 20), b=mg.get("b", 20)),
+        paper_bgcolor=style.get("paper_bgcolor", "#ffffff"),
+        plot_bgcolor=style.get("plot_bgcolor", "#fafafa"),
         # No axis titles, tick labels, or tick marks — UMAP coordinates
         # are arbitrary and labels would just be noise.
         xaxis=dict(
-            showgrid=True, gridcolor="#e8e8e8", zeroline=False,
-            showticklabels=False, title="",
+            showgrid=True, gridcolor=grid, zeroline=False,
+            showticklabels=False, title=xtitle,
             range=axis_range, scaleanchor="y", scaleratio=1,
         ),
         yaxis=dict(
-            showgrid=True, gridcolor="#e8e8e8", zeroline=False,
-            showticklabels=False, title="",
+            showgrid=True, gridcolor=grid, zeroline=False,
+            showticklabels=False, title=ytitle,
             range=axis_range,
         ),
         hovermode="closest",
         # Legend inside the plot area, top-right corner with a
         # semi-transparent background so it doesn't obscure markers.
         legend=dict(
-            font=dict(size=9),
+            font=dict(size=leg.get("font_size", 9)),
             x=1, y=1,
             xanchor="right", yanchor="top",
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="#ccc", borderwidth=1,
+            bgcolor=leg.get("bgcolor", "rgba(255,255,255,0.8)"),
+            bordercolor=leg.get("bordercolor", "#ccc"),
+            borderwidth=leg.get("borderwidth", 1),
         ),
     )
+    return fig_umap
 
-    # ── Cluster scatter plot ───────────────────────────────────────────
+
+def build_cluster_figure(
+    gene_sets: list[dict],
+    *,
+    organ: str,
+    sex: str,
+    dose_unit: str = "mg/kg",
+    style: dict | None = None,
+    clusters: dict | None = None,
+    umap_ref: list[dict] | None = None,
+    umap_lookup: dict[str, dict] | None = None,
+) -> "object":
+    """BMD × gene-overlap-cluster scatter (contract C4).  Points colored by UMAP
+    semantic cluster (same palette as the UMAP map); y-axis ranks gene-overlap
+    clusters by minimum BMD; marker size reflects gene count."""
+    import plotly.graph_objects as go
+
+    style = style or {}
+    lookup = umap_lookup if umap_lookup is not None else _UMAP_LOOKUP
+
+    palette = style.get("palette")
+    outlier = style.get("outlier_color")
+    mk = style.get("marker") or {}
+    mopac = mk.get("opacity", 0.8)
+    mlw = mk.get("line_width", 0.5)
+    mlc = mk.get("line_color", "#fff")
 
     # Get or compute cluster assignments
     if not clusters:
-        # Compute inline (same logic as the /api/genomics-clusters endpoint)
-        from scipy.cluster.hierarchy import linkage as _linkage, fcluster as _fcluster
-        from scipy.spatial.distance import squareform as _squareform
-
-        parsed_cats = []
-        for gs in gene_sets:
-            genes_str = gs.get("genes", "")
-            gene_set = set(g.strip().lower() for g in genes_str.split(";") if g.strip())
-            parsed_cats.append({"go_id": gs["go_id"], "genes": gene_set})
-
-        valid_cats = [p for p in parsed_cats if len(p["genes"]) > 0]
-
-        if len(valid_cats) < 3:
-            clusters = {p["go_id"]: 0 for p in parsed_cats}
-        else:
-            nv = len(valid_cats)
-            dm = np.zeros((nv, nv))
-            for i in range(nv):
-                for j in range(i + 1, nv):
-                    a, b = valid_cats[i]["genes"], valid_cats[j]["genes"]
-                    inter = len(a & b)
-                    union = len(a | b)
-                    dm[i, j] = dm[j, i] = 1.0 - (inter / union) if union > 0 else 1.0
-            Z = _linkage(_squareform(dm), method="average")
-            labels = _fcluster(Z, t=0.7, criterion="distance")
-            clusters = {}
-            for i, v in enumerate(valid_cats):
-                clusters[v["go_id"]] = int(labels[i]) - 1
-            for p in parsed_cats:
-                if p["go_id"] not in clusters:
-                    clusters[p["go_id"]] = -1
+        clusters = _compute_gene_overlap_clusters(gene_sets)
 
     # Build flat list of plottable points with both gene-overlap cluster
     # (y-axis position) and UMAP semantic cluster (color — same palette
@@ -655,7 +777,7 @@ def render_chart_images(
             continue
         gene_cid = clusters.get(go_id, -1)
         n_genes = gs.get("n_genes_with_bmd", 0) or 0
-        ref = _UMAP_LOOKUP.get(go_id)
+        ref = lookup.get(go_id)
         umap_cid = ref.get("cluster", -1) if ref else -1
         all_points.append({
             "go_id": go_id,
@@ -726,15 +848,15 @@ def render_chart_images(
 
     for umap_cid in sorted_umap_cids:
         pts = by_umap_cluster[umap_cid]
-        color = get_cluster_color(umap_cid)
+        color = get_cluster_color(umap_cid, palette=palette, outlier=outlier)
         sizes = [max(6, min(30, p["n_genes"] * 0.5 + 5)) for p in pts]
 
         fig_cluster.add_trace(go.Scatter(
             x=[p["bmd"] for p in pts],
             y=[p["y_jittered"] for p in pts],
             mode="markers",
-            marker=dict(size=sizes, color=color, opacity=0.8,
-                        line=dict(width=0.5, color="#fff")),
+            marker=dict(size=sizes, color=color, opacity=mopac,
+                        line=dict(width=mlw, color=mlc)),
             name=str(umap_cid) if umap_cid >= 0 else "Outlier",
             text=[f"{p['go_term']}<br>BMD: {p['bmd']:.3g} {dose_unit}<br>"
                   f"Genes: {p['n_genes']}<br>Direction: {p['direction']}<br>"
@@ -769,21 +891,36 @@ def render_chart_images(
         tick_vals.append(y_pos)
         tick_text.append("Outlier" if gc == -1 else str(gc))
 
+    mg = style.get("margins") or {}
+    grid = style.get("gridcolor", "#e8e8e8")
+    xa = style.get("xaxis") or {}
+    ya = style.get("yaxis") or {}
+    leg = style.get("legend") or {}
+    xtitle = xa.get("title")
+    if xtitle is None:
+        xtitle = f"BMD ({dose_unit})"
+    else:
+        xtitle = xtitle.replace("${dose_unit}", dose_unit)
+    xtype = xa.get("type", "log")
+    ytitle = (ya.get("title", "Gene-Overlap Cluster") or "").replace("${dose_unit}", dose_unit)
+
     fig_cluster.update_layout(
-        width=1000, height=chart_height,
-        margin=dict(l=80, r=30, t=90, b=60),
-        paper_bgcolor="#ffffff",
-        plot_bgcolor="#fafafa",
-        xaxis=dict(title=f"BMD ({dose_unit})", type="log",
-                   showgrid=True, gridcolor="#e8e8e8"),
+        width=style.get("width", 1000),
+        height=style.get("height") or chart_height,
+        margin=dict(l=mg.get("l", 80), r=mg.get("r", 30),
+                    t=mg.get("t", 90), b=mg.get("b", 60)),
+        paper_bgcolor=style.get("paper_bgcolor", "#ffffff"),
+        plot_bgcolor=style.get("plot_bgcolor", "#fafafa"),
+        xaxis=dict(title=xtitle, type=xtype,
+                   showgrid=True, gridcolor=grid),
         yaxis=dict(
-            title="Gene-Overlap Cluster",
-            showgrid=True, gridcolor="#e8e8e8",
+            title=ytitle,
+            showgrid=True, gridcolor=grid,
             tickvals=tick_vals, ticktext=tick_text,
         ),
         hovermode="closest",
         legend=dict(
-            font=dict(size=12),
+            font=dict(size=leg.get("font_size", 12)),
             orientation="h",
             x=0.5, y=1.02,
             xanchor="center", yanchor="bottom",
@@ -801,65 +938,256 @@ def render_chart_images(
         showarrow=False,
         font=dict(size=13),
     )
+    return fig_cluster
 
-    # ── Render to PNG + SVG from the same figures ─────────────────────
-    # Both renders go through kaleido's export path over the identical
-    # figure objects — any divergence between the PDF (PNG) and the
-    # HTML in-app view (SVG) is limited to rasterization, never data.
-    # This is the architectural contract: one render, two output
-    # encodings chosen by the consumer.
-    umap_bytes = fig_umap.to_image(format="png", scale=2)
-    cluster_bytes = fig_cluster.to_image(format="png", scale=2)
 
-    # SVG output is utf-8 text; decode and namespace it so multiple
-    # charts can coexist in the same DOM without Plotly's auto-generated
-    # clip-path IDs (`clip0`, `clip1`, ...) colliding across <svg>
-    # instances.  Without this, the browser applies whichever clip-path
-    # was last defined to every SVG on the page.
-    umap_svg_raw = fig_umap.to_image(format="svg").decode("utf-8")
-    cluster_svg_raw = fig_cluster.to_image(format="svg").decode("utf-8")
-    svg_ns_suffix = f"{organ}-{sex}".lower().replace(" ", "_") or "chart"
-    umap_svg = _namespace_svg_ids(umap_svg_raw, f"u-{svg_ns_suffix}")
-    cluster_svg = _namespace_svg_ids(cluster_svg_raw, f"c-{svg_ns_suffix}")
+def build_generic_chart(
+    gene_sets: list[dict],
+    *,
+    organ: str,
+    sex: str,
+    dose_unit: str = "mg/kg",
+    style: dict | None = None,
+    spec: dict | None = None,
+    clusters: dict | None = None,
+    umap_ref: list[dict] | None = None,
+    umap_lookup: dict[str, dict] | None = None,
+) -> "object":
+    """
+    Generic data-driven figure builder (contract C4 + ``spec``).  Serves any
+    chart type declared purely in the document config's ``chart_types`` block —
+    a trace kind (scatter|bar|line) over named gene_set columns, optional color
+    grouping, size binding, sort/limit, and axes.  No per-chart Python.
 
-    umap_b64 = base64.b64encode(umap_bytes).decode()
-    cluster_b64 = base64.b64encode(cluster_bytes).decode()
+    ``spec`` keys: ``trace`` (scatter|bar|line), ``x``, ``y`` (column names),
+    optional ``color`` (one trace per distinct value), ``size`` (column → marker
+    size), ``sort`` ({by, dir}), ``limit`` (int), ``axes`` ({x:{title,type},
+    y:{title,type}}).  Visuals (palette, marker opacity, dims, bg, margins) come
+    from the resolved ``style``.
+    """
+    import plotly.graph_objects as go
 
-    umap_caption = (
-        f"GO Biological Process categories from the {organ_title} ({sex_title}) "
-        f"gene expression analysis projected onto a pre-computed UMAP embedding "
-        f"of GO BP terms. Points are colored by HDBSCAN semantic cluster."
-    )
-    cluster_caption = (
-        f"GO Biological Process categories from the {organ_title} ({sex_title}) "
-        f"analysis plotted by BMD value (x-axis, log scale) against hierarchical "
-        f"gene-overlap cluster assignment (y-axis). Marker size reflects the number "
-        f"of genes with BMD values in each category. Points are colored by UMAP "
-        f"semantic cluster (same palette as the semantic map above). Categories "
-        f"are clustered on the y-axis by Jaccard similarity of their gene sets."
-    )
+    style = style or {}
+    spec = spec or {}
+    trace_kind = spec.get("trace", "scatter")
+    xcol = spec.get("x")
+    ycol = spec.get("y")
+    color_col = spec.get("color")
+    size_col = spec.get("size")
 
-    # --- Cluster biology summary via Enrichr ---
-    # Delegate to the shared enrich_clusters() function which pools genes
-    # per cluster, calls Enrichr, and falls back to internal GO terms.
-    # The `clusters` variable (go_id → cluster_id) is already available
-    # from the clustering step above.
-    cluster_summary = enrich_clusters(gene_sets, clusters, gene_dir=gene_dir)
+    rows = [gs for gs in gene_sets
+            if gs.get(xcol) is not None and gs.get(ycol) is not None]
 
-    return {
-        "umap_png": umap_b64,
-        "cluster_png": cluster_b64,
-        # SVG bytes for the HTML inline render (same figures as PNG).
-        # Stored as utf-8 text rather than base64 because we inject them
-        # directly into the DOM via innerHTML.  The caller can strip
-        # these when serializing to keep payloads lean for consumers
-        # that only need the rasters.
-        "umap_svg": umap_svg,
-        "cluster_svg": cluster_svg,
-        "umap_caption": umap_caption,
-        "cluster_caption": cluster_caption,
-        "cluster_summary": cluster_summary,
+    sort = spec.get("sort") or {}
+    if sort.get("by"):
+        by = sort["by"]
+        rev = (sort.get("dir", "asc") == "desc")
+        rows = sorted(rows, key=lambda r: (r.get(by) is None, r.get(by)), reverse=rev)
+
+    limit = spec.get("limit")
+    if limit:
+        rows = rows[:int(limit)]
+
+    groups: dict = {}
+    if color_col:
+        for r in rows:
+            groups.setdefault(r.get(color_col), []).append(r)
+    else:
+        groups = {None: rows}
+
+    palette = style.get("palette") or _CLUSTER_COLORS
+    mk = style.get("marker") or {}
+    mopac = mk.get("opacity", 0.85)
+
+    fig = go.Figure()
+    trace_cls = go.Bar if trace_kind == "bar" else go.Scatter
+    for gi, (gname, grows) in enumerate(groups.items()):
+        xs = [r.get(xcol) for r in grows]
+        ys = [r.get(ycol) for r in grows]
+        color = palette[gi % len(palette)]
+        kwargs: dict = {"x": xs, "y": ys,
+                        "name": "" if gname is None else str(gname)}
+        if trace_kind == "bar":
+            kwargs["marker"] = dict(color=color, opacity=mopac)
+        else:
+            kwargs["mode"] = "lines" if trace_kind == "line" else "markers"
+            marker = dict(color=color, opacity=mopac)
+            if mk.get("size") is not None:
+                marker["size"] = mk["size"]
+            if size_col:
+                marker["size"] = [r.get(size_col) or 6 for r in grows]
+            kwargs["marker"] = marker
+        fig.add_trace(trace_cls(**kwargs))
+
+    axes = spec.get("axes") or {}
+    grid = style.get("gridcolor", "#e8e8e8")
+    xa = {**(axes.get("x") or {}), **(style.get("xaxis") or {})}
+    ya = {**(axes.get("y") or {}), **(style.get("yaxis") or {})}
+    xaxis: dict = {"showgrid": True, "gridcolor": grid}
+    if xa.get("title"):
+        xaxis["title"] = xa["title"].replace("${dose_unit}", dose_unit)
+    if xa.get("type"):
+        xaxis["type"] = xa["type"]
+    yaxis: dict = {"showgrid": True, "gridcolor": grid}
+    if ya.get("title"):
+        yaxis["title"] = ya["title"].replace("${dose_unit}", dose_unit)
+    if ya.get("type"):
+        yaxis["type"] = ya["type"]
+
+    layout: dict = {
+        "width": style.get("width", 1000),
+        "height": style.get("height", 500),
+        "paper_bgcolor": style.get("paper_bgcolor", "#ffffff"),
+        "plot_bgcolor": style.get("plot_bgcolor", "#fafafa"),
+        "xaxis": xaxis,
+        "yaxis": yaxis,
+        "hovermode": "closest",
     }
+    mg = style.get("margins")
+    if mg:
+        layout["margin"] = dict(l=mg.get("l", 80), r=mg.get("r", 30),
+                                t=mg.get("t", 90), b=mg.get("b", 60))
+    fig.update_layout(**layout)
+    return fig
+
+
+def render_chart_images(
+    gene_sets: list[dict],
+    organ: str,
+    sex: str,
+    dose_unit: str = "mg/kg",
+    clusters: dict | None = None,
+    gene_dir: dict[str, str] | None = None,
+    *,
+    chart_style_cfg: dict | None = None,
+    registry: dict | None = None,
+) -> dict:
+    """
+    Render every chart type in ``registry`` for one (organ, sex) as base64 PNG
+    + namespaced SVG, returning a flat dict keyed by type (contract C5).
+
+    Pure function (no HTTP) so it can be called from both the API endpoint and
+    the PDF export pipeline.  For each chart type it resolves the per-instance
+    style (chart_style.resolve_chart_style — built-in ← defaults ← types ←
+    instances), builds the figure (a registered code builder for umap/cluster, or
+    the generic data-driven builder), and rasterizes via the single shared
+    kaleido + SVG-ID-namespacing block.
+
+    Args:
+        gene_sets:  List of gene set dicts (go_id, go_term, bmd,
+                    n_genes_with_bmd, direction, genes, …).
+        organ, sex: identify the chart instance (→ instance key, C1).
+        dose_unit:  Dose unit for axis labels / captions (default "mg/kg").
+        clusters:   Optional pre-computed {go_id: cluster_id}.  If None and a
+                    cluster chart is present, computed inline (and shared with
+                    the enrichment summary).
+        gene_dir:   Optional all-caps symbol → "up"/"down" map for cluster
+                    summary n_up/n_down counts.
+        chart_style_cfg: the document config's ``chart_style`` block (None ⇒
+                    built-in defaults only ⇒ byte-identical to the old render).
+        registry:   the effective chart-type registry (chart_registry.
+                    build_registry(...)).  None ⇒ the built-in umap+cluster set.
+
+    Returns:
+        Dict with generic keys ``f"{type}_png"``/``f"{type}_svg"``/
+        ``f"{type}_caption"`` for every type, ``types`` (the list of type names
+        present), and — when a cluster chart is present — ``cluster_summary``.
+        For umap/cluster with no config these keys/values match the old output.
+    """
+    import base64
+
+    # Ensure reference data is loaded
+    _load_umap_reference()
+
+    organ_title = organ.capitalize() if organ else "Unknown"
+    sex_title = sex.capitalize() if sex else ""
+
+    if registry is None:
+        registry = chart_registry.default_registry()
+    chart_types = list(registry.values())
+    type_names = [ct.name for ct in chart_types]
+
+    # Gene-overlap clusters drive the cluster chart's y-axis AND its enrichment
+    # summary — compute once, share both, so they can never disagree.
+    if "cluster" in type_names and not clusters:
+        clusters = _compute_gene_overlap_clusters(gene_sets)
+
+    svg_ns_suffix = f"{organ}-{sex}".lower().replace(" ", "_") or "chart"
+    result: dict = {}
+
+    for ct in chart_types:
+        style = chart_style.resolve_chart_style(
+            chart_style_cfg, ct.name, organ, sex, ct.style_defaults
+        )
+        bad = chart_style.unknown_style_keys(style)
+        if bad:
+            logger.warning(
+                "chart_style: unknown keys for %s (%s/%s): %s",
+                ct.name, organ, sex, bad,
+            )
+
+        if ct.has_builder:
+            fig = ct.builder(
+                gene_sets, organ=organ, sex=sex, dose_unit=dose_unit,
+                style=style, clusters=clusters,
+                umap_ref=_UMAP_REF, umap_lookup=_UMAP_LOOKUP,
+            )
+        else:
+            fig = build_generic_chart(
+                gene_sets, organ=organ, sex=sex, dose_unit=dose_unit,
+                style=style, spec=ct.spec, clusters=clusters,
+                umap_ref=_UMAP_REF, umap_lookup=_UMAP_LOOKUP,
+            )
+
+        # ── Render to PNG + SVG from the same figure ──────────────────────
+        # One render, two encodings: any divergence between the PDF (PNG) and
+        # the in-app view (SVG) is limited to rasterization, never data.  SVG
+        # IDs are namespaced so multiple charts coexist in one DOM without
+        # Plotly's auto-generated clip-path IDs colliding across <svg>s.
+        png_bytes = fig.to_image(format="png", scale=2)
+        svg_raw = fig.to_image(format="svg").decode("utf-8")
+        prefix = _SVG_PREFIX.get(ct.name, ct.name)
+        svg = _namespace_svg_ids(svg_raw, f"{prefix}-{svg_ns_suffix}")
+
+        template = style.get("caption_template") or ct.caption_template
+        caption = (
+            template.format(organ_title=organ_title, sex_title=sex_title)
+            .replace("${dose_unit}", dose_unit)
+            if template else ""
+        )
+
+        result[f"{ct.name}_png"] = base64.b64encode(png_bytes).decode()
+        result[f"{ct.name}_svg"] = svg
+        result[f"{ct.name}_caption"] = caption
+
+    result["types"] = type_names
+
+    # --- Cluster biology summary via Enrichr (cluster chart only) ---
+    # Shares the `clusters` assignment built above so the chart and the summary
+    # never disagree.
+    if "cluster" in type_names:
+        result["cluster_summary"] = enrich_clusters(
+            gene_sets, clusters or {}, gene_dir=gene_dir
+        )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Late binding: attach the real code builders to the registry's built-in types.
+# Done here (not in chart_registry) to break the import cycle — chart_registry
+# imports nothing from the renderer, the renderer fills in the callables.
+# ---------------------------------------------------------------------------
+chart_registry.register_builder(
+    "umap", build_umap_figure,
+    style_defaults=UMAP_STYLE_DEFAULTS,
+    caption_template=UMAP_CAPTION_TEMPLATE,
+)
+chart_registry.register_builder(
+    "cluster", build_cluster_figure,
+    style_defaults=CLUSTER_STYLE_DEFAULTS,
+    caption_template=CLUSTER_CAPTION_TEMPLATE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -883,10 +1211,31 @@ def cache_has_svg(chart_images) -> bool:
     return isinstance(first, dict) and "umap_svg" in first
 
 
+def _resolve_registry(chart_types: dict | None) -> dict:
+    """
+    Coerce the ``chart_types`` argument into an effective chart-type registry.
+
+    Accepts either:
+      - None / empty            → the built-in umap+cluster registry;
+      - {name: ChartType}       → a pre-built registry, passed through;
+      - {name: spec dict}       → raw YAML data-type specs, validated and built.
+    """
+    if not chart_types:
+        return chart_registry.default_registry()
+    if all(isinstance(v, chart_registry.ChartType) for v in chart_types.values()):
+        # Already-built registry: ensure the built-ins are present too.
+        merged = chart_registry.default_registry()
+        merged.update(chart_types)
+        return merged
+    return chart_registry.build_registry(chart_types)
+
+
 def render_chart_images_for_sections(
     genomics_sections: dict,
     bmd_stat: str = "median",
     dose_unit: str = "mg/kg",
+    chart_style_cfg: dict | None = None,
+    chart_types: dict | None = None,
 ) -> list[dict]:
     """
     Render one chart pair (UMAP + cluster scatter + enrichment) per
@@ -901,6 +1250,13 @@ def render_chart_images_for_sections(
         bmd_stat:          Which BMD statistic's gene-set list drives
                            the charts (same stat as the PDF tables).
         dose_unit:         Passed through for axis labels.
+        chart_style_cfg:   the document config's ``chart_style`` block
+                           (contract C6).  None ⇒ built-in defaults ⇒
+                           today's render.
+        chart_types:       the data-driven ``chart_types`` declarations
+                           (name → spec dict OR ChartType), folded into the
+                           effective registry (contract C6).  None ⇒ just the
+                           built-in umap+cluster types.
 
     Returns:
         List of per-entry dicts as produced by render_chart_images,
@@ -912,6 +1268,12 @@ def render_chart_images_for_sections(
     run_in_executor themselves.  A single-session render (4 pairs) is
     fast enough to do inline on a page load.
     """
+    # Build the effective registry ONCE for the whole batch.  chart_types may
+    # arrive as raw YAML specs (name → dict) or as already-built ChartType
+    # objects; build_registry handles the former, and a dict of ChartType is
+    # passed through as-is.
+    registry = _resolve_registry(chart_types)
+
     out: list[dict] = []
     for key, gen_data in genomics_sections.items():
         # Prefer the full chart set (all passing GO terms) over the top-20 table
@@ -945,6 +1307,8 @@ def render_chart_images_for_sections(
                 sex=sex,
                 dose_unit=dose_unit,
                 gene_dir=section_gene_dir or None,
+                chart_style_cfg=chart_style_cfg,
+                registry=registry,
             )
             result["label"] = f"{organ_title} ({sex_title})"
             result["organ"] = organ
