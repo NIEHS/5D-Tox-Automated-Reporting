@@ -227,22 +227,102 @@ def _instantiate_node(
 # Public API
 # ---------------------------------------------------------------------------
 
+def _load_raw(name: str):
+    """Parse a template YAML file by name; return the raw deserialized value
+    (a list for legacy scaffolds, or a mapping with a ``document:`` key for the
+    full config).  Raises FileNotFoundError if absent."""
+    path = TEMPLATES_DIR / f"{name}.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"no template named {name!r} at {path}")
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
 def load_template(name: str) -> list[dict]:
     """
     Load a template by name (without extension) from TEMPLATES_DIR.
 
-    Returns the raw list of node-entry dicts.  Raises FileNotFoundError if the
-    template file does not exist, or ValueError if the file is not a YAML list.
+    Returns the raw list of node-entry dicts (the *document* structure).  The
+    file may be EITHER:
+
+      - a bare YAML list of node entries (legacy scaffolds, unit-test fixtures), or
+      - a mapping with a ``document:`` key holding that list, alongside optional
+        sibling blocks (``chart_style``, ``chart_types``) read by
+        :func:`load_chart_style` / :func:`load_chart_types`.
+
+    Either way this returns the document LIST, so ``instantiate``, ``build_tree``,
+    and the golden-tree test are unaffected by the sibling blocks.  Raises
+    ValueError if the shape is neither.
     """
-    path = TEMPLATES_DIR / f"{name}.yaml"
-    if not path.exists():
-        raise FileNotFoundError(f"no template named {name!r} at {path}")
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
+    data = _load_raw(name)
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and "document" in data:
+        doc = data["document"]
+        if not isinstance(doc, list):
+            raise ValueError(
+                f"template {name!r}: 'document' must be a list of node entries, "
+                f"got {type(doc).__name__}"
+            )
+        return doc
+    raise ValueError(
+        f"template {name!r} must be a YAML list of node entries, or a mapping "
+        f"with a 'document' key, got {type(data).__name__}"
+    )
+
+
+def load_chart_style(name: str) -> dict:
+    """
+    Load the ``chart_style`` block from a template (the three-layer style config
+    consumed by chart_style.resolve_chart_style).  Returns ``{}`` when the file
+    is a bare list or has no ``chart_style`` key — so the no-config render path
+    (built-in defaults only) is unchanged.
+
+    Validates SHAPE only (loudly): ``chart_style`` must be a mapping whose
+    ``defaults``/``types``/``instances`` sub-blocks, when present, are mappings.
+    Unknown *style keys* are not fatal here — they are reported per-instance at
+    render time (genomics_viz logs chart_style.unknown_style_keys).
+    """
+    data = _load_raw(name)
+    if not isinstance(data, dict):
+        return {}
+    cfg = data.get("chart_style")
+    if cfg is None:
+        return {}
+    if not isinstance(cfg, dict):
         raise ValueError(
-            f"template {name!r} must be a YAML list of node entries, got {type(data).__name__}"
+            f"template {name!r}: 'chart_style' must be a mapping, "
+            f"got {type(cfg).__name__}"
         )
-    return data
+    for sub in ("defaults", "types", "instances"):
+        if sub in cfg and not isinstance(cfg[sub], dict):
+            raise ValueError(
+                f"template {name!r}: chart_style.{sub} must be a mapping, "
+                f"got {type(cfg[sub]).__name__}"
+            )
+    return cfg
+
+
+def load_chart_types(name: str):
+    """
+    Load the ``chart_types`` block and build the effective chart-type registry.
+
+    Returns ``chart_registry.build_registry(raw)`` — the built-in code types
+    (umap, cluster) merged with the data-driven types declared in the template.
+    Each declared spec is validated LOUDLY by build_registry (a name colliding
+    with a code type, a non-mapping spec, or a missing trace/x/y raises).  A bare
+    list or a missing ``chart_types`` key yields just the built-ins (today's
+    behaviour).
+    """
+    import chart_registry
+
+    data = _load_raw(name)
+    raw = data.get("chart_types") if isinstance(data, dict) else None
+    if raw is not None and not isinstance(raw, dict):
+        raise ValueError(
+            f"template {name!r}: 'chart_types' must be a mapping of "
+            f"name → spec, got {type(raw).__name__}"
+        )
+    return chart_registry.build_registry(raw)
 
 
 def instantiate(template: list[dict]) -> list[DocNode]:

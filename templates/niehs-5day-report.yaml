@@ -20,7 +20,16 @@
 #
 # The golden-tree test (tests/unit/test_document_template.py) asserts that
 # instantiating this file reproduces the frozen DOCUMENT_TREE byte-for-byte.
+#
+# This file is a MAPPING with three top-level keys:
+#   document:    the region containers + node entries (the document structure);
+#   chart_style: optional per-instance chart styling (see chart_style.py);
+#   chart_types: optional data-driven chart-type declarations (chart_registry).
+# load_template() returns the `document` list unchanged, so the golden tree is
+# unaffected by the chart blocks.  A bare list (no `document:` key) is still
+# accepted for legacy/test scaffolds.
 
+document:
 - region: front
   children:
   - id: cover
@@ -280,3 +289,57 @@
   - id: appendix-f
     type: appendix
     title: Appendix F. Supplemental Data
+
+
+# ---------------------------------------------------------------------------
+# chart_style — per-instance genomics-chart styling (optional)
+# ---------------------------------------------------------------------------
+# Four-layer deep-merge (chart_style.py): built-in defaults <- defaults <-
+# types[type] <- instances[<organ>|<sex>|<type>].  Each layer is partial — it
+# overrides only the keys it names; a nested leaf (e.g. marker.size) can be set
+# without restating its siblings.  Lists (palette) replace wholesale.  Omit this
+# whole block and the charts render exactly as the built-in defaults (the
+# pre-feature look).
+#
+# Uncomment / edit to restyle.  The canonical key set is documented in
+# chart_style.STYLE_KEY_SCHEMA; an unknown key is logged (typo catcher), not
+# fatal.
+#
+# chart_style:
+#   defaults:                       # applied to EVERY chart
+#     paper_bgcolor: "#ffffff"
+#   types:                          # applied to every instance of one type
+#     cluster:
+#       marker: { opacity: 0.9 }
+#   instances:                      # applied to ONE chart: "<organ>|<sex>|<type>"
+#     liver|male|umap:
+#       marker: { size: 14 }
+
+# ---------------------------------------------------------------------------
+# chart_types — data-driven chart types (optional)
+# ---------------------------------------------------------------------------
+# Declare a NEW chart type entirely in config: a trace kind (scatter|bar|line)
+# over named gene_set columns, with optional color grouping / size binding /
+# sort / limit / axes.  No Python.  Required: trace, x, y.  The two built-in
+# code types (umap, cluster) may NOT be redeclared here (loud error) — they
+# need bespoke Python and stay golden-stable.
+#
+# Available gene_set columns: bmd, bmdl, direction, fishers_p, go_id, go_term,
+# n_down, n_genes, n_genes_with_bmd, n_up, rank.
+#
+# Substitutions: ${dose_unit} in axis titles, {organ_title}/{sex_title} in
+# captions.
+#
+# chart_types:
+#   bmd-bar:
+#     trace: bar
+#     x: go_term
+#     y: bmd
+#     color: direction          # one trace per distinct value
+#     sort: { by: bmd, dir: asc }
+#     limit: 20
+#     axes:
+#       x: { title: "GO Term", type: category }
+#       y: { title: "BMD (${dose_unit})", type: log }
+#     layout: { width: 1000, height: 500 }
+#     caption: "BMD per GO term — {organ_title} ({sex_title})."
