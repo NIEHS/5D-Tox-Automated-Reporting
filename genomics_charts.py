@@ -85,10 +85,17 @@ def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
     Attach per-(organ, sex) chart images to the matching gene_set entries.
 
     `charts_cache` is the `_cache_charts_*.json` list: one entry per (organ,
-    sex) carrying base64-PNG fields umap_png / cluster_png (+ captions).  We
-    index it by (organ, sex) and hang the images on the gene_set genomics entry
-    as entry["charts"], so genomics_content_plan emits chart content items and
+    sex) carrying base64-PNG fields `<type>_png` / `<type>_caption` for each
+    chart type present (plus a `types` list naming them).  We index it by
+    (organ, sex) and hang the images on the gene_set genomics entry as
+    entry["charts"], so genomics_content_plan emits chart content items and
     build_overleaf_bundle writes the PNGs into figures/.
+
+    The chart types are whatever the renderer produced (umap + cluster, plus any
+    data-driven types declared in the document config) — read from the cache
+    entry's `types` list so a new chart type rides through to both renderers
+    with no edit here.  Pre-feature caches lack `types`; they fall back to the
+    original umap/cluster pair.
 
     Each chart carries its OWN deterministic `filename`; both the renderer
     (the \\includegraphics path) and the bundler (the file it writes) read that
@@ -124,7 +131,13 @@ def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
             continue
         slug = f"{organ}-{sex}".replace(" ", "-")
         charts = []
-        for key in ("umap", "cluster"):
+        # Which chart types this cache entry carries.  Prefer the explicit
+        # `types` list written by render_chart_images (contract C5); fall back to
+        # the original umap/cluster pair for caches that pre-date it.
+        chart_keys = cache_entry.get("types")
+        if not isinstance(chart_keys, list) or not chart_keys:
+            chart_keys = ["umap", "cluster"]
+        for key in chart_keys:
             png = cache_entry.get(f"{key}_png")
             if not png:
                 continue
