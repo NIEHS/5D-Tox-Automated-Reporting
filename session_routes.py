@@ -448,9 +448,16 @@ async def api_session_load(dtxsid: str):
                 first_entry = next(iter(genomics_cache.values()), {})
                 stats = list((first_entry.get("gene_sets_by_stat") or {}).keys())
                 bmd_stat = stats[0] if stats else "median"
+                # Chart styling + data-driven types come from the same active
+                # template as the document structure (WP-6), so this migration
+                # render matches the pool_orchestrator render.
+                from document_tree import ACTIVE_TEMPLATE
+                from document_template import load_chart_style, load_chart_types
                 rerendered = render_chart_images_for_sections(
                     genomics_sections=genomics_cache,
                     bmd_stat=bmd_stat,
+                    chart_style_cfg=load_chart_style(ACTIVE_TEMPLATE),
+                    chart_types=load_chart_types(ACTIVE_TEMPLATE),
                 )
                 if rerendered:
                     chart_images = rerendered

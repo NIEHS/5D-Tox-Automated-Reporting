@@ -219,9 +219,20 @@ async def serve_ui():
     # this adds no per-request cost beyond string interpolation.
     # Placed right before </head> so it's available when state.js and
     # layout.js execute.
+    # Inject the document tree plus the chart styling config and chart-type
+    # registry as globals before any other scripts run.  All three are static
+    # (computed at module load), so this adds no per-request cost beyond string
+    # interpolation.  The JS chart surfaces read __CHART_STYLE__/__CHART_REGISTRY__
+    # to resolve the IDENTICAL effective style the Python export path uses (so the
+    # interactive browser view and the PDF can't drift); when absent (stale page)
+    # the JS falls back to its literals.
     tree_json = json.dumps(_SERIALIZED_TREE)
+    chart_style_json = json.dumps(_CHART_STYLE_CFG)
+    chart_registry_json = json.dumps(_CHART_REGISTRY_PAYLOAD)
     tree_script = (
-        f'<script>window.__DOCUMENT_TREE__ = {tree_json};</script>\n'
+        f'<script>window.__DOCUMENT_TREE__ = {tree_json};'
+        f'window.__CHART_STYLE__ = {chart_style_json};'
+        f'window.__CHART_REGISTRY__ = {chart_registry_json};</script>\n'
     )
     html = html.replace('</head>', tree_script + '</head>')
 
@@ -246,6 +257,18 @@ compute_table_numbers()
 # reads capabilities straight off the served tree instead of duplicating the
 # type→capability mapping in JavaScript.
 _SERIALIZED_TREE = annotate_capabilities(serialize_tree())
+
+# Chart styling + chart-type registry, loaded once from the SAME active template
+# as the document tree (contract C8).  __CHART_STYLE__ is the raw chart_style
+# block; __CHART_REGISTRY__ is one entry per chart type ({name, type, spec?}).
+# Both are injected into the served HTML so the JS chart surfaces resolve the
+# same effective style the Python export path uses.
+from document_tree import ACTIVE_TEMPLATE
+from document_template import load_chart_style, load_chart_types
+from chart_registry import registry_payload
+
+_CHART_STYLE_CFG = load_chart_style(ACTIVE_TEMPLATE)
+_CHART_REGISTRY_PAYLOAD = registry_payload(load_chart_types(ACTIVE_TEMPLATE))
 
 
 @app.get("/api/document-tree")

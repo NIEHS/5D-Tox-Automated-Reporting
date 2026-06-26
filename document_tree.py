@@ -46,7 +46,12 @@ from document_template import build_tree
 # A deliberate fail-fast — a missing/malformed template breaks import loudly
 # rather than yielding a half-built report — but importing document_tree does
 # therefore require the template file to be present and valid.
-DOCUMENT_TREE: list[DocNode] = build_tree("niehs-5day-report")
+#
+# The active template name — single source for both the document STRUCTURE
+# (build_tree below) and the chart config (chart_style/chart_types) loaded by
+# the chart pipeline, so structure and chart styling always come from one file.
+ACTIVE_TEMPLATE = "niehs-5day-report"
+DOCUMENT_TREE: list[DocNode] = build_tree(ACTIVE_TEMPLATE)
 
 
 # ---------------------------------------------------------------------------

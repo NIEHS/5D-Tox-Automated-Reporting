@@ -437,6 +437,18 @@ def _build_bmd_summary(ctx):
     ctx.apical_bmd_summary_bmds = apical_bmd_summary_bmds
 
 
+def _chart_types_fingerprint(registry: dict) -> dict:
+    """
+    A JSON-stable fingerprint of a chart-type registry for the charts cache key.
+
+    The registry holds ChartType objects (not JSON-serializable); we key on each
+    type's NAME + data spec — the only parts that change the rendered output.
+    Code types (umap/cluster) contribute just their name; a data-driven type
+    contributes its spec, so editing a chart_types declaration re-renders.
+    """
+    return {name: getattr(ct, "spec", {}) for name, ct in sorted(registry.items())}
+
+
 async def _build_charts(ctx):
     """
     Layer 2.5 — Charts + Enrichr (depends on genomics output).
@@ -457,6 +469,16 @@ async def _build_charts(ctx):
 
     chart_images = []
     if genomics_sections:
+        # Chart styling + data-driven chart types are authored in the SAME
+        # document template that drives structure (chart_style / chart_types
+        # blocks).  Load the raw blocks (for the cache key) and the built
+        # registry (for rendering).  Absent config ⇒ {} / built-in types ⇒
+        # today's render.
+        from document_tree import ACTIVE_TEMPLATE
+        from document_template import load_chart_style, load_chart_types
+        chart_style_cfg = load_chart_style(ACTIVE_TEMPLATE)
+        chart_types_reg = load_chart_types(ACTIVE_TEMPLATE)
+
         # Bump _CHARTS_CACHE_SCHEMA_VERSION (defined near the other
         # cache schema constants) when the chart-rendering algorithm
         # itself changes — e.g. when the jitter formula is fixed.
@@ -464,12 +486,16 @@ async def _build_charts(ctx):
         # changes to which gene sets exist propagate; mixing in the
         # charts schema version on top of that lets us invalidate
         # *only* the chart SVGs/PNGs without forcing the (expensive)
-        # genomics + LLM narrative pipeline to re-run.
+        # genomics + LLM narrative pipeline to re-run.  The chart
+        # style/type config is folded in too, so editing the template's
+        # chart blocks re-renders the charts without touching genomics.
         charts_hash = hashlib.sha256(
             json.dumps({
                 "genomics_hash": genomics_hash,
                 "charts_schema": _CHARTS_CACHE_SCHEMA_VERSION,
-            }, sort_keys=True).encode()
+                "chart_style": chart_style_cfg,
+                "chart_types": _chart_types_fingerprint(chart_types_reg),
+            }, sort_keys=True, default=str).encode()
         ).hexdigest()[:16]
         charts_cached = _load_cache(dtxsid, "charts", charts_hash)
 
@@ -499,6 +525,8 @@ async def _build_charts(ctx):
                     genomics_sections=genomics_sections,
                     bmd_stat=bmd_stat,
                     dose_unit=dose_unit,
+                    chart_style_cfg=chart_style_cfg,
+                    chart_types=chart_types_reg,
                 ),
             )
             if chart_images:
