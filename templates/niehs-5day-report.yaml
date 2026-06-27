@@ -373,16 +373,16 @@ document:
 # Substitutions: ${dose_unit} in axis titles, {organ_title}/{sex_title} in
 # captions.
 #
-# chart_types:
-#   bmd-bar:
-#     trace: bar
-#     x: go_term
-#     y: bmd
-#     color: direction          # one trace per distinct value
-#     sort: { by: bmd, dir: asc }
-#     limit: 20
-#     axes:
-#       x: { title: "GO Term", type: category }
-#       y: { title: "BMD (${dose_unit})", type: log }
-#     layout: { width: 1000, height: 500 }
-#     caption: "BMD per GO term — {organ_title} ({sex_title})."
+chart_types:
+  bmd-bar:
+    trace: bar
+    x: go_term
+    y: bmd
+    color: direction          # one trace per distinct value
+    sort: { by: bmd, dir: asc }
+    limit: 20
+    axes:
+      x: { title: "GO Term", type: category }
+      y: { title: "BMD (${dose_unit})", type: log }
+    layout: { width: 1000, height: 500 }
+    caption: "BMD per GO term — {organ_title} ({sex_title})."
