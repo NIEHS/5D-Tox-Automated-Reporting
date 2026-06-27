@@ -715,6 +715,8 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
     "incidence-table",
     "bmd-summary",
     "genomics-section",
+    "freeform-page",
+    "freeform-block",
 })
 
 # Node types a renderer may legitimately NOT implement, with the structural

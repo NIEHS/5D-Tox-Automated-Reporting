@@ -44,6 +44,7 @@ from pathlib import Path
 import yaml
 
 from document_node import DocNode
+from freeform_content import VALID_REPRESENTATIONS, resolve_freeform
 from render_capabilities import (
     COMPONENT_CATALOG,
     capabilities_for,
@@ -70,9 +71,18 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 #   children  — recursion, not a scalar binding
 #   region    — set by the top-level region container (ADR-0004 amendment d),
 #               inherited by descendants — never authored on a node entry.
+#   resolved_content — computed by _instantiate_node from the authored
+#               content/content_file/representation (freeform nodes); never
+#               authored.
 _COMPUTED_OR_SPECIAL = frozenset(
-    {"level", "node_type", "children", "table_number", "figure_number", "region"}
+    {"level", "node_type", "children", "table_number", "figure_number", "region",
+     "resolved_content"}
 )
+
+# The freeform component types whose content is AUTHORED (in the template or an
+# external file) rather than read from the pipeline data dict.  Their content
+# bindings get a dedicated validation branch + a resolve step at instantiation.
+_FREEFORM_TYPES = frozenset({"freeform-page", "freeform-block"})
 
 # Valid region names — project directly to BITS <front-matter> / <book-body> /
 # <book-back> on a future BITS export (ADR-0004 amendment d).
@@ -175,6 +185,82 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             f"{node_type!r} is not captionable"
         )
 
+    # Freeform authored-content bindings (freeform-page / freeform-block).
+    if node_type in _FREEFORM_TYPES:
+        _validate_freeform_entry(entry, node_id)
+    elif any(entry.get(k) for k in ("content", "content_file", "representation")):
+        # content/content_file/representation only mean something on freeform
+        # types; flag a stray binding on any other type rather than silently
+        # ignoring it.
+        raise ValueError(
+            f"template node {node_id!r} of type {node_type!r}: "
+            f"content/content_file/representation are only valid on "
+            f"{sorted(_FREEFORM_TYPES)}"
+        )
+
+
+def _validate_freeform_entry(entry: dict, node_id: str) -> None:
+    """
+    Validate the authored-content bindings of a freeform node.
+
+    Rules:
+      - `content` may be an inline string OR a dual-source mapping
+        ({latex, html}); `content_file` is an external path.
+      - exactly ONE source: `content` xor `content_file`.
+      - a dual-source mapping needs no `representation`; otherwise
+        `representation` ∈ {latex, html, docx} is REQUIRED.
+      - `representation: docx` MUST use `content_file` (a .docx is a file).
+    """
+    content = entry.get("content")
+    content_file = entry.get("content_file")
+    representation = entry.get("representation")
+
+    is_dual = isinstance(content, dict)
+    has_inline = content is not None
+    has_file = bool(content_file)
+
+    if has_inline and has_file:
+        raise ValueError(
+            f"freeform node {node_id!r}: set exactly one of `content` / "
+            f"`content_file`, not both"
+        )
+    if not has_inline and not has_file:
+        raise ValueError(
+            f"freeform node {node_id!r}: requires `content` or `content_file`"
+        )
+
+    if is_dual:
+        # A dual-source mapping carries its own per-surface markup; a
+        # representation is meaningless (and a `latex`/`html` key must exist).
+        if not ({"latex", "html"} & set(content)):
+            raise ValueError(
+                f"freeform node {node_id!r}: dual-source `content` mapping must "
+                f"have a `latex` and/or `html` key"
+            )
+        if representation is not None:
+            raise ValueError(
+                f"freeform node {node_id!r}: `representation` is not allowed with "
+                f"a dual-source `content` mapping"
+            )
+        return
+
+    # Single-source: representation is required and must be valid.
+    if not representation:
+        raise ValueError(
+            f"freeform node {node_id!r}: `representation` is required "
+            f"(one of {sorted(VALID_REPRESENTATIONS)})"
+        )
+    if representation not in VALID_REPRESENTATIONS:
+        raise ValueError(
+            f"freeform node {node_id!r}: `representation` must be one of "
+            f"{sorted(VALID_REPRESENTATIONS)}, got {representation!r}"
+        )
+    if representation == "docx" and not has_file:
+        raise ValueError(
+            f"freeform node {node_id!r}: representation 'docx' requires "
+            f"`content_file` (a .docx path)"
+        )
+
 
 def _validate_region_container(entry: dict) -> None:
     """
@@ -218,9 +304,19 @@ def _instantiate_node(
     # Forward every binding field by name; an absent optional field becomes
     # None (DocNode's default), exactly matching the old hand-written literal.
     bindings = {name: entry.get(name) for name in _BINDING_FIELDS}
-    return DocNode(
+    node = DocNode(
         node_type=node_type, level=level, children=children, region=region, **bindings
     )
+    # Freeform nodes carry AUTHORED content; resolve it to per-surface markup
+    # ONCE here (a docx file is parsed a single time) and store it on the node so
+    # both renderers just read node.resolved_content.  Validation has already
+    # confirmed the source fields are well-formed.
+    if node_type in _FREEFORM_TYPES:
+        node.resolved_content = resolve_freeform(
+            node.content, node.content_file, node.representation,
+            base_dir=TEMPLATES_DIR,
+        )
+    return node
 
 
 # ---------------------------------------------------------------------------

@@ -153,9 +153,10 @@ _DATA_BLOCK = NodeCapabilities(orientable=True, breakable=True)  # tables/charts
 
 # The closed vocabulary of content-item kinds a component may hold.  Kept
 # deliberately small (a minimal subset of a full block-content model); it
-# grows only when a genuinely new content kind appears.
+# grows only when a genuinely new content kind appears.  `freeform` is authored
+# content (latex/html/docx) carried ON the node, not produced by the pipeline.
 CONTENT_KINDS: frozenset[str] = frozenset(
-    {"text", "table", "chart", "image", "toc-entry"}
+    {"text", "table", "chart", "image", "toc-entry", "freeform"}
 )
 
 # The catalog: node_type → ComponentType.  This is the single place that
@@ -190,6 +191,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
         allowed_children=(
             "heading-only", "narrative", "narrative+tables",
             "bmd-summary", "genomics-section",
+            "freeform-page", "freeform-block",
         ),
     ),
     # ── Prose sections — editable text, breakable; never landscape (running
@@ -234,6 +236,21 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "genomics-section": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("text", "table", "chart"),
         requires=("data_key", "narrative_key"),
+    ),
+    # ── Freeform AUTHORED content — the only types whose content lives ON the
+    #    node (content/content_file/representation) rather than in the pipeline
+    #    data dict.  Held in one of a small set of representations (latex / html
+    #    / docx); resolved to per-surface markup at instantiation.  The
+    #    content-field validation is custom (see document_template.
+    #    _validate_freeform_entry), so `requires` stays empty.  Not captionable
+    #    (the authored content carries its own structure), not orientable.
+    #    freeform-page forces its own page (the renderer emits a page break);
+    #    freeform-block is an inline insert with no forced break.
+    "freeform-page": ComponentType(
+        capabilities=_STRUCTURAL, content_kinds=("freeform",),
+    ),
+    "freeform-block": ComponentType(
+        capabilities=_STRUCTURAL, content_kinds=("freeform",),
     ),
 }
 

@@ -83,6 +83,7 @@ from render_common import (
     table_caption as _table_caption,
 )
 from genomics_content import genomics_content_plan
+from freeform_content import pending_note as _freeform_pending_note
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
@@ -1041,6 +1042,44 @@ def _render_title_page(node: DocNode, data: dict) -> str:
     return ""
 
 
+def _freeform_body_html(node: DocNode) -> str:
+    """
+    The HTML body for a freeform node: the author's resolved HTML markup when
+    this surface is native (or a dual-source mapping supplied one), else a
+    pending note saying which surface the content was authored for.  Authored
+    HTML is emitted VERBATIM (same trust model as injected genomics SVG).
+    """
+    resolved = node.resolved_content or {}
+    html = resolved.get("html")
+    if html:
+        return html
+    rep = node.representation or "latex"
+    # pending_note already brackets its text (matching the LaTeX side), so wrap
+    # in the .pending span directly rather than via _pending (which re-brackets).
+    return f'<em class="pending">{_esc(_freeform_pending_note(rep, "html"))}</em>'
+
+
+def _render_freeform_page(node: DocNode, data: dict) -> str:
+    """
+    Freeform authored page — forces its own page (break-before:page) and
+    carries an optional heading plus the authored HTML body.
+    """
+    heading = _heading(node.level, node.title) if node.title else ""
+    body = _freeform_body_html(node)
+    inner = f"{heading}\n{body}" if heading else body
+    return f'<section class="freeform-page" style="break-before:page">{inner}</section>'
+
+
+def _render_freeform_block(node: DocNode, data: dict) -> str:
+    """
+    Freeform authored block — inline insert with NO forced page break.
+    """
+    heading = _heading(node.level, node.title) if node.title else ""
+    body = _freeform_body_html(node)
+    inner = f"{heading}\n{body}" if heading else body
+    return f'<section class="freeform-block">{inner}</section>'
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types we haven't ported.  Emits this node's
@@ -1070,6 +1109,8 @@ _DISPATCH: dict[str, object] = {
     "incidence-table":  _render_incidence_table,
     "bmd-summary":      _render_bmd_summary,
     "genomics-section": _render_genomics_section,
+    "freeform-page":    _render_freeform_page,
+    "freeform-block":   _render_freeform_block,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical

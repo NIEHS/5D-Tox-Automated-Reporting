@@ -70,6 +70,24 @@ class DocNode:
                         switch and projects directly to BITS <front-matter> /
                         <book-body> / <book-back>.  Not authored on individual
                         nodes — region containers in the template own it.
+        content:        For the freeform-page / freeform-block component types:
+                        the AUTHORED content source.  Either an inline string (a
+                        latex/html fragment) or a dual-source mapping
+                        {latex: ..., html: ...} for content that differs per
+                        render surface.  None for every pipeline-driven node
+                        (which read data[data_key] instead).  See
+                        freeform_content.resolve_freeform.
+        content_file:   For freeform nodes: a path (relative to templates/) to an
+                        external content file read at load time — a .docx for
+                        representation "docx", or a .tex/.html fragment.  Mutually
+                        exclusive with inline `content`.
+        representation: For freeform nodes: "latex" | "html" | "docx" — how to
+                        interpret `content`/`content_file`.  Not needed when
+                        `content` is a dual-source mapping.
+        resolved_content: COMPUTED at load by the instantiator — the per-surface
+                        markup {latex: str|None, html: str|None} produced from the
+                        authored source (docx is parsed once here).  Not authored;
+                        the renderers read this.  None for non-freeform nodes.
     """
     id: str
     title: str
@@ -86,3 +104,7 @@ class DocNode:
     orientation: str | None = None
     caption: str | None = None
     region: str | None = None
+    content: str | dict | None = None
+    content_file: str | None = None
+    representation: str | None = None
+    resolved_content: dict | None = None

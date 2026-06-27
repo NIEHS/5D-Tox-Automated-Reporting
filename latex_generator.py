@@ -101,6 +101,7 @@ from render_common import (
     table_caption as _table_caption,
 )
 from genomics_content import genomics_content_plan
+from freeform_content import pending_note as _freeform_pending_note
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
 from cross_references import resolve_xrefs_latex, latex_label_key
@@ -941,6 +942,46 @@ def _render_description_list(descriptions: list) -> str:
     return "\n\n".join(items)
 
 
+def _freeform_body_latex(node: DocNode) -> str:
+    """Shared body for the two freeform handlers: the node's resolved LaTeX
+    markup (emitted VERBATIM — authored LaTeX is the user's own content), or a
+    pending note when this representation has no native LaTeX rendering (e.g. an
+    `html` node with no dual-source latex)."""
+    resolved = node.resolved_content or {}
+    latex = resolved.get("latex")
+    if latex:
+        return latex
+    rep = node.representation or "html"
+    return f"\\emph{{{_escape_latex(_freeform_pending_note(rep, 'latex'))}}}"
+
+
+def _render_freeform_page(node: DocNode, data: dict) -> str:
+    r"""
+    Freeform AUTHORED content that starts its own page.  Emits ``\clearpage``
+    so the page is isolated, an optional heading (skipped when title is empty),
+    then the resolved LaTeX content verbatim (or a pending note).
+    """
+    heading = _heading(node.level, node.title) if node.title else ""
+    body = _freeform_body_latex(node)
+    parts = ["\\clearpage"]
+    if heading:
+        parts.append(heading)
+    parts.append(body)
+    return "\n\n".join(parts)
+
+
+def _render_freeform_block(node: DocNode, data: dict) -> str:
+    """
+    Freeform AUTHORED content rendered inline (no forced page break).  Optional
+    heading + the resolved LaTeX content verbatim (or a pending note).
+    """
+    heading = _heading(node.level, node.title) if node.title else ""
+    body = _freeform_body_latex(node)
+    if heading:
+        return f"{heading}\n\n{body}"
+    return body
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types not yet ported (table, bmd-summary,
@@ -984,6 +1025,8 @@ _DISPATCH: dict[str, object] = {
     "incidence-table":   _render_incidence_table,
     "bmd-summary":       _render_bmd_summary,
     "genomics-section":  _render_genomics_section,
+    "freeform-page":     _render_freeform_page,
+    "freeform-block":    _render_freeform_block,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical
