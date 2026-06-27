@@ -289,6 +289,49 @@ document:
   - id: appendix-f
     type: appendix
     title: Appendix F. Supplemental Data
+  # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
+  # freeform-page / freeform-block carry content authored HERE (or in an
+  # external file), not read from the pipeline.  Uncomment + adapt to insert a
+  # one-off legal page, an externally-written appendix, a pasted block, etc.
+  # See freeform_content.py and render_capabilities (COMPONENT_CATALOG).
+  #
+  # Authoring rules (validated at load):
+  #   - exactly ONE of `content` (inline) or `content_file` (path under
+  #     templates/);
+  #   - `representation` ∈ {latex, html, docx}, REQUIRED for a single source;
+  #     `representation: docx` MUST use `content_file`;
+  #   - OR a dual-source `content: {latex: ..., html: ...}` (NO representation)
+  #     when the two surfaces need different markup;
+  #   - `title: ""` for an untitled page (the renderers skip an empty heading).
+  # latex is native to the Overleaf bundle, html to the in-app preview; a
+  # single-surface node shows a short pending note on the other surface.
+  # freeform-page forces its own page; freeform-block inserts inline (no break).
+  #
+  # - id: legal-notice                 # inline LaTeX, native to the bundle
+  #   type: freeform-page
+  #   title: Legal Notice
+  #   representation: latex
+  #   content: |
+  #     \textbf{For research use only.} Not for diagnostic procedures.
+  #
+  # - id: data-availability            # inline HTML, native to the preview
+  #   type: freeform-block
+  #   title: ""
+  #   representation: html
+  #   content: '<p>Data available at <a href="https://example.org">example.org</a>.</p>'
+  #
+  # - id: methods-addendum             # same content, per-surface markup
+  #   type: freeform-page
+  #   title: Methods Addendum
+  #   content:
+  #     latex: \emph{Supplementary methods.}
+  #     html: <em>Supplementary methods.</em>
+  #
+  # - id: imported-appendix            # a Word doc → both surfaces at load
+  #   type: freeform-page
+  #   title: Imported Appendix
+  #   representation: docx
+  #   content_file: freeform/imported-appendix.docx
 
 
 # ---------------------------------------------------------------------------
