@@ -427,62 +427,73 @@ def load_chart_types(name: str):
 # rather than silently filtering nothing.
 REPORT_ORGAN_AREAS: frozenset[str] = frozenset({"genomics", "organ-weight"})
 
+# Sex is a row/column axis in two places: the apical tables (a "Male"/"Female"
+# key in every table_data) and the genomics sections (one entry per organ×sex).
+REPORT_SEX_AREAS: frozenset[str] = frozenset({"apical", "genomics"})
 
-def load_report_organs(name: str) -> dict[str, list[str]]:
+# Assays (individual clinical-pathology endpoints) are filterable for the two
+# multi-endpoint apical platforms only.  Hormones is intentionally excluded —
+# its short curated panel is always shown in full.
+REPORT_ASSAY_AREAS: frozenset[str] = frozenset({"clinical-chemistry", "hematology"})
+
+
+def _load_per_area_block(
+    name: str, key: str, valid_areas: frozenset[str], area_noun: str | None = None
+) -> dict[str, list[str]]:
     """
-    Load the ``organs`` block from a template — the per-area organ ALLOWLIST.
+    Load a per-area ALLOWLIST block (a sibling of ``document``) — the shared
+    loader behind ``organs:``, ``sex:`` and ``assays:``.
 
-    The block is a sibling of ``document`` (like ``chart_style``/``chart_types``)
-    and is a MAPPING keyed by content area:
+    The block is a MAPPING keyed by content area; each value a list of tokens:
 
-        organs:
-          genomics: [kidney]            # limit the genomics sections to kidney
-          organ-weight: [liver, kidney] # limit the organ-weight table/narrative
+        <key>:
+          <area>: [token, ...]
 
-    Returns ``{area: [tokens]}`` with each token lower-cased and stripped — the
-    canonical match form, since organ strings appear inconsistently cased across
-    the pipeline.  Filtering compares against this via
-    table_builder_common.organ_allowed (component-aware).
-
-    An OMITTED area key (or an empty list for it) means NO filtering for that
-    area.  Returns ``{}`` when the file is a bare list or has no ``organs`` key,
-    which means no filtering anywhere — the pre-feature behaviour, fully
-    backward compatible.
+    Returns ``{area: [tokens]}`` with each token lower-cased and stripped (the
+    canonical match form, since the underlying strings are inconsistently cased
+    across the pipeline).  An OMITTED area key (or an empty list) means NO
+    filtering for that area; a missing block, or a file that is a bare list,
+    means no filtering anywhere — ``{}`` (backward compatible).
 
     Validates SHAPE loudly:
-      - ``organs`` must be a MAPPING (a bare list is the rejected flat shape);
-      - each key must be a known area (REPORT_ORGAN_AREAS);
+      - the block must be a MAPPING (a bare list is the rejected flat shape);
+      - each key must be one of ``valid_areas``;
       - each value must be a list of strings.
+
+    ``area_noun`` is the word used in the "unknown ... area" error (defaults to
+    the block ``key``); the organ loader passes "organ" to keep its historical
+    wording stable.
     """
+    noun = area_noun or key
     data = _load_raw(name)
     if not isinstance(data, dict):
         return {}
-    raw = data.get("organs")
+    raw = data.get(key)
     if raw is None:
         return {}
     if not isinstance(raw, dict):
         raise ValueError(
-            f"template {name!r}: 'organs' must be a mapping of area → "
-            f"[organ, ...], got {type(raw).__name__}"
+            f"template {name!r}: {key!r} must be a mapping of area → "
+            f"[token, ...], got {type(raw).__name__}"
         )
 
     filters: dict[str, list[str]] = {}
     for area, tokens in raw.items():
-        if area not in REPORT_ORGAN_AREAS:
+        if area not in valid_areas:
             raise ValueError(
-                f"template {name!r}: unknown organ area {area!r}; "
-                f"must be one of {sorted(REPORT_ORGAN_AREAS)}"
+                f"template {name!r}: unknown {noun} area {area!r}; "
+                f"must be one of {sorted(valid_areas)}"
             )
         if not isinstance(tokens, list):
             raise ValueError(
-                f"template {name!r}: organs.{area} must be a list of organ "
-                f"names, got {type(tokens).__name__}"
+                f"template {name!r}: {key}.{area} must be a list of names, "
+                f"got {type(tokens).__name__}"
             )
         cleaned: list[str] = []
         for item in tokens:
             if not isinstance(item, str):
                 raise ValueError(
-                    f"template {name!r}: every entry in organs.{area} must be a "
+                    f"template {name!r}: every entry in {key}.{area} must be a "
                     f"string, got {type(item).__name__}: {item!r}"
                 )
             token = item.strip().lower()
@@ -490,6 +501,115 @@ def load_report_organs(name: str) -> dict[str, list[str]]:
                 cleaned.append(token)
         filters[area] = cleaned
     return filters
+
+
+def _load_flat_block(name: str, key: str) -> list[str]:
+    """
+    Load a flat-list ALLOWLIST block (a sibling of ``document``) — the loader
+    behind the single-axis genomics blocks ``genes:`` and ``gene_sets:``.
+
+    The block is a LIST of tokens:
+
+        <key>: [token, ...]
+
+    Returns ``[tokens]`` lower-cased and stripped.  A missing block, or a file
+    that is a bare list, returns ``[]`` (no filtering).  Validates that the
+    block is a list of strings; a mapping is the rejected per-area shape.
+    """
+    data = _load_raw(name)
+    if not isinstance(data, dict):
+        return []
+    raw = data.get(key)
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"template {name!r}: {key!r} must be a list of names, "
+            f"got {type(raw).__name__}"
+        )
+    cleaned: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError(
+                f"template {name!r}: every entry in {key} must be a string, "
+                f"got {type(item).__name__}: {item!r}"
+            )
+        token = item.strip().lower()
+        if token:
+            cleaned.append(token)
+    return cleaned
+
+
+def load_report_organs(name: str) -> dict[str, list[str]]:
+    """
+    Load the ``organs`` block — the per-area organ ALLOWLIST.
+
+        organs:
+          genomics: [kidney]            # limit the genomics sections to kidney
+          organ-weight: [liver, kidney] # limit the organ-weight table/narrative
+
+    Returns ``{area: [tokens]}`` (lower-cased); filtering compares via
+    table_builder_common.organ_allowed (component-aware).  See
+    _load_per_area_block for the shape rules.
+    """
+    return _load_per_area_block(name, "organs", REPORT_ORGAN_AREAS,
+                                area_noun="organ")
+
+
+def load_report_sex(name: str) -> dict[str, list[str]]:
+    """
+    Load the ``sex`` block — the per-area sex ALLOWLIST.
+
+        sex:
+          apical: [male]      # show only male columns in the apical tables
+          genomics: [male]    # show only male organ×sex genomics sections
+
+    Returns ``{area: [tokens]}`` (lower-cased).  Filtering compares via
+    table_builder_common.sex_allowed (exact match).
+    """
+    return _load_per_area_block(name, "sex", REPORT_SEX_AREAS)
+
+
+def load_report_assays(name: str) -> dict[str, list[str]]:
+    """
+    Load the ``assays`` block — the per-area clinical-pathology endpoint
+    ALLOWLIST.
+
+        assays:
+          clinical-chemistry: [albumin, "alanine aminotransferase"]
+          hematology: [hemoglobin]
+
+    Returns ``{area: [tokens]}`` (lower-cased).  Filtering compares via
+    table_builder_common.assay_allowed (component-aware).  Areas are the two
+    multi-endpoint platforms only (REPORT_ASSAY_AREAS).
+    """
+    return _load_per_area_block(name, "assays", REPORT_ASSAY_AREAS)
+
+
+def load_report_genes(name: str) -> list[str]:
+    """
+    Load the ``genes`` block — a flat gene-symbol ALLOWLIST (genomics-only).
+
+        genes: [egr1, ddit4]
+
+    Returns ``[tokens]`` (lower-cased).  Filtering compares via
+    table_builder_common.gene_allowed.
+    """
+    return _load_flat_block(name, "genes")
+
+
+def load_report_gene_sets(name: str) -> list[str]:
+    """
+    Load the ``gene_sets`` block — a flat gene-set / GO-term ALLOWLIST
+    (genomics-only).
+
+        gene_sets: ["GO:1902893", "cell division"]
+
+    Returns ``[tokens]`` (lower-cased — GO accessions are matched
+    case-insensitively against the lower-cased go_id).  Filtering compares via
+    table_builder_common.gene_set_allowed (go_id OR go_term-component).
+    """
+    return _load_flat_block(name, "gene_sets")
 
 
 def instantiate(template: list[dict]) -> list[DocNode]:

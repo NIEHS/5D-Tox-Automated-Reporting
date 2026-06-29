@@ -255,6 +255,98 @@ def _partition_by_platform(
     return platform_tables
 
 
+# Map the kebab-case assay AREA keys (REPORT_ASSAY_AREAS) to the display
+# platform names used as keys in platform_tables.  Only these two multi-endpoint
+# platforms are assay-filterable; Hormones is intentionally never filtered.
+_ASSAY_AREA_TO_PLATFORM: dict[str, str] = {
+    "clinical-chemistry": "Clinical Chemistry",
+    "hematology": "Hematology",
+}
+
+
+def apply_apical_filters(
+    platform_tables: dict[str, dict[str, list]],
+    sex_allow: list[str] | None = None,
+    assay_filters: dict[str, list[str]] | None = None,
+) -> dict[str, dict[str, list]]:
+    """
+    Apply the report-level SEX and ASSAY allowlists to the partitioned
+    ``{platform: {sex: [TableRow]}}`` dict, returning a new filtered dict (the
+    input is not mutated).
+
+    This is the SINGLE apical choke point.  It runs right after the NTP-stats
+    layer, so everything downstream that reads ``platform_tables`` — the apical
+    tables, the BMD summary, the BMDS modeling inputs, and the apical narratives
+    — sees the same filtered set and stays consistent.  It is applied
+    unconditionally (even on an NTP cache hit), which keeps the NTP cache itself
+    sex/assay-agnostic (the same "filter after the agnostic cache" trick the
+    genomics post-filter uses).
+
+      - sex_allow: the "apical" area sex list.  Drops every non-allowed sex key
+        from every platform (table_builder_common.sex_allowed, exact match).
+      - assay_filters: {area: [tokens]} for the two assay platforms.  Drops rows
+        whose endpoint label fails the per-platform allowlist
+        (table_builder_common.assay_allowed, component-aware).
+
+    Empty/None for either axis is a no-op for that axis, so an entirely
+    unfiltered call returns the tables unchanged (the pre-feature behaviour).
+    """
+    if not sex_allow and not assay_filters:
+        return platform_tables
+
+    from table_builder_common import sex_allowed, assay_allowed
+
+    assay_filters = assay_filters or {}
+    out: dict[str, dict[str, list]] = {}
+    for platform, sex_rows in platform_tables.items():
+        # Resolve the assay allowlist for this platform (None ⇒ no row filter).
+        assay_allow: list[str] | None = None
+        for area, plat_name in _ASSAY_AREA_TO_PLATFORM.items():
+            if platform == plat_name:
+                assay_allow = assay_filters.get(area)
+                break
+
+        new_sex_rows: dict[str, list] = {}
+        for sex, rows in sex_rows.items():
+            if not sex_allowed(sex, sex_allow):
+                continue
+            if assay_allow:
+                rows = [
+                    r for r in rows
+                    if assay_allowed(
+                        r.get("label", "") if isinstance(r, dict)
+                        else getattr(r, "label", ""),
+                        assay_allow,
+                    )
+                ]
+            new_sex_rows[sex] = rows
+        out[platform] = new_sex_rows
+    return out
+
+
+def prune_card_sexes(card: dict | None, sex_allow: list[str] | None) -> dict | None:
+    """
+    Drop non-allowed sex keys from a section card's ``tables_json`` in place,
+    for the sidecar-built cards that bypass ``platform_tables`` (Tissue
+    Concentration, Clinical Observations) — those are NOT reached by
+    apply_apical_filters but key their table_data by sex just the same.
+
+    No-op when there's no allowlist, no card, or no dict-shaped tables_json.
+    Returns the (possibly mutated) card so it can be used inline.
+    """
+    if not sex_allow or not card:
+        return card
+    from table_builder_common import sex_allowed
+
+    tables = card.get("tables_json")
+    if isinstance(tables, dict):
+        card["tables_json"] = {
+            sex: rows for sex, rows in tables.items()
+            if sex_allowed(sex, sex_allow)
+        }
+    return card
+
+
 def _build_section_cards(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
@@ -262,6 +354,7 @@ def _build_section_cards(
     dtxsid: str | None = None,
     imputed_cells: dict | None = None,
     organ_allowlist: list[str] | None = None,
+    sex_allow: list[str] | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -294,6 +387,13 @@ def _build_section_cards(
                          the "organ-weight" area.  Threaded ONLY to the Organ
                          Weight builder (the one apical table grouped by organ).
                          Empty/None ⇒ no filtering.
+        sex_allow:       Report-level "apical" sex allowlist.  apply_apical_filters
+                         already narrowed the platform_tables this consumes, but
+                         the Body Weight / Organ Weight sidecar builders iterate
+                         the sidecar files directly over a fixed ("Male","Female")
+                         loop, so their tables_json can still carry a dropped
+                         sex.  Every built card's tables_json is pruned by this
+                         at the end for a uniform guarantee.  Empty/None ⇒ no-op.
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -499,6 +599,12 @@ def _build_section_cards(
             "tables_json": tables_json,
             "narrative": narrative,
         })
+    # Uniform apical sex prune — covers the sidecar builders (Body/Organ Weight)
+    # whose fixed ("Male","Female") loop ignores the narrowed platform_tables.
+    # A no-op for the already-narrow clin-path cards and when sex_allow is empty.
+    if sex_allow:
+        for card in sections:
+            prune_card_sexes(card, sex_allow)
     return sections
 
 

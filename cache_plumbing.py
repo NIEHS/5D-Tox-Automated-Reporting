@@ -231,6 +231,8 @@ def _hash_sections(
     sidecar_hash: str = "",
     imputed_cells=None,
     organ_allowlist=None,
+    sex_allowlist=None,
+    assay_filters=None,
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -251,6 +253,11 @@ def _hash_sections(
         sections blob, so editing the allowlist MUST force a fresh build.
         Unlike the genomics allowlist (post-filtered, no hash), this one is
         folded here.  None/empty ⇒ no effect on the key (backward compatible).
+      - sex_allowlist: the "apical" area sex allowlist, and assay_filters: the
+        per-platform clinical-chemistry/hematology endpoint allowlists.  Both
+        narrow the apical tables + narratives that live in the sections blob
+        (via apply_apical_filters upstream of the build), so a change MUST force
+        a fresh build.  Same injected-only-when-set rule as organ_allowlist.
 
     A schema_version is folded in so that adding/renaming row-dict fields
     (e.g. the `responsive` flag for clinical-pathology bolding) forces a
@@ -270,6 +277,19 @@ def _hash_sections(
     # → a fresh build (the Organ Weight table + narrative live in this blob).
     if organ_allowlist:
         payload["organ_allowlist"] = sorted(organ_allowlist)
+    # Same injected-only-when-set rule for the sibling apical allowlists, so an
+    # unfiltered report hashes byte-identically to the pre-feature key.
+    if sex_allowlist:
+        payload["sex_allowlist"] = sorted(sex_allowlist)
+    if assay_filters:
+        # Sort both the area keys and each token list for an order-stable key.
+        payload["assay_filters"] = {
+            area: sorted(tokens)
+            for area, tokens in sorted(assay_filters.items())
+            if tokens
+        } or None
+        if payload["assay_filters"] is None:
+            del payload["assay_filters"]
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

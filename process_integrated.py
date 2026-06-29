@@ -86,6 +86,8 @@ from processing_helpers import (
     _extract_genomics,
     _build_apical_bmd_summary,
     _build_bmds_bmd_summary,
+    apply_apical_filters,
+    prune_card_sexes,
 )
 
 
@@ -151,6 +153,18 @@ class ProcessContext:
     # Defaulted so test scaffolds that build a context need not pass it.  See
     # document_template.load_report_organs / table_builder_common.organ_allowed.
     organ_filters: dict | None = None
+
+    # The sibling report-level allowlists, same shape conventions:
+    #   sex_filters   — {area: [tokens]}, areas "apical"/"genomics"
+    #   assay_filters — {area: [tokens]}, areas "clinical-chemistry"/"hematology"
+    #   gene_filter / gene_set_filter — flat [tokens], genomics-only
+    # All default to None ⇒ no filtering, so existing scaffolds are unaffected.
+    # See document_template.load_report_{sex,assays,genes,gene_sets} and the
+    # table_builder_common matchers.
+    sex_filters: dict | None = None
+    assay_filters: dict | None = None
+    gene_filter: list | None = None
+    gene_set_filter: list | None = None
 
     # --- accumulated state (None until the producing Layer runs) ---
     platform_tables: dict | None = None
@@ -618,6 +632,11 @@ async def _get_sections(ctx):
     # narrative (both cached in the sections blob, so this is folded into
     # sections_hash upstream — see _hash_sections at the Layer-0 hash step).
     ow_allow = (ctx.organ_filters or {}).get("organ-weight")
+    # Apical sex allowlist — the platform-table-derived cards are already
+    # narrowed by apply_apical_filters, but the two sidecar-built cards
+    # (Tissue Concentration, Clinical Observations) bypass platform_tables and
+    # are pruned by sex here.  Also folded into sections_hash upstream.
+    apical_sex_allow = (ctx.sex_filters or {}).get("apical")
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
@@ -636,15 +655,16 @@ async def _get_sections(ctx):
         lambda: _build_section_cards(
             platform_tables, compound_name, dose_unit,
             dtxsid=dtxsid, imputed_cells=imputed_cells,
-            organ_allowlist=ow_allow,
+            organ_allowlist=ow_allow, sex_allow=apical_sex_allow,
         ),
     )
     # Clinical obs tables bypass Java integration (categorical data).
     # Built separately and appended as an incidence section card.
-    clin_obs = _build_clinical_obs_section(
-        integrated, compound_name, dose_unit,
+    clin_obs = prune_card_sexes(
+        _build_clinical_obs_section(integrated, compound_name, dose_unit),
+        apical_sex_allow,
     )
-    if clin_obs:
+    if clin_obs and clin_obs.get("tables_json"):
         sections.append(clin_obs)
 
     # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
@@ -664,6 +684,15 @@ async def _get_sections(ctx):
                 compound_name=compound_name,
                 dose_unit=dose_unit,
             )
+            # Prune by the apical sex allowlist (this card bypasses
+            # platform_tables / apply_apical_filters).
+            if tc_result and apical_sex_allow:
+                from table_builder_common import sex_allowed
+                tc_result["table_data"] = {
+                    sex: rows
+                    for sex, rows in (tc_result.get("table_data") or {}).items()
+                    if sex_allowed(sex, apical_sex_allow)
+                }
             if tc_result and tc_result.get("table_data"):
                 narrative = (
                     f"Plasma concentrations of {compound_name} were "
@@ -779,19 +808,23 @@ async def _get_genomics(ctx):
         _save_cache(dtxsid, "genomics", genomics_hash, result)
         ctx.genomics_sections = result
 
-    # Per-area organ allowlist (post-filter — the single genomics choke point).
-    # Every entry carries a lower-case "organ"; dropping the non-allowed keys
-    # here cascades to charts, genomics narratives, and the gene tables, which
-    # all read this dict — no further edits needed.  Applied AFTER the cache
-    # save so the genomics cache stays organ-agnostic.
-    allow = (ctx.organ_filters or {}).get("genomics")
-    if allow and ctx.genomics_sections:
-        from table_builder_common import organ_allowed
-        ctx.genomics_sections = {
-            key: entry
-            for key, entry in ctx.genomics_sections.items()
-            if organ_allowed(entry.get("organ", ""), allow)
-        }
+    # Genomics post-filter — the single genomics choke point shared with the
+    # Overleaf export (latex_export.load_session_data calls the SAME
+    # filter_genomics_sections so both surfaces agree).  Applied AFTER the cache
+    # save so the genomics cache stays filter-agnostic and editing any allowlist
+    # re-filters instantly without re-running the costly extraction.  Drops
+    # whole organ/sex sections and prunes the per-section gene / gene-set lists;
+    # the result cascades to charts, narratives, and the gene tables, which all
+    # read this dict.
+    if ctx.genomics_sections:
+        from table_builder_common import filter_genomics_sections
+        ctx.genomics_sections = filter_genomics_sections(
+            ctx.genomics_sections,
+            organ=(ctx.organ_filters or {}).get("genomics"),
+            sex=(ctx.sex_filters or {}).get("genomics"),
+            genes=ctx.gene_filter,
+            gene_sets=ctx.gene_set_filter,
+        )
 
 
 async def _get_methods(ctx):
@@ -977,8 +1010,18 @@ async def api_process_integrated(dtxsid: str, request: Request):
     # ({area: [tokens]}; {} ⇒ no filtering).  Loaded from the template like the
     # chart config.  See document_template.load_report_organs.
     from document_tree import ACTIVE_TEMPLATE
-    from document_template import load_report_organs
+    from document_template import (
+        load_report_organs,
+        load_report_sex,
+        load_report_assays,
+        load_report_genes,
+        load_report_gene_sets,
+    )
     organ_filters = load_report_organs(ACTIVE_TEMPLATE)
+    sex_filters = load_report_sex(ACTIVE_TEMPLATE)
+    assay_filters = load_report_assays(ACTIVE_TEMPLATE)
+    gene_filter = load_report_genes(ACTIVE_TEMPLATE)
+    gene_set_filter = load_report_gene_sets(ACTIVE_TEMPLATE)
 
     # --- Load integrated data ---
     integrated = _load_integrated(dtxsid)
@@ -1003,6 +1046,10 @@ async def api_process_integrated(dtxsid: str, request: Request):
         go_max_genes=go_max_genes,
         go_min_bmd=go_min_bmd,
         organ_filters=organ_filters,
+        sex_filters=sex_filters,
+        assay_filters=assay_filters,
+        gene_filter=gene_filter,
+        gene_set_filter=gene_set_filter,
     )
 
     # --- Migrate old monolithic cache files ---
@@ -1018,6 +1065,17 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # ══════════════════════════════════════════════════════════════
         await _build_ntp_stats(ctx)
 
+        # Report-level SEX + ASSAY allowlists — the single apical choke point.
+        # Applied unconditionally right after the NTP layer (even on a cache
+        # hit), so the NTP cache stays sex/assay-agnostic and EVERY downstream
+        # consumer of platform_tables (apical tables, BMD summary, BMDS inputs,
+        # narratives) sees the same filtered set.  No-op when neither is set.
+        ctx.platform_tables = apply_apical_filters(
+            ctx.platform_tables,
+            sex_allow=(ctx.sex_filters or {}).get("apical"),
+            assay_filters=ctx.assay_filters,
+        )
+
         # ══════════════════════════════════════════════════════════════
         # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
         # ══════════════════════════════════════════════════════════════
@@ -1028,7 +1086,8 @@ async def api_process_integrated(dtxsid: str, request: Request):
         # unit loads its own cache from that key.
 
         # Collect _bmds_input dicts from all TableRows for BMDS modeling.
-        # Runs AFTER Layer 1 so platform_tables is populated.
+        # Runs AFTER Layer 1 (and the apical filter) so platform_tables is
+        # populated AND already narrowed — dropped sexes/assays aren't modeled.
         ctx.bmds_inputs = [
             row._bmds_input
             for sex_rows in ctx.platform_tables.values()
@@ -1052,6 +1111,8 @@ async def api_process_integrated(dtxsid: str, request: Request):
             sidecar_hash=sections_sidecar_hash,
             imputed_cells=_meta.get("imputed_cells"),
             organ_allowlist=(ctx.organ_filters or {}).get("organ-weight"),
+            sex_allowlist=(ctx.sex_filters or {}).get("apical"),
+            assay_filters=ctx.assay_filters,
         )
         ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 

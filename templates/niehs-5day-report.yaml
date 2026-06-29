@@ -360,7 +360,50 @@ document:
 #   organ-weight: [liver, kidney]
 organs:
   genomics: [liver, kidney]
-  organ-weight: [liver, kidney]
+  organ-weight: [liver]
+
+
+# ---------------------------------------------------------------------------
+# sex / assays / genes / gene_sets — the sibling per-content allowlists
+# ---------------------------------------------------------------------------
+# Four more limiting factors, each a sibling of `document` and built on the same
+# rail as `organs` (document_template.load_report_{sex,assays,genes,gene_sets} +
+# the table_builder_common matchers).  Every block is OPTIONAL; an omitted block
+# (or empty list) ⇒ no filtering for that axis.  All ship omitted here (the
+# default filters nothing beyond `organs` above).
+#
+#   sex          — per-area MAPPING, areas {apical, genomics}.  EXACT match
+#                  (male|female).  `apical` narrows the columns of every apical
+#                  table + the BMD summary + the apical narratives; `genomics`
+#                  drops whole organ×sex genomics sections.  Editing `apical`
+#                  forces a fresh section build (cached); `genomics` re-filters
+#                  instantly (post-filter, no re-extraction).
+#
+#   assays       — per-area MAPPING, areas {clinical-chemistry, hematology}
+#                  ONLY (Hormones is always shown in full).  COMPONENT-AWARE
+#                  match on the endpoint label, so one token can cover a family
+#                  (`count` keeps "Basophil count" / "Leukocyte Count") or a
+#                  single endpoint ("alanine aminotransferase").  Folds into the
+#                  section cache like organ-weight.
+#
+#   genes        — FLAT list of gene symbols (genomics only).  Component-aware
+#                  (single-token in practice) match on top_genes[].gene_symbol.
+#                  Post-filter, no re-extraction.
+#
+#   gene_sets    — FLAT list of GO terms (genomics only).  A token matches the
+#                  GO accession ("GO:0051301") OR a component of the readable
+#                  term ("division" keeps "cell division").  Post-filter.
+#
+# Example (uncomment + edit to limit):
+#
+# sex:
+#   apical: [male]
+#   genomics: [male]
+# assays:
+#   clinical-chemistry: ["alanine aminotransferase", albumin]
+#   hematology: [hemoglobin]
+# genes: [egr1, ddit4]
+# gene_sets: ["GO:1902893", "cell division"]
 
 
 # ---------------------------------------------------------------------------
