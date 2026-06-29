@@ -29,16 +29,15 @@ from document_tree import DOCUMENT_TREE, walk_tree
 # Positional numbers assigned by compute_table_numbers() on the canonical
 # document tree (Table 1 is the front-matter study-design table; results
 # tables start at 2).  These are the ground truth the overlay must reproduce.
-# Table 4 is the Clinical Observations incidence-table (not an apical platform,
-# so absent here) — it sits between Organ Weight (3) and Clinical Chemistry (5)
-# in document order, which is why the apical platforms below skip 4.
+# The apical platforms are now contiguous (2..7) — the active template no longer
+# instances a Clinical Observations incidence-table, so there is no gap.
 EXPECTED_TABLE_NUMBERS = {
     "Body Weight": 2,
     "Organ Weight": 3,
-    "Clinical Chemistry": 5,
-    "Hematology": 6,
-    "Hormones": 7,
-    "Tissue Concentration": 8,
+    "Clinical Chemistry": 4,
+    "Hematology": 5,
+    "Hormones": 6,
+    "Tissue Concentration": 7,
 }
 
 
@@ -102,7 +101,7 @@ def test_cold_marshal_numbers_and_orders_multiple_sections(cold_tree):
     assert produced == [
         ("Body Weight", 2),
         ("Organ Weight", 3),
-        ("Hematology", 6),
+        ("Hematology", 5),
     ], "Apical sections must be numbered from the tree and sorted in document order."
 
 

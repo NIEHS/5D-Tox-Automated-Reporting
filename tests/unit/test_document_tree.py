@@ -148,25 +148,41 @@ class TestComputeTableNumbers:
         leave a gap in the sequence.
 
         Regression: compute_table_numbers used to allowlist only "table" and
-        "bmd-summary", so table-clinical-obs (an incidence-table) got None and
-        the surrounding numbers jumped 3 -> 4, dropping it from the List of
-        Tables and rendering it without a "Table N." caption.
+        "bmd-summary", so an incidence-table got None and the surrounding
+        numbers jumped 3 -> 4, dropping it from the List of Tables and rendering
+        it without a "Table N." caption.  Built on a synthetic tree (the active
+        niehs-5day template no longer instances an incidence-table node) so the
+        numbering contract is pinned independently of the template's node set.
         """
-        import copy
-        tree = copy.deepcopy(DOCUMENT_TREE)
+        from document_tree import NUMBERED_TABLE_TYPES, walk_tree
+
+        tree = [
+            DocNode(
+                id="results", title="Results", level=1, node_type="heading-only",
+                children=[
+                    DocNode(id="t-bw", title="Body Weights", level=2,
+                            node_type="table", platform="Body Weight"),
+                    DocNode(id="t-ow", title="Organ Weights", level=2,
+                            node_type="table", platform="Organ Weight"),
+                    DocNode(id="t-incidence", title="Clinical Observations", level=2,
+                            node_type="incidence-table",
+                            platform="Clinical Observations"),
+                    DocNode(id="t-cc", title="Clinical Chemistry", level=2,
+                            node_type="table", platform="Clinical Chemistry"),
+                ],
+            )
+        ]
         compute_table_numbers(tree)
 
-        clin_obs = find_node("table-clinical-obs", tree)
-        assert clin_obs is not None
-        assert clin_obs.node_type == "incidence-table"
-        # It sits third among the numbered tables (body-weight=2, organ-weight=3),
-        # so it must be Table 4 — present and gap-free, not None.
-        assert clin_obs.table_number == 4
+        incidence = find_node("t-incidence", tree)
+        assert incidence is not None
+        assert incidence.node_type == "incidence-table"
+        # It sits third among the numbered tables (t-bw=2, t-ow=3), so it must be
+        # Table 4 — present and gap-free, not None.
+        assert incidence.table_number == 4
 
         # Whole-tree sweep: every numbered-table node has a number and the full
         # run is contiguous starting at 2, with no gaps around the incidence row.
-        from document_tree import NUMBERED_TABLE_TYPES, walk_tree
-
         numbers: list[int] = []
 
         def _collect(node):
@@ -307,8 +323,12 @@ class TestCollectPlatforms:
         assert "Organ Weight" in platforms
 
     def test_clinical_obs_has_legacy_compat(self):
-        """Clinical Observations platform should also include 'Clinical'."""
-        node = find_node("table-clinical-obs")
+        """The "Clinical Observations" platform should also expose the legacy
+        "Clinical" alias.  Built on a synthetic node (the active template no
+        longer instances a clinical-obs table) so the alias contract is pinned
+        independently of the template's node set."""
+        node = DocNode(id="t-clin-obs", title="Clinical Observations", level=2,
+                       node_type="incidence-table", platform="Clinical Observations")
         platforms = collect_platforms(node)
         assert "Clinical Observations" in platforms
         assert "Clinical" in platforms

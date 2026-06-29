@@ -204,12 +204,6 @@ document:
         platform: Organ Weight
         orientation: landscape
         ready_key: animalCondition
-      - id: table-clinical-obs
-        type: incidence-table
-        title: Clinical Observations
-        platform: Clinical Observations
-        orientation: landscape
-        ready_key: animalCondition
     - id: clinical-path
       type: narrative+tables
       title: Clinical Pathology
@@ -247,6 +241,7 @@ document:
     - id: bmd-summary
       type: bmd-summary
       title: Apical Endpoint Benchmark Dose Summary
+      caption: "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
       data_key: bmd_summary
       ready_key: bmdSummary
     - id: gene-sets
@@ -332,6 +327,40 @@ document:
   #   title: Imported Appendix
   #   representation: docx
   #   content_file: freeform/imported-appendix.docx
+
+
+# ---------------------------------------------------------------------------
+# organs — per-area organ ALLOWLIST (optional limiting factor)
+# ---------------------------------------------------------------------------
+# A sibling of `document` (loaded by document_template.load_report_organs).
+# A MAPPING keyed by content AREA — the two places organ is a row/section axis:
+#
+#   genomics      — the genomics sections (and their charts, narratives, gene
+#                   tables, all of which read the same filtered sections dict)
+#   organ-weight  — the Organ Weight apical table AND its findings narrative
+#
+# Each value is a list of organ tokens.  An OMITTED area key (or an empty list)
+# ⇒ NO filtering for that area; omit the whole block ⇒ no filtering anywhere
+# (the default, and what ships here).  An unknown area key fails loudly at load.
+#
+# Matching is case-insensitive and COMPONENT-AWARE
+# (table_builder_common.organ_allowed): a token matches the whole organ string
+# OR any `-`/space/`.`/`/`-separated component.  So `kidney` covers the genomics
+# token "kidney" AND the apical laterality labels "Kidney-Left"/"Kidney-Right"/
+# "R. Kidney", while "Liver"/"Heart" are dropped.  A listed organ absent from
+# the data simply renders nothing (no note, no error).  Knowledge-base /
+# enrichment (gene→organ associations) are intentionally NOT filtered.
+#
+# Note: editing `genomics` re-filters instantly (post-filter, no re-extraction);
+# editing `organ-weight` forces a fresh section build (its output is cached).
+# Example:
+#
+# organs:
+#   genomics: [kidney]
+#   organ-weight: [liver, kidney]
+organs:
+  genomics: [liver, kidney]
+  organ-weight: [liver, kidney]
 
 
 # ---------------------------------------------------------------------------

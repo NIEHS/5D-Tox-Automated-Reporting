@@ -358,17 +358,6 @@
               "table_number": 3,
               "title": "Summary of Organ Weights",
               "type": "table"
-            },
-            {
-              "id": "table-clinical-obs",
-              "level": 0,
-              "orientation": "landscape",
-              "platform": "Clinical Observations",
-              "ready_key": "animalCondition",
-              "region": "body",
-              "table_number": 4,
-              "title": "Clinical Observations",
-              "type": "incidence-table"
             }
           ],
           "id": "animal-condition",
@@ -388,7 +377,7 @@
               "platform": "Clinical Chemistry",
               "ready_key": "clinicalPath",
               "region": "body",
-              "table_number": 5,
+              "table_number": 4,
               "title": "Summary of Select Clinical Chemistry Data",
               "type": "table"
             },
@@ -399,7 +388,7 @@
               "platform": "Hematology",
               "ready_key": "clinicalPath",
               "region": "body",
-              "table_number": 6,
+              "table_number": 5,
               "title": "Summary of Select Hematology Data",
               "type": "table"
             },
@@ -410,7 +399,7 @@
               "platform": "Hormones",
               "ready_key": "clinicalPath",
               "region": "body",
-              "table_number": 7,
+              "table_number": 6,
               "title": "Summary of Select Hormone Data",
               "type": "table"
             }
@@ -431,7 +420,7 @@
               "platform": "Tissue Concentration",
               "ready_key": "internalDose",
               "region": "body",
-              "table_number": 8,
+              "table_number": 7,
               "title": "Summary of Plasma Concentration Data",
               "type": "table"
             }
@@ -444,12 +433,13 @@
           "type": "narrative+tables"
         },
         {
+          "caption": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High",
           "data_key": "bmd_summary",
           "id": "bmd-summary",
           "level": 2,
           "ready_key": "bmdSummary",
           "region": "body",
-          "table_number": 9,
+          "table_number": 8,
           "title": "Apical Endpoint Benchmark Dose Summary",
           "type": "bmd-summary"
         },
@@ -755,31 +745,26 @@
     {
       "ready": false,
       "table_number": 4,
-      "title": "Clinical Observations"
-    },
-    {
-      "ready": false,
-      "table_number": 5,
       "title": "Summary of Select Clinical Chemistry Data"
     },
     {
       "ready": false,
-      "table_number": 6,
+      "table_number": 5,
       "title": "Summary of Select Hematology Data"
     },
     {
       "ready": false,
-      "table_number": 7,
+      "table_number": 6,
       "title": "Summary of Select Hormone Data"
     },
     {
       "ready": false,
-      "table_number": 8,
+      "table_number": 7,
       "title": "Summary of Plasma Concentration Data"
     },
     {
       "ready": false,
-      "table_number": 9,
+      "table_number": 8,
       "title": "Apical Endpoint Benchmark Dose Summary"
     }
   ],

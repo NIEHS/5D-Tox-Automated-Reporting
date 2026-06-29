@@ -448,13 +448,12 @@ def test_fragment_compile_includes_target_subtree(scaffold):
 def test_fragment_compile_recurses_into_subtree(scaffold):
     r"""
     Filtering to a parent node must include all descendants.  Filtering
-    to "animal-condition" should bring in the three child table nodes.
+    to "animal-condition" should bring in its child table nodes.
     """
     tex = generate_latex(scaffold, section_filter="animal-condition")
     assert r"\subsection{Animal Condition, Body Weights, and Organ Weights}" in tex
     assert r"\begin{niehstable}{table-body-weight}" in tex
     assert r"\begin{niehstable}{table-organ-weight}" in tex
-    assert r"\begin{niehstable}{table-clinical-obs}" in tex
 
 
 def test_fragment_compile_unknown_id_returns_empty_body(scaffold):
