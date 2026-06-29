@@ -235,7 +235,46 @@ def _normalize_apical_section(sec: dict) -> dict:
     return normalize_apical_section_for_render(sec)
 
 
-def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
+def _load_genomics_interpretations(
+    session_dir: Path,
+    genomics_cache: dict,
+) -> dict[tuple[str, str], dict]:
+    """
+    Build a {(organ_lower, sex_lower): {gene_set_narrative, gene_narrative}}
+    map from the per-organ×sex `_cache_interpretation_<organ>_<sex>_*.json`
+    files, keyed off the (post-filter) genomics_cache keys so filtered-out
+    sections contribute no narrative.
+
+    Mirrors the canonical reader at session_routes.py: split each
+    "<organ>_<sex>" key, build the prefix via the shared
+    interpretation_cache_prefix helper, and pick the latest cache by mtime.
+    """
+    out: dict[tuple[str, str], dict] = {}
+    if not isinstance(genomics_cache, dict):
+        return out
+    from genomics_narratives import interpretation_cache_prefix
+    for key in genomics_cache.keys():
+        if "_" not in key:
+            continue
+        organ_k, sex_k = key.split("_", 1)
+        organ_k = organ_k.lower()
+        sex_k = sex_k.lower()
+        prefix = interpretation_cache_prefix(organ_k, sex_k)
+        latest = _latest(session_dir, f"{prefix}*.json")
+        interp = _load_json(latest)
+        if not isinstance(interp, dict):
+            continue
+        out[(organ_k, sex_k)] = {
+            "gene_set_narrative": interp.get("gene_set_narrative") or [],
+            "gene_narrative": interp.get("gene_narrative") or [],
+        }
+    return out
+
+
+def _convert_genomics_cache(
+    genomics_cache: dict,
+    interpretations: dict[tuple[str, str], dict] | None = None,
+) -> list[dict]:
     """
     Convert the `_cache_genomics_*.json` shape into the list-of-sections
     form data["genomics_sections"] expects.
@@ -245,16 +284,27 @@ def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
     Output shape: a flat list with two entries per organ_sex pair —
     one type="gene_set" using gene_sets_by_stat["median"], one
     type="gene" using top_genes.
+
+    When `interpretations` is provided — a {(organ_lower, sex_lower): {
+    gene_set_narrative: [...], gene_narrative: [...]}} map read from the
+    per-organ×sex `_cache_interpretation_*.json` files — each entry's
+    `narrative` is set to the matching LLM interpretation paragraphs (the
+    gene_set entry gets gene_set_narrative, the gene entry gets gene_narrative).
+    genomics_content.genomics_content_plan then emits a narrative content item
+    ahead of the table.  Omitting the arg (default None) leaves `narrative`
+    unset — the pre-feature behaviour, tables only.
     """
     out: list[dict] = []
     if not isinstance(genomics_cache, dict):
         return out
+    interp = interpretations or {}
     for key in sorted(genomics_cache.keys()):
         entry = genomics_cache[key]
         if not isinstance(entry, dict):
             continue
         organ = entry.get("organ", "")
         sex = entry.get("sex", "")
+        interp_entry = interp.get((organ.lower(), sex.lower()), {})
         # Gene-set entry — pull from gene_sets_by_stat using the median
         # statistic (the canonical default; the UI lets users switch
         # but the LaTeX path renders one view).
@@ -262,28 +312,36 @@ def _convert_genomics_cache(genomics_cache: dict) -> list[dict]:
             (entry.get("gene_sets_by_stat") or {}).get("median")
             or []
         )
-        out.append({
+        gene_set_section = {
             "type": "gene_set",
             "organ": organ,
             "sex": sex,
             "caption": f"Top Gene Sets — {organ.capitalize()}, {sex.capitalize()}",
             "gene_sets": gene_sets,
             "go_descriptions": [],
-        })
+        }
+        gs_narr = interp_entry.get("gene_set_narrative")
+        if gs_narr:
+            gene_set_section["narrative"] = gs_narr
+        out.append(gene_set_section)
         # Gene entry — map gene_symbol → gene to match generator's expected key
         top_genes_raw = entry.get("top_genes", []) or []
         top_genes = [
             {**g, "gene": g.get("gene_symbol") or g.get("gene", "")}
             for g in top_genes_raw
         ]
-        out.append({
+        gene_section = {
             "type": "gene",
             "organ": organ,
             "sex": sex,
             "caption": f"Top Genes — {organ.capitalize()}, {sex.capitalize()}",
             "top_genes": top_genes,
             "gene_descriptions": [],
-        })
+        }
+        gn_narr = interp_entry.get("gene_narrative")
+        if gn_narr:
+            gene_section["narrative"] = gn_narr
+        out.append(gene_section)
     return out
 
 
@@ -424,11 +482,50 @@ def load_session_data(
         if isinstance(unified, dict) and unified:
             data["unified_narratives"] = unified
 
+    # ── Materials & Methods prose ─────────────────────────────────────
+    # The LLM Methods pass writes a bare dict with a `sections` list whose
+    # entries are keyed by the SAME `methods_key`s the template uses, so
+    # render_common.methods_subsection_content resolves each M&M subsection by
+    # key.  scaffold_report_data already seeds the heading-only M&M tree; this
+    # replaces the empty `sections` with the cached prose (mirrors the HTML
+    # path at report_data.py).  Omitted ⇒ subsections stay "[Section pending]".
+    methods_cache = _load_json(_latest(session_dir, "_cache_methods_*.json"))
+    if isinstance(methods_cache, dict) and methods_cache.get("sections"):
+        data["methods"] = {"sections": methods_cache["sections"]}
+
     # ── Genomics sections ─────────────────────────────────────────────
+    # The on-disk genomics cache is the FULL, filter-agnostic extraction (the
+    # web pipeline saves it before filtering).  Re-apply the report-level
+    # genomics allowlists HERE — the SAME filter_genomics_sections the web path
+    # uses — so the Overleaf bundle and the HTML preview render the identical
+    # set.  (Loaded from the active template; {} / [] ⇒ no filtering.)
     genomics_path = _latest(session_dir, "_cache_genomics_*.json")
     genomics_cache = _load_json(genomics_path)
     if isinstance(genomics_cache, dict) and genomics_cache:
-        converted = _convert_genomics_cache(genomics_cache)
+        from document_tree import ACTIVE_TEMPLATE
+        from document_template import (
+            load_report_organs, load_report_sex,
+            load_report_genes, load_report_gene_sets,
+        )
+        from table_builder_common import filter_genomics_sections
+        genomics_cache = filter_genomics_sections(
+            genomics_cache,
+            organ=load_report_organs(ACTIVE_TEMPLATE).get("genomics"),
+            sex=load_report_sex(ACTIVE_TEMPLATE).get("genomics"),
+            genes=load_report_genes(ACTIVE_TEMPLATE),
+            gene_sets=load_report_gene_sets(ACTIVE_TEMPLATE),
+        )
+        # Genomics LLM interpretation: the per-organ×sex biology analysis lives
+        # in `_cache_interpretation_<organ>_<sex>_*.json` (top-level
+        # gene_set_narrative / gene_narrative paragraph lists), generated and
+        # shown on the HTML preview but never carried onto the .tex entries.
+        # Build a {(organ,sex): {gene_set_narrative, gene_narrative}} map keyed
+        # off the SURVIVING (post-filter) genomics keys, picking the latest
+        # cache per organ×sex — the same reader session_routes uses.
+        interpretations = _load_genomics_interpretations(
+            session_dir, genomics_cache,
+        )
+        converted = _convert_genomics_cache(genomics_cache, interpretations)
         if converted:
             data["genomics_sections"] = converted
 
@@ -449,8 +546,9 @@ def load_session_data(
     # endpoints come from `data["bmd_summary"]`, the Background sentence from
     # background.json, and the genomics cache we ALREADY loaded above (so it is
     # not re-read from disk, and there is no second session-path assumption).
-    # No methods_context (this session has no methods cache), so the Methods
-    # abstract paragraph is simply omitted — consistent with the M&M prose.
+    # The Methods abstract sentence is assembled by overlay_abstract itself; we
+    # don't pass an explicit methods_context here (the M&M prose is overlaid
+    # onto data["methods"] above and rendered directly by the M&M nodes).
     from report_data import overlay_abstract
     overlay_abstract(
         data,

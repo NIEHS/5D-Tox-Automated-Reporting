@@ -240,6 +240,43 @@ def test_convert_genomics_cache_produces_two_entries_per_organ_sex():
     gene_entry = next(e for e in out if e["type"] == "gene")
     # gene_symbol → gene rename for generator compatibility
     assert gene_entry["top_genes"][0]["gene"] == "FOXP1"
+    # No interpretations arg ⇒ no narrative attached (pre-feature behavior).
+    assert "narrative" not in gene_entry
+    gene_set_entry = next(e for e in out if e["type"] == "gene_set")
+    assert "narrative" not in gene_set_entry
+
+
+def test_convert_genomics_cache_attaches_interpretation_narrative():
+    """
+    With an interpretations map, the gene_set entry gets gene_set_narrative
+    and the gene entry gets gene_narrative for the matching (organ, sex).
+    """
+    cache = {
+        "liver_male": {
+            "organ": "liver", "sex": "male",
+            "gene_sets_by_stat": {"median": [{"rank": 1, "go_id": "GO:1"}]},
+            "top_genes": [{"rank": 1, "gene_symbol": "FOXP1"}],
+        },
+    }
+    interpretations = {
+        ("liver", "male"): {
+            "gene_set_narrative": ["Hepatic gene sets were dose-responsive."],
+            "gene_narrative": ["Foxp1 showed a low BMD."],
+        },
+    }
+    out = _convert_genomics_cache(cache, interpretations)
+    gene_set_entry = next(e for e in out if e["type"] == "gene_set")
+    gene_entry = next(e for e in out if e["type"] == "gene")
+    assert gene_set_entry["narrative"] == ["Hepatic gene sets were dose-responsive."]
+    assert gene_entry["narrative"] == ["Foxp1 showed a low BMD."]
+    # An organ×sex with no interpretation leaves narrative unset.
+    cache["kidney_female"] = {
+        "organ": "kidney", "sex": "female",
+        "gene_sets_by_stat": {"median": []}, "top_genes": [],
+    }
+    out2 = _convert_genomics_cache(cache, interpretations)
+    kidney_entries = [e for e in out2 if e.get("organ") == "kidney"]
+    assert kidney_entries and all("narrative" not in e for e in kidney_entries)
 
 
 def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkeypatch):
@@ -287,8 +324,19 @@ def test_load_session_data_overlays_real_session_when_present():
         "References should be surfaced from background.json"
     assert data.get("appendix_animals"), \
         "Appendix B animal roster should be loaded"
-    # Abstract assembled from caches (Background + Results + Summary); the
-    # Methods paragraph stays empty without a methods cache.
+    # Methods prose: the LLM Methods cache must be overlaid so the M&M
+    # subsections render real text instead of "[Section pending]".  The
+    # template's `study_design` methods_key is a stable anchor.
+    methods_sections = data.get("methods", {}).get("sections", [])
+    assert methods_sections, "Methods cache should be overlaid"
+    by_key = {s.get("key"): s for s in methods_sections if isinstance(s, dict)}
+    assert by_key.get("study_design", {}).get("paragraphs"), \
+        "Study Design M&M subsection should carry real paragraphs"
+    # Genomics LLM interpretation: at least one converted entry must now carry
+    # the per-organ×sex interpretation narrative (was dropped pre-fix).
+    assert any(e.get("narrative") for e in gs), \
+        "Genomics entries should carry the LLM interpretation narrative"
+    # Abstract assembled from caches (Background + Results + Summary).
     abstract_sections = {
         s.get("label"): s.get("text")
         for s in data.get("abstract", {}).get("sections", [])
