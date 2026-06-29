@@ -261,6 +261,7 @@ def _build_section_cards(
     dose_unit: str,
     dtxsid: str | None = None,
     imputed_cells: dict | None = None,
+    organ_allowlist: list[str] | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -289,6 +290,10 @@ def _build_section_cards(
                          can footnote imputation-backed BMDs.  None when no
                          imputation was detected (or the data was already
                          deduped before this load).
+        organ_allowlist: Report-level organ allowlist (lower-cased tokens) for
+                         the "organ-weight" area.  Threaded ONLY to the Organ
+                         Weight builder (the one apical table grouped by organ).
+                         Empty/None ⇒ no filtering.
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -452,6 +457,7 @@ def _build_section_cards(
                     ntp_stats=sex_rows,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
+                    organ_allowlist=organ_allowlist,
                 )
 
                 if ow_result and ow_result.get("table_data"):

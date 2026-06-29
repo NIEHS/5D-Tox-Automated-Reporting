@@ -230,6 +230,7 @@ def _hash_sections(
     dose_unit: str,
     sidecar_hash: str = "",
     imputed_cells=None,
+    organ_allowlist=None,
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -245,19 +246,31 @@ def _hash_sections(
       - imputed_cells: the _meta.imputed_cells map, which the
         clinical-pathology builder uses to footnote imputation-backed BMDs;
         it is not otherwise reflected in ntp_hash.
+      - organ_allowlist: the "organ-weight" area allowlist (a list of organ
+        tokens) — the Organ Weight table AND its narrative are baked into the
+        sections blob, so editing the allowlist MUST force a fresh build.
+        Unlike the genomics allowlist (post-filtered, no hash), this one is
+        folded here.  None/empty ⇒ no effect on the key (backward compatible).
 
     A schema_version is folded in so that adding/renaming row-dict fields
     (e.g. the `responsive` flag for clinical-pathology bolding) forces a
     miss even when the upstream inputs haven't changed.
     """
-    key = json.dumps({
+    payload = {
         "schema_version": _SECTIONS_CACHE_SCHEMA_VERSION,
         "ntp": ntp_hash,
         "compound_name": compound_name,
         "dose_unit": dose_unit,
         "sidecars": sidecar_hash,
         "imputed_cells": imputed_cells,
-    }, sort_keys=True)
+    }
+    # Only inject the organ-weight allowlist when one is set, so an unfiltered
+    # report hashes byte-identically to the pre-feature key (existing on-disk
+    # sections caches stay valid).  When set, a different list → a different key
+    # → a fresh build (the Organ Weight table + narrative live in this blob).
+    if organ_allowlist:
+        payload["organ_allowlist"] = sorted(organ_allowlist)
+    key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 

@@ -145,6 +145,13 @@ class ProcessContext:
     go_max_genes: int
     go_min_bmd: int
 
+    # Per-area organ allowlist from the template's `organs:` block —
+    # {area: [lower-cased tokens]} (areas: "genomics", "organ-weight").  A
+    # missing area key ⇒ no filtering for it; None/{} ⇒ no filtering anywhere.
+    # Defaulted so test scaffolds that build a context need not pass it.  See
+    # document_template.load_report_organs / table_builder_common.organ_allowed.
+    organ_filters: dict | None = None
+
     # --- accumulated state (None until the producing Layer runs) ---
     platform_tables: dict | None = None
     ntp_hash: str | None = None
@@ -607,6 +614,10 @@ async def _get_sections(ctx):
     compound_name = ctx.compound_name
     dose_unit = ctx.dose_unit
     sections_hash = ctx.sections_hash
+    # Organ-weight area allowlist — applied to the Organ Weight table and its
+    # narrative (both cached in the sections blob, so this is folded into
+    # sections_hash upstream — see _hash_sections at the Layer-0 hash step).
+    ow_allow = (ctx.organ_filters or {}).get("organ-weight")
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
@@ -625,6 +636,7 @@ async def _get_sections(ctx):
         lambda: _build_section_cards(
             platform_tables, compound_name, dose_unit,
             dtxsid=dtxsid, imputed_cells=imputed_cells,
+            organ_allowlist=ow_allow,
         ),
     )
     # Clinical obs tables bypass Java integration (categorical data).
@@ -702,6 +714,7 @@ async def _get_sections(ctx):
         platform_tables, compound_name, dose_unit,
         sidecar_mortality=sidecar_mortality,
         clinical_obs_incidence=clin_obs_incidence,
+        organ_allowlist=ow_allow,
     )
     clin_path_narrative = generate_clinical_pathology_narrative(
         platform_tables, compound_name, dose_unit,
@@ -756,13 +769,29 @@ async def _get_genomics(ctx):
     genomics_cached = _load_cache(dtxsid, "genomics", genomics_hash)
     if genomics_cached:
         ctx.genomics_sections = genomics_cached
-        return
-    result = await _extract_genomics(
-        dtxsid, ctx.integrated, ctx.bmd_stats,
-        ctx.go_pct, ctx.go_min_genes, ctx.go_max_genes, ctx.go_min_bmd,
-    )
-    _save_cache(dtxsid, "genomics", genomics_hash, result)
-    ctx.genomics_sections = result
+    else:
+        result = await _extract_genomics(
+            dtxsid, ctx.integrated, ctx.bmd_stats,
+            ctx.go_pct, ctx.go_min_genes, ctx.go_max_genes, ctx.go_min_bmd,
+        )
+        # Cache the FULL (unfiltered) extraction so editing the organ allowlist
+        # re-filters instantly without re-running the costly extraction.
+        _save_cache(dtxsid, "genomics", genomics_hash, result)
+        ctx.genomics_sections = result
+
+    # Per-area organ allowlist (post-filter — the single genomics choke point).
+    # Every entry carries a lower-case "organ"; dropping the non-allowed keys
+    # here cascades to charts, genomics narratives, and the gene tables, which
+    # all read this dict — no further edits needed.  Applied AFTER the cache
+    # save so the genomics cache stays organ-agnostic.
+    allow = (ctx.organ_filters or {}).get("genomics")
+    if allow and ctx.genomics_sections:
+        from table_builder_common import organ_allowed
+        ctx.genomics_sections = {
+            key: entry
+            for key, entry in ctx.genomics_sections.items()
+            if organ_allowed(entry.get("organ", ""), allow)
+        }
 
 
 async def _get_methods(ctx):
@@ -944,6 +973,13 @@ async def api_process_integrated(dtxsid: str, request: Request):
     go_max_genes = body.get("go_max_genes", 500)
     go_min_bmd = body.get("go_min_bmd", 3)
 
+    # Per-area organ allowlist from the active template's `organs:` block
+    # ({area: [tokens]}; {} ⇒ no filtering).  Loaded from the template like the
+    # chart config.  See document_template.load_report_organs.
+    from document_tree import ACTIVE_TEMPLATE
+    from document_template import load_report_organs
+    organ_filters = load_report_organs(ACTIVE_TEMPLATE)
+
     # --- Load integrated data ---
     integrated = _load_integrated(dtxsid)
     if not integrated:
@@ -966,6 +1002,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
         go_min_genes=go_min_genes,
         go_max_genes=go_max_genes,
         go_min_bmd=go_min_bmd,
+        organ_filters=organ_filters,
     )
 
     # --- Migrate old monolithic cache files ---
@@ -1014,6 +1051,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             ctx.ntp_hash, compound_name, dose_unit,
             sidecar_hash=sections_sidecar_hash,
             imputed_cells=_meta.get("imputed_cells"),
+            organ_allowlist=(ctx.organ_filters or {}).get("organ-weight"),
         )
         ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 

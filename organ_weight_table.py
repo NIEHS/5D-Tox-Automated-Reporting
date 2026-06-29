@@ -102,6 +102,7 @@ def build_organ_weight_table_from_sidecar(
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    organ_allowlist: list[str] | None = None,
 ) -> dict:
     """
     Build NIEHS Table 3 (Organ Weights) from sidecar + NTP stats.
@@ -167,6 +168,14 @@ def build_organ_weight_table_from_sidecar(
     # row inclusion — matching the body weight and clinical pathology pattern.
     # Terminal Body Weight is excluded from the organ list — it's a context
     # row shown separately.
+    # Report-level organ allowlist: keep only labels whose parsed organ token is
+    # allowed (empty/None ⇒ everything, the pre-feature behaviour).  Labels are
+    # full endpoint strings ("Liver Absolute"); _parse_organ_label extracts the
+    # organ token ("Liver") that organ_allowed matches component-wise (so
+    # "kidney" covers the "Kidney-Left"/"Kidney-Right" laterality labels).
+    from table_builder_common import organ_allowed
+    from unified_narrative import _parse_organ_label
+
     all_organs: set[str] = set()
     ntp_by_sex_label: dict[str, dict[str, dict]] = {}
     for sex, sex_stats in ntp_stats.items():
@@ -175,7 +184,9 @@ def build_organ_weight_table_from_sidecar(
             label = stat_row.get("label") if isinstance(stat_row, dict) else stat_row.label
             ntp_by_sex_label[sex][label] = stat_row
             if label != "Terminal Body Weight":
-                all_organs.add(label)
+                organ_token, _wtype = _parse_organ_label(label)
+                if organ_allowed(organ_token, organ_allowlist):
+                    all_organs.add(label)
 
     if not all_organs:
         return {}

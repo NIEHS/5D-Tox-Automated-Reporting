@@ -104,6 +104,51 @@ SIGNIFICANCE_EXPLANATION = (
 # re-derives from `marker_refs`, it is idempotent and safe to run again after
 # more footnotes are merged in downstream (see report_data.py).
 
+# ---------------------------------------------------------------------------
+# Report-level organ allowlist (per-area limiting factor)
+# ---------------------------------------------------------------------------
+
+# Organ candidates are split into components on whitespace / hyphen / dot /
+# slash so one author-friendly token covers the inconsistent organ spellings
+# across the pipeline (e.g. "kidney" must match the apical laterality labels
+# "Kidney-Left" / "Kidney-Right" / "R. Kidney" as well as the genomics token
+# "kidney").
+_ORGAN_COMPONENT_SEP = re.compile(r"[\s.\-/]+")
+
+
+def organ_allowed(organ: str, allowlist: list[str] | None) -> bool:
+    """
+    Whether an organ passes a (per-area) report-level allowlist.
+
+    An EMPTY/None allowlist means "no filtering" — every organ is allowed (the
+    pre-feature behaviour).  Otherwise the candidate is kept when a listed token
+    matches it COMPONENT-WISE: the candidate is case-folded and split on
+    whitespace / ``-`` / ``.`` / ``/`` into components, and it passes when a
+    listed token equals the whole candidate OR any one component.
+
+    Component matching is what lets one token cover the inconsistent organ
+    spellings across the pipeline: genomics emits a clean ``"kidney"`` (one
+    component → matches), while apical row labels split laterality
+    (``"Kidney-Left"``, ``"Kidney-Right"``, ``"R. Kidney"`` → "kidney" is a
+    component → matches).  A non-listed organ (``"Liver"``, ``"Heart"``) shares
+    no component and is dropped.
+
+    The allowlist is expected pre-lower-cased by
+    document_template.load_report_organs, so only the candidate is folded here.
+    This is the SINGLE matcher every organ choke point shares (genomics post-
+    filter, organ-weight table, organ-weight narrative).
+    """
+    if not allowlist:
+        return True
+    folded = (organ or "").strip().lower()
+    if not folded:
+        return False
+    if folded in allowlist:
+        return True
+    components = {c for c in _ORGAN_COMPONENT_SEP.split(folded) if c}
+    return any(token in components for token in allowlist)
+
+
 def legend_footnote(text: str) -> dict:
     """Build a `legend` footnote record (unlettered, e.g. the `*`/`**` key)."""
     return {"kind": "legend", "text": text}

@@ -421,6 +421,77 @@ def load_chart_types(name: str):
     return chart_registry.build_registry(raw)
 
 
+# The content AREAS an organ allowlist may scope — the only two places organ is
+# a row/section axis (genomics sections; the organ-weight apical table).  A
+# closed vocabulary so a typo'd area key (e.g. `genomic:`) fails loudly at load
+# rather than silently filtering nothing.
+REPORT_ORGAN_AREAS: frozenset[str] = frozenset({"genomics", "organ-weight"})
+
+
+def load_report_organs(name: str) -> dict[str, list[str]]:
+    """
+    Load the ``organs`` block from a template — the per-area organ ALLOWLIST.
+
+    The block is a sibling of ``document`` (like ``chart_style``/``chart_types``)
+    and is a MAPPING keyed by content area:
+
+        organs:
+          genomics: [kidney]            # limit the genomics sections to kidney
+          organ-weight: [liver, kidney] # limit the organ-weight table/narrative
+
+    Returns ``{area: [tokens]}`` with each token lower-cased and stripped — the
+    canonical match form, since organ strings appear inconsistently cased across
+    the pipeline.  Filtering compares against this via
+    table_builder_common.organ_allowed (component-aware).
+
+    An OMITTED area key (or an empty list for it) means NO filtering for that
+    area.  Returns ``{}`` when the file is a bare list or has no ``organs`` key,
+    which means no filtering anywhere — the pre-feature behaviour, fully
+    backward compatible.
+
+    Validates SHAPE loudly:
+      - ``organs`` must be a MAPPING (a bare list is the rejected flat shape);
+      - each key must be a known area (REPORT_ORGAN_AREAS);
+      - each value must be a list of strings.
+    """
+    data = _load_raw(name)
+    if not isinstance(data, dict):
+        return {}
+    raw = data.get("organs")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"template {name!r}: 'organs' must be a mapping of area → "
+            f"[organ, ...], got {type(raw).__name__}"
+        )
+
+    filters: dict[str, list[str]] = {}
+    for area, tokens in raw.items():
+        if area not in REPORT_ORGAN_AREAS:
+            raise ValueError(
+                f"template {name!r}: unknown organ area {area!r}; "
+                f"must be one of {sorted(REPORT_ORGAN_AREAS)}"
+            )
+        if not isinstance(tokens, list):
+            raise ValueError(
+                f"template {name!r}: organs.{area} must be a list of organ "
+                f"names, got {type(tokens).__name__}"
+            )
+        cleaned: list[str] = []
+        for item in tokens:
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"template {name!r}: every entry in organs.{area} must be a "
+                    f"string, got {type(item).__name__}: {item!r}"
+                )
+            token = item.strip().lower()
+            if token:
+                cleaned.append(token)
+        filters[area] = cleaned
+    return filters
+
+
 def instantiate(template: list[dict]) -> list[DocNode]:
     """
     Instantiate a template into a flat list of DocNode top-level entries.

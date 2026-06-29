@@ -595,6 +595,7 @@ def _build_organ_weight_paragraphs(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
     dose_unit: str,
+    organ_allowlist: list[str] | None = None,
 ) -> list[str]:
     """
     Build organ weight finding paragraphs from the Organ Weight platform data.
@@ -612,10 +613,18 @@ def _build_organ_weight_paragraphs(
         platform_tables: The full {platform -> {sex -> [TableRow]}} dict.
         compound_name:   Chemical name for prose.
         dose_unit:       Dose unit string.
+        organ_allowlist: Report-level organ allowlist (lower-cased tokens) for
+                         the "organ-weight" area.  Empty/None ⇒ no filtering.
+                         Keeps the prose in lock-step with the filtered Organ
+                         Weight table.  Scoped to organ-weight rows ONLY (this
+                         builder), so clinical-chemistry endpoints — which
+                         _parse_organ_label also names — are untouched.
 
     Returns:
         List of paragraph strings (one per sex that has data).
     """
+    from table_builder_common import organ_allowed
+
     ow_data = platform_tables.get("Organ Weight", {})
     if not ow_data:
         return []
@@ -627,8 +636,14 @@ def _build_organ_weight_paragraphs(
         if not rows:
             continue
 
-        # Separate organ-weight rows from any body-weight rows that might be mixed in
-        organ_rows = [r for r in rows if _parse_organ_label(r.label)[1] != "body_weight"]
+        # Separate organ-weight rows from any body-weight rows that might be
+        # mixed in, then apply the report-level organ allowlist (matched on the
+        # parsed organ token) so the prose names only the kept organs.
+        organ_rows = [
+            r for r in rows
+            if _parse_organ_label(r.label)[1] != "body_weight"
+            and organ_allowed(_parse_organ_label(r.label)[0], organ_allowlist)
+        ]
         if not organ_rows:
             continue
 
@@ -828,6 +843,7 @@ def generate_apical_narrative(
     dose_unit: str,
     sidecar_mortality: dict | None = None,
     clinical_obs_incidence: dict[str, list] | None = None,
+    organ_allowlist: list[str] | None = None,
 ) -> list[str]:
     """
     Unified "Animal Condition, Body Weights, and Organ Weights" narrative.
@@ -851,6 +867,11 @@ def generate_apical_narrative(
         clinical_obs_incidence: Optional {sex: [IncidenceRow]} from
                                 build_clinical_obs_tables().  If None, clinical
                                 signs are omitted from the condition paragraph.
+        organ_allowlist:        Report-level organ allowlist (lower-cased
+                                tokens) for the "organ-weight" area, applied to
+                                the organ-weight findings so the prose matches
+                                the filtered Organ Weight table.  Empty/None ⇒
+                                no filtering.
 
     Returns:
         List of paragraph strings, ready for display or export.
@@ -873,7 +894,9 @@ def generate_apical_narrative(
 
     # 3. Organ weight findings
     paragraphs.extend(
-        _build_organ_weight_paragraphs(platform_tables, compound_name, dose_unit)
+        _build_organ_weight_paragraphs(
+            platform_tables, compound_name, dose_unit, organ_allowlist
+        )
     )
 
     return paragraphs
