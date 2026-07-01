@@ -129,7 +129,9 @@ def walk_tree(nodes: list[DocNode], visit) -> None:
 # must receive a positional table_number.  This is the single producer-side
 # source of truth; cross_references._TABLE_TYPES is the consumer-side mirror and
 # must stay equal to it (see the assertion in cross_references.py).
-NUMBERED_TABLE_TYPES = frozenset({"table", "incidence-table", "bmd-summary"})
+NUMBERED_TABLE_TYPES = frozenset(
+    {"sample-counts-table", "table", "incidence-table", "bmd-summary"}
+)
 
 
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
@@ -137,20 +139,23 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     Walk the whole tree in document order and assign table_number to every
     node whose node_type is in NUMBERED_TABLE_TYPES.
 
-    Table 1 is always the sample counts table (in Methods), which is
-    handled separately (inline, not a tree node).  The remaining tables start
-    at Table 2 and are numbered in pre-order document order regardless of which
-    section they live under — numbering is positional, not scoped to a section
-    id, so re-parenting or renaming a section can't silently drop a number.
+    Numbering is fully positional and starts at Table 1: the first numbered
+    node in document order is the Methods sample-counts table (a
+    `sample-counts-table` node under Transcriptomics), so it earns Table 1 by
+    position; the Results tables follow (2, 3, ...).  Numbering is not scoped to
+    a section id, so re-parenting or renaming a section can't silently drop a
+    number.
 
     Mutates nodes in place.
     """
     if tree is None:
         tree = DOCUMENT_TREE
 
-    # Table 1 = sample counts (in Methods, not a tree node — it's inline).
-    # Every numbered table starts at 2.
-    counter = 2
+    # Positional from 1: the sample-counts-table node in Methods is the first
+    # numbered node in document order, so it becomes Table 1; Results tables
+    # follow.  (Previously Table 1 was reserved for a DOCX-only inline table
+    # that no tree node carried — that hack is gone now the table is a node.)
+    counter = 1
 
     def visit(node: DocNode) -> None:
         nonlocal counter

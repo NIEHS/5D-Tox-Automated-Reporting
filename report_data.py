@@ -350,6 +350,16 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
         data["methods"] = {"sections": [], "paragraphs": methods_paragraphs}
     # else: scaffold's heading-only methods structure remains
 
+    # Table 1: Final Sample Counts (the sample-counts-table tree node).  Built
+    # from the posted MethodsContext, which already carries
+    # genomics_sample_counts on the web path (no session_dir here, so the
+    # fingerprint fallback is a no-op).  None ⇒ node shows its pending stub.
+    if methods_data and methods_data.get("context"):
+        from methods_table1 import build_sample_counts_from_context
+        sample_counts = build_sample_counts_from_context(methods_data["context"])
+        if sample_counts:
+            data["sample_counts"] = sample_counts
+
     # Assign positional table numbers on the document tree before any overlay
     # reads them.  _overlay_apical_sections resolves each section's table number
     # via _find_table_number(DOCUMENT_TREE, ...), which reads node.table_number;
@@ -1092,7 +1102,15 @@ def _build_methods_sections_from_tree() -> list[dict]:
     # Pre-order walk of the methods subtree (excluding the heading-only
     # "methods" parent — we start from its children).  Uses the shared
     # walk_tree primitive (ADR-0006) rather than a local re-implementation.
+    # Only prose subsections (heading-bearing narrative/heading-only nodes)
+    # become methods "sections"; a data table nested under Methods (e.g. the
+    # headingless sample-counts-table) renders through its own dispatch and must
+    # NOT masquerade as an empty prose section.
+    _PROSE_TYPES = {"narrative", "heading-only"}
+
     def _visit(node) -> None:
+        if node.node_type not in _PROSE_TYPES:
+            return
         sections.append({
             "level": node.level,
             "heading": node.title,
@@ -1489,6 +1507,11 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
                         return True
             return False
 
+        # Sample-counts table (Table 1) — ready iff its built matrix has rows.
+        if node.node_type == "sample-counts-table":
+            built = data.get(dk) if dk else None
+            return bool(isinstance(built, dict) and built.get("rows"))
+
         # BMD summary — check for non-placeholder endpoints
         if node.node_type == "bmd-summary":
             bmd = data.get("bmd_summary", {})
@@ -1653,9 +1676,9 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
 
     # All data keys that can be independently removed
     ALL_BODY = {
-        "background", "methods", "apical_sections", "unified_narratives",
-        "internal_dose", "bmd_summary", "genomics_sections",
-        "gene_set_narrative", "gene_narrative",
+        "background", "methods", "sample_counts", "apical_sections",
+        "unified_narratives", "internal_dose", "bmd_summary",
+        "genomics_sections", "gene_set_narrative", "gene_narrative",
         "summary", "references",
     }
     ALL_FRONT = {

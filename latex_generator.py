@@ -89,6 +89,7 @@ from render_common import (
     appendix_roster_rows,
     ANIMAL_ROSTER_HEADERS,
     methods_subsection_content,
+    sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
     genomics_entries,
@@ -672,6 +673,57 @@ def _emit_table_placeholder(node: DocNode) -> str:
     )
 
 
+def _render_sample_counts_table(node: DocNode, data: dict) -> str:
+    r"""
+    Render the Methods "Final Sample Counts" matrix (Table 1) as a niehstable.
+
+    The built matrix ({caption, headers, rows, footnotes}) comes from the shared
+    sample_counts_table EXTRACT; its rows carry two conventions from the DOCX
+    builder that we honor here (build_table1_data / methods_report._add_methods_
+    table): a sex-header row has its first cell wrapped in "**...**" and spans
+    the table (a bold separator, like the apical sex blocks); organ rows carry
+    two leading spaces on the first cell.  \small keeps the 11 dose columns on
+    the page; the walker's landscape wrap handles the width (node is orientable +
+    orientation: landscape in the template).
+    """
+    built = sample_counts_table(node, data)
+    if built is None:
+        return _emit_table_placeholder(node)
+
+    headers = [str(h) for h in built.get("headers", [])]
+    rows = built.get("rows", [])
+    ncols = max(len(headers), max((len(r) for r in rows), default=0))
+    colspec = "l" + "c" * (ncols - 1) if ncols > 1 else "l"
+
+    lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
+             _emit_tabular_row(headers), "\\midrule"]
+    for row in rows:
+        cells = [str(c) for c in row]
+        first = cells[0] if cells else ""
+        if first.startswith("**") and first.endswith("**"):
+            # Sex-header separator row — bold, spanning every column.
+            label = first.strip("*").strip()
+            lines.append(
+                f"\\multicolumn{{{ncols}}}{{l}}{{\\textbf{{{_escape_latex(label)}}}}} \\\\"
+            )
+        else:
+            if cells:
+                cells[0] = cells[0].strip()
+            lines.append(_emit_tabular_row(cells))
+    lines.append("\\bottomrule")
+    lines.append("\\end{tabular}")
+    tabular = "{\\small\n" + "\n".join(lines) + "\n}"
+
+    notes = _emit_table_footnotes(built.get("footnotes", []))
+    caption = _table_caption(node, built.get("caption", ""))
+    return (
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
+        f"{tabular}"
+        f"{notes}\n"
+        f"\\end{{niehstable}}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Narrative + tables group (Results subsections)
 # ---------------------------------------------------------------------------
@@ -1062,6 +1114,7 @@ _DISPATCH: dict[str, object] = {
     "narrative+tables":  _render_narrative_tables,
     "table":             _render_apical_table,
     "incidence-table":   _render_incidence_table,
+    "sample-counts-table": _render_sample_counts_table,
     "bmd-summary":       _render_bmd_summary,
     "genomics-section":  _render_genomics_section,
     "freeform-page":     _render_freeform_page,

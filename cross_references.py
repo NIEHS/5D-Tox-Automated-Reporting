@@ -76,7 +76,9 @@ _XREF_RE = re.compile(r"\[\[xref:([\w\-:.]+)\]\]")
 # NUMBERED_TABLE_TYPES) is the source of truth; we mirror it and assert equality
 # so a type can never be numbered-but-unreferenceable (or vice versa) again.
 _TABLE_TYPES = NUMBERED_TABLE_TYPES
-assert _TABLE_TYPES == frozenset({"table", "incidence-table", "bmd-summary"})
+assert _TABLE_TYPES == frozenset(
+    {"sample-counts-table", "table", "incidence-table", "bmd-summary"}
+)
 
 
 # ---------------------------------------------------------------------------

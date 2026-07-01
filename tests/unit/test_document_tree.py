@@ -122,11 +122,25 @@ class TestComputeTableNumbers:
 
         _collect_results_table_numbers(results.children)
         assert len(table_numbers) > 0
-        # Table numbers should start at 2 (Table 1 = sample counts, inline)
+        # The first RESULTS table is Table 2: Table 1 is the Methods
+        # sample-counts-table node, which precedes Results in document order.
         assert table_numbers[0] == 2
         # Should be sequential with no gaps
         for i in range(1, len(table_numbers)):
             assert table_numbers[i] == table_numbers[i - 1] + 1
+
+    def test_sample_counts_table_is_table_one(self):
+        """The Methods sample-counts-table node is Table 1 (first numbered node
+        in document order), and the first Results table follows at 2 — so
+        numbering is fully positional with no reserved-slot hack."""
+        import copy
+        tree = copy.deepcopy(DOCUMENT_TREE)
+        compute_table_numbers(tree)
+
+        sc = find_node("table-sample-counts", tree)
+        assert sc is not None and sc.node_type == "sample-counts-table"
+        assert sc.table_number == 1
+        assert find_node("table-body-weight", tree).table_number == 2
 
     def test_non_table_nodes_have_no_number(self):
         """Narrative and heading-only nodes should not get table numbers."""
@@ -149,10 +163,12 @@ class TestComputeTableNumbers:
 
         Regression: compute_table_numbers used to allowlist only "table" and
         "bmd-summary", so an incidence-table got None and the surrounding
-        numbers jumped 3 -> 4, dropping it from the List of Tables and rendering
-        it without a "Table N." caption.  Built on a synthetic tree (the active
+        numbers jumped, dropping it from the List of Tables and rendering it
+        without a "Table N." caption.  Built on a synthetic tree (the active
         niehs-5day template no longer instances an incidence-table node) so the
         numbering contract is pinned independently of the template's node set.
+        This synthetic tree has no sample-counts-table node, so numbering starts
+        at 1 here; on the real tree Table 1 is the Methods sample-counts node.
         """
         from document_tree import NUMBERED_TABLE_TYPES, walk_tree
 
@@ -177,12 +193,13 @@ class TestComputeTableNumbers:
         incidence = find_node("t-incidence", tree)
         assert incidence is not None
         assert incidence.node_type == "incidence-table"
-        # It sits third among the numbered tables (t-bw=2, t-ow=3), so it must be
-        # Table 4 — present and gap-free, not None.
-        assert incidence.table_number == 4
+        # It sits third among the numbered tables (t-bw=1, t-ow=2 on this
+        # synthetic sample-counts-free tree), so it must be Table 3 — present and
+        # gap-free, not None.
+        assert incidence.table_number == 3
 
         # Whole-tree sweep: every numbered-table node has a number and the full
-        # run is contiguous starting at 2, with no gaps around the incidence row.
+        # run is contiguous starting at 1, with no gaps around the incidence row.
         numbers: list[int] = []
 
         def _collect(node):
@@ -194,7 +211,7 @@ class TestComputeTableNumbers:
                 numbers.append(node.table_number)
 
         walk_tree(tree, _collect)
-        assert numbers == list(range(2, 2 + len(numbers)))
+        assert numbers == list(range(1, 1 + len(numbers)))
 
 
 class TestFindNode:

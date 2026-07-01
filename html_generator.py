@@ -70,6 +70,7 @@ from render_common import (
     appendix_roster_rows,
     ANIMAL_ROSTER_HEADERS,
     methods_subsection_content,
+    sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
     genomics_entries,
@@ -620,6 +621,57 @@ def _render_inline_table(table: dict) -> str:
     )
 
 
+def _render_sample_counts_table(node: DocNode, data: dict) -> str:
+    """
+    Render the Methods "Final Sample Counts" matrix (Table 1) as an HTML table.
+
+    Mirrors the LaTeX emitter: the built {caption, headers, rows, footnotes}
+    matrix comes from the shared sample_counts_table EXTRACT; sex-header rows
+    (first cell "**...**") render as a bold full-width separator, organ rows keep
+    their label.  The "Table N." caption comes from the shared _table_caption
+    (node.caption wins — authored in the YAML).
+    """
+    built = sample_counts_table(node, data)
+    if built is None:
+        caption = _table_caption(node, node.title or "")
+        return (
+            '<table class="niehstable">'
+            f"<caption>{_esc(caption)}</caption></table>"
+            f"{_pending(f'Table data pending: {node.title}')}"
+        )
+
+    headers = [str(h) for h in built.get("headers", [])]
+    ncols = max(len(headers),
+                max((len(r) for r in built.get("rows", [])), default=0))
+    head = _emit_table_header(headers) if headers else ""
+
+    body_rows: list[str] = []
+    for row in built.get("rows", []):
+        cells = [str(c) for c in row]
+        first = cells[0] if cells else ""
+        if first.startswith("**") and first.endswith("**"):
+            label = first.strip("*").strip()
+            body_rows.append(
+                f'<tr class="sex-row"><td colspan="{ncols}"><strong>'
+                f"{_esc(label)}</strong></td></tr>"
+            )
+        else:
+            if cells:
+                cells[0] = cells[0].strip()
+            body_rows.append(_emit_table_row(cells))
+
+    notes = _emit_table_footnotes(built.get("footnotes", []))
+    caption = _table_caption(node, built.get("caption", ""))
+    return (
+        '<table class="niehstable">'
+        f"<caption>{_esc(caption)}</caption>"
+        f"{head}"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+        f"{notes}"
+    )
+
+
 def _render_heading_only(node: DocNode, data: dict) -> str:
     """Structural heading; children rendered separately by the walker."""
     return _heading(node.level, node.title)
@@ -1121,6 +1173,7 @@ _DISPATCH: dict[str, object] = {
     "narrative+tables": _render_narrative_tables,
     "table":            _render_apical_table,
     "incidence-table":  _render_incidence_table,
+    "sample-counts-table": _render_sample_counts_table,
     "bmd-summary":      _render_bmd_summary,
     "genomics-section": _render_genomics_section,
     "freeform-page":    _render_freeform_page,

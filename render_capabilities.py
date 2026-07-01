@@ -190,7 +190,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
         content_kinds=(),
         allowed_children=(
             "heading-only", "narrative", "narrative+tables",
-            "bmd-summary", "genomics-section",
+            "bmd-summary", "genomics-section", "sample-counts-table",
             "freeform-page", "freeform-block",
         ),
     ),
@@ -228,6 +228,17 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "incidence-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
         requires=("platform",), captionable=True,
+    ),
+    # ── The Methods sample-counts matrix — "Table 1. Final Sample Counts for
+    #    BMD Analysis of the Transcriptomics Data" (organ×sex rows × dose
+    #    columns).  A headingless, captionable data table like `table`, but its
+    #    data comes from data[data_key] (the built {caption, headers, rows,
+    #    footnotes} matrix) rather than a platform's apical_sections — so it
+    #    requires a `data_key`, not a `platform`.  Orientable because the 11
+    #    dose columns want landscape.
+    "sample-counts-table": ComponentType(
+        capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
+        requires=("data_key",), captionable=True,
     ),
     # ── A summary section whose body is one table (it DOES have a heading).
     #    Captionable because its body is the table whose <caption><p> is the

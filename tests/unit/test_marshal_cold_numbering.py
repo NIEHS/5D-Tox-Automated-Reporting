@@ -27,10 +27,11 @@ from document_tree import DOCUMENT_TREE, walk_tree
 
 
 # Positional numbers assigned by compute_table_numbers() on the canonical
-# document tree (Table 1 is the front-matter study-design table; results
-# tables start at 2).  These are the ground truth the overlay must reproduce.
-# The apical platforms are now contiguous (2..7) — the active template no longer
-# instances a Clinical Observations incidence-table, so there is no gap.
+# document tree.  Table 1 is the Methods sample-counts-table node (first
+# numbered node in document order), so the Results apical tables start at 2.
+# These are the ground truth the overlay must reproduce.  The apical platforms
+# are contiguous (2..7) — the active template no longer instances a Clinical
+# Observations incidence-table, so there is no gap.
 EXPECTED_TABLE_NUMBERS = {
     "Body Weight": 2,
     "Organ Weight": 3,

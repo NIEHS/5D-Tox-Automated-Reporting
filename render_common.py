@@ -644,6 +644,29 @@ def methods_subsection_content(
     return [], None
 
 
+def sample_counts_table(node: DocNode, data: dict) -> dict | None:
+    """
+    EXTRACT for a ``sample-counts-table`` node (Methods "Final Sample Counts"
+    matrix — Table 1).  The already-built table dict lives at
+    ``data[node.data_key]`` in the neutral ``{caption, headers, rows,
+    footnotes}`` shape (produced by methods_table1.build_sample_counts_from_
+    context on both export paths), so each emitter renders it in its own markup.
+
+    Returns the dict when present and non-empty, else None (the emitter shows
+    its pending placeholder — emptiness handling is format-dependent, so it
+    stays in emit, matching the inline-table / apical-table pattern).
+    """
+    key = node.data_key
+    if not key:
+        return None
+    built = data.get(key)
+    if not isinstance(built, dict):
+        return None
+    if not built.get("headers") and not built.get("rows"):
+        return None
+    return built
+
+
 # ---------------------------------------------------------------------------
 # Genomics-section extractors (ADR-0006 Amendment 1 — semantic core only)
 # ---------------------------------------------------------------------------
@@ -831,6 +854,7 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
     "table",
     "incidence-table",
     "bmd-summary",
+    "sample-counts-table",
     "genomics-section",
     "freeform-page",
     "freeform-block",

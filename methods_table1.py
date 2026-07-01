@@ -31,6 +31,9 @@ methods_report.py re-exports build_table1_data so external callers
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from methods_models import MethodsContext
 
 
@@ -97,5 +100,49 @@ def build_table1_data(ctx: MethodsContext) -> dict | None:
         "rows": rows,
         "footnotes": [],
     }
+
+
+def build_sample_counts_from_context(
+    methods_context: dict | None,
+    session_dir: str | Path | None = None,
+) -> dict | None:
+    """
+    Build the Table 1 matrix from a serialized MethodsContext, for the two
+    tree-driven export paths (LaTeX load_session_data, web marshal_export_data).
+
+    The document tree has a `sample-counts-table` node bound to
+    data["sample_counts"]; this produces that value in the neutral
+    {caption, headers, rows, footnotes} shape build_table1_data returns.
+
+    The context's genomics_sample_counts may be absent (a stale cache written
+    before the counts were extracted).  When it is AND a session_dir is given,
+    reconstruct the counts from that session's _fingerprints.json — the same
+    source methods_extract._build_genomics_sample_counts uses — so an old
+    session still gets Table 1.  Returns None when there is no genomics data to
+    tabulate (no counts and nothing to reconstruct from).
+    """
+    if not methods_context:
+        return None
+    ctx = MethodsContext.from_dict(methods_context)
+    if not ctx.genomics_sample_counts and session_dir is not None:
+        from methods_extract import _build_genomics_sample_counts
+        fingerprints = _load_session_fingerprints(session_dir)
+        if fingerprints:
+            ctx.genomics_sample_counts = _build_genomics_sample_counts(
+                fingerprints, ctx.dose_groups,
+            )
+    return build_table1_data(ctx)
+
+
+def _load_session_fingerprints(session_dir: str | Path) -> dict:
+    """Read a session's _fingerprints.json ({file_id: fingerprint-dict}), or {}
+    if the file is absent/unreadable.  The stale-cache fallback for
+    build_sample_counts_from_context."""
+    path = Path(session_dir) / "_fingerprints.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 

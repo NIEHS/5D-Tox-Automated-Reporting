@@ -146,6 +146,12 @@ document:
         title: Sequencing Quality Checks and Outlier Removal
         data_key: methods
         methods_key: txomics_qc
+      - id: table-sample-counts
+        type: sample-counts-table
+        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        data_key: sample_counts
+        orientation: landscape
+        caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
       - id: mm-tx-norm
         type: narrative
         title: Data Normalization

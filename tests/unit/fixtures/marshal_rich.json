@@ -260,6 +260,17 @@
               "type": "narrative"
             },
             {
+              "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+              "data_key": "sample_counts",
+              "id": "table-sample-counts",
+              "level": 0,
+              "orientation": "landscape",
+              "region": "body",
+              "table_number": 1,
+              "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+              "type": "sample-counts-table"
+            },
+            {
               "data_key": "methods",
               "id": "mm-tx-norm",
               "level": 3,
@@ -635,6 +646,11 @@
     ]
   },
   "table_entries": [
+    {
+      "ready": false,
+      "table_number": 1,
+      "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data"
+    },
     {
       "ready": false,
       "table_number": 2,

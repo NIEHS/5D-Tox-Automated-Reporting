@@ -494,6 +494,19 @@ def load_session_data(
     if isinstance(methods_cache, dict) and methods_cache.get("sections"):
         data["methods"] = {"sections": methods_cache["sections"]}
 
+    # ── Table 1: Final Sample Counts (the sample-counts-table tree node) ──
+    # Built from the cached MethodsContext; when that context lacks
+    # genomics_sample_counts (a stale cache), build_sample_counts_from_context
+    # reconstructs them from this session's _fingerprints.json, so an older
+    # session still renders Table 1.  None ⇒ the node shows its pending stub.
+    if isinstance(methods_cache, dict) and methods_cache.get("context"):
+        from methods_table1 import build_sample_counts_from_context
+        sample_counts = build_sample_counts_from_context(
+            methods_cache["context"], session_dir,
+        )
+        if sample_counts:
+            data["sample_counts"] = sample_counts
+
     # ── Genomics sections ─────────────────────────────────────────────
     # The on-disk genomics cache is the FULL, filter-agnostic extraction (the
     # web pipeline saves it before filtering).  Re-apply the report-level

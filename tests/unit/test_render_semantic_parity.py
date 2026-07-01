@@ -154,8 +154,12 @@ def test_table_numbers_agree_across_surfaces(session_data):
         f"rendered table numbers {html_nums} != expected {expected}"
     )
 
-
-def test_genomics_numbering_identical_across_render_paths():
+    # Table 1 specifically is the Methods sample-counts-table node — a data-
+    # driven table that only renders when data["sample_counts"] is present.
+    # Pin it on both surfaces so a regression that drops its data (leaving only
+    # the pending stub, which still carries the number) is caught here.
+    assert 1 in html_nums, "Table 1 (sample counts) absent from both surfaces"
+    assert "Table 1." in html and "Table 1." in tex
     """
     The genomics table numbers assigned by the LaTeX session path
     (load_session_data) and the web/marshal path (marshal_export_data) must be
