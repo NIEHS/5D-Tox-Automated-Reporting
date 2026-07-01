@@ -361,7 +361,11 @@ def resolve_freeform(
 
     Cases:
       - ``content`` is a dual-source mapping ({latex, html}): each surface uses
-        its own source verbatim (a missing key → None on that surface).
+        its own inline source verbatim (a missing key → None on that surface).
+      - ``content_file`` is a dual-source mapping ({latex, html}): each surface
+        reads its OWN file (a missing key → None on that surface).  This is the
+        from-files twin of the inline dual-source form — an authored appendix
+        lives as a .tex + .html pair under templates/ rather than in the YAML.
       - else a single source — inline ``content`` string OR the text of
         ``content_file`` — interpreted per ``representation``:
           * latex → {latex: src, html: None}
@@ -373,11 +377,21 @@ def resolve_freeform(
     template validator BEFORE this is called; this function trusts that and
     raises only on a genuinely unreadable/empty source.
     """
-    # Dual-source mapping: surface-specific native sources.
+    # Dual-source inline mapping: surface-specific native sources.
     if isinstance(content, dict):
         return {
             "latex": content.get("latex"),
             "html": content.get("html"),
+        }
+
+    # Dual-source FILE mapping: each surface reads its own file (or None when
+    # that key is absent).  Symmetric with the inline mapping above.
+    if isinstance(content_file, dict):
+        return {
+            "latex": (_read_source_file(content_file["latex"], base_dir)
+                      if content_file.get("latex") else None),
+            "html": (_read_source_file(content_file["html"], base_dir)
+                     if content_file.get("html") else None),
         }
 
     rep = representation

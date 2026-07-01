@@ -266,9 +266,22 @@ document:
     type: narrative
     title: References
     data_key: references
+  # Appendices A/D/E/F carry AUTHORED static content (the reference's plasma
+  # method, BMD rules table, organ descriptions, supplemental manifest) as a
+  # freeform-block child — dual-surface, one .tex + one .html per appendix
+  # under templates/freeform/.  Appendix B renders the data-derived animal
+  # roster (no child).  Appendix C stays a pending stub (its QC/eFDR figures
+  # need transcriptomics data the pipeline does not retain).
   - id: appendix-a
     type: appendix
     title: Appendix A. Internal Dose Assessment
+    children:
+    - id: appendix-a-body
+      type: freeform-block
+      title: ""
+      content_file:
+        latex: freeform/appendix-a.tex
+        html: freeform/appendix-a.html
   - id: appendix-b
     type: appendix
     title: Appendix B. Animal Identifiers
@@ -278,12 +291,33 @@ document:
   - id: appendix-d
     type: appendix
     title: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies
+    children:
+    - id: appendix-d-body
+      type: freeform-block
+      title: ""
+      content_file:
+        latex: freeform/appendix-d.tex
+        html: freeform/appendix-d.html
   - id: appendix-e
     type: appendix
     title: Appendix E. Organ Weight Descriptions
+    children:
+    - id: appendix-e-body
+      type: freeform-block
+      title: ""
+      content_file:
+        latex: freeform/appendix-e.tex
+        html: freeform/appendix-e.html
   - id: appendix-f
     type: appendix
     title: Appendix F. Supplemental Data
+    children:
+    - id: appendix-f-body
+      type: freeform-block
+      title: ""
+      content_file:
+        latex: freeform/appendix-f.tex
+        html: freeform/appendix-f.html
   # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
   # freeform-page / freeform-block carry content authored HERE (or in an
   # external file), not read from the pipeline.  Uncomment + adapt to insert a

@@ -440,15 +440,22 @@ def _render_appendix(node: DocNode, data: dict) -> str:
     """
     Appendix node (Appendix A through F).
 
-    Appendix B (Animal Identifiers) renders the animal roster from
-    data["appendix_animals"] when the session supplied it.  The other
-    appendices are not yet wired to data, so they emit a visible
-    "[Appendix body pending]" line so the author knows to expect content.
+    Three body sources, in precedence order:
+      - Appendix B (Animal Identifiers) renders the animal roster from
+        data["appendix_animals"] when the session supplied it.
+      - Appendices A/D/E/F carry authored freeform CHILD nodes (the reference's
+        static prose / rules tables / manifests).  We emit only the heading here
+        and let the walker render the child body after us — so we must NOT also
+        emit the pending stub, or the appendix would show stub + real content.
+      - An appendix with neither (Appendix C, whose content needs pipeline data
+        we don't retain) still emits the visible "[Appendix body pending]" line.
     """
     heading = _heading(node.level, node.title)
     rows = appendix_roster_rows(node, data)
     if rows is not None:
         return f"{heading}\n\n{_emit_animal_roster(rows)}"
+    if node.children:
+        return heading
     body = f"\\emph{{[Appendix body pending: {_escape_latex(node.title)}]}}"
     return f"{heading}\n\n{body}"
 
@@ -468,12 +475,16 @@ def _emit_animal_roster(rows: list[list[str]]) -> str:
     them again (a latent double-escape, harmless for plain IDs but wrong for an
     id carrying LaTeX specials).
     """
-    head = (
-        "\\begin{longtable}{l l r}\n"
+    caption = "\\caption*{\\textbf{Table B-1. Animal Numbers and Dose Assignments}}\\\\\n"
+    col_head = (
         "\\toprule\n"
         "Animal ID & Sex & Dose (mg/kg) \\\\\n"
         "\\midrule\n"
-        "\\endhead\n"
+    )
+    head = (
+        "\\begin{longtable}{l l r}\n"
+        f"{caption}{col_head}\\endfirsthead\n"
+        f"{col_head}\\endhead\n"
     )
     body = "\n".join(_emit_tabular_row(r) for r in rows)
     return head + body + "\n\\bottomrule\n\\end{longtable}"

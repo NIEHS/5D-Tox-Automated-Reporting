@@ -205,19 +205,21 @@ def _validate_freeform_entry(entry: dict, node_id: str) -> None:
 
     Rules:
       - `content` may be an inline string OR a dual-source mapping
-        ({latex, html}); `content_file` is an external path.
+        ({latex, html}); `content_file` is an external path OR a dual-source
+        mapping of paths ({latex, html}).
       - exactly ONE source: `content` xor `content_file`.
-      - a dual-source mapping needs no `representation`; otherwise
-        `representation` ∈ {latex, html, docx} is REQUIRED.
-      - `representation: docx` MUST use `content_file` (a .docx is a file).
+      - a dual-source mapping (inline OR file) needs no `representation`;
+        otherwise `representation` ∈ {latex, html, docx} is REQUIRED.
+      - `representation: docx` MUST use a single-path `content_file`.
     """
     content = entry.get("content")
     content_file = entry.get("content_file")
     representation = entry.get("representation")
 
-    is_dual = isinstance(content, dict)
+    is_dual_content = isinstance(content, dict)
+    is_dual_file = isinstance(content_file, dict)
     has_inline = content is not None
-    has_file = bool(content_file)
+    has_file = content_file is not None and content_file != ""
 
     if has_inline and has_file:
         raise ValueError(
@@ -229,18 +231,21 @@ def _validate_freeform_entry(entry: dict, node_id: str) -> None:
             f"freeform node {node_id!r}: requires `content` or `content_file`"
         )
 
-    if is_dual:
-        # A dual-source mapping carries its own per-surface markup; a
-        # representation is meaningless (and a `latex`/`html` key must exist).
-        if not ({"latex", "html"} & set(content)):
+    if is_dual_content or is_dual_file:
+        # A dual-source mapping (inline strings OR file paths) carries its own
+        # per-surface source; a representation is meaningless (and a
+        # `latex`/`html` key must exist).
+        mapping = content if is_dual_content else content_file
+        which = "content" if is_dual_content else "content_file"
+        if not ({"latex", "html"} & set(mapping)):
             raise ValueError(
-                f"freeform node {node_id!r}: dual-source `content` mapping must "
+                f"freeform node {node_id!r}: dual-source `{which}` mapping must "
                 f"have a `latex` and/or `html` key"
             )
         if representation is not None:
             raise ValueError(
                 f"freeform node {node_id!r}: `representation` is not allowed with "
-                f"a dual-source `content` mapping"
+                f"a dual-source `{which}` mapping"
             )
         return
 

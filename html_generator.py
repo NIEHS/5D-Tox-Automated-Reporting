@@ -626,12 +626,15 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
 def _render_appendix(node: DocNode, data: dict) -> str:
     """
-    Appendix node — Appendix B renders the animal roster; others stub out.
+    Appendix node — Appendix B renders the animal roster; A/D/E/F carry authored
+    freeform child nodes (heading only here, walker renders the child body);
+    Appendix C (no roster, no children) still stubs out.
 
     ADR-0006 Amendment 1: the "which appendix carries the roster" decision and
     the roster rows are the shared appendix_roster_rows EXTRACT; only the HTML
     table markup (and the stub) are emit here.  The HTML roster scrolls — no
-    pagination — unlike the LaTeX longtable.
+    pagination — unlike the LaTeX longtable.  The children guard mirrors the
+    LaTeX renderer so both surfaces agree on when the stub shows.
     """
     heading = _heading(node.level, node.title)
     rows = appendix_roster_rows(node, data)
@@ -639,10 +642,14 @@ def _render_appendix(node: DocNode, data: dict) -> str:
         body_rows = "".join(_emit_table_row(r) for r in rows)
         roster = (
             '<table class="niehstable">'
+            + "<caption><strong>Table B-1. Animal Numbers and Dose "
+            + "Assignments</strong></caption>"
             + _emit_table_header(list(ANIMAL_ROSTER_HEADERS))
             + f"<tbody>{body_rows}</tbody></table>"
         )
         return f"{heading}\n{roster}"
+    if node.children:
+        return heading
     body = f'<div class="appendix-stub">Appendix body pending: {_esc(node.title)}</div>'
     return f"{heading}\n{body}"
 

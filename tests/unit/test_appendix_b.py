@@ -47,3 +47,31 @@ def test_appendix_b_renders_table_html():
     out = html_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
                         {"appendix_animals": _ROWS})
     assert "<table" in out and "Animal ID" in out and "Plate1-1" in out
+
+
+def test_appendix_b_longtable_carries_table_caption_latex():
+    out = latex_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
+                         {"appendix_animals": _ROWS})
+    # The roster now names itself Table B-1 (matching the reference), emitted
+    # once on the first page via \endfirsthead / \endhead.
+    assert "Table B-1" in out
+    assert "\\endfirsthead" in out and "\\endhead" in out
+
+
+def test_appendix_b_table_caption_html():
+    out = html_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
+                        {"appendix_animals": _ROWS})
+    assert "<caption>" in out and "Table B-1" in out
+
+
+def test_appendix_with_freeform_child_emits_heading_only_no_stub():
+    # An appendix carrying an authored freeform child renders heading only; the
+    # walker renders the child body separately, so NO pending stub is emitted.
+    node = DocNode(id="appendix-e", title="Appendix E. Organ Weight Descriptions",
+                   level=1, node_type="appendix")
+    node.children = [DocNode(id="appendix-e-body", title="", level=2,
+                             node_type="freeform-block")]
+    latex_out = latex_appendix(node, {})
+    html_out = html_appendix(node, {})
+    assert "pending" not in latex_out.lower()
+    assert "pending" not in html_out.lower()

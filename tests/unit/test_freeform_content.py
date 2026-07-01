@@ -65,6 +65,23 @@ def test_resolve_missing_content_file_raises(tmp_path):
         fc.resolve_freeform(None, "nope.html", "html", base_dir=tmp_path)
 
 
+def test_resolve_dual_file_reads_each_surface_from_its_own_file(tmp_path):
+    (tmp_path / "a.tex").write_text(r"\emph{tex}", encoding="utf-8")
+    (tmp_path / "a.html").write_text("<em>html</em>", encoding="utf-8")
+    out = fc.resolve_freeform(
+        None, {"latex": "a.tex", "html": "a.html"}, None, base_dir=tmp_path
+    )
+    assert out == {"latex": r"\emph{tex}", "html": "<em>html</em>"}
+
+
+def test_resolve_dual_file_missing_key_is_none_on_that_surface(tmp_path):
+    (tmp_path / "only.html").write_text("<em>html</em>", encoding="utf-8")
+    out = fc.resolve_freeform(
+        None, {"html": "only.html"}, None, base_dir=tmp_path
+    )
+    assert out == {"latex": None, "html": "<em>html</em>"}
+
+
 # ---------------------------------------------------------------------------
 # Resolver — docx → both surfaces (fixture built in-test)
 # ---------------------------------------------------------------------------
@@ -168,6 +185,28 @@ def test_validation_rejects_representation_with_dual_source():
 def test_validation_rejects_dual_source_without_latex_or_html_key():
     with pytest.raises(ValueError, match="latex.*html"):
         instantiate([_page(content={"foo": "bar"})])
+
+
+def test_validation_accepts_dual_file_mapping(tmp_path):
+    # A dict content_file with latex+html keys is the dual-file form; it must
+    # pass validation (no representation, at least one surface key present).
+    tree = instantiate(
+        [_page(content_file={"latex": "freeform/appendix-e.tex",
+                             "html": "freeform/appendix-e.html"})]
+    )
+    node = tree[0]
+    assert node.resolved_content["latex"]
+    assert node.resolved_content["html"]
+
+
+def test_validation_rejects_dual_file_without_latex_or_html_key():
+    with pytest.raises(ValueError, match="latex.*html"):
+        instantiate([_page(content_file={"foo": "bar.tex"})])
+
+
+def test_validation_rejects_representation_with_dual_file():
+    with pytest.raises(ValueError, match="not allowed with"):
+        instantiate([_page(content_file={"latex": "a.tex"}, representation="latex")])
 
 
 def test_validation_rejects_content_on_non_freeform_type():

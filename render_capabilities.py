@@ -202,9 +202,15 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "narrative": ComponentType(
         capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
     ),
-    # Appendices currently carry no wiring (bodies are pending), so nothing is
-    # required of them yet.
-    "appendix": ComponentType(capabilities=_PROSE, content_kinds=("text",)),
+    # Appendices carry their own heading; a body is either a data-derived
+    # roster (Appendix B, handled in the renderer) or authored freeform content
+    # nested as a child (Appendices A/D/E/F — the reference's static prose /
+    # rules tables / manifests).  freeform children are the sanctioned
+    # authored-content channel, so allow them here.
+    "appendix": ComponentType(
+        capabilities=_PROSE, content_kinds=("text",),
+        allowed_children=("freeform-block", "freeform-page"),
+    ),
     # ── Prose + child tables — the section's own content is the narrative
     #    text; the wide tables are separate child `table` nodes, each
     #    orientable on its own (prose stays portrait while a table flips).

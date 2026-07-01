@@ -1,0 +1,30 @@
+<p>The benchmark dose (BMD) model recommendation and selection methodology applies a fixed set of rules to each fitted model. Each rule classifies a model outcome as <em>Viable</em>, <em>Nonviable</em>, <em>Nonreportable</em>, or a <em>Failure</em>, and the resulting bin placement determines whether a model is eligible for recommendation. Table&nbsp;D-1 lists the rules, the criterion each evaluates, the numerical threshold applied (where one is used), and the bin the model is placed in when the rule fails.</p>
+
+<p><strong>Table D-1. Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints</strong></p>
+<table class="freeform-table">
+<thead>
+<tr><th>Rule</th><th>Criteria for &ldquo;Viable&rdquo;</th><th>Numerical Threshold</th><th>Bin Placement for Rule Failure</th></tr>
+</thead>
+<tbody>
+<tr><td>BMD Existence</td><td>A BMD exists.</td><td>NA</td><td>Failure</td></tr>
+<tr><td>BMDL Existence</td><td>A BMDL exists.</td><td>NA</td><td>Failure</td></tr>
+<tr><td>AIC Existence</td><td>An AIC exists.</td><td>NA</td><td>Failure</td></tr>
+<tr><td>Residual of Interest Existence</td><td>The residual at the dose group closest to the BMD (i.e., the residual of interest) exists.</td><td>NA</td><td>Failure</td></tr>
+<tr><td>Variance Model Fit</td><td>The variance model used fits the data.</td><td>NA</td><td>Nonviable</td></tr>
+<tr><td>Variance Model Selection</td><td>The variance model is appropriate.</td><td>NA</td><td>Nonviable</td></tr>
+<tr><td>Global Goodness of Fit</td><td>The mean model fits the data means sufficiently well (BMDS 2.7.0 Test 4 p value &gt;N).</td><td>0.1</td><td>Nonviable</td></tr>
+<tr><td>Degrees of Freedom</td><td>There is at least 1 degree of freedom (i.e., more dose groups than model parameters).</td><td>NA</td><td>Nonviable</td></tr>
+<tr><td>BMD-to-BMDL Ratio</td><td>The ratio of BMD to BMDL is not large (BMD/BMDL &lt;N).</td><td>20</td><td>Viable</td></tr>
+<tr><td>High BMDL</td><td>The BMDL is &lt;N times higher than the maximum dose.</td><td>1</td><td>Viable</td></tr>
+<tr><td>High BMD</td><td>The BMD is &lt;N times higher than the maximum dose.</td><td>1</td><td>Viable</td></tr>
+<tr><td>Low BMD</td><td>The BMD is &lt;N times lower than the minimum nonzero dose.</td><td>3</td><td>Nonreportable</td></tr>
+<tr><td>Control Residual</td><td>The residual at control is small (residual &lt;N).</td><td>2</td><td>Nonviable</td></tr>
+<tr><td>Control Standard Deviation</td><td>The modeled standard deviation is similar to the actual (&lt;N times different).</td><td>1.5</td><td>Nonviable</td></tr>
+<tr><td>Residual of Interest</td><td>The residual at the dose group closest to the BMD (i.e., the residual of interest) is small (residual &lt;N).</td><td>2</td><td>Nonviable</td></tr>
+<tr><td>No Warnings Reported</td><td>No warnings in the BMD model system were reported.</td><td>NA</td><td>Viable</td></tr>
+</tbody>
+</table>
+
+<p><small>BMD = benchmark dose; NA = not applicable; BMDL = benchmark dose lower confidence limit; AIC = Akaike information criterion; BMDS = Benchmark Dose Software; N = numerical threshold.</small></p>
+
+<p><em>Note: the two model-recommendation/selection methodology flowcharts (Figure D-1 for apical endpoints and Figure D-2 for gene sets) are not yet reproduced in this generated report.</em></p>

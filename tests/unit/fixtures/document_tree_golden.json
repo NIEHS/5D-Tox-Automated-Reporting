@@ -413,6 +413,15 @@
     "type": "narrative"
   },
   {
+    "children": [
+      {
+        "id": "appendix-a-body",
+        "level": 2,
+        "region": "back",
+        "title": "",
+        "type": "freeform-block"
+      }
+    ],
     "id": "appendix-a",
     "level": 1,
     "region": "back",
@@ -434,6 +443,15 @@
     "type": "appendix"
   },
   {
+    "children": [
+      {
+        "id": "appendix-d-body",
+        "level": 2,
+        "region": "back",
+        "title": "",
+        "type": "freeform-block"
+      }
+    ],
     "id": "appendix-d",
     "level": 1,
     "region": "back",
@@ -441,6 +459,15 @@
     "type": "appendix"
   },
   {
+    "children": [
+      {
+        "id": "appendix-e-body",
+        "level": 2,
+        "region": "back",
+        "title": "",
+        "type": "freeform-block"
+      }
+    ],
     "id": "appendix-e",
     "level": 1,
     "region": "back",
@@ -448,6 +475,15 @@
     "type": "appendix"
   },
   {
+    "children": [
+      {
+        "id": "appendix-f-body",
+        "level": 2,
+        "region": "back",
+        "title": "",
+        "type": "freeform-block"
+      }
+    ],
     "id": "appendix-f",
     "level": 1,
     "region": "back",
