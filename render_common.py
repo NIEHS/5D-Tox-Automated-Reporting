@@ -48,6 +48,73 @@ from table_builder_common import format_mean_se_display, format_display_number
 # render_common a leaf (the tree walk itself is still passed in, never imported).
 from render_capabilities import landscape_requested
 
+import re
+
+
+# ---------------------------------------------------------------------------
+# Release gate — pending-placeholder detection (issue #3)
+# ---------------------------------------------------------------------------
+# Both renderers deliberately emit visible "[... pending]" placeholders for
+# unimplemented / data-missing nodes so authors editing the draft can grep for
+# the gaps (see latex_generator._pending_placeholder and the html mirror).
+# That draft visibility is correct — but a placeholder must NEVER survive into a
+# customer-facing DELIVERABLE.  Rather than thread a "strict" flag through the
+# ~15 emit sites, the deliverable build scans the FINISHED output string once
+# here (the single choke point) and refuses to ship if any marker survived.
+#
+# One family of marker shapes, all emitted as bracketed "[<label> pending: ...]"
+# or "[Placeholder: ...]".  The last shape catches LLM-generated prose that
+# leaks a "[Placeholder: GEO Accession ...]" note the model was told to fill —
+# a different mechanism than the tree stubs, but the same defect for a reader.
+_PENDING_MARKER_RE = re.compile(
+    r"\[(?:"
+    r"Section pending"
+    r"|Narrative pending"
+    r"|Appendix body pending"
+    r"|Table data pending"
+    r"|Placeholder"
+    r")\b[^\]]*\]",
+    re.IGNORECASE,
+)
+
+
+class PendingContentError(RuntimeError):
+    """
+    Raised when a DELIVERABLE build (strict mode) would emit a document that
+    still contains one or more "[... pending]" / "[Placeholder: ...]" markers.
+
+    The message lists every surviving marker so the caller sees exactly which
+    sections are unresolved.  Carries the raw marker list on `.markers` for
+    programmatic callers (route handlers, tests).
+    """
+
+    def __init__(self, markers: list[str]) -> None:
+        self.markers = markers
+        preview = "\n".join(f"  - {m}" for m in markers)
+        super().__init__(
+            f"{len(markers)} unresolved placeholder(s) would ship in the "
+            f"deliverable:\n{preview}"
+        )
+
+
+def scan_pending_markers(text: str) -> list[str]:
+    """
+    Return every pending-placeholder marker found in a rendered report string,
+    in document order, de-duplicated while preserving first-seen order.
+
+    Format-agnostic: the markers are the same bracketed tokens in both the
+    LaTeX and HTML surfaces (the brackets survive \\emph{...} / <em>...</em>
+    wrapping), so one scan serves either deliverable.  Returns [] when the
+    document is clean — the release-gate success condition.
+    """
+    seen: dict[str, None] = {}
+    for m in _PENDING_MARKER_RE.finditer(text or ""):
+        # Collapse internal whitespace so a marker broken across lines by the
+        # renderer still reads as one label.
+        marker = " ".join(m.group(0).split())
+        seen.setdefault(marker, None)
+    return list(seen)
+
 
 # ---------------------------------------------------------------------------
 # Type definitions — markup-free descriptions handed to the emitters

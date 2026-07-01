@@ -143,18 +143,39 @@ async def api_export_overleaf_bundle(request: Request):
     body = await request.json()
     _resolve_bm2_into_body(body)
 
+    from render_common import PendingContentError
+
     try:
         report_data = marshal_export_data(body)
         # Build the zip in memory.  build_overleaf_bundle writes to a
         # path, so we pipe through a tmpfile-shaped buffer to keep the
         # streaming simple and avoid filesystem chatter on every export.
+        # strict=True: this endpoint produces a DOWNLOADABLE deliverable, so
+        # gate on unresolved "[... pending]" markers (issue #3) rather than
+        # hand the user a report with visible gaps.
         import tempfile
         with tempfile.NamedTemporaryFile(
             suffix=".zip", prefix="5dtox_bundle_", delete=False,
         ) as tmp:
-            build_overleaf_bundle(report_data, Path(tmp.name))
+            build_overleaf_bundle(report_data, Path(tmp.name), strict=True)
             zip_bytes = Path(tmp.name).read_bytes()
             Path(tmp.name).unlink(missing_ok=True)
+    except PendingContentError as e:
+        # A gated build wrote nothing; tell the caller exactly which sections
+        # are unresolved so the UI can surface them.  422 (not 500): the
+        # request is well-formed, the report just isn't ready to ship.
+        try:
+            Path(tmp.name).unlink(missing_ok=True)
+        except NameError:
+            pass
+        return JSONResponse(
+            {
+                "error": "Report has unresolved placeholder sections and "
+                         "cannot be exported as a deliverable.",
+                "pending": e.markers,
+            },
+            status_code=422,
+        )
     except Exception as e:
         logging.exception("Overleaf bundle export failed")
         return JSONResponse(

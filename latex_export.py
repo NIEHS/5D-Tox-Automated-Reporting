@@ -610,6 +610,7 @@ def build_overleaf_bundle(
     out_path: Path,
     *,
     include_readme: bool = True,
+    strict: bool = False,
 ) -> Path:
     """
     Build an Overleaf-ready zip from the given report data.
@@ -630,6 +631,12 @@ def build_overleaf_bundle(
                         parent directory is created if missing.
         include_readme: Pass False to skip the README (e.g., for tests
                         that only care about the .tex / .cls payload).
+        strict:         DELIVERABLE gate (issue #3).  When True, refuse to
+                        write the zip if the report still contains any
+                        "[... pending]" / "[Placeholder: ...]" marker
+                        (raises render_common.PendingContentError).  The
+                        customer-facing export route passes strict=True;
+                        draft/scaffold callers leave it False.
 
     Returns:
         out_path, for chaining or convenience in the CLI.
@@ -641,7 +648,8 @@ def build_overleaf_bundle(
     # Assemble the payload once (shared with the directory writer) then stream
     # it into the zip.  ZIP_DEFLATED is standard PKZIP — Overleaf handles it
     # without special flags; ZIP_LZMA is smaller but some importers reject it.
-    files = _assemble_bundle_files(data, include_readme=include_readme)
+    # strict runs BEFORE the zip is opened, so a gated build writes nothing.
+    files = _assemble_bundle_files(data, include_readme=include_readme, strict=strict)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for relpath, raw in files.items():
             zf.writestr(relpath, raw)
@@ -653,7 +661,9 @@ def build_overleaf_bundle(
 # Shared payload assembly + the expanded-directory writer (ADR-0005)
 # ---------------------------------------------------------------------------
 
-def _assemble_bundle_files(data: dict, *, include_readme: bool = True) -> "dict[str, bytes]":
+def _assemble_bundle_files(
+    data: dict, *, include_readme: bool = True, strict: bool = False,
+) -> "dict[str, bytes]":
     r"""
     Build the in-memory file payload shared by every bundle writer.
 
@@ -672,10 +682,24 @@ def _assemble_bundle_files(data: dict, *, include_readme: bool = True) -> "dict[
                             always matches the written file) …
         figures/.gitkeep    … or an empty placeholder when there are no charts
         README.md           customer-facing instructions (when include_readme)
+
+    strict (issue #3): when True, this is a DELIVERABLE build — scan the
+    assembled report body for surviving "[... pending]" / "[Placeholder: ...]"
+    markers and raise PendingContentError if any remain, rather than shipping a
+    report with visible gaps.  Default False keeps the draft/preview and
+    scaffold-test paths unchanged (they legitimately render stubs).  The scan
+    runs on report.tex, which is where every node body lands; main.tex is just
+    the preamble + \input, so it carries no node content.
     """
     files: "dict[str, bytes]" = {}
+    report_body = generate_report_body(data)
+    if strict:
+        from render_common import scan_pending_markers, PendingContentError
+        markers = scan_pending_markers(report_body)
+        if markers:
+            raise PendingContentError(markers)
     files["main.tex"] = generate_main_tex(data).encode("utf-8")
-    files["report.tex"] = generate_report_body(data).encode("utf-8")
+    files["report.tex"] = report_body.encode("utf-8")
     files["niehs.cls"] = _read_class_file().encode("utf-8")
     figures = _collect_figure_files(data)
     if figures:
@@ -711,7 +735,9 @@ def _write_files_to_dir(files: "dict[str, bytes]", out_dir: Path) -> Path:
     return out_dir
 
 
-def write_overleaf_dir(data: dict, out_dir: Path, *, include_readme: bool = True) -> Path:
+def write_overleaf_dir(
+    data: dict, out_dir: Path, *, include_readme: bool = True, strict: bool = False,
+) -> Path:
     """
     Write the Overleaf bundle as an EXPANDED DIRECTORY (not a zip).
 
@@ -724,10 +750,15 @@ def write_overleaf_dir(data: dict, out_dir: Path, *, include_readme: bool = True
     does NOT preserve in-place edits yet — protecting human edits is the
     ADR-0005 reconciliation step (override store + diff attribution).
 
+    strict (issue #3): when True, the assembly raises PendingContentError
+    before any file is written if the report still contains pending markers —
+    so a gated sync leaves the existing directory untouched.
+
     Returns out_dir.
     """
     return _write_files_to_dir(
-        _assemble_bundle_files(data, include_readme=include_readme), out_dir
+        _assemble_bundle_files(data, include_readme=include_readme, strict=strict),
+        out_dir,
     )
 
 
@@ -754,6 +785,7 @@ def sync_document(
     casrn: str = "000-00-0",
     *,
     docs_root: Path = DOCUMENTS_DIR,
+    strict: bool = False,
 ) -> Path:
     """
     Materialize / refresh a session's dev document directory from its cache.
@@ -766,14 +798,21 @@ def sync_document(
     cache.  Outbound only — see write_overleaf_dir for the edit-preservation
     caveat.
 
+    strict (issue #3): when True, refuse to sync if the report still contains
+    "[... pending]" / "[Placeholder: ...]" markers (raises
+    PendingContentError) — the existing directory + sidecar are left as they
+    were.  Left False for the dev-directory refresh, which is a working draft
+    that legitimately shows the gaps still to fill.
+
     Returns the document directory.
     """
     data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn)
     out_dir = docs_root / dtxsid
 
     # Assemble once; reuse the same payload for both the files we write and the
-    # fingerprint we record, so generate_latex runs exactly once.
-    files = _assemble_bundle_files(data)
+    # fingerprint we record, so generate_latex runs exactly once.  strict runs
+    # inside the assembly (before any write), so a gated sync is a no-op on disk.
+    files = _assemble_bundle_files(data, strict=strict)
     _write_files_to_dir(files, out_dir)
 
     sidecar = {
