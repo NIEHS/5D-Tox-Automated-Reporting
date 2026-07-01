@@ -95,6 +95,23 @@
 % from the OUTSIDE, with the \caption kept out of the scaled box.
 \RequirePackage{adjustbox}
 
+% --- Caption labels ------------------------------------------------------
+% The Python generator sources every table's number positionally from the
+% document tree (invariant: table_number is auto-assigned by tree walk) and
+% bakes it INTO the caption text as "Table N. ...".  LaTeX's float counter
+% would ALSO prepend its own "Table M:" label, producing a doubled
+% "Table 1: Table 2. ..." — and worse, M drifts from N because the float
+% counter only counts RENDERED tables while our N counts tree position
+% (so an unrendered table, e.g. the reference's Table 1 Sample Counts, is
+% absent from LaTeX's count but present in ours).  Our tree number is the
+% authoritative one, so we suppress LaTeX's auto label for tables entirely
+% and let the caption text carry the number.  \listoftables still lists
+% every table (it reads the \caption text, which keeps "Table N."), and
+% \label/\ref still resolve via the \label{tab:<id>} inside niehstable.
+% Scoped to [table] so figures (if any gain \caption later) are unaffected.
+\RequirePackage{caption}
+\captionsetup[table]{labelformat=empty,labelsep=none}
+
 % --- Landscape pages -----------------------------------------------------
 % pdflscape provides the `landscape` environment for individual landscape
 % pages (wide dose-response tables, charts, figures) inside an otherwise

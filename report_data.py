@@ -1280,13 +1280,20 @@ def scaffold_report_data(
         # --- Publication Details ---
         # Structure is boilerplate.  DOI and report number are
         # study-specific → shown as placeholders.
+        # DOI and Report Series Number are assigned by NIEHS only at
+        # publication, so they are genuinely unknown pre-publication.  Render
+        # them as plain "to be assigned" text rather than ph()-wrapped scaffold:
+        # the guillemets ph() adds ("«...»") are non-ASCII and rendered as
+        # mojibake ("Â¿") in the compiled PDF, and a placeholder marker should
+        # never ship in a deliverable regardless.  The other four lines are
+        # real, known values.
         "publication_details": {"paragraphs": [
             "Publisher: National Institute of Environmental Health Sciences",
             "Publishing Location: Research Triangle Park, NC",
             "ISSN: 2768-5632",
-            ph("DOI: https://doi.org/10.22427/NIEHS-XX"),
+            "DOI: to be assigned upon publication",
             "Report Series: NIEHS Report Series",
-            ph("Report Series Number: XX"),
+            "Report Series Number: to be assigned upon publication",
         ]},
 
         # --- Acknowledgments ---
