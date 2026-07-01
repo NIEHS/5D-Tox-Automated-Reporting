@@ -530,10 +530,18 @@ def load_session_data(
             data["genomics_sections"] = converted
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
+    # The active template's `charts:` allowlist decides WHICH chart types render
+    # (None ⇒ all; [] ⇒ none) — honored here so the Overleaf bundle and the HTML
+    # preview show the identical set of figures.
     charts_path = _latest(session_dir, "_cache_charts_*.json")
     charts_cache = _load_json(charts_path)
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
-        _attach_genomics_charts(data["genomics_sections"], charts_cache)
+        from document_tree import ACTIVE_TEMPLATE
+        from document_template import load_report_charts
+        _attach_genomics_charts(
+            data["genomics_sections"], charts_cache,
+            enabled_types=load_report_charts(ACTIVE_TEMPLATE),
+        )
 
     # ── Appendix B: animal identifier roster ──────────────────────────
     animals = _load_animal_identifiers(session_dir)

@@ -371,6 +371,55 @@ def test_load_genes_non_string_rejected(template_dir):
         dt.load_report_genes(name)
 
 
+# --- charts allowlist: presence is the switch (absent=None, []=none) ---------
+
+def test_load_charts_absent_returns_none(template_dir):
+    # Distinct from the token allowlists: absence means "no filtering" (None),
+    # so every chart type renders.
+    import document_template as dt
+    name = _write(template_dir, "document: []\n")
+    assert dt.load_report_charts(name) is None
+
+
+def test_load_charts_empty_list_is_render_none(template_dir):
+    # An explicit empty list is NOT "no filtering" — it renders zero charts.
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        charts: []
+    """)
+    assert dt.load_report_charts(name) == []
+
+
+def test_load_charts_lowercased_list(template_dir):
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        charts: [UMAP, "  Cluster  "]
+    """)
+    assert dt.load_report_charts(name) == ["umap", "cluster"]
+
+
+def test_load_charts_mapping_rejected(template_dir):
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        charts: { umap: true }
+    """)
+    with pytest.raises(ValueError, match="must be a list"):
+        dt.load_report_charts(name)
+
+
+def test_load_charts_non_string_rejected(template_dir):
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        charts: [42]
+    """)
+    with pytest.raises(ValueError, match="must be a string"):
+        dt.load_report_charts(name)
+
+
 # ---------------------------------------------------------------------------
 # 5. _hash_sections — apical sex + assay sensitivity + backward compat
 # ---------------------------------------------------------------------------

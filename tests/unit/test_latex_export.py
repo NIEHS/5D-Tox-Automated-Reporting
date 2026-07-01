@@ -316,10 +316,11 @@ def test_load_session_data_overlays_real_session_when_present():
     assert isinstance(gs, list)
     assert any(e.get("type") == "gene_set" for e in gs)
     assert any(e.get("type") == "gene" for e in gs)
-    # Phase 5 overlays: charts attached to gene_set entries, references list,
-    # and the Appendix B animal roster.
-    assert any(e.get("charts") for e in gs if e.get("type") == "gene_set"), \
-        "Genomics charts should be attached to gene_set entries"
+    # Phase 5 overlays: references list and the Appendix B animal roster.
+    # (Genomics charts are NOT asserted here — the active template ships
+    # `charts: []`, suppressing every genomics figure to match the reference,
+    # which has no main-body charts.  The enabled/disabled attach contract is
+    # unit-tested directly in test_genomics_charts.py.)
     assert data.get("references", {}).get("paragraphs"), \
         "References should be surfaced from background.json"
     assert data.get("appendix_animals"), \

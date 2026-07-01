@@ -617,6 +617,50 @@ def load_report_gene_sets(name: str) -> list[str]:
     return _load_flat_block(name, "gene_sets")
 
 
+def load_report_charts(name: str) -> list[str] | None:
+    """
+    Load the ``charts`` block — an ALLOWLIST of genomics chart TYPE KEYS to
+    render (``umap``, ``cluster``, or any data-driven type in ``chart_types``).
+
+        charts: [umap, cluster]   # render only these types
+        charts: []                # render NO genomics charts
+
+    Unlike the token allowlists (``genes``/``gene_sets``/``organs``) whose empty
+    form means "no filtering", this block ranges over a CLOSED set of chart
+    types, so an explicit empty list genuinely means "render none".  The
+    distinction is presence:
+
+      - key ABSENT      → ``None`` → no filtering (every chart type renders —
+                          the backward-compatible default);
+      - key PRESENT     → the (possibly empty) lower-cased list → only those
+                          types render.
+
+    Honored identically by both render paths where charts attach
+    (genomics_charts.attach_genomics_charts's ``enabled_types``), so the HTML
+    preview and the Overleaf export agree on which figures appear.
+    """
+    data = _load_raw(name)
+    if not isinstance(data, dict) or "charts" not in data:
+        return None
+    raw = data.get("charts")
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"template {name!r}: 'charts' must be a list of chart-type keys, "
+            f"got {type(raw).__name__}"
+        )
+    cleaned: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError(
+                f"template {name!r}: every entry in 'charts' must be a string, "
+                f"got {type(item).__name__}: {item!r}"
+            )
+        token = item.strip().lower()
+        if token:
+            cleaned.append(token)
+    return cleaned
+
+
 def instantiate(template: list[dict]) -> list[DocNode]:
     """
     Instantiate a template into a flat list of DocNode top-level entries.

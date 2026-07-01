@@ -820,9 +820,14 @@ def _overlay_genomics(data: dict, body: dict) -> None:
                 try:
                     import orjson
                     from genomics_charts import attach_genomics_charts
+                    from document_tree import ACTIVE_TEMPLATE
+                    from document_template import load_report_charts
                     charts_cache = orjson.loads(_charts.read_bytes())
                     if isinstance(charts_cache, list):
-                        attach_genomics_charts(genomics, charts_cache)
+                        attach_genomics_charts(
+                            genomics, charts_cache,
+                            enabled_types=load_report_charts(ACTIVE_TEMPLATE),
+                        )
                 except Exception:
                     # A missing/corrupt chart cache must not abort the report;
                     # the genomics sections simply render without figures.

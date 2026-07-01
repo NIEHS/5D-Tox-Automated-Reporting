@@ -80,7 +80,11 @@ def decode_png(b64: str | None) -> bytes | None:
 # Public API
 # ---------------------------------------------------------------------------
 
-def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
+def attach_genomics_charts(
+    genomics_sections: list,
+    charts_cache: list,
+    enabled_types: list | None = None,
+) -> None:
     """
     Attach per-(organ, sex) chart images to the matching gene_set entries.
 
@@ -97,6 +101,14 @@ def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
     with no edit here.  Pre-feature caches lack `types`; they fall back to the
     original umap/cluster pair.
 
+    `enabled_types` is the document config's ``charts:`` ALLOWLIST of type keys
+    (document_template.load_report_charts).  ``None`` (the default, and the
+    "charts key absent" case) means no filtering — every produced type renders.
+    A LIST — including the empty list — restricts rendering to those type keys,
+    so ``charts: []`` in the template suppresses every genomics figure (the
+    reference report carries no main-body charts).  Applied to BOTH paths here
+    so the HTML preview and the Overleaf export agree on which figures appear.
+
     Each chart carries its OWN deterministic `filename`; both the renderer
     (the \\includegraphics path) and the bundler (the file it writes) read that
     same field, so they can never disagree on the name — a mismatch would be a
@@ -108,6 +120,7 @@ def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
     """
     if not isinstance(charts_cache, list):
         return
+    allow = None if enabled_types is None else {t.lower() for t in enabled_types}
     # Index the cache by (organ, sex), lower-cased, so the lookup below is
     # case-insensitive and order-independent.
     by_os = {
@@ -138,6 +151,10 @@ def attach_genomics_charts(genomics_sections: list, charts_cache: list) -> None:
         if not isinstance(chart_keys, list) or not chart_keys:
             chart_keys = ["umap", "cluster"]
         for key in chart_keys:
+            # Config allowlist (charts:): skip any type not enabled.  `allow`
+            # is None when the template omits `charts:` (no filtering).
+            if allow is not None and key.lower() not in allow:
+                continue
             png = cache_entry.get(f"{key}_png")
             if not png:
                 continue
