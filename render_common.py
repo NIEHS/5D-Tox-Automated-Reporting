@@ -552,7 +552,11 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
 
 # Column meaning of the Appendix B animal roster (semantic vocabulary shared by
 # both surfaces; the LaTeX longtable header is laid out separately — presentation).
-ANIMAL_ROSTER_HEADERS: tuple[str, ...] = ("Animal ID", "Sex", "Dose (mg/kg)")
+# Reconstructs the reference's Table B-1 "Animal Numbers and FASTQ Data File
+# Names": one row per (animal x sequenced tissue).
+ANIMAL_ROSTER_HEADERS: tuple[str, ...] = (
+    "Animal Number", "Sex", "Dose (mg/kg)", "Tissue", "FASTQ File ID",
+)
 
 
 def _roster_dose(dose) -> str:
@@ -564,17 +568,26 @@ def _roster_dose(dose) -> str:
 
 def appendix_roster_rows(node: DocNode, data: dict) -> list[list[str]] | None:
     """
-    EXTRACT for the Appendix B animal roster: one [animal_id, sex, dose] row per
-    animal, format-agnostic (raw strings; each emitter escapes).
+    EXTRACT for the Appendix B animal roster: one row per (animal x tissue) in
+    ANIMAL_ROSTER_HEADERS order — [animal_number, sex, dose, tissue, fastq_file_id]
+    — format-agnostic (raw strings; each emitter escapes).
 
-    Returns None for any appendix other than B, or when the session supplied no
-    roster — the emitter then shows its "[Appendix body pending]" stub.  The
-    "Appendix B carries the roster" decision is the semantic part and lives here.
+    Rows arrive already joined + sorted (latex_export._load_animal_identifiers);
+    this only projects them to the shared column order.  Returns None for any
+    appendix other than B, or when the session supplied no roster — the emitter
+    then shows its "[Appendix body pending]" stub.  The "Appendix B carries the
+    roster" decision is the semantic part and lives here.
     """
     if node.id != "appendix-b" or not data.get("appendix_animals"):
         return None
     return [
-        [str(r.get("animal_id", "")), str(r.get("sex", "")), _roster_dose(r.get("dose"))]
+        [
+            str(r.get("animal_number", "")),
+            str(r.get("sex", "")),
+            _roster_dose(r.get("dose")),
+            str(r.get("tissue", "")),
+            str(r.get("fastq_file_id", "")),
+        ]
         for r in data["appendix_animals"]
     ]
 
@@ -752,6 +765,43 @@ def genomics_chart_caption(chart: dict) -> str:
     if fig_num is not None:
         text = f"Figure {fig_num}. {text}".rstrip()
     return text
+
+
+def genomics_table_caption(entry: dict) -> str:
+    """
+    The "Table N. <descriptive>" caption for one genomics (organ, sex) table.
+
+    The number comes from ``entry["table_number"]``, assigned positionally by
+    document_tree.assign_genomics_table_numbers (the data-side companion to
+    compute_table_numbers, since genomics tables are not tree nodes).  The
+    descriptive text is DATA-DRIVEN from the entry's organ / sex / type and row
+    count — it mirrors the reference's phrasing ("Top N <Organ> Gene Ontology
+    Biological Process Gene Sets…" / "Top N <Organ> Genes…") but includes the
+    sex, because our config sex-splits the sections (the reference did not).
+
+    Shared so both surfaces label the table identically; the emitter decides
+    whether it becomes a LaTeX caption line or an HTML <caption>.  Returns the
+    bare descriptive text when no number is assigned (scaffold / preview).
+    """
+    organ = (entry.get("organ") or "").strip().capitalize()
+    sex = (entry.get("sex") or "").strip().capitalize()
+    role = entry.get("type")
+    rows = entry.get("gene_sets") if role == "gene_set" else entry.get("top_genes")
+    n = len(rows or [])
+
+    kind = ("Gene Ontology Biological Process Gene Sets"
+            if role == "gene_set" else "Genes")
+    locator = " ".join(p for p in (organ, sex) if p)
+    lead = f"Top {n} " if n else "Top "
+    descriptive = (
+        f"{lead}{locator} {kind} Ranked by Potency of Perturbation, "
+        "Sorted by Benchmark Dose"
+    ).replace("  ", " ").strip()
+
+    num = entry.get("table_number")
+    if num is not None:
+        return f"Table {num}. {descriptive}"
+    return descriptive
 
 
 # ---------------------------------------------------------------------------

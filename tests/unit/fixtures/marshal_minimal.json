@@ -586,6 +586,7 @@
       "go_descriptions": [],
       "organ": "liver",
       "sex": "male",
+      "table_number": 9,
       "type": "gene_set"
     },
     {
@@ -594,6 +595,7 @@
       "go_descriptions": [],
       "organ": "kidney",
       "sex": "male",
+      "table_number": 10,
       "type": "gene_set"
     },
     {
@@ -601,6 +603,7 @@
       "gene_descriptions": [],
       "organ": "liver",
       "sex": "male",
+      "table_number": 11,
       "top_genes": [],
       "type": "gene"
     },
@@ -609,6 +612,7 @@
       "gene_descriptions": [],
       "organ": "kidney",
       "sex": "male",
+      "table_number": 12,
       "top_genes": [],
       "type": "gene"
     }
@@ -802,6 +806,26 @@
       "ready": false,
       "table_number": 8,
       "title": "Apical Endpoint Benchmark Dose Summary"
+    },
+    {
+      "ready": false,
+      "table_number": 9,
+      "title": "Top Liver Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+    },
+    {
+      "ready": false,
+      "table_number": 10,
+      "title": "Top Kidney Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+    },
+    {
+      "ready": false,
+      "table_number": 11,
+      "title": "Top Liver Male Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+    },
+    {
+      "ready": false,
+      "table_number": 12,
+      "title": "Top Kidney Male Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
     }
   ],
   "test_article": {

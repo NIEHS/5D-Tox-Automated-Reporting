@@ -364,6 +364,14 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     _overlay_unified_and_bmd(data, body)
     _overlay_genomics(data, body)
 
+    # Positional table numbers for the data-driven genomics tables — continues
+    # the tree sequence (Table 8 → 9, 10, ...) now that genomics_sections is
+    # finalized.  Same helper the LaTeX session path calls, so both surfaces
+    # number identically; runs before _build_toc_entries so the Tables list
+    # picks the numbers up.  A no-op when there are no genomics sections.
+    from document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
+    assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
+
     # Summary
     summary_paragraphs = body.get("summary_paragraphs", [])
     if summary_paragraphs:
@@ -1596,6 +1604,27 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
                 _walk_toc(node.children)
 
     _walk_toc(DOCUMENT_TREE)
+
+    # Genomics tables are DATA-DRIVEN (not tree nodes), so the walk above misses
+    # them.  They were numbered by assign_genomics_table_numbers before this ran;
+    # append them to the Tables list in table_number order so the front-matter
+    # list continues Table 8 → 9, 10, ...  Title/readiness come from the same
+    # shared caption + row presence the renderers use, so all three agree.
+    from render_common import genomics_table_caption
+    genomics_tables = [
+        {
+            "title": genomics_table_caption(entry).split(". ", 1)[-1],
+            "table_number": entry["table_number"],
+            "ready": bool(
+                entry.get("gene_sets") if entry.get("type") == "gene_set"
+                else entry.get("top_genes")
+            ),
+        }
+        for entry in (data.get("genomics_sections") or [])
+        if entry.get("table_number") is not None
+    ]
+    genomics_tables.sort(key=lambda e: e["table_number"])
+    table_entries.extend(genomics_tables)
 
     return toc_entries, table_entries
 

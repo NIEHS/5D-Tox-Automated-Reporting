@@ -113,3 +113,36 @@ def test_cold_marshal_matches_full_tree_numbering(cold_tree):
 
     got = {s["title"]: s["table_number"] for s in out["apical_sections"]}
     assert got == EXPECTED_TABLE_NUMBERS
+
+
+def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
+    """Genomics tables (data-driven, not tree nodes) continue the positional
+    sequence after the last apical/BMD table.  The last tree table is the BMD
+    summary (Table 8), so genomics gene_set tables get 9.. and gene tables
+    follow — assigned in RENDER order (all gene_set first, then all gene),
+    NOT the interleaved list order."""
+    body = _apical_body("Body Weight")
+    # Interleaved delivery order, two organs, gene_set + gene each.
+    body["genomics_sections"] = [
+        {"type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [{"rank": 1}]},
+        {"type": "gene", "organ": "liver", "sex": "male", "top_genes": [{"rank": 1}]},
+        {"type": "gene_set", "organ": "kidney", "sex": "male", "gene_sets": [{"rank": 1}]},
+        {"type": "gene", "organ": "kidney", "sex": "male", "top_genes": [{"rank": 1}]},
+    ]
+    out = marshal_export_data(body)
+    numbered = {
+        (s["type"], s["organ"]): s["table_number"]
+        for s in out["genomics_sections"]
+    }
+    # gene_set tables numbered first (9, 10), then gene tables (11, 12),
+    # each in list order within its role.
+    assert numbered == {
+        ("gene_set", "liver"): 9,
+        ("gene_set", "kidney"): 10,
+        ("gene", "liver"): 11,
+        ("gene", "kidney"): 12,
+    }
+    # The front-matter Tables list continues the sequence too.
+    table_nums = [e["table_number"] for e in out["table_entries"]]
+    assert 9 in table_nums and 12 in table_nums
+    assert table_nums == sorted(table_nums)

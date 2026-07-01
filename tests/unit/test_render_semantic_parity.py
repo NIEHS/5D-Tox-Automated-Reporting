@@ -57,8 +57,13 @@ def session_data() -> dict:
 # ---------------------------------------------------------------------------
 
 # HTML caption "<caption>Table 8. ..." and LaTeX "\begin{niehstable}{id}{Table 8. ...}".
-_HTML_TABLE_NUM = re.compile(r"<caption>\s*Table (\d+)\.")
-_LATEX_TABLE_NUM = re.compile(r"\\begin\{niehstable\}\{[^}]*\}\{\s*Table (\d+)\.")
+# Genomics tables are NOT niehstable floats — LaTeX emits their caption as a bold
+# line "\noindent\textbf{Table N. ...}" and HTML as a plain "<caption>Table N. ...";
+# match both LaTeX forms so the parity set covers apical + genomics tables.
+_HTML_TABLE_NUM = re.compile(r"<caption>\s*(?:<strong>\s*)?Table (\d+)\.")
+_LATEX_TABLE_NUM = re.compile(
+    r"\\begin\{niehstable\}\{[^}]*\}\{\s*Table (\d+)\.|\\textbf\{Table (\d+)\."
+)
 
 # HTML "<figcaption>Figure 3. ..." and LaTeX "{\small\itshape Figure 3. ...}".
 _HTML_FIGURE_NUM = re.compile(r"<figcaption>\s*Figure (\d+)\.")
@@ -66,8 +71,18 @@ _LATEX_FIGURE_NUM = re.compile(r"\\itshape\s+Figure (\d+)\.")
 
 
 def _nums(pattern: re.Pattern, text: str) -> set[int]:
-    """Set of integers a numbering pattern captures in a rendered surface."""
-    return {int(m) for m in pattern.findall(text)}
+    """Set of integers a numbering pattern captures in a rendered surface.
+
+    Tolerates multi-group alternation patterns (findall yields tuples): each
+    match contributes exactly one non-empty group, so flatten and drop blanks.
+    """
+    out: set[int] = set()
+    for m in pattern.findall(text):
+        groups = m if isinstance(m, tuple) else (m,)
+        for g in groups:
+            if g:
+                out.add(int(g))
+    return out
 
 
 def _html_bmd_rows(html: str) -> list[tuple[str, str]]:
@@ -114,8 +129,10 @@ def test_table_numbers_agree_across_surfaces(session_data):
     html_nums = _nums(_HTML_TABLE_NUM, html)
     latex_nums = _nums(_LATEX_TABLE_NUM, tex)
 
-    # Tree oracle: every node the walker assigned a table_number to renders a
-    # caption (real table or "[data pending]" placeholder both carry it).
+    # Oracle: tree-assigned numbers (apical + BMD) PLUS the data-driven genomics
+    # table numbers (genomics tables are not tree nodes — assign_genomics_table_
+    # numbers stamps them onto the genomics_sections entries).  Both surfaces
+    # must render exactly this union.
     expected: set[int] = set()
 
     def _collect_tree_table_numbers(nodes):
@@ -125,14 +142,57 @@ def test_table_numbers_agree_across_surfaces(session_data):
             _collect_tree_table_numbers(n.children)
 
     _collect_tree_table_numbers(DOCUMENT_TREE)
+    for entry in session_data.get("genomics_sections") or []:
+        if entry.get("table_number") is not None:
+            expected.add(entry["table_number"])
 
     assert html_nums == latex_nums, (
         f"table-number drift between surfaces: HTML-only={html_nums - latex_nums}, "
         f"LaTeX-only={latex_nums - html_nums}"
     )
     assert html_nums == expected, (
-        f"rendered table numbers {html_nums} != tree-assigned {expected}"
+        f"rendered table numbers {html_nums} != expected {expected}"
     )
+
+
+def test_genomics_numbering_identical_across_render_paths():
+    """
+    The genomics table numbers assigned by the LaTeX session path
+    (load_session_data) and the web/marshal path (marshal_export_data) must be
+    IDENTICAL for the same session — both call the one shared helper
+    (assign_genomics_table_numbers), so a divergence would mean one path was
+    left unwired.  Keys on (type, organ, sex) since the two paths may deliver
+    the entries in different list order.
+    """
+    from report_data import marshal_export_data
+
+    latex_data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    web_data = marshal_export_data({
+        "chemical_name": "Perfluorohexanesulfonamide",
+        "casrn": "41997-13-1",
+        "dtxsid": "DTXSID50469320",
+        # Feed the SAME genomics entries the LaTeX path resolved, so both number
+        # the identical input (marshal numbers whatever the body carries).
+        "genomics_sections": [
+            {k: v for k, v in e.items() if k != "table_number"}
+            for e in (latex_data.get("genomics_sections") or [])
+        ],
+    })
+
+    def _by_key(data):
+        return {
+            (e.get("type"), e.get("organ"), e.get("sex")): e.get("table_number")
+            for e in (data.get("genomics_sections") or [])
+        }
+
+    assert _by_key(latex_data) == _by_key(web_data)
+    # And the numbers are a contiguous block starting at 9 (after Table 8).
+    nums = sorted(v for v in _by_key(latex_data).values() if v is not None)
+    assert nums and nums[0] == 9 and nums == list(range(9, 9 + len(nums)))
 
 
 def test_figure_numbers_agree_across_surfaces(session_data):
@@ -275,13 +335,17 @@ def test_methods_subsection_legacy_heading_fallback():
 
 def test_roster_cell_escaping_is_single_on_both_surfaces():
     """
-    An animal_id carrying a LaTeX special is escaped exactly once on both
-    surfaces — previously the LaTeX roster double-escaped (pre-escape +
-    _emit_tabular_row), diverging from HTML's single-escape.
+    A roster cell carrying a LaTeX special is escaped exactly once — previously
+    the LaTeX roster double-escaped (pre-escape + _emit_tabular_row), diverging
+    from HTML's single-escape.  The FASTQ file id (Plate1-<n> etc.) is the cell
+    most likely to carry an underscore-style special, so exercise it there.
     """
     node = DocNode(id="appendix-b", title="Animal Identifiers",
                    node_type="appendix", level=1)
-    data = {"appendix_animals": [{"animal_id": "A_1", "sex": "Male", "dose": 0}]}
+    data = {"appendix_animals": [{
+        "animal_number": "1", "sex": "Male", "dose": 0,
+        "tissue": "Liver", "fastq_file_id": "A_1",
+    }]}
 
     tex = latex_generator._render_appendix(node, data)
 

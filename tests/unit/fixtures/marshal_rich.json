@@ -583,6 +583,7 @@
     {
       "organ": "Liver",
       "sex": "Male",
+      "table_number": 9,
       "type": "gene_set"
     }
   ],
@@ -668,6 +669,11 @@
       "ready": true,
       "table_number": 8,
       "title": "Apical Endpoint Benchmark Dose Summary"
+    },
+    {
+      "ready": false,
+      "table_number": 9,
+      "title": "Top Liver Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
     }
   ],
   "test_article": {

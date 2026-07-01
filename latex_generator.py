@@ -87,6 +87,7 @@ from render_common import (
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
     appendix_roster_rows,
+    ANIMAL_ROSTER_HEADERS,
     methods_subsection_content,
     genomics_role,
     genomics_intro_paragraphs,
@@ -95,6 +96,7 @@ from render_common import (
     gene_table_rows,
     genomics_description_items,
     genomics_chart_caption,
+    genomics_table_caption,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     find_apical_section as _find_apical_section,
@@ -462,27 +464,32 @@ def _render_appendix(node: DocNode, data: dict) -> str:
 
 def _emit_animal_roster(rows: list[list[str]]) -> str:
     r"""
-    EMIT the Appendix B animal roster as a page-breaking longtable.
+    EMIT the Appendix B roster as a page-breaking longtable — the reference's
+    Table B-1 "Animal Numbers and FASTQ Data File Names", one row per
+    (animal x tissue).
 
-    ~300 animals don't fit one page, and the niehstable float can't break
+    Hundreds of rows don't fit one page, and the niehstable float can't break
     across pages — so this uses longtable (loaded by niehs.cls), whose
     \endhead repeats the column header on every page.  Rows come pre-built
-    (animal_id, sex, dose) from appendix_roster_rows (ADR-0006 Amendment 1).
+    (animal_number, sex, dose, tissue, fastq_file_id) from appendix_roster_rows;
+    the header text is driven from ANIMAL_ROSTER_HEADERS so it can't drift from
+    the shared column vocabulary.
 
     Each cell is escaped exactly once (by _emit_tabular_row) — matching the
-    HTML roster's single-escape.  This converges a pre-existing divergence:
-    the old code pre-escaped animal_id/sex and then _emit_tabular_row escaped
-    them again (a latent double-escape, harmless for plain IDs but wrong for an
-    id carrying LaTeX specials).
+    HTML roster's single-escape.
     """
-    caption = "\\caption*{\\textbf{Table B-1. Animal Numbers and Dose Assignments}}\\\\\n"
+    caption = ("\\caption*{\\textbf{Table B-1. Animal Numbers and FASTQ Data "
+               "File Names}}\\\\\n")
+    # colspec: number | sex | dose(r) | tissue | fastq-id — mirrors the 5 headers.
+    colspec = "l l r l l"
+    header_cells = " & ".join(_escape_latex(h) for h in ANIMAL_ROSTER_HEADERS)
     col_head = (
         "\\toprule\n"
-        "Animal ID & Sex & Dose (mg/kg) \\\\\n"
+        f"{header_cells} \\\\\n"
         "\\midrule\n"
     )
     head = (
-        "\\begin{longtable}{l l r}\n"
+        f"\\begin{{longtable}}{{{colspec}}}\n"
         f"{caption}{col_head}\\endfirsthead\n"
         f"{col_head}\\endhead\n"
     )
@@ -886,6 +893,21 @@ def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
     )
 
 
+def _genomics_caption_block(entry: dict) -> str:
+    r"""
+    The bold "Table N. ..." caption line above a genomics table.
+
+    Text comes from the shared genomics_table_caption EXTRACT (data-driven,
+    escaped here for LaTeX); the trailing blank line separates it from the
+    tabular.  Empty when the entry has no caption text (shouldn't happen once
+    numbers are assigned).
+    """
+    caption = genomics_table_caption(entry)
+    if not caption:
+        return ""
+    return f"\\noindent\\textbf{{{_escape_latex(caption)}}}\n\n"
+
+
 def _render_gene_set_table(entry: dict) -> str:
     """
     Render the top-gene-sets table for one (organ, sex) of a genomics
@@ -909,7 +931,10 @@ def _render_gene_set_table(entry: dict) -> str:
     # Wrap the bare tabular in the same "max width=\linewidth" adjustbox so a
     # wide 7-column table shrinks to the text width instead of overflowing the
     # margin; a table that already fits is left at natural size.
-    return "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
+    table = "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
+    # Positional "Table N." caption (data-driven), emitted above the tabular in
+    # the same bold style the appendix tables use.
+    return _genomics_caption_block(entry) + table
 
 
 def _render_gene_table(entry: dict) -> str:
@@ -935,7 +960,10 @@ def _render_gene_table(entry: dict) -> str:
     # Wrap the bare tabular in the same "max width=\linewidth" adjustbox so a
     # wide 7-column table shrinks to the text width instead of overflowing the
     # margin; a table that already fits is left at natural size.
-    return "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
+    table = "\\adjustbox{max width=\\linewidth}{%\n" + "\n".join(lines) + "\n}"
+    # Positional "Table N." caption (data-driven), emitted above the tabular in
+    # the same bold style the appendix tables use.
+    return _genomics_caption_block(entry) + table
 
 
 def _render_description_list(descriptions: list) -> str:

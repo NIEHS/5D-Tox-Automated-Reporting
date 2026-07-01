@@ -161,6 +161,75 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     walk_tree(tree, visit)
 
 
+# The two genomics-section nodes carry their role in `narrative_key`; the flat
+# data["genomics_sections"] entries carry the SAME role in `type`.  Mapping one
+# to the other lets us number the data-driven genomics tables in the exact order
+# the renderers emit them, without importing render_common (which would cycle).
+_GENOMICS_NARRATIVE_TO_TYPE = {
+    "gene_set_narrative": "gene_set",
+    "gene_narrative": "gene",
+}
+
+
+def assign_genomics_table_numbers(
+    tree: list[DocNode] | None,
+    genomics_sections: list[dict] | None,
+) -> None:
+    """
+    Assign positional ``table_number`` to each genomics-section entry, continuing
+    the sequence the tree's numbered tables established (Table 8 → 9, 10, ...).
+
+    Genomics tables are DATA-DRIVEN, not tree nodes: the tree holds two
+    ``genomics-section`` nodes (gene-sets, gene-bmd) that each expand at render
+    time into one table per matching entry in ``genomics_sections``.  So
+    compute_table_numbers() — a pure tree walk — can't see them; this is the
+    data-side companion that numbers them, called by BOTH render paths after
+    ``data["genomics_sections"]`` is finalized (single source of truth: same
+    function, same inputs → identical numbers on both surfaces).
+
+    Ordering is load-bearing: the numbers MUST match the printed order.  The
+    renderers walk the TREE — the gene-sets node emits ALL ``type=="gene_set"``
+    entries first, then gene-bmd emits ALL ``type=="gene"`` — NOT the interleaved
+    order of the raw list.  So we walk the genomics-section nodes in tree order,
+    and for each, number its role's entries in list order.  Deriving the role
+    sequence from the tree (via each node's ``narrative_key``) keeps this
+    template-driven rather than hardcoding ("gene_set", "gene").
+
+    Mutates each entry dict in place (sets ``entry["table_number"]``); entries
+    whose role has no genomics-section node are left unnumbered.  Idempotent.
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    if not genomics_sections:
+        return
+
+    # Continue from the highest number the tree already assigned (Table 8 here).
+    tree_max = 1
+    def _max(node: DocNode) -> None:
+        nonlocal tree_max
+        if node.table_number is not None:
+            tree_max = max(tree_max, node.table_number)
+    walk_tree(tree, _max)
+
+    # Role sequence in tree order, from the genomics-section nodes themselves.
+    role_order: list[str] = []
+    def _roles(node: DocNode) -> None:
+        if node.node_type == "genomics-section":
+            role = _GENOMICS_NARRATIVE_TO_TYPE.get(
+                getattr(node, "narrative_key", None) or ""
+            )
+            if role and role not in role_order:
+                role_order.append(role)
+    walk_tree(tree, _roles)
+
+    counter = tree_max + 1
+    for role in role_order:
+        for entry in genomics_sections:
+            if entry.get("type") == role:
+                entry["table_number"] = counter
+                counter += 1
+
+
 def build_node_index(tree: list[DocNode]) -> dict[str, DocNode]:
     """
     Build an ``{id: node}`` lookup over a forest, enforcing id uniqueness.

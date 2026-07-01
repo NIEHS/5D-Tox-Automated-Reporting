@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -529,6 +530,13 @@ def load_session_data(
         if converted:
             data["genomics_sections"] = converted
 
+    # Positional table numbers for the data-driven genomics tables — continues
+    # the tree sequence (Table 8 → 9, 10, ...).  Same helper the web/marshal path
+    # calls, so both surfaces number identically.  Runs after genomics_sections
+    # is finalized; a no-op when there are none.
+    from document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
+    assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
+
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
     # The active template's `charts:` allowlist decides WHICH chart types render
     # (None ⇒ all; [] ⇒ none) — honored here so the Overleaf bundle and the HTML
@@ -579,31 +587,86 @@ def load_session_data(
     return data
 
 
+# Appendix B / Table B-1 reconstructs the reference's "Animal Numbers and FASTQ
+# Data File Names": one row per (animal x sequenced tissue).  animal_report.json
+# stores that same fact spread across THREE id-forms per physical animal — a bare
+# numeric ANIMAL NUMBER ("111"), a "Plate1-111" LIVER FASTQ file id, and a
+# "Plate5-111" KIDNEY FASTQ file id.  The tissue is encoded ONLY in the plate
+# prefix (the reference's own Table B-1 pairs Plate1->Liver, Plate5->Kidney);
+# domain_presence just says "Gene Expression".  Centralized so the mapping has
+# one home if it ever grows.
+_PLATE_TISSUE = {"plate1": "Liver", "plate5": "Kidney"}
+
+
+def _animal_core(animal_id: str) -> str:
+    """The trailing numeric run of an id — the physical ANIMAL NUMBER that joins
+    the bare / Plate1- / Plate5- forms.  '' when the id has no numeric tail."""
+    m = re.search(r"(\d+)$", str(animal_id or ""))
+    return m.group(1) if m else ""
+
+
 def _load_animal_identifiers(session_dir: Path) -> list[dict]:
     """
-    Flatten animal_report.json into a roster of {animal_id, sex, dose} rows for
-    Appendix B (Animal Identifiers), sorted by sex, then dose, then id.  Returns
-    [] when the file is absent — the appendix then keeps its pending placeholder.
+    Build the Appendix B FASTQ-mapping roster (reference Table B-1) from
+    animal_report.json: one row per (animal x tissue), joining the three id-forms
+    by their shared numeric ANIMAL NUMBER.
+
+    Row schema: {animal_number, sex, dose, tissue, fastq_file_id}.  The bare
+    numeric record supplies animal_number/sex/dose; each Plate<N>-<num> record
+    supplies one tissue row (tissue from the plate prefix, fastq_file_id = the
+    plate id itself).  Rows are sorted by numeric animal number, then tissue with
+    Kidney before Liver (matching the reference).  Returns [] when the file is
+    absent — the appendix then keeps its pending placeholder.
+
+    Columns "Group" (Vehicle control / dose label) and "Survived to Study
+    Termination" from the reference are intentionally OMITTED — neither is in our
+    per-animal data ({animal_id, sex, dose, selection, domain_presence}); we do
+    not fabricate them.
+
+    NOTE: the join lives here because the roster is LaTeX-only today (the
+    web/marshal path does not build appendix_animals).  Move it to a shared
+    module if the HTML preview grows an Appendix B.
     """
     report = _load_json(session_dir / "animal_report.json")
     animals = report.get("animals") if isinstance(report, dict) else None
     if not isinstance(animals, dict):
         return []
-    rows = [
-        {
-            "animal_id": rec.get("animal_id", ""),
-            "sex": rec.get("sex") or "",
-            "dose": rec.get("dose"),
-        }
-        for rec in animals.values()
-        if isinstance(rec, dict)
-    ]
-    # Numeric doses sort ahead of missing ones; ids break ties.
+
+    # Index the bare-numeric records by animal number to supply sex/dose to each
+    # tissue row (all id-forms of one animal agree on sex/dose — verified).
+    identity: dict[str, dict] = {}
+    for rec in animals.values():
+        if not isinstance(rec, dict):
+            continue
+        aid = str(rec.get("animal_id", ""))
+        if aid.isdigit():
+            identity[aid] = rec
+
+    rows: list[dict] = []
+    for rec in animals.values():
+        if not isinstance(rec, dict):
+            continue
+        aid = str(rec.get("animal_id", ""))
+        prefix = aid.split("-", 1)[0].lower() if "-" in aid else ""
+        tissue = _PLATE_TISSUE.get(prefix)
+        if tissue is None:
+            continue  # bare-numeric and any unknown-prefix ids carry no tissue row
+        core = _animal_core(aid)
+        ident = identity.get(core, rec)
+        rows.append({
+            "animal_number": core or aid,
+            "sex": ident.get("sex") or rec.get("sex") or "",
+            "dose": ident.get("dose", rec.get("dose")),
+            "tissue": tissue,
+            "fastq_file_id": aid,
+        })
+
+    # Sort by numeric animal number, then Kidney before Liver within an animal.
+    _tissue_rank = {"Kidney": 0, "Liver": 1}
     rows.sort(
         key=lambda r: (
-            r["sex"],
-            r["dose"] if isinstance(r["dose"], (int, float)) else float("inf"),
-            r["animal_id"],
+            int(r["animal_number"]) if str(r["animal_number"]).isdigit() else 1 << 30,
+            _tissue_rank.get(r["tissue"], 9),
         )
     )
     return rows

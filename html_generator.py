@@ -77,6 +77,7 @@ from render_common import (
     gene_table_rows,
     genomics_description_items,
     genomics_chart_caption,
+    genomics_table_caption,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     find_apical_section as _find_apical_section,
@@ -642,8 +643,8 @@ def _render_appendix(node: DocNode, data: dict) -> str:
         body_rows = "".join(_emit_table_row(r) for r in rows)
         roster = (
             '<table class="niehstable">'
-            + "<caption><strong>Table B-1. Animal Numbers and Dose "
-            + "Assignments</strong></caption>"
+            + "<caption><strong>Table B-1. Animal Numbers and FASTQ Data "
+            + "File Names</strong></caption>"
             + _emit_table_header(list(ANIMAL_ROSTER_HEADERS))
             + f"<tbody>{body_rows}</tbody></table>"
         )
@@ -930,8 +931,11 @@ def _render_gene_set_table(entry: dict) -> str:
             f"Top gene sets pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
         )
     body_rows = "".join(_emit_table_row(r) for r in rows)
+    caption = genomics_table_caption(entry)
+    cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (
         '<table class="niehstable">'
+        f"{cap}"
         f"{_emit_table_header(list(GENE_SET_TABLE_HEADERS))}"
         f"<tbody>{body_rows}</tbody>"
         "</table>"
@@ -946,8 +950,11 @@ def _render_gene_table(entry: dict) -> str:
             f"Top genes pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
         )
     body_rows = "".join(_emit_table_row(r) for r in rows)
+    caption = genomics_table_caption(entry)
+    cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (
         '<table class="niehstable">'
+        f"{cap}"
         f"{_emit_table_header(list(GENE_TABLE_HEADERS))}"
         f"<tbody>{body_rows}</tbody>"
         "</table>"
