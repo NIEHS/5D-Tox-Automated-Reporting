@@ -282,14 +282,25 @@ def _hash_sections(
     if sex_allowlist:
         payload["sex_allowlist"] = sorted(sex_allowlist)
     if assay_filters:
-        # Sort both the area keys and each token list for an order-stable key.
-        payload["assay_filters"] = {
-            area: sorted(tokens)
-            for area, tokens in sorted(assay_filters.items())
-            if tokens
-        } or None
-        if payload["assay_filters"] is None:
-            del payload["assay_filters"]
+        # Order-stable key.  Each area value is EITHER a flat token list (both
+        # sexes) OR a {sex: [tokens]} per-sex mapping — sort area keys, sex keys,
+        # and token lists so an equivalent config always hashes identically.
+        def _norm_assay_value(value):
+            if isinstance(value, dict):
+                return {
+                    sex: sorted(tokens)
+                    for sex, tokens in sorted(value.items())
+                    if tokens
+                } or None
+            return sorted(value) if value else None
+
+        normalized = {
+            area: nv
+            for area, value in sorted(assay_filters.items())
+            if (nv := _norm_assay_value(value)) is not None
+        }
+        if normalized:
+            payload["assay_filters"] = normalized
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

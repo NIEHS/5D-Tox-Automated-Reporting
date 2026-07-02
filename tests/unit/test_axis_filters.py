@@ -233,6 +233,43 @@ def test_apical_filter_unfiltered_is_noop_identity():
     assert apply_apical_filters(pt) is pt
 
 
+def test_apical_filter_per_sex_assay_selection():
+    # A {sex: [tokens]} mapping keeps DIFFERENT endpoints per sex — the
+    # reference's "Select" tables.  Male keeps only "Albumin", Female only
+    # "Hemoglobin" (each sex ignores the other's tokens).
+    pt = {
+        "Clinical Chemistry": {
+            "Male": [_row("Albumin"), _row("Hemoglobin")],
+            "Female": [_row("Albumin"), _row("Hemoglobin")],
+        },
+    }
+    out = apply_apical_filters(
+        pt,
+        assay_filters={"clinical-chemistry": {"male": ["albumin"],
+                                              "female": ["hemoglobin"]}},
+    )
+    assert [r.label for r in out["Clinical Chemistry"]["Male"]] == ["Albumin"]
+    assert [r.label for r in out["Clinical Chemistry"]["Female"]] == ["Hemoglobin"]
+
+
+def test_apical_filter_per_sex_missing_sex_is_unfiltered():
+    # A per-sex mapping that omits a sex leaves that sex's rows untouched
+    # (only sex_allow governs whether the sex shows at all).
+    pt = {
+        "Hematology": {
+            "Male": [_row("Basophil count"), _row("Hematocrit")],
+            "Female": [_row("Basophil count"), _row("Hematocrit")],
+        },
+    }
+    out = apply_apical_filters(
+        pt, assay_filters={"hematology": {"male": ["hematocrit"]}},
+    )
+    assert [r.label for r in out["Hematology"]["Male"]] == ["Hematocrit"]
+    # Female had no entry → unfiltered.
+    assert [r.label for r in out["Hematology"]["Female"]] == \
+        ["Basophil count", "Hematocrit"]
+
+
 def test_prune_card_sexes_drops_disallowed_sex():
     card = {"platform": "Tissue Concentration",
             "tables_json": {"Male": [1], "Female": [2]}}
@@ -323,6 +360,52 @@ def test_load_assays_unknown_area_rejected(template_dir):
           hormones: [thyroxine]
     """)
     with pytest.raises(ValueError, match="unknown assays area"):
+        dt.load_report_assays(name)
+
+
+def test_load_assays_per_sex_mapping(template_dir):
+    # An area value may be a {male:/female:} mapping — the reference's "Select"
+    # tables show different endpoints per sex.  Tokens lower-cased/stripped.
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        assays:
+          clinical-chemistry:
+            male: [Cholesterol]
+            female: ["Aspartate Aminotransferase", "Sorbitol Dehydrogenase"]
+          hematology: [Hemoglobin]
+    """)
+    assert dt.load_report_assays(name) == {
+        "clinical-chemistry": {
+            "male": ["cholesterol"],
+            "female": ["aspartate aminotransferase", "sorbitol dehydrogenase"],
+        },
+        # A flat list still loads flat, alongside a per-sex area.
+        "hematology": ["hemoglobin"],
+    }
+
+
+def test_load_assays_unknown_sex_rejected(template_dir):
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        assays:
+          hematology:
+            mail: ["neutrophil count"]
+    """)
+    with pytest.raises(ValueError, match="unknown sex"):
+        dt.load_report_assays(name)
+
+
+def test_load_assays_per_sex_non_string_rejected(template_dir):
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        assays:
+          hematology:
+            male: [42]
+    """)
+    with pytest.raises(ValueError, match="must be a string"):
         dt.load_report_assays(name)
 
 
@@ -456,3 +539,37 @@ def test_hash_sections_changes_with_assay_filters_order_independent():
     b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
                        assay_filters={"clinical-chemistry": ["alt", "albumin"]})
     assert a == b
+
+
+def test_hash_sections_per_sex_assay_filters_stable_and_distinct():
+    # A {area: {sex: [tokens]}} per-sex config hashes order-independently
+    # (area keys, sex keys, and token lists all sorted) and differs from both
+    # the unfiltered key and the flat-list key with the same tokens.
+    from cache_plumbing import _hash_sections
+    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    per_sex = {"clinical-chemistry": {"male": ["cholesterol"],
+                                      "female": ["ast", "sdh"]}}
+    per_sex_reordered = {"clinical-chemistry": {"female": ["sdh", "ast"],
+                                                "male": ["cholesterol"]}}
+    h = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
+                       assay_filters=per_sex)
+    h2 = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
+                        assay_filters=per_sex_reordered)
+    assert h == h2                      # order-independent
+    assert h != base                    # differs from unfiltered
+    # Differs from a flat list carrying the same tokens (shape matters).
+    flat = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
+                          assay_filters={"clinical-chemistry":
+                                         ["cholesterol", "ast", "sdh"]})
+    assert h != flat
+
+
+def test_hash_sections_per_sex_empty_inner_is_backward_compatible():
+    # A per-sex mapping whose sex lists are all empty ⇒ no effective filter,
+    # so the key matches the unfiltered one (existing caches stay valid).
+    from cache_plumbing import _hash_sections
+    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    empty_per_sex = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
+                                   imputed_cells=None,
+                                   assay_filters={"hematology": {"male": []}})
+    assert empty_per_sex == base

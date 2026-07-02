@@ -575,20 +575,96 @@ def load_report_sex(name: str) -> dict[str, list[str]]:
     return _load_per_area_block(name, "sex", REPORT_SEX_AREAS)
 
 
-def load_report_assays(name: str) -> dict[str, list[str]]:
+# Sexes a per-sex assay mapping may key on (lower-cased match form).  A closed
+# vocabulary so a typo'd sex key fails loudly at load, matching REPORT_*_AREAS.
+_VALID_ASSAY_SEXES: frozenset[str] = frozenset({"male", "female"})
+
+
+def _clean_token_list(tokens, where: str) -> list[str]:
+    """Lower-case + strip a list of string tokens, dropping empties.  Raises if
+    ``tokens`` is not a list of strings.  ``where`` names the location for the
+    error message."""
+    if not isinstance(tokens, list):
+        raise ValueError(
+            f"{where} must be a list of names, got {type(tokens).__name__}"
+        )
+    cleaned: list[str] = []
+    for item in tokens:
+        if not isinstance(item, str):
+            raise ValueError(
+                f"every entry in {where} must be a string, "
+                f"got {type(item).__name__}: {item!r}"
+            )
+        token = item.strip().lower()
+        if token:
+            cleaned.append(token)
+    return cleaned
+
+
+def load_report_assays(name: str) -> dict[str, list[str] | dict[str, list[str]]]:
     """
     Load the ``assays`` block — the per-area clinical-pathology endpoint
-    ALLOWLIST.
+    ALLOWLIST.  Each area's value is EITHER a flat token list (applies to BOTH
+    sexes — the original form) OR a per-sex mapping (different endpoints per
+    sex, matching the reference's "Select" tables):
 
         assays:
-          clinical-chemistry: [albumin, "alanine aminotransferase"]
-          hematology: [hemoglobin]
+          clinical-chemistry:            # flat — same endpoints for both sexes
+            [albumin, "alanine aminotransferase"]
+          hematology:                    # per-sex — the reference selection
+            male: ["neutrophil count"]
+            female: ["manual hematocrit"]
 
-    Returns ``{area: [tokens]}`` (lower-cased).  Filtering compares via
-    table_builder_common.assay_allowed (component-aware).  Areas are the two
-    multi-endpoint platforms only (REPORT_ASSAY_AREAS).
+    Returns ``{area: [tokens]}`` for a flat area, or ``{area: {sex: [tokens]}}``
+    for a per-sex area (all tokens lower-cased/stripped).  Filtering compares via
+    table_builder_common.assay_allowed (component-aware); apply_apical_filters
+    resolves the per-sex shape inside its sex loop.  Areas are the two
+    multi-endpoint platforms only (REPORT_ASSAY_AREAS); Hormones is never
+    assay-filtered.  A missing block, or a bare-list file, returns ``{}``.
+
+    Validates SHAPE loudly: the block is a mapping; every area is one of
+    REPORT_ASSAY_AREAS; each area value is a token list OR a mapping whose keys
+    are in {male, female} and whose values are token lists.
     """
-    return _load_per_area_block(name, "assays", REPORT_ASSAY_AREAS)
+    data = _load_raw(name)
+    if not isinstance(data, dict):
+        return {}
+    raw = data.get("assays")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"template {name!r}: 'assays' must be a mapping of area → "
+            f"[token, ...] or area → {{sex: [token, ...]}}, "
+            f"got {type(raw).__name__}"
+        )
+
+    filters: dict[str, list[str] | dict[str, list[str]]] = {}
+    for area, value in raw.items():
+        if area not in REPORT_ASSAY_AREAS:
+            raise ValueError(
+                f"template {name!r}: unknown assays area {area!r}; "
+                f"must be one of {sorted(REPORT_ASSAY_AREAS)}"
+            )
+        if isinstance(value, dict):
+            per_sex: dict[str, list[str]] = {}
+            for sex, tokens in value.items():
+                sex_key = str(sex).strip().lower()
+                if sex_key not in _VALID_ASSAY_SEXES:
+                    raise ValueError(
+                        f"template {name!r}: unknown sex {sex!r} in "
+                        f"assays.{area}; must be one of "
+                        f"{sorted(_VALID_ASSAY_SEXES)}"
+                    )
+                per_sex[sex_key] = _clean_token_list(
+                    tokens, f"template {name!r}: assays.{area}.{sex_key}"
+                )
+            filters[area] = per_sex
+        else:
+            filters[area] = _clean_token_list(
+                value, f"template {name!r}: assays.{area}"
+            )
+    return filters
 
 
 def load_report_genes(name: str) -> list[str]:

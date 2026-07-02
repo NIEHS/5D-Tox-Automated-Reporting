@@ -439,11 +439,24 @@ organs:
 # sex:
 #   apical: [male]
 #   genomics: [male]
-# assays:
-#   clinical-chemistry: ["alanine aminotransferase", albumin]
-#   hematology: [hemoglobin]
 # genes: [egr1, ddit4]
 # gene_sets: ["GO:1902893", "cell division"]
+
+# assays — restrict the Clinical Chemistry (Table 4) and Hematology (Table 5)
+# tables to the reference's "Select" endpoints.  These are PER-SEX: the NIEHS
+# reference shows different endpoints for males vs females (and the apical BMD
+# summary, Table 8, lists the same per-sex set).  An area value may be a flat
+# list (both sexes) OR this {male:/female:} mapping.  Tokens are matched
+# component-aware, so multi-word tokens ("manual hematocrit", "neutrophil
+# count") are used where a single word would over-match (e.g. bare "hematocrit"
+# would also keep "Hematocrit"; bare "count" spans every differential row).
+assays:
+  clinical-chemistry:
+    male: [cholesterol]
+    female: ["aspartate aminotransferase", "sorbitol dehydrogenase"]
+  hematology:
+    male: ["neutrophil count"]
+    female: ["manual hematocrit"]
 
 
 # ---------------------------------------------------------------------------

@@ -267,7 +267,7 @@ _ASSAY_AREA_TO_PLATFORM: dict[str, str] = {
 def apply_apical_filters(
     platform_tables: dict[str, dict[str, list]],
     sex_allow: list[str] | None = None,
-    assay_filters: dict[str, list[str]] | None = None,
+    assay_filters: dict[str, list[str] | dict[str, list[str]]] | None = None,
 ) -> dict[str, dict[str, list]]:
     """
     Apply the report-level SEX and ASSAY allowlists to the partitioned
@@ -284,9 +284,13 @@ def apply_apical_filters(
 
       - sex_allow: the "apical" area sex list.  Drops every non-allowed sex key
         from every platform (table_builder_common.sex_allowed, exact match).
-      - assay_filters: {area: [tokens]} for the two assay platforms.  Drops rows
-        whose endpoint label fails the per-platform allowlist
-        (table_builder_common.assay_allowed, component-aware).
+      - assay_filters: {area: value} for the two assay platforms.  Each value is
+        EITHER a flat token list (applies to BOTH sexes) OR a per-sex mapping
+        {sex: [tokens]} (the reference's "Select" tables show different endpoints
+        per sex).  Drops rows whose endpoint label fails the resolved allowlist
+        (table_builder_common.assay_allowed, component-aware).  A per-sex mapping
+        that omits a sex leaves that sex's rows unfiltered (only sex_allow governs
+        whether the sex shows at all).
 
     Empty/None for either axis is a no-op for that axis, so an entirely
     unfiltered call returns the tables unchanged (the pre-feature behaviour).
@@ -299,17 +303,23 @@ def apply_apical_filters(
     assay_filters = assay_filters or {}
     out: dict[str, dict[str, list]] = {}
     for platform, sex_rows in platform_tables.items():
-        # Resolve the assay allowlist for this platform (None ⇒ no row filter).
-        assay_allow: list[str] | None = None
+        # Resolve this platform's raw assay filter (None ⇒ no row filter).  It is
+        # either a flat list (both sexes) or a {sex: [tokens]} per-sex mapping.
+        platform_assay = None
         for area, plat_name in _ASSAY_AREA_TO_PLATFORM.items():
             if platform == plat_name:
-                assay_allow = assay_filters.get(area)
+                platform_assay = assay_filters.get(area)
                 break
 
         new_sex_rows: dict[str, list] = {}
         for sex, rows in sex_rows.items():
             if not sex_allowed(sex, sex_allow):
                 continue
+            # Per-sex mapping: pick this sex's list; flat list: same for all.
+            if isinstance(platform_assay, dict):
+                assay_allow = platform_assay.get(str(sex).strip().lower())
+            else:
+                assay_allow = platform_assay
             if assay_allow:
                 rows = [
                     r for r in rows
