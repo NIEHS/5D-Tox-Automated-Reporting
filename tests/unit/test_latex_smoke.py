@@ -303,6 +303,26 @@ def test_unrenderable_unicode_is_translated_to_latex():
     assert r"\textsubscript{1}" in out
 
 
+def test_superscript_exponents_survive_the_compile():
+    r"""
+    Superscript digits and the superscript minus in scientific notation (e.g.
+    an FDR of "6.20×10⁻²²") must be translated to \textsuperscript{…}; the
+    lmodern/T1 font has no glyphs for U+2070–207F / U+00B9-B3, so untranslated
+    they DROP from the PDF and silently change the value by orders of magnitude
+    ("6.20×10⁻²²" → "6.20×1022").  Regression for issue #11.
+    """
+    from latex_generator import _escape_latex
+    out = _escape_latex("GO enrichment (54 genes, FDR = 6.20×10⁻²²)")
+    # Every superscript codepoint must be gone from the output…
+    for ch in "⁻²":
+        assert ch not in out
+    # …replaced by \textsuperscript boxes (minus, then each exponent digit).
+    assert r"\textsuperscript{-}" in out
+    assert r"\textsuperscript{2}" in out
+    # The legacy Latin-1 superscript ¹ (U+00B9) is handled too.
+    assert r"\textsuperscript{1}" in _escape_latex("5.30×10⁻¹⁹")
+
+
 def test_table_caption_prefers_node_caption_over_data_overlay():
     """
     ADR-0004 amendment (a) — the de-overloaded `caption` on the addressable

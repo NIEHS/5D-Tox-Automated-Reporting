@@ -162,11 +162,24 @@ _LATEX_ESCAPES: list[tuple[str, str]] = [
 # them to LaTeX commands (math fonts carry the relations; \textsubscript for
 # subscript digits).  Applied as a post-pass AFTER the special-character
 # escaping above, so the backslashes/braces we insert here are not re-escaped.
+# Superscript-digit codepoints are NOT contiguous: 1/2/3 are the legacy
+# Latin-1 chars (U+00B9/B2/B3) while 0 and 4–9 live in U+2070–2079.  Mapped
+# to \textsuperscript{N} so scientific-notation exponents in LLM prose (e.g.
+# an FDR of "6.66×10⁻³⁴") survive the compile instead of silently dropping
+# their exponent — which changes the value by orders of magnitude.
+_SUPERSCRIPT_DIGIT_CP: dict[int, int] = {
+    0: 0x2070, 1: 0x00B9, 2: 0x00B2, 3: 0x00B3, 4: 0x2074,
+    5: 0x2075, 6: 0x2076, 7: 0x2077, 8: 0x2078, 9: 0x2079,
+}
+
 _UNICODE_TO_LATEX: list[tuple[str, str]] = [
     ("≤", r"\ensuremath{\le}"),   # ≤
     ("≥", r"\ensuremath{\ge}"),   # ≥
     # Subscript digits ₀–₉ → \textsubscript{N}
     *((chr(0x2080 + d), rf"\textsubscript{{{d}}}") for d in range(10)),
+    # Superscript minus ⁻ (U+207B) + superscript digits → \textsuperscript{…}
+    ("⁻", r"\textsuperscript{-}"),
+    *((chr(cp), rf"\textsuperscript{{{d}}}") for d, cp in _SUPERSCRIPT_DIGIT_CP.items()),
 ]
 
 
