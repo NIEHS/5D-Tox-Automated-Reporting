@@ -84,6 +84,19 @@ function navigateToNode(navId) {
     // Entering the Report tab → load the Overleaf binding so the
     // "Open in Overleaf" link / link-a-project prompt reflect current state.
     if (navId === 'report' && typeof initReportTab === 'function') initReportTab();
+
+    // Keep the HTML live preview (ADR-0007) current for the active node.
+    // chem-id/data have no document content, so skip them.  The preview
+    // always renders the full paginated report; navigation just scrolls it
+    // to the active section.
+    const NON_PREVIEW_NODES = new Set(['chem-id', 'data']);
+    if (!NON_PREVIEW_NODES.has(navId) &&
+        typeof Alpine !== 'undefined' && Alpine.store('app')?.htmlViewVisible) {
+        if (typeof ensureFullPreview === 'function') ensureFullPreview();
+        if (typeof scrollPreviewToNode === 'function') {
+            scrollPreviewToNode(navId === 'report' ? 'cover' : navId);
+        }
+    }
 }
 
 
@@ -95,6 +108,97 @@ function toggleContentPane() {
         Alpine.store('app').contentVisible = !Alpine.store('app').contentVisible;
     }
 }
+
+
+/* ================================================================
+ * Preview splitters (ADR-0007) — draggable dividers.
+ *
+ * Three splitters share this one implementation, parameterized by the
+ * pane they resize and the axis they drag on:
+ *   • #pane-splitter  — region ↔ content   (col-resize, sets region flex-basis px)
+ *   • #view-splitter  — HTML view ↔ PDF view (row-resize, sets #html-view basis px)
+ *   • #pdf-splitter   — live PDF ↔ comparison (col-resize, sets #live-pdf-wrap basis px)
+ *
+ * Drag to resize; on the region splitter, drag to an edge to snap-collapse
+ * that side.  Chosen size persists to localStorage.  Double-click resets.
+ * ================================================================ */
+function _initSplitter({ splitterId, paneId, axis, storeKey, snap = 0, defaultBasis }) {
+    const splitter = document.getElementById(splitterId);
+    const pane = document.getElementById(paneId);
+    if (!splitter || !pane) return;
+
+    const horizontal = axis === 'x';       // x = col-resize (width), y = row-resize (height)
+    const MIN_PANE = 120;
+
+    const saved = parseInt(localStorage.getItem(storeKey) || '', 10);
+    if (!isNaN(saved)) pane.style.flexBasis = saved + 'px';
+
+    let dragging = false;
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        // Measure from the pane's own start edge so the math is local to the
+        // container the pane lives in (works for all three splitters).
+        const rect = pane.parentElement.getBoundingClientRect();
+        const startEdge = horizontal ? rect.left : rect.top;
+        const pos = horizontal ? e.clientX : e.clientY;
+        // Desired pane size = pointer distance from the pane's leading edge
+        // within its container.
+        let size = pos - startEdge;
+        const avail = horizontal ? rect.width : rect.height;
+        if (snap && size < snap) {
+            size = 0;                       // snap-collapse this pane
+        } else if (snap && size > avail - snap) {
+            size = avail;                   // snap-collapse the sibling
+        } else {
+            size = Math.max(MIN_PANE, Math.min(size, avail - MIN_PANE));
+        }
+        pane.style.flexBasis = size + 'px';
+        e.preventDefault();
+    };
+
+    const onUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove('splitter-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        const w = parseInt(pane.style.flexBasis, 10);
+        if (!isNaN(w)) localStorage.setItem(storeKey, String(w));
+    };
+
+    splitter.addEventListener('mousedown', (e) => {
+        dragging = true;
+        document.body.classList.add('splitter-dragging');
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+    });
+
+    splitter.addEventListener('dblclick', () => {
+        pane.style.flexBasis = defaultBasis;
+        localStorage.removeItem(storeKey);
+    });
+}
+
+function initPaneSplitter() {
+    _initSplitter({
+        splitterId: 'pane-splitter', paneId: 'preview-region', axis: 'x',
+        storeKey: 'previewRegionWidthPx', snap: 48, defaultBasis: '45%',
+    });
+    _initSplitter({
+        splitterId: 'view-splitter', paneId: 'html-view', axis: 'y',
+        storeKey: 'htmlViewHeightPx', snap: 0, defaultBasis: '50%',
+    });
+    _initSplitter({
+        splitterId: 'pdf-splitter', paneId: 'live-pdf-wrap', axis: 'x',
+        storeKey: 'livePdfWidthPx', snap: 0, defaultBasis: '50%',
+    });
+}
+
+// Wire the splitters once the DOM is ready (the app container starts hidden
+// behind the login gate, but attaching listeners + restoring size is safe).
+document.addEventListener('DOMContentLoaded', initPaneSplitter);
 
 
 /* ================================================================
@@ -229,6 +333,62 @@ function initDocumentTree() {
     // Invalidate the PLATFORM_TO_READY cache so it rebuilds from
     // the now-loaded tree on next access.
     window._platformToReadyCache = null;
+}
+
+
+/**
+ * Re-fetch the (possibly per-session) document structure and re-render the nav,
+ * Results containers, and M&M stubs — then refresh the open previews.  Called
+ * after the Document Structure config is saved (document_config.js), so a
+ * structure edit takes effect WITHOUT a page reload or re-integration.
+ *
+ * Unlike initDocumentTree (which runs at alpine:init, before Alpine's first DOM
+ * walk, so injected directives are processed for free), this runs at RUNTIME —
+ * so the freshly-built directive elements must be handed to Alpine.initTree()
+ * to wire up their x-show / :class / @click bindings.
+ *
+ * @param {string} dtxsid — the session whose structure to fetch.
+ */
+async function refreshDocumentTree(dtxsid) {
+    let tree;
+    try {
+        const url = dtxsid
+            ? `/api/document-tree?dtxsid=${encodeURIComponent(dtxsid)}`
+            : '/api/document-tree';
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            console.warn('refreshDocumentTree: fetch failed', resp.status);
+            return;
+        }
+        tree = await resp.json();
+    } catch (e) {
+        console.warn('refreshDocumentTree: fetch error', e);
+        return;
+    }
+    if (!Array.isArray(tree) || tree.length === 0) return;
+
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').documentTree = tree;
+    }
+
+    if (typeof renderNavFromTree === 'function') renderNavFromTree(tree);
+    if (typeof renderResultsFromTree === 'function') renderResultsFromTree(tree);
+    if (typeof renderMethodsSubsectionsFromTree === 'function') renderMethodsSubsectionsFromTree(tree);
+    window._platformToReadyCache = null;
+
+    // Wire the freshly-built directive elements (runtime, post-init).
+    if (typeof Alpine !== 'undefined' && typeof Alpine.initTree === 'function') {
+        for (const id of ['nav-tree-container']) {
+            const el = document.getElementById(id);
+            if (el) Alpine.initTree(el);
+        }
+    }
+
+    // Refresh the HTML preview if it's open so it reflects the new structure.
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')?.htmlViewVisible
+        && typeof ensureFullPreview === 'function') {
+        ensureFullPreview(true);
+    }
 }
 
 

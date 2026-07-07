@@ -1311,9 +1311,10 @@ def _fragment_skeleton(body: str) -> str:
 def generate_latex(
     data: dict,
     section_filter: str | None = None,
+    tree: "list | None" = None,
 ) -> str:
     """
-    Walk DOCUMENT_TREE + data and produce a complete report.tex source string.
+    Walk the document tree + data and produce a complete report.tex source string.
 
     Args:
         data:           The same dict marshal_export_data builds for Typst.
@@ -1326,6 +1327,11 @@ def generate_latex(
                         given node id renders.  Tracer-bullet ignores
                         this — full walk only.  Threaded through now so
                         the public signature is stable.
+        tree:           Optional per-session document tree.  When None (the
+                        default), the global DOCUMENT_TREE is used, so existing
+                        callers are byte-identical.  The HTML twin threads the
+                        same param — the two renderers stay in lockstep
+                        (ADR-0006); ADR-0007 follow-on per-session structure.
 
     Returns:
         A self-contained .tex source string.  The caller is responsible
@@ -1337,7 +1343,7 @@ def generate_latex(
     # per-tab preview button hits.  Front matter, TOC, and \maketitle
     # are all stripped — see _fragment_skeleton's docstring for why.
     if section_filter:
-        node = find_node(section_filter)
+        node = find_node(section_filter, tree)
         if node is None:
             # Unknown id → empty fragment with a comment so callers can
             # detect the miss without crashing.  No exception, because
@@ -1354,7 +1360,7 @@ def generate_latex(
     title, author, running_header = _doc_metadata(data)
     return _document_skeleton(
         title=title, author=author,
-        body=generate_report_body(data), running_header=running_header,
+        body=generate_report_body(data, tree=tree), running_header=running_header,
     )
 
 
@@ -1377,7 +1383,7 @@ def _doc_metadata(data: dict) -> "tuple[str, str, str]":
     return title, author, running_header
 
 
-def generate_report_body(data: dict) -> str:
+def generate_report_body(data: dict, tree: "list | None" = None) -> str:
     r"""
     Render just the report BODY — sections + round-trip anchors, no preamble.
 
@@ -1392,10 +1398,14 @@ def generate_report_body(data: dict) -> str:
     first_body_node_id() (region == "body", ADR-0004 amendment d) so the LaTeX
     and HTML renderers can't drift on where the switch lands.  \clearpage
     flushes pending floats so the switch lands on the body's opening page.
+
+    `tree` defaults to the global DOCUMENT_TREE; a per-session tree renders that
+    session's own structure (ADR-0007 follow-on).
     """
-    body_first_id = first_body_node_id()
+    nodes = tree if tree is not None else DOCUMENT_TREE
+    body_first_id = first_body_node_id(nodes)
     body_chunks: list[str] = []
-    for top in DOCUMENT_TREE:
+    for top in nodes:
         if top.id == body_first_id:
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")
         body_chunks.extend(_walk_latex(top, data))

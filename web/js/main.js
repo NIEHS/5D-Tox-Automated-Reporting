@@ -10,7 +10,7 @@
  *   settings.js       — settings panel (BMD stats, dose unit, GO filters)
  *   layout.js         — tabbed/stacked view toggle, collapse/expand
  *   versions.js       — version history and style profile management
- *   export.js         — DOCX/PDF export, report preview, clipboard
+ *   export.js         — Overleaf bundle export, report preview, clipboard
  *   genomics.js       — genomics cards, GO term analysis, BMD summary
  *   genomics_charts.js — Plotly UMAP and cluster scatter charts
  *   filepool.js       — file upload, validation, BM2 cards, metadata

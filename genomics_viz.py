@@ -13,7 +13,7 @@ semicolon-separated gene list) and returns cluster assignments computed
 via scipy's agglomerative clustering on pairwise Jaccard distances.
 
 The chart-rendering endpoint produces static PNG images using plotly.py
-and kaleido, suitable for embedding in DOCX and PDF reports.
+and kaleido, suitable for embedding in the exported report.
 """
 
 import json
@@ -169,7 +169,7 @@ def get_cluster_color(
 # ---------------------------------------------------------------------------
 # Shared cluster enrichment logic
 # ---------------------------------------------------------------------------
-# Used by both render_chart_images() (for PDF/DOCX) and the
+# Used by both render_chart_images() (for the report export) and the
 # /api/genomics-cluster-enrichment endpoint (for the web UI).
 # Ensures both paths produce identical results from the same inputs.
 
@@ -1325,7 +1325,7 @@ async def api_genomics_chart_images(request: Request):
     Render the UMAP scatter and cluster scatter charts as PNG images.
 
     Thin wrapper around render_chart_images() for direct API calls.
-    Used by the DOCX export pipeline and for debugging.
+    Used by the report export pipeline and for debugging.
 
     Input JSON:
         {

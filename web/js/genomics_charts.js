@@ -602,14 +602,14 @@ function _renderUmapChart(geneSets, data) {
 /* ================================================================
  * Chart image capture for report export
  *
- * Called by exportDocx() and exportPdf() in main.js before sending
- * the export payload.  Captures the currently rendered Plotly charts
- * as base64 PNG images with captions suitable for report embedding.
+ * Called before sending the export payload.  Captures the currently
+ * rendered Plotly charts as base64 PNG images with captions suitable
+ * for report embedding.
  * ================================================================ */
 
 /**
  * Capture the currently rendered UMAP and cluster scatter charts as
- * base64-encoded PNG images for embedding in DOCX/PDF reports.
+ * base64-encoded PNG images for embedding in the exported report.
  *
  * Returns null if no charts are rendered (no genomics data).
  * The returned object includes:
@@ -898,7 +898,7 @@ function _renderClusterChart(geneSets, data, clusters) {
 
     // --- Cluster biology summary table ---
     // Client-side fallback: shows our own GO terms per gene-overlap cluster.
-    // The server-side render (PDF/DOCX) calls Enrichr for independent
+    // The server-side render calls Enrichr for independent
     // enrichment analysis per cluster — that richer version flows through
     // cluster_summary in the report data.  For the web preview we use
     // internal terms since calling Enrichr client-side would add latency

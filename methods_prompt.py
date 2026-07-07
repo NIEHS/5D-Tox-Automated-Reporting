@@ -51,7 +51,7 @@ def build_subsection_skeleton(ctx: MethodsContext) -> list[tuple[str, str, int]]
     Determine which M&M subsections to include based on domain presence.
 
     Returns a list of (subsection_key, heading_text, heading_level) tuples
-    in the correct order for both the LLM prompt and the DOCX output.
+    in the correct order for both the LLM prompt and the rendered report.
 
     Args:
         ctx: MethodsContext with domain presence flags set.

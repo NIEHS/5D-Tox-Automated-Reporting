@@ -16,13 +16,15 @@ Endpoints:
   GET    /api/style-profile             — Retrieve the global style profile
   DELETE /api/style-profile/{idx}       — Delete a style rule by index
   POST   /api/export-overleaf-bundle    — Download full report as Overleaf .zip
-  POST   /api/preview-latex-fragment    — Fetch .tex source for one TOC subtree
+  POST   /api/compile-pdf               — Compile report to a preview PDF (tect)
+  POST   /api/preview-latex-html        — Render a TOC subtree to preview HTML
   GET    /api/export-bm2/{dtxsid}       — Download enriched .bm2 file
 """
 
 import asyncio
 import io
 import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -119,6 +121,28 @@ def _resolve_bm2_into_body(body: dict) -> None:
                 sec["narrative_paragraphs"] = upload["narrative"]
 
 
+def _session_tree_for(body: dict):
+    """
+    Resolve the per-session document tree for a request body, or None.
+
+    Reads dtxsid from the body and returns that session's structure override
+    (document_config.build_session_tree) when one exists, else None so the
+    render path falls back to the global DOCUMENT_TREE.  A malformed stored
+    override is logged and treated as absent, so a bad file can never 500 a
+    render (the save route validates before writing, so this is defensive).
+    """
+    dtxsid = (body or {}).get("dtxsid", "")
+    if not dtxsid:
+        return None
+    try:
+        from document_config import build_session_tree
+        return build_session_tree(dtxsid)
+    except Exception:
+        logger.exception("per-session document tree failed to build for %s; "
+                          "falling back to the global structure", dtxsid)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # POST /api/export-overleaf-bundle — download the LaTeX Overleaf bundle (zip)
 # ---------------------------------------------------------------------------
@@ -142,11 +166,12 @@ async def api_export_overleaf_bundle(request: Request):
 
     body = await request.json()
     _resolve_bm2_into_body(body)
+    session_tree = _session_tree_for(body)
 
     from render_common import PendingContentError
 
     try:
-        report_data = marshal_export_data(body)
+        report_data = marshal_export_data(body, tree=session_tree)
         # Build the zip in memory.  build_overleaf_bundle writes to a
         # path, so we pipe through a tmpfile-shaped buffer to keep the
         # streaming simple and avoid filesystem chatter on every export.
@@ -157,7 +182,7 @@ async def api_export_overleaf_bundle(request: Request):
         with tempfile.NamedTemporaryFile(
             suffix=".zip", prefix="5dtox_bundle_", delete=False,
         ) as tmp:
-            build_overleaf_bundle(report_data, Path(tmp.name), strict=True)
+            build_overleaf_bundle(report_data, Path(tmp.name), strict=True, tree=session_tree)
             zip_bytes = Path(tmp.name).read_bytes()
             Path(tmp.name).unlink(missing_ok=True)
     except PendingContentError as e:
@@ -191,6 +216,117 @@ async def api_export_overleaf_bundle(request: Request):
         content=zip_bytes,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/compile-pdf — compile the LaTeX bundle locally to a preview PDF
+# ---------------------------------------------------------------------------
+# The engine command is indirected so a deployment can point at its own
+# offline wrapper.  Default `tect` = the seeded-bundle tectonic wrapper
+# (/usr/local/bin/tect); NEVER plain `tectonic` (its package CDN is
+# firewalled).  See ADR-0007 and the tect-offline-compile tooling note.
+TECT_CMD = os.environ.get("TECT_CMD", "tect")
+_COMPILE_TIMEOUT_S = int(os.environ.get("COMPILE_PDF_TIMEOUT", "120"))
+
+
+@router.post("/api/compile-pdf")
+async def api_compile_pdf(request: Request):
+    """
+    Compile the current report to a PDF locally, for the in-app live preview.
+
+    This is the DRAFT-preview sibling of /api/export-overleaf-bundle: it
+    assembles the identical LaTeX bundle (main.tex + report.tex + niehs.cls
+    + figures/) but, instead of zipping it for Overleaf, materializes it in
+    a temp dir and runs the local offline TeX engine (`tect`) to produce a
+    byte-accurate PDF of the deliverable — so the author sees real LaTeX
+    pagination / float placement / overflow WITHOUT an Overleaf round trip
+    (ADR-0007).
+
+    Pipeline:
+      body → marshal_export_data → _assemble_bundle_files → tmpdir
+           → tect main.tex → main.pdf
+
+    strict=False (unlike the bundle export): this is a working draft, so
+    pending markers should be VISIBLE in the compiled PDF, not gate it.
+
+    Returns application/pdf on success; 422 with the tail of the compile log
+    on a non-zero engine exit (so the UI can show what broke); 503 if the
+    engine binary is not installed on this host.
+    """
+    import shutil as _shutil
+    import subprocess
+    import tempfile
+
+    from report_data import marshal_export_data
+    from latex_export import _assemble_bundle_files, _write_files_to_dir
+
+    body = await request.json()
+    _resolve_bm2_into_body(body)
+    session_tree = _session_tree_for(body)
+
+    if _shutil.which(TECT_CMD) is None:
+        return JSONResponse(
+            {
+                "error": f"LaTeX engine '{TECT_CMD}' is not available on the "
+                         f"server, so the PDF preview cannot be compiled here. "
+                         f"The HTML preview and Overleaf export are unaffected.",
+            },
+            status_code=503,
+        )
+
+    def _compile() -> "tuple[bytes | None, str]":
+        """Assemble + compile in a scratch dir; return (pdf_bytes|None, log)."""
+        data = marshal_export_data(body, tree=session_tree)
+        files = _assemble_bundle_files(data, strict=False, tree=session_tree)
+        with tempfile.TemporaryDirectory(prefix="5dtox_compile_") as tmp:
+            tmp_path = Path(tmp)
+            _write_files_to_dir(files, tmp_path)
+            out_dir = tmp_path / "out"
+            out_dir.mkdir(exist_ok=True)
+            proc = subprocess.run(
+                [TECT_CMD, "main.tex", "--outdir", str(out_dir)],
+                cwd=str(tmp_path),
+                capture_output=True,
+                text=True,
+                timeout=_COMPILE_TIMEOUT_S,
+            )
+            log = (proc.stdout or "") + (proc.stderr or "")
+            pdf = out_dir / "main.pdf"
+            if proc.returncode != 0 or not pdf.exists():
+                return None, log
+            return pdf.read_bytes(), log
+
+    # Compilation is blocking CPU/IO (subprocess); keep the event loop free.
+    loop = asyncio.get_running_loop()
+    try:
+        pdf_bytes, log = await loop.run_in_executor(None, _compile)
+    except subprocess.TimeoutExpired:
+        return JSONResponse(
+            {"error": f"PDF compile exceeded {_COMPILE_TIMEOUT_S}s and was "
+                      f"aborted."},
+            status_code=422,
+        )
+    except Exception as e:
+        logging.exception("PDF compile failed")
+        return JSONResponse(
+            {"error": f"PDF compile failed: {e}"}, status_code=500,
+        )
+
+    if pdf_bytes is None:
+        # Non-zero engine exit: hand back the tail of the log so the UI can
+        # show the LaTeX error the author needs to fix (the whole point of
+        # catching it here instead of in Overleaf).
+        tail = "\n".join(log.splitlines()[-40:])
+        return JSONResponse(
+            {"error": "LaTeX compilation failed.", "log": tail},
+            status_code=422,
+        )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="preview.pdf"'},
     )
 
 
@@ -583,6 +719,7 @@ async def api_preview_latex_html(request: Request):
 
     body = await request.json()
     _resolve_bm2_into_body(body)
+    session_tree = _session_tree_for(body)
     section_filter = body.get("section_filter")
 
     if section_filter:
@@ -598,8 +735,8 @@ async def api_preview_latex_html(request: Request):
         )
 
     try:
-        report_data = marshal_export_data(body, section_filter=section_filter)
-        html = generate_html(report_data, section_filter=section_filter)
+        report_data = marshal_export_data(body, section_filter=section_filter, tree=session_tree)
+        html = generate_html(report_data, section_filter=section_filter, tree=session_tree)
     except Exception as e:
         logging.exception("HTML preview generation failed")
         return JSONResponse(
@@ -695,3 +832,64 @@ async def api_export_bm2(dtxsid: str):
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Document-structure config (ADR-0007 follow-on): per-session YAML that
+# defines the document STRUCTURE, editable in the UI without re-integrating.
+# ---------------------------------------------------------------------------
+
+@router.get("/api/document-config/{dtxsid}")
+async def api_get_document_config(dtxsid: str, default: int = 0):
+    """
+    Return the session's document-structure YAML for the config editor.
+
+    When the session has no per-session override yet, returns the global default
+    structure (so the editor opens on the real active document, not a blank box).
+    `is_default` tells the UI whether it's showing the shared default (True) or
+    this session's own saved copy (False).
+
+    ``?default=1`` forces the shared default regardless of any saved copy — the
+    "Load default" affordance, so a session that already has an override can
+    still get back to the default in the editor (unsaved until the user saves).
+    """
+    from document_config import load_session_document_yaml, default_document_yaml
+
+    if default:
+        return JSONResponse({"yaml": default_document_yaml(), "is_default": True})
+    text = load_session_document_yaml(dtxsid)
+    if text is None:
+        return JSONResponse({"yaml": default_document_yaml(), "is_default": True})
+    return JSONResponse({"yaml": text, "is_default": False})
+
+
+@router.post("/api/document-config/{dtxsid}")
+async def api_save_document_config(dtxsid: str, request: Request):
+    """
+    Validate + persist the session's document-structure YAML.
+
+    The save is gated on a full tree build (parse + catalog validation + unique
+    ids); an invalid edit returns 422 with the validation message and writes
+    nothing, so the previous structure stays intact.  On success the caller
+    re-fetches /api/document-tree?dtxsid=… and re-renders (no re-integration —
+    only the structure changed).
+    """
+    from document_config import save_session_document_yaml
+
+    body = await request.json()
+    text = body.get("yaml")
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse(
+            {"error": "Request must include a non-empty 'yaml' string."},
+            status_code=422,
+        )
+    try:
+        save_session_document_yaml(dtxsid, text)
+    except ValueError as e:
+        # Well-formed request, invalid document structure — surface the exact
+        # validation error in the editor rather than 500.
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save document config for %s", dtxsid)
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})

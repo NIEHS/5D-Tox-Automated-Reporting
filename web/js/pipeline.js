@@ -196,7 +196,7 @@ function bm2Slug(filename) {
  *
  * The animal report reads all files in the pool, extracts per-animal
  * data, and cross-references across tiers and domains.  The result
- * is rendered inside the validation panel and included in DOCX export.
+ * is rendered inside the validation panel and included in the report export.
  */
 async function approvePool() {
     if (!currentIdentity?.dtxsid) {

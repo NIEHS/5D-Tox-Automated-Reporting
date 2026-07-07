@@ -91,7 +91,7 @@ def safe_filename(name: str) -> str:
 
     Replaces non-alphanumeric characters (except spaces, hyphens, and
     underscores) with underscores.  Used when building download filenames
-    for exported .docx and .pdf reports.
+    for exported reports (the Overleaf .zip bundle).
 
     Args:
         name: The chemical name (e.g., "1,2-Dichlorobenzene").

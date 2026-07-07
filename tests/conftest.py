@@ -53,6 +53,7 @@ _SESSIONS_DIR_MODULES = [
     "llm_routes",
     "background_server",
     "style_learning",
+    "document_config",
 ]
 
 # pool_orchestrator imports session_dir (the function), which reads

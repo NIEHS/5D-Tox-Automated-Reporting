@@ -695,6 +695,7 @@ def build_overleaf_bundle(
     *,
     include_readme: bool = True,
     strict: bool = False,
+    tree: "list | None" = None,
 ) -> Path:
     """
     Build an Overleaf-ready zip from the given report data.
@@ -733,7 +734,7 @@ def build_overleaf_bundle(
     # it into the zip.  ZIP_DEFLATED is standard PKZIP — Overleaf handles it
     # without special flags; ZIP_LZMA is smaller but some importers reject it.
     # strict runs BEFORE the zip is opened, so a gated build writes nothing.
-    files = _assemble_bundle_files(data, include_readme=include_readme, strict=strict)
+    files = _assemble_bundle_files(data, include_readme=include_readme, strict=strict, tree=tree)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for relpath, raw in files.items():
             zf.writestr(relpath, raw)
@@ -747,6 +748,7 @@ def build_overleaf_bundle(
 
 def _assemble_bundle_files(
     data: dict, *, include_readme: bool = True, strict: bool = False,
+    tree: "list | None" = None,
 ) -> "dict[str, bytes]":
     r"""
     Build the in-memory file payload shared by every bundle writer.
@@ -776,7 +778,7 @@ def _assemble_bundle_files(
     the preamble + \input, so it carries no node content.
     """
     files: "dict[str, bytes]" = {}
-    report_body = generate_report_body(data)
+    report_body = generate_report_body(data, tree=tree)
     if strict:
         from render_common import scan_pending_markers, PendingContentError
         markers = scan_pending_markers(report_body)

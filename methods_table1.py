@@ -13,7 +13,7 @@ Single public entry point:
   build_table1_data(ctx) -> dict | None
 
 Returns None when there's no genomics data to tabulate, otherwise a
-dict in the shape that the DOCX builder + the Typst template expect:
+dict in the shape the report renderers expect:
   {
     "caption":   str,
     "headers":   list[str],

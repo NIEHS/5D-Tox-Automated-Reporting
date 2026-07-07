@@ -133,6 +133,33 @@ document.addEventListener('alpine:init', () => {
         // Always visible — the content pane is the primary editing surface.
         contentVisible: true,
 
+        // --- Preview view visibility (ADR-0007) ---
+        // User-driven UI state (the sanctioned exception to derive-don't-set),
+        // persisted to localStorage like sidebarCollapsed.  The CONTENT of each
+        // view is still derived from the report payload — only whether the view
+        // is shown is stored here.
+        //   htmlViewVisible — the Paged.js HTML live preview
+        //   pdfViewVisible  — the compiled-PDF view (live + comparison)
+        //   compareVisible  — whether the filesystem comparison PDF is shown
+        htmlViewVisible: JSON.parse(localStorage.getItem('5dtox-html-view') || 'false'),
+        pdfViewVisible: JSON.parse(localStorage.getItem('5dtox-pdf-view') || 'false'),
+        compareVisible: false,
+
+        /** Toggle the HTML live-preview view and persist the choice. */
+        toggleHtmlView() {
+            this.htmlViewVisible = !this.htmlViewVisible;
+            localStorage.setItem('5dtox-html-view', JSON.stringify(this.htmlViewVisible));
+            if (this.htmlViewVisible && typeof ensureFullPreview === 'function') {
+                ensureFullPreview();
+            }
+        },
+
+        /** Toggle the compiled-PDF view and persist the choice. */
+        togglePdfView() {
+            this.pdfViewVisible = !this.pdfViewVisible;
+            localStorage.setItem('5dtox-pdf-view', JSON.stringify(this.pdfViewVisible));
+        },
+
         // --- Unified narratives ---
         // Populated from the process-integrated response.  Keyed by section
         // name (e.g. "apical", "clinical_pathology"), values are
@@ -269,7 +296,7 @@ let selectedModels = {
 
 
 // --- Animal report ---
-// Whether the animal report has been approved (included in DOCX export).
+// Whether the animal report has been approved (included in the report export).
 let animalReportApproved = false;
 // Cached animal report data from /api/generate-animal-report/{dtxsid}.
 let animalReportData = null;

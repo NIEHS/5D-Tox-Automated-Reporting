@@ -9,7 +9,8 @@ while keeping the dependency graph clean.
 Shared stores:
   - _bm2_uploads:  bm2_id (UUID) → {filename, temp_path, table_data, bm2_json, narrative}
                    Populated by upload-bm2 / upload-zip; consumed by process-bm2,
-                   preview, export-docx/pdf, and session load (re-registration).
+                   preview, the LaTeX/Overleaf export path, and session load
+                   (re-registration).
 
   - _csv_uploads:  csv_id (UUID) → {filename, temp_path, temp_dir, df}
                    Populated by upload-csv; consumed by process-genomics.

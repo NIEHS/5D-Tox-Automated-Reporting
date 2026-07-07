@@ -207,7 +207,7 @@ class MethodsSection:
     A single M&M subsection with heading and content.
 
     heading:    The subsection heading text (e.g. "Study Design").
-    level:      Heading depth — 3 = H3, 4 = H4 in the DOCX.
+    level:      Heading depth — 3 = H3, 4 = H4 in the rendered report.
     key:        Subsection key matching SUBSECTION_SKELETON (e.g. "study_design").
     paragraphs: Prose paragraphs (user-editable in the frontend).
     table:      Optional table data for programmatic tables like Table 1.
@@ -250,7 +250,7 @@ class MethodsReport:
 
     sections:  Ordered list of MethodsSection objects (heading hierarchy preserved).
     context:   The MethodsContext used to generate this report — retained so the
-               DOCX builder can access study parameters for Table 1 generation.
+               Table 1 builder can access study parameters for its generation.
     """
     sections: list[MethodsSection] = field(default_factory=list)
     context: MethodsContext = field(default_factory=MethodsContext)

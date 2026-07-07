@@ -238,7 +238,7 @@ async def api_process_bm2(request: Request):
             None, build_table_data_from_bm2, bm2_path,
         )
 
-        # Cache the table_data and full JSON so /api/export-docx and
+        # Cache the table_data and full JSON so the export path and
         # /api/preview can reuse them without re-running the Java export
         upload["table_data"] = table_data
         upload["bm2_json"] = bm2_json

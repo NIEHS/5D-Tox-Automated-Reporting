@@ -2274,9 +2274,217 @@ header p {
     min-width: 0; /* prevent flex child from overflowing */
 }
 
-/* (Preview-pane, draggable splitter, and collapse-tab styles removed with the
-   in-app preview — the content pane is now the only column right of the
-   sidebar and spans the full width via flex: 1.) */
+/* ================================================================
+ * Preview region (ADR-0007) — the column between the sidebar and the
+ * editing content pane.  Stacks two collapsible views vertically:
+ * the HTML live preview (top) and the PDF view (bottom).  The PDF view
+ * itself splits horizontally into the compiled live preview and an
+ * optional filesystem-chosen comparison PDF.
+ * ================================================================ */
+.preview-region {
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-right: 1px solid var(--c-border);
+    background: var(--c-bg-light);
+    display: flex;
+    flex-direction: column;
+    /* Draggable basis: initPaneSplitter() overrides flex-basis while
+       dragging and restores the persisted width on load.  min-width:0 lets
+       the region-splitter snap-collapse it to zero. */
+    flex: 0 0 45%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Each view (HTML / PDF) — flex column that shares the region's height.
+   flex:1 so the two views split the vertical space; the view-splitter
+   overrides flex-basis when the user drags. */
+.preview-view {
+    flex: 1 1 50%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Toolbar at the top of each view — title, status, action buttons. */
+.preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--c-border);
+    background: var(--c-bg-white);
+    flex: 0 0 auto;
+}
+.preview-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--c-primary);
+}
+.preview-status {
+    font-size: 0.72rem;
+    color: var(--c-text-muted);
+    font-style: italic;
+}
+.preview-toolbar-spacer { flex: 1 1 auto; }
+
+/* The iframe(s) that show rendered content — fill the view below the toolbar. */
+.preview-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 0;
+    background: var(--c-bg-white);
+    min-height: 0;
+}
+
+/* PDF view body — live preview + comparison side by side (horizontal). */
+.pdf-view-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+}
+.pdf-frame-wrap {
+    flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+/* Placeholder shown in the live-preview frame before the first compile. */
+.pdf-frame-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--c-text-muted);
+    background: var(--c-bg-light);
+}
+/* Small bar above the comparison frame showing the chosen filename. */
+.pdf-compare-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-bottom: 1px solid var(--c-border);
+    background: var(--c-bg-light);
+    flex: 0 0 auto;
+}
+.pdf-compare-name {
+    font-size: 0.72rem;
+    color: var(--c-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1 1 auto;
+}
+
+/* --- Splitters ---
+   Three kinds share drag behavior (initPaneSplitter): the region↔content
+   splitter (vertical bar, col-resize), the HTML↔PDF view splitter (horizontal
+   bar, row-resize), and the live↔comparison splitter (col-resize). */
+.pane-splitter {
+    flex: 0 0 6px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    cursor: col-resize;
+    background: var(--c-border);
+    z-index: 11;
+    transition: background 0.15s;
+}
+.view-splitter {
+    flex: 0 0 6px;
+    cursor: row-resize;
+    background: var(--c-border);
+    transition: background 0.15s;
+}
+.pdf-splitter {
+    flex: 0 0 6px;
+    cursor: col-resize;
+    background: var(--c-border);
+    transition: background 0.15s;
+}
+.pane-splitter:hover,
+.view-splitter:hover,
+.pdf-splitter:hover { background: var(--c-accent, #3b82f6); }
+
+/* While dragging: kill text selection and let pointer events pass THROUGH
+   the iframes (otherwise an iframe swallows mousemove and the drag stalls
+   the instant the cursor crosses into it). */
+body.splitter-dragging { user-select: none; }
+body.splitter-dragging iframe { pointer-events: none; }
+
+/* Sidebar "Preview" section label above the view toggles. */
+.sidebar-section-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--c-text-muted);
+    padding: 0.25rem 0.75rem;
+}
+
+/* Document Structure config panel (ADR-0007 follow-on) — monospace YAML editor
+   + status line, reusing the settings-panel chrome.  The bare .doc-config-editor
+   rules style the fallback <textarea> (used when CodeMirror can't load); when
+   CodeMirror mounts it hides the textarea and inserts a .CodeMirror wrapper,
+   styled just below. */
+.doc-config-editor {
+    width: 100%;
+    min-height: 420px;
+    box-sizing: border-box;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    background: var(--c-bg-white);
+    color: var(--c-text);
+    resize: vertical;
+}
+.doc-config-editor:focus {
+    outline: none;
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.3);
+}
+/* CodeMirror instance for the YAML editor — match the fallback's chrome so the
+   panel looks the same whether or not CodeMirror loaded. */
+#doc-config-panel .CodeMirror {
+    height: 460px;
+    border: 1px solid var(--c-border-input);
+    border-radius: var(--r-md);
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+#doc-config-panel .CodeMirror-focused {
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.3);
+}
+.doc-config-status {
+    min-height: 1.2rem;
+    margin: 0.25rem 0 0.5rem;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    color: var(--c-text-secondary);
+}
+.doc-config-status.ok { color: #15803d; }
+.doc-config-status.err { color: var(--c-error, #b91c1c); }
+.doc-config-actions { display: flex; align-items: center; gap: 0.5rem; }
 
 /* Message shown in the preview pane when a section can't render as PDF
    because required data sources are missing (e.g., no .bm2 for BMD columns).

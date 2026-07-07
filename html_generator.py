@@ -1380,23 +1380,31 @@ def _fragment_skeleton(body: str, running_header: str = "") -> str:
 def generate_html(
     data: dict,
     section_filter: Optional[str] = None,
+    tree: "list | None" = None,
 ) -> str:
     """
-    Walk DOCUMENT_TREE + data and produce a complete HTML document.
+    Walk the document tree + data and produce a complete HTML document.
 
     Args:
         data:           The data dict marshal_export_data builds (same
                         shape generate_latex consumes).
         section_filter: For the fragment-compile preview path.  When set,
                         only the subtree at that DocNode id renders.
+        tree:           Optional per-session document tree.  When None (the
+                        default), the global DOCUMENT_TREE is used, so existing
+                        callers are unchanged.  A per-session structure override
+                        is passed so the preview reflects the edited structure
+                        (ADR-0007 follow-on) — the twin latex_generator threads
+                        the same param for surface parity (ADR-0006).
 
     Returns:
         A self-contained HTML string suitable for iframe srcdoc.
     """
+    nodes = tree if tree is not None else DOCUMENT_TREE
     # Fragment path — only emit the requested subtree.  The running header
     # for a fragment is the section's own title.
     if section_filter:
-        node = find_node(section_filter)
+        node = find_node(section_filter, tree)
         if node is None:
             body = (
                 f"<p><em>No section found for id "
@@ -1420,11 +1428,11 @@ def generate_html(
     # subsequent top-level node goes into the body bucket.
     # The running header is the report title (same source as the cover
     # block's <h1>, so preview header and title block stay in sync).
-    body_first_id = first_body_node_id()
+    body_first_id = first_body_node_id(nodes)
     front_chunks: list[str] = []
     body_chunks: list[str] = []
     in_body = False
-    for top in DOCUMENT_TREE:
+    for top in nodes:
         if top.id == body_first_id:
             in_body = True
         (body_chunks if in_body else front_chunks).extend(_walk_html(top, data))

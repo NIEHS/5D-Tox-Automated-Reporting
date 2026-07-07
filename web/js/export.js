@@ -839,13 +839,11 @@ function renderXlsxPreview(data, container) {
 
 
 /* =================================================================
- * Report dirty tracking (vestigial)
+ * Report dirty tracking
  *
- * markReportDirty() is still called from every approve/unapprove action
- * across the app.  With the in-app preview removed it no longer drives a
- * re-render, but it is kept as a harmless no-op so those many call sites
- * keep working — and as a hook a future "report changed since last sent to
- * Overleaf" indicator could read.
+ * markReportDirty() is called from every approve/unapprove action across
+ * the app.  It flags the HTML live preview (ADR-0007) as stale so the next
+ * ensureFullPreview() re-renders instead of serving the cached srcdoc.
  * ================================================================= */
 
 let reportDirty = true;
@@ -1304,5 +1302,174 @@ async function saveRepoBinding() {
         await initReportTab();  // activate the controls
     } catch (e) {
         if (status) status.textContent = `Error: ${e.message}`;
+    }
+}
+
+
+/* =================================================================
+ * In-app preview (ADR-0007)
+ *
+ * Two surfaces, both fed by the same buildExportPayload():
+ *   • HTML view  — POST /api/preview-latex-html → Paged.js HTML in an
+ *                  iframe srcdoc.  Fast; the live editing surface.
+ *   • PDF view   — POST /api/compile-pdf → real LaTeX compiled locally by
+ *                  `tect` → PDF blob in an iframe.  Slower (~seconds); the
+ *                  byte-accurate deliverable.  Plus a comparison PDF chosen
+ *                  from the filesystem (client-side object URL, no upload).
+ * ================================================================= */
+
+let _fullPreviewRendering = false;
+
+/**
+ * Render the full report to HTML into the HTML-view iframe (#preview-pdf-frame).
+ * No-op if already current (rendered + not dirty) unless force=true.
+ */
+async function ensureFullPreview(force = false) {
+    const frame = document.getElementById('preview-pdf-frame');
+    if (!frame) return;
+    if (!force && frame.srcdoc && !reportDirty) return;
+    if (_fullPreviewRendering) return;
+    _fullPreviewRendering = true;
+
+    const status = document.getElementById('html-preview-status');
+    if (status) status.textContent = 'Rendering…';
+    try {
+        const payload = await buildExportPayload();  // full report (no section_filter)
+        const resp = await fetch('/api/preview-latex-html', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            if (status) status.textContent = err.error || 'Preview failed';
+            return;
+        }
+        frame.srcdoc = await resp.text();
+        reportDirty = false;
+        if (status) status.textContent = '';
+    } catch (e) {
+        if (status) status.textContent = `Error: ${e.message}`;
+    } finally {
+        _fullPreviewRendering = false;
+    }
+}
+
+/**
+ * Scroll the HTML preview to a section anchor.  The Paged.js output anchors
+ * each node by its id; the srcdoc iframe is same-origin so we can reach into
+ * its document.  Best-effort — a missing anchor is a silent no-op.
+ */
+function scrollPreviewToNode(navId) {
+    const frame = document.getElementById('preview-pdf-frame');
+    if (!frame || !navId) return;
+    try {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        const el = doc.getElementById(navId) ||
+                   doc.querySelector(`[data-node-id="${navId}"]`);
+        if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ block: 'start' });
+        }
+    } catch (e) {
+        /* cross-frame or not-yet-loaded — ignore */
+    }
+}
+
+/** Recompile button on the HTML view — force a fresh render. */
+function recompilePreview() {
+    ensureFullPreview(true);
+    const navId = Alpine?.store('app')?.activeSection;
+    if (navId) scrollPreviewToNode(navId === 'report' ? 'cover' : navId);
+}
+
+let _compilingPdf = false;
+
+/**
+ * Compile the report to a PDF locally (POST /api/compile-pdf) and show it in
+ * the live-preview iframe.  On a LaTeX error the server returns the compile
+ * log, which we surface so the author can fix it before the Overleaf round trip.
+ */
+async function compileLivePdf() {
+    if (_compilingPdf) return;
+    _compilingPdf = true;
+    const frame = document.getElementById('live-pdf-frame');
+    const empty = document.getElementById('live-pdf-empty');
+    const status = document.getElementById('live-pdf-status');
+    const btn = document.getElementById('btn-compile-pdf');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Compiling…';
+    try {
+        const payload = await buildExportPayload();
+        const resp = await fetch('/api/compile-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            let msg = err.error || `Compile failed (${resp.status})`;
+            if (err.log) msg += `\n\n${err.log}`;
+            if (status) status.textContent = err.error || 'Compile failed';
+            if (empty) {
+                empty.style.display = 'flex';
+                empty.textContent = msg;
+            }
+            return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        // Revoke the previous blob URL to avoid leaking memory across compiles.
+        if (frame && frame.dataset.blobUrl) URL.revokeObjectURL(frame.dataset.blobUrl);
+        if (frame) {
+            frame.src = url;
+            frame.dataset.blobUrl = url;
+        }
+        if (empty) empty.style.display = 'none';
+        if (status) status.textContent = '';
+    } catch (e) {
+        if (status) status.textContent = `Error: ${e.message}`;
+    } finally {
+        _compilingPdf = false;
+        if (btn) btn.disabled = false;
+    }
+}
+
+/** Open the filesystem picker for the comparison PDF. */
+function chooseComparisonPdf() {
+    const input = document.getElementById('compare-pdf-input');
+    if (input) input.click();
+}
+
+/** File-picker change handler — load the chosen PDF into the comparison frame. */
+function onComparisonPdfChosen(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    const frame = document.getElementById('compare-pdf-frame');
+    const nameEl = document.getElementById('compare-pdf-name');
+    const url = URL.createObjectURL(file);   // client-side only — never uploaded
+    if (frame && frame.dataset.blobUrl) URL.revokeObjectURL(frame.dataset.blobUrl);
+    if (frame) {
+        frame.src = url;
+        frame.dataset.blobUrl = url;
+    }
+    if (nameEl) nameEl.textContent = file.name;
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').compareVisible = true;
+    }
+    // Allow re-choosing the same file later (change fires only on a new value).
+    event.target.value = '';
+}
+
+/** Close the comparison pane and free its blob URL. */
+function closeComparisonPdf() {
+    const frame = document.getElementById('compare-pdf-frame');
+    if (frame && frame.dataset.blobUrl) {
+        URL.revokeObjectURL(frame.dataset.blobUrl);
+        frame.removeAttribute('src');
+        delete frame.dataset.blobUrl;
+    }
+    if (typeof Alpine !== 'undefined' && Alpine.store('app')) {
+        Alpine.store('app').compareVisible = false;
     }
 }

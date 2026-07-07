@@ -34,8 +34,8 @@ data is empty, or dose groups are missing so the LLE cutoff can't be
 computed).
 
 The "paragraphs" field is the flattened legacy shape — kept so any
-consumer that doesn't yet understand the per-organ structure (DOCX
-export, older session round-trips) still gets a sensible prose block.
+consumer that doesn't yet understand the per-organ structure (older
+session round-trips) still gets a sensible prose block.
 """
 
 # ---------------------------------------------------------------------------

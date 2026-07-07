@@ -216,7 +216,11 @@ def _build_full_title(ta: dict) -> str:
     )
 
 
-def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
+def marshal_export_data(
+    body: dict,
+    section_filter: str | None = None,
+    tree: "list | None" = None,
+) -> dict:
     """
     Reshape a web-UI export/preview request body into the render-ready data
     dict that both renderers consume (generate_html for the in-app preview,
@@ -236,11 +240,23 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
                         "genomics" (gene set/gene tables + descriptions),
                         "charts" (UMAP + cluster scatter figures).
                         When None, the full report is returned.
+        tree: Optional per-session document tree (a list[DocNode]).  When None
+              (the default), the global DOCUMENT_TREE is used, so every existing
+              caller is byte-identical.  A per-session structure override
+              (document_config.build_session_tree) is passed here so the report
+              re-renders with a different structure against the SAME data — no
+              re-integration (the render path never touches integrated.json).
 
     Returns:
         The render-ready data dict (the shape generate_html / generate_latex
         walk).
     """
+    from document_tree import DOCUMENT_TREE
+    # Resolve once: `active_tree` is a concrete list for the walks that need one;
+    # the raw `tree` param (possibly None) is passed to find_node so the default
+    # path keeps its O(1) index lookup (an explicit tree forces a linear scan).
+    active_tree = tree if tree is not None else DOCUMENT_TREE
+
     chemical_name = body.get("chemical_name", "Chemical")
 
     # --- Start from the scaffold ---
@@ -367,10 +383,10 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     # here (rather than relying on a later call leaking numbers across requests)
     # makes a fresh process produce correct numbers on the first call.
     from document_tree import compute_table_numbers
-    compute_table_numbers()
+    compute_table_numbers(active_tree)
 
     _overlay_abstract(data, body)
-    _overlay_apical_sections(data, body)
+    _overlay_apical_sections(data, body, tree=active_tree)
     _overlay_unified_and_bmd(data, body)
     _overlay_genomics(data, body)
 
@@ -379,8 +395,8 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     # finalized.  Same helper the LaTeX session path calls, so both surfaces
     # number identically; runs before _build_toc_entries so the Tables list
     # picks the numbers up.  A no-op when there are no genomics sections.
-    from document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
-    assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
+    from document_tree import assign_genomics_table_numbers
+    assign_genomics_table_numbers(active_tree, data.get("genomics_sections"))
 
     # Summary
     summary_paragraphs = body.get("summary_paragraphs", [])
@@ -390,13 +406,13 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     # Inject the document structure tree so the Typst template can walk
     # it for heading hierarchy, table numbering, and section ordering.
     from document_tree import serialize_tree, find_node, is_leaf_table
-    data["document_tree"] = serialize_tree()
+    data["document_tree"] = serialize_tree(active_tree)
 
     # Build manual TOC entries from the document tree BEFORE the section
     # filter strips content.  This lets the tables-list preview render a
     # complete Table of Contents with ready/placeholder styling, even
     # though the body headings are stripped from the compiled document.
-    toc_entries, table_entries = _build_toc_entries(data)
+    toc_entries, table_entries = _build_toc_entries(data, tree=active_tree)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
 
@@ -404,10 +420,10 @@ def marshal_export_data(body: dict, section_filter: str | None = None) -> dict:
     # Uses the document tree to determine which data keys and platforms
     # belong to the requested TOC node — no hardcoded maps.
     if section_filter:
-        _apply_section_filter(data, section_filter)
+        _apply_section_filter(data, section_filter, tree=tree)
         # Tell the Typst template whether this is a leaf table preview
         # (no headings, just the table) vs a group/section preview.
-        node = find_node(section_filter)
+        node = find_node(section_filter, tree)
         if node and is_leaf_table(node):
             data["leaf_preview"] = True
 
@@ -595,8 +611,11 @@ def _find_table_number(nodes: list, platform: str):
     return None
 
 
-def _overlay_apical_sections(data: dict, body: dict) -> None:
-    """Overlay the apical endpoint sections: footnotes, tree-derived table numbers, document-order sort, and per-row canonicalization."""
+def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None) -> None:
+    """Overlay the apical endpoint sections: footnotes, tree-derived table numbers, document-order sort, and per-row canonicalization.
+
+    `tree` defaults to the global DOCUMENT_TREE; a per-session tree is passed so
+    table numbers resolve against the session's own structure."""
     chemical_name = body.get("chemical_name", "Chemical")
     # Apical endpoint sections
     apical_sections = body.get("apical_sections", [])
@@ -662,8 +681,9 @@ def _overlay_apical_sections(data: dict, body: dict) -> None:
             # table_number from the UI.  (_find_table_number is a module-level
             # helper so it isn't rebuilt on every loop iteration.)
             from document_tree import DOCUMENT_TREE
+            nodes = tree if tree is not None else DOCUMENT_TREE
             platform = apical_entry["platform"]
-            tree_table_num = _find_table_number(DOCUMENT_TREE, platform)
+            tree_table_num = _find_table_number(nodes, platform)
             if tree_table_num is not None:
                 apical_entry["table_number"] = tree_table_num
 
@@ -1436,7 +1456,7 @@ def _ensure_paragraphs(obj) -> dict:
 # can render a manual TOC with placeholder styling for incomplete sections.
 # ---------------------------------------------------------------------------
 
-def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
+def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dict], list[dict]]:
     """
     Walk the document tree and build two arrays for the Typst template:
 
@@ -1469,8 +1489,9 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
     """
     from document_tree import DOCUMENT_TREE, compute_table_numbers
 
+    nodes = tree if tree is not None else DOCUMENT_TREE
     # Ensure table numbers are computed before we walk
-    compute_table_numbers()
+    compute_table_numbers(nodes)
 
     toc_entries = []
     table_entries = []
@@ -1626,7 +1647,7 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
             if node.children:
                 _walk_toc(node.children)
 
-    _walk_toc(DOCUMENT_TREE)
+    _walk_toc(nodes)
 
     # Genomics tables are DATA-DRIVEN (not tree nodes), so the walk above misses
     # them.  They were numbered by assign_genomics_table_numbers before this ran;
@@ -1652,7 +1673,7 @@ def _build_toc_entries(data: dict) -> tuple[list[dict], list[dict]]:
     return toc_entries, table_entries
 
 
-def _apply_section_filter(data: dict, section_filter: str) -> None:
+def _apply_section_filter(data: dict, section_filter: str, tree: "list | None" = None) -> None:
     """
     Strip all report sections except the requested one for PDF preview.
 
@@ -1702,13 +1723,13 @@ def _apply_section_filter(data: dict, section_filter: str) -> None:
                 candidate_organ = section_filter[len(prefix):]
                 # Only treat as a per-organ subnode when the suffix
                 # isn't itself an existing static node ID.
-                if find_node(section_filter) is None and candidate_organ:
+                if find_node(section_filter, tree) is None and candidate_organ:
                     organ_qualifier = candidate_organ.lower()
                     section_filter = parent_id
                 break
 
     # --- Look up the node in the document tree ---
-    node = find_node(section_filter)
+    node = find_node(section_filter, tree)
 
     if node is None:
         # Unknown node ID — strip everything as a safe fallback

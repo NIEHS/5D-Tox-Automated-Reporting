@@ -272,7 +272,7 @@ async function approveBackground() {
             notes: currentResult?.notes || [],
             // Persist the LLM-generated Abstract Background distillation
             // so the abstract section survives session reloads and flows
-            // into PDF/DOCX exports without re-running the LLM.
+            // into the report export without re-running the LLM.
             abstract_background: currentResult?.abstract_background || '',
         },
     );

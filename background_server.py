@@ -9,7 +9,7 @@ the web UI.  All actual endpoint logic lives in dedicated router modules:
   session_routes.py     — session load, approve, unapprove, history, restore, BMD summary
   upload_routes.py      — upload-bm2, upload-csv, upload-zip, process-bm2, process-genomics, preview
   llm_routes.py         — generate (SSE), generate-methods, methods-context, generate-summary, generate-genomics-narrative
-  export_routes.py      — export-docx, export-pdf, export-pdf-scaffold, style-profile
+  export_routes.py      — export-overleaf-bundle, preview-latex-html, sync/commit/push/pull-document, export-bm2, style-profile
 
 Shared mutable state (upload dicts, pool fingerprints) lives in server_state.py.
 Pure-function modules: session_store.py, llm_helpers.py, style_learning.py.
@@ -176,8 +176,8 @@ app.include_router(upload_routes.router)
 import llm_routes
 app.include_router(llm_routes.router)
 
-# Export and style: export-docx, export-pdf, export-pdf-scaffold,
-# style-profile GET/DELETE
+# Export and style: export-overleaf-bundle, preview-latex-html,
+# sync/commit/push/pull-document, export-bm2, style-profile GET/DELETE
 import export_routes
 app.include_router(export_routes.router)
 
@@ -272,15 +272,34 @@ _CHART_REGISTRY_PAYLOAD = registry_payload(load_chart_types(ACTIVE_TEMPLATE))
 
 
 @app.get("/api/document-tree")
-async def get_document_tree():
+async def get_document_tree(dtxsid: str | None = None):
     """
-    Return the full document structure tree as JSON.
+    Return the document structure tree as JSON.
 
     The tree includes node IDs, titles, levels, types, platform mappings,
     narrative keys, table numbers, and ready_key flags — everything the
     frontend needs to generate the navigation panel, Results containers, and
     platform routing without any hardcoded document structure.
+
+    With no ``dtxsid`` this returns the frozen global default (_SERIALIZED_TREE,
+    computed once at import).  With ``?dtxsid=…`` and a per-session structure
+    override present (ADR-0007 follow-on), it serializes that session's own tree
+    instead — so after editing the document config the client can re-fetch the
+    new structure without a restart.  No override ⇒ the global default.
     """
+    if dtxsid:
+        try:
+            from document_config import build_session_tree
+            session_tree = build_session_tree(dtxsid)
+            if session_tree is not None:
+                return JSONResponse(
+                    annotate_capabilities(serialize_tree(session_tree))
+                )
+        except Exception:
+            logging.exception(
+                "per-session document tree failed to build for %s; serving "
+                "the global default", dtxsid,
+            )
     return JSONResponse(_SERIALIZED_TREE)
 
 

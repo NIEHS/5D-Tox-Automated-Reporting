@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=15">
+    <link rel="stylesheet" href="/style.css?v=18">
+    <!-- CodeMirror 5 — syntax-highlighted editor for the Document Structure
+         YAML config panel (document_config.js).  Core CSS + a light theme;
+         the JS (core + YAML mode) loads with the other scripts at end of body.
+         Same CDN pattern as Alpine/Plotly; degrades to a plain textarea if the
+         CDN is unreachable (document_config.js guards on window.CodeMirror). -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/eclipse.min.css">
     <!-- Alpine.js — lightweight reactive framework for sidebar navigation.
          Loaded via CDN with defer so it initializes after our state.js registers
          the Alpine store via 'alpine:init' event.  No build step needed.
@@ -296,19 +303,125 @@
                 </ul>
 
                 <hr class="sidebar-divider">
+                <!-- Preview toggles (ADR-0007) — show/hide the HTML live view
+                     and the compiled/comparison PDF view beside the editor. -->
+                <div class="sidebar-section">
+                    <span class="sidebar-section-label">Preview</span>
+                    <a class="nav-node" :class="{ active: $store.app.htmlViewVisible }"
+                       @click="$store.app.toggleHtmlView()">
+                        <span x-text="$store.app.htmlViewVisible ? '☑' : '☐'"></span> HTML view
+                    </a>
+                    <a class="nav-node" :class="{ active: $store.app.pdfViewVisible }"
+                       @click="$store.app.togglePdfView()">
+                        <span x-text="$store.app.pdfViewVisible ? '☑' : '☐'"></span> PDF view
+                    </a>
+                    <a class="nav-node" onclick="toggleDocConfigPanel()"
+                       title="Edit the document structure YAML for this report">
+                        Document structure…
+                    </a>
+                </div>
+
+                <hr class="sidebar-divider">
                 <a class="nav-node" :class="{ active: $store.app.activeSection === 'report' }"
                    @click="navigateToNode('report')">Report</a>
             </div>
         </nav>
 
         <!-- ================================================================
-             Content Pane — scrollable main area with all report sections.
-             Sections use x-show bound to Alpine store readiness flags
-             for automatic show/hide.
+             Preview Region (ADR-0007) — sits between the sidebar and the
+             editing content pane.  Two independently collapsible views:
+
+               • HTML view  — the Paged.js LaTeX→HTML render (fast, live;
+                              the interaction surface for editing).
+               • PDF view   — the deliverable, split into:
+                              · Live preview  — our LaTeX compiled locally
+                                                via `tect` (byte-accurate).
+                              · Comparison    — any PDF chosen from the
+                                                filesystem (fidelity check).
+
+             Each boundary is a draggable splitter (initPaneSplitter). View
+             visibility is user-driven UI state on the Alpine store
+             (htmlViewVisible / pdfViewVisible / compareVisible), persisted
+             to localStorage — the sanctioned exception to derive-don't-set.
              ================================================================ -->
-        <!-- The committee reviews and edits the compiled report in Overleaf,
-             which syncs to the report's GitHub repo; the app commits/pushes the
-             rendered working copy to that repo from the Report tab. -->
+        <div class="preview-region" id="preview-region" x-data
+             x-show="$store.app.htmlViewVisible || $store.app.pdfViewVisible"
+             style="display:none">
+
+            <!-- HTML view — live Paged.js render -->
+            <section class="preview-view" id="html-view"
+                     x-show="$store.app.htmlViewVisible">
+                <div class="preview-toolbar">
+                    <span class="preview-title">HTML preview</span>
+                    <span class="preview-status" id="html-preview-status"></span>
+                    <span class="preview-toolbar-spacer"></span>
+                    <button class="btn-small" onclick="recompilePreview()">Refresh</button>
+                    <button class="btn-small" title="Collapse HTML view"
+                            onclick="Alpine.store('app').toggleHtmlView()">&times;</button>
+                </div>
+                <iframe id="preview-pdf-frame" class="preview-frame"
+                        title="HTML preview"></iframe>
+            </section>
+
+            <!-- Splitter between HTML view and PDF view (vertical stack) -->
+            <div class="view-splitter" id="view-splitter"
+                 x-show="$store.app.htmlViewVisible && $store.app.pdfViewVisible"
+                 title="Drag to resize · double-click to reset"></div>
+
+            <!-- PDF view — compiled live preview + filesystem comparison -->
+            <section class="preview-view" id="pdf-view"
+                     x-show="$store.app.pdfViewVisible">
+                <div class="preview-toolbar">
+                    <span class="preview-title">PDF preview</span>
+                    <span class="preview-status" id="live-pdf-status"></span>
+                    <span class="preview-toolbar-spacer"></span>
+                    <button class="btn-small primary" id="btn-compile-pdf"
+                            onclick="compileLivePdf()">Compile PDF</button>
+                    <button class="btn-small" title="Open a PDF to compare against"
+                            onclick="chooseComparisonPdf()"
+                            x-text="$store.app.compareVisible ? 'Change comparison' : 'Compare PDF…'"></button>
+                    <button class="btn-small" title="Collapse PDF view"
+                            onclick="Alpine.store('app').togglePdfView()">&times;</button>
+                </div>
+                <div class="pdf-view-body">
+                    <!-- Live compiled preview -->
+                    <div class="pdf-frame-wrap" id="live-pdf-wrap">
+                        <iframe id="live-pdf-frame" class="preview-frame"
+                                title="Compiled PDF preview"></iframe>
+                        <div class="pdf-frame-empty" id="live-pdf-empty">
+                            Click <strong>Compile PDF</strong> to render the
+                            report with LaTeX (a few seconds).
+                        </div>
+                    </div>
+                    <!-- Splitter between live + comparison -->
+                    <div class="pdf-splitter" id="pdf-splitter"
+                         x-show="$store.app.compareVisible"
+                         title="Drag to resize · double-click to reset"></div>
+                    <!-- Comparison PDF (chosen from filesystem) -->
+                    <div class="pdf-frame-wrap" id="compare-pdf-wrap"
+                         x-show="$store.app.compareVisible">
+                        <div class="pdf-compare-bar">
+                            <span class="pdf-compare-name" id="compare-pdf-name">No file chosen</span>
+                            <button class="btn-small" title="Close comparison"
+                                    onclick="closeComparisonPdf()">&times;</button>
+                        </div>
+                        <iframe id="compare-pdf-frame" class="preview-frame"
+                                title="Comparison PDF"></iframe>
+                    </div>
+                </div>
+                <!-- hidden picker for the comparison PDF -->
+                <input type="file" id="compare-pdf-input" accept="application/pdf"
+                       style="display:none" onchange="onComparisonPdfChosen(event)">
+            </section>
+        </div>
+
+        <!-- Draggable splitter between the preview region and the content
+             (editing) pane.  Drag to resize; drag to an edge to collapse.
+             Width persists to localStorage.  See initPaneSplitter(). -->
+        <div class="pane-splitter" id="pane-splitter"
+             x-data x-show="$store.app.htmlViewVisible || $store.app.pdfViewVisible"
+             style="display:none"
+             title="Drag to resize · drag to an edge to collapse · double-click to reset"></div>
 
         <!-- ================================================================
              Content Pane — always visible, scrollable editing surface.
@@ -423,6 +536,42 @@
                     </button>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Document Structure config panel (ADR-0007 follow-on) — edit the
+             per-session YAML that defines the document structure (sections,
+             ordering, titles, orientation, freeform content).  Saving validates
+             server-side and re-renders the previews WITHOUT re-integrating the
+             study data.  Slide-down panel like the settings panel. -->
+        <div id="doc-config-panel" class="settings-panel" style="display:none;">
+            <div class="settings-header">
+                <h3>Document Structure</h3>
+                <button class="modal-close" onclick="toggleDocConfigPanel()" title="Close">&times;</button>
+            </div>
+            <div class="settings-body">
+                <p class="settings-hint">
+                    Edit the <code>document:</code> YAML that defines this report's
+                    structure — section inclusion, ordering, titles, page
+                    orientation, and freeform content.  Saving validates the
+                    structure and re-renders the previews against the same data
+                    (no re-integration).  This is a per-report copy; the shared
+                    default template is untouched.
+                </p>
+                <div id="doc-config-status" class="doc-config-status"></div>
+                <textarea id="doc-config-yaml" class="doc-config-editor"
+                          spellcheck="false" wrap="off"
+                          placeholder="Loading document structure…"></textarea>
+                <div class="settings-apply doc-config-actions">
+                    <button class="btn-small" onclick="loadDocumentConfig()"
+                            title="Reload from the server (discards unsaved edits)">Reload</button>
+                    <button class="btn-small" onclick="resetDocumentConfigToDefault()"
+                            title="Replace the editor with the shared default structure">Load default</button>
+                    <span style="flex:1"></span>
+                    <button class="btn-action primary" onclick="saveDocumentConfig()">
+                        Save &amp; Re-render
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1033,13 +1182,19 @@
     -->
     <script src="/js/app_store.js?v=5"></script>
     <script src="/js/pool_state.js?v=9"></script>
-    <script src="/js/state.js?v=11"></script>
+    <script src="/js/state.js?v=12"></script>
     <script src="/js/utils.js?v=8"></script>
     <script src="/js/login.js?v=1"></script>
     <script src="/js/settings.js?v=4"></script>
-    <script src="/js/layout.js?v=6"></script>
+    <script src="/js/layout.js?v=8"></script>
     <script src="/js/versions.js?v=1"></script>
-    <script src="/js/export.js?v=10"></script>
+    <script src="/js/export.js?v=11"></script>
+    <!-- CodeMirror 5 core + YAML mode — powers the Document Structure editor.
+         Loaded before document_config.js, which upgrades the #doc-config-yaml
+         textarea when window.CodeMirror is present (else falls back to plain). -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
+    <script src="/js/document_config.js?v=2"></script>
     <script src="/js/chart_style.js?v=1"></script>
     <script src="/js/genomics.js?v=12"></script>
     <script src="/js/genomics_charts.js?v=5"></script>
