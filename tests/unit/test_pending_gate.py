@@ -92,7 +92,9 @@ def test_strict_assembly_raises_on_stubbed_scaffold(scaffold):
     with pytest.raises(PendingContentError) as exc:
         _assemble_bundle_files(scaffold, strict=True)
     assert exc.value.markers, "the error should carry the offending markers"
-    # The scaffold has no cover/title/appendix content, so those stubs appear.
+    # The scaffold has no body/appendix content, so those stubs appear.  (Cover
+    # and title-page no longer stub — they render from the identity fields — but
+    # the many empty body/appendix sections still trip the gate.)
     joined = "\n".join(exc.value.markers)
     assert "pending" in joined.lower()
 

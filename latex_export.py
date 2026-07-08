@@ -70,6 +70,17 @@ from latex_generator import generate_main_tex, generate_report_body
 REPO_ROOT = Path(__file__).resolve().parent
 CLASS_FILE = REPO_ROOT / "latex" / "niehs.cls"
 
+# Cover assets (background image, NIH badge) are declared per report-cover
+# subtype in cover_layouts and live under assets/.  They ship at the bundle root
+# alongside main.tex so _render_cover's bare \includegraphics resolves.  Which
+# assets ship is driven by the layouts in play (cover_layouts.required_assets),
+# not a hardcoded list here — a new report cover ships its own assets with no
+# edit to this module.  ALL_COVER_ASSETS is every registered layout's assets
+# (used to declare the managed-dir entries, which must be static).
+import cover_layouts as _cover_layouts
+
+ALL_COVER_ASSETS = _cover_layouts.required_assets(_cover_layouts._COVER_LAYOUTS)
+
 # Default destination for the CLI demo bundle.  dist/ is gitignored so the
 # generated zip never accidentally gets committed.
 DEFAULT_BUNDLE_PATH = REPO_ROOT / "dist" / "niehs-overleaf-bundle.zip"
@@ -92,7 +103,10 @@ _SYNC_SIDECAR = ".rlm-sync.json"
 # re-sync clears these first so a chart that disappeared upstream (or a renamed
 # file) doesn't linger.  Everything else in the document directory — notably
 # .git and the .rlm-sync.json sidecar — is left untouched.
-_MANAGED_DIR_ENTRIES = ("main.tex", "report.tex", "niehs.cls", "README.md", "figures")
+_MANAGED_DIR_ENTRIES = (
+    "main.tex", "report.tex", "niehs.cls", "README.md", "figures",
+    *ALL_COVER_ASSETS,
+)
 
 
 # The customer-facing README that ships INSIDE the zip.  Written in plain
@@ -192,6 +206,45 @@ def _read_class_file() -> str:
             f"cannot ship without the class file."
         )
     return CLASS_FILE.read_text()
+
+
+def _read_cover_asset(name: str) -> bytes:
+    """
+    Read a cover asset (background image / NIH badge) by basename from the
+    cover_layouts assets/ dir.
+
+    Same fail-loud contract as _read_class_file: a missing asset is a packaging
+    bug (the cover node's \\includegraphics would fail to compile), not user
+    error.
+    """
+    path = _cover_layouts.asset_path(name)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Expected cover asset {name!r} at {path} — the bundle exporter "
+            f"cannot ship without it (the cover page's \\includegraphics needs it)."
+        )
+    return path.read_bytes()
+
+
+def _cover_subtypes_in_tree(tree) -> "list":
+    """
+    The cover / title-page subtypes present in a document tree (defaulting when a
+    node carries none), so the assembler ships exactly the assets those covers
+    need.  Falls back to the global DOCUMENT_TREE when tree is None.
+    """
+    from document_tree import DOCUMENT_TREE, walk_tree
+    subtypes: list = []
+    seen = set()
+
+    def visit(node):
+        if node.node_type in ("cover", "title-page"):
+            key = node.subtype  # None → default, resolved by required_assets
+            if key not in seen:
+                seen.add(key)
+                subtypes.append(key)
+
+    walk_tree(tree if tree is not None else DOCUMENT_TREE, visit)
+    return subtypes
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +816,10 @@ def _assemble_bundle_files(
         report.tex          the report BODY only — sections + round-trip
                             anchors.  This is the editable / reconciled file.
         niehs.cls           copied from <repo>/latex/niehs.cls
+        <cover assets>      the cover subtype's images (e.g. cover-bg.jpg +
+                            nih-logo.png), from cover_layouts.required_assets —
+                            shipped at the root so the cover's \includegraphics
+                            resolves
         figures/<name>      one PNG per attached genomics chart (each carries
                             its own filename so the \includegraphics path
                             always matches the written file) …
@@ -787,6 +844,10 @@ def _assemble_bundle_files(
     files["main.tex"] = generate_main_tex(data).encode("utf-8")
     files["report.tex"] = report_body.encode("utf-8")
     files["niehs.cls"] = _read_class_file().encode("utf-8")
+    # Cover assets for whatever cover subtypes the tree uses (background, badge),
+    # shipped at the bundle root so the cover's bare \includegraphics resolves.
+    for asset in _cover_layouts.required_assets(_cover_subtypes_in_tree(tree)):
+        files[asset] = _read_cover_asset(asset)
     figures = _collect_figure_files(data)
     if figures:
         for fig_name, raw in figures.items():

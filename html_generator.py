@@ -86,6 +86,7 @@ from render_common import (
 )
 from genomics_content import genomics_content_plan
 from freeform_content import pending_note as _freeform_pending_note
+from cover_layouts import get_cover_layout
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
@@ -1049,44 +1050,21 @@ def _render_cover(node: DocNode, data: dict) -> str:
     first page.  The title-page node stays suppressed (_render_title_page)
     — this one handler emits the front page.
     """
-    chemical = data.get("chemical_name", "")
-    casrn = data.get("casrn", "")
-    strain = data.get("strain", "(Hsd:Sprague Dawley® SD®)")
     report_number = data.get("report_number", "")
     report_date = data.get("report_date", "")
-    issn = data.get("issn", "")
 
-    # "title-name" — the most formal identifier: chemical plus CASRN
-    # (matches the Typst ta-form("title")).
-    title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
-
-    # Bold title block.  Hard line breaks at the same semantic points as the
-    # reference; long chemical/strain lines wrap naturally when centered.
-    title_lines = [
-        "NIEHS Report on the",
-        "In Vivo Repeat Dose Biological Potency Study of",
-        title_name,
-        f"in Sprague Dawley {strain} Rats",
-        "(Gavage Studies)",
-    ]
-    title_html = "<br>".join(_esc(line) for line in title_lines if line)
+    # Title + publisher text come from the node's cover layout (cover_layouts) —
+    # the SAME builders the LaTeX cover uses, so the two surfaces can't drift.
+    # The builders return unescaped lines; escape them for HTML here.
+    layout = get_cover_layout(node.subtype)
+    title_html = "<br>".join(_esc(line) for line in layout.title_builder(data))
 
     # Report number + date, each on its own line; omitted when absent.
     report_html = "<br>".join(
         _esc(line) for line in (report_number, report_date) if line
     )
 
-    # Publisher block — static institutional lines, with the ISSN inserted
-    # when present.
-    pub_lines = [
-        "National Institute of Environmental Health Sciences",
-        "Public Health Service",
-        "U.S. Department of Health and Human Services",
-    ]
-    if issn:
-        pub_lines.append(f"ISSN: {issn}")
-    pub_lines.append("Research Triangle Park, North Carolina, USA")
-    pub_html = "<br>".join(_esc(line) for line in pub_lines)
+    pub_html = "<br>".join(_esc(line) for line in layout.publisher_builder(data))
 
     # The title is the document <h1> (so sections nest under it for the
     # accessibility outline); .tp-title styling makes it a centered title

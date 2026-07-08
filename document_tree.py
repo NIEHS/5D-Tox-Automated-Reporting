@@ -408,7 +408,33 @@ compute_table_numbers()
 
 # O(1) id->node lookup for the default tree, used by find_node().  Built once
 # here (eagerly, so a duplicate id fails import like a malformed template) and
-# never invalidated: prod never mutates the tree's shape after build_tree(), so
-# the index can't go stale.  Tests passing an explicit sub-forest bypass this
+# only invalidated by rebuild_document_tree() (the default-structure editor):
+# ordinary prod never mutates the tree's shape after build_tree(), so the index
+# can't go stale on that path.  Tests passing an explicit sub-forest bypass this
 # and walk linearly instead.
 _DOCUMENT_INDEX: dict[str, DocNode] = build_node_index(DOCUMENT_TREE)
+
+
+def rebuild_document_tree() -> None:
+    """
+    Re-instantiate the global document tree from the (edited) active template,
+    IN PLACE, and refresh the derived globals.  Used by the default-structure
+    editor (document_config.save_default_document_yaml) to apply a template edit
+    live, with no server restart.
+
+    Critically this MUTATES the existing DOCUMENT_TREE list object rather than
+    rebinding the name: latex_generator / html_generator / report_data bound
+    ``DOCUMENT_TREE`` at their own import (``from document_tree import
+    DOCUMENT_TREE``), so a reassignment here would not reach them — a slice
+    assignment does.  The id->node index is likewise cleared + repopulated in
+    place (find_node reads the module global).
+
+    The serialized copy that the browser reads
+    (background_server._SERIALIZED_TREE) is a SEPARATE singleton; the caller
+    refreshes it via background_server.refresh_serialized_tree() after this runs.
+    """
+    new_tree = build_tree(ACTIVE_TEMPLATE)
+    DOCUMENT_TREE[:] = new_tree           # in-place: bound references see it
+    compute_table_numbers()               # positional numbers on the new tree
+    _DOCUMENT_INDEX.clear()
+    _DOCUMENT_INDEX.update(build_node_index(DOCUMENT_TREE))

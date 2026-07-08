@@ -88,6 +88,11 @@ class DocNode:
                         markup {latex: str|None, html: str|None} produced from the
                         authored source (docx is parsed once here).  Not authored;
                         the renderers read this.  None for non-freeform nodes.
+        subtype:        For cover / title-page nodes: which branded cover layout to
+                        render (e.g. "niehs-5d-tox").  Looked up in
+                        cover_layouts.get_cover_layout by the renderers; None falls
+                        back to the default layout.  A pure render concern — not
+                        serialized to the frontend.
     """
     id: str
     title: str
@@ -108,3 +113,4 @@ class DocNode:
     content_file: str | None = None
     representation: str | None = None
     resolved_content: dict | None = None
+    subtype: str | None = None

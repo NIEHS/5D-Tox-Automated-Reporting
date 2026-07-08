@@ -91,13 +91,19 @@ def test_title_block_present(scaffold):
     """
     html = generate_html(scaffold)
     assert 'class="title-block"' in html
-    # Series prefix + study-type line.
+    # Series prefix + study-type lines (canonical 7-line title from the shared
+    # cover_layouts builder — the LaTeX cover and HTML title page use the same
+    # line breaks now, so "In Vivo Repeat Dose" and "Biological Potency Study of"
+    # are separate lines).
     assert "NIEHS Report on the" in html
-    assert "In Vivo Repeat Dose Biological Potency Study of" in html
-    # Chemical with CASRN (the formal title-name), then strain + study type.
+    assert "In Vivo Repeat Dose" in html
+    assert "Biological Potency Study of" in html
+    # Chemical with CASRN (the formal title-name), then strain + study type on
+    # their own lines.
     assert "Perfluorohexanesulfonamide (CASRN 41997-13-1)" in html
-    assert "in Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats" in html
-    assert "(Gavage Studies)" in html
+    assert "in Sprague Dawley" in html
+    assert "(Hsd:Sprague Dawley® SD®)" in html
+    assert "Rats (Gavage Studies)" in html
     # Publisher block + ISSN + location.
     assert "National Institute of Environmental Health Sciences" in html
     assert "ISSN: 2768-5632" in html

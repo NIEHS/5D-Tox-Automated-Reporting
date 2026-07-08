@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=18">
+    <link rel="stylesheet" href="/style.css?v=19">
     <!-- CodeMirror 5 — syntax-highlighted editor for the Document Structure
          YAML config panel (document_config.js).  Core CSS + a light theme;
          the JS (core + YAML mode) loads with the other scripts at end of body.
@@ -551,13 +551,28 @@
             </div>
             <div class="settings-body">
                 <p class="settings-hint">
-                    Edit the <code>document:</code> YAML that defines this report's
+                    Edit the <code>document:</code> YAML that defines the report
                     structure — section inclusion, ordering, titles, page
                     orientation, and freeform content.  Saving validates the
                     structure and re-renders the previews against the same data
-                    (no re-integration).  This is a per-report copy; the shared
-                    default template is untouched.
+                    (no re-integration).
                 </p>
+                <!-- Scope: this report (per-session override) vs the shared
+                     default (the template every report inherits). -->
+                <div class="doc-config-scope">
+                    <label><input type="radio" name="doc-config-scope" value="session"
+                                  checked onchange="onDocConfigScopeChanged()">
+                        This report only</label>
+                    <label><input type="radio" name="doc-config-scope" value="default"
+                                  onchange="onDocConfigScopeChanged()">
+                        Default (all reports)</label>
+                </div>
+                <div id="doc-config-scope-banner" class="doc-config-banner"
+                     style="display:none">
+                    Editing the <strong>shared default</strong> — this changes the
+                    structure of every report that has no per-report override, and
+                    edits the committed template file.
+                </div>
                 <div id="doc-config-status" class="doc-config-status"></div>
                 <textarea id="doc-config-yaml" class="doc-config-editor"
                           spellcheck="false" wrap="off"
@@ -1194,7 +1209,7 @@
          textarea when window.CodeMirror is present (else falls back to plain). -->
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
-    <script src="/js/document_config.js?v=2"></script>
+    <script src="/js/document_config.js?v=3"></script>
     <script src="/js/chart_style.js?v=1"></script>
     <script src="/js/genomics.js?v=12"></script>
     <script src="/js/genomics_charts.js?v=5"></script>

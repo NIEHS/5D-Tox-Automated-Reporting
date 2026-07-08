@@ -258,6 +258,32 @@ compute_table_numbers()
 # type→capability mapping in JavaScript.
 _SERIALIZED_TREE = annotate_capabilities(serialize_tree())
 
+
+def refresh_serialized_tree() -> None:
+    """
+    Recompute the served document-tree singleton from the (rebuilt) global
+    DOCUMENT_TREE.  Called by the default-structure editor after
+    document_tree.rebuild_document_tree() so GET /api/document-tree and the
+    freshly-injected window.__DOCUMENT_TREE__ reflect the edited default without
+    a server restart.  (Pages already loaded still hold the old injected copy —
+    the client re-fetches via refreshDocumentTree() after a save.)
+
+    Dual-import note: the server runs as ``python background_server.py`` (module
+    ``__main__``), while callers reach it via ``import background_server`` — two
+    distinct module objects, each with its own ``_SERIALIZED_TREE``.  The route
+    that serves the tree lives in whichever module registered it, so we update
+    the value on EVERY loaded copy of this module (identified by having both a
+    ``_SERIALIZED_TREE`` and the ``get_document_tree`` endpoint), not just the
+    one this call is bound to.
+    """
+    import sys
+    fresh = annotate_capabilities(serialize_tree())
+    for mod in list(sys.modules.values()):
+        if mod is None:
+            continue
+        if hasattr(mod, "_SERIALIZED_TREE") and hasattr(mod, "get_document_tree"):
+            mod._SERIALIZED_TREE = fresh
+
 # Chart styling + chart-type registry, loaded once from the SAME active template
 # as the document tree (contract C8).  __CHART_STYLE__ is the raw chart_style
 # block; __CHART_REGISTRY__ is one entry per chart type ({name, type, spec?}).

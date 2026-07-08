@@ -91,11 +91,43 @@ function _setDocConfigStatus(msg, kind) {
     el.className = 'doc-config-status' + (kind ? ` ${kind}` : '');
 }
 
-/** Fetch the session's document YAML (or the global default) into the editor. */
+/** "session" (per-report override) or "default" (the shared template). */
+function _docConfigScope() {
+    const sel = document.querySelector('input[name="doc-config-scope"]:checked');
+    return sel ? sel.value : 'session';
+}
+
+/** Show/hide the default-scope warning banner and reload for the new scope. */
+function onDocConfigScopeChanged() {
+    const banner = document.getElementById('doc-config-scope-banner');
+    if (banner) banner.style.display = _docConfigScope() === 'default' ? 'block' : 'none';
+    loadDocumentConfig();
+}
+
+/** Fetch the YAML for the active scope (session override, or the default). */
 async function loadDocumentConfig() {
+    const scope = _docConfigScope();
+    if (scope === 'default') {
+        _setDocConfigStatus('Loading default…', '');
+        try {
+            const resp = await fetch('/api/document-config-default');
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                _setDocConfigStatus(data.error || `Load failed (${resp.status})`, 'err');
+                return;
+            }
+            _docConfigSet(data.yaml || '');
+            _setDocConfigStatus('Showing the shared default (the template all reports inherit).', 'ok');
+        } catch (e) {
+            _setDocConfigStatus(`Load error: ${e.message}`, 'err');
+        }
+        return;
+    }
+
+    // session scope
     const dtxsid = _docConfigDtxsid();
     if (!dtxsid) {
-        _setDocConfigStatus('Enter a chemical first — the document structure is per-report.', 'err');
+        _setDocConfigStatus('Enter a chemical first — the per-report structure is keyed by report.', 'err');
         _docConfigSet('');
         return;
     }
@@ -118,7 +150,7 @@ async function loadDocumentConfig() {
     }
 }
 
-/** Load the shared default structure into the editor (not saved until Save). */
+/** Load the shared default structure into the editor (session scope only). */
 async function resetDocumentConfigToDefault() {
     const dtxsid = _docConfigDtxsid();
     _setDocConfigStatus('Fetching default…', '');
@@ -139,16 +171,26 @@ async function resetDocumentConfigToDefault() {
     }
 }
 
-/** Validate + save the edited YAML, then re-render the structure. */
+/** Validate + save the edited YAML for the active scope, then re-render. */
 async function saveDocumentConfig() {
+    const scope = _docConfigScope();
     const dtxsid = _docConfigDtxsid();
-    if (!dtxsid) {
-        _setDocConfigStatus('Enter a chemical first — the document structure is per-report.', 'err');
-        return;
+
+    let url;
+    if (scope === 'default') {
+        url = '/api/document-config-default';
+    } else {
+        if (!dtxsid) {
+            _setDocConfigStatus('Enter a chemical first — the per-report structure is keyed by report.', 'err');
+            return;
+        }
+        url = `/api/document-config/${encodeURIComponent(dtxsid)}`;
     }
-    _setDocConfigStatus('Validating & saving…', '');
+
+    _setDocConfigStatus(
+        scope === 'default' ? 'Validating & saving the default…' : 'Validating & saving…', '');
     try {
-        const resp = await fetch(`/api/document-config/${encodeURIComponent(dtxsid)}`, {
+        const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ yaml: _docConfigGet() }),
@@ -160,11 +202,17 @@ async function saveDocumentConfig() {
             return;
         }
         _setDocConfigStatus('Saved — re-rendering the document…', 'ok');
-        // Re-fetch the new structure and re-render nav + previews (no reprocess).
+        // Re-fetch the (possibly per-session) structure and re-render nav +
+        // previews.  A default save rebuilt the global tree server-side, so this
+        // refresh reflects it for the current report too (no reprocess).
         if (typeof refreshDocumentTree === 'function') {
             await refreshDocumentTree(dtxsid);
         }
-        _setDocConfigStatus('Saved and re-rendered.', 'ok');
+        _setDocConfigStatus(
+            scope === 'default'
+                ? 'Saved the default and re-rendered. Commit the template + golden fixture to keep it.'
+                : 'Saved and re-rendered.',
+            'ok');
     } catch (e) {
         _setDocConfigStatus(`Save error: ${e.message}`, 'err');
     }

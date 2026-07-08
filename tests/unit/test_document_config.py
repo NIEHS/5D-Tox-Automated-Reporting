@@ -158,3 +158,98 @@ class TestDocumentConfigRoutes:
 
         assert set(default_ids) == set(session_ids)
         assert default_ids != session_ids
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) editor — save_default_document_yaml edits the real
+# template, applies live, and regenerates the golden fixture.  These tests run
+# against a COPY of templates/ (TEMPLATES_DIR + _GOLDEN_FIXTURE redirected) and
+# restore the in-process global tree afterward, so the repo is never mutated.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def isolated_template(tmp_path, monkeypatch):
+    """Redirect TEMPLATES_DIR + the golden fixture to a temp copy of templates/,
+    and restore the global DOCUMENT_TREE from the real template on teardown."""
+    import shutil
+    import document_template
+    import document_tree
+
+    real_templates = document_template.TEMPLATES_DIR
+    tmp_templates = tmp_path / "templates"
+    shutil.copytree(real_templates, tmp_templates)   # whole tree incl. freeform/
+    document_template.TEMPLATES_DIR = tmp_templates   # set/restore manually so we
+    tmp_golden = tmp_path / "golden.json"              # control ordering vs the
+    tmp_golden.write_text("{}")                        # tree rebuild on teardown
+    monkeypatch.setattr(dc, "_GOLDEN_FIXTURE", tmp_golden)
+
+    try:
+        yield tmp_templates, tmp_golden
+    finally:
+        # Restore the REAL template dir FIRST, then rebuild the process-global
+        # tree from it (the save mutated DOCUMENT_TREE in place).  Doing the
+        # restore explicitly — not via monkeypatch teardown ordering — ensures
+        # the rebuild reads the real template, not this test's temp copy.
+        document_template.TEMPLATES_DIR = real_templates
+        document_tree.rebuild_document_tree()
+
+
+def test_default_save_preserves_sibling_blocks(isolated_template):
+    tmp_templates, _ = isolated_template
+    dc.save_default_document_yaml(_reorder_body_yaml())
+    raw = yaml.safe_load((tmp_templates / f"{ACTIVE_TEMPLATE}.yaml").read_text())
+    # document rewritten; organs/assays/charts siblings preserved.
+    assert "document" in raw
+    for sibling in ("organs", "assays", "charts"):
+        assert sibling in raw, f"{sibling} sibling block was dropped"
+
+
+def test_default_save_applies_live_in_place(isolated_template):
+    import document_tree
+    before = [n.id for n in document_tree.DOCUMENT_TREE]
+    obj_id = id(document_tree.DOCUMENT_TREE)
+    dc.save_default_document_yaml(_reorder_body_yaml())
+    after = [n.id for n in document_tree.DOCUMENT_TREE]
+    # Same list object (renderers' bound reference sees it), new contents.
+    assert id(document_tree.DOCUMENT_TREE) == obj_id
+    assert set(before) == set(after)
+    assert before != after
+
+
+def test_default_save_regenerates_golden(isolated_template):
+    import json
+    _, tmp_golden = isolated_template
+    dc.save_default_document_yaml(_reorder_body_yaml())
+    golden = json.loads(tmp_golden.read_text())
+    assert isinstance(golden, list) and golden  # regenerated from the new tree
+
+
+def test_default_save_invalid_raises_and_writes_nothing(isolated_template):
+    tmp_templates, _ = isolated_template
+    before = (tmp_templates / f"{ACTIVE_TEMPLATE}.yaml").read_text()
+    with pytest.raises(ValueError):
+        dc.save_default_document_yaml(
+            "- {id: dup, type: heading-only, title: A}\n"
+            "- {id: dup, type: heading-only, title: B}\n"
+        )
+    assert (tmp_templates / f"{ACTIVE_TEMPLATE}.yaml").read_text() == before
+
+
+class TestDefaultConfigRoutes:
+    """GET/POST /api/document-config-default through the real FastAPI app."""
+
+    def test_get_default_returns_template_yaml(self, client, isolated_template):
+        r = client.get("/api/document-config-default")
+        assert r.status_code == 200
+        assert "document" in r.json()["yaml"]
+
+    def test_post_valid_default_saves(self, client, isolated_template):
+        r = client.post("/api/document-config-default",
+                        json={"yaml": _reorder_body_yaml()})
+        assert r.status_code == 200 and r.json().get("saved") is True
+
+    def test_post_invalid_default_returns_422(self, client, isolated_template):
+        r = client.post("/api/document-config-default",
+                        json={"yaml": "- {id: x, type: not-a-real-type, title: T}"})
+        assert r.status_code == 422
+        assert "error" in r.json()

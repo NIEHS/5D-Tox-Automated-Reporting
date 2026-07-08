@@ -223,3 +223,79 @@ filesystem file       ──URL.createObjectURL───────────
 3. **P3 (optional):** per-payload-hash compile cache; page-jump alignment on the
    comparison pane; extend the semantic-parity guard to assert the compiled PDF
    page count/section presence against the HTML preview.
+
+## Amendment 1 (2026-07-07) — branded cover + inner title page in LaTeX
+
+The side-by-side compare surfaced that the compiled **deliverable** (Overleaf)
+had no cover page and no title page. Root cause: the tracer-bullet "decision #6"
+(skip the NIEHS cover in v1, build the title page with `\maketitle`) shipped as
+permanent behavior, and because `niehs.cls` loads `article` without the
+`titlepage` option, `\maketitle` didn't even produce a standalone page — the
+title sat atop the first content page. The `cover` and `title-page` tree nodes
+rendered nothing (`render_common.LATEX_OMITS = {cover, title-page}`).
+
+**Decision #6 is reversed.** Both node types now have real LaTeX emitters,
+porting the already-approved Typst cover (`report.typ:452-618`):
+
+- `latex_generator._render_cover` — a full-bleed branded cover (page 1): a
+  `tikzpicture` overlay anchored to `current page` drawing the sage-green field,
+  the white institution band, the bicolor accent bar, the `cover-bg.jpg`
+  hexagon-pattern background, and the title / report-number / date. Unnumbered,
+  no running header.
+- `latex_generator._render_title_page` — the centered inner title page (page 2),
+  mirroring `html_generator._render_cover` (title block + publisher/ISSN block).
+- `_document_skeleton` no longer emits `\maketitle` / `\title` / `\author`; the
+  nodes own the front pages (rendered into `report.tex`). `\pagenumbering{roman}`
+  stays before the body; the cover keeps page i unnumbered via `\thispagestyle{empty}`.
+- `render_common.LATEX_OMITS` is now empty — both renderers cover every node
+  type, closing the one documented HTML↔LaTeX divergence (ADR-0006).
+- `latex_export` ships `cover-bg.jpg` at the bundle root (same static-asset
+  pattern as `niehs.cls`; added to `_MANAGED_DIR_ENTRIES`).
+- Side fix: `®` (U+00AE), present in the default strain, was absent from
+  `_UNICODE_TO_LATEX` and silently dropped by pdflatex; now mapped to
+  `\textregistered{}`.
+
+Verified: `tect` compiles the bundle (cover-bg.jpg embeds, 20-page document);
+smoke/parity/gate/export tests updated. The HTML surface still folds both nodes
+into a single inner title page (its page-1 branded cover remains deferred) — the
+LaTeX deliverable is the fidelity target here.
+
+## Amendment 2 (2026-07-07) — cover as a subtype + layout registry
+
+Follow-up fixes surfaced by compiling the deliverable: the TOC heading read
+"Contents" (article's default `\contentsname` — renamed to "Table of Contents" in
+`niehs.cls`); the cover was missing the NIH hexagon badge (top-left of the header
+band) and the accent bar's diagonal break. The badge isn't a raster in the
+reference PDF (it's vector) and no logo asset existed, so it was extracted via
+PyMuPDF (`get_drawings` bbox → transparent PNG) into `nih-logo.png`; the accent
+bar is now two parallelograms (exact reference path vertices) with a slanted white
+gap, not two rectangles.
+
+More structurally: everything that makes it the NIEHS cover was hardcoded in
+`_render_cover` (assets, colors, geometry, title lines), duplicated in
+`html_generator`, with colors in `niehs.cls` and images loose at the repo root.
+That is now encoded as a **subtype + layout registry**:
+
+- New `cover_layouts.py` — a frozen-dataclass `CoverLayout` registry (same
+  discipline as `chart_registry`), keyed by subtype. The `niehs-5d-tox` entry owns
+  the assets, brand palette, institution lines, `title_builder` /
+  `publisher_builder` (the single source of the title/publisher text for BOTH
+  surfaces), and the reference-derived geometry `metrics` (band/bg/accent-bar
+  vertices/positions). Imports nothing from the renderers.
+- `DocNode.subtype` (auto-forwarded via `_BINDING_FIELDS`), gated to
+  `{cover, title-page}` in `_validate_entry`; NOT serialized to the frontend
+  (pure render concern). The template's cover + title-page nodes carry
+  `subtype: niehs-5d-tox`.
+- `_render_cover` / `_render_title_page` (LaTeX) and `_render_cover` (HTML) now
+  consume `get_cover_layout(node.subtype)` — palette emitted as `\definecolor`,
+  geometry read from `metrics`, text from the shared builders — instead of
+  hardcoding. `niehs.cls` keeps `tikz`/`xcolor` but no longer defines the palette.
+- Assets moved to `assets/`; `latex_export` ships them driven by
+  `cover_layouts.required_assets(subtypes-in-tree)`, not a hardcoded pair, so a new
+  report cover ships its own assets with no renderer/exporter edit.
+
+Behavior-preserving: the compiled cover is visually identical to Amendment 1's
+(verified by rendering page 1 with PyMuPDF). The golden document-tree fixture is
+unchanged (subtype isn't serialized). Adding a second report type's cover is now a
+new registry entry + assets. HTML's title lines were unified onto the shared
+7-line builder (the one visible preview change).

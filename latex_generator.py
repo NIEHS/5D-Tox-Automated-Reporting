@@ -105,6 +105,7 @@ from render_common import (
 )
 from genomics_content import genomics_content_plan
 from freeform_content import pending_note as _freeform_pending_note
+from cover_layouts import get_cover_layout
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
 from cross_references import resolve_xrefs_latex, latex_label_key
@@ -180,6 +181,10 @@ _UNICODE_TO_LATEX: list[tuple[str, str]] = [
     # Superscript minus ⁻ (U+207B) + superscript digits → \textsuperscript{…}
     ("⁻", r"\textsuperscript{-}"),
     *((chr(cp), rf"\textsuperscript{{{d}}}") for d, cp in _SUPERSCRIPT_DIGIT_CP.items()),
+    # Registered-trademark ® (U+00AE) — not in lmodern under T1, so pdflatex
+    # silently drops it (the strain "(Hsd:Sprague Dawley® SD®)" on the cover
+    # would lose both marks).  textcomp (loaded via lmodern/T1) provides it.
+    ("®", r"\textregistered{}"),
 ]
 
 
@@ -1086,10 +1091,124 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     return body
 
 
+def _cover_point(dx: float, dy: float, *, corner: str = "north west") -> str:
+    r"""A tikz `current page` coordinate dx pt right / dy pt DOWN from a corner."""
+    return f"([xshift={dx}pt, yshift={-dy}pt]current page.{corner})"
+
+
+def _render_cover(node: DocNode, data: dict) -> str:
+    r"""
+    Full-bleed branded cover page (page 1), driven by the node's cover subtype.
+
+    The layout — assets, palette, institution name, title lines, and all geometry
+    — comes from cover_layouts.get_cover_layout(node.subtype); this handler is the
+    generic emitter that turns that spec into a tikzpicture.  Built with
+    `remember picture, overlay` anchored to `current page` so it ignores the 1in
+    text block and covers the whole sheet; coordinates are measured DOWN from the
+    top-left (metrics are origin-top-left points).  No running header / page
+    number (\thispagestyle{empty}); a trailing \clearpage ends the page.  The
+    layout's assets are shipped into the bundle root by latex_export.
+    """
+    layout = get_cover_layout(node.subtype)
+    m = layout.metrics
+    bg_img, logo_img = layout.assets[0], layout.assets[1]
+    title_tex = " \\\\\n".join(_escape_latex(ln) for ln in layout.title_builder(data))
+    institution_tex = "\\\\".join(_escape_latex(ln) for ln in layout.institution_lines)
+    report_number = _escape_latex(data.get("report_number", ""))
+    report_date = _escape_latex(data.get("report_date", ""))
+
+    # Brand palette → \definecolor{cover<key>}{HTML}{...}; the nodes below
+    # reference cover<title>/cover<meta>/etc.
+    color_defs = "".join(
+        f"  \\definecolor{{cover{k}}}{{HTML}}{{{v}}}\n"
+        for k, v in layout.palette.items()
+    )
+
+    bg_top = m["bg_top"]
+    band_h = m["band_height"]
+    # Accent-bar polygons: dark block from explicit vertices; green block from its
+    # two left vertices then the two page-east corners at the bar top/bottom.
+    dark_pts = " -- ".join(_cover_point(x, y) for x, y in m["bar_dark"])
+    green_left = " -- ".join(_cover_point(x, y) for x, y in m["bar_green_left"])
+    green_pts = (
+        f"{green_left} -- "
+        f"{_cover_point(0, m['bar_bottom'], corner='north east')} -- "
+        f"{_cover_point(0, m['bar_top'], corner='north east')}"
+    )
+
+    return (
+        "% cover node — full-bleed branded cover (layout: " + layout.name + ")\n"
+        "\\thispagestyle{empty}%\n"
+        + color_defs
+        + "\\begin{tikzpicture}[remember picture, overlay]\n"
+        # Brand-color field from bg_top to the page bottom.
+        f"  \\fill[coversage] {_cover_point(0, bg_top)} rectangle (current page.south east);\n"
+        # Background image (hexagon pattern) across the same field.
+        f"  \\node[anchor=north west, inner sep=0pt] at {_cover_point(0, bg_top)} "
+        f"{{\\includegraphics[width=\\paperwidth, height=\\dimexpr\\paperheight-{bg_top}pt\\relax]{{{bg_img}}}}};\n"
+        # White institution band across the top.
+        f"  \\fill[white] (current page.north west) rectangle {_cover_point(0, band_h, corner='north east')};\n"
+        # Logo badge, top-left of the band.
+        f"  \\node[anchor=north west, inner sep=0pt] at {_cover_point(m['logo_x'], m['logo_y'])} "
+        f"{{\\includegraphics[height={m['logo_height']}pt]{{{logo_img}}}}};\n"
+        # Institution text, to the right of the badge.
+        f"  \\node[anchor=north west, text=covertitle, font=\\sffamily\\bfseries\\fontsize{{{m['institution_size']}}}{{16}}\\selectfont, align=left] "
+        f"at {_cover_point(m['institution_x'], m['institution_y'])} {{{institution_tex}}};\n"
+        # Bicolor accent bar: two parallelograms with a slanted white gap between.
+        f"  \\fill[coverdarkgray] {dark_pts} -- cycle;\n"
+        f"  \\fill[covergreen] {green_pts} -- cycle;\n"
+        # Title block.
+        f"  \\node[anchor=north west, text=covertitle, font=\\sffamily\\bfseries\\fontsize{{{m['title_size']}}}{{{m['title_leading']}}}\\selectfont, align=left, text width={m['title_width_frac']}\\paperwidth] "
+        f"at {_cover_point(m['title_x'], m['title_y'])} {{{title_tex}}};\n"
+        # Report number + date under the title.
+        f"  \\node[anchor=north west, text=covermeta, font=\\sffamily\\fontsize{{{m['meta_size']}}}{{14}}\\selectfont] "
+        f"at {_cover_point(m['meta_x'], m['report_number_y'])} {{{report_number}}};\n"
+        f"  \\node[anchor=north west, text=covermeta, font=\\sffamily\\fontsize{{{m['meta_size']}}}{{14}}\\selectfont] "
+        f"at {_cover_point(m['meta_x'], m['report_date_y'])} {{{report_date}}};\n"
+        "\\end{tikzpicture}%\n"
+        "\\clearpage"
+    )
+
+
+def _render_title_page(node: DocNode, data: dict) -> str:
+    r"""
+    Inner title page (page 2) — centered title block, report number/date, and the
+    publisher block, driven by the node's cover subtype (same layout the cover
+    uses: shared title_builder + publisher_builder).  Mirrors
+    html_generator._render_cover (the HTML surface folds the title block into its
+    "cover" node).  Normal margins, no running header, no page number; a trailing
+    \clearpage ends it before the front matter.
+    """
+    layout = get_cover_layout(node.subtype)
+    title_tex = " \\\\\n".join(_escape_latex(ln) for ln in layout.title_builder(data))
+
+    report_number = _escape_latex(data.get("report_number", ""))
+    report_date = _escape_latex(data.get("report_date", ""))
+    report_block = " \\\\\n".join(x for x in (report_number, report_date) if x)
+
+    pub_block = " \\\\\n".join(
+        _escape_latex(ln) for ln in layout.publisher_builder(data)
+    )
+
+    parts = [
+        "% title-page node — centered inner title page (layout: " + layout.name + ")",
+        "\\thispagestyle{empty}%",
+        "\\begin{center}",
+        "\\vspace*{1.4in}",
+        "{\\sffamily\\bfseries\\large\n" + title_tex + "\\par}",
+    ]
+    if report_block:
+        parts.append("\\vspace{2.5em}\n{" + report_block + "\\par}")
+    parts.append("\\vspace{3em}\n{" + pub_block + "\\par}")
+    parts.append("\\end{center}")
+    parts.append("\\clearpage")
+    return "\n".join(parts)
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types not yet ported (table, bmd-summary,
-    genomics-section, narrative+tables, incidence-table, cover, title-page).
+    genomics-section, narrative+tables, incidence-table).
 
     Emits this node's heading (if it has one) plus a visible pending
     placeholder.  The .tex still compiles cleanly; the author sees the
@@ -1113,11 +1232,13 @@ def _render_unimplemented(node: DocNode, data: dict) -> str:
 # Dispatch table — one entry per DocNode.node_type value.  Anything not
 # listed here falls through to _render_unimplemented.
 #
-# Cover and title-page deliberately stay unimplemented per decision #6
-# (skip cover in v1, use \\maketitle for the title page) — the outer
-# \\maketitle call in _document_skeleton handles that page, so the
-# corresponding tree nodes simply emit a comment-only placeholder.
+# cover / title-page ARE rendered here now (a full-bleed branded cover +
+# centered inner title page, ported from the approved Typst layout) — the
+# old decision-#6 \\maketitle path is retired (see _document_skeleton and the
+# ADR note).  So LATEX_OMITS is empty and both types have real emitters.
 _DISPATCH: dict[str, object] = {
+    "cover":             _render_cover,
+    "title-page":        _render_title_page,
     "front-matter":      _render_front_matter,
     "narrative":         _render_narrative,
     "heading-only":      _render_heading_only,
@@ -1224,10 +1345,12 @@ def _document_skeleton(
     Wrap a rendered body in the outer LaTeX document scaffolding for a
     full-report compile.
 
-    Per decision #6 we skip the NIEHS-branded cover and use \maketitle.
-    The Table of Contents is no longer emitted here: it is a `toc` node in the
-    document tree (ADR-0003), rendered as native \tableofcontents (which LaTeX
-    auto-populates from the \section commands the body emits).
+    The cover page and inner title page are now rendered as tree NODES (the
+    first two `front`-region children → _render_cover / _render_title_page in
+    `body`), not by \maketitle — so this skeleton no longer emits \maketitle or
+    a \title/\author block.  The old decision-#6 \maketitle path is retired (see
+    the ADR note).  The Table of Contents is likewise a `toc` node in the tree
+    (ADR-0003), rendered as native \tableofcontents.
 
     The class file (niehs.cls) owns page geometry, fonts, the niehstable
     environment, and the fancyhdr running header — this function only
@@ -1236,31 +1359,28 @@ def _document_skeleton(
     Args:
         running_header: the per-page running-header title.  niehs.cls
             defines \niehsrunningheader empty; we \renewcommand it here so
-            the header (which the class shows from the page after
-            \maketitle onward) carries the full report title, matching the
-            reference and the HTML preview.  Must already be LaTeX-escaped.
+            the header carries the full report title on every content page
+            (the cover / title-page nodes set \thispagestyle{empty}, so no
+            header shows there).  Must already be LaTeX-escaped.
     """
+    # `title`/`author` are intentionally unused now that \maketitle is gone —
+    # the cover/title-page nodes render the title from the data dict.  Kept in
+    # the signature so callers (_doc_metadata unpacking) don't change.
+    del title, author
     # Strings are concatenated rather than f-format'd to avoid the
     # double-brace escaping noise that .format() requires.  LaTeX is
     # already brace-heavy; readability wins.
     return (
         "\\documentclass{niehs}\n"
         "\n"
-        "\\title{" + title + "}\n"
-        "\\author{" + author + "}\n"
-        "\\date{\\today}\n"
         "\\renewcommand{\\niehsrunningheader}{" + running_header + "}\n"
         "\n"
         "\\begin{document}\n"
-        # Front matter is numbered in roman (NIEHS Report 10).  Set this
-        # before \maketitle so the title page is page i; the body switches
-        # to arabic via a \pagenumbering{arabic} injected into `body` at the
-        # front-matter/body boundary (see generate_latex).
+        # Front matter is numbered in roman (NIEHS Report 10).  Set before the
+        # body renders; the cover node's \thispagestyle{empty} keeps page i
+        # unnumbered, and the body switches to arabic via \pagenumbering{arabic}
+        # injected into `body` at the front-matter/body boundary (generate_latex).
         "\\pagenumbering{roman}\n"
-        "\\maketitle\n"
-        # No visible number on the title page — the reference shows a
-        # date/ISSN footer there, not a page number.
-        "\\thispagestyle{empty}\n"
         "\n"
         + body + "\n"
         "\n"

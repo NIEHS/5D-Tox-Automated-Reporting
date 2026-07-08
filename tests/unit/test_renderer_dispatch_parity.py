@@ -18,8 +18,9 @@ does that. What remains worth testing:
   2. The guarantee has teeth: assert_dispatch_covers actually raises on a
      drifted table, rather than silently accepting it.
 
-The LaTeX renderer DELIBERATELY omits cover/title-page (it builds the title
-page with \maketitle); that one divergence is declared in render_common.LATEX_OMITS.
+Both renderers now cover every registered node type: cover / title-page gained
+real LaTeX emitters (a branded cover + inner title page), so LATEX_OMITS — once
+{cover, title-page} — is now empty and there is no remaining divergence.
 """
 
 import pytest
@@ -49,8 +50,9 @@ def test_registry_covers_every_tree_node_type():
     Every node_type the document tree can contain must be in the canonical
     registry.  Combined with the import-time assert_dispatch_covers() calls in
     each renderer, this transitively guarantees every tree node renders in both
-    surfaces (LaTeX's cover/title-page omission aside) — the property the old
-    two-table comparison used to check directly.
+    surfaces — the property the old two-table comparison used to check directly.
+    (Both surfaces now render every type; LATEX_OMITS is empty since cover /
+    title-page gained real LaTeX emitters.)
     """
     tree_types = _tree_node_types(DOCUMENT_TREE)
     unregistered = tree_types - RENDERABLE_NODE_TYPES
@@ -68,9 +70,12 @@ def test_both_renderer_dispatch_tables_satisfy_the_registry():
     above would already have raised — this makes the guarantee explicit.)
     """
     assert_dispatch_covers(html_generator._DISPATCH, renderer="HTML")
+    # LATEX_OMITS is empty now (cover / title-page have real emitters); passing
+    # it keeps the call shape and documents that nothing is omitted any more.
     assert_dispatch_covers(
         latex_generator._DISPATCH, renderer="LaTeX", allow_omit=LATEX_OMITS
     )
+    assert LATEX_OMITS == frozenset()
 
 
 def test_assert_dispatch_covers_raises_on_missing_emitter():

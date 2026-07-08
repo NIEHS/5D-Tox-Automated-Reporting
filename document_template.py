@@ -84,6 +84,10 @@ _COMPUTED_OR_SPECIAL = frozenset(
 # bindings get a dedicated validation branch + a resolve step at instantiation.
 _FREEFORM_TYPES = frozenset({"freeform-page", "freeform-block"})
 
+# Node types that may carry a `subtype` (which branded cover layout to render —
+# see cover_layouts).  A subtype on any other type is a template authoring error.
+_SUBTYPABLE_TYPES = frozenset({"cover", "title-page"})
+
 # Valid region names — project directly to BITS <front-matter> / <book-body> /
 # <book-back> on a future BITS export (ADR-0004 amendment d).
 _VALID_REGIONS: tuple[str, ...] = ("front", "body", "back")
@@ -196,6 +200,15 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             f"template node {node_id!r} of type {node_type!r}: "
             f"content/content_file/representation are only valid on "
             f"{sorted(_FREEFORM_TYPES)}"
+        )
+
+    # `subtype` (which branded cover layout) is only meaningful on cover /
+    # title-page; flag a stray subtype on any other type (same discipline as the
+    # freeform bindings above) rather than silently ignoring it.
+    if entry.get("subtype") and node_type not in _SUBTYPABLE_TYPES:
+        raise ValueError(
+            f"template node {node_id!r} of type {node_type!r}: "
+            f"subtype is only valid on {sorted(_SUBTYPABLE_TYPES)}"
         )
 
 

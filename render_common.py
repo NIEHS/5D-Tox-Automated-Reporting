@@ -861,10 +861,12 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
 })
 
 # Node types a renderer may legitimately NOT implement, with the structural
-# reason.  The LaTeX renderer builds the title page with \maketitle (ADR-0003
-# decision #6), so its cover / title-page tree nodes intentionally emit nothing;
-# this is the single documented divergence between the two surfaces.
-LATEX_OMITS: frozenset[str] = frozenset({"cover", "title-page"})
+# reason.  Empty now: the LaTeX renderer used to omit cover / title-page and
+# build the title page with \maketitle (ADR-0003 decision #6), but both are now
+# real emitters (_render_cover / _render_title_page — a full-bleed branded cover
+# + centered inner title page), so the two surfaces render every node type and
+# there is no remaining documented divergence.
+LATEX_OMITS: frozenset[str] = frozenset()
 
 
 class RenderDispatchError(RuntimeError):

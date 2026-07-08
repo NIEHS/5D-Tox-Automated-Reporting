@@ -88,26 +88,34 @@ def test_generates_document_skeleton(scaffold):
     assert r"\documentclass{niehs}" in tex
     assert r"\begin{document}" in tex
     assert r"\end{document}" in tex
-    assert r"\maketitle" in tex
+    # The cover / title-page tree nodes now render the front pages (a tikz
+    # cover + centered inner title page), replacing the old \maketitle path.
+    assert r"\maketitle" not in tex
+    assert r"\begin{tikzpicture}" in tex
     assert r"\tableofcontents" in tex
 
 
 def test_title_and_author_are_set(scaffold):
-    """Title metadata from the data dict must flow into the preamble."""
+    """
+    Title metadata from the data dict must flow into the rendered document.
+
+    \\maketitle (and the \\title/\\author preamble) is retired; the chemical
+    name now flows into the cover / inner-title-page nodes instead, so verify
+    the substitution reached the rendered output (not a literal placeholder leak)
+    and the cover carries the NIEHS title line.
+    """
     tex = generate_latex(scaffold)
-    assert r"\title{" in tex
-    assert r"\author{" in tex
-    # Scaffold title includes the chemical name; verify the substitution
-    # actually happened (not a literal "{title}" placeholder leak).
     assert "Perfluorohexanesulfonamide" in tex
+    assert "NIEHS Report on the" in tex
 
 
 def test_roman_front_matter_then_arabic_body(scaffold):
     r"""
     Front matter is numbered in roman, the body in arabic restarted at 1
     (NIEHS Report 10: Background = arabic page 1).  The preamble sets
-    \pagenumbering{roman} before \maketitle; \pagenumbering{arabic} is
-    injected at the front-matter/body boundary, before \section{Background}.
+    \pagenumbering{roman} before the body renders (the cover node keeps page i
+    unnumbered via \thispagestyle{empty}); \pagenumbering{arabic} is injected at
+    the front-matter/body boundary, before \section{Background}.
     """
     tex = generate_latex(scaffold)
     assert r"\pagenumbering{roman}" in tex
@@ -179,15 +187,22 @@ def test_tables_list_renders_listoftables(scaffold):
 # Tests — unimplemented node_types emit visible placeholders
 # ---------------------------------------------------------------------------
 
-def test_cover_and_title_page_still_unimplemented(scaffold):
+def test_cover_and_title_page_render(scaffold):
     """
-    Cover and title-page remain unimplemented by design (decision #6 —
-    \\maketitle handles the title; the NIEHS-branded cover is deferred).
-    They emit comment-only placeholders so the .tex still compiles.
+    Cover and title-page are now real emitters (decision #6 retired): the cover
+    is a full-bleed tikz page with the cover-bg.jpg background, and the inner
+    title page is a centered title + publisher block.  Neither emits a pending
+    placeholder any more.
     """
     tex = generate_latex(scaffold)
-    assert "[Section pending: cover" in tex
-    assert "[Section pending: title-page" in tex
+    assert "[Section pending: cover" not in tex
+    assert "[Section pending: title-page" not in tex
+    # Cover: tikz overlay + the shipped background image.
+    assert r"\begin{tikzpicture}" in tex
+    assert "cover-bg.jpg" in tex
+    # Inner title page: the publisher block (unique to the title page).
+    assert "Public Health Service" in tex
+    assert "Research Triangle Park, North Carolina, USA" in tex
 
 
 def test_narrative_tables_groups_render_with_heading(scaffold):
@@ -269,18 +284,21 @@ def test_narrative_tables_groups_emit_their_subsection_headings(scaffold):
 
 def test_special_characters_are_escaped():
     """
-    Chemical names containing & % # _ must be escaped in the title so
-    pdflatex doesn't choke.  We don't run pdflatex here — we just check
-    the escape happened.
+    Strings containing & % # _ must be escaped so pdflatex doesn't choke.  The
+    title flows into the running header; the chemical name flows into the cover /
+    title-page nodes.  We don't run pdflatex here — we just check the escape
+    happened.  (\\author / \\maketitle are retired, so the escaping is verified
+    on the header + cover text instead.)
     """
     data = {
         "title": "Test & Demo 50% Compound_X",
-        "author": "Acme & Co",
+        "chemical_name": "Acme & Co 50% Compound_X",
     }
     tex = generate_latex(data)
     # Original unescaped form must not appear
     assert "Test & Demo" not in tex
-    # Escaped form must appear
+    assert "Acme & Co" not in tex
+    # Escaped form must appear (title → running header; chemical → cover)
     assert r"Test \& Demo" in tex
     assert r"50\% Compound\_X" in tex
     assert r"Acme \& Co" in tex

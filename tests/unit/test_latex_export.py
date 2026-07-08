@@ -30,6 +30,7 @@ from latex_export import (
     CLASS_FILE,
     build_overleaf_bundle,
 )
+from cover_layouts import asset_path
 from latex_generator import generate_main_tex, generate_report_body
 from report_data import scaffold_report_data
 
@@ -79,6 +80,8 @@ def test_bundle_contains_required_files(bundle_path):
     assert "main.tex" in names
     assert "report.tex" in names
     assert "niehs.cls" in names
+    assert "cover-bg.jpg" in names  # branded-cover background (cover node \includegraphics)
+    assert "nih-logo.png" in names  # NIH badge for the cover header band
     assert "figures/.gitkeep" in names
     assert "README.md" in names
 
@@ -123,6 +126,21 @@ def test_class_file_matches_source(bundle_path):
     with zipfile.ZipFile(bundle_path) as zf:
         cls_in_zip = zf.read("niehs.cls").decode("utf-8")
     assert cls_in_zip == CLASS_FILE.read_text()
+
+
+def test_cover_image_matches_source(bundle_path):
+    """cover-bg.jpg in the zip must be byte-identical to the assets/ source image
+    (the cover node's \\includegraphics{cover-bg.jpg} resolves it at the root)."""
+    with zipfile.ZipFile(bundle_path) as zf:
+        img_in_zip = zf.read("cover-bg.jpg")
+    assert img_in_zip == asset_path("cover-bg.jpg").read_bytes()
+
+
+def test_cover_logo_matches_source(bundle_path):
+    """nih-logo.png in the zip must be byte-identical to the assets/ source badge."""
+    with zipfile.ZipFile(bundle_path) as zf:
+        logo_in_zip = zf.read("nih-logo.png")
+    assert logo_in_zip == asset_path("nih-logo.png").read_bytes()
 
 
 def test_readme_mentions_overleaf(bundle_path):

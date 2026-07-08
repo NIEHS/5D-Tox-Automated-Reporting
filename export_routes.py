@@ -893,3 +893,46 @@ async def api_save_document_config(dtxsid: str, request: Request):
         logger.exception("Failed to save document config for %s", dtxsid)
         return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
     return JSONResponse({"saved": True})
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) document structure — the structure EVERY report
+# inherits without a per-session override.  Edits the git-tracked template and
+# applies live (no restart).  Distinct from the per-session routes above.
+# ---------------------------------------------------------------------------
+
+@router.get("/api/document-config-default")
+async def api_get_document_config_default():
+    """Return the default (template) document-structure YAML for the editor."""
+    from document_config import load_default_document_yaml
+    return JSONResponse({"yaml": load_default_document_yaml()})
+
+
+@router.post("/api/document-config-default")
+async def api_save_document_config_default(request: Request):
+    """
+    Validate + persist + LIVE-APPLY an edit to the DEFAULT (template) structure.
+
+    Same validate-before-write gate as the per-session route (422 on invalid,
+    writing nothing).  On success the template file is rewritten (siblings
+    preserved), the in-process document tree is rebuilt in place, and the golden
+    fixture is regenerated — so every report without its own override, plus the
+    nav/preview, reflect the new default with no restart.
+    """
+    from document_config import save_default_document_yaml
+
+    body = await request.json()
+    text = body.get("yaml")
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse(
+            {"error": "Request must include a non-empty 'yaml' string."},
+            status_code=422,
+        )
+    try:
+        save_default_document_yaml(text)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save default document config")
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})

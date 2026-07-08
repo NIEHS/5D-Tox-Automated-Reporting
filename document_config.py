@@ -135,3 +135,90 @@ def save_session_document_yaml(dtxsid: str, text: str) -> None:
     path = session_document_path(dtxsid)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) editor — edits templates/<ACTIVE_TEMPLATE>.yaml,
+# the git-tracked structure EVERY report inherits when it has no per-session
+# override.  Unlike the per-session file, a default edit must apply live to the
+# in-process tree and keep the golden-tree guard green.
+# ---------------------------------------------------------------------------
+
+def _template_path() -> Path:
+    """Path to the active template file (the git-tracked default structure)."""
+    from document_template import TEMPLATES_DIR
+    return TEMPLATES_DIR / f"{ACTIVE_TEMPLATE}.yaml"
+
+
+# The golden fixture the document-template test pins the tree to; regenerated on
+# a valid default save so a UI edit doesn't red the guard (matches the exact
+# serialization tests/unit/test_document_template.py uses).
+_GOLDEN_FIXTURE = (
+    Path(__file__).resolve().parent
+    / "tests" / "unit" / "fixtures" / "document_tree_golden.json"
+)
+
+
+def load_default_document_yaml() -> str:
+    """The default (template) document structure as YAML — the default editor's
+    initial content.  Same text default_document_yaml() produces."""
+    return default_document_yaml()
+
+
+def _regenerate_golden_fixture() -> None:
+    """
+    Rewrite the golden document-tree fixture from the current global tree, using
+    the exact serialization the golden test compares against
+    (json.dumps(serialize_tree(...), sort_keys=True, indent=2, ensure_ascii=False)
+    + newline).  Keeps the guard green after an intentional UI default-edit.
+    """
+    import json
+    from document_tree import DOCUMENT_TREE, serialize_tree, compute_table_numbers
+    compute_table_numbers(DOCUMENT_TREE)
+    serialized = json.dumps(
+        serialize_tree(DOCUMENT_TREE), sort_keys=True, indent=2, ensure_ascii=False
+    ) + "\n"
+    if _GOLDEN_FIXTURE.exists():   # only regen where the fixture actually lives
+        _GOLDEN_FIXTURE.write_text(serialized, encoding="utf-8")
+
+
+def save_default_document_yaml(text: str) -> None:
+    """
+    Validate, persist, and LIVE-APPLY an edit to the default (template) structure.
+
+    Steps (validate-before-write, same guard as the per-session save):
+      1. Parse + full tree build — raises ValueError on any invalid edit BEFORE
+         touching disk, so a bad edit never corrupts the template.
+      2. Rewrite ONLY the template's ``document:`` block, preserving its sibling
+         blocks (organs/assays/charts/...) — load the whole file, replace the
+         document list, dump back.  (safe_dump does not preserve YAML comments;
+         the author reviews the git diff before committing.)
+      3. rebuild_document_tree() — re-instantiate the in-process global tree in
+         place so renderers/nav/preview reflect the edit with no restart.
+      4. Refresh the served serialized-tree singleton + regenerate the golden
+         fixture so the browser and the dev guard both track the new default.
+    """
+    document = _parse_document_yaml(text)
+    _tree_from_document_list(document)  # validate; raises on failure
+
+    path = _template_path()
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        raw["document"] = document      # preserve organs/assays/charts siblings
+        new_text = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
+    else:
+        # Legacy bare-list template (no siblings) — dump the document list alone.
+        new_text = yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
+    path.write_text(new_text, encoding="utf-8")
+
+    # Apply live + keep the browser and the golden guard in sync.
+    from document_tree import rebuild_document_tree
+    rebuild_document_tree()
+    try:
+        import background_server
+        background_server.refresh_serialized_tree()
+    except Exception:
+        # The served singleton refresh is best-effort (e.g. background_server not
+        # imported in a unit-test context); the tree rebuild above is what matters.
+        pass
+    _regenerate_golden_fixture()

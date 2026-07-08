@@ -79,6 +79,29 @@
 % subdirectory of the Overleaf export bundle.
 \RequirePackage{graphicx}
 
+% --- Branded cover page --------------------------------------------------
+% The cover (page 1) and inner title page (page 2) are rendered by the
+% latex_generator _render_cover / _render_title_page handlers, not by
+% \maketitle.  The cover is a full-bleed tikz overlay (the LaTeX analog of
+% the approved Typst layout in report.typ): a sage-green field with the
+% cover-bg.jpg hexagon pattern, a white institution band, a bicolor accent
+% bar, and the title/number/date.  tikz gives absolute page-anchored
+% placement; xcolor defines the palette (hexes extracted from NIEHS Report
+% 10, matching report.typ's cover-* colors).  \newgeometry (from geometry,
+% already loaded) lets the cover drop the 1in margins for full bleed.
+\RequirePackage{tikz}
+\RequirePackage{xcolor}
+% The cover's brand palette is NOT defined here — the cover handler
+% (latex_generator._render_cover) emits \definecolor{cover<key>} from the
+% subtype's layout (cover_layouts) so a new report cover ships its own colors
+% without a class edit.
+
+% The Table of Contents node (\tableofcontents) self-heads with LaTeX's
+% \contentsname, which the article class defaults to "Contents".  NIEHS
+% Report 10 (and our document tree's `toc` node title) call it "Table of
+% Contents", so rename it here.
+\renewcommand{\contentsname}{Table of Contents}
+
 % --- Scale-to-fit wide tables --------------------------------------------
 % adjustbox gives us \begin{adjustbox}{max width=\linewidth}...\end{adjustbox}
 % which scales its contents DOWN to fit the available text width but leaves

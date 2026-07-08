@@ -96,6 +96,23 @@ def test_disallowed_child_is_rejected():
         instantiate(bad)
 
 
+def test_subtype_accepted_on_cover_and_title_page():
+    # subtype (which branded cover layout) is valid on cover / title-page.
+    tree = instantiate([
+        {"id": "cover", "type": "cover", "title": "C", "subtype": "niehs-5d-tox"},
+        {"id": "tp", "type": "title-page", "title": "T", "subtype": "niehs-5d-tox"},
+    ])
+    assert tree[0].subtype == "niehs-5d-tox"
+    assert tree[1].subtype == "niehs-5d-tox"
+
+
+def test_subtype_rejected_on_other_types():
+    # subtype on a non-cover type is a template authoring error.
+    with pytest.raises(ValueError, match="subtype is only valid on"):
+        instantiate([{"id": "s", "type": "heading-only", "title": "S",
+                      "subtype": "niehs-5d-tox"}])
+
+
 def test_missing_required_binding_is_rejected():
     # A `table` must name a `platform`; omitting it is a load-time error.
     bad = [

@@ -2485,6 +2485,24 @@ body.splitter-dragging iframe { pointer-events: none; }
 .doc-config-status.ok { color: #15803d; }
 .doc-config-status.err { color: var(--c-error, #b91c1c); }
 .doc-config-actions { display: flex; align-items: center; gap: 0.5rem; }
+/* Scope toggle (this report vs the shared default) + the default warning. */
+.doc-config-scope {
+    display: flex;
+    gap: 1.25rem;
+    margin: 0.25rem 0 0.5rem;
+    font-size: 0.82rem;
+}
+.doc-config-scope label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.doc-config-banner {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--r-md);
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
 
 /* Message shown in the preview pane when a section can't render as PDF
    because required data sources are missing (e.g., no .bm2 for BMD columns).
