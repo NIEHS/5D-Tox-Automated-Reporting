@@ -397,6 +397,18 @@ async function refreshDocumentTree(dtxsid) {
  * from the document tree, replacing ~210 lines of hardcoded HTML.
  * ================================================================ */
 
+// Node types that are pure layout markers — they carry no navigable content
+// (no heading, no body), so they must NOT become clickable sidebar entries.
+// `page-break` is an author-placed \clearpage / break-before:page that only
+// affects pagination in the rendered document.  The tree walk below skips
+// these so a break between two sections doesn't leave a dead nav row.
+const _NON_NAVIGABLE_TYPES = new Set(['page-break']);
+
+/** Whether a tree node should appear as a navigation entry. */
+function _isNavigable(node) {
+    return !_NON_NAVIGABLE_TYPES.has(node.type);
+}
+
 /**
  * Generate the complete navigation sidebar from the document tree.
  *
@@ -435,6 +447,10 @@ function renderNavFromTree(tree) {
     for (const node of tree) {
         if (node.id === 'background') phase = 'body';
         if (node.type === 'appendix') phase = 'appendix';
+
+        // Layout-only markers (page-break) are not navigable — they belong to
+        // no group and must not disturb the phase machine's bucketing.
+        if (!_isNavigable(node)) continue;
 
         if (phase === 'front') frontMatter.push(node);
         else if (phase === 'appendix') appendices.push(node);
@@ -509,6 +525,7 @@ function _buildCollapsibleGroup(label, nodes, startExpanded) {
     ul.setAttribute('x-show', 'expanded');
     ul.setAttribute('x-collapse', '');
     for (const node of nodes) {
+        if (!_isNavigable(node)) continue;   // skip layout-only markers
         const childLi = document.createElement('li');
         childLi.innerHTML = `<a class="nav-node"
             :class="{ active: $store.app.activeSection === '${node.id}' }"
@@ -577,6 +594,7 @@ function _buildMethodsNavNode(node) {
  */
 function _buildMethodsChildren(parentUl, children) {
     for (const child of children) {
+        if (!_isNavigable(child)) continue;   // skip layout-only markers
         const li = document.createElement('li');
 
         if (child.children && child.children.length > 0) {
@@ -618,6 +636,7 @@ function _buildResultsNavNode(node) {
     ul.setAttribute('x-collapse', '');
 
     for (const child of (node.children || [])) {
+        if (!_isNavigable(child)) continue;   // skip layout-only markers
         const childLi = document.createElement('li');
         const readyExpr = child.ready_key
             ? `!$store.app.ready.${child.ready_key}` : '';
@@ -731,6 +750,8 @@ function renderMethodsSubsectionsFromTree(tree) {
     // Recursively collect all leaf and heading-only children
     function walkChildren(nodes) {
         for (const node of nodes) {
+            // Layout-only markers (page-break) have no heading/content stub.
+            if (!_isNavigable(node)) continue;
             // Skip the parent "methods" node itself — we only want children
             const div = document.createElement('div');
             div.className = 'front-matter-section';

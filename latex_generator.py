@@ -1091,6 +1091,15 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     return body
 
 
+def _render_page_break(node: DocNode, data: dict) -> str:
+    r"""
+    An explicit author-placed page break.  Emits ``\clearpage`` (flush floats +
+    start a new page), the same primitive freeform-page uses.  Carries no
+    heading or content of its own.
+    """
+    return "\\clearpage"
+
+
 def _cover_point(dx: float, dy: float, *, corner: str = "north west") -> str:
     r"""A tikz `current page` coordinate dx pt right / dy pt DOWN from a corner."""
     return f"([xshift={dx}pt, yshift={-dy}pt]current page.{corner})"
@@ -1253,6 +1262,7 @@ _DISPATCH: dict[str, object] = {
     "genomics-section":  _render_genomics_section,
     "freeform-page":     _render_freeform_page,
     "freeform-block":    _render_freeform_block,
+    "page-break":        _render_page_break,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical

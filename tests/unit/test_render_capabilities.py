@@ -11,6 +11,9 @@ reads.
 from render_capabilities import (
     capabilities_for,
     annotate_capabilities,
+    is_allowed_child,
+    is_headingless,
+    required_bindings_for,
     NodeCapabilities,
 )
 
@@ -52,6 +55,30 @@ def test_unknown_type_gets_safe_default():
     c = capabilities_for("some-future-node-type")
     assert c == NodeCapabilities()
     assert not (c.orientable or c.breakable or c.editable)
+
+
+# ---------------------------------------------------------------------------
+# page-break — an author-placed layout marker (a first-class node, distinct
+# from a per-node break override).  It carries nothing, so it must be inert
+# (no capabilities), headingless (level 0, no heading emitted), require no
+# bindings, and be allowed as a child of the structural container.
+# ---------------------------------------------------------------------------
+
+def test_page_break_is_fixed_and_headingless():
+    c = capabilities_for("page-break")
+    assert c == NodeCapabilities()
+    assert not (c.orientable or c.breakable or c.editable)
+    assert is_headingless("page-break")
+
+
+def test_page_break_requires_no_bindings():
+    assert required_bindings_for("page-break") == ()
+
+
+def test_page_break_allowed_inside_structural_container():
+    # It's a sibling one drops between content sections under a heading-only
+    # container (and, being top-level-unchecked, between top-level sections).
+    assert is_allowed_child("heading-only", "page-break")
 
 
 # ---------------------------------------------------------------------------

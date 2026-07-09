@@ -191,8 +191,20 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
         allowed_children=(
             "heading-only", "narrative", "narrative+tables",
             "bmd-summary", "genomics-section", "sample-counts-table",
-            "freeform-page", "freeform-block",
+            "freeform-page", "freeform-block", "page-break",
         ),
+    ),
+    # ── An explicit page break — a headingless, content-free structural marker
+    #    the author drops between siblings to force a new page (the reference
+    #    breaks before certain sections/appendices).  Distinct from a per-node
+    #    user break override (which is keyed by node id in the orientation/break
+    #    overlay): this is an AUTHORED, first-class node in the template.  It
+    #    carries nothing — no heading, no data, no caption — so its capabilities
+    #    are _FIXED (the break itself is not further breakable/orientable) and it
+    #    requires no bindings.  Emitted as \clearpage (LaTeX) / a break-before
+    #    marker (HTML), reusing the same mechanism freeform-page uses.
+    "page-break": ComponentType(
+        capabilities=_FIXED, content_kinds=(), headingless=True,
     ),
     # ── Prose sections — editable text, breakable; never landscape (running
     #    body text doesn't rotate).

@@ -1124,6 +1124,16 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     return f'<section class="freeform-block">{inner}</section>'
 
 
+def _render_page_break(node: DocNode, data: dict) -> str:
+    """
+    An explicit author-placed page break.  Empty element carrying only a
+    break-before:page — the same print-CSS mechanism freeform-page uses to
+    start a new page.  Renders as nothing on screen; a page boundary in print
+    and in the PDF preview.
+    """
+    return '<div class="page-break" style="break-before:page"></div>'
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types we haven't ported.  Emits this node's
@@ -1156,6 +1166,7 @@ _DISPATCH: dict[str, object] = {
     "genomics-section": _render_genomics_section,
     "freeform-page":    _render_freeform_page,
     "freeform-block":   _render_freeform_block,
+    "page-break":       _render_page_break,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical

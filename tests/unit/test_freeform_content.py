@@ -293,3 +293,48 @@ def test_html_shows_pending_note_for_latex_only_content():
     out = hg._render_freeform_page(node, {})
     assert "Overleaf/LaTeX export" in out
     assert r"\textbf{x}" not in out
+
+
+# ---------------------------------------------------------------------------
+# page-break — an author-placed layout marker.  Unlike freeform-page it carries
+# NO authored content: it emits only the page-break primitive on each surface
+# (LaTeX \clearpage / HTML break-before:page), reusing the same mechanism
+# freeform-page uses.  It's a first-class template node (distinct from the
+# per-node break override keyed by id), so the instantiator must accept it with
+# no bindings — both at top level and nested under a structural container.
+# ---------------------------------------------------------------------------
+
+def test_latex_page_break_emits_only_clearpage():
+    import latex_generator as lg
+
+    out = lg._render_page_break(_node("page-break"), {})
+    assert r"\clearpage" in out
+    # It carries nothing else — no heading, no body.
+    assert out.strip() == r"\clearpage"
+
+
+def test_html_page_break_emits_break_before():
+    import html_generator as hg
+
+    out = hg._render_page_break(_node("page-break"), {})
+    assert "break-before:page" in out
+    assert 'class="page-break"' in out
+    # No visible content — the element is empty (nothing on screen; a page
+    # boundary only in print / the PDF preview).
+    assert out.strip().endswith("></div>")
+
+
+def test_page_break_instantiates_at_top_level():
+    tree = instantiate([{"id": "brk", "type": "page-break", "title": "break"}])
+    assert len(tree) == 1
+    assert tree[0].node_type == "page-break"
+    assert tree[0].level == 0          # headingless
+
+def test_page_break_instantiates_under_heading_only_container():
+    tree = instantiate([{
+        "id": "sec", "type": "heading-only", "title": "Section",
+        "children": [
+            {"id": "brk", "type": "page-break", "title": "break"},
+        ],
+    }])
+    assert tree[0].children[0].node_type == "page-break"
