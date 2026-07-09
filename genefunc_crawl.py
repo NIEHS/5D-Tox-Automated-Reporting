@@ -23,6 +23,9 @@ from citegraph import (
     Paper,
     GovernorConfig,
     tag_organs,
+    resolve_s2_api_key,
+    resolve_caps,
+    log_s2_auth_status,
 )
 
 
@@ -434,7 +437,7 @@ def build_tox_search_queries(gene: str, organs: list[str], focus: str) -> list[s
 
 
 def run_genetox_crawl(
-    max_papers_per_gene: int = 100,
+    max_papers_per_gene: int = 200,
     api_key: str | None = None,
 ) -> "GeneFuncCrawler":
     """
@@ -443,8 +446,9 @@ def run_genetox_crawl(
     Uses the focus string + TOX_QUERY_TEMPLATES for search, scores with
     gene_relevance(), does 1-hop expansion, saves to citegraph_output_genetox/.
     """
-    total_budget = max_papers_per_gene * len(GENETOX_TARGETS)
-    total_api = total_budget * 2  # searches + expansion
+    default_budget = max_papers_per_gene * len(GENETOX_TARGETS)
+    total_budget, total_api = resolve_caps(default_budget, default_budget * 2)
+    log_s2_auth_status(api_key)
 
     print("=" * 60)
     print("GENE-TOX CRAWL (Tier 3)")
@@ -512,13 +516,15 @@ def run_genetox_crawl(
 
 def run_genefunc_crawl(
     consensus_path: str = "citegraph_output/gene_consensus.json",
-    max_papers: int = 400,
-    max_api_calls: int = 200,
+    max_papers: int = 800,
+    max_api_calls: int = 400,
     api_key: str | None = None,
 ):
     """
     Orchestrator: load genes, search for function papers, expand 1-hop.
     """
+    max_papers, max_api_calls = resolve_caps(max_papers, max_api_calls)
+    log_s2_auth_status(api_key)
     print("="*60)
     print("GENE-FUNCTION CRAWL")
     print("="*60)
@@ -583,12 +589,14 @@ def run_genefunc_crawl(
 if __name__ == "__main__":
     import sys
 
+    api_key = resolve_s2_api_key()
+
     if len(sys.argv) >= 2 and sys.argv[1].lower() == "tox":
         # Tier 3 gene-tox crawl
-        run_genetox_crawl()
+        run_genetox_crawl(api_key=api_key)
     else:
         # Original gene-function crawl
-        max_papers = 400
+        max_papers = None
         consensus_path = "citegraph_output/gene_consensus.json"
 
         for arg in sys.argv[1:]:
@@ -597,7 +605,7 @@ if __name__ == "__main__":
             elif arg.endswith(".json"):
                 consensus_path = arg
 
-        run_genefunc_crawl(
-            consensus_path=consensus_path,
-            max_papers=max_papers,
-        )
+        kwargs = {"consensus_path": consensus_path, "api_key": api_key}
+        if max_papers is not None:
+            kwargs["max_papers"] = max_papers
+        run_genefunc_crawl(**kwargs)

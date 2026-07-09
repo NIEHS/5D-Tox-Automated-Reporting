@@ -11,6 +11,7 @@ Uses local Ollama instances in parallel across multiple GPUs.
 """
 
 import json
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
@@ -19,6 +20,8 @@ from threading import Lock
 from typing import Optional
 
 import requests
+
+from llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +89,69 @@ REMOTE_OLLAMA = OllamaEndpoint(
     model="qwen2.5:14b",
     weight=1,
 )
+
+
+# ---------------------------------------------------------------------------
+# Claude endpoint (via NIEHS litellm proxy) — used when Ollama is unavailable
+# ---------------------------------------------------------------------------
+
+# Bulk extraction is a high-volume, structured-JSON task, so pin the fast/cheap
+# tier rather than inheriting ANTHROPIC_MODEL (opus). Canonical id; the proxy
+# name (claude-haiku-4.5) is produced by resolve_model_name() in llm_endpoints.
+CLAUDE_EXTRACTION_MODEL = "claude-haiku-4-5"
+
+
+@dataclass
+class ClaudeExtractionEndpoint(AnthropicEndpoint):
+    """AnthropicEndpoint adapted to the ParallelExtractionEngine's duck-typed
+    interface: adds `url` (display only) and `weight` (round-robin share), and
+    wraps generate() to match OllamaEndpoint's graceful-failure contract.
+    """
+
+    url: str = "litellm-proxy"
+    weight: int = 1
+
+    def generate(self, prompt: str, system: str = "",
+                 temperature: float | None = None) -> str:
+        # The engine's worker loop has no per-paper error handling — it relies on
+        # generate() returning "" on failure (as OllamaEndpoint does). An uncaught
+        # exception would propagate through future.result() and abort the whole
+        # run, so swallow errors here and back off on transient proxy throttling.
+        for attempt in range(4):
+            try:
+                return super().generate(prompt, system=system, temperature=temperature)
+            except Exception as e:
+                msg = str(e).lower()
+                transient = any(t in msg for t in
+                                ("429", "overloaded", "rate", "timeout",
+                                 "connection", "529"))
+                if not transient or attempt == 3:
+                    print(f"  [{self.name} error: {e}]")
+                    return ""
+                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+        return ""
+
+    def is_available(self) -> bool:
+        return bool(resolve_anthropic_api_key())
+
+
+def build_claude_endpoints(n_workers: int = 6,
+                           model: str = CLAUDE_EXTRACTION_MODEL) -> list:
+    """Build N identical Claude endpoints.
+
+    The engine runs one thread per endpoint (a GPU serializes, so Ollama used 2).
+    The litellm proxy accepts concurrent requests, so N identical Claude endpoints
+    give N concurrent extraction workers via the existing round-robin.
+    """
+    return [
+        ClaudeExtractionEndpoint(
+            name=f"claude-{i + 1}",
+            model=model,
+            max_tokens=2048,
+            temperature=0.1,
+        )
+        for i in range(n_workers)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1038,13 +1104,16 @@ if __name__ == "__main__":
             sys.exit(1)
         merge_gene_consensus(files)
     else:
-        # Usage: python extract.py [papers_dir] [max_papers] [--fulltext] [--email EMAIL] [--proxy URL]
+        # Usage: python extract.py [papers_dir] [max_papers] [--fulltext] [--email EMAIL]
+        #                          [--proxy URL] [--claude] [--workers N]
         args = sys.argv[1:]
         use_fulltext = False
         email = "user@example.com"
         proxy = None
         max_papers = None
         papers_dir = "citegraph_output_800"
+        use_claude = False
+        workers = 6
 
         i = 0
         while i < len(args):
@@ -1056,6 +1125,12 @@ if __name__ == "__main__":
                 i += 2
             elif args[i] == "--proxy" and i + 1 < len(args):
                 proxy = args[i + 1]
+                i += 2
+            elif args[i] == "--claude":
+                use_claude = True
+                i += 1
+            elif args[i] == "--workers" and i + 1 < len(args):
+                workers = int(args[i + 1])
                 i += 2
             elif args[i] in ("analyze", "merge"):
                 break  # handled above
@@ -1085,7 +1160,20 @@ if __name__ == "__main__":
             fetcher.print_stats()
             print()
 
-        engine = ParallelExtractionEngine()
+        if use_claude:
+            # The Anthropic SDK verifies TLS against certifi, which lacks the NIH
+            # proxy's internal CA. Point it at the system bundle (curl already
+            # trusts it) so an unattended run doesn't fail with APIConnectionError.
+            _sys_ca = "/etc/ssl/certs/ca-certificates.crt"
+            if not os.environ.get("SSL_CERT_FILE") and os.path.exists(_sys_ca):
+                os.environ["SSL_CERT_FILE"] = _sys_ca
+            print(f"Extraction backend: Claude ({CLAUDE_EXTRACTION_MODEL}, "
+                  f"{workers} workers via litellm proxy)")
+            engine = ParallelExtractionEngine(
+                endpoints=build_claude_endpoints(workers))
+        else:
+            engine = ParallelExtractionEngine()
+
         extractions = engine.process_papers(papers_file, max_papers=max_papers,
                                             fulltext_results=fulltext_results)
         engine.save(extractions, output_file)

@@ -5,6 +5,7 @@ Uses Semantic Scholar API to expand a citation graph from seed papers,
 scoring relevance and stopping when the graph saturates or budget is exhausted.
 """
 
+import os
 import time
 import json
 import hashlib
@@ -15,6 +16,30 @@ from typing import Optional
 
 import requests
 import networkx as nx
+
+
+# ---------------------------------------------------------------------------
+# Runtime configuration from environment
+# ---------------------------------------------------------------------------
+
+def resolve_s2_api_key() -> str | None:
+    """Read the Semantic Scholar key from env. Returns None if unset (public pool)."""
+    return os.getenv("S2_API_KEY") or None
+
+
+def log_s2_auth_status(api_key: str | None) -> None:
+    """Print whether the crawl is authenticated, without echoing the key."""
+    if api_key:
+        print(f"[S2] authenticated (key len {len(api_key)})")
+    else:
+        print("[S2] public pool (no key) — set S2_API_KEY for higher rate limits")
+
+
+def resolve_caps(default_papers: int, default_calls: int) -> tuple[int, int]:
+    """Allow env overrides of per-crawl governor caps for a comprehensive run."""
+    papers = int(os.getenv("CRAWL_MAX_PAPERS", default_papers))
+    calls = int(os.getenv("CRAWL_MAX_API_CALLS", default_calls))
+    return papers, calls
 
 
 # ---------------------------------------------------------------------------
@@ -672,15 +697,19 @@ class CitationGraphCrawler:
 
 def run_toxicogenomics_crawl(
     max_depth: int = 2,
-    max_papers: int = 200,
+    max_papers: int = 400,
+    max_api_calls: int = 1000,
     api_key: str | None = None,
 ):
     """
     Run a targeted crawl for toxicogenomics hallmark genes.
     """
+    max_papers, max_api_calls = resolve_caps(max_papers, max_api_calls)
+    log_s2_auth_status(api_key)
     config = GovernorConfig(
         max_depth=max_depth,
         max_papers=max_papers,
+        max_api_calls=max_api_calls,
         rate_limit_delay=1.0,
     )
 
@@ -821,7 +850,8 @@ ORGAN_CRAWL_CONFIGS = {
 def run_organ_crawl(
     organ: str,
     max_depth: int = 2,
-    max_papers: int = 400,
+    max_papers: int = 800,
+    max_api_calls: int = 1000,
     api_key: str | None = None,
 ):
     """
@@ -835,10 +865,12 @@ def run_organ_crawl(
 
     organ_cfg = ORGAN_CRAWL_CONFIGS[organ]
 
+    max_papers, max_api_calls = resolve_caps(max_papers, max_api_calls)
+    log_s2_auth_status(api_key)
     config = GovernorConfig(
         max_depth=max_depth,
         max_papers=max_papers,
-        max_api_calls=500,
+        max_api_calls=max_api_calls,
         rate_limit_delay=1.5,
         organ_boost_keywords=organ_cfg["boost_keywords"],
     )
@@ -871,12 +903,14 @@ def run_organ_crawl(
 if __name__ == "__main__":
     import sys
 
+    api_key = resolve_s2_api_key()
+
     if len(sys.argv) >= 2 and sys.argv[1] in ORGAN_CRAWL_CONFIGS:
         # Organ-specific crawl: python citegraph.py heart|brain|lung [max_papers]
         organ = sys.argv[1]
-        max_papers = int(sys.argv[2]) if len(sys.argv) > 2 else 400
-        crawler, report = run_organ_crawl(organ, max_papers=max_papers)
+        max_papers = int(sys.argv[2]) if len(sys.argv) > 2 else 800
+        crawler, report = run_organ_crawl(organ, max_papers=max_papers, api_key=api_key)
     else:
         # Original general crawl: python citegraph.py [max_papers]
-        max_papers = int(sys.argv[1]) if len(sys.argv) > 1 else 200
-        crawler, report = run_toxicogenomics_crawl(max_papers=max_papers)
+        max_papers = int(sys.argv[1]) if len(sys.argv) > 1 else 400
+        crawler, report = run_toxicogenomics_crawl(max_papers=max_papers, api_key=api_key)

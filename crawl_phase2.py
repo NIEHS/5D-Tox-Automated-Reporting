@@ -29,7 +29,14 @@ Usage:
 import sys
 import time
 
-from citegraph import CitationGraphCrawler, GovernorConfig, load_known_genes
+from citegraph import (
+    CitationGraphCrawler,
+    GovernorConfig,
+    load_known_genes,
+    resolve_s2_api_key,
+    resolve_caps,
+    log_s2_auth_status,
+)
 from genefunc_crawl import run_genetox_crawl
 
 
@@ -39,8 +46,8 @@ from genefunc_crawl import run_genetox_crawl
 
 MECHANISM_CRAWL_CONFIGS = {
     "nrf2dose": {
-        "max_papers": 400,
-        "max_api_calls": 800,
+        "max_papers": 800,
+        "max_api_calls": 1600,
         "searches": [
             ("NRF2 dose response oxidative stress threshold", 10),
             ("KEAP1 NRF2 activation dose dependent", 10),
@@ -68,8 +75,8 @@ MECHANISM_CRAWL_CONFIGS = {
         ],
     },
     "inflammasome": {
-        "max_papers": 300,
-        "max_api_calls": 600,
+        "max_papers": 600,
+        "max_api_calls": 1200,
         "searches": [
             ("NLRP3 inflammasome activation dose response", 10),
             ("NF-kB activation threshold toxicology dose", 10),
@@ -99,8 +106,8 @@ MECHANISM_CRAWL_CONFIGS = {
         ],
     },
     "celldeath": {
-        "max_papers": 400,
-        "max_api_calls": 800,
+        "max_papers": 800,
+        "max_api_calls": 1600,
         "searches": [
             ("ferroptosis dose response oxidative stress", 10),
             ("ferroptosis apoptosis necroptosis decision", 10),
@@ -133,8 +140,8 @@ MECHANISM_CRAWL_CONFIGS = {
         ],
     },
     "circadian": {
-        "max_papers": 200,
-        "max_api_calls": 400,
+        "max_papers": 400,
+        "max_api_calls": 800,
         "searches": [
             ("AHR circadian clock ARNT BMAL1", 10),
             ("circadian rhythm disruption toxicity xenobiotic", 10),
@@ -160,8 +167,8 @@ MECHANISM_CRAWL_CONFIGS = {
         ],
     },
     "senescence": {
-        "max_papers": 200,
-        "max_api_calls": 400,
+        "max_papers": 400,
+        "max_api_calls": 800,
         "searches": [
             ("cellular senescence toxicology SASP", 10),
             ("senescence associated secretory phenotype toxicant", 10),
@@ -196,8 +203,8 @@ MECHANISM_CRAWL_CONFIGS = {
 
 ORGAN_GAP_CONFIGS = {
     "intestine": {
-        "max_papers": 400,
-        "max_api_calls": 800,
+        "max_papers": 800,
+        "max_api_calls": 1600,
         "searches": [
             ("intestinal toxicogenomics gene expression barrier", 10),
             ("gut liver axis toxicology chemical exposure", 10),
@@ -218,8 +225,8 @@ ORGAN_GAP_CONFIGS = {
         ],
     },
     "testis": {
-        "max_papers": 300,
-        "max_api_calls": 600,
+        "max_papers": 600,
+        "max_api_calls": 1200,
         "searches": [
             ("testicular toxicogenomics gene expression spermatogenesis", 10),
             ("reproductive toxicology transcriptomics rat testis", 10),
@@ -238,8 +245,8 @@ ORGAN_GAP_CONFIGS = {
         ],
     },
     "vascular": {
-        "max_papers": 300,
-        "max_api_calls": 600,
+        "max_papers": 600,
+        "max_api_calls": 1200,
         "searches": [
             ("endothelial toxicity gene expression vascular", 10),
             ("vascular toxicogenomics transcriptomic", 10),
@@ -279,8 +286,9 @@ def run_mechanism_crawl(
 
     Returns (crawler, report).
     """
-    max_papers = config_dict["max_papers"]
-    max_api_calls = config_dict["max_api_calls"]
+    max_papers, max_api_calls = resolve_caps(
+        config_dict["max_papers"], config_dict["max_api_calls"])
+    log_s2_auth_status(api_key)
     searches = config_dict["searches"]
     topic_keywords = config_dict.get("topic_keywords")
     boost_keywords = config_dict.get("boost_keywords", [])
@@ -445,19 +453,20 @@ def main():
         sys.exit(1)
 
     target = sys.argv[1].lower()
+    api_key = resolve_s2_api_key()
 
     if target == "all":
-        run_all_phase2()
+        run_all_phase2(api_key=api_key)
     elif target == "tier1":
-        run_all_phase2(tiers=[1])
+        run_all_phase2(tiers=[1], api_key=api_key)
     elif target == "tier2":
-        run_all_phase2(tiers=[2])
+        run_all_phase2(tiers=[2], api_key=api_key)
     elif target == "tier3" or target == "genetox":
-        run_all_phase2(tiers=[3])
+        run_all_phase2(tiers=[3], api_key=api_key)
     elif target in MECHANISM_CRAWL_CONFIGS:
-        run_mechanism_crawl(target, MECHANISM_CRAWL_CONFIGS[target])
+        run_mechanism_crawl(target, MECHANISM_CRAWL_CONFIGS[target], api_key=api_key)
     elif target in ORGAN_GAP_CONFIGS:
-        run_mechanism_crawl(target, ORGAN_GAP_CONFIGS[target])
+        run_mechanism_crawl(target, ORGAN_GAP_CONFIGS[target], api_key=api_key)
     else:
         print(f"Unknown target: {target}")
         print(f"Available: all, tier1, tier2, tier3, genetox, "
