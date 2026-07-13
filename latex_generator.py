@@ -104,6 +104,7 @@ from render_common import (
     table_caption as _table_caption,
 )
 from genomics_content import genomics_content_plan
+from layout_style import resolve_layout_style
 from freeform_content import pending_note as _freeform_pending_note
 from cover_layouts import get_cover_layout
 from roundtrip.overrides import region_hash
@@ -1309,6 +1310,131 @@ def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict)
     return override.get("latex_region", generated)
 
 
+# ---------------------------------------------------------------------------
+# Per-content-type layout styling (the LaTeX half of the abstract spec)
+# ---------------------------------------------------------------------------
+# resolve_layout_style (layout_style.py) merges the document's styles config
+# down to ONE flat dict per node; _layout_to_latex translates that abstract
+# spec into the surrounding LaTeX markup.  The HTML twin emits the SAME resolved
+# spec as CSS rules (html_generator), so the two surfaces can't drift (ADR-0006).
+# An empty spec ⇒ ("", "") ⇒ the chunk is untouched, so a document with no
+# `styles` block compiles byte-identically to before this feature.
+
+_FONT_FAMILY_CMD = {"serif": r"\rmfamily", "sans": r"\sffamily", "mono": r"\ttfamily"}
+_ALIGN_CMD = {"left": r"\raggedright", "right": r"\raggedleft", "center": r"\centering"}
+# justify is LaTeX's default (fully-justified) → no declaration emitted.
+
+
+def _fmt_num(x: float) -> str:
+    """Format a computed number without trailing-zero noise (15.40 → '15.4')."""
+    s = f"{x:.4f}".rstrip("0").rstrip(".")
+    return s or "0"
+
+
+def _parse_length(value: str) -> "tuple[float, str] | None":
+    """Split a validated length like '11pt' into (11.0, 'pt'); None if unparseable."""
+    m = re.fullmatch(r"(-?\d+(?:\.\d+)?)(pt|mm|cm|in|em|ex)", value or "")
+    if not m:
+        return None
+    return float(m.group(1)), m.group(2)
+
+
+def _expand_hex(color: str) -> str:
+    """'#abc' → 'AABBCC', '#aabbcc' → 'AABBCC' (xcolor HTML model wants 6 upper hex)."""
+    h = color.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return h.upper()
+
+
+def _layout_to_latex(style: dict) -> "tuple[str, str]":
+    r"""
+    Translate one resolved abstract style spec into surrounding LaTeX markup.
+
+    Returns ``(pre, post)`` such that ``pre + chunk + post`` renders the chunk
+    with the requested typography and flow.  Font/color/alignment/indent are
+    scoped in a group ``{ ... \par}`` (the trailing ``\par`` flushes the
+    paragraph while the size/leading is still active — the standard LaTeX
+    size-change gotcha); vertical space and page breaks sit OUTSIDE the group,
+    and ``keep_together`` wraps everything in an unbreakable minipage.
+
+    An empty / falsy spec returns ``("", "")`` — the no-op that keeps a
+    style-less document byte-identical to the pre-feature output.
+    """
+    if not style:
+        return "", ""
+
+    # --- inside-the-group declarations (font, color, alignment, indent) ---
+    decls: list[str] = []
+    fam = _FONT_FAMILY_CMD.get(style.get("font_family"))
+    if fam:
+        decls.append(fam)
+
+    size = style.get("font_size")
+    line_height = style.get("line_height")
+    if size:
+        parsed = _parse_length(size)
+        if parsed:
+            num, unit = parsed
+            lead = num * (line_height if isinstance(line_height, (int, float)) else 1.2)
+            decls.append(rf"\fontsize{{{size}}}{{{_fmt_num(lead)}{unit}}}\selectfont")
+    elif isinstance(line_height, (int, float)):
+        # Leading multiplier with no explicit size → scale the current size.
+        decls.append(rf"\linespread{{{_fmt_num(line_height)}}}\selectfont")
+
+    if style.get("weight") == "bold":
+        decls.append(r"\bfseries")
+    if style.get("style") == "italic":
+        decls.append(r"\itshape")
+
+    color = style.get("color")
+    if color:
+        h = _expand_hex(color)
+        name = "ctcolor" + h.lower()
+        decls.append(rf"\definecolor{{{name}}}{{HTML}}{{{h}}}\color{{{name}}}")
+
+    align = _ALIGN_CMD.get(style.get("align"))
+    if align:
+        decls.append(align)
+
+    indent = style.get("first_line_indent")
+    if indent and _parse_length(indent):
+        decls.append(rf"\setlength\parindent{{{indent}}}")
+
+    # --- outside-the-group flow (space + page breaks) and keep-together box ---
+    pre_parts: list[str] = []
+    post_parts: list[str] = []
+
+    if style.get("break_before") == "page":
+        pre_parts.append("\\clearpage")
+    sb = style.get("space_before")
+    if sb and _parse_length(sb):
+        pre_parts.append(rf"\vspace{{{sb}}}")
+    keep = style.get("keep_together") is True
+    if keep:
+        pre_parts.append(r"\begin{minipage}{\linewidth}")
+
+    if decls:
+        pre_parts.append("{" + "".join(decls))
+        post_parts.append(r"\par}")
+
+    if keep:
+        post_parts.append(r"\end{minipage}")
+    sa = style.get("space_after")
+    if sa and _parse_length(sa):
+        post_parts.append(rf"\vspace{{{sa}}}")
+    if style.get("break_after") == "page":
+        post_parts.append("\\clearpage")
+
+    pre = "\n".join(pre_parts)
+    if pre:
+        pre += "\n"
+    post = "\n".join(post_parts)
+    if post:
+        post = "\n" + post
+    return pre, post
+
+
 def _walk_latex(node: DocNode, data: dict) -> list[str]:
     """
     Render a node and its descendants to a flat, document-ordered list of
@@ -1318,6 +1444,18 @@ def _walk_latex(node: DocNode, data: dict) -> list[str]:
     the traversal + accumulator are common, only the LaTeX-specific emit below
     is passed in.  Same skeleton as html_generator._walk_html.
     """
+    layout_cfg = data.get("layout_style")
+
+    def _wrap_style(n: DocNode, chunk: str) -> str:
+        # Per-content-type typography/flow.  The DECISION (resolved spec) is
+        # shared with HTML via data["layout_style"]; only this LaTeX WRAP is
+        # surface-specific.  Empty cfg → resolve_layout_style returns {} →
+        # _layout_to_latex returns ("", "") → chunk unchanged (byte-identical).
+        pre, post = _layout_to_latex(
+            resolve_layout_style(layout_cfg, n.node_type, n.id)
+        )
+        return pre + chunk + post
+
     def _wrap_post(n: DocNode, chunk: str) -> str:
         # ADR-0005: if a human owns this region (edited and reconciled into the
         # override store), emit their version verbatim instead of the generated
@@ -1340,6 +1478,7 @@ def _walk_latex(node: DocNode, data: dict) -> list[str]:
         # pdflscape rotates both the content and the PDF page, so Overleaf shows
         # it landscape.
         wrap_landscape=lambda chunk: "\\begin{landscape}\n" + chunk + "\n\\end{landscape}",
+        wrap_style=_wrap_style,
         wrap_post=_wrap_post,
     )
 

@@ -538,3 +538,43 @@ charts: []
 #       y: { title: "BMD (${dose_unit})", type: log }
 #     layout: { width: 1000, height: 500 }
 #     caption: "BMD per GO term — {organ_title} ({sex_title})."
+
+# ---------------------------------------------------------------------------
+# styles — per-content-type typography & page flow (optional)
+# ---------------------------------------------------------------------------
+# Three-layer deep-merge (layout_style.py): defaults <- types[<content-type>]
+# <- instances[<node-id>].  Each layer is partial — it overrides only the keys
+# it names.  A single ABSTRACT, surface-agnostic spec that BOTH renderers
+# translate: the LaTeX export wraps each node in a font/spacing group, the HTML
+# preview emits the same spec as an inline-styled wrapper — so the two surfaces
+# cannot drift (ADR-0006).  Omit this whole block (as shipped) and every surface
+# renders exactly today's built-in look (the all-absent path is a no-op).
+#
+# Keys (layout_style.LAYOUT_KEY_SCHEMA) — a bad VALUE fails loudly at load, an
+# unknown KEY is a non-fatal typo warning:
+#   font_family: serif | sans | mono        color: "#rgb" | "#rrggbb"
+#   font_size:   e.g. "11pt" (pt/mm/cm/in/em/ex)   line_height: number, e.g. 1.4
+#   weight:      normal | bold               style: normal | italic
+#   align:       left | right | center | justify
+#   space_before / space_after: length       first_line_indent: length
+#   break_before / break_after: auto | page   keep_together: true | false
+#
+# `types` keys are content types from render_capabilities.COMPONENT_CATALOG
+# (narrative, heading-only, front-matter, appendix, table, bmd-summary,
+# genomics-section, freeform-page, ...); `instances` keys are DocNode ids.
+#
+# styles:
+#   defaults:                       # applied to EVERY element
+#     font_family: serif
+#     line_height: 1.4
+#   types:                          # applied to every node of one content type
+#     narrative:
+#       align: justify
+#       first_line_indent: "1.5em"
+#     heading-only:
+#       font_family: sans
+#       weight: bold
+#       break_before: page
+#   instances:                      # applied to ONE node, keyed by DocNode id
+#     background:
+#       font_size: "10pt"

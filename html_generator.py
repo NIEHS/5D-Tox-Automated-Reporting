@@ -85,6 +85,7 @@ from render_common import (
     table_caption as _table_caption,
 )
 from genomics_content import genomics_content_plan
+from layout_style import resolve_layout_style
 from freeform_content import pending_note as _freeform_pending_note
 from cover_layouts import get_cover_layout
 from cross_references import resolve_xrefs_html
@@ -1221,6 +1222,86 @@ def _apply_override_html(chunk: str, anchor_id: str, data: dict) -> str:
 # Tree walk
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Per-content-type layout styling (the HTML half of the abstract spec)
+# ---------------------------------------------------------------------------
+# resolve_layout_style (layout_style.py) merges the document's styles config
+# down to ONE flat dict per node; _layout_to_css_props translates that abstract
+# spec into CSS declarations.  The LaTeX twin (_layout_to_latex) translates the
+# SAME resolved spec into font/spacing groups, so the two surfaces can't drift
+# (ADR-0006).  An empty spec ⇒ "" ⇒ no wrapper div, so a document with no
+# `styles` block renders byte-identically to before this feature.
+#
+# The wrap is a <div style="…"> around the node's chunk.  Inheritable props
+# (font-family/size/weight/style/color/text-align/line-height/text-indent)
+# cascade to the body <p>s; the section heading keeps its own element rule —
+# exactly mirroring LaTeX, where \section ignores the surrounding \fontsize
+# group.  Flow props (margins, page breaks, break-inside) act on the div box.
+
+_CSS_FONT_STACK = {
+    "serif": 'Georgia, "Times New Roman", serif',
+    "sans": '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+    "mono": '"SF Mono", Consolas, "Liberation Mono", monospace',
+}
+_CSS_ALIGN = {"left": "left", "right": "right", "center": "center", "justify": "justify"}
+_CSS_BREAK = {"auto": "auto", "page": "page"}
+
+
+def _layout_to_css_props(style: dict) -> str:
+    """
+    Translate one resolved abstract style spec into a CSS declaration string
+    (``prop: val; prop: val``) for a wrapping ``<div style="...">``.
+
+    Empty / falsy spec ⇒ "" (the no-op that keeps a style-less document byte-
+    identical).  Lengths pass through unchanged (pt/mm/cm/in/em/ex are all valid
+    CSS); font families map to on-screen stacks; page-flow maps to the CSS
+    Fragmentation props Paged.js honours (break-before/after, break-inside).
+    """
+    if not style:
+        return ""
+    props: list[str] = []
+
+    fam = _CSS_FONT_STACK.get(style.get("font_family"))
+    if fam:
+        props.append(f"font-family: {fam}")
+    size = style.get("font_size")
+    if size:
+        props.append(f"font-size: {size}")
+    if style.get("weight") == "bold":
+        props.append("font-weight: 700")
+    if style.get("style") == "italic":
+        props.append("font-style: italic")
+    color = style.get("color")
+    if color:
+        props.append(f"color: {color}")
+    align = _CSS_ALIGN.get(style.get("align"))
+    if align:
+        props.append(f"text-align: {align}")
+    lh = style.get("line_height")
+    if isinstance(lh, (int, float)) and not isinstance(lh, bool):
+        props.append(f"line-height: {lh}")
+    indent = style.get("first_line_indent")
+    if indent:
+        props.append(f"text-indent: {indent}")
+
+    sb = style.get("space_before")
+    if sb:
+        props.append(f"margin-top: {sb}")
+    sa = style.get("space_after")
+    if sa:
+        props.append(f"margin-bottom: {sa}")
+    bb = _CSS_BREAK.get(style.get("break_before"))
+    if bb:
+        props.append(f"break-before: {bb}")
+    ba = _CSS_BREAK.get(style.get("break_after"))
+    if ba:
+        props.append(f"break-after: {ba}")
+    if style.get("keep_together") is True:
+        props.append("break-inside: avoid")
+
+    return "; ".join(props)
+
+
 def _walk_html(node: DocNode, data: dict) -> list[str]:
     """
     Render a node and its descendants to a flat, document-ordered list of
@@ -1238,6 +1319,22 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
     content items carry a second, composite-key override grain applied inside
     _render_genomics_section, mirroring latex_generator.
     """
+    layout_cfg = data.get("layout_style")
+
+    def _wrap_style(n: DocNode, chunk: str) -> str:
+        # Per-content-type typography/flow.  The DECISION (resolved spec) is
+        # shared with LaTeX via data["layout_style"]; only this HTML WRAP is
+        # surface-specific — a <div style="…"> whose inheritable props cascade
+        # to the body prose while the heading keeps its element rule (mirroring
+        # LaTeX's \section vs \fontsize group).  Empty cfg → resolve returns {}
+        # → props "" → chunk unchanged (byte-identical).
+        props = _layout_to_css_props(
+            resolve_layout_style(layout_cfg, n.node_type, n.id)
+        )
+        if not props:
+            return chunk
+        return f'<div class="ct-{_esc(n.node_type)}" style="{props}">{chunk}</div>'
+
     return walk_emit(
         node, data,
         walk=walk_tree,
@@ -1252,6 +1349,10 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
         # Wrap in a .landscape-block (assigned to the landscape @page) when the
         # user flipped it AND the node's semantic type is orientable.
         wrap_landscape=lambda chunk: f'<div class="landscape-block">{chunk}</div>',
+        # Per-content-type layout styling — same resolved spec as LaTeX, emitted
+        # as an inline-styled wrapper div.  Between landscape and wrap_post so a
+        # styled node still rotates and any override substitution sees final markup.
+        wrap_style=_wrap_style,
         # ADR-0005 node-grain override: mark/render a region a human edited in
         # Overleaf instead of silently showing the regenerated content.
         wrap_post=lambda n, chunk: _apply_override_html(chunk, n.id, data),

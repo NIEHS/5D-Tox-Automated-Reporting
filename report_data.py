@@ -199,6 +199,42 @@ def normalize_apical_section_for_render(sec: dict) -> dict:
     return out
 
 
+def _resolve_layout_config(body: dict) -> dict:
+    """
+    Merge the layout-styles config from its three SOURCES, in increasing
+    precedence, into the single ``styles`` mapping the renderers resolve per-node:
+
+        1. global template ``styles:`` block  — the git-tracked default;
+        2. per-session ``styles.yaml`` override (keyed by the body's dtxsid);
+        3. request-body ``layout_style``       — live UI edits (same channel
+           ``orientations`` rides), so an unsaved tweak previews immediately.
+
+    Each source is itself a ``{defaults, types, instances}`` mapping; the merge is
+    the generic chart_style.deep_merge, so a later source overrides only the keys
+    it names (e.g. a session that re-styles just ``types.narrative`` inherits the
+    template's ``defaults``).  The WITHIN-config three-layer precedence
+    (defaults ← types ← instances) is resolved later, per-node, at emit time by
+    layout_style.resolve_layout_style.  All sources empty ⇒ {} ⇒ no styling.
+    """
+    from chart_style import deep_merge
+    from document_template import load_layout_style
+    from document_tree import ACTIVE_TEMPLATE
+
+    template_cfg = load_layout_style(ACTIVE_TEMPLATE)
+
+    session_cfg = None
+    dtxsid = body.get("dtxsid", "")
+    if dtxsid:
+        from document_config import load_session_layout_style
+        session_cfg = load_session_layout_style(dtxsid)
+
+    request_cfg = body.get("layout_style")
+    if not isinstance(request_cfg, dict):
+        request_cfg = None
+
+    return deep_merge(template_cfg, session_cfg, request_cfg)
+
+
 def _build_full_title(ta: dict) -> str:
     """
     Build the report's full title / running header from the test-article forms.
@@ -297,6 +333,14 @@ def marshal_export_data(
     # LaTeX, an @page landscape block in the HTML preview).  Absent/portrait
     # nodes render normally.
     data["orientations"] = body.get("orientations") or {}
+
+    # Per-content-type layout styling (fonts + page flow).  A single ``styles``
+    # config, resolved per-node by layout_style.resolve_layout_style, that BOTH
+    # renderers consume identically (LaTeX wraps each chunk, HTML emits CSS —
+    # ADR-0006 no-drift).  Three SOURCES merged in increasing precedence:
+    # global template block ← per-session override ← live request body.  Empty
+    # everywhere ⇒ {} ⇒ each surface emits its built-in look (no-op).
+    data["layout_style"] = _resolve_layout_config(body)
 
     # --- Report metadata overrides ---
     # These populate the inner title page and publication details.

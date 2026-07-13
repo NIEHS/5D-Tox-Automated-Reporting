@@ -936,3 +936,97 @@ async def api_save_document_config_default(request: Request):
         logger.exception("Failed to save default document config")
         return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
     return JSONResponse({"saved": True})
+
+
+# ---------------------------------------------------------------------------
+# Layout STYLES config — per-content-type typography & page flow (fonts,
+# alignment, spacing, breaks).  Pure presentation: it does NOT feed the
+# integration pipeline, so both the per-session and default edits re-render with
+# no re-integration (mirrors the document-structure routes above; the same
+# scope decision as document_config's per-session styles helpers).
+# ---------------------------------------------------------------------------
+
+@router.get("/api/layout-style/{dtxsid}")
+async def api_get_layout_style(dtxsid: str, default: int = 0):
+    """
+    Return the session's layout-styles YAML for the styles editor.
+
+    When the session has no per-session styles override, returns the global
+    default ``styles:`` block (so the editor opens on the active styling, not a
+    blank box).  ``is_default`` tells the UI whether it's showing the shared
+    default (True) or this session's own saved copy (False).  ``?default=1``
+    forces the shared default — the "Load default" affordance.
+    """
+    import yaml as _yaml
+    from document_config import load_session_layout_style, default_layout_style_yaml
+
+    if default:
+        return JSONResponse({"yaml": default_layout_style_yaml(), "is_default": True})
+    cfg = load_session_layout_style(dtxsid)
+    if cfg is None:
+        return JSONResponse({"yaml": default_layout_style_yaml(), "is_default": True})
+    text = _yaml.safe_dump({"styles": cfg}, sort_keys=False, allow_unicode=True)
+    return JSONResponse({"yaml": text, "is_default": False})
+
+
+@router.post("/api/layout-style/{dtxsid}")
+async def api_save_layout_style(dtxsid: str, request: Request):
+    """
+    Validate + persist the session's layout-styles YAML.
+
+    Gated on the loud enum/length/color + catalog-type validation (422 on a bad
+    value, writing nothing).  On success the caller re-renders the preview (no
+    re-integration — styles are pure presentation).
+    """
+    from document_config import save_session_layout_style
+
+    body = await request.json()
+    text = body.get("yaml")
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse(
+            {"error": "Request must include a non-empty 'yaml' string."},
+            status_code=422,
+        )
+    try:
+        save_session_layout_style(dtxsid, text)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save layout style for %s", dtxsid)
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})
+
+
+@router.get("/api/layout-style-default")
+async def api_get_layout_style_default():
+    """Return the default (template) layout-styles YAML for the editor."""
+    from document_config import default_layout_style_yaml
+    return JSONResponse({"yaml": default_layout_style_yaml()})
+
+
+@router.post("/api/layout-style-default")
+async def api_save_layout_style_default(request: Request):
+    """
+    Validate + persist an edit to the DEFAULT (template) ``styles:`` block.
+
+    Same validate-before-write gate as the per-session route (422 on invalid).
+    On success only the template's ``styles:`` sibling is rewritten; no tree
+    rebuild is needed (styles are pure presentation, re-read live per render).
+    """
+    from document_config import save_default_layout_style
+
+    body = await request.json()
+    text = body.get("yaml")
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse(
+            {"error": "Request must include a non-empty 'yaml' string."},
+            status_code=422,
+        )
+    try:
+        save_default_layout_style(text)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save default layout style")
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})

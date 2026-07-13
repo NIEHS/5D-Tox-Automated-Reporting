@@ -319,6 +319,10 @@
                        title="Edit the document structure YAML for this report">
                         Document structure…
                     </a>
+                    <a class="nav-node" onclick="toggleLayoutConfigPanel()"
+                       title="Edit per-content-type fonts, spacing, and page breaks">
+                        Layout &amp; typography…
+                    </a>
                 </div>
 
                 <hr class="sidebar-divider">
@@ -584,6 +588,54 @@
                             title="Replace the editor with the shared default structure">Load default</button>
                     <span style="flex:1"></span>
                     <button class="btn-action primary" onclick="saveDocumentConfig()">
+                        Save &amp; Re-render
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layout & typography config panel (layout_config.js) — per-content-type
+             fonts / spacing / page breaks; sibling of the structure panel above. -->
+        <div id="layout-config-panel" class="settings-panel" style="display:none;">
+            <div class="settings-header">
+                <h3>Layout &amp; Typography</h3>
+                <button class="modal-close" onclick="toggleLayoutConfigPanel()" title="Close">&times;</button>
+            </div>
+            <div class="settings-body">
+                <p class="settings-hint">
+                    Edit the <code>styles:</code> YAML that sets typography and page
+                    flow <em>per content type</em> — font family/size/weight, color,
+                    alignment, line spacing, space before/after, and page breaks.
+                    Three layers, later wins: <code>defaults</code> (every element)
+                    → <code>types.&lt;content-type&gt;</code> → <code>instances.&lt;node-id&gt;</code>.
+                    Both the LaTeX export and the HTML preview render the same spec.
+                    Saving validates and re-renders the preview (no re-integration).
+                </p>
+                <div class="doc-config-scope">
+                    <label><input type="radio" name="layout-config-scope" value="session"
+                                  checked onchange="onLayoutConfigScopeChanged()">
+                        This report only</label>
+                    <label><input type="radio" name="layout-config-scope" value="default"
+                                  onchange="onLayoutConfigScopeChanged()">
+                        Default (all reports)</label>
+                </div>
+                <div id="layout-config-scope-banner" class="doc-config-banner"
+                     style="display:none">
+                    Editing the <strong>shared default</strong> — this changes the
+                    typography of every report that has no per-report override, and
+                    edits the committed template file.
+                </div>
+                <div id="layout-config-status" class="doc-config-status"></div>
+                <textarea id="layout-config-yaml" class="doc-config-editor"
+                          spellcheck="false" wrap="off"
+                          placeholder="Loading layout styles…"></textarea>
+                <div class="settings-apply doc-config-actions">
+                    <button class="btn-small" onclick="loadLayoutConfig()"
+                            title="Reload from the server (discards unsaved edits)">Reload</button>
+                    <button class="btn-small" onclick="resetLayoutConfigToDefault()"
+                            title="Replace the editor with the shared default styles">Load default</button>
+                    <span style="flex:1"></span>
+                    <button class="btn-action primary" onclick="saveLayoutConfig()">
                         Save &amp; Re-render
                     </button>
                 </div>
@@ -1210,6 +1262,7 @@
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
     <script src="/js/document_config.js?v=3"></script>
+    <script src="/js/layout_config.js?v=1"></script>
     <script src="/js/chart_style.js?v=1"></script>
     <script src="/js/genomics.js?v=12"></script>
     <script src="/js/genomics_charts.js?v=5"></script>

@@ -935,6 +935,7 @@ def walk_emit(
     wrap_landscape,
     emit_pre=None,
     wrap_post=None,
+    wrap_style=None,
 ) -> list[str]:
     r"""
     Render a node and its descendants to a flat, document-ordered list of
@@ -974,6 +975,15 @@ def walk_emit(
             content only, never human overrides) — see the divergence-#2 TODO
             in memory ([[project_rlm_arch1_walk_emit]]) for the plan to give
             HTML its own override-substitution wrap_post.
+        wrap_style: optional ``(node, chunk) -> chunk`` applied AFTER the
+            landscape wrap and BEFORE wrap_post — the per-content-type font/flow
+            styling wrap.  The DECISION (what style this node resolves to) is
+            shared: both surfaces read the same ``data["layout_style"]`` config;
+            only this WRAP markup is per-surface.  LaTeX passes a wrapper that
+            brackets the chunk in a font/spacing group; HTML passes None because
+            it applies the same resolved spec as CSS rules in the document
+            ``<style>`` block rather than inline (same shared-decision /
+            per-surface-emit split as wrap_landscape).
 
     Returns:
         The list of markup chunks in document order; the caller joins them.
@@ -996,6 +1006,12 @@ def walk_emit(
         if landscape_requested(n.node_type, n.id, data.get("orientations"),
                                default=n.orientation):
             chunk = wrap_landscape(chunk)
+        # Per-node font/flow styling (per-content-type layout spec).  Applied
+        # after the landscape wrap so a styled node still rotates correctly, and
+        # before wrap_post so an ADR-0005 override substitution sees the final
+        # styled markup.  HTML passes None here (it emits CSS rules instead).
+        if wrap_style is not None:
+            chunk = wrap_style(n, chunk)
         if wrap_post is not None:
             chunk = wrap_post(n, chunk)
         chunks.append(chunk)

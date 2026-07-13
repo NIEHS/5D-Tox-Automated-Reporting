@@ -37,11 +37,17 @@ from document_tree import (
 from session_store import SESSIONS_DIR
 
 _SESSION_DOCUMENT_FILE = "document.yaml"
+_SESSION_STYLES_FILE = "styles.yaml"
 
 
 def session_document_path(dtxsid: str) -> Path:
     """Path to a session's per-session document-structure YAML (may not exist)."""
     return SESSIONS_DIR / dtxsid / _SESSION_DOCUMENT_FILE
+
+
+def session_styles_path(dtxsid: str) -> Path:
+    """Path to a session's per-session layout-styles YAML (may not exist)."""
+    return SESSIONS_DIR / dtxsid / _SESSION_STYLES_FILE
 
 
 def _parse_document_yaml(text: str) -> list[dict]:
@@ -138,6 +144,104 @@ def save_session_document_yaml(dtxsid: str, text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Per-session layout STYLES override (the typography/flow analog of the
+# per-session document structure above).  Unlike the data/chart blocks the
+# module header warns off, styles are pure PRESENTATION — they do not feed the
+# integration pipeline, so a per-session override is safe and cheap (re-renders
+# with no reprocess, exactly like the structure override).  Stored as
+# ``sessions/<dtxsid>/styles.yaml``; absent ⇒ None ⇒ caller uses the global
+# template `styles:` block (or nothing).
+# ---------------------------------------------------------------------------
+
+def _parse_styles_yaml(text: str) -> dict:
+    """
+    Parse + VALIDATE a layout-styles YAML string into the ``styles`` mapping.
+
+    Accepts either a bare mapping (``defaults:``/``types:``/``instances:`` at the
+    top level) or a mapping nested under a ``styles:`` key — the same dual shape
+    the template file uses — so a user can paste either form.  Runs the identical
+    loud validation as document_template.load_layout_style (enum/length/color
+    value checks, real-catalog-type keys), raising ValueError before any write.
+    """
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise ValueError(f"invalid YAML: {e}") from e
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"styles config must be a YAML mapping, got {type(data).__name__}"
+        )
+    cfg = data.get("styles", data)
+    if not isinstance(cfg, dict):
+        raise ValueError(
+            f"'styles' must be a mapping, got {type(cfg).__name__}"
+        )
+    _validate_styles_cfg(cfg)
+    return cfg
+
+
+def _validate_styles_cfg(cfg: dict) -> None:
+    """
+    Loud shape/value validation for a ``styles`` mapping — the same rules
+    document_template.load_layout_style enforces on the template block, factored
+    here so the per-session path validates identically.  Raises ValueError.
+    """
+    import layout_style
+    from document_template import COMPONENT_CATALOG
+
+    for sub in ("defaults", "types", "instances"):
+        if sub in cfg and not isinstance(cfg[sub], dict):
+            raise ValueError(
+                f"styles.{sub} must be a mapping, got {type(cfg[sub]).__name__}"
+            )
+    for node_type in (cfg.get("types") or {}):
+        if node_type not in COMPONENT_CATALOG:
+            raise ValueError(
+                f"styles.types.{node_type!r} is not a catalog content type"
+            )
+    layers: list[tuple[str, dict]] = []
+    if isinstance(cfg.get("defaults"), dict):
+        layers.append(("defaults", cfg["defaults"]))
+    for k, v in (cfg.get("types") or {}).items():
+        if isinstance(v, dict):
+            layers.append((f"types.{k}", v))
+    for k, v in (cfg.get("instances") or {}).items():
+        if isinstance(v, dict):
+            layers.append((f"instances.{k}", v))
+    for where, style in layers:
+        errors = layout_style.validate_style(style)
+        if errors:
+            raise ValueError(
+                f"styles.{where} has invalid value(s): {'; '.join(errors)}"
+            )
+
+
+def load_session_layout_style(dtxsid: str) -> dict | None:
+    """
+    The session's per-session ``styles`` override as a mapping, or None when the
+    session has no override (caller falls back to the global template block).
+    """
+    path = session_styles_path(dtxsid)
+    if not path.exists():
+        return None
+    return _parse_styles_yaml(path.read_text(encoding="utf-8"))
+
+
+def save_session_layout_style(dtxsid: str, text: str) -> None:
+    """
+    Validate then persist a session's layout-styles YAML (validate-before-write,
+    same discipline as save_session_document_yaml).  A bad value never lands on
+    disk, so a broken style can't reach the renderers.
+    """
+    _parse_styles_yaml(text)  # validate; raises on failure
+    path = session_styles_path(dtxsid)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Default (global template) editor — edits templates/<ACTIVE_TEMPLATE>.yaml,
 # the git-tracked structure EVERY report inherits when it has no per-session
 # override.  Unlike the per-session file, a default edit must apply live to the
@@ -222,3 +326,49 @@ def save_default_document_yaml(text: str) -> None:
         # imported in a unit-test context); the tree rebuild above is what matters.
         pass
     _regenerate_golden_fixture()
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) layout STYLES editor — edits the template's
+# ``styles:`` sibling block, the typography/flow EVERY report inherits without a
+# per-session styles override.  Simpler than the structure default above: styles
+# do NOT feed the tree, so there is no tree rebuild and no golden fixture to keep
+# green — the render path re-reads load_layout_style() live per request.
+# ---------------------------------------------------------------------------
+
+def default_layout_style_yaml() -> str:
+    """
+    The global default ``styles:`` block as YAML text — the default styles
+    editor's initial content.  Empty ``styles: {}`` when the template has none
+    (the no-styling baseline), so the editor opens on a valid, editable stub.
+    """
+    from document_template import load_layout_style
+    cfg = load_layout_style(ACTIVE_TEMPLATE)
+    return yaml.safe_dump({"styles": cfg or {}}, sort_keys=False, allow_unicode=True)
+
+
+def save_default_layout_style(text: str) -> None:
+    """
+    Validate + persist an edit to the DEFAULT (template) ``styles:`` block.
+
+    Validate-before-write (same discipline as the structure default): the parse
+    runs the loud enum/length/color + catalog-type checks and raises ValueError
+    on any bad value BEFORE touching disk.  On success ONLY the ``styles:``
+    sibling is rewritten (document/organs/assays/charts preserved); no tree
+    rebuild is needed because styles are pure presentation — the next render
+    re-reads the block via load_layout_style().
+    """
+    cfg = _parse_styles_yaml(text)  # validate; raises on failure
+
+    path = _template_path()
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        # Legacy bare-list template — promote to a mapping so styles can attach.
+        raw = {"document": raw if isinstance(raw, list) else []}
+    if cfg:
+        raw["styles"] = cfg
+    else:
+        raw.pop("styles", None)  # empty edit clears the block rather than storing {}
+    path.write_text(
+        yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )

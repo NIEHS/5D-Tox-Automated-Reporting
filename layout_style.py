@@ -1,0 +1,176 @@
+"""
+layout_style.py — per-content-type font & flow specification (the styling
+analog of chart_style.py).
+
+A report's typography and page-flow are authored at the CONTENT-TYPE level: the
+document config carries a ``styles`` block that maps each catalog node type
+(render_capabilities.COMPONENT_CATALOG) to an ABSTRACT, surface-agnostic style
+spec, which each renderer translates to its own directives — LaTeX
+package/selector output (latex_generator) and CSS (html_generator).  Because
+both surfaces resolve the SAME spec, they cannot drift (ADR-0006).
+
+Three merge layers, in increasing precedence (identical shape to chart_style):
+
+    1. styles.defaults        — applied to EVERY element.
+    2. styles.types[T]        — applied to every node of content type T.
+    3. styles.instances[id]   — applied to ONE node, keyed by its DocNode id.
+
+Each layer is a partial dict overriding only the keys it names; the merge is the
+generic ``chart_style.deep_merge`` (recurse dicts, replace scalars/lists/None
+wholesale, never mutate).  An absent / empty ``styles`` block resolves to ``{}``
+for every node, so the renderers emit exactly today's hardcoded look — the
+all-absent path is a no-op.
+
+This module is pure data: it imports nothing from the render pipeline and is
+fully unit-testable in isolation.  The vocabulary is intentionally bounded (no
+raw-LaTeX / raw-CSS escape hatch) so the two surfaces stay expressible from one
+spec.
+"""
+
+from __future__ import annotations
+
+import re
+
+# Reuse the generic, well-tested deep-merge (recurse dicts, replace
+# scalars/lists/None wholesale, deep-copy, never mutate inputs).  It is domain-
+# neutral, so there is no reason to re-implement it here.
+from chart_style import deep_merge
+
+
+# ---------------------------------------------------------------------------
+# The abstract vocabulary (canonical key schema)
+# ---------------------------------------------------------------------------
+# Flat (no nested groups): each key is one presentation dimension that can
+# legitimately vary per content type on BOTH surfaces mid-document.  For each
+# key we record the accepted values — an enum set for closed vocabularies, or a
+# validator name for open scalars (length / number / color) — used by
+# ``validate_style`` to reject a bad VALUE loudly at load time (a bad value
+# would corrupt the .tex compile or the CSS), while an unknown KEY stays
+# non-fatal (``unknown_layout_keys``), mirroring chart_style's discipline.
+
+FONT_FAMILIES = frozenset({"serif", "sans", "mono"})
+WEIGHTS = frozenset({"normal", "bold"})
+STYLES = frozenset({"normal", "italic"})
+ALIGNMENTS = frozenset({"left", "right", "center", "justify"})
+BREAKS = frozenset({"auto", "page"})
+
+# Descriptive schema: key -> ("enum", frozenset) | ("length",) | ("number",)
+# | ("color",) | ("bool",).  Used both as the author-facing doc and by
+# validate_style / unknown_layout_keys.
+LAYOUT_KEY_SCHEMA: dict = {
+    "font_family": ("enum", FONT_FAMILIES),   # serif | sans | mono
+    "font_size": ("length",),                 # e.g. "11pt", "1.2em"
+    "weight": ("enum", WEIGHTS),              # normal | bold
+    "style": ("enum", STYLES),                # normal | italic
+    "color": ("color",),                      # "#rgb" | "#rrggbb"
+    "align": ("enum", ALIGNMENTS),            # left | right | center | justify
+    "line_height": ("number",),              # unitless multiplier, e.g. 1.4
+    "space_before": ("length",),              # vertical space above, e.g. "6pt"
+    "space_after": ("length",),               # vertical space below
+    "first_line_indent": ("length",),         # paragraph first-line indent
+    "break_before": ("enum", BREAKS),         # auto | page
+    "break_after": ("enum", BREAKS),          # auto | page
+    "keep_together": ("bool",),               # avoid breaking inside
+}
+
+# A CSS/LaTeX length: a number (int or float, optionally signed) followed by a
+# unit.  Deliberately restricted to print-safe absolute/relative units that map
+# cleanly to BOTH surfaces (pt, mm, cm, in, em, ex).  px is excluded (meaningless
+# in LaTeX); % is excluded (ambiguous target box).
+_LENGTH_RE = re.compile(r"^-?\d+(\.\d+)?(pt|mm|cm|in|em|ex)$")
+_COLOR_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+# ---------------------------------------------------------------------------
+# Value validation
+# ---------------------------------------------------------------------------
+
+def _value_error(key: str, value, expected: str) -> str:
+    """Return a validation error message, or '' if the value is acceptable."""
+    spec = LAYOUT_KEY_SCHEMA.get(key)
+    if spec is None:
+        return ""  # unknown key — not a VALUE error (caught by unknown_layout_keys)
+    kind = spec[0]
+    if kind == "enum":
+        allowed = spec[1]
+        if value not in allowed:
+            return (
+                f"{key}: {value!r} is not one of {sorted(allowed)}"
+            )
+    elif kind == "length":
+        if not (isinstance(value, str) and _LENGTH_RE.match(value)):
+            return (
+                f"{key}: {value!r} is not a valid length "
+                f"(a number with a unit: pt/mm/cm/in/em/ex)"
+            )
+    elif kind == "number":
+        # bool is an int subclass — reject it explicitly (a leading is not a flag).
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return f"{key}: {value!r} is not a number"
+    elif kind == "color":
+        if not (isinstance(value, str) and _COLOR_RE.match(value)):
+            return f"{key}: {value!r} is not a hex color (#rgb or #rrggbb)"
+    elif kind == "bool":
+        if not isinstance(value, bool):
+            return f"{key}: {value!r} is not a boolean"
+    return ""
+
+
+def validate_style(style: dict) -> list[str]:
+    """
+    Return a list of VALUE errors for a single resolved/authored style dict.
+
+    Only KNOWN keys are value-checked; unknown keys are ignored here (they are
+    the domain of ``unknown_layout_keys``, which is non-fatal).  An empty list
+    means every named key carries an acceptable value.
+    """
+    errors: list[str] = []
+    if not isinstance(style, dict):
+        return [f"style must be a mapping, got {type(style).__name__}"]
+    for key, value in style.items():
+        msg = _value_error(key, value, "")
+        if msg:
+            errors.append(msg)
+    return errors
+
+
+def unknown_layout_keys(style: dict) -> list[str]:
+    """
+    Return keys in ``style`` not present in ``LAYOUT_KEY_SCHEMA`` — a typo-catcher
+    for authored config.  Non-fatal: callers log these as warnings (mirroring
+    chart_style.unknown_style_keys).  Flat vocabulary, so no recursion.
+    """
+    if not isinstance(style, dict):
+        return []
+    return [k for k in style if k not in LAYOUT_KEY_SCHEMA]
+
+
+# ---------------------------------------------------------------------------
+# The resolver
+# ---------------------------------------------------------------------------
+
+def resolve_layout_style(
+    layout_cfg: dict | None,
+    node_type: str,
+    node_id: str,
+) -> dict:
+    """
+    Resolve the effective style for one node via the three-layer deep-merge
+    (defaults ← types[node_type] ← instances[node_id]).
+
+    Args:
+        layout_cfg: the raw ``styles`` block (``{defaults, types, instances}``);
+            any layer may be absent.  None / ``{}`` ⇒ ``{}`` (no styling → the
+            renderer's built-in look).
+        node_type:  the DocNode.node_type (the ``types`` key).
+        node_id:    the DocNode.id (the ``instances`` key).
+
+    Returns a fresh resolved-style dict.  Later layers win; a nested value would
+    replace wholesale, but the vocabulary is flat so every key is a scalar.
+    """
+    cfg = layout_cfg or {}
+    return deep_merge(
+        cfg.get("defaults"),
+        (cfg.get("types") or {}).get(node_type),
+        (cfg.get("instances") or {}).get(node_id),
+    )

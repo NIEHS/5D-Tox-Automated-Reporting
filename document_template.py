@@ -439,6 +439,71 @@ def load_chart_types(name: str):
     return chart_registry.build_registry(raw)
 
 
+def load_layout_style(name: str) -> dict:
+    """
+    Load the ``styles`` block from a template (the per-content-type font & flow
+    config consumed by layout_style.resolve_layout_style).  Returns ``{}`` when
+    the file is a bare list or has no ``styles`` key — so the no-config render
+    path (each renderer's built-in look) is unchanged.
+
+    Validates loudly at load time — this is stricter than load_chart_style
+    because a bad style would corrupt the .tex compile / the CSS, not just log a
+    warning:
+      - ``styles`` is a mapping whose ``defaults``/``types``/``instances`` sub-
+        blocks, when present, are mappings;
+      - every ``styles.types`` key names a real catalog content type (a typo like
+        ``narrtive`` would silently never match, so reject it);
+      - every style leaf VALUE on a KNOWN key is acceptable
+        (layout_style.validate_style: enum / length / color / number / bool).
+    Unknown style KEYS stay non-fatal (reported at render time via
+    layout_style.unknown_layout_keys), mirroring chart_style's discipline.
+    """
+    import layout_style
+
+    data = _load_raw(name)
+    if not isinstance(data, dict):
+        return {}
+    cfg = data.get("styles")
+    if cfg is None:
+        return {}
+    if not isinstance(cfg, dict):
+        raise ValueError(
+            f"template {name!r}: 'styles' must be a mapping, "
+            f"got {type(cfg).__name__}"
+        )
+    for sub in ("defaults", "types", "instances"):
+        if sub in cfg and not isinstance(cfg[sub], dict):
+            raise ValueError(
+                f"template {name!r}: styles.{sub} must be a mapping, "
+                f"got {type(cfg[sub]).__name__}"
+            )
+    # types keys must be real content types (a typo would silently never match).
+    for node_type in (cfg.get("types") or {}):
+        if node_type not in COMPONENT_CATALOG:
+            raise ValueError(
+                f"template {name!r}: styles.types.{node_type!r} is not a catalog "
+                f"content type"
+            )
+    # Value-check every style dict across all three layers.
+    layers: list[tuple[str, dict]] = []
+    if isinstance(cfg.get("defaults"), dict):
+        layers.append(("defaults", cfg["defaults"]))
+    for k, v in (cfg.get("types") or {}).items():
+        if isinstance(v, dict):
+            layers.append((f"types.{k}", v))
+    for k, v in (cfg.get("instances") or {}).items():
+        if isinstance(v, dict):
+            layers.append((f"instances.{k}", v))
+    for where, style in layers:
+        errors = layout_style.validate_style(style)
+        if errors:
+            raise ValueError(
+                f"template {name!r}: styles.{where} has invalid value(s): "
+                f"{'; '.join(errors)}"
+            )
+    return cfg
+
+
 # The content AREAS an organ allowlist may scope — the only two places organ is
 # a row/section axis (genomics sections; the organ-weight apical table).  A
 # closed vocabulary so a typo'd area key (e.g. `genomic:`) fails loudly at load
