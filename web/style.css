@@ -2504,6 +2504,58 @@ body.splitter-dragging iframe { pointer-events: none; }
     line-height: 1.4;
 }
 
+/* Layout & Typography visual builder (layout_builder.js) — Form/YAML tabs,
+   target selector, and the schema-generated control grid. */
+.lb-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0.25rem 0 0.5rem;
+    border-bottom: 1px solid var(--c-border, #e2e0db);
+}
+.lb-tab {
+    padding: 0.35rem 0.9rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--c-text-secondary, #4a5568);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+.lb-tab.active {
+    color: var(--c-text, #1a1a1a);
+    font-weight: 600;
+    border-bottom-color: var(--c-accent, #2c5282);
+}
+.lb-target { margin: 0.25rem 0 0.75rem; }
+.lb-target #lb-target-which {
+    margin-top: 0.4rem;
+    max-width: 100%;
+    font-size: 0.82rem;
+    padding: 0.2rem 0.3rem;
+}
+.lb-controls {
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) 1fr;
+    gap: 0.4rem 0.75rem;
+    align-items: center;
+    margin: 0.5rem 0;
+}
+.lb-row { display: contents; }
+.lb-row label {
+    font-size: 0.8rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--c-text-secondary, #4a5568);
+    text-align: right;
+}
+.lb-control { display: flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; }
+.lb-control select,
+.lb-control input[type="text"],
+.lb-control input[type="number"] {
+    font-size: 0.82rem;
+    padding: 0.15rem 0.3rem;
+}
+
 /* Message shown in the preview pane when a section can't render as PDF
    because required data sources are missing (e.g., no .bm2 for BMD columns).
    Styled to be clearly a warning, not an error — the data can be uploaded. */

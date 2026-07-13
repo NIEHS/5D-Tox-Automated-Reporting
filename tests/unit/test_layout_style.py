@@ -157,3 +157,43 @@ def test_unknown_layout_keys_flags_typos_only():
 
 def test_unknown_layout_keys_empty_for_clean_style():
     assert ls.unknown_layout_keys({"font_family": "serif", "align": "justify"}) == []
+
+
+# ---------------------------------------------------------------------------
+# style_schema_payload — the projection the browser form is generated from
+# ---------------------------------------------------------------------------
+
+def test_schema_payload_covers_every_schema_key():
+    payload = ls.style_schema_payload()
+    assert set(payload) == set(ls.LAYOUT_KEY_SCHEMA)
+
+
+def test_schema_payload_reports_the_right_kind_per_key():
+    payload = ls.style_schema_payload()
+    assert payload["font_family"]["kind"] == "enum"
+    assert payload["font_size"]["kind"] == "length"
+    assert payload["line_height"]["kind"] == "number"
+    assert payload["color"]["kind"] == "color"
+    assert payload["keep_together"]["kind"] == "bool"
+
+
+def test_schema_payload_enum_values_match_the_frozensets():
+    payload = ls.style_schema_payload()
+    # Values are sorted for stable output; compare as sets against the source.
+    assert set(payload["font_family"]["values"]) == ls.FONT_FAMILIES
+    assert set(payload["align"]["values"]) == ls.ALIGNMENTS
+    assert set(payload["break_before"]["values"]) == ls.BREAKS
+    assert payload["font_family"]["values"] == sorted(ls.FONT_FAMILIES)  # sorted
+
+
+def test_schema_payload_length_keys_carry_the_unit_list():
+    payload = ls.style_schema_payload()
+    assert payload["font_size"]["units"] == list(ls.LENGTH_UNITS)
+    # A non-length key has no units.
+    assert "units" not in payload["line_height"]
+
+
+def test_schema_payload_is_json_serializable():
+    import json
+    # Must round-trip cleanly — it ships as window.__LAYOUT_SCHEMA__ JSON.
+    json.dumps(ls.style_schema_payload())

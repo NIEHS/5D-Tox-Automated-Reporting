@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>5dToxReport</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/style.css?v=19">
+    <link rel="stylesheet" href="/style.css?v=20">
     <!-- CodeMirror 5 — syntax-highlighted editor for the Document Structure
          YAML config panel (document_config.js).  Core CSS + a light theme;
          the JS (core + YAML mode) loads with the other scripts at end of body.
@@ -603,41 +603,80 @@
             </div>
             <div class="settings-body">
                 <p class="settings-hint">
-                    Edit the <code>styles:</code> YAML that sets typography and page
-                    flow <em>per content type</em> — font family/size/weight, color,
-                    alignment, line spacing, space before/after, and page breaks.
-                    Three layers, later wins: <code>defaults</code> (every element)
-                    → <code>types.&lt;content-type&gt;</code> → <code>instances.&lt;node-id&gt;</code>.
-                    Both the LaTeX export and the HTML preview render the same spec.
-                    Saving validates and re-renders the preview (no re-integration).
+                    Set typography and page flow <em>per content type</em> — font,
+                    color, alignment, spacing, page breaks. Three layers, later wins:
+                    <code>defaults</code> (every element) →
+                    <code>types.&lt;content-type&gt;</code> →
+                    <code>instances.&lt;node-id&gt;</code>. Both the LaTeX export and
+                    the HTML preview render the same spec (no re-integration). Use the
+                    <strong>Form</strong> to build it visually, or the
+                    <strong>YAML</strong> tab for raw edits / the shared default.
                 </p>
-                <div class="doc-config-scope">
-                    <label><input type="radio" name="layout-config-scope" value="session"
-                                  checked onchange="onLayoutConfigScopeChanged()">
-                        This report only</label>
-                    <label><input type="radio" name="layout-config-scope" value="default"
-                                  onchange="onLayoutConfigScopeChanged()">
-                        Default (all reports)</label>
+
+                <!-- Form / YAML tab strip -->
+                <div class="lb-tabs">
+                    <button id="lb-tab-form" class="lb-tab active"
+                            onclick="switchLayoutTab('form')">Form</button>
+                    <button id="lb-tab-yaml" class="lb-tab"
+                            onclick="switchLayoutTab('yaml')">YAML</button>
                 </div>
-                <div id="layout-config-scope-banner" class="doc-config-banner"
-                     style="display:none">
-                    Editing the <strong>shared default</strong> — this changes the
-                    typography of every report that has no per-report override, and
-                    edits the committed template file.
-                </div>
+
                 <div id="layout-config-status" class="doc-config-status"></div>
-                <textarea id="layout-config-yaml" class="doc-config-editor"
-                          spellcheck="false" wrap="off"
-                          placeholder="Loading layout styles…"></textarea>
-                <div class="settings-apply doc-config-actions">
-                    <button class="btn-small" onclick="loadLayoutConfig()"
-                            title="Reload from the server (discards unsaved edits)">Reload</button>
-                    <button class="btn-small" onclick="resetLayoutConfigToDefault()"
-                            title="Replace the editor with the shared default styles">Load default</button>
-                    <span style="flex:1"></span>
-                    <button class="btn-action primary" onclick="saveLayoutConfig()">
-                        Save &amp; Re-render
-                    </button>
+
+                <!-- FORM view: visual style builder (layout_builder.js) -->
+                <div id="layout-form-view">
+                    <div class="lb-target">
+                        <div class="doc-config-scope">
+                            <label><input type="radio" name="lb-scope" value="defaults"
+                                          checked onchange="onLayoutBuilderScopeChanged()">
+                                Defaults (every element)</label>
+                            <label><input type="radio" name="lb-scope" value="types"
+                                          onchange="onLayoutBuilderScopeChanged()">
+                                By content type</label>
+                            <label><input type="radio" name="lb-scope" value="instances"
+                                          onchange="onLayoutBuilderScopeChanged()">
+                                This specific section</label>
+                        </div>
+                        <select id="lb-target-which" style="display:none"
+                                onchange="onLayoutBuilderWhichChanged()"></select>
+                    </div>
+                    <div id="lb-controls" class="lb-controls"></div>
+                    <p class="settings-hint">
+                        Changes apply live to the HTML preview and save to this
+                        report’s styles. Leave a control on <em>(inherit)</em> to
+                        take the value from the layer above.
+                    </p>
+                </div>
+
+                <!-- YAML view: raw CodeMirror editor + session/default scope -->
+                <div id="layout-yaml-view" style="display:none">
+                    <div class="doc-config-scope">
+                        <label><input type="radio" name="layout-config-scope" value="session"
+                                      checked onchange="onLayoutConfigScopeChanged()">
+                            This report only</label>
+                        <label><input type="radio" name="layout-config-scope" value="default"
+                                      onchange="onLayoutConfigScopeChanged()">
+                            Default (all reports)</label>
+                    </div>
+                    <div id="layout-config-scope-banner" class="doc-config-banner"
+                         style="display:none">
+                        Editing the <strong>shared default</strong> — this changes the
+                        typography of every report that has no per-report override, and
+                        edits the committed template file.
+                    </div>
+                    <textarea id="layout-config-yaml" class="doc-config-editor"
+                              spellcheck="false" wrap="off"
+                              placeholder="Loading layout styles…"></textarea>
+                    <div class="settings-apply doc-config-actions">
+                        <button class="btn-small" onclick="loadLayoutConfig()"
+                                title="Reload from the server (discards unsaved edits)">Reload</button>
+                        <button class="btn-small" onclick="resetLayoutConfigToDefault()"
+                                title="Replace the editor with the shared default styles">Load default</button>
+                        <span style="flex:1"></span>
+                        <button class="btn-action primary" onclick="saveLayoutConfig()">
+                            Save &amp; Re-render
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1262,7 +1301,8 @@
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/yaml/yaml.min.js"></script>
     <script src="/js/document_config.js?v=3"></script>
-    <script src="/js/layout_config.js?v=1"></script>
+    <script src="/js/layout_config.js?v=2"></script>
+    <script src="/js/layout_builder.js?v=1"></script>
     <script src="/js/chart_style.js?v=1"></script>
     <script src="/js/genomics.js?v=12"></script>
     <script src="/js/genomics_charts.js?v=5"></script>

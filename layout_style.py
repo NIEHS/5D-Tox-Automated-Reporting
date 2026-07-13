@@ -76,8 +76,10 @@ LAYOUT_KEY_SCHEMA: dict = {
 # A CSS/LaTeX length: a number (int or float, optionally signed) followed by a
 # unit.  Deliberately restricted to print-safe absolute/relative units that map
 # cleanly to BOTH surfaces (pt, mm, cm, in, em, ex).  px is excluded (meaningless
-# in LaTeX); % is excluded (ambiguous target box).
-_LENGTH_RE = re.compile(r"^-?\d+(\.\d+)?(pt|mm|cm|in|em|ex)$")
+# in LaTeX); % is excluded (ambiguous target box).  The unit set is named so the
+# regex and the schema payload (the form's unit dropdown) share ONE source.
+LENGTH_UNITS = ("pt", "mm", "cm", "in", "em", "ex")
+_LENGTH_RE = re.compile(r"^-?\d+(\.\d+)?(" + "|".join(LENGTH_UNITS) + r")$")
 _COLOR_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
@@ -174,3 +176,39 @@ def resolve_layout_style(
         (cfg.get("types") or {}).get(node_type),
         (cfg.get("instances") or {}).get(node_id),
     )
+
+
+# ---------------------------------------------------------------------------
+# Schema projection for the browser form
+# ---------------------------------------------------------------------------
+
+def style_schema_payload() -> dict:
+    """
+    Project LAYOUT_KEY_SCHEMA into a JSON-serializable description the visual
+    style builder (web/js/layout_builder.js) renders its controls from.
+
+    Shape — one entry per key, in schema (author-facing) order:
+
+        {
+          "font_family": {"kind": "enum", "values": ["mono","sans","serif"]},
+          "font_size":   {"kind": "length", "units": ["pt","mm","cm","in","em","ex"]},
+          "line_height": {"kind": "number"},
+          "color":       {"kind": "color"},
+          "keep_together":{"kind": "bool"},
+          ...
+        }
+
+    Deriving this from the single schema (rather than hand-listing keys in JS)
+    means a new key added to LAYOUT_KEY_SCHEMA appears in the form automatically.
+    Enum value lists are sorted for stable output (frozensets are unordered).
+    """
+    out: dict = {}
+    for key, spec in LAYOUT_KEY_SCHEMA.items():
+        kind = spec[0]
+        entry: dict = {"kind": kind}
+        if kind == "enum":
+            entry["values"] = sorted(spec[1])
+        elif kind == "length":
+            entry["units"] = list(LENGTH_UNITS)
+        out[key] = entry
+    return out

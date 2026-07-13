@@ -347,6 +347,16 @@ def default_layout_style_yaml() -> str:
     return yaml.safe_dump({"styles": cfg or {}}, sort_keys=False, allow_unicode=True)
 
 
+def default_layout_style_config() -> dict:
+    """
+    The global default ``styles:`` block as a mapping — the visual builder's
+    initial state when a session has no override (the JSON-only sibling of
+    default_layout_style_yaml).  ``{}`` when the template declares no styles.
+    """
+    from document_template import load_layout_style
+    return load_layout_style(ACTIVE_TEMPLATE) or {}
+
+
 def save_default_layout_style(text: str) -> None:
     """
     Validate + persist an edit to the DEFAULT (template) ``styles:`` block.

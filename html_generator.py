@@ -1238,10 +1238,14 @@ def _apply_override_html(chunk: str, anchor_id: str, data: dict) -> str:
 # exactly mirroring LaTeX, where \section ignores the surrounding \fontsize
 # group.  Flow props (margins, page breaks, break-inside) act on the div box.
 
+# Font names are SINGLE-quoted: these stacks are emitted into a double-quoted
+# inline style="..." attribute, so a double-quoted family name (e.g. "Times New
+# Roman") would close the attribute early and drop every property after it. CSS
+# accepts single quotes around family names, so this is the clean fix.
 _CSS_FONT_STACK = {
-    "serif": 'Georgia, "Times New Roman", serif',
-    "sans": '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    "mono": '"SF Mono", Consolas, "Liberation Mono", monospace',
+    "serif": "Georgia, 'Times New Roman', serif",
+    "sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+    "mono": "'SF Mono', Consolas, 'Liberation Mono', monospace",
 }
 _CSS_ALIGN = {"left": "left", "right": "right", "center": "center", "justify": "justify"}
 _CSS_BREAK = {"auto": "auto", "page": "page"}

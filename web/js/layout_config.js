@@ -60,6 +60,35 @@ function toggleLayoutConfigPanel() {
     const opening = panel.style.display === 'none' || !panel.style.display;
     panel.style.display = opening ? 'block' : 'none';
     if (opening) {
+        // Open on the Form tab (the visual builder) by default; the YAML tab is
+        // the escape hatch. Both share the per-session config.
+        switchLayoutTab('form');
+    }
+}
+
+/**
+ * Switch between the Form (visual builder) and YAML (raw editor) tabs.  Each tab
+ * loads its own view fresh so the two never show stale, divergent state: Form
+ * re-fetches into the builder (initLayoutBuilder); YAML mounts CodeMirror and
+ * reloads the text (loadLayoutConfig).
+ */
+function switchLayoutTab(which) {
+    const formView = document.getElementById('layout-form-view');
+    const yamlView = document.getElementById('layout-yaml-view');
+    const formTab = document.getElementById('lb-tab-form');
+    const yamlTab = document.getElementById('lb-tab-yaml');
+    if (!formView || !yamlView) return;
+
+    const showForm = which === 'form';
+    formView.style.display = showForm ? 'block' : 'none';
+    yamlView.style.display = showForm ? 'none' : 'block';
+    if (formTab) formTab.classList.toggle('active', showForm);
+    if (yamlTab) yamlTab.classList.toggle('active', !showForm);
+
+    if (showForm) {
+        if (typeof initLayoutBuilder === 'function') initLayoutBuilder();
+    } else {
+        // Mount CodeMirror now that the YAML view is visible, then load content.
         const cm = _ensureLayoutConfigEditor();
         loadLayoutConfig().then(() => { if (cm) cm.refresh(); });
     }

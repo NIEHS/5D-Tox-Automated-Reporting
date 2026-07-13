@@ -229,10 +229,14 @@ async def serve_ui():
     tree_json = json.dumps(_SERIALIZED_TREE)
     chart_style_json = json.dumps(_CHART_STYLE_CFG)
     chart_registry_json = json.dumps(_CHART_REGISTRY_PAYLOAD)
+    layout_schema_json = json.dumps(_LAYOUT_SCHEMA_PAYLOAD)
+    content_types_json = json.dumps(_CONTENT_TYPES_PAYLOAD)
     tree_script = (
         f'<script>window.__DOCUMENT_TREE__ = {tree_json};'
         f'window.__CHART_STYLE__ = {chart_style_json};'
-        f'window.__CHART_REGISTRY__ = {chart_registry_json};</script>\n'
+        f'window.__CHART_REGISTRY__ = {chart_registry_json};'
+        f'window.__LAYOUT_SCHEMA__ = {layout_schema_json};'
+        f'window.__CONTENT_TYPES__ = {content_types_json};</script>\n'
     )
     html = html.replace('</head>', tree_script + '</head>')
 
@@ -295,6 +299,17 @@ from chart_registry import registry_payload
 
 _CHART_STYLE_CFG = load_chart_style(ACTIVE_TEMPLATE)
 _CHART_REGISTRY_PAYLOAD = registry_payload(load_chart_types(ACTIVE_TEMPLATE))
+
+# The visual style builder (web/js/layout_builder.js) renders its controls from
+# the layout-style schema and offers a target per content type; inject both so
+# the form is generated from the SAME source of truth the validator uses (no
+# hand-duplicated key/type list in JS).  __LAYOUT_SCHEMA__ is {key: {kind,
+# values?/units?}}; __CONTENT_TYPES__ is the catalog's node-type list.
+from layout_style import style_schema_payload as _layout_style_schema_payload
+from render_capabilities import COMPONENT_CATALOG as _COMPONENT_CATALOG
+
+_LAYOUT_SCHEMA_PAYLOAD = _layout_style_schema_payload()
+_CONTENT_TYPES_PAYLOAD = sorted(_COMPONENT_CATALOG)
 
 
 @app.get("/api/document-tree")

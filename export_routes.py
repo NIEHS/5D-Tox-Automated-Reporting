@@ -949,7 +949,9 @@ async def api_save_document_config_default(request: Request):
 @router.get("/api/layout-style/{dtxsid}")
 async def api_get_layout_style(dtxsid: str, default: int = 0):
     """
-    Return the session's layout-styles YAML for the styles editor.
+    Return the session's layout-styles config for the styles editor, as BOTH the
+    raw ``yaml`` text (the CodeMirror tab) and the parsed ``config`` mapping (the
+    visual builder, which is JSON-only so no client YAML parser is needed).
 
     When the session has no per-session styles override, returns the global
     default ``styles:`` block (so the editor opens on the active styling, not a
@@ -958,33 +960,55 @@ async def api_get_layout_style(dtxsid: str, default: int = 0):
     forces the shared default — the "Load default" affordance.
     """
     import yaml as _yaml
-    from document_config import load_session_layout_style, default_layout_style_yaml
+    from document_config import (
+        load_session_layout_style,
+        default_layout_style_yaml,
+        default_layout_style_config,
+    )
 
     if default:
-        return JSONResponse({"yaml": default_layout_style_yaml(), "is_default": True})
+        return JSONResponse({
+            "yaml": default_layout_style_yaml(),
+            "config": default_layout_style_config(),
+            "is_default": True,
+        })
     cfg = load_session_layout_style(dtxsid)
     if cfg is None:
-        return JSONResponse({"yaml": default_layout_style_yaml(), "is_default": True})
+        return JSONResponse({
+            "yaml": default_layout_style_yaml(),
+            "config": default_layout_style_config(),
+            "is_default": True,
+        })
     text = _yaml.safe_dump({"styles": cfg}, sort_keys=False, allow_unicode=True)
-    return JSONResponse({"yaml": text, "is_default": False})
+    return JSONResponse({"yaml": text, "config": cfg, "is_default": False})
 
 
 @router.post("/api/layout-style/{dtxsid}")
 async def api_save_layout_style(dtxsid: str, request: Request):
     """
-    Validate + persist the session's layout-styles YAML.
+    Validate + persist the session's layout-styles config.
 
-    Gated on the loud enum/length/color + catalog-type validation (422 on a bad
-    value, writing nothing).  On success the caller re-renders the preview (no
-    re-integration — styles are pure presentation).
+    Accepts EITHER a raw ``yaml`` string (the CodeMirror tab) or a parsed
+    ``config`` mapping (the visual builder — dumped to YAML server-side so both
+    paths hit the identical validated save).  Gated on the loud enum/length/color
+    + catalog-type validation (422 on a bad value, writing nothing).  On success
+    the caller re-renders the preview (no re-integration — styles are pure
+    presentation).
     """
+    import yaml as _yaml
     from document_config import save_session_layout_style
 
     body = await request.json()
     text = body.get("yaml")
+    if text is None and isinstance(body.get("config"), dict):
+        # Builder path: serialize the config mapping to the same YAML shape the
+        # raw editor produces, then share the one validated save below.
+        text = _yaml.safe_dump({"styles": body["config"]}, sort_keys=False,
+                               allow_unicode=True)
     if not isinstance(text, str) or not text.strip():
         return JSONResponse(
-            {"error": "Request must include a non-empty 'yaml' string."},
+            {"error": "Request must include a non-empty 'yaml' string or a "
+                      "'config' object."},
             status_code=422,
         )
     try:
