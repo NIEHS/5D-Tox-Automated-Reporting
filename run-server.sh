@@ -18,8 +18,15 @@
 # written to disk or echoed, so this script is safe to commit (like deploy.sh).
 #
 # Usage:
-#   ./run-server.sh                 # port 9000 (the server default)
+#   ./run-server.sh                 # port 9000, bound to 0.0.0.0 (see below)
 #   ./run-server.sh --port 8080     # any background_server.py flags pass through
+#   ./run-server.sh --host 127.0.0.1  # override the default bind (loopback only)
+#
+# Default bind is 0.0.0.0 (all interfaces), NOT background_server.py's own
+# 127.0.0.1 default. This sandbox reaches the app through a host port-forward that
+# lands on the container's external interface; a loopback-only listener never sees
+# that traffic (the browser gets "no data" / 404). Binding to 0.0.0.0 is what makes
+# the forward work. Pass an explicit --host to override for a one-off local run.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,4 +72,15 @@ if [[ -n "$SSL_CERT_FILE" && ! -f "$SSL_CERT_FILE" ]]; then
   echo "run-server.sh: SSL_CERT_FILE=$SSL_CERT_FILE does not exist — TLS to the proxy may fail." >&2
 fi
 
+# Default to binding all interfaces so the host port-forward reaches us (see the
+# header note). Only inject --host when the caller didn't pass their own, so an
+# explicit --host still wins and the server prints the address it actually binds.
+host_given=false
+for arg in "$@"; do
+  if [[ "$arg" == "--host" ]]; then host_given=true; break; fi
+done
+
+if [[ "$host_given" == false ]]; then
+  exec "$PY" background_server.py --host 0.0.0.0 "$@"
+fi
 exec "$PY" background_server.py "$@"
