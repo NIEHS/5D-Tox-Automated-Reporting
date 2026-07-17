@@ -631,7 +631,7 @@ def load_session_data(
     # The Methods abstract sentence is assembled by overlay_abstract itself; we
     # don't pass an explicit methods_context here (the M&M prose is overlaid
     # onto data["methods"] above and rendered directly by the M&M nodes).
-    from report_data import overlay_abstract
+    from report_data_overlays import overlay_abstract
     overlay_abstract(
         data,
         abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
