@@ -25,6 +25,7 @@ real LaTeX emitters (a branded cover + inner title page), so LATEX_OMITS — onc
 
 import pytest
 
+import docx_generator
 import html_generator
 import latex_generator
 from document_tree import DOCUMENT_TREE
@@ -63,13 +64,16 @@ def test_registry_covers_every_tree_node_type():
     )
 
 
-def test_both_renderer_dispatch_tables_satisfy_the_registry():
+def test_all_renderer_dispatch_tables_satisfy_the_registry():
     """
-    Smoke check: the real dispatch tables pass the same assertion the renderers
-    run at import.  (If they didn't, importing html_generator / latex_generator
-    above would already have raised — this makes the guarantee explicit.)
+    Smoke check: every real dispatch table passes the same assertion the
+    renderers run at import.  (If any didn't, importing docx_generator /
+    html_generator / latex_generator above would already have raised — this
+    makes the guarantee explicit.)  The Word surface (ADR-0008 Option B) is the
+    third emitter and covers every registered type, so it too is checked here.
     """
     assert_dispatch_covers(html_generator._DISPATCH, renderer="HTML")
+    assert_dispatch_covers(docx_generator._DISPATCH, renderer="Word/OOXML")
     # LATEX_OMITS is empty now (cover / title-page have real emitters); passing
     # it keeps the call shape and documents that nothing is omitted any more.
     assert_dispatch_covers(
