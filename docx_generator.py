@@ -117,9 +117,7 @@ _HEADING_PT: dict[int, int] = {1: 17, 2: 15, 3: 13}
 _TABLE_PT = 10
 _HEADER_PT = 12
 
-# Brand accent for the cover bar, from the cover layout palette (sage/green).
-_COVER_GREEN = RGBColor(0x78, 0xA1, 0x2E)
-_COVER_TITLE_GRAY = RGBColor(0x53, 0x55, 0x57)
+# Black — the reference body + title-page text color (headings and title).
 _BLACK = RGBColor(0x00, 0x00, 0x00)
 
 # DocNode.level → Word built-in heading style.  Level 0 = no heading (cover,
@@ -616,52 +614,57 @@ def _add_chart_image(doc: Document, chart: dict) -> None:
 
 def _render_cover(doc: Document, node: DocNode, data: dict) -> None:
     """
-    Cover / inner title page — a clean typographic block (no image-backed cover;
-    Word can't embed a PDF page, and the branded-cover pixel work is a LaTeX/HTML
-    concern).  Title + report number/date + publisher, centered, over a green
-    accent bar drawn as a shaded one-cell table (the brand nod).  Title/publisher
-    text come from the SAME cover_layouts builders the other surfaces use.
+    Branded page-1 cover — EXCLUDED on the Word surface (emits nothing).
+
+    The reference cover (NIEHS Report 10, page 1) is hexagon artwork under a
+    luminosity-masked gradient with Myriad Pro / Helvetica Neue text — Word can't
+    embed that PDF page and the branded pixels aren't the fidelity target, so the
+    docx skips the cover entirely and opens on the title page (the LaTeX surface
+    keeps its tikz cover; see latex_generator._render_cover).  The handler stays
+    registered so the dispatch table still covers every node type; it just
+    contributes no content.
+    """
+    return
+
+
+def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
+    """
+    Inner title page (reference page 2) — a centered typographic block matching
+    the measured reference spec: an Arial Bold 20pt BLACK title, then the report
+    number/date and the publisher block in Times New Roman 12pt, all centered.
+    No accent bar and no gray (those belong to the excluded page-1 cover).
+    Title / publisher text come from the SAME cover_layouts builders the other
+    surfaces use, so the three surfaces can't drift on the wording.
     """
     layout = get_cover_layout(node.subtype)
-
-    _add_cover_bar(doc)
 
     for line in layout.title_builder(data):
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = para.add_run(_clean(line))
         run.bold = True
+        run.font.name = _HEADING_FONT           # Arial (the reference title font)
         run.font.size = Pt(20)
-        run.font.color.rgb = _COVER_TITLE_GRAY
+        run.font.color.rgb = _BLACK
 
     for meta in (data.get("report_number", ""), data.get("report_date", "")):
         if not meta:
             continue
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        para.add_run(_clean(meta)).font.size = Pt(12)
+        run = para.add_run(_clean(meta))
+        run.font.name = _BODY_FONT              # Times New Roman
+        run.font.size = Pt(12)
+        run.font.color.rgb = _BLACK
 
     doc.add_paragraph()
     for line in layout.publisher_builder(data):
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        para.add_run(_clean(line)).font.size = Pt(11)
-
-
-def _add_cover_bar(doc: Document) -> None:
-    """A slim full-width green bar (shaded one-cell table) atop the cover."""
-    table = doc.add_table(rows=1, cols=1)
-    cell = table.rows[0].cells[0]
-    shd = OxmlElement("w:shd")
-    shd.set(qn("w:val"), "clear")
-    shd.set(qn("w:fill"), "78A12E")
-    cell._tc.get_or_add_tcPr().append(shd)
-    cell.paragraphs[0].add_run("")
-
-
-def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
-    """Suppressed — the cover handler already emitted the title block."""
-    return
+        run = para.add_run(_clean(line))
+        run.font.name = _BODY_FONT              # Times New Roman
+        run.font.size = Pt(12)
+        run.font.color.rgb = _BLACK
 
 
 def _freeform_text(node: DocNode) -> str:

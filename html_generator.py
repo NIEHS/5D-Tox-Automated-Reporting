@@ -1028,8 +1028,22 @@ def _render_description_list(descriptions: list) -> str:
 
 def _render_cover(node: DocNode, data: dict) -> str:
     """
+    Branded page-1 cover — deferred on the HTML surface (emits nothing).
+
+    The reference cover (NIEHS Report 10, page 1) is image-backed hexagon
+    artwork; the HTML preview has no faithful render of it, so this contributes
+    nothing and the preview opens on the title page (the LaTeX surface keeps its
+    tikz cover — latex_generator._render_cover).  The handler stays registered so
+    the dispatch table still covers every node type.  The inner title page is now
+    emitted by _render_title_page (mirroring LaTeX's cover/title-page split).
+    """
+    return ""
+
+
+def _render_title_page(node: DocNode, data: dict) -> str:
+    """
     Inner title page (NIEHS Report 10, page 2) — centered, no horizontal
-    rule.  Replicates the approved Typst inner-title-page layout:
+    rule.  Replicates the approved inner-title-page layout:
 
         NIEHS Report on the
         In Vivo Repeat Dose Biological Potency Study of
@@ -1046,17 +1060,13 @@ def _render_cover(node: DocNode, data: dict) -> str:
         ISSN: <issn>
         Research Triangle Park, North Carolina, USA
 
-    The image-backed cover (page 1 of the reference) is a separate,
-    deferred concern; for now this title page stands alone as the report's
-    first page.  The title-page node stays suppressed (_render_title_page)
-    — this one handler emits the front page.
+    Text comes from the node's cover layout (cover_layouts) — the SAME builders
+    the LaTeX title page uses, so the two surfaces can't drift.  The builders
+    return unescaped lines; escape them for HTML here.
     """
     report_number = data.get("report_number", "")
     report_date = data.get("report_date", "")
 
-    # Title + publisher text come from the node's cover layout (cover_layouts) —
-    # the SAME builders the LaTeX cover uses, so the two surfaces can't drift.
-    # The builders return unescaped lines; escape them for HTML here.
     layout = get_cover_layout(node.subtype)
     title_html = "<br>".join(_esc(line) for line in layout.title_builder(data))
 
@@ -1080,11 +1090,6 @@ def _render_cover(node: DocNode, data: dict) -> str:
         f'<div class="tp-publisher">{pub_html}</div>'
         "</section>"
     )
-
-
-def _render_title_page(node: DocNode, data: dict) -> str:
-    """Suppressed — the cover handler already emitted the title block."""
-    return ""
 
 
 def _freeform_body_html(node: DocNode) -> str:

@@ -5,7 +5,7 @@ Option B, the third render surface).
 What this proves
 ----------------
   - generate_docx returns bytes that python-docx can re-open (a valid .docx).
-  - The document has the expected structure: the cover title line, section
+  - The document has the expected structure: the title-page title line, section
     headings from DOCUMENT_TREE, roman→arabic two-section page numbering, and
     at least one rendered table.
   - Rich session data (loaded from the DTXSID50469320 session via the same
@@ -96,12 +96,45 @@ def test_generates_valid_docx(scaffold):
     assert len(doc.paragraphs) > 0
 
 
-def test_cover_title_line_present(scaffold):
-    """The cover renders the NIEHS title line + the chemical name."""
+def test_title_page_line_present(scaffold):
+    """The title page (not the cover) renders the NIEHS title line + chemical."""
     doc = _open(generate_docx(scaffold))
     text = _all_text(doc)
     assert "NIEHS Report on the" in text
     assert "Perfluorohexanesulfonamide" in text
+
+
+def test_title_page_matches_reference_spec(scaffold):
+    """
+    The title page reproduces the measured reference (page 2): the title lines
+    are Arial Bold 20pt BLACK and centered — NOT the page-1 cover's gray, and
+    with no accent bar.  (Reference title page: Arial Bold 20pt #000000.)
+    """
+    doc = _open(generate_docx(scaffold))
+    title_runs = [
+        r for p in doc.paragraphs for r in p.runs
+        if r.text.strip() == "NIEHS Report on the"
+    ]
+    assert title_runs, "title line not found"
+    run = title_runs[0]
+    assert run.font.name == "Arial"
+    assert run.font.size == Pt(20)
+    assert run.font.bold is True
+    assert str(run.font.color.rgb) == "000000"    # black, not the cover gray 535557
+
+
+def test_no_green_accent_bar_table(scaffold):
+    """
+    The page-1 cover (with its green accent bar) is excluded on the docx surface,
+    so there must be NO 1x1 shaded bar table — the first table is a real data
+    table, and no cell carries the cover green fill.
+    """
+    doc = _open(generate_docx(scaffold))
+    # No 1x1 table (the old _add_cover_bar shape).
+    assert all(not (len(t.rows) == 1 and len(t.columns) == 1) for t in doc.tables)
+    # No cell shaded with the cover green anywhere.
+    xml = "".join(t._tbl.xml for t in doc.tables)
+    assert "78A12E" not in xml and "78a12e" not in xml
 
 
 def test_section_headings_present(scaffold):
