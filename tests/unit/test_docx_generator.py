@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from docx.shared import Inches, Pt
 
 from docx_generator import _DISPATCH, generate_docx
 from latex_export import load_session_data
@@ -137,6 +138,71 @@ def test_has_tables(scaffold):
     """At least the sample-counts / roster tables render as Word tables."""
     doc = _open(generate_docx(scaffold))
     assert len(doc.tables) > 0
+
+
+# ---------------------------------------------------------------------------
+# Reference typography — the measured NIEHS spec is bound onto the base styles
+# (see docx_generator Constants + _build_style_skeleton).  These lock the fonts
+# and geometry so a regression in the style sheet fails loudly.
+# ---------------------------------------------------------------------------
+
+def test_body_style_is_times_12pt(scaffold):
+    """Normal (the body/base style) is Times New Roman 12pt — the reference body."""
+    doc = _open(generate_docx(scaffold))
+    normal = doc.styles["Normal"]
+    assert normal.font.name == "Times New Roman"
+    assert normal.font.size == Pt(12)
+
+
+def test_heading_styles_are_arial_bold_sized(scaffold):
+    """Headings are Arial Bold at the measured sizes (H1 17, H2 15, H3 13pt)."""
+    doc = _open(generate_docx(scaffold))
+    expected = {1: 17, 2: 15, 3: 13}
+    for level, pt in expected.items():
+        style = doc.styles[f"Heading {level}"]
+        assert style.font.name == "Arial", f"Heading {level} font"
+        assert style.font.bold is True, f"Heading {level} bold"
+        assert style.font.size == Pt(pt), f"Heading {level} size"
+
+
+def test_running_header_style_is_times_12pt(scaffold):
+    """The running header rides on the Header style — Times New Roman 12pt."""
+    doc = _open(generate_docx(scaffold))
+    header = doc.styles["Header"]
+    assert header.font.name == "Times New Roman"
+    assert header.font.size == Pt(12)
+
+
+def test_section_margins_are_one_inch(scaffold):
+    """US-Letter with 1" margins all round (the reference trim)."""
+    doc = _open(generate_docx(scaffold))
+    for section in doc.sections:
+        assert section.left_margin == Inches(1)
+        assert section.right_margin == Inches(1)
+        assert section.top_margin == Inches(1)
+        assert section.bottom_margin == Inches(1)
+
+
+def test_table_cells_render_below_body_size(scaffold):
+    """
+    Table cell runs are set to the table size (10pt), one step below the 12pt
+    body — so dense tables don't inherit the body size.  Header cells are Arial.
+    """
+    doc = _open(generate_docx(scaffold))
+    # Find a table with a populated data row + header.
+    for t in doc.tables:
+        if len(t.rows) < 2 or not t.rows[0].cells[0].paragraphs[0].runs:
+            continue
+        hrun = t.rows[0].cells[0].paragraphs[0].runs[0]
+        assert hrun.font.size == Pt(10)
+        assert hrun.font.name == "Arial"
+        # A data-row run (skip merged sex-separator rows, which have one cell).
+        for r in t.rows[1:]:
+            runs = r.cells[-1].paragraphs[0].runs
+            if runs:
+                assert runs[0].font.size == Pt(10)
+                return
+    pytest.skip("no populated table with header + data row found")
 
 
 # ---------------------------------------------------------------------------

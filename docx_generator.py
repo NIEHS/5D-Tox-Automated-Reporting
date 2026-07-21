@@ -48,7 +48,7 @@ from io import BytesIO
 
 from docx import Document
 from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -86,17 +86,40 @@ from table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Constants — the reference typography spec
 # ---------------------------------------------------------------------------
+# Every value below was MEASURED from docs/NIEHS-Report-10-Reference.pdf (all 80
+# pages, via PyMuPDF span analysis), so the generated Word styles reproduce the
+# reference's fonts/sizes rather than Word's default theme (Calibri/Aptos).  We
+# name the font FAMILIES ("Times New Roman", "Arial"); the actual glyphs come
+# from the render machine's installed fonts — the reference-identical set lives
+# in assets/fonts/ (gitignored, licensed) for local measurement only.
 
-# US-Letter page + one-inch margins (NIEHS Report 10 trim).
+# US-Letter page + one-inch margins (NIEHS Report 10 trim: text block L=72pt,
+# R≈540pt, top/bottom ≈35pt band for the running header/footer → 1" margins with
+# the header/footer 0.5" from the edge).
 _PAGE_WIDTH = Inches(8.5)
 _PAGE_HEIGHT = Inches(11.0)
 _MARGIN = Inches(1.0)
+_HEADER_FOOTER_DISTANCE = Inches(0.5)
+
+# Font families (matched by name against the render machine's installed fonts).
+_BODY_FONT = "Times New Roman"     # body text — 78/80 reference pages
+_HEADING_FONT = "Arial"            # all headings + table headers
+
+# Point sizes (measured).  Body 12pt; headings step 17/15/13 by level; the
+# front-matter 16/14pt heading variants collapse to level-1 17pt in v1 (a ≤1pt
+# divergence that doesn't move pagination).  Tables start at a uniform 10pt (the
+# reference steps 10→9→8.5→8 by density — a later diff-driven tuning pass).
+_BODY_PT = 12
+_HEADING_PT: dict[int, int] = {1: 17, 2: 15, 3: 13}
+_TABLE_PT = 10
+_HEADER_PT = 12
 
 # Brand accent for the cover bar, from the cover layout palette (sage/green).
 _COVER_GREEN = RGBColor(0x78, 0xA1, 0x2E)
 _COVER_TITLE_GRAY = RGBColor(0x53, 0x55, 0x57)
+_BLACK = RGBColor(0x00, 0x00, 0x00)
 
 # DocNode.level → Word built-in heading style.  Level 0 = no heading (cover,
 # leaf table nodes); levels 1-3 nest under the document title.
@@ -115,6 +138,17 @@ _TAG_RE = re.compile(r"<[^>]+>")
 def _clean(text) -> str:
     """Coerce a value to a control-char-free string safe for an OOXML run."""
     return _CONTROL_RE.sub("", str(text if text is not None else ""))
+
+
+def _style_run(run, *, size_pt: int, font: str | None = None, bold: bool = False):
+    """Set explicit size/font/weight on a run (used for table cells, which must
+    not inherit the 12pt body size — the reference tables run smaller)."""
+    run.font.size = Pt(size_pt)
+    if font:
+        run.font.name = font
+    if bold:
+        run.bold = True
+    return run
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +271,9 @@ def _booktabs_table(
             if i >= ncols:
                 break
             para = hcells[i].paragraphs[0]
-            para.add_run(_clean(h)).bold = True
+            # Reference table headers are Arial Bold, one step below body size.
+            _style_run(para.add_run(_clean(h)), size_pt=_TABLE_PT,
+                       font=_HEADING_FONT, bold=True)
         _set_repeat_header(table.rows[0])
         for c in table.rows[0]._tr.tc_lst:
             _set_edge_border(c, "bottom")
@@ -250,12 +286,14 @@ def _booktabs_table(
             merged = tr.cells[0]
             for other in tr.cells[1:]:
                 merged = merged.merge(other)
-            merged.paragraphs[0].add_run(first.strip("*").strip()).bold = True
+            _style_run(merged.paragraphs[0].add_run(first.strip("*").strip()),
+                       size_pt=_TABLE_PT, bold=True)
             continue
         tr = table.add_row()
         for i in range(ncols):
             val = cells[i].strip() if i < len(cells) else ""
-            tr.cells[i].paragraphs[0].add_run(val)
+            # Data cells: body font (Times), table size (10pt).
+            _style_run(tr.cells[i].paragraphs[0].add_run(val), size_pt=_TABLE_PT)
 
     # Outer top + bottom rules complete the booktabs frame.
     _set_edge_border(table._tbl, "top")
@@ -762,12 +800,58 @@ def _add_page_number_field(paragraph) -> None:
     run._r.append(end)
 
 
+def _build_style_skeleton(doc: Document) -> None:
+    """
+    Bind the reference typography onto the document's base styles BEFORE any
+    content is walked, replacing Word's default theme (Calibri/Aptos).
+
+    All handlers create paragraphs via the ``Normal`` / ``Heading 1-3`` styles,
+    so restyling those here cascades to the whole document — the reference match
+    lives in ONE place rather than being set per run.  Fonts are named by FAMILY
+    (the Font.name setter writes both w:ascii and w:hAnsi runProps), so Word uses
+    the installed Times New Roman / Arial regardless of its theme's minor/major
+    font.  See the measured spec in the Constants block.
+    """
+    styles = doc.styles
+
+    normal = styles["Normal"]
+    normal.font.name = _BODY_FONT
+    normal.font.size = Pt(_BODY_PT)
+    normal.font.color.rgb = _BLACK
+    npf = normal.paragraph_format
+    # Times' natural single spacing gives the reference's ~13.8pt line pitch;
+    # block paragraphs (no first-line indent) with a little space after.
+    npf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    npf.space_before = Pt(0)
+    npf.space_after = Pt(6)
+    npf.first_line_indent = Pt(0)
+
+    for level, size in _HEADING_PT.items():
+        style = styles[f"Heading {level}"]
+        style.font.name = _HEADING_FONT
+        style.font.bold = True
+        style.font.size = Pt(size)
+        # Word's built-in headings are blue — the reference headings are black.
+        style.font.color.rgb = _BLACK
+        hpf = style.paragraph_format
+        hpf.keep_with_next = True
+        hpf.space_before = Pt(12)
+        hpf.space_after = Pt(4)
+
+    # The running header rides on the built-in "Header" style.
+    header = styles["Header"]
+    header.font.name = _BODY_FONT
+    header.font.size = Pt(_HEADER_PT)
+
+
 def _configure_section(section, running_header: str) -> None:
     """US-Letter geometry + a running header + a centered page-number footer."""
     section.page_width = _PAGE_WIDTH
     section.page_height = _PAGE_HEIGHT
     for attr in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
         setattr(section, attr, _MARGIN)
+    section.header_distance = _HEADER_FOOTER_DISTANCE
+    section.footer_distance = _HEADER_FOOTER_DISTANCE
 
     header_para = section.header.paragraphs[0]
     header_para.text = _clean(running_header)
@@ -798,6 +882,7 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     running_header = data.get("running_header") or data.get("title") or "5dToxReport"
 
     doc = Document()
+    _build_style_skeleton(doc)
     front_section = doc.sections[0]
     _configure_section(front_section, running_header)
     # No page number on the cover page itself (front matter numbering still

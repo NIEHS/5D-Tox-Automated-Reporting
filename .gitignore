@@ -31,3 +31,11 @@ svobodadl@*
 # commit: they embed full conversation history and have leaked live
 # credentials (HHS audit, 2026-06-22). Rotate any secret that lands here.
 output/session_exports/
+
+# Licensed Microsoft/Monotype fonts (Times New Roman, Arial, Calibri, Symbol).
+# Used LOCALLY to measure reference typography; the .docx only NAMES these
+# families (they exist on the Windows render machine), so they must never be
+# committed to this public HHS repo. See project_configurable_fonts memory.
+assets/fonts/
+ttfonts.zip
+times*.ttf
