@@ -159,6 +159,12 @@ function _lbControlRow(key, spec, value) {
             `<option value="true"${sel(true)}>true</option>` +
             `<option value="false"${sel(false)}>false</option>` +
             `</select>`;
+    } else if (spec.kind === "string") {
+        // Open free-text (a literal font family name, e.g. the `font` key).
+        control =
+            `<input type="text" id="${id}" data-key="${key}" data-kind="string" ` +
+            `placeholder="(inherit)" value="${has ? escapeHtml(String(value)) : ""}" ` +
+            `style="width:12em">`;
     } else {
         control = `<span>unsupported: ${escapeHtml(spec.kind)}</span>`;
     }
@@ -207,7 +213,7 @@ function _lbBindControls() {
     host.querySelectorAll("[data-key]").forEach((el) => {
         el.addEventListener("change", () => _lbOnControlChange(el));
         if (el.dataset.kind === "color" || el.dataset.kind === "length" ||
-            el.dataset.kind === "number") {
+            el.dataset.kind === "number" || el.dataset.kind === "string") {
             // Text/number inputs: also react to typing (debounced by the save).
             el.addEventListener("input", () => _lbOnControlChange(el));
         }
@@ -251,7 +257,7 @@ function _lbOnControlChange(el) {
     } else if (kind === "bool") {
         val = el.value === "" ? undefined : el.value === "true";
     } else {
-        // enum / color: "" means inherit (unset).
+        // enum / color / string: "" means inherit (unset).
         val = el.value.trim() === "" ? undefined : el.value.trim();
     }
 
