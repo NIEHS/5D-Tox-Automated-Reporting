@@ -1366,9 +1366,20 @@ def _layout_to_latex(style: dict) -> "tuple[str, str]":
 
     # --- inside-the-group declarations (font, color, alignment, indent) ---
     decls: list[str] = []
-    fam = _FONT_FAMILY_CMD.get(style.get("font_family"))
-    if fam:
-        decls.append(fam)
+    # Font precedence (see layout_style.LAYOUT_KEY_SCHEMA): an explicit `font`
+    # (literal family name) wins via fontspec's \fontspec; otherwise the abstract
+    # `font_family` maps to \rmfamily/\sffamily/\ttfamily.  The \fontspec call is
+    # GUARDED by \ifdefined\fontspec so it is inert under pdflatex+lmodern (the
+    # class's current engine — the true-branch tokens are skipped, not executed,
+    # when fontspec is absent) and active under XeTeX/LuaTeX with fontspec loaded
+    # (the `tect`/Overleaf path, where the named system font must be installed).
+    font_name = (style.get("font") or "").strip()
+    if font_name:
+        decls.append(rf"\ifdefined\fontspec\fontspec{{{font_name}}}\fi")
+    else:
+        fam = _FONT_FAMILY_CMD.get(style.get("font_family"))
+        if fam:
+            decls.append(fam)
 
     size = style.get("font_size")
     line_height = style.get("line_height")

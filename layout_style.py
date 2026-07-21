@@ -55,10 +55,19 @@ ALIGNMENTS = frozenset({"left", "right", "center", "justify"})
 BREAKS = frozenset({"auto", "page"})
 
 # Descriptive schema: key -> ("enum", frozenset) | ("length",) | ("number",)
-# | ("color",) | ("bool",).  Used both as the author-facing doc and by
-# validate_style / unknown_layout_keys.
+# | ("color",) | ("bool",) | ("string",).  Used both as the author-facing doc
+# and by validate_style / unknown_layout_keys.
+#
+# FONT PRECEDENCE (applied identically by all three translators —
+# html_generator._layout_to_css_props, latex_generator._layout_to_latex,
+# docx_generator._layout_to_docx): an explicit `font` (a literal family name like
+# "Times New Roman") WINS and is used verbatim on every surface; otherwise
+# `font_family` (serif/sans/mono) maps through each surface's abstract table.
+# This lets a Word-authored / bootstrap-extracted config name the exact font
+# while a hand-written serif/sans/mono config keeps working unchanged.
 LAYOUT_KEY_SCHEMA: dict = {
-    "font_family": ("enum", FONT_FAMILIES),   # serif | sans | mono
+    "font": ("string",),                      # literal family name, e.g. "Times New Roman"
+    "font_family": ("enum", FONT_FAMILIES),   # serif | sans | mono (fallback when `font` unset)
     "font_size": ("length",),                 # e.g. "11pt", "1.2em"
     "weight": ("enum", WEIGHTS),              # normal | bold
     "style": ("enum", STYLES),                # normal | italic
@@ -84,12 +93,43 @@ _COLOR_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
 # ---------------------------------------------------------------------------
+# The DOCUMENT-level vocabulary (page geometry + document defaults)
+# ---------------------------------------------------------------------------
+# Distinct from the per-node LAYOUT_KEY_SCHEMA above: these keys describe the
+# WHOLE document (the page and its margins, the base body font, the running
+# header), not a single node's block.  They live in an optional top-level
+# ``document:`` section of the ``styles`` block.  A page dimension / margin is a
+# print-length; the fonts are literal family names; the sizes are lengths.  This
+# is where the reference's US-Letter trim, 1" margins, and header font become
+# DATA the docx surface reads (replacing its hardcoded constants) — the same
+# geometry LaTeX (geometry package) and HTML (@page) can honor where feasible.
+DOCUMENT_KEY_SCHEMA: dict = {
+    "page_width": ("length",),         # e.g. "8.5in"
+    "page_height": ("length",),        # e.g. "11in"
+    "margin_top": ("length",),
+    "margin_bottom": ("length",),
+    "margin_left": ("length",),
+    "margin_right": ("length",),
+    "header_distance": ("length",),    # header/footer distance from the page edge
+    "default_font": ("string",),       # base body font family name
+    "default_font_size": ("length",),  # base body size, e.g. "12pt"
+    "header_font": ("string",),        # running-header font family name
+    "header_font_size": ("length",),
+}
+
+
+# ---------------------------------------------------------------------------
 # Value validation
 # ---------------------------------------------------------------------------
 
-def _value_error(key: str, value, expected: str) -> str:
-    """Return a validation error message, or '' if the value is acceptable."""
-    spec = LAYOUT_KEY_SCHEMA.get(key)
+def _value_error(key: str, value, expected: str, schema: dict | None = None) -> str:
+    """Return a validation error message, or '' if the value is acceptable.
+
+    ``schema`` selects the vocabulary to look ``key`` up in — the per-node
+    LAYOUT_KEY_SCHEMA by default, or DOCUMENT_KEY_SCHEMA for the document-level
+    block.  Both share the same value-KIND checks below, so only the lookup
+    table differs."""
+    spec = (schema or LAYOUT_KEY_SCHEMA).get(key)
     if spec is None:
         return ""  # unknown key — not a VALUE error (caught by unknown_layout_keys)
     kind = spec[0]
@@ -115,6 +155,13 @@ def _value_error(key: str, value, expected: str) -> str:
     elif kind == "bool":
         if not isinstance(value, bool):
             return f"{key}: {value!r} is not a boolean"
+    elif kind == "string":
+        # An open free-text scalar (a font family name).  Any non-empty string
+        # is accepted — we can't validate a font NAME against the render
+        # machine's installed set here, and doing so would couple this to a
+        # specific box.  Emptiness is the only error.
+        if not (isinstance(value, str) and value.strip()):
+            return f"{key}: {value!r} is not a non-empty string"
     return ""
 
 
@@ -145,6 +192,30 @@ def unknown_layout_keys(style: dict) -> list[str]:
     if not isinstance(style, dict):
         return []
     return [k for k in style if k not in LAYOUT_KEY_SCHEMA]
+
+
+def validate_document_style(document: dict) -> list[str]:
+    """
+    Return a list of VALUE errors for the document-level ``document:`` block,
+    checked against DOCUMENT_KEY_SCHEMA.  Same discipline as validate_style:
+    known keys are value-checked, unknown keys are ignored here (typo-catching is
+    unknown_document_keys' job).  Empty list ⇒ every named key is acceptable.
+    """
+    errors: list[str] = []
+    if not isinstance(document, dict):
+        return [f"document must be a mapping, got {type(document).__name__}"]
+    for key, value in document.items():
+        msg = _value_error(key, value, "", schema=DOCUMENT_KEY_SCHEMA)
+        if msg:
+            errors.append(msg)
+    return errors
+
+
+def unknown_document_keys(document: dict) -> list[str]:
+    """Keys in the ``document:`` block absent from DOCUMENT_KEY_SCHEMA."""
+    if not isinstance(document, dict):
+        return []
+    return [k for k in document if k not in DOCUMENT_KEY_SCHEMA]
 
 
 # ---------------------------------------------------------------------------

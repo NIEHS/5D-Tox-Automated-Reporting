@@ -115,6 +115,25 @@ def test_bad_enum_value_is_flagged():
     assert len(errors) == 1 and "font_family" in errors[0]
 
 
+def test_font_string_key_accepts_any_nonempty_name():
+    # The `font` key (literal family name) is an open string — any non-empty
+    # value is valid (we can't validate a name against a render machine here).
+    assert ls.validate_style({"font": "Times New Roman"}) == []
+    assert ls.validate_style({"font": "Some Custom Font 2"}) == []
+
+
+def test_font_string_key_rejects_empty_or_non_string():
+    assert ls.validate_style({"font": "   "}) != []
+    assert ls.validate_style({"font": 12}) != []
+    assert ls.validate_style({"font": None}) != []
+
+
+def test_font_key_is_in_schema_and_payload():
+    assert ls.LAYOUT_KEY_SCHEMA["font"] == ("string",)
+    payload = ls.style_schema_payload()
+    assert payload["font"] == {"kind": "string"}
+
+
 def test_bad_length_value_is_flagged():
     # A bare number with no unit, and a px unit (excluded), both fail.
     assert ls.validate_style({"font_size": 11}) != []
@@ -197,3 +216,35 @@ def test_schema_payload_is_json_serializable():
     import json
     # Must round-trip cleanly — it ships as window.__LAYOUT_SCHEMA__ JSON.
     json.dumps(ls.style_schema_payload())
+
+
+# ---------------------------------------------------------------------------
+# Document-level vocabulary (page geometry + document defaults)
+# ---------------------------------------------------------------------------
+
+def test_document_style_valid_block_has_no_errors():
+    doc = {
+        "page_width": "8.5in", "page_height": "11in",
+        "margin_left": "1in", "margin_top": "1in",
+        "header_distance": "0.5in",
+        "default_font": "Times New Roman", "default_font_size": "12pt",
+        "header_font": "Arial",
+    }
+    assert ls.validate_document_style(doc) == []
+
+
+def test_document_style_flags_bad_length_and_empty_font():
+    assert ls.validate_document_style({"page_width": "8.5"}) != []      # no unit
+    assert ls.validate_document_style({"default_font": "  "}) != []     # empty
+    assert ls.validate_document_style({"margin_top": "2in"}) == []
+
+
+def test_document_unknown_keys_are_reported():
+    assert ls.unknown_document_keys({"page_width": "8.5in", "bogus": 1}) == ["bogus"]
+    assert ls.unknown_document_keys({"page_width": "8.5in"}) == []
+
+
+def test_document_keys_are_disjoint_from_node_keys():
+    # The two vocabularies must not overlap — a node key in the document block
+    # (or vice-versa) would be silently mis-validated.
+    assert set(ls.DOCUMENT_KEY_SCHEMA) & set(ls.LAYOUT_KEY_SCHEMA) == set()

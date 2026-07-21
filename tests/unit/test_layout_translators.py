@@ -132,3 +132,34 @@ def test_css_line_height_bool_is_not_emitted():
 def test_css_partial_spec_emits_only_named_props():
     css = hg._layout_to_css_props({"align": "justify"})
     assert css == "text-align: justify"
+
+
+# ---------------------------------------------------------------------------
+# `font` (literal family name) precedence — the key added for the docx
+# bootstrap.  An explicit `font` wins over `font_family` on every surface and is
+# emitted verbatim; `font_family` alone still maps to the abstract stack/command.
+# ---------------------------------------------------------------------------
+
+def test_css_literal_font_is_emitted_verbatim_with_fallback():
+    css = hg._layout_to_css_props({"font": "Times New Roman"})
+    # Named font first, then a graceful fallback stack.
+    assert css.startswith('font-family: "Times New Roman", ')
+
+
+def test_css_font_wins_over_font_family():
+    css = hg._layout_to_css_props({"font": "Arial", "font_family": "serif"})
+    assert '"Arial"' in css
+    # The serif stack is used only as the fallback tail, not the primary.
+    assert not css.startswith("font-family: Georgia")
+
+
+def test_latex_literal_font_emits_guarded_fontspec():
+    pre, _ = lg._layout_to_latex({"font": "Times New Roman"})
+    # Guarded so it is inert under pdflatex+lmodern and active under XeTeX.
+    assert r"\ifdefined\fontspec\fontspec{Times New Roman}\fi" in pre
+
+
+def test_latex_font_wins_over_font_family():
+    pre, _ = lg._layout_to_latex({"font": "Arial", "font_family": "serif"})
+    assert r"\fontspec{Arial}" in pre
+    assert r"\rmfamily" not in pre  # the abstract family command is suppressed

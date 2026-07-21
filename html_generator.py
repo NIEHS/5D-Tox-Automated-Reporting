@@ -1265,9 +1265,17 @@ def _layout_to_css_props(style: dict) -> str:
         return ""
     props: list[str] = []
 
-    fam = _CSS_FONT_STACK.get(style.get("font_family"))
-    if fam:
-        props.append(f"font-family: {fam}")
+    # Font precedence (see layout_style.LAYOUT_KEY_SCHEMA): an explicit `font`
+    # (literal family name) wins and is emitted verbatim, followed by the
+    # abstract-family stack as a graceful fallback for machines that lack it;
+    # otherwise fall back to the `font_family` (serif/sans/mono) stack alone.
+    font_name = (style.get("font") or "").strip()
+    fam_stack = _CSS_FONT_STACK.get(style.get("font_family"))
+    if font_name:
+        fallback = fam_stack or _CSS_FONT_STACK["serif"]
+        props.append(f'font-family: "{font_name}", {fallback}')
+    elif fam_stack:
+        props.append(f"font-family: {fam_stack}")
     size = style.get("font_size")
     if size:
         props.append(f"font-size: {size}")

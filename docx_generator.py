@@ -82,6 +82,7 @@ from render_common import (
     unified_narrative_paragraphs,
 )
 from genomics_content import genomics_content_plan
+from layout_style import resolve_layout_style
 from table_builder_common import format_display_number, format_mean_se_display
 
 
@@ -128,6 +129,23 @@ _HEADING_STYLE_BY_LEVEL: dict[int, str] = {
     2: "Heading 2",
     3: "Heading 3",
 }
+
+# Abstract font-family → concrete Word font, used only when a resolved style
+# carries `font_family` (serif/sans/mono) but NOT an explicit `font` name.  The
+# literal `font` always wins (see layout_style.LAYOUT_KEY_SCHEMA precedence note).
+_DOCX_FONT_BY_FAMILY: dict[str, str] = {
+    "serif": "Times New Roman",
+    "sans": "Arial",
+    "mono": "Consolas",
+}
+
+# Points per absolute unit, for converting a resolved-style length to Pt.  em/ex
+# are relative and can't be resolved without the current font size, so a length
+# in those units is ignored on the docx surface (logged as skipped).
+_PT_PER_UNIT: dict[str, float] = {
+    "pt": 1.0, "mm": 72.0 / 25.4, "cm": 72.0 / 2.54, "in": 72.0,
+}
+_LENGTH_RE = re.compile(r"^(-?\d+(?:\.\d+)?)(pt|mm|cm|in|em|ex)$")
 
 # Strip C0 control chars (except tab/newline) that would make the OOXML invalid.
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
@@ -727,6 +745,105 @@ assert_dispatch_covers(_DISPATCH, renderer="Word/OOXML")
 
 
 # ---------------------------------------------------------------------------
+# Per-node layout styling (the docx twin of _layout_to_css_props / _layout_to_latex)
+# ---------------------------------------------------------------------------
+
+def _length_to_pt(value) -> "float | None":
+    """A resolved-style length ('6pt', '0.5in') → points; None if unparseable or
+    in a relative unit (em/ex) we can't resolve without the current font size."""
+    m = _LENGTH_RE.match(str(value or ""))
+    if not m:
+        return None
+    factor = _PT_PER_UNIT.get(m.group(2))
+    return float(m.group(1)) * factor if factor is not None else None
+
+
+def _resolve_font_name(style: dict) -> "str | None":
+    """The concrete Word font for a resolved style: the literal `font` wins, else
+    map `font_family` (serif/sans/mono) through _DOCX_FONT_BY_FAMILY.  See the
+    precedence note in layout_style.LAYOUT_KEY_SCHEMA."""
+    name = (style.get("font") or "").strip()
+    if name:
+        return name
+    return _DOCX_FONT_BY_FAMILY.get(style.get("font_family"))
+
+
+def _apply_run_style(run, style: dict) -> None:
+    """Apply the character-level part of a resolved style to one run."""
+    font = _resolve_font_name(style)
+    if font:
+        run.font.name = font
+    size = _length_to_pt(style.get("font_size"))
+    if size:
+        run.font.size = Pt(size)
+    weight = style.get("weight")
+    if weight == "bold":
+        run.font.bold = True
+    elif weight == "normal":
+        run.font.bold = False
+    st = style.get("style")
+    if st == "italic":
+        run.font.italic = True
+    elif st == "normal":
+        run.font.italic = False
+    color = style.get("color")
+    if isinstance(color, str) and color.startswith("#"):
+        h = color.lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        if len(h) == 6:
+            run.font.color.rgb = RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _apply_paragraph_style(paragraph, style: dict) -> None:
+    """Apply the paragraph-level part of a resolved style to one paragraph, and
+    the character-level part to each of its runs (so inheritance is explicit)."""
+    pf = paragraph.paragraph_format
+    align = style.get("align")
+    if align:
+        pf.alignment = {
+            "left": WD_ALIGN_PARAGRAPH.LEFT, "right": WD_ALIGN_PARAGRAPH.RIGHT,
+            "center": WD_ALIGN_PARAGRAPH.CENTER, "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+        }.get(align)
+    lh = style.get("line_height")
+    if isinstance(lh, (int, float)) and not isinstance(lh, bool):
+        pf.line_spacing = lh
+    sb = _length_to_pt(style.get("space_before"))
+    if sb is not None:
+        pf.space_before = Pt(sb)
+    sa = _length_to_pt(style.get("space_after"))
+    if sa is not None:
+        pf.space_after = Pt(sa)
+    indent = _length_to_pt(style.get("first_line_indent"))
+    if indent is not None:
+        pf.first_line_indent = Pt(indent)
+    if style.get("break_before") == "page":
+        pf.page_break_before = True
+    if style.get("keep_together") is True:
+        pf.keep_together = True
+    for run in paragraph.runs:
+        _apply_run_style(run, style)
+
+
+def _layout_to_docx(paragraphs, style: dict) -> None:
+    """
+    Apply a resolved abstract style spec to a run of paragraphs — the docx twin
+    of html_generator._layout_to_css_props and latex_generator._layout_to_latex.
+
+    Unlike those string-wrapping surfaces, Word is an object model: the node's
+    handler has ALREADY appended its paragraphs, so this overlays the per-node
+    ``types``/``instances`` styling onto them (the base ``Normal``/``Heading``
+    style from _build_style_skeleton is the baseline; this wins over it, mirroring
+    the other two surfaces' _wrap_style layering).  Empty style ⇒ no-op, so a
+    style-less document is byte-identical to the pre-feature output.
+    """
+    if not style:
+        return
+    for paragraph in paragraphs:
+        _apply_paragraph_style(paragraph, style)
+
+
+# ---------------------------------------------------------------------------
 # Tree walk + document skeleton
 # ---------------------------------------------------------------------------
 
@@ -739,10 +856,23 @@ def _walk_docx_tree(doc: Document, node: DocNode, data: dict) -> None:
     STRINGS, whereas Word handlers mutate the Document.  So this runs the shared
     walk_tree primitive directly with a _visit callback that dispatches to the
     (doc, node, data) handlers — same pre-order traversal, object-model emit.
+
+    Per-node layout styling (ADR-0006 parity with the other surfaces): the
+    resolved ``types``/``instances`` spec is applied to exactly the paragraphs a
+    node's handler added, by snapshotting the paragraph count before/after the
+    handler runs.  The DECISION (resolved spec) is shared via
+    data["layout_style"]; only this object-model application is surface-specific.
     """
+    layout_cfg = data.get("layout_style")
+
     def _visit(n: DocNode) -> None:
+        before = len(doc.paragraphs)
         handler = _DISPATCH.get(n.node_type, _render_unimplemented)
         handler(doc, n, data)
+        if layout_cfg:
+            style = resolve_layout_style(layout_cfg, n.node_type, n.id)
+            if style:
+                _layout_to_docx(doc.paragraphs[before:], style)
 
     walk_tree([node], _visit)
 
@@ -800,23 +930,41 @@ def _add_page_number_field(paragraph) -> None:
     run._r.append(end)
 
 
-def _build_style_skeleton(doc: Document) -> None:
+def _emu_or_default(document: dict, key: str, default):
+    """A document-level length in EMU (via docx Pt/Inches types) or the default.
+    Lengths are stored as strings ('12pt', '1in'); parse to pt then to a
+    Length."""
+    pt = _length_to_pt(document.get(key)) if document else None
+    return Pt(pt) if pt is not None else default
+
+
+def _build_style_skeleton(doc: Document, document: dict | None = None) -> None:
     """
-    Bind the reference typography onto the document's base styles BEFORE any
-    content is walked, replacing Word's default theme (Calibri/Aptos).
+    Bind the base typography onto the document's Word styles BEFORE any content
+    is walked, replacing Word's default theme (Calibri/Aptos).
 
     All handlers create paragraphs via the ``Normal`` / ``Heading 1-3`` styles,
-    so restyling those here cascades to the whole document — the reference match
-    lives in ONE place rather than being set per run.  Fonts are named by FAMILY
-    (the Font.name setter writes both w:ascii and w:hAnsi runProps), so Word uses
-    the installed Times New Roman / Arial regardless of its theme's minor/major
-    font.  See the measured spec in the Constants block.
+    so restyling those here cascades to the whole document — the base look lives
+    in ONE place rather than being set per run.  Fonts are named by FAMILY (the
+    Font.name setter writes both w:ascii and w:hAnsi runProps), so Word uses the
+    installed font regardless of its theme's minor/major font.
+
+    ``document`` is the optional resolved document-level style block
+    (styles.document); its ``default_font`` / ``default_font_size`` /
+    ``header_font`` override the measured constants when present, so the base
+    body/header fonts become DATA.  Absent ⇒ the measured reference constants.
     """
+    document = document or {}
+    body_font = (document.get("default_font") or "").strip() or _BODY_FONT
+    body_size = _length_to_pt(document.get("default_font_size")) or _BODY_PT
+    header_font = (document.get("header_font") or "").strip() or _BODY_FONT
+    header_size = _length_to_pt(document.get("header_font_size")) or _HEADER_PT
+
     styles = doc.styles
 
     normal = styles["Normal"]
-    normal.font.name = _BODY_FONT
-    normal.font.size = Pt(_BODY_PT)
+    normal.font.name = body_font
+    normal.font.size = Pt(body_size)
     normal.font.color.rgb = _BLACK
     npf = normal.paragraph_format
     # Times' natural single spacing gives the reference's ~13.8pt line pitch;
@@ -840,18 +988,25 @@ def _build_style_skeleton(doc: Document) -> None:
 
     # The running header rides on the built-in "Header" style.
     header = styles["Header"]
-    header.font.name = _BODY_FONT
-    header.font.size = Pt(_HEADER_PT)
+    header.font.name = header_font
+    header.font.size = Pt(header_size)
 
 
-def _configure_section(section, running_header: str) -> None:
-    """US-Letter geometry + a running header + a centered page-number footer."""
-    section.page_width = _PAGE_WIDTH
-    section.page_height = _PAGE_HEIGHT
-    for attr in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
-        setattr(section, attr, _MARGIN)
-    section.header_distance = _HEADER_FOOTER_DISTANCE
-    section.footer_distance = _HEADER_FOOTER_DISTANCE
+def _configure_section(section, running_header: str, document: dict | None = None) -> None:
+    """US-Letter geometry + a running header + a centered page-number footer.
+
+    ``document`` (the resolved styles.document block) overrides the page size,
+    margins, and header distance when present; absent ⇒ the measured constants."""
+    document = document or {}
+    section.page_width = _emu_or_default(document, "page_width", _PAGE_WIDTH)
+    section.page_height = _emu_or_default(document, "page_height", _PAGE_HEIGHT)
+    section.top_margin = _emu_or_default(document, "margin_top", _MARGIN)
+    section.bottom_margin = _emu_or_default(document, "margin_bottom", _MARGIN)
+    section.left_margin = _emu_or_default(document, "margin_left", _MARGIN)
+    section.right_margin = _emu_or_default(document, "margin_right", _MARGIN)
+    hdr = _emu_or_default(document, "header_distance", _HEADER_FOOTER_DISTANCE)
+    section.header_distance = hdr
+    section.footer_distance = hdr
 
     header_para = section.header.paragraphs[0]
     header_para.text = _clean(running_header)
@@ -880,11 +1035,15 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     """
     nodes = tree if tree is not None else DOCUMENT_TREE
     running_header = data.get("running_header") or data.get("title") or "5dToxReport"
+    # Optional document-level style block (page geometry + base fonts); absent ⇒
+    # the measured reference constants.  Same styles config the per-node layer
+    # reads, under its own "document" key.
+    document = (data.get("layout_style") or {}).get("document") or {}
 
     doc = Document()
-    _build_style_skeleton(doc)
+    _build_style_skeleton(doc, document)
     front_section = doc.sections[0]
-    _configure_section(front_section, running_header)
+    _configure_section(front_section, running_header, document)
     # No page number on the cover page itself (front matter numbering still
     # counts it as page i, matching the reference's unnumbered cover).
     front_section.different_first_page_header_footer = True
@@ -897,7 +1056,7 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
         if body_first_id is not None and top.id == body_first_id and not in_body:
             # Section break → the body restarts page numbering at arabic 1.
             doc.add_section(WD_SECTION.NEW_PAGE)
-            _configure_section(doc.sections[-1], running_header)
+            _configure_section(doc.sections[-1], running_header, document)
             added_body_section = True
             in_body = True
         _walk_docx_tree(doc, top, data)

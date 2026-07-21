@@ -191,10 +191,18 @@ def _validate_styles_cfg(cfg: dict) -> None:
     import layout_style
     from document_template import COMPONENT_CATALOG
 
-    for sub in ("defaults", "types", "instances"):
+    for sub in ("defaults", "types", "instances", "document"):
         if sub in cfg and not isinstance(cfg[sub], dict):
             raise ValueError(
                 f"styles.{sub} must be a mapping, got {type(cfg[sub]).__name__}"
+            )
+    # The optional document-level block (page geometry + document defaults) is
+    # validated against its own vocabulary (DOCUMENT_KEY_SCHEMA).
+    if isinstance(cfg.get("document"), dict):
+        doc_errors = layout_style.validate_document_style(cfg["document"])
+        if doc_errors:
+            raise ValueError(
+                f"styles.document has invalid value(s): {'; '.join(doc_errors)}"
             )
     for node_type in (cfg.get("types") or {}):
         if node_type not in COMPONENT_CATALOG:

@@ -206,6 +206,81 @@ def test_table_cells_render_below_body_size(scaffold):
 
 
 # ---------------------------------------------------------------------------
+# Per-node layout styling — the docx twin of the CSS/LaTeX translators.  A
+# `styles` block with per-type/per-instance specs applies to the paragraphs the
+# matching node emitted, overlaying the base Normal/Heading styles.
+# ---------------------------------------------------------------------------
+
+def test_per_type_layout_style_applies_to_matching_nodes(scaffold):
+    """A `types` entry restyles every node of that type (font/size/color)."""
+    data = dict(scaffold)
+    data["layout_style"] = {
+        "types": {"narrative": {"font": "Georgia", "font_size": "14pt",
+                                "color": "#cc0000"}}
+    }
+    doc = _open(generate_docx(data))
+    styled = [
+        r for p in doc.paragraphs for r in p.runs
+        if r.font.name == "Georgia" and r.font.size == Pt(14)
+    ]
+    assert styled, "no narrative runs picked up the per-type font/size"
+    assert str(styled[0].font.color.rgb) == "CC0000"
+
+
+def test_instance_layer_wins_over_type_layer_in_docx(scaffold):
+    """An `instances` entry overrides the `types` layer for one node id."""
+    data = dict(scaffold)
+    data["layout_style"] = {
+        "types": {"narrative": {"weight": "normal"}},
+        "instances": {"background": {"weight": "bold"}},
+    }
+    doc = _open(generate_docx(data))
+    # The Background heading run must be bold (instance layer), proving the
+    # instance override reached the docx surface.
+    bg = [p for p in doc.paragraphs if p.text.strip() == "Background"]
+    assert bg and any(r.font.bold for r in bg[0].runs)
+
+
+def test_no_layout_style_is_a_noop(scaffold):
+    """A document with no `layout_style` renders (base styles only, no crash)."""
+    data = dict(scaffold)
+    data.pop("layout_style", None)
+    doc = _open(generate_docx(data))
+    assert len(doc.paragraphs) > 0
+
+
+def test_document_level_block_drives_page_and_base_fonts(scaffold):
+    """The styles.document block overrides page geometry + base body/header fonts."""
+    data = dict(scaffold)
+    data["layout_style"] = {"document": {
+        "page_width": "8.27in", "page_height": "11.69in",   # A4
+        "margin_left": "1.25in",
+        "default_font": "Palatino Linotype", "default_font_size": "11pt",
+        "header_font": "Cambria",
+    }}
+    doc = _open(generate_docx(data))
+    s = doc.sections[0]
+    assert round(s.page_width.inches, 2) == 8.27
+    assert round(s.page_height.inches, 2) == 11.69
+    assert round(s.left_margin.inches, 2) == 1.25
+    assert doc.styles["Normal"].font.name == "Palatino Linotype"
+    assert doc.styles["Normal"].font.size == Pt(11)
+    assert doc.styles["Header"].font.name == "Cambria"
+
+
+def test_absent_document_block_uses_reference_constants(scaffold):
+    """No document block ⇒ the measured reference defaults (US-Letter, Times 12)."""
+    data = dict(scaffold)
+    data.pop("layout_style", None)
+    doc = _open(generate_docx(data))
+    s = doc.sections[0]
+    assert round(s.page_width.inches, 2) == 8.5
+    assert round(s.page_height.inches, 2) == 11.0
+    assert doc.styles["Normal"].font.name == "Times New Roman"
+    assert doc.styles["Normal"].font.size == Pt(12)
+
+
+# ---------------------------------------------------------------------------
 # Rich-data rendering — the shared EXTRACT plans produce real tables
 # ---------------------------------------------------------------------------
 
