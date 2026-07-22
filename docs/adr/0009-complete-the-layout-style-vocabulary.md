@@ -95,6 +95,20 @@ point, and no surface may quietly diverge on what a key means.
 - **`indent_left`, `indent_right`, `hanging_indent`** — `length`. docx `w:ind`
   (`w:left`/`w:right`/`w:hanging`); CSS `margin-left`/`margin-right`/text-indent;
   LaTeX list/`\hangindent`. Today only `first_line_indent` exists.
+- **`line_spacing_exact`** — `length` (an absolute point value, e.g. `"12pt"`).
+  Word has TWO line-spacing modes and the vocabulary models only one: today's
+  `line_height` is a UNITLESS MULTIPLIER (docx `line_spacing = 1.2`, rule
+  MULTIPLE; CSS `line-height: 1.2`; LaTeX `\linespread{1.2}`). The reference
+  title page uses the OTHER mode — Word "Exactly", an absolute length that
+  measured as **12pt** when set to match the reference — which no key can
+  currently express. Contract: docx `pf.line_spacing = Pt(n)` (yields rule
+  `EXACTLY`); CSS `line-height: 12pt` (an absolute length is valid); LaTeX
+  `\baselineskip`/`\setlength`. Extractor: the currently-SKIPPED EMU branch in
+  `_extract_style_props` (the `isinstance(pf.line_spacing, float)` guard drops
+  exact spacing on purpose today) reads it once the key exists. `line_height`
+  (multiple) and `line_spacing_exact` (absolute) are mutually exclusive on a
+  given style — Word stores one `w:spacing w:lineRule` per paragraph; the
+  translators must not emit both.
 - **`contextual_spacing`** — `bool`. docx `w:contextualSpacing`; CSS adjacent-
   sibling margin collapse; LaTeX paragraph-skip handling.
 - **Wire `break_after`** — the schema key EXISTS but the extractor never emits it
