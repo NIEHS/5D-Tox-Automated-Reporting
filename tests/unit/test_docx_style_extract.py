@@ -11,6 +11,8 @@ closes the loop "design in Word → extract → drive all three surfaces."
 import io
 import os
 import tempfile
+import zipfile
+from pathlib import Path
 
 import pytest
 from docx import Document
@@ -95,9 +97,106 @@ def test_to_yaml_wraps_under_styles_key(generated_docx_path):
     assert yaml_text.startswith("styles:")
 
 
+def _repackage_as_dotx(docx_path: str, out_path: str) -> None:
+    """Flip a .docx's main content-type to template.main so it reads as a .dotx.
+
+    A .dotx is the same OPC package with one content-type string changed — this
+    mirrors what Word writes on Save-As-Template, so the extractor must accept it.
+    """
+    with zipfile.ZipFile(docx_path) as zin, \
+            zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "[Content_Types].xml":
+                data = data.replace(
+                    b"wordprocessingml.document.main+xml",
+                    b"wordprocessingml.template.main+xml",
+                )
+            zout.writestr(item, data)
+
+
+def test_extracts_from_a_dotx_template(generated_docx_path, tmp_path):
+    """A .dotx (template content-type) extracts the same core facts as a .docx.
+
+    python-docx rejects template.main directly; the extractor normalizes the
+    content-type in memory so customers can author the look as a Word template.
+    """
+    dotx = tmp_path / "template.dotx"
+    _repackage_as_dotx(generated_docx_path, str(dotx))
+    cfg = dse.extract_styles(str(dotx))
+    assert cfg["defaults"]["font"] == "Times New Roman"
+    assert cfg["document"]["page_width"] == "8.5in"
+    # And it still validates as a drop-in styles.yaml.
+    _parse_styles_yaml(dse.to_yaml(cfg))
+
+
 def test_cli_writes_yaml(generated_docx_path, tmp_path):
     out = tmp_path / "styles.yaml"
     rc = dse._main([generated_docx_path, "-o", str(out)])
     assert rc == 0
     text = out.read_text()
     assert "styles:" in text and "Times New Roman" in text
+
+
+# ---------------------------------------------------------------------------
+# Title-page style family — the NTP `1-NN` styles → the title_page role layer.
+# Exercised against the reverse-engineered NTP template (which carries the real
+# 1-NN family + Base_Heading/Base_Text parents); the generated scaffold docx
+# does NOT have these styles.
+# ---------------------------------------------------------------------------
+
+_NTP_DOTX = (
+    Path(__file__).resolve().parents[2]
+    / "assets" / "templates" / "NIEHS-report-style-bordered.dotx"
+)
+
+
+@pytest.fixture(scope="module")
+def ntp_template_cfg() -> dict:
+    if not _NTP_DOTX.exists():
+        pytest.skip(f"NTP template not present: {_NTP_DOTX}")
+    return dse.extract_styles(str(_NTP_DOTX))
+
+
+def test_title_page_family_extracted(ntp_template_cfg):
+    """The extractor emits a title_page role layer from the NTP 1-NN family."""
+    tp = ntp_template_cfg.get("title_page")
+    assert tp, "no title_page layer extracted"
+    # The roles our title-page node emits should all be present.
+    for role in ("report_title", "publisher_name", "publication_date",
+                 "report_number", "issn"):
+        assert role in tp, f"missing role {role!r}"
+
+
+def test_report_title_resolves_through_basedon(ntp_template_cfg):
+    """
+    `1-03_Report_Title` inherits its Arial font from the parent `Base_Heading`.
+    python-docx does NOT resolve basedOn, so this proves the extractor's
+    _resolved_style_props walk works: the title comes out Arial Bold 20pt center.
+    """
+    title = ntp_template_cfg["title_page"]["report_title"]
+    assert title["font"] == "Arial"       # inherited from Base_Heading, not on the child
+    assert title["font_size"] == "20pt"
+    assert title["weight"] == "bold"
+    assert title["align"] == "center"
+
+
+def test_title_page_layer_validates_as_styles_yaml(ntp_template_cfg):
+    """The extracted title_page layer is a drop-in styles.yaml (validates loudly)."""
+    validated = _parse_styles_yaml(dse.to_yaml(ntp_template_cfg))
+    assert "title_page" in validated
+    # Every extracted role is a known TITLE_PAGE_ROLE (else validation would raise).
+    import layout_style
+    for role in validated["title_page"]:
+        assert role in layout_style.TITLE_PAGE_ROLES
+
+
+def test_resolved_style_props_walks_parent_chain(ntp_template_cfg):
+    """Directly: a child style with no own font inherits the parent's."""
+    doc = dse._open_word(str(_NTP_DOTX))
+    child = doc.styles["1-03_Report_Title"]
+    # python-docx alone returns None (the font lives on Base_Heading)...
+    assert child.font.name is None
+    # ...but the resolved walk recovers it.
+    resolved = dse._resolved_style_props(child)
+    assert resolved.get("font") == "Arial"

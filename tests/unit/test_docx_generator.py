@@ -123,6 +123,57 @@ def test_title_page_matches_reference_spec(scaffold):
     assert str(run.font.color.rgb) == "000000"    # black, not the cover gray 535557
 
 
+def test_title_page_is_one_paragraph_per_role(scaffold):
+    """
+    The title block is ONE multi-line paragraph (line breaks, matching the
+    reference's single `1-03_Report_Title` paragraph), NOT one paragraph per
+    line — the old shape stacked Normal `space_after` gaps between every line.
+    """
+    doc = _open(generate_docx(scaffold))
+    title_paras = [
+        p for p in doc.paragraphs if p.text.startswith("NIEHS Report on the")
+    ]
+    assert len(title_paras) == 1, "the title should be a single paragraph"
+    # The 7 title lines are carried as line breaks within that one paragraph.
+    assert title_paras[0]._p.xml.count("<w:br/>") >= 1
+
+
+def test_title_page_role_styling_applied(scaffold):
+    """
+    A `styles.title_page` config styles each ROLE independently: `report_title`
+    can be re-fonted/sized while `publisher_name` gets italic, and other roles
+    keep the reference default.  Proves per-role styling reaches the page.
+    """
+    data = dict(scaffold)
+    data["layout_style"] = {
+        "title_page": {
+            "report_title": {"font": "Times New Roman", "font_size": "28pt",
+                             "weight": "bold"},
+            "publisher_name": {"style": "italic"},
+        }
+    }
+    doc = _open(generate_docx(data))
+    title = next(r for p in doc.paragraphs for r in p.runs
+                 if r.text.strip() == "NIEHS Report on the")
+    assert title.font.name == "Times New Roman"
+    assert title.font.size == Pt(28)
+    # publisher name (institution line) is italic; a non-styled role is not.
+    pub = next(r for p in doc.paragraphs for r in p.runs
+               if r.text.startswith("National Institute of Environmental"))
+    assert pub.font.italic is True
+
+
+def test_title_page_empty_config_unchanged(scaffold):
+    """No title_page config ⇒ the reference default (Arial Bold 20pt black title)
+    — the ADR-0006 no-drift guarantee."""
+    doc = _open(generate_docx(scaffold))
+    title = next(r for p in doc.paragraphs for r in p.runs
+                 if r.text.strip() == "NIEHS Report on the")
+    assert title.font.name == "Arial"
+    assert title.font.size == Pt(20)
+    assert title.font.bold is True
+
+
 def test_no_green_accent_bar_table(scaffold):
     """
     The page-1 cover (with its green accent bar) is excluded on the docx surface,

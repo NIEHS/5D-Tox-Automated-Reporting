@@ -627,44 +627,85 @@ def _render_cover(doc: Document, node: DocNode, data: dict) -> None:
     return
 
 
+# The hardcoded per-role title-page spec — the measured reference default that
+# stands in when a role has no configured style (so an empty config renders
+# byte-identically to the pre-role behavior).  `title` roles = Arial Bold 20pt
+# black; everything else = Times New Roman 12pt black; all centered.
+_TITLE_PAGE_ROLE_DEFAULTS: dict = {
+    "report_title": {"font": _HEADING_FONT, "size": 20, "bold": True},
+}
+_TITLE_PAGE_META_DEFAULT = {"font": _BODY_FONT, "size": 12, "bold": False}
+
+
+def _resolve_title_page_role(layout_cfg: "dict | None", role: str) -> dict:
+    """The configured style for a title-page role, resolved in precedence order:
+    ``defaults`` ← ``types["title-page"]`` (a page-wide baseline) ←
+    ``title_page[role]`` (the per-role override).  Empty when nothing configured
+    (the handler then keeps the measured hardcoded spec).
+
+    NB the handler owns ALL title-page styling: the generic per-node overlay in
+    `_walk_docx_tree` is SKIPPED for this node (see `_visit`), so this resolver
+    must fold in the node-level ``types``/``instances`` layers itself — otherwise
+    a page-wide `types["title-page"]` style would be lost."""
+    if not layout_cfg:
+        return {}
+    style = dict(layout_cfg.get("defaults") or {})
+    style.update((layout_cfg.get("types") or {}).get("title-page") or {})
+    style.update((layout_cfg.get("instances") or {}).get("title-page") or {})
+    style.update((layout_cfg.get("title_page") or {}).get(role) or {})
+    return style
+
+
 def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
     """
-    Inner title page (reference page 2) — a centered typographic block matching
-    the measured reference spec: an Arial Bold 20pt BLACK title, then the report
-    number/date and the publisher block in Times New Roman 12pt, all centered.
-    No accent bar and no gray (those belong to the excluded page-1 cover).
-    Title / publisher text come from the SAME cover_layouts builders the other
-    surfaces use, so the three surfaces can't drift on the wording.
+    Inner title page (reference page 2) — a centered typographic block.  Each
+    semantic ROLE (report_title, report_number, publication_date, publisher_name,
+    publisher_affiliation, issn, …) is emitted as ONE paragraph (multi-line roles
+    like the title use internal line breaks, matching the reference's single
+    title paragraph — not one paragraph per line).
+
+    Styling precedence per role: the measured hardcoded reference spec
+    (`_TITLE_PAGE_ROLE_DEFAULTS`) is applied first, then the configured
+    ``styles.title_page[role]`` (resolved over ``defaults``) is overlaid via the
+    shared `_apply_paragraph_style`, so any key the config omits keeps its
+    reference value (ADR-0006 no-drift: an empty config renders unchanged).
+
+    Text comes from the SAME cover_layouts builder the wording is single-sourced
+    through, so the surfaces can't drift on wording.  Falls back to the flat
+    title/publisher builders when a layout supplies no role builder.
     """
     layout = get_cover_layout(node.subtype)
+    layout_cfg = data.get("layout_style")
 
-    for line in layout.title_builder(data):
-        para = doc.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.add_run(_clean(line))
-        run.bold = True
-        run.font.name = _HEADING_FONT           # Arial (the reference title font)
-        run.font.size = Pt(20)
-        run.font.color.rgb = _BLACK
+    blocks = layout.title_page_blocks(data) if layout.title_page_blocks else None
+    if blocks is None:
+        # Legacy fallback: a layout without the role builder → old flat behavior.
+        blocks = [("report_title", layout.title_builder(data))]
+        for meta in (data.get("report_number", ""), data.get("report_date", "")):
+            if meta:
+                blocks.append(("report_number", [meta]))
+        blocks.append(("publisher_affiliation", layout.publisher_builder(data)))
 
-    for meta in (data.get("report_number", ""), data.get("report_date", "")):
-        if not meta:
+    for role, lines in blocks:
+        lines = [_clean(ln) for ln in lines if ln]
+        if not lines:
             continue
         para = doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.add_run(_clean(meta))
-        run.font.name = _BODY_FONT              # Times New Roman
-        run.font.size = Pt(12)
-        run.font.color.rgb = _BLACK
-
-    doc.add_paragraph()
-    for line in layout.publisher_builder(data):
-        para = doc.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.add_run(_clean(line))
-        run.font.name = _BODY_FONT              # Times New Roman
-        run.font.size = Pt(12)
-        run.font.color.rgb = _BLACK
+        run = para.add_run(lines[0])
+        for extra in lines[1:]:
+            run.add_break(WD_BREAK.LINE)
+            run = para.add_run(extra)
+        # Reference default for this role, then the configured overlay on top.
+        base = _TITLE_PAGE_ROLE_DEFAULTS.get(role, _TITLE_PAGE_META_DEFAULT)
+        for r in para.runs:
+            r.font.name = base["font"]
+            r.font.size = Pt(base["size"])
+            r.font.bold = base["bold"]
+            r.font.color.rgb = _BLACK
+        role_style = _resolve_title_page_role(layout_cfg, role)
+        if role_style:
+            _apply_paragraph_style(para, role_style)
 
 
 def _freeform_text(node: DocNode) -> str:
@@ -872,7 +913,10 @@ def _walk_docx_tree(doc: Document, node: DocNode, data: dict) -> None:
         before = len(doc.paragraphs)
         handler = _DISPATCH.get(n.node_type, _render_unimplemented)
         handler(doc, n, data)
-        if layout_cfg:
+        # The title-page handler applies its own PER-ROLE styling (it folds in the
+        # node-level types/instances layers itself); skip the generic uniform
+        # overlay so it doesn't clobber the per-role fonts/sizes with one style.
+        if layout_cfg and n.node_type != "title-page":
             style = resolve_layout_style(layout_cfg, n.node_type, n.id)
             if style:
                 _layout_to_docx(doc.paragraphs[before:], style)

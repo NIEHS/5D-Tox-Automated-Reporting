@@ -119,6 +119,30 @@ DOCUMENT_KEY_SCHEMA: dict = {
 
 
 # ---------------------------------------------------------------------------
+# The TITLE-PAGE roles (a per-role styling sub-layer)
+# ---------------------------------------------------------------------------
+# The title-page node emits several semantically distinct lines (the report
+# title, the report number/date, the publisher block, the ISSN) that each want a
+# DIFFERENT style — unlike every other node, which resolves to ONE style.  So the
+# title page gets a `title_page:` sub-layer in the styles config, keyed by ROLE
+# (not node_type).  Each role's value is an ordinary per-node style dict
+# (validated against LAYOUT_KEY_SCHEMA).  The role names map 1:1 onto the NTP
+# template's `1-NN` title-page style family (see
+# docx_style_extract._TITLE_PAGE_STYLE_TO_ROLE) so the extractor can populate
+# them; the docx title-page handler (docx_generator._render_title_page) reads
+# them to style each emitted block.  Snake_case, a closed set (an unknown role is
+# rejected, like an unknown node_type).
+TITLE_PAGE_ROLES = frozenset({
+    "report_title", "report_type", "report_subtitle",
+    "publication_date", "report_number", "doi", "issn", "nih_number",
+    "publisher_name", "publisher_affiliation",
+    "publication_office", "publication_division",
+    "publication_institute", "publication_department",
+    "logo_graphic",
+})
+
+
+# ---------------------------------------------------------------------------
 # Value validation
 # ---------------------------------------------------------------------------
 

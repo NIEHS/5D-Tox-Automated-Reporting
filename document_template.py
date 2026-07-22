@@ -471,7 +471,7 @@ def load_layout_style(name: str) -> dict:
             f"template {name!r}: 'styles' must be a mapping, "
             f"got {type(cfg).__name__}"
         )
-    for sub in ("defaults", "types", "instances"):
+    for sub in ("defaults", "types", "instances", "title_page"):
         if sub in cfg and not isinstance(cfg[sub], dict):
             raise ValueError(
                 f"template {name!r}: styles.{sub} must be a mapping, "
@@ -484,7 +484,14 @@ def load_layout_style(name: str) -> dict:
                 f"template {name!r}: styles.types.{node_type!r} is not a catalog "
                 f"content type"
             )
-    # Value-check every style dict across all three layers.
+    # title_page keys are ROLES from a closed set (a typo would silently never match).
+    for role in (cfg.get("title_page") or {}):
+        if role not in layout_style.TITLE_PAGE_ROLES:
+            raise ValueError(
+                f"template {name!r}: styles.title_page.{role!r} is not a "
+                f"title-page role (known: {sorted(layout_style.TITLE_PAGE_ROLES)})"
+            )
+    # Value-check every style dict across all layers.
     layers: list[tuple[str, dict]] = []
     if isinstance(cfg.get("defaults"), dict):
         layers.append(("defaults", cfg["defaults"]))
@@ -494,6 +501,9 @@ def load_layout_style(name: str) -> dict:
     for k, v in (cfg.get("instances") or {}).items():
         if isinstance(v, dict):
             layers.append((f"instances.{k}", v))
+    for k, v in (cfg.get("title_page") or {}).items():
+        if isinstance(v, dict):
+            layers.append((f"title_page.{k}", v))
     for where, style in layers:
         errors = layout_style.validate_style(style)
         if errors:

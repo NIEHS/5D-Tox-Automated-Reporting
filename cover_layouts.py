@@ -60,6 +60,11 @@ class CoverLayout:
     title_builder: Callable[[dict], list] = None
     # data -> UNESCAPED publisher / ISSN lines (inner title page).
     publisher_builder: Callable[[dict], list] = None
+    # data -> [(role, [line, ...]), ...] — role-tagged title-page blocks, the
+    # single source of the SAME text as title_builder/publisher_builder but with
+    # per-role semantic tags for role-addressable styling.  Optional: falls back
+    # to title_builder + publisher_builder when a layout doesn't supply it.
+    title_page_blocks: Callable[[dict], list] = None
     # Surface-agnostic geometry in points (origin = top-left of a Letter page).
     metrics: dict = field(default_factory=dict)
 
@@ -115,6 +120,56 @@ def _niehs_publisher_lines(data: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Role-tagged title-page blocks — the SAME text as the flat builders above, but
+# each line carries a semantic ROLE so a per-role styling layer (and the NTP
+# `1-NN` template style family) can address it.  Reuses `_niehs_title_lines` /
+# `_niehs_publisher_lines` so the WORDING is single-sourced and cannot drift.
+#
+# Roles are snake_case and map 1:1 onto the NTP title-page styles (see
+# docx_style_extract._TITLE_PAGE_STYLE_TO_ROLE).  Each block is
+# (role, lines) where `lines` is a list emitted as ONE paragraph with internal
+# line breaks — matching the reference, where e.g. the whole title is a single
+# `1-03_Report_Title` paragraph, not one paragraph per line.
+# ---------------------------------------------------------------------------
+
+def _niehs_title_page_blocks(data: dict) -> list:
+    """data -> [(role, [line, ...]), ...] for the inner title page.
+
+    The title lines collapse into ONE `report_title` block (multi-line); the
+    report number and date, and each publisher line, get their own role so they
+    can be styled independently.  Publisher lines beyond the institution name
+    share the `publisher_affiliation` role (the parent agencies + location),
+    with the ISSN split out to `issn`.
+    """
+    blocks: list = []
+
+    title_lines = _niehs_title_lines(data)
+    if title_lines:
+        blocks.append(("report_title", title_lines))
+
+    report_number = data.get("report_number", "")
+    if report_number:
+        blocks.append(("report_number", [report_number]))
+    report_date = data.get("report_date", "")
+    if report_date:
+        blocks.append(("publication_date", [report_date]))
+
+    # Publisher block: first line is the publisher name; ISSN (if present) gets
+    # its own role; the remaining agency + location lines are affiliations.
+    pub_lines = _niehs_publisher_lines(data)
+    for ln in pub_lines:
+        if ln.startswith("ISSN:"):
+            role = "issn"
+        elif ln == pub_lines[0]:
+            role = "publisher_name"
+        else:
+            role = "publisher_affiliation"
+        blocks.append((role, [ln]))
+
+    return blocks
+
+
+# ---------------------------------------------------------------------------
 # The NIEHS 5D-Tox cover — every reference-derived building block in one place.
 # Geometry from the reference PDF (NIEHS Report 10, page 1): colors extracted via
 # PyMuPDF drawing analysis, accent-bar vertices from the page's vector paths, all
@@ -134,6 +189,7 @@ _NIEHS_5D_TOX = CoverLayout(
     institution_lines=("National Institute of", "Environmental Health Sciences"),
     title_builder=_niehs_title_lines,
     publisher_builder=_niehs_publisher_lines,
+    title_page_blocks=_niehs_title_page_blocks,
     metrics={
         "band_height": 102.0,       # white institution band, top of page
         "bg_top": 119.0,            # sage field + hexagon bg start (below the bar)
