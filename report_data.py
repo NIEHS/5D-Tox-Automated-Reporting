@@ -435,6 +435,7 @@ def marshal_export_data(
     # filter strips content.  This lets the tables-list preview render a
     # complete Table of Contents with ready/placeholder styling, even
     # though the body headings are stripped from the compiled document.
+    from report_data_toc import _build_toc_entries, _apply_section_filter
     toc_entries, table_entries = _build_toc_entries(data, tree=active_tree)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
@@ -840,10 +841,36 @@ def scaffold_report_data(
         # Verbatim from NIEHS Report 10 page ii.  This text is identical
         # across all NIEHS reports — it describes the NIEHS mission and
         # the report series.  No study-specific content.
+        # Foreword — fixed NIEHS boilerplate.  Each paragraph is an INLINE-CONTENT
+        # list (render_common inline model): plain-string runs interleaved with
+        # {"type": "ext-link", ...} units carrying the reference's embedded
+        # hyperlinks (NIEHS, DTT, the report website, PubMed).  All three surfaces
+        # render these as real links (docx w:hyperlink / LaTeX \href / HTML <a>).
         "foreword": {"paragraphs": [
-            "The National Institute of Environmental Health Sciences (NIEHS) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.",
-            "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the Division of Translational Toxicology (DTT) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.",
-            "NIEHS reports are available free of charge on the NIEHS/DTT website and cataloged in PubMed, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).",
+            [
+                "The ",
+                {"type": "ext-link",
+                 "text": "National Institute of Environmental Health Sciences (NIEHS)",
+                 "href": "https://www.niehs.nih.gov/"},
+                " is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.",
+            ],
+            [
+                "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the ",
+                {"type": "ext-link",
+                 "text": "Division of Translational Toxicology (DTT)",
+                 "href": "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm"},
+                " at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.",
+            ],
+            [
+                "NIEHS reports are available free of charge on the ",
+                {"type": "ext-link",
+                 "text": "NIEHS/DTT website",
+                 "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm"},
+                " and cataloged in ",
+                {"type": "ext-link", "text": "PubMed",
+                 "href": "https://pubmed.ncbi.nlm.nih.gov/"},
+                ", a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).",
+            ],
         ]},
 
         # --- About This Report ---

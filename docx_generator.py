@@ -75,14 +75,21 @@ from render_common import (
     genomics_role,
     genomics_table_caption,
     has_paragraph_content,
+    normalize_inline,
+    inline_plain_text,
+    INLINE_EXT_LINK,
     incidence_table_plan,
     methods_subsection_content,
     sample_counts_table,
     table_caption as _table_caption,
     unified_narrative_paragraphs,
 )
+from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
+from render_capabilities import front_matter_roles_for
+
+_REL_HYPERLINK = _REL.HYPERLINK
 from table_builder_common import format_display_number, format_mean_se_display
 
 
@@ -189,19 +196,72 @@ def _add_heading(doc: Document, level: int, title: str, data: dict | None = None
     doc.add_paragraph(_clean(title), style=style)
 
 
-def _add_paragraphs(doc: Document, paragraphs) -> bool:
+def _add_paragraphs(doc: Document, paragraphs, style: str | None = None) -> bool:
     """
     Append one body paragraph per non-empty string.  Returns True if anything
     was added (so callers can fall back to a pending line when nothing was).
+
+    ``style`` names a Word paragraph style to apply (role-driven path, e.g.
+    1-22_Foreword_Text); None uses the default Normal (legacy path).  A style
+    name absent from the doc is ignored (falls back to Normal), so an unbuilt
+    vocabulary never breaks generation.
     """
     added = False
+    use_style = style if (style and style in {s.name for s in doc.styles}) else None
     for p in paragraphs or []:
-        text = _clean(p).strip()
-        if not text:
+        # A paragraph is a plain str OR a list of inline units (render_common
+        # inline model).  Skip only when it has no text at all.
+        if not inline_plain_text(p).strip():
             continue
-        doc.add_paragraph(text)
+        para = doc.add_paragraph()
+        if use_style:
+            para.style = doc.styles[use_style]
+        _add_inline_runs(para, p)
         added = True
     return added
+
+
+def _add_inline_runs(paragraph, content) -> None:
+    """Populate a paragraph from an inline-content value (a plain str OR a list of
+    inline units — render_common's model).  A plain str is one run; an ext-link
+    unit becomes a real Word hyperlink (blue, underlined) via _add_hyperlink; an
+    unknown typed unit degrades to a plain run of its text."""
+    for unit in normalize_inline(content):
+        if isinstance(unit, str):
+            if unit:
+                paragraph.add_run(_clean(unit))
+        elif unit.get("type") == INLINE_EXT_LINK:
+            _add_hyperlink(paragraph, _clean(unit.get("text", "")), unit.get("href", ""))
+        else:
+            paragraph.add_run(_clean(unit.get("text", "")))
+
+
+def _add_hyperlink(paragraph, text: str, url: str) -> None:
+    """Append a clickable external hyperlink run to a paragraph.
+
+    python-docx has no hyperlink API, so build the OOXML directly: register the
+    URL as an EXTERNAL relationship on the part, then a <w:hyperlink r:id=...>
+    wrapping a run styled blue + underlined (the reference's link presentation).
+    A missing url degrades to a plain run (the link text, not clickable)."""
+    if not url:
+        paragraph.add_run(text)
+        return
+    r_id = paragraph.part.relate_to(
+        url, _REL_HYPERLINK, is_external=True
+    )
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), r_id)
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    color = OxmlElement("w:color"); color.set(qn("w:val"), "0563C1"); rpr.append(color)
+    underline = OxmlElement("w:u"); underline.set(qn("w:val"), "single"); rpr.append(underline)
+    run.append(rpr)
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
+    t.text = text
+    run.append(t)
+    link.append(run)
+    paragraph._p.append(link)
 
 
 def _add_labeled_sections(doc: Document, parts) -> None:
@@ -359,13 +419,30 @@ def _add_page_break(doc: Document) -> None:
 
 
 def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
-    """Front-matter / narrative section: heading + labeled-sections or prose."""
-    _add_heading(doc, node.level, node.title, data)
+    """Front-matter / narrative section: heading + labeled-sections or prose.
+
+    Role-driven path (ADR-0010): a ``front-matter`` node derives its heading + body
+    ROLES from its data_key (render_capabilities.front_matter_roles_for) — so the
+    Foreword title is 1-21_Foreword_Title (centered), its text 1-22_Foreword_Text,
+    the Abstract head 1-15_Abstract_Head, etc., instead of the generic body
+    section_heading/Normal.  `narrative` nodes delegating here keep the generic
+    heading (they are body sections, not front matter)."""
+    heading_role = body_role = None
+    if node.node_type == "front-matter" and data.get("_vocabulary") is not None:
+        heading_role, body_role = front_matter_roles_for(node.data_key)
+
+    heading_style = _role_style_name(data, heading_role) if heading_role else None
+    if heading_style and node.title and heading_style in {s.name for s in doc.styles}:
+        doc.add_paragraph(_clean(node.title), style=doc.styles[heading_style])
+    else:
+        _add_heading(doc, node.level, node.title, data)
+
+    body_style = _role_style_name(data, body_role) if body_role else None
     plan = front_matter_plan(node, data)
     if plan.kind == "labeled":
         _add_labeled_sections(doc, plan.labeled_parts)
     elif plan.kind == "paragraphs":
-        _add_paragraphs(doc, plan.paragraphs)
+        _add_paragraphs(doc, plan.paragraphs, style=body_style)
     else:
         _add_pending(doc, f"Section pending: {node.title}")
 
@@ -757,6 +834,16 @@ def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
             role_style = _resolve_title_page_role(layout_cfg, role)
             if role_style:
                 _apply_paragraph_style(para, role_style)
+
+    # The title page is a self-contained front page: always end it so the next
+    # node (Foreword) starts fresh, regardless of the active tree or whether a
+    # page-break node was authored between them.  The reference separates the
+    # title block from the Foreword with a section break; a page break is the
+    # equivalent here (the front-matter section break at the body boundary is
+    # emitted separately by generate_docx).  Previously this separation happened
+    # only by accident, via the body-heading style's break_before — which
+    # vanished once the Foreword correctly used the (no-break) 1-21 title style.
+    _add_page_break(doc)
 
 
 def _freeform_text(node: DocNode) -> str:
@@ -1295,6 +1382,30 @@ def _build_style_skeleton(doc: Document, document: dict | None = None) -> None:
     header.font.size = Pt(header_size)
 
 
+# Max characters per running-header line.  The header runs ~12pt across the full
+# ~6.5" text block, so it fits far more per line than the 20pt title; we wrap only
+# to avoid Word's arbitrary mid-phrase break.  The reference breaks its ~85-char
+# header into two lines after "…Study of", so ~50 puts the break at a comparable
+# semantic point without overflowing.
+_HEADER_MAX_CHARS = 50
+
+
+def _set_header_text(header_para, text: str) -> None:
+    """Set the running-header text, width-wrapped into lines joined by soft breaks
+    so it breaks at word boundaries rather than auto-wrapping mid-phrase (the
+    reported header-wrap bug).  Reuses cover_layouts._wrap_words for the same
+    greedy packing the title uses.  A short header stays one line."""
+    from cover_layouts import _wrap_words
+
+    for run in list(header_para.runs):        # clear any existing runs
+        run._element.getparent().remove(run._element)
+    lines = _wrap_words(text, _HEADER_MAX_CHARS) or [text]
+    run = header_para.add_run(lines[0])
+    for extra in lines[1:]:
+        run.add_break(WD_BREAK.LINE)
+        run = header_para.add_run(extra)
+
+
 def _configure_section(section, running_header: str, document: dict | None = None) -> None:
     """US-Letter geometry + a running header + a centered page-number footer.
 
@@ -1312,8 +1423,12 @@ def _configure_section(section, running_header: str, document: dict | None = Non
     section.footer_distance = hdr
 
     header_para = section.header.paragraphs[0]
-    header_para.text = _clean(running_header)
     header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Break the running header at word boundaries so it does not auto-wrap at an
+    # arbitrary point in the text-block width (the reference inserts an explicit
+    # break after "…Study of" rather than letting Word wrap).  Width-wrap into
+    # lines with soft breaks; one line renders unchanged.
+    _set_header_text(header_para, _clean(running_header))
 
     footer_para = section.footer.paragraphs[0]
     footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER

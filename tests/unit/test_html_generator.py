@@ -91,19 +91,23 @@ def test_title_block_present(scaffold):
     """
     html = generate_html(scaffold)
     assert 'class="title-block"' in html
-    # Series prefix + study-type lines (canonical 7-line title from the shared
-    # cover_layouts builder — the LaTeX cover and HTML title page use the same
-    # line breaks now, so "In Vivo Repeat Dose" and "Biological Potency Study of"
-    # are separate lines).
-    assert "NIEHS Report on the" in html
-    assert "In Vivo Repeat Dose" in html
-    assert "Biological Potency Study of" in html
-    # Chemical with CASRN (the formal title-name), then strain + study type on
-    # their own lines.
-    assert "Perfluorohexanesulfonamide (CASRN 41997-13-1)" in html
-    assert "in Sprague Dawley" in html
-    assert "(Hsd:Sprague Dawley® SD®)" in html
-    assert "Rats (Gavage Studies)" in html
+    # The title is WIDTH-WRAPPED with <br> soft breaks (cover_layouts._wrap_words),
+    # so line boundaries are no longer fixed — assert on the title text with the
+    # <br> markers stripped (the words are all present, in order).
+    import re
+    m = re.search(r'class="tp-title">(.*?)</h1>', html, re.S)
+    assert m, "title block not found"
+    title_text = m.group(1).replace("<br>", " ")
+    assert title_text.startswith("NIEHS Report on the")
+    for fragment in (
+        "In Vivo Repeat Dose Biological",
+        "Potency Study of",
+        "Perfluorohexanesulfonamide (CASRN 41997-13-1)",
+        "in Sprague Dawley",
+        "(Hsd:Sprague Dawley® SD®) Rats",
+        "(Gavage Studies)",
+    ):
+        assert fragment in title_text, f"missing {fragment!r}"
     # Publisher block + ISSN + location.
     assert "National Institute of Environmental Health Sciences" in html
     assert "ISSN: 2768-5632" in html

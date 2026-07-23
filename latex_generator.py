@@ -78,6 +78,10 @@ from render_capabilities import content_item_landscape_requested
 from render_common import (
     front_matter_plan,
     has_paragraph_content,
+    normalize_inline,
+    inline_plain_text,
+    paragraph_has_inline,
+    INLINE_EXT_LINK,
     assert_dispatch_covers,
     walk_emit,
     LATEX_OMITS,
@@ -276,19 +280,39 @@ def _splice_urls(text: str) -> str:
     return "".join(out)
 
 
-def _render_paragraphs(paragraphs: list[str]) -> str:
-    """
-    Render a flat list of paragraph strings as LaTeX, separated by blank
-    lines (which TeX interprets as paragraph breaks).
+def _render_inline(paragraph) -> str:
+    r"""Render one paragraph (a plain str OR a list of inline units — the
+    render_common inline model) to LaTeX.  A plain str keeps the exact
+    _splice_urls path (bare-URL → breakable \url{}); an ext-link unit becomes an
+    \href{url}{text} (hyperref, loaded in niehs.cls), text escaped; an unknown
+    typed unit degrades to its escaped text."""
+    if not paragraph_has_inline(paragraph):
+        text = inline_plain_text(paragraph) if isinstance(paragraph, list) else paragraph
+        return _splice_urls(text or "")
+    out: list[str] = []
+    for unit in normalize_inline(paragraph):
+        if isinstance(unit, str):
+            out.append(_splice_urls(unit))
+        elif unit.get("type") == INLINE_EXT_LINK:
+            href = unit.get("href", "")
+            out.append(rf"\href{{{href}}}{{{_escape_latex(unit.get('text', ''))}}}")
+        else:
+            out.append(_escape_latex(unit.get("text", "")))
+    return "".join(out)
 
-    Each paragraph is escaped individually, with embedded URLs spliced into
-    breakable \\url{} links (see _splice_urls — this is what keeps long
-    reference URLs from overflowing the margin).  Returns "" for empty input
-    so callers can detect "no content" and substitute a placeholder.
+
+def _render_paragraphs(paragraphs: list) -> str:
+    """
+    Render a list of paragraphs as LaTeX, separated by blank lines (TeX paragraph
+    breaks).  A paragraph is a plain string OR a list of inline units
+    (render_common inline model); _render_inline escapes/links either.  Bare URLs
+    in plain text still become breakable \\url{} (keeps long reference URLs off
+    the margin).  Returns "" for empty input so callers can substitute a
+    placeholder.
     """
     if not paragraphs:
         return ""
-    return "\n\n".join(_splice_urls(p) for p in paragraphs)
+    return "\n\n".join(_render_inline(p) for p in paragraphs)
 
 
 def _pending_placeholder(node_type: str) -> str:

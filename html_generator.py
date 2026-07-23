@@ -60,6 +60,10 @@ from render_capabilities import content_item_landscape_requested
 from render_common import (
     front_matter_plan,
     has_paragraph_content,
+    normalize_inline,
+    inline_plain_text,
+    paragraph_has_inline,
+    INLINE_EXT_LINK,
     assert_dispatch_covers,
     walk_emit,
     incidence_table_plan,
@@ -428,16 +432,35 @@ def _heading(level: int, title: str) -> str:
     return f"<{tag}>{_esc(title)}</{tag}>"
 
 
+def _render_inline(paragraph) -> str:
+    """Render one paragraph (a plain str OR a list of inline units — ext-link
+    etc., render_common's inline model) to escaped HTML.  A plain str keeps the
+    exact _esc path (xref resolution intact); an ext-link becomes <a href>, its
+    text escaped; an unknown typed unit degrades to its escaped text."""
+    if not paragraph_has_inline(paragraph):
+        return _esc(inline_plain_text(paragraph) if isinstance(paragraph, list) else paragraph)
+    out: list[str] = []
+    for unit in normalize_inline(paragraph):
+        if isinstance(unit, str):
+            out.append(_esc(unit))
+        elif unit.get("type") == INLINE_EXT_LINK:
+            href = _html.escape(str(unit.get("href", "")), quote=True)
+            out.append(f'<a href="{href}">{_esc(unit.get("text", ""))}</a>')
+        else:
+            out.append(_esc(unit.get("text", "")))
+    return "".join(out)
+
+
 def _render_paragraphs(paragraphs: list) -> str:
     """
-    Render a flat list of paragraph strings as a sequence of <p> blocks.
-
-    Each paragraph is escaped individually.  Returns "" for empty input
-    so callers can detect "no content" and substitute a placeholder.
+    Render a list of paragraphs as a sequence of <p> blocks.  A paragraph is a
+    plain string OR a list of inline units (render_common inline model); either
+    is escaped/linkified by _render_inline.  Returns "" for empty input so callers
+    can detect "no content" and substitute a placeholder.
     """
     if not paragraphs:
         return ""
-    return "\n".join(f"<p>{_esc(p)}</p>" for p in paragraphs)
+    return "\n".join(f"<p>{_render_inline(p)}</p>" for p in paragraphs)
 
 
 def _pending(label: str) -> str:

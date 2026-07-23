@@ -579,9 +579,39 @@
   "dtxsid": "DTXSID_TEST_NO_SESSION",
   "foreword": {
     "paragraphs": [
-      "The National Institute of Environmental Health Sciences (NIEHS) is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.",
-      "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the Division of Translational Toxicology (DTT) at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.",
-      "NIEHS reports are available free of charge on the NIEHS/DTT website and cataloged in PubMed, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+      [
+        "The ",
+        {
+          "href": "https://www.niehs.nih.gov/",
+          "text": "National Institute of Environmental Health Sciences (NIEHS)",
+          "type": "ext-link"
+        },
+        " is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people."
+      ],
+      [
+        "The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the ",
+        {
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm",
+          "text": "Division of Translational Toxicology (DTT)",
+          "type": "ext-link"
+        },
+        " at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making."
+      ],
+      [
+        "NIEHS reports are available free of charge on the ",
+        {
+          "href": "https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm",
+          "text": "NIEHS/DTT website",
+          "type": "ext-link"
+        },
+        " and cataloged in ",
+        {
+          "href": "https://pubmed.ncbi.nlm.nih.gov/",
+          "text": "PubMed",
+          "type": "ext-link"
+        },
+        ", a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health)."
+      ]
     ]
   },
   "gene_narrative": {

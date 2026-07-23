@@ -117,6 +117,73 @@ def scan_pending_markers(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Inline content model — semantic units WITHIN a paragraph (ADR-0010 inline
+# sibling of the block COMPONENT_CATALOG)
+# ---------------------------------------------------------------------------
+# A hyperlink (and, later, a cross-reference, a superscript, an emphasis) is
+# SEMANTIC content, not a styling annotation: the link's TARGET is information
+# ("this text refers to the NIEHS site"); the appearance (blue/underlined/
+# clickable) is a per-surface RENDERING INSTRUCTION each emitter derives — the
+# same decision/emit split ADR-0006 applies to block styling, one level down.
+#
+# Representation (deliberately minimal, room to grow):
+#   - a PARAGRAPH is either a plain ``str`` (the common case, unchanged) OR a
+#     list of INLINE UNITS;
+#   - an inline unit is either a plain ``str`` (a literal run) or a typed dict.
+#     The only type today is ``ext-link`` (projects to BITS <ext-link>/HTML <a>):
+#         {"type": "ext-link", "text": "PubMed", "href": "https://pubmed..."}
+#   - a future unit (``xref``, ``sup``, ``emphasis``) is a new ``type`` the
+#     emitters learn; unknown types degrade to their ``text`` (never a hard fail).
+#
+# ``normalize_inline`` coerces either shape to a list of units so every emitter
+# has ONE code path; ``inline_plain_text`` flattens to bare text (for alt-text,
+# link detection, the pending-marker scan).  The three surface emitters
+# (html/latex/docx) each translate a unit to their markup — that per-surface
+# translation is the only place link presentation is decided.
+
+INLINE_EXT_LINK = "ext-link"
+
+
+def make_ext_link(text: str, href: str) -> dict:
+    """One inline external-link unit (the semantic content: display text + its
+    target URI).  Presentation is each surface's business."""
+    return {"type": INLINE_EXT_LINK, "text": text, "href": href}
+
+
+def normalize_inline(paragraph) -> list:
+    """Coerce a paragraph (a plain str OR a list of inline units) to a list of
+    inline units, so an emitter has one path.  A plain str → ``[str]``; a list
+    passes through (its str/dict units intact).  None/empty → ``[]``."""
+    if paragraph is None:
+        return []
+    if isinstance(paragraph, str):
+        return [paragraph] if paragraph else []
+    if isinstance(paragraph, list):
+        return paragraph
+    return [str(paragraph)]
+
+
+def inline_plain_text(paragraph) -> str:
+    """Flatten a paragraph (plain str or inline-unit list) to bare text — the
+    link display text for a typed unit, the literal for a str.  Used where only
+    the text matters (pending-marker scan, docx alt, has-content checks)."""
+    parts: list[str] = []
+    for unit in normalize_inline(paragraph):
+        if isinstance(unit, str):
+            parts.append(unit)
+        elif isinstance(unit, dict):
+            parts.append(str(unit.get("text", "")))
+    return "".join(parts)
+
+
+def paragraph_has_inline(paragraph) -> bool:
+    """True when a paragraph carries any TYPED inline unit (a link etc.), i.e. it
+    is not a plain string / list of plain strings.  Lets an emitter keep its fast
+    plain-text path and only branch to inline rendering when needed."""
+    return any(isinstance(u, dict) for u in normalize_inline(paragraph))
+
+
+# ---------------------------------------------------------------------------
 # Type definitions — markup-free descriptions handed to the emitters
 # ---------------------------------------------------------------------------
 
@@ -162,8 +229,11 @@ def has_paragraph_content(paragraphs) -> bool:
     while LaTeX rendered it as "" (treated as absent, → pending), so the two
     surfaces silently disagreed about whether a section had content.  Deciding
     it once here makes both projections agree.
+
+    A paragraph is a plain string OR an inline-unit list (the inline model);
+    inline_plain_text flattens either to bare text for the emptiness check.
     """
-    return any((p or "").strip() for p in (paragraphs or []))
+    return any(inline_plain_text(p).strip() for p in (paragraphs or []))
 
 
 def labeled_section_parts(sections) -> list[tuple[str, str]]:
