@@ -171,11 +171,21 @@ def _style_run(run, *, size_pt: int, font: str | None = None, bold: bool = False
 # Low-level docx helpers
 # ---------------------------------------------------------------------------
 
-def _add_heading(doc: Document, level: int, title: str) -> None:
-    """Append a heading paragraph for levels 1-3; level 0/empty adds nothing."""
-    style = _HEADING_STYLE_BY_LEVEL.get(level)
-    if not style or not title:
+def _add_heading(doc: Document, level: int, title: str, data: dict | None = None) -> None:
+    """Append a heading paragraph for levels 1-3; level 0/empty adds nothing.
+
+    Role-driven path (ADR-0010 Phase 2): when a vocabulary is active (``data``
+    carries it), the level maps to the section_heading_N role and the paragraph
+    gets that role's NATIVE Word style (3-0Na_HeadN_NoNumber).  Otherwise the
+    built-in Heading 1-3 styles (_HEADING_STYLE_BY_LEVEL) — the pre-vocabulary
+    look."""
+    if not title or level not in _HEADING_STYLE_BY_LEVEL:
         return
+    style = _HEADING_STYLE_BY_LEVEL[level]
+    if data is not None:
+        role_style = _role_style_name(data, f"section_heading_{level}")
+        if role_style and role_style in {s.name for s in doc.styles}:
+            style = role_style
     doc.add_paragraph(_clean(title), style=style)
 
 
@@ -350,7 +360,7 @@ def _add_page_break(doc: Document) -> None:
 
 def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
     """Front-matter / narrative section: heading + labeled-sections or prose."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     plan = front_matter_plan(node, data)
     if plan.kind == "labeled":
         _add_labeled_sections(doc, plan.labeled_parts)
@@ -370,7 +380,7 @@ def _render_narrative(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_methods_subsection(doc: Document, node: DocNode, data: dict) -> None:
     """M&M subsection — prose + optional inline table, matched by methods_key."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     paragraphs, inline = methods_subsection_content(node, data)
     added = _add_paragraphs(doc, paragraphs) if has_paragraph_content(paragraphs) else False
     if inline is not None:
@@ -411,12 +421,12 @@ def _render_sample_counts_table(doc: Document, node: DocNode, data: dict) -> Non
 
 def _render_heading_only(doc: Document, node: DocNode, data: dict) -> None:
     """Structural heading; children rendered separately by the walker."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
 
 
 def _render_appendix(doc: Document, node: DocNode, data: dict) -> None:
     """Appendix — B renders the animal roster; others heading + stub/children."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     rows = appendix_roster_rows(node, data)
     if rows is not None:
         _booktabs_table(
@@ -430,7 +440,7 @@ def _render_appendix(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_tables_list(doc: Document, node: DocNode, data: dict) -> None:
     """Front-matter list of tables from data['table_entries']."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     entries = data.get("table_entries") or []
     if not entries:
         _add_pending(doc, "List of tables: pending.")
@@ -465,7 +475,7 @@ def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_narrative_tables(doc: Document, node: DocNode, data: dict) -> None:
     """H2 group under Results: heading + unified narrative; tables walked after."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     paragraphs = unified_narrative_paragraphs(node, data)
     if has_paragraph_content(paragraphs):
         _add_paragraphs(doc, paragraphs)
@@ -510,7 +520,7 @@ def _render_incidence_table(doc: Document, node: DocNode, data: dict) -> None:
 def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
     """Apical Endpoint BMD Summary — prose + one row per endpoint."""
     plan = bmd_summary_plan(node, data)
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     prose = _add_paragraphs(doc, plan.paragraphs)
     if plan.rows is None:
         if not prose:
@@ -522,7 +532,7 @@ def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
 def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     """Gene Set / Gene BMD section — per-(organ, sex) subsections."""
     role = genomics_role(node)
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data))
 
     entries = genomics_entries(node, data)
@@ -721,21 +731,32 @@ def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
         if not lines:
             continue
         para = doc.add_paragraph()
-        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = para.add_run(lines[0])
         for extra in lines[1:]:
             run.add_break(WD_BREAK.LINE)
             run = para.add_run(extra)
-        # Reference default for this role, then the configured overlay on top.
-        base = _TITLE_PAGE_ROLE_DEFAULTS.get(role, _TITLE_PAGE_META_DEFAULT)
-        for r in para.runs:
-            r.font.name = base["font"]
-            r.font.size = Pt(base["size"])
-            r.font.bold = base["bold"]
-            r.font.color.rgb = _BLACK
-        role_style = _resolve_title_page_role(layout_cfg, role)
-        if role_style:
-            _apply_paragraph_style(para, role_style)
+        # Role-driven path (ADR-0010 Phase 2): when a vocabulary is active, tag the
+        # paragraph with the role's NATIVE Word style — the title inherits the NTP
+        # 1-NN typography (incl. the neutral single line spacing) with NO hardcoded
+        # defaults.  Otherwise fall back to the measured reference defaults +
+        # optional config overlay (the pre-vocabulary look).
+        style_name = _role_style_name(data, role)
+        if style_name:
+            try:
+                para.style = doc.styles[style_name]
+            except KeyError:
+                style_name = None
+        if not style_name:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            base = _TITLE_PAGE_ROLE_DEFAULTS.get(role, _TITLE_PAGE_META_DEFAULT)
+            for r in para.runs:
+                r.font.name = base["font"]
+                r.font.size = Pt(base["size"])
+                r.font.bold = base["bold"]
+                r.font.color.rgb = _BLACK
+            role_style = _resolve_title_page_role(layout_cfg, role)
+            if role_style:
+                _apply_paragraph_style(para, role_style)
 
 
 def _freeform_text(node: DocNode) -> str:
@@ -757,14 +778,14 @@ def _render_freeform_page(doc: Document, node: DocNode, data: dict) -> None:
     """Freeform authored page — forces its own page, then heading + body text."""
     _add_page_break(doc)
     if node.title:
-        _add_heading(doc, node.level, node.title)
+        _add_heading(doc, node.level, node.title, data)
     _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
 
 
 def _render_freeform_block(doc: Document, node: DocNode, data: dict) -> None:
     """Freeform authored block — inline, no forced page break."""
     if node.title:
-        _add_heading(doc, node.level, node.title)
+        _add_heading(doc, node.level, node.title, data)
     _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
 
 
@@ -775,7 +796,7 @@ def _render_page_break(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_unimplemented(doc: Document, node: DocNode, data: dict) -> None:
     """Catch-all — heading (if any) + a visible pending placeholder."""
-    _add_heading(doc, node.level, node.title)
+    _add_heading(doc, node.level, node.title, data)
     _add_pending(doc, f"Section pending: {node.node_type} rendering not yet implemented")
 
 
@@ -844,48 +865,91 @@ def _resolve_font_name(style: dict) -> "str | None":
 
 
 def _apply_run_style(run, style: dict) -> None:
-    """Apply the character-level part of a resolved style to one run."""
-    font = _resolve_font_name(style)
-    if font:
-        run.font.name = font
+    """Apply the character-level part of a resolved style to one run (delegates to
+    _apply_font_style on the run's font)."""
+    _apply_font_style(run.font, style)
+
+
+def _apply_font_style(font, style: dict) -> None:
+    """Apply the character-level part of a resolved style to a Font object — works
+    for both a run's font and a named style's font (both expose the same Font API
+    + a `_element` carrying an rPr).  So the same character logic bakes into a
+    style DEFINITION (Phase 2) or overlays a run (legacy path)."""
+    name = _resolve_font_name(style)
+    if name:
+        font.name = name
     size = _length_to_pt(style.get("font_size"))
     if size:
-        run.font.size = Pt(size)
+        font.size = Pt(size)
     weight = style.get("weight")
     if weight == "bold":
-        run.font.bold = True
+        font.bold = True
     elif weight == "normal":
-        run.font.bold = False
+        font.bold = False
     st = style.get("style")
     if st == "italic":
-        run.font.italic = True
+        font.italic = True
     elif st == "normal":
-        run.font.italic = False
+        font.italic = False
     tt = style.get("text_transform")
     if tt == "uppercase":
-        run.font.all_caps = True   # w:caps — a DISPLAY transform (text unchanged)
+        font.all_caps = True   # w:caps — a DISPLAY transform (text unchanged)
     elif tt == "none":
-        run.font.all_caps = False
+        font.all_caps = False
     color = style.get("color")
     if isinstance(color, str) and color.startswith("#"):
         h = color.lstrip("#")
         if len(h) == 3:
             h = "".join(c * 2 for c in h)
         if len(h) == 6:
-            run.font.color.rgb = RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+            font.color.rgb = RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
     # letter_spacing → rPr <w:spacing w:val="TWIPS"> (character spacing, in twips =
     # pt*20).  python-docx's Font exposes no `spacing`, so set it on the rPr
-    # directly.  Absolute units only (em/ex → _length_to_pt None), matching the
-    # LaTeX surface (soul spaces by a fixed width).  NB this is the CHARACTER
-    # spacing element (rPr), distinct from paragraph space_before/after (pPr).
+    # directly.  Font._element is the run (rPr host) or the style element (both
+    # answer get_or_add_rPr).  Absolute units only (em/ex → _length_to_pt None).
     ls_pt = _length_to_pt(style.get("letter_spacing"))
     if ls_pt is not None:
-        rpr = run._element.get_or_add_rPr()
+        rpr = font._element.get_or_add_rPr()
         spacing = rpr.find(qn("w:spacing"))
         if spacing is None:
             spacing = OxmlElement("w:spacing")
             rpr.append(spacing)
         spacing.set(qn("w:val"), str(int(round(ls_pt * 20))))
+
+
+def _apply_style_props_to_style(word_style, style: dict) -> None:
+    """Apply a resolved style dict to a Word STYLE object (not a paragraph): its
+    paragraph_format + its font.  Used to bake a vocabulary type's OWN delta into
+    a named <w:style> (ADR-0010 Phase 2), so the style DEFINITION carries the
+    property and every paragraph tagged with it inherits — the native Word model,
+    unlike the per-paragraph overlay _apply_paragraph_style does for the legacy
+    path.  Only the character part differs (a style has one .font, not runs)."""
+    if not style:
+        return
+    pf = word_style.paragraph_format
+    align = style.get("align")
+    if align:
+        pf.alignment = {
+            "left": WD_ALIGN_PARAGRAPH.LEFT, "right": WD_ALIGN_PARAGRAPH.RIGHT,
+            "center": WD_ALIGN_PARAGRAPH.CENTER, "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+        }.get(align)
+    lh = style.get("line_height")
+    if isinstance(lh, (int, float)) and not isinstance(lh, bool):
+        pf.line_spacing = lh
+    sb = _length_to_pt(style.get("space_before"))
+    if sb is not None:
+        pf.space_before = Pt(sb)
+    sa = _length_to_pt(style.get("space_after"))
+    if sa is not None:
+        pf.space_after = Pt(sa)
+    indent = _length_to_pt(style.get("first_line_indent"))
+    if indent is not None:
+        pf.first_line_indent = Pt(indent)
+    if style.get("keep_together") is True:
+        pf.keep_together = True
+    if style.get("break_before") == "page":
+        pf.page_break_before = True
+    _apply_font_style(word_style.font, style)
 
 
 def _apply_paragraph_style(paragraph, style: dict) -> None:
@@ -1050,6 +1114,123 @@ def _emu_or_default(document: dict, key: str, default):
     return Pt(pt) if pt is not None else default
 
 
+def _load_active_vocabulary(data: dict):
+    """Load the vocabulary named by ``data['vocabulary']`` (a vocab/<name>.yaml
+    stem), or None when unset — the opt-in switch for role-driven styling.  A load
+    error is swallowed to None (fall back to legacy styling) rather than breaking
+    generation; the vocabulary is an enhancement, not a hard dependency."""
+    name = (data.get("vocabulary") or "").strip()
+    if not name:
+        return None
+    try:
+        import vocabulary as _vocab
+        return _vocab.load_vocabulary(name)
+    except Exception:
+        return None
+
+
+def _role_style_name(data: dict, role: str) -> "str | None":
+    """The Word style name a vocabulary role maps to (its docx binding), or None
+    when no vocabulary is active or the role is unknown — the switch that makes a
+    handler apply a native pStyle only on the role-driven path, falling back to
+    its legacy styling otherwise."""
+    vocab = data.get("_vocabulary")
+    if vocab is None or vocab.get(role) is None:
+        return None
+    import vocabulary as _vocab
+    return _vocab.resolve_bindings(vocab, role)["docx"]
+
+
+def _build_vocabulary_styles(doc: Document, vocab) -> None:
+    """Emit the vocabulary's type graph as native Word paragraph styles (ADR-0010
+    Phase 2): one <w:style> per type, styleId/name = its docx binding, basedOn =
+    the specialization parent's binding, properties = the type's OWN style delta.
+    The resulting styles.xml mirrors the NTP basedOn graph, so applying a role by
+    pStyle resolves through the same inheritance the reference uses — and a
+    co-author opening the docx sees the real named-style palette.
+
+    Built in specialization order (parents before children) so base_style can be
+    assigned.  A type whose docx binding is an EXISTING style (Normal, Heading 1)
+    updates that style in place rather than adding a duplicate."""
+    import vocabulary as _vocab
+    from docx.enum.style import WD_STYLE_TYPE
+
+    styles = doc.styles
+
+    # Topological order: a type appears after its `specializes` parent.  The
+    # graph is a shallow forest (roots → NTP roles), so a simple resolved-set
+    # sweep terminates quickly.
+    remaining = dict(vocab.types)
+    ordered: list[str] = []
+    placed: set[str] = set()
+    while remaining:
+        progressed = False
+        for name, rec in list(remaining.items()):
+            parent = rec.specializes
+            if parent is None or parent in placed or parent not in vocab.types:
+                ordered.append(name)
+                placed.add(name)
+                del remaining[name]
+                progressed = True
+        if not progressed:  # defensive: a cycle (validation should prevent this)
+            ordered.extend(remaining)
+            break
+
+    for name in ordered:
+        rec = vocab.types[name]
+        bindings = _vocab.resolve_bindings(vocab, name)
+        style_name = bindings["docx"]
+        # Reuse an existing Word style of that name, else create a paragraph style.
+        try:
+            style = styles[style_name]
+        except KeyError:
+            style = styles.add_style(style_name, WD_STYLE_TYPE.PARAGRAPH)
+        # basedOn = the parent type's docx style (skip if the parent isn't a real
+        # style in the doc, e.g. a pure grouping root whose binding we didn't emit).
+        # CRITICAL: skip when the parent binds to the SAME Word style name — a
+        # curated alias (e.g. publisher_location) may reuse its concrete parent's
+        # Word style; both vocab types then map to one physical <w:style>, and
+        # setting basedOn to itself is a self-reference Word can't resolve (the
+        # chain breaks → left/default rendering).  Same-name ⇒ same style ⇒ no edge.
+        if rec.specializes and rec.specializes in vocab.types:
+            parent_name = _vocab.resolve_bindings(vocab, rec.specializes)["docx"]
+            if parent_name != style_name:
+                try:
+                    style.base_style = styles[parent_name]
+                except KeyError:
+                    pass
+        # Apply ONLY this type's own delta (inheritance carries the rest), so the
+        # emitted style mirrors the NTP delta-based definitions.
+        if rec.style:
+            _apply_style_props_to_style(style, rec.style)
+
+
+def _neutralize_docdefaults_spacing(styles) -> None:
+    """Remove python-docx's default docDefaults paragraph spacing entirely, so the
+    document root is spacing-neutral like the NTP reference.
+
+    A fresh Document() ships docDefaults pPr <w:spacing w:line="276" (1.15x)
+    w:after="200" (10pt)> — the modern-Office default.  The NTP reference's
+    docDefaults has NO spacing element at all (verified): every gap comes from the
+    individual 1-NN/0-NN STYLES, never a document-wide default.  Leaving the
+    default in place means (a) the title inherits 1.15x line spacing, and (b) a
+    paragraph without its own space_after inherits a 10pt gap — which is why a
+    hand-inserted paragraph on the title page opened a huge gap.  We drop the
+    whole <w:spacing> element to match the reference; each style's own
+    space_before/after then governs, and single line spacing applies by default.
+    python-docx exposes no docDefaults API, so we edit the element directly.
+    Idempotent + safe if the element is absent."""
+    el = styles.element
+    ppr = el.find(
+        "/".join(qn(t) for t in ("w:docDefaults", "w:pPrDefault", "w:pPr"))
+    )
+    if ppr is None:
+        return
+    spacing = ppr.find(qn("w:spacing"))
+    if spacing is not None:
+        ppr.remove(spacing)
+
+
 def _build_style_skeleton(doc: Document, document: dict | None = None) -> None:
     """
     Bind the base typography onto the document's Word styles BEFORE any content
@@ -1073,6 +1254,16 @@ def _build_style_skeleton(doc: Document, document: dict | None = None) -> None:
     header_size = _length_to_pt(document.get("header_font_size")) or _HEADER_PT
 
     styles = doc.styles
+
+    # Neutralize python-docx's non-reference docDefaults (ADR-0010): a fresh
+    # Document() ships docDefaults pPr <w:spacing w:line="276" lineRule="auto">
+    # (1.15x) + after=200, the modern-Office default.  The NTP reference sets NO
+    # line spacing at the document root, so every part — including the title,
+    # which inherits the root, not Normal — renders SINGLE.  Our 1.15x root is
+    # exactly why the generated title looked mis-spaced.  Strip the docDefaults
+    # paragraph spacing so the neutral single default (vocab/base.yaml `text`)
+    # applies; Normal below still sets its own space_after for body paragraphs.
+    _neutralize_docdefaults_spacing(styles)
 
     normal = styles["Normal"]
     normal.font.name = body_font
@@ -1154,6 +1345,17 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
 
     doc = Document()
     _build_style_skeleton(doc, document)
+    # Opt-in role-driven styling (ADR-0010 Phase 2): when the data dict names a
+    # vocabulary, build its type graph as native Word styles so handlers can apply
+    # them by pStyle and a co-author sees the real NTP palette.  Absent ⇒ the
+    # legacy per-node styling path, byte-identical to before.
+    vocab = _load_active_vocabulary(data)
+    if vocab is not None:
+        _build_vocabulary_styles(doc, vocab)
+        # Stash on a shallow copy so handlers can resolve a role → Word style name
+        # (via _role_style_name) without threading a new parameter.  Copy, don't
+        # mutate the caller's dict.
+        data = {**data, "_vocabulary": vocab}
     front_section = doc.sections[0]
     _configure_section(front_section, running_header, document)
     # No page number on the cover page itself (front matter numbering still

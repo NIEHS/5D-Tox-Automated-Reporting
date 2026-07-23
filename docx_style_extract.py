@@ -687,6 +687,7 @@ _ALWAYS_INCLUDE = (
     "Fig_Title",              # fig_title role (figure, ADR-0012)
     "3-11_Fig_Alt_Text",      # fig_alt_text role (figure accessibility)
     "1-26_Logo_Graphic",      # logo_graphic role (figure subtype=logo)
+    "NTP Publisher Location", # publisher_location role (title-page location line)
 )
 
 

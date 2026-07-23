@@ -79,27 +79,60 @@ class CoverLayout:
 _DEFAULT_STRAIN = "(Hsd:Sprague Dawley® SD®)"
 
 
-def _niehs_title_lines(data: dict) -> list:
-    """
-    The seven title lines of the NIEHS 5D-Tox report (report.typ:522-528).
+# Max characters per wrapped title line.  The title renders in ~20pt Arial bold
+# in a ~6.5" text block; a fixed break scheme overflows for long chemical names
+# (Word then re-wraps mid-line at an inconvenient point — the reported bug).  We
+# instead greedy-pack the title to this width so every line fits and breaks land
+# at word boundaries.  Tuned conservatively for the bold 20pt face; a single word
+# longer than this (a long IUPAC name) still gets its own line and may itself wrap
+# — nothing but a smaller font can fix a single over-wide word.
+_TITLE_MAX_CHARS = 34
 
-    The chemical line carries the CASRN in parentheses when present.  Empty lines
-    are dropped so a missing chemical name doesn't leave a blank row.
+# The pinned header line — always standalone (the reference keeps "NIEHS Report on
+# the" on its own line above the flowed body).
+_TITLE_HEADER = "NIEHS Report on the"
+
+
+def _wrap_words(text: str, max_chars: int) -> list:
+    """Greedy word-wrap ``text`` into lines no longer than ``max_chars`` (a word
+    longer than the limit takes its own line rather than being split)."""
+    lines: list = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
+    """
+    The NIEHS 5D-Tox report title, WIDTH-WRAPPED into lines (ADR-0010 title-page
+    follow-up).  The pinned header line stands alone; the rest of the title —
+    "In Vivo Repeat Dose Biological Potency Study of <chemical> (CASRN <casrn>) in
+    Sprague Dawley <strain> Rats (Gavage Studies)" — is greedy-packed to
+    ``max_chars`` so no line overflows the text block and Word never re-wraps a
+    line mid-phrase.  The chemical line carries the CASRN in parentheses when
+    present.  Emitted as ONE paragraph with soft breaks by the renderer (matching
+    the reference), so the wrapped lines have zero inter-line gap.
     """
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
     strain = data.get("strain") or _DEFAULT_STRAIN
     title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
-    lines = [
-        "NIEHS Report on the",
-        "In Vivo Repeat Dose",
-        "Biological Potency Study of",
+    body = " ".join(seg for seg in (
+        "In Vivo Repeat Dose Biological Potency Study of",
         title_name,
         "in Sprague Dawley",
         strain,
         "Rats (Gavage Studies)",
-    ]
-    return [ln for ln in lines if ln]
+    ) if seg.strip())
+    return [_TITLE_HEADER, *_wrap_words(body, max_chars)]
 
 
 def _niehs_publisher_lines(data: dict) -> list:
@@ -154,16 +187,23 @@ def _niehs_title_page_blocks(data: dict) -> list:
     if report_date:
         blocks.append(("publication_date", [report_date]))
 
-    # Publisher block: first line is the publisher name; ISSN (if present) gets
-    # its own role; the remaining agency + location lines are affiliations.
-    pub_lines = _niehs_publisher_lines(data)
-    for ln in pub_lines:
+    # Publisher block: each line carries its SPECIFIC NTP role so it lands on the
+    # right 1-NN style (tight single spacing), not the generic publisher_affiliation
+    # (which maps to no style → Normal → a stray 6pt gap).  Order matches
+    # _niehs_publisher_lines: name, parent-agency×2, ISSN (optional), location.
+    #   1-01_Publisher_Name / 1-08_Publication_Institute /
+    #   1-09_Publication_Department / 1-05c_ISSN / NTP Publisher Location
+    _PUB_ROLE_BY_TEXT = {
+        "National Institute of Environmental Health Sciences": "publisher_name",
+        "Public Health Service": "publication_institute",
+        "U.S. Department of Health and Human Services": "publication_department",
+        "Research Triangle Park, North Carolina, USA": "publisher_location",
+    }
+    for ln in _niehs_publisher_lines(data):
         if ln.startswith("ISSN:"):
             role = "issn"
-        elif ln == pub_lines[0]:
-            role = "publisher_name"
         else:
-            role = "publisher_affiliation"
+            role = _PUB_ROLE_BY_TEXT.get(ln, "publisher_affiliation")
         blocks.append((role, [ln]))
 
     return blocks

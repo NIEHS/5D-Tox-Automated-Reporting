@@ -39,16 +39,26 @@ def test_title_builder_includes_casrn_and_strain():
     lines = cl.get_cover_layout(None).title_builder(
         {"chemical_name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1"}
     )
-    assert "NIEHS Report on the" in lines
-    # chemical + CASRN folded into one line
-    assert any("Perfluorohexanesulfonamide (CASRN 41997-13-1)" == ln for ln in lines)
-    # default strain (carries ®) is present
-    assert any("Sprague Dawley" in ln and "®" in ln for ln in lines)
+    # The header line stands alone; the rest is width-wrapped, so assert on the
+    # JOINED title (the chemical, its CASRN, and the strain all appear).
+    assert lines[0] == "NIEHS Report on the"
+    joined = " ".join(lines)
+    assert "Perfluorohexanesulfonamide (CASRN 41997-13-1)" in joined
+    assert "Sprague Dawley" in joined and "®" in joined
+
+
+def test_title_builder_wraps_to_width():
+    """Width-aware wrapping: no line overflows _TITLE_MAX_CHARS, so Word never
+    re-wraps a title line mid-phrase (the reported auto-wrap bug)."""
+    lines = cl.get_cover_layout(None).title_builder(
+        {"chemical_name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1"}
+    )
+    assert all(len(ln) <= cl._TITLE_MAX_CHARS for ln in lines), lines
 
 
 def test_title_builder_omits_casrn_when_absent():
     lines = cl.get_cover_layout(None).title_builder({"chemical_name": "Acme"})
-    assert "Acme" in lines
+    assert "Acme" in " ".join(lines)
     assert not any("CASRN" in ln for ln in lines)
 
 

@@ -145,7 +145,7 @@ DOCUMENT_KEY_SCHEMA: dict = {
 TITLE_PAGE_ROLES = frozenset({
     "report_title", "report_type", "report_subtitle",
     "publication_date", "report_number", "doi", "issn", "nih_number",
-    "publisher_name", "publisher_affiliation",
+    "publisher_name", "publisher_affiliation", "publisher_location",
     "publication_office", "publication_division",
     "publication_institute", "publication_department",
     "logo_graphic",

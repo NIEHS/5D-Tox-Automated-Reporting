@@ -257,6 +257,20 @@ def test_running_header_style_is_times_12pt(scaffold):
     assert header.font.size == Pt(12)
 
 
+def test_docdefaults_spacing_is_fully_neutralized(scaffold):
+    """python-docx ships docDefaults pPr spacing (line=276 / 1.15x + after=200 /
+    10pt); we remove the whole element so the document root is spacing-neutral like
+    the NTP reference (whose docDefaults has NO spacing).  Every gap then comes
+    from a style's own space_before/after — so the title renders single-spaced AND
+    a hand-inserted paragraph does not inherit a phantom 10pt gap (ADR-0010)."""
+    from docx.oxml.ns import qn
+    doc = _open(generate_docx(scaffold))
+    spacing = doc.styles.element.find(
+        "/".join(qn(t) for t in ("w:docDefaults", "w:pPrDefault", "w:pPr", "w:spacing"))
+    )
+    assert spacing is None, "docDefaults pPr spacing should be removed entirely"
+
+
 def test_section_margins_are_one_inch(scaffold):
     """US-Letter with 1" margins all round (the reference trim)."""
     doc = _open(generate_docx(scaffold))

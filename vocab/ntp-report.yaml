@@ -82,3 +82,12 @@ types:
   # the example bodies don't apply them), so they need no curated alias — the
   # crosswalk names resolve straight to the generated types.  Do NOT redefine them
   # here: a curated type of the same name would override the real generated one.
+
+  # The title-page location line (Research Triangle Park...) → NTP Publisher
+  # Location (basedOn 1-09_Publication_Department, +16pt before).  Canonical role
+  # name the content builder emits; explicit docx bind (bind doesn't inherit
+  # through specializes).
+  publisher_location:
+    specializes: ntp_publisher_location
+    bind:
+      docx: "NTP Publisher Location"
