@@ -835,6 +835,30 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     return f"{_heading(node.level, node.title)}\n{body}"
 
 
+def _render_figure(node: DocNode, data: dict) -> str:
+    """A first-class figure node (ADR-0012) as a <figure> with an inline data-URI
+    <img> and a "Figure N." <figcaption>.
+
+    The artifact is a payload at data[data_key] (``{png_b64, caption}``) — chart
+    figures reuse the genomics chart pipeline's base64 output verbatim.  The
+    <img alt> carries the DESCRIPTIVE caption alone (the fig_alt_text
+    accessibility role); the visible <figcaption> gets the "Figure N." prefix.  A
+    missing payload emits a visible pending note, never a silent gap."""
+    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    png = payload.get("png_b64", "")
+    descriptive = node.caption or payload.get("caption") or node.title or ""
+    if not png:
+        return _pending(f"Figure pending: {node.title}")
+    src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
+    label = f"Figure {node.figure_number}. " if node.figure_number else ""
+    display = f"{label}{descriptive}" if descriptive else ""
+    return (
+        f'<figure class="report-figure">'
+        f'<img src="{src}" alt="{_esc(descriptive)}">'
+        f"<figcaption>{_esc(display)}</figcaption></figure>"
+    )
+
+
 def _render_bmd_summary(node: DocNode, data: dict) -> str:
     """
     Apical Endpoint Benchmark Dose Summary table.
@@ -1167,6 +1191,7 @@ _DISPATCH: dict[str, object] = {
     "narrative+tables": _render_narrative_tables,
     "table":            _render_apical_table,
     "incidence-table":  _render_incidence_table,
+    "figure":           _render_figure,
     "sample-counts-table": _render_sample_counts_table,
     "bmd-summary":      _render_bmd_summary,
     "genomics-section": _render_genomics_section,
@@ -1288,6 +1313,11 @@ def _layout_to_css_props(style: dict) -> str:
         props.append("font-weight: 700")
     if style.get("style") == "italic":
         props.append("font-style: italic")
+    if style.get("text_transform") == "uppercase":
+        props.append("text-transform: uppercase")
+    ls_ = style.get("letter_spacing")
+    if ls_:
+        props.append(f"letter-spacing: {ls_}")
     color = style.get("color")
     if color:
         props.append(f"color: {color}")

@@ -564,6 +564,36 @@ def _render_genomics_item(doc: Document, entry: dict, role: str, item: dict) -> 
         _add_description_list(doc, descriptions)
 
 
+def _render_figure(doc: Document, node: DocNode, data: dict) -> None:
+    """A first-class figure node (ADR-0012): embed its lossless PNG + caption.
+
+    The artifact is a payload dict at ``data[data_key]`` shaped like a chart
+    payload (``{png_b64 | filename, caption}``) — so chart figures reuse the
+    genomics chart pipeline's output verbatim and logo figures supply an image
+    the same way.  Caption is ``node.caption`` (authored) or the payload's, prefixed
+    with the positional ``Figure N.`` from node.figure_number.  A missing payload
+    renders a visible pending note, never a silent gap."""
+    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    png = payload.get("png_b64", "")
+    if png.startswith("data:"):
+        png = png.split(",", 1)[1]
+    if png:
+        try:
+            doc.add_picture(BytesIO(base64.b64decode(png)), width=Inches(5.5))
+        except Exception:
+            _add_pending(doc, f"Figure image failed to decode: {node.title}")
+    else:
+        _add_pending(doc, f"Figure pending: {node.title}")
+    text = node.caption or payload.get("caption") or node.title
+    if text:
+        label = f"Figure {node.figure_number}. " if node.figure_number else ""
+        cap = doc.add_paragraph()
+        run = cap.add_run(_clean(f"{label}{text}"))
+        run.italic = True
+        run.font.size = Pt(9)
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
 def _render_gene_set_table(doc: Document, entry: dict) -> None:
     """Top-gene-sets table for one (organ, sex)."""
     rows = gene_set_table_rows(entry)
@@ -774,6 +804,7 @@ _DISPATCH: dict[str, object] = {
     "narrative+tables":    _render_narrative_tables,
     "table":               _render_apical_table,
     "incidence-table":     _render_incidence_table,
+    "figure":              _render_figure,
     "sample-counts-table": _render_sample_counts_table,
     "bmd-summary":         _render_bmd_summary,
     "genomics-section":    _render_genomics_section,
@@ -830,6 +861,11 @@ def _apply_run_style(run, style: dict) -> None:
         run.font.italic = True
     elif st == "normal":
         run.font.italic = False
+    tt = style.get("text_transform")
+    if tt == "uppercase":
+        run.font.all_caps = True   # w:caps — a DISPLAY transform (text unchanged)
+    elif tt == "none":
+        run.font.all_caps = False
     color = style.get("color")
     if isinstance(color, str) and color.startswith("#"):
         h = color.lstrip("#")
@@ -837,6 +873,19 @@ def _apply_run_style(run, style: dict) -> None:
             h = "".join(c * 2 for c in h)
         if len(h) == 6:
             run.font.color.rgb = RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    # letter_spacing → rPr <w:spacing w:val="TWIPS"> (character spacing, in twips =
+    # pt*20).  python-docx's Font exposes no `spacing`, so set it on the rPr
+    # directly.  Absolute units only (em/ex → _length_to_pt None), matching the
+    # LaTeX surface (soul spaces by a fixed width).  NB this is the CHARACTER
+    # spacing element (rPr), distinct from paragraph space_before/after (pPr).
+    ls_pt = _length_to_pt(style.get("letter_spacing"))
+    if ls_pt is not None:
+        rpr = run._element.get_or_add_rPr()
+        spacing = rpr.find(qn("w:spacing"))
+        if spacing is None:
+            spacing = OxmlElement("w:spacing")
+            rpr.append(spacing)
+        spacing.set(qn("w:val"), str(int(round(ls_pt * 20))))
 
 
 def _apply_paragraph_style(paragraph, style: dict) -> None:
@@ -861,16 +910,18 @@ def _apply_paragraph_style(paragraph, style: dict) -> None:
     indent = _length_to_pt(style.get("first_line_indent"))
     if indent is not None:
         pf.first_line_indent = Pt(indent)
-    if style.get("break_before") == "page":
-        pf.page_break_before = True
     if style.get("keep_together") is True:
         pf.keep_together = True
+    # NB: break_before / break_after are NODE-level flow, applied once at the node
+    # boundary by _layout_to_docx (not here) — see the note there.  Applying them
+    # per paragraph would break before/after EVERY paragraph of a multi-paragraph
+    # node, diverging from HTML (one wrapping div) and LaTeX (one \clearpage).
     for run in paragraph.runs:
         _apply_run_style(run, style)
 
 
 def _layout_to_docx(paragraphs, style: dict) -> None:
-    """
+    r"""
     Apply a resolved abstract style spec to a run of paragraphs — the docx twin
     of html_generator._layout_to_css_props and latex_generator._layout_to_latex.
 
@@ -880,11 +931,25 @@ def _layout_to_docx(paragraphs, style: dict) -> None:
     style from _build_style_skeleton is the baseline; this wins over it, mirroring
     the other two surfaces' _wrap_style layering).  Empty style ⇒ no-op, so a
     style-less document is byte-identical to the pre-feature output.
+
+    ``break_before`` / ``break_after`` are NODE-level flow and are applied ONCE
+    here at the node boundary — before the first paragraph, after the last —
+    matching HTML's single wrapping div and LaTeX's single \clearpage.  Word has
+    no paragraph "page-break-after" property (OOXML only offers pageBreakBefore),
+    so an after-break is emitted as a trailing page-break run; this is why the
+    extractor can read ``break_before`` from a style but never ``break_after``.
     """
     if not style:
         return
+    paragraphs = list(paragraphs)
     for paragraph in paragraphs:
         _apply_paragraph_style(paragraph, style)
+    if not paragraphs:
+        return
+    if style.get("break_before") == "page":
+        paragraphs[0].paragraph_format.page_break_before = True
+    if style.get("break_after") == "page":
+        paragraphs[-1].add_run().add_break(WD_BREAK.PAGE)
 
 
 # ---------------------------------------------------------------------------

@@ -98,6 +98,40 @@ def test_allowed_children_reference_real_types():
             )
 
 
+def test_emits_roles_resolve_in_the_shipped_vocabulary():
+    """Every vocabulary role a catalog type `emits` must exist in the shipped
+    ntp-report vocabulary — the crosswalk from node_type to paragraph-granular
+    semantic roles must not name a role the vocabulary can't resolve (ADR-0010)."""
+    import vocabulary as V
+
+    vocab = V.load_vocabulary("ntp-report")
+    for node_type, spec in COMPONENT_CATALOG.items():
+        for role in spec.emits:
+            assert vocab.get(role) is not None, (
+                f"{node_type!r} emits role {role!r} absent from the ntp-report vocabulary"
+            )
+
+
+def test_front_matter_data_key_roles_resolve_in_the_vocabulary():
+    """Every (heading, body) role a front-matter data_key derives must resolve in
+    the shipped vocabulary — so an Abstract/Foreword/Peer-Review/... section styles
+    its head+body by its own NTP role, not the generic pair (ADR-0010)."""
+    import vocabulary as V
+    import render_capabilities as rc
+
+    vocab = V.load_vocabulary("ntp-report")
+    for data_key, (head, body) in rc.FRONT_MATTER_ROLES_BY_DATA_KEY.items():
+        assert vocab.get(head) is not None, f"{data_key!r} head role {head!r} unresolved"
+        assert vocab.get(body) is not None, f"{data_key!r} body role {body!r} unresolved"
+
+
+def test_front_matter_roles_for_falls_back_to_generic():
+    import render_capabilities as rc
+    assert rc.front_matter_roles_for("abstract") == ("abstract_head", "abstract")
+    assert rc.front_matter_roles_for("unmapped") == ("section_heading", "body_para")
+    assert rc.front_matter_roles_for(None) == ("section_heading", "body_para")
+
+
 def test_required_bindings_name_real_docnode_fields():
     """A `requires` entry must name an actual DocNode binding field."""
     for node_type, spec in COMPONENT_CATALOG.items():

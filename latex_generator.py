@@ -964,6 +964,28 @@ def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
     )
 
 
+def _render_figure(node: DocNode, data: dict) -> str:
+    r"""A first-class figure node (ADR-0012) as a centered \includegraphics + an
+    italic "Figure N." caption.  The artifact is a payload at data[data_key]
+    (``{filename, caption}``); the image file figures/<filename> is written into
+    the bundle by latex_export (same path genomics charts use), so the .tex
+    reference and the written file agree.  A missing payload emits a visible
+    pending note, never a silent gap."""
+    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    text = node.caption or payload.get("caption") or node.title
+    label = f"Figure {node.figure_number}. " if node.figure_number else ""
+    caption = _escape_latex(f"{label}{text}") if text else ""
+    filename = payload.get("filename")
+    if not filename:
+        return f"\\emph{{[Figure pending: {_escape_latex(node.title)}]}}"
+    return (
+        "\\begin{center}\n"
+        f"\\includegraphics[width=0.85\\linewidth]{{figures/{filename}}}\\\\\n"
+        f"{{\\small\\itshape {caption}}}\n"
+        "\\end{center}"
+    )
+
+
 def _genomics_caption_block(entry: dict) -> str:
     r"""
     The bold "Table N. ..." caption line above a genomics table.
@@ -1258,6 +1280,7 @@ _DISPATCH: dict[str, object] = {
     "narrative+tables":  _render_narrative_tables,
     "table":             _render_apical_table,
     "incidence-table":   _render_incidence_table,
+    "figure":            _render_figure,
     "sample-counts-table": _render_sample_counts_table,
     "bmd-summary":       _render_bmd_summary,
     "genomics-section":  _render_genomics_section,
@@ -1412,6 +1435,22 @@ def _layout_to_latex(style: dict) -> "tuple[str, str]":
     if indent and _parse_length(indent):
         decls.append(rf"\setlength\parindent{{{indent}}}")
 
+    # letter_spacing → soul's \sodef defines a per-node tracking macro (\rlmls),
+    # scoped INSIDE this declaration group so it never leaks.  soul spaces by a
+    # FIXED width, so an em/ex value (no resolvable size here) is rejected — only
+    # an absolute length drives it, matching the docx surface (w:spacing twips).
+    # The word/outer inter-word spaces are soul's documented sensible defaults;
+    # only the inter-LETTER space (2nd arg) carries the requested value.  The
+    # \rlmls{...} WRAP is emitted below alongside \uppercase (both wrap the chunk).
+    letter_spacing = style.get("letter_spacing")
+    ls_abs = bool(letter_spacing and _parse_length(letter_spacing)
+                  and not letter_spacing.endswith(("em", "ex")))
+    if ls_abs:
+        decls.append(
+            rf"\sodef\rlmls{{}}{{{letter_spacing}}}"
+            r"{.5em plus.1em minus.1em}{1em plus.1em minus.1em}"
+        )
+
     # --- outside-the-group flow (space + page breaks) and keep-together box ---
     pre_parts: list[str] = []
     post_parts: list[str] = []
@@ -1428,6 +1467,29 @@ def _layout_to_latex(style: dict) -> "tuple[str, str]":
     if decls:
         pre_parts.append("{" + "".join(decls))
         post_parts.append(r"\par}")
+
+    # text_transform: uppercase → the TeX primitive \uppercase wrapped INNERMOST
+    # around the chunk, independent of the decls group so it applies with or
+    # without other declarations.  We use the primitive, NOT \MakeUppercase:
+    # \MakeUppercase is not \long, so a \par (blank line) inside its argument is a
+    # hard error — and a node chunk is multi-paragraph (heading + body).
+    # \uppercase reads a balanced group and tolerates \par (verified by a real
+    # tect compile), uppercasing character tokens while leaving control sequences
+    # (\section, \emph, \clearpage) intact.  Like CSS/Word it covers the whole
+    # node's text (parity: the CSS div and docx run-loop both cover heading+body).
+    # Caveat: \uppercase is ASCII-oriented (no LICR/accent handling) — fine for the
+    # display title this targets.  Closes BEFORE \par} (the group flush).
+    if style.get("text_transform") == "uppercase":
+        pre_parts.append(r"\uppercase{")
+        post_parts.insert(0, "}")
+
+    # letter_spacing wrap: \rlmls{...} (defined by the \sodef decl above), nested
+    # INNERMOST — inside \uppercase so soul receives already-cased character
+    # tokens (\uppercase leaves the \rlmls control sequence intact; soul is
+    # finicky with macros in its own argument, so it must be the inner one).
+    if ls_abs:
+        pre_parts.append(r"\rlmls{")
+        post_parts.insert(0, "}")
 
     if keep:
         post_parts.append(r"\end{minipage}")

@@ -853,6 +853,7 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
     "narrative+tables",
     "table",
     "incidence-table",
+    "figure",
     "bmd-summary",
     "sample-counts-table",
     "genomics-section",

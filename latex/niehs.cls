@@ -159,6 +159,16 @@
 % (mathptmx / newtxtext) — deferred to a typography session.
 \RequirePackage{lmodern}
 
+% --- Letter spacing (soul) ----------------------------------------------
+% soul provides \so / \sodef for tracking (inter-character spacing), driving
+% the shared vocabulary's `letter_spacing` key on this surface.  It works under
+% BOTH pdflatex (the current engine) and XeTeX, unlike fontspec's XeTeX-only
+% LetterSpace.  latex_generator emits a per-node \sodef with the requested
+% length; the value must be an ABSOLUTE length (pt/mm/cm/in) — soul spaces by a
+% fixed width, and em/ex can't be resolved to one here.  Loaded before hyperref
+% (below), per the "hyperref last" convention.
+\RequirePackage{soul}
+
 % --- Running header (fancyhdr) ------------------------------------------
 % NIEHS Report 10 carries a running header — the full report title,
 % centered at the top of every page from the Foreword onward.  The cover

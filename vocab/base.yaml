@@ -1,0 +1,71 @@
+# vocab/base.yaml — the medium-neutral root vocabulary.
+#
+# The "up the tree" layer of the design system (vocabulary.py): a small set of
+# neutral semantic roots that any domain vocabulary specializes.  These are NOT
+# NTP-specific — they are the document primitives the descriptive-markup
+# tradition has converged on (text, heading, block, title, caption, note, …).
+#
+# The single most important record here is `text`: it carries the NEUTRAL body
+# baseline — Times New Roman 12pt with NO line-spacing key — so an unstyled part
+# inherits the surface's single-spacing default, exactly like the reference's
+# docDefaults.  This is what fixes the title's line spacing WITHOUT any
+# per-title value: every heading/title specializes down from `text`, and nothing
+# in the chain injects a line-height, so the rendered pitch is font-size-driven
+# single spacing (matching the NTP examples).
+#
+# A domain vocabulary (vocab/ntp-report.yaml) `extends: base` and specializes
+# these roots; a different domain (aircraft-engine-manual) would extend the same
+# base with different concrete types.  The engine never hardcodes a type — swap
+# the domain vocabulary and the same walker + translators run.
+
+vocabulary: base
+types:
+  # The document anchor — a pure grouping root (no own style).
+  document: {}
+
+  # The body-text baseline: the NEUTRAL root.  Times New Roman 12pt, block
+  # alignment, NO line_height (→ single spacing on every surface).  Everything
+  # ultimately specializes this, so this is where the reference's docDefaults
+  # baseline lives as DATA.
+  text:
+    specializes: document
+    style:
+      font: "Times New Roman"
+      font_size: "12pt"
+
+  # A block-level paragraph of body text (paragraphs, list items, references).
+  block:
+    specializes: text
+
+  # A heading: Arial, bold, kept with the following paragraph.  Mirrors the NTP
+  # Base_Heading root; concrete heading levels specialize this and add a size.
+  heading:
+    specializes: text
+    style:
+      font: "Arial"
+      weight: bold
+      keep_together: true
+
+  # A display title (report title, section titles) — a heading used for titling.
+  title:
+    specializes: heading
+
+  # A caption paragraph (table/figure titles) — bold, slightly smaller.
+  caption:
+    specializes: block
+    style:
+      weight: bold
+
+  # Fine print: footnotes, sources, notes.
+  note:
+    specializes: block
+    style:
+      font_size: "9pt"
+
+  # A list item (bulleted/numbered) — a block with tighter spacing downstream.
+  list_item:
+    specializes: block
+
+  # A table body cell / table-internal paragraph.
+  table_part:
+    specializes: block

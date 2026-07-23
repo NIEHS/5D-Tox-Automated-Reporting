@@ -21,12 +21,15 @@ RICH = {
     "line_height": 1.5,
     "weight": "bold",
     "style": "italic",
+    "text_transform": "uppercase",
+    "letter_spacing": "1pt",
     "color": "#2c5282",
     "align": "center",
     "first_line_indent": "1.5em",
     "space_before": "6pt",
     "space_after": "12pt",
     "break_before": "page",
+    "break_after": "page",
     "keep_together": True,
 }
 
@@ -96,6 +99,67 @@ def test_latex_short_hex_color_expands_to_six_digits():
     assert r"\definecolor{ctcoloraabbcc}{HTML}{AABBCC}" in pre
 
 
+def test_latex_break_after_clearpages_in_post():
+    # break_after sits in POST (after the node), symmetric to break_before in pre.
+    pre, post = lg._layout_to_latex({"break_after": "page"})
+    assert r"\clearpage" in post
+    assert r"\clearpage" not in pre
+
+
+def test_latex_text_transform_wraps_uppercase_primitive():
+    # The TeX primitive \uppercase (NOT \MakeUppercase, which forbids \par in its
+    # argument) opens in pre, closes in post, around the chunk.
+    pre, post = lg._layout_to_latex({"text_transform": "uppercase"})
+    assert r"\uppercase{" in pre
+    assert r"\MakeUppercase" not in pre  # would break on multi-paragraph nodes
+    assert post.strip().startswith("}")
+
+
+def test_latex_text_transform_closes_before_par():
+    # With a font group present, the } must precede \par} (the group flush) so the
+    # \uppercase group is balanced inside the declaration group.
+    pre, post = lg._layout_to_latex({"weight": "bold", "text_transform": "uppercase"})
+    assert post.index("}") < post.index(r"\par}")
+
+
+def test_css_text_transform_only_uppercase_emits():
+    assert "text-transform: uppercase" in hg._layout_to_css_props(
+        {"text_transform": "uppercase"}
+    )
+    # `none` is a no-op (matches the byte-identical default), not an emit.
+    assert "text-transform" not in hg._layout_to_css_props({"text_transform": "none"})
+
+
+def test_css_letter_spacing_emits_verbatim():
+    assert "letter-spacing: 0.5pt" in hg._layout_to_css_props(
+        {"letter_spacing": "0.5pt"}
+    )
+
+
+def test_latex_letter_spacing_defines_and_wraps_soul():
+    # An absolute length emits a scoped \sodef + a \rlmls wrap around the chunk.
+    pre, post = lg._layout_to_latex({"letter_spacing": "2pt"})
+    assert r"\sodef\rlmls{}{2pt}" in pre
+    assert r"\rlmls{" in pre
+    assert post.strip().startswith("}")
+
+
+def test_latex_letter_spacing_rejects_relative_units():
+    # soul spaces by a FIXED width; em/ex can't resolve to one here → no emit
+    # (parity with docx, where _length_to_pt returns None for em/ex).
+    assert lg._layout_to_latex({"letter_spacing": "0.2em"}) == ("", "")
+
+
+def test_latex_letter_spacing_nests_inside_uppercase():
+    # \uppercase must be OUTER, the \rlmls WRAP inner (soul receives cased char
+    # tokens; it is finicky with macros in its own argument).  Assert on the wrap
+    # (\rlmls{ at line start), not the \sodef\rlmls definition which precedes both.
+    pre, _ = lg._layout_to_latex(
+        {"letter_spacing": "1pt", "text_transform": "uppercase"}
+    )
+    assert pre.index(r"\uppercase{") < pre.index("\n\\rlmls{")
+
+
 # ---------------------------------------------------------------------------
 # HTML/CSS translator
 # ---------------------------------------------------------------------------
@@ -112,6 +176,8 @@ def test_css_rich_spec_emits_all_expected_props():
         "font-size: 12pt",
         "font-weight: 700",
         "font-style: italic",
+        "text-transform: uppercase",
+        "letter-spacing: 1pt",
         "color: #2c5282",
         "text-align: center",
         "line-height: 1.5",
@@ -119,6 +185,7 @@ def test_css_rich_spec_emits_all_expected_props():
         "margin-top: 6pt",
         "margin-bottom: 12pt",
         "break-before: page",
+        "break-after: page",
         "break-inside: avoid",
     ):
         assert expected in css, f"missing {expected!r} in {css!r}"

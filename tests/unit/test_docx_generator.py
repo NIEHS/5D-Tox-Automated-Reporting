@@ -333,6 +333,81 @@ def test_no_layout_style_is_a_noop(scaffold):
     assert len(doc.paragraphs) > 0
 
 
+def test_text_transform_uppercase_sets_all_caps(scaffold):
+    """text_transform: uppercase → w:caps (all_caps) on the node's runs — a
+    DISPLAY transform, so the underlying text is unchanged (round-trippable)."""
+    data = dict(scaffold)
+    data["layout_style"] = {"types": {"narrative": {"text_transform": "uppercase"}}}
+    doc = _open(generate_docx(data))
+    bg = [p for p in doc.paragraphs if p.text.strip() == "Background"]
+    assert bg, "Background heading not found"
+    # The run carries all_caps, and the stored text is NOT mutated to uppercase.
+    assert any(r.font.all_caps for r in bg[0].runs)
+    assert bg[0].text.strip() == "Background"
+
+
+def test_letter_spacing_sets_rpr_spacing_in_twips(scaffold):
+    """letter_spacing → rPr <w:spacing w:val> in twips (pt*20), on the CHARACTER
+    element (rPr), not paragraph spacing (pPr)."""
+    from docx.oxml.ns import qn
+
+    data = dict(scaffold)
+    data["layout_style"] = {"types": {"narrative": {"letter_spacing": "1.5pt"}}}
+    doc = _open(generate_docx(data))
+    bg = [p for p in doc.paragraphs if p.text.strip() == "Background"]
+    assert bg, "Background heading not found"
+    run = bg[0].runs[0]
+    sp = run._element.get_or_add_rPr().find(qn("w:spacing"))
+    assert sp is not None, "no rPr w:spacing emitted"
+    assert sp.get(qn("w:val")) == "30"  # 1.5pt * 20 twips/pt
+
+
+def test_letter_spacing_relative_unit_is_ignored(scaffold):
+    """em/ex can't resolve to a fixed width without a size → no w:spacing (parity
+    with the LaTeX surface, which also rejects relative units)."""
+    from docx.oxml.ns import qn
+
+    data = dict(scaffold)
+    data["layout_style"] = {"types": {"narrative": {"letter_spacing": "0.2em"}}}
+    doc = _open(generate_docx(data))
+    bg = [p for p in doc.paragraphs if p.text.strip() == "Background"]
+    run = bg[0].runs[0]
+    rpr = run._element.find(qn("w:rPr"))
+    sp = rpr.find(qn("w:spacing")) if rpr is not None else None
+    assert sp is None
+
+
+def test_break_before_and_after_apply_once_at_node_boundary(scaffold):
+    """break_before sets pageBreakBefore on the node's FIRST paragraph; break_after
+    appends a page-break run on its LAST — once each, not per paragraph (parity
+    with HTML's one wrapping div and LaTeX's one \\clearpage)."""
+    from docx.enum.text import WD_BREAK
+    from docx.oxml.ns import qn
+
+    data = dict(scaffold)
+    # background is a narrative node; style the whole type so we can find its paras.
+    data["layout_style"] = {
+        "types": {"narrative": {"break_before": "page", "break_after": "page"}}
+    }
+    doc = _open(generate_docx(data))
+    paras = doc.paragraphs
+    heads = [i for i, p in enumerate(paras) if p.text.strip() == "Background"]
+    assert heads, "Background heading not found"
+    start = heads[0]
+    # First paragraph of the node carries pageBreakBefore.
+    assert paras[start].paragraph_format.page_break_before is True
+    # It is set ONCE: the immediately-following paragraphs of the same node do not
+    # all carry it (the old per-paragraph bug would set it on every paragraph).
+    assert paras[start + 1].paragraph_format.page_break_before in (None, False)
+    # A page-break run exists in the document (break_after emits a trailing break).
+    break_runs = [
+        br for p in paras for r in p.runs
+        for br in r._element.findall(qn("w:br"))
+        if br.get(qn("w:type")) == "page"
+    ]
+    assert break_runs, "break_after did not emit a page-break run"
+
+
 def test_document_level_block_drives_page_and_base_fonts(scaffold):
     """The styles.document block overrides page geometry + base body/header fonts."""
     data = dict(scaffold)

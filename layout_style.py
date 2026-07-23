@@ -53,6 +53,14 @@ WEIGHTS = frozenset({"normal", "bold"})
 STYLES = frozenset({"normal", "italic"})
 ALIGNMENTS = frozenset({"left", "right", "center", "justify"})
 BREAKS = frozenset({"auto", "page"})
+# text_transform is deliberately scoped to {none, uppercase}: uppercase is the
+# only value that maps to a FAITHFUL display-transform on all three surfaces
+# (CSS text-transform:uppercase, LaTeX \MakeUppercase, docx w:caps/all_caps) AND
+# is what the NTP `Title` (all-caps) needs.  `lowercase`/`capitalize` are NOT
+# included because Word has no display-transform run property for them (only
+# w:caps for all-caps) — emitting them would silently no-op on docx (a
+# four-part-contract drift bug) or force irreversible actual-text mutation.
+TEXT_TRANSFORMS = frozenset({"none", "uppercase"})
 
 # Descriptive schema: key -> ("enum", frozenset) | ("length",) | ("number",)
 # | ("color",) | ("bool",) | ("string",).  Used both as the author-facing doc
@@ -71,6 +79,8 @@ LAYOUT_KEY_SCHEMA: dict = {
     "font_size": ("length",),                 # e.g. "11pt", "1.2em"
     "weight": ("enum", WEIGHTS),              # normal | bold
     "style": ("enum", STYLES),                # normal | italic
+    "text_transform": ("enum", TEXT_TRANSFORMS),  # none | uppercase (all-caps display)
+    "letter_spacing": ("length",),            # inter-char tracking; ABSOLUTE units only (pt/mm/cm/in)
     "color": ("color",),                      # "#rgb" | "#rrggbb"
     "align": ("enum", ALIGNMENTS),            # left | right | center | justify
     "line_height": ("number",),              # unitless multiplier, e.g. 1.4

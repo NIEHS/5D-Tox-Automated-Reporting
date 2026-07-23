@@ -101,6 +101,7 @@ def test_valid_style_has_no_errors():
         "style": "italic",
         "color": "#2c5282",
         "align": "justify",
+        "text_transform": "uppercase",
         "line_height": 1.4,
         "space_before": "6pt",
         "first_line_indent": "1.5em",
@@ -113,6 +114,15 @@ def test_valid_style_has_no_errors():
 def test_bad_enum_value_is_flagged():
     errors = ls.validate_style({"font_family": "comic-sans"})
     assert len(errors) == 1 and "font_family" in errors[0]
+
+
+def test_text_transform_enum_is_bounded():
+    # uppercase is valid; lowercase/capitalize are intentionally NOT in the
+    # vocabulary (no faithful docx display-transform) → flagged as bad values.
+    assert ls.validate_style({"text_transform": "uppercase"}) == []
+    assert ls.validate_style({"text_transform": "none"}) == []
+    errs = ls.validate_style({"text_transform": "lowercase"})
+    assert len(errs) == 1 and "text_transform" in errs[0]
 
 
 def test_font_string_key_accepts_any_nonempty_name():

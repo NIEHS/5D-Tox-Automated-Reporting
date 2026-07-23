@@ -84,9 +84,11 @@ _COMPUTED_OR_SPECIAL = frozenset(
 # bindings get a dedicated validation branch + a resolve step at instantiation.
 _FREEFORM_TYPES = frozenset({"freeform-page", "freeform-block"})
 
-# Node types that may carry a `subtype` (which branded cover layout to render —
-# see cover_layouts).  A subtype on any other type is a template authoring error.
-_SUBTYPABLE_TYPES = frozenset({"cover", "title-page"})
+# Node types that may carry a `subtype`.  For cover/title-page it selects the
+# branded cover layout (see cover_layouts); for `figure` it is the pictorial KIND
+# (render_capabilities.FIGURE_SUBTYPES: chart | logo — ADR-0012).  A subtype on
+# any other type is a template authoring error.
+_SUBTYPABLE_TYPES = frozenset({"cover", "title-page", "figure"})
 
 # Valid region names — project directly to BITS <front-matter> / <book-body> /
 # <book-back> on a future BITS export (ADR-0004 amendment d).

@@ -1,0 +1,463 @@
+vocabulary: ntp-report-generated
+extends: base
+types:
+  normal:
+    specializes: text
+    bind:
+      docx: Normal
+  heading_1:
+    specializes: normal
+    style:
+      font: Arial
+      font_size: 16pt
+      weight: bold
+      space_after: 16pt
+      break_before: page
+    bind:
+      docx: Heading 1
+  base_heading:
+    specializes: heading
+    style:
+      font: Arial
+      font_size: 14pt
+    bind:
+      docx: Base_Heading
+  base_text:
+    specializes: block
+    bind:
+      docx: Base_Text
+  report_subtitle:
+    specializes: base_heading
+    style:
+      weight: bold
+      align: center
+      space_after: 6pt
+    bind:
+      docx: 1-04_Report_Subtitle
+  report_title:
+    specializes: base_heading
+    style:
+      font_size: 20pt
+      weight: bold
+      align: center
+      space_after: 6pt
+    bind:
+      docx: 1-03_Report_Title
+  abstract_head:
+    specializes: base_heading
+    style:
+      font_size: 16pt
+      weight: bold
+      align: center
+      space_after: 12pt
+      break_before: page
+    bind:
+      docx: 1-15_Abstract_Head
+  abstract:
+    specializes: base_text
+    style:
+      space_after: 6pt
+    bind:
+      docx: 1-19_Abstract
+  report_type:
+    specializes: base_text
+    style:
+      align: center
+      space_after: 6pt
+    bind:
+      docx: 1-02_Report_Type
+  toc_1:
+    style:
+      space_before: 6pt
+      first_line_indent: -18pt
+    bind:
+      docx: toc 1
+  toc_2:
+    style:
+      color: '#000000'
+      first_line_indent: -25.2pt
+    bind:
+      docx: toc 2
+  paragraph:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 0-03_Paragraph
+  equation:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 3-09_Equation
+  references:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 4-13_References
+  reference_head:
+    specializes: base_heading
+    style:
+      font_size: 16pt
+      weight: bold
+      space_after: 16pt
+    bind:
+      docx: 4-12_Reference_Head
+  acknowledgement:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 4-11_Acknowledgement
+  logo_graphic:
+    specializes: base_text
+    style:
+      align: center
+    bind:
+      docx: 1-26_Logo_Graphic
+  appendix_text:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 4-09_Appendix_Text
+  appendix_head_1:
+    specializes: base_heading
+    style:
+      weight: bold
+      space_before: 12pt
+      space_after: 14pt
+    bind:
+      docx: 4-05_Appendix_Head_1
+  appendix_head_2:
+    specializes: base_heading
+    style:
+      font_size: 12pt
+      weight: bold
+      space_before: 12pt
+      space_after: 6pt
+    bind:
+      docx: 4-06_Appendix_Head_2
+  table_title:
+    specializes: base_text
+    style:
+      font_size: 11pt
+      weight: bold
+      space_before: 14pt
+      space_after: 3pt
+    bind:
+      docx: 0-25_Table_Title
+  table_body:
+    specializes: base_text
+    style:
+      font_size: 10pt
+    bind:
+      docx: 0-29_Table_Body
+  table_footnote:
+    specializes: base_text
+    style:
+      font_size: 9pt
+    bind:
+      docx: 0-30_Table_Footnote
+  fig_caption:
+    specializes: base_text
+    style:
+      font_size: 11pt
+      weight: bold
+      space_before: 3pt
+      space_after: 14pt
+    bind:
+      docx: 0-32_Fig_Caption
+  fig_source:
+    specializes: base_text
+    style:
+      font_size: 9pt
+    bind:
+      docx: 3-13_Fig_Source
+  bul_list_1:
+    specializes: base_text
+    style:
+      space_after: 4pt
+    bind:
+      docx: 0-06_Bul_List_1
+  fig_alt_text:
+    specializes: base_text
+    style:
+      font_size: 11pt
+      space_after: 6pt
+    bind:
+      docx: 3-11_Fig_Alt_Text
+  publication_date:
+    specializes: base_text
+    style:
+      align: center
+      space_before: 18pt
+    bind:
+      docx: 1-05_Publication_Date
+  publication_department:
+    specializes: base_text
+    style:
+      align: center
+    bind:
+      docx: 1-09_Publication_Department
+  publication_institute:
+    specializes: base_text
+    style:
+      align: center
+    bind:
+      docx: 1-08_Publication_Institute
+  publisher_name:
+    specializes: base_text
+    style:
+      align: center
+      space_before: 100pt
+    bind:
+      docx: 1-01_Publisher_Name
+  contrib_affiliation:
+    specializes: base_text
+    style:
+      weight: bold
+      space_before: 12pt
+    bind:
+      docx: 1-13_Contrib_Affiliation
+  contrib_head:
+    specializes: base_text
+    style:
+      font_size: 14pt
+      weight: bold
+      align: center
+      space_before: 12pt
+      space_after: 12pt
+    bind:
+      docx: 1-10_Contrib_Head
+  contributor:
+    specializes: base_text
+    bind:
+      docx: 1-11_Contributor
+  contributor_contributions:
+    specializes: base_text
+    style:
+      style: italic
+    bind:
+      docx: 1-12_Contributor_Contributions
+  foreword_text:
+    specializes: base_text
+    style:
+      space_after: 6pt
+    bind:
+      docx: 1-22_Foreword_Text
+  foreword_title:
+    specializes: base_heading
+    style:
+      weight: bold
+      align: center
+      space_after: 12pt
+    bind:
+      docx: 1-21_Foreword_Title
+  frontmatter_head1:
+    specializes: base_heading
+    style:
+      font_size: 16pt
+      weight: bold
+      align: center
+      space_after: 12pt
+    bind:
+      docx: 1-23_FrontMatter_Head1
+  frontmatter_para:
+    specializes: base_text
+    style:
+      space_after: 6pt
+    bind:
+      docx: 1-25_FrontMatter_Para
+  num_list_1:
+    specializes: base_text
+    style:
+      space_after: 4pt
+    bind:
+      docx: 0-07_Num_List_1
+  non_xml_text:
+    specializes: base_text
+    bind:
+      docx: 0-35_Non-XML_Text
+  toc_3:
+    style:
+      first_line_indent: -28.8pt
+    bind:
+      docx: toc 3
+  table_of_figures:
+    specializes: normal
+    style:
+      first_line_indent: -58.3pt
+    bind:
+      docx: table of figures
+  report_number:
+    specializes: base_text
+    style:
+      align: center
+      space_after: 6pt
+    bind:
+      docx: 1-05a_Report-Number
+  issn:
+    specializes: base_text
+    style:
+      align: center
+      space_after: 6pt
+    bind:
+      docx: 1-05c_ISSN
+  fig_note:
+    specializes: base_text
+    style:
+      font_size: 9pt
+    bind:
+      docx: 3-13a_Fig_Note
+  author_head:
+    specializes: contrib_head
+    bind:
+      docx: 1-10a_Author_Head
+  author:
+    specializes: contributor
+    bind:
+      docx: 1-10b_Author
+  author_affiliation:
+    specializes: contrib_affiliation
+    bind:
+      docx: 1-10c_Author_Affiliation
+  table_footnote_space_after:
+    specializes: base_text
+    style:
+      font_size: 9pt
+      space_after: 9pt
+    bind:
+      docx: 0-30a_Table_Footnote_Space_After
+  peer_review_desc_head:
+    specializes: base_heading
+    style:
+      font_size: 16pt
+      weight: bold
+      align: center
+      space_after: 12pt
+      break_before: page
+    bind:
+      docx: 1-14h_Peer_Review_Desc_Head
+  peer_review_desc_text:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 1-14i_Peer_Review_Desc_Text
+  about_this_report_head:
+    specializes: base_heading
+    style:
+      font_size: 16pt
+      weight: bold
+      align: center
+      space_after: 12pt
+    bind:
+      docx: 1-23a_About_This_Report_Head
+  head1_nonumber:
+    specializes: base_heading
+    style:
+      font_size: 17pt
+      weight: bold
+      space_after: 16pt
+      break_before: page
+    bind:
+      docx: 3-02a_Head1_NoNumber
+  head2_nonumber:
+    specializes: base_heading
+    style:
+      font_size: 15pt
+      weight: bold
+      space_before: 12pt
+      space_after: 6pt
+    bind:
+      docx: 3-03a_Head2_NoNumber
+  head3_nonumber:
+    specializes: base_heading
+    style:
+      font_size: 13pt
+      weight: bold
+      space_before: 12pt
+      space_after: 6pt
+    bind:
+      docx: 3-04a_Head3_NoNumber
+  author_line:
+    specializes: base_text
+    style:
+      space_after: 3pt
+    bind:
+      docx: 1-100a_Author_Line
+  linked_affiliations:
+    specializes: base_text
+    style:
+      space_after: 6pt
+    bind:
+      docx: 1-100b_Linked_Affiliations
+  fig_graphic:
+    specializes: base_text
+    bind:
+      docx: 0-32a_Fig_Graphic
+  author_contributions:
+    specializes: base_text
+    style:
+      style: italic
+    bind:
+      docx: 1-10e_Author_Contributions
+  acknowledgement_headfront:
+    specializes: base_heading
+    style:
+      weight: bold
+      space_before: 12pt
+      space_after: 14pt
+    bind:
+      docx: 4-10a_Acknowledgement_HeadFront
+  ntp_appendix_list_of_tables_heading:
+    specializes: normal
+    style:
+      font: Arial
+      font_size: 16pt
+      weight: bold
+      space_before: 12pt
+      space_after: 6pt
+    bind:
+      docx: NTP Appendix List of Tables Heading
+  ntp_appendix_list_of_figures_heading:
+    specializes: ntp_appendix_list_of_tables_heading
+    bind:
+      docx: NTP Appendix List of Figures Heading
+  ntp_contents_heading:
+    specializes: normal
+    style:
+      font: Arial
+      font_size: 16pt
+      weight: bold
+      align: center
+      space_after: 12pt
+    bind:
+      docx: NTP Contents Heading
+  ntp_publisher_location:
+    specializes: publication_department
+    style:
+      space_before: 16pt
+    bind:
+      docx: NTP Publisher Location
+  supplementary_material_title:
+    specializes: base_text
+    style:
+      weight: bold
+      space_before: 9pt
+    bind:
+      docx: 4-09a_Supplementary_Material_Title
+  supplementary_material_filename:
+    specializes: base_text
+    style:
+      space_after: 9pt
+    bind:
+      docx: 4-09c_Supplementary_Material_Filename
+  fig_title:
+    specializes: base_text
+    style:
+      weight: bold
+    bind:
+      docx: Fig_Title

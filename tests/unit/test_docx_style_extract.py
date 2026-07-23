@@ -200,3 +200,255 @@ def test_resolved_style_props_walks_parent_chain(ntp_template_cfg):
     # ...but the resolved walk recovers it.
     resolved = dse._resolved_style_props(child)
     assert resolved.get("font") == "Arial"
+
+
+# ---------------------------------------------------------------------------
+# Coverage diagnostic — a day-one read on how well a NEW template matches the
+# style maps, turning the silent KeyError-skip into an explicit found/missing
+# report.  Exercised against the NTP template the maps were built for (all
+# present) so it also guards the maps against drift.
+# ---------------------------------------------------------------------------
+
+def test_extract_reads_all_caps_as_text_transform():
+    """w:caps on a style → text_transform: uppercase.  The NTP template's built-in
+    `Title` style is all-caps (per ADR-0009); prove the extractor recovers it.
+    (In this reverse-engineered .dotx the caps sit on `Title`, not on
+    `1-03_Report_Title` — a hand-edit drift the real template may differ on; the
+    read itself is what this guards.)"""
+    if not _NTP_DOTX.exists():
+        pytest.skip(f"NTP template not present: {_NTP_DOTX}")
+    doc = dse._open_word(str(_NTP_DOTX))
+    props = dse._extract_style_props(doc.styles["Title"])
+    assert props.get("text_transform") == "uppercase"
+
+
+def test_extract_reads_rpr_letter_spacing_not_ppr_space():
+    """rPr <w:spacing w:val> → letter_spacing, and it is NOT confused with pPr
+    <w:spacing w:before/after> (space_before/after) — the ADR-0009 trap.  Build a
+    Normal style carrying BOTH and confirm they extract to the right keys."""
+    from docx import Document as _Doc
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn as _qn
+
+    doc = _Doc()
+    st = doc.styles["Normal"]
+    # rPr character spacing = 30 twips (1.5pt).
+    rpr = st.element.get_or_add_rPr()
+    csp = OxmlElement("w:spacing"); csp.set(_qn("w:val"), "30"); rpr.append(csp)
+    # pPr paragraph space_before = 120 twips (6pt), written on the pPr <w:spacing
+    # w:before> — the SAME element name, different parent, carrying space_before.
+    ppr = st.element.get_or_add_pPr()
+    psp = OxmlElement("w:spacing"); psp.set(_qn("w:before"), "120"); ppr.append(psp)
+
+    props = dse._extract_style_props(st)
+    assert props.get("letter_spacing") == "1.5pt"   # from rPr w:val
+    assert props.get("space_before") == "6pt"        # from pPr w:before
+    # The two came from different elements — neither leaked into the other.
+
+
+def test_letter_spacing_round_trips_through_generate_extract(tmp_path):
+    """Design→extract→re-drive loop for letter_spacing (absolute twips)."""
+    from docx import Document as _Doc
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn as _qn
+
+    data = scaffold_report_data(chemical_name="T", casrn="1-1-1", dtxsid="X")
+    doc = _Doc(io.BytesIO(generate_docx(data)))
+    rpr = doc.styles["Normal"].element.get_or_add_rPr()
+    el = OxmlElement("w:spacing"); el.set(_qn("w:val"), "20"); rpr.append(el)  # 1pt
+    out = tmp_path / "ls.docx"
+    doc.save(str(out))
+    cfg = dse.extract_styles(str(out))
+    assert cfg["defaults"].get("letter_spacing") == "1pt"
+
+
+def test_text_transform_round_trips_through_generate_extract(tmp_path):
+    """Generate a docx whose Normal style is all-caps, extract, and confirm the
+    key comes back — the load-bearing design→extract→re-drive loop for the key."""
+    from docx import Document as _Doc
+    data = scaffold_report_data(chemical_name="T", casrn="1-1-1", dtxsid="X")
+    raw = generate_docx(data)
+    doc = _Doc(io.BytesIO(raw))
+    doc.styles["Normal"].font.all_caps = True
+    out = tmp_path / "caps.docx"
+    doc.save(str(out))
+    cfg = dse.extract_styles(str(out))
+    assert cfg["defaults"].get("text_transform") == "uppercase"
+
+
+def test_coverage_finds_all_expected_styles_in_ntp_template():
+    if not _NTP_DOTX.exists():
+        pytest.skip(f"NTP template not present: {_NTP_DOTX}")
+    report = dse.coverage_report(str(_NTP_DOTX))
+    # The template the maps were reverse-engineered from ⇒ every expected present.
+    assert report["missing"] == 0
+    assert report["found"] == report["total"]
+    names = {r["style"] for r in report["expected"]}
+    assert {"Normal", "Header", "Heading 1", "1-03_Report_Title"} <= names
+    # It surfaces the rest of the NTP library as mapping candidates.
+    assert len(report["unmapped_with_props"]) > 50
+
+
+def test_coverage_reports_missing_expected_styles(generated_docx_path):
+    """The generated scaffold docx has Normal/Heading but NOT the NTP 1-NN family,
+    so those roles report missing — the exact signal a mismatched new template
+    would give."""
+    report = dse.coverage_report(generated_docx_path)
+    by_name = {r["style"]: r for r in report["expected"]}
+    assert by_name["Normal"]["present"] is True
+    assert by_name["1-03_Report_Title"]["present"] is False
+    assert report["missing"] > 0
+
+
+def test_format_coverage_renders_marks(generated_docx_path):
+    text = dse.format_coverage(dse.coverage_report(generated_docx_path))
+    assert "expected styles present" in text
+    assert "MISSING" in text  # the absent 1-NN roles show the missing mark
+
+
+def test_coverage_cli_flag(generated_docx_path, capsys):
+    rc = dse._main([generated_docx_path, "--coverage"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "style coverage" in out
+
+
+# ---------------------------------------------------------------------------
+# Vocabulary generation — a Word template's named-style graph → a vocabulary
+# (the descriptive-markup design system).  Exercised against a REAL example doc
+# (the reverse-engineered .dotx lacks the used-body paragraphs the used_only
+# scope walks), and falls back to the .dotx skeleton when examples are absent.
+# ---------------------------------------------------------------------------
+
+_NTP_EXAMPLE = next(
+    iter(sorted((Path(__file__).resolve().parents[2] / "examples").glob("*.docx"))),
+    None,
+)
+
+
+def _vocab_source() -> str:
+    if _NTP_EXAMPLE is not None and _NTP_EXAMPLE.exists():
+        return str(_NTP_EXAMPLE)
+    if _NTP_DOTX.exists():
+        return str(_NTP_DOTX)
+    pytest.skip("no NTP example or template present")
+
+
+def test_generate_vocabulary_shape():
+    vocab = dse.generate_vocabulary(_vocab_source())
+    assert vocab["vocabulary"] == "ntp-report"
+    assert vocab["extends"] == "base"
+    assert isinstance(vocab["types"], dict) and vocab["types"]
+
+
+def test_generated_report_title_is_a_delta_specializing_a_root():
+    """report_title emits ONLY its delta (no inherited Arial) and specializes the
+    base_heading root — the specialization GRAPH is preserved, not flattened."""
+    types = dse.generate_vocabulary(_vocab_source())["types"]
+    rt = types.get("report_title")
+    if rt is None:
+        pytest.skip("report_title style not in this source")
+    assert rt["specializes"] == "base_heading"
+    # 20pt is the delta; Arial is inherited (NOT restated on the child).
+    assert rt["style"]["font_size"] == "20pt"
+    assert "font" not in rt["style"]
+    assert rt["bind"]["docx"] == "1-03_Report_Title"
+
+
+def test_generated_roots_link_into_base_vocabulary():
+    """The NTP roots (Base_Text/Base_Heading/Normal) specialize the neutral base
+    types so the whole graph resolves through vocab/base.yaml."""
+    types = dse.generate_vocabulary(_vocab_source())["types"]
+    # At least one root must bridge to base; which depends on what the source uses.
+    bridges = {t.get("specializes") for t in types.values()}
+    assert {"heading", "block", "text"} & bridges, "no NTP root bridged to base"
+
+
+def test_used_only_scope_is_smaller_than_full():
+    src = _vocab_source()
+    used = dse.generate_vocabulary(src, used_only=True)["types"]
+    full = dse.generate_vocabulary(src, used_only=False)["types"]
+    assert len(used) <= len(full)
+
+
+def test_generated_vocabulary_resolves_through_vocabulary_module(tmp_path):
+    """End to end: generate → write → load_vocabulary (with the shipped base) →
+    resolve report_title to the reference look with NO line spacing."""
+    import vocabulary as V
+
+    vocab_dict = dse.generate_vocabulary(_vocab_source())
+    if "report_title" not in vocab_dict["types"]:
+        pytest.skip("report_title not in this source")
+    # Load via the module's injectable loader: base from disk, ntp from memory.
+    def loader(name):
+        if name == "base":
+            return V._read_vocab_file("base")
+        return vocab_dict
+    vocab = V.load_vocabulary("ntp-report", _loader=loader)
+    style = V.resolve_type_style(vocab, "report_title")
+    assert style["font"] == "Arial"        # inherited through the chain
+    assert style["font_size"] == "20pt"
+    assert "line_height" not in style
+
+
+def test_emit_vocabulary_cli(tmp_path):
+    out = tmp_path / "vocab.yaml"
+    rc = dse._main([_vocab_source(), "--emit-vocabulary", "-o", str(out)])
+    assert rc == 0
+    text = out.read_text()
+    assert "vocabulary: ntp-report" in text
+    assert "specializes:" in text
+
+
+# ---------------------------------------------------------------------------
+# PDF / converter contamination detection in the coverage diagnostic.
+# ---------------------------------------------------------------------------
+
+def test_classify_contamination_catches_converter_names():
+    classes = dse._classify_contamination({"CM14", "Pa2", "0-03_Paragraph", "Normal"})
+    assert classes["converter"] == ["CM14", "Pa2"]
+    assert "0-03_Paragraph" not in classes["converter"]
+
+
+def test_classify_contamination_catches_paste_collision_twins():
+    # 'Title1' is a twin of 'Title'; 'Heading 1' is NOT (no base 'Heading').
+    names = {"Title", "Title1", "Title2", "Heading 1", "No List", "No List11"}
+    dup = dse._classify_contamination(names)["numbered_dup"]
+    assert "Title1" in dup and "Title2" in dup
+    assert "Heading 1" not in dup  # 'Heading ' base absent → a real numbered style
+
+
+_EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples"
+_CONTAMINATED = _EXAMPLES_DIR / "NIEHS-12 1,2-DCB Publication Version Draft 03.20.2026.docx"
+_CLEAN_FINAL = _EXAMPLES_DIR / "NIEHS-09 2,3-Benzofluorene_Final.docx"
+
+
+def test_coverage_flags_contaminated_draft():
+    if not _CONTAMINATED.exists():
+        pytest.skip("contaminated draft example not present")
+    report = dse.coverage_report(str(_CONTAMINATED))
+    contam = report["contamination"]
+    # The Acrobat CM##/Pa# fingerprint must be caught.
+    assert contam["total"] >= 5
+    assert any(c.startswith(("CM", "Pa")) for c in contam["converter"])
+    # And the human-readable render must warn.
+    text = dse.format_coverage(report)
+    assert "PDF/paste-import" in text
+    assert "converter" in text.lower()
+
+
+def test_coverage_clean_final_has_no_contamination_warning():
+    if not _CLEAN_FINAL.exists():
+        pytest.skip("clean final example not present")
+    report = dse.coverage_report(str(_CLEAN_FINAL))
+    assert report["contamination"]["total"] == 0
+    assert "PDF/paste-import" not in dse.format_coverage(report)
+
+
+def test_contaminated_cruft_is_not_used_in_body():
+    """The contamination is dead library cruft — no body paragraph applies it, so
+    used_only extraction excludes it.  This is what makes it harmless."""
+    if not _CONTAMINATED.exists():
+        pytest.skip("contaminated draft example not present")
+    contam = dse.coverage_report(str(_CONTAMINATED))["contamination"]
+    assert contam["used_in_body"] == []

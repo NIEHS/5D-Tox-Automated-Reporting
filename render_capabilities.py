@@ -130,6 +130,19 @@ class ComponentType:
                            Sections are NOT captionable (BITS <sec> has <title>
                            only).  The instantiator rejects `caption:` on a
                            non-captionable type.
+        emits            — the ordered VOCABULARY ROLE TYPES a node of this type
+                           produces as it renders (vocabulary.py).  This is the
+                           granularity bridge: our structural key is the
+                           node_type, but Word/descriptive-markup styles at the
+                           PARAGRAPH level — one `narrative` node emits a heading
+                           paragraph (role `section_heading`) AND body paragraphs
+                           (role `body_para`), two different roles.  The handler
+                           decides WHICH emitted paragraph is which role; this
+                           field DECLARES the set so the mapping is inspectable
+                           and validatable.  Names are vocabulary type names
+                           (resolved against the active vocabulary), not catalog
+                           node_types.  Empty = not yet crosswalked (falls back to
+                           the legacy per-node styling).  ADR-0010.
     """
     capabilities: NodeCapabilities = field(default_factory=NodeCapabilities)
     content_kinds: tuple[str, ...] = ()
@@ -137,6 +150,7 @@ class ComponentType:
     allowed_children: tuple[str, ...] = ()
     requires: tuple[str, ...] = ()
     captionable: bool = False
+    emits: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +184,14 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     ),
     "title-page": ComponentType(
         capabilities=_FIXED, content_kinds=(), headingless=True,
+        # The title page is the ORIGINAL role-emitting node (it already styles per
+        # semantic role via the title_page sub-layer — the proof-of-pattern this
+        # crosswalk generalizes).  It emits one paragraph per title-page role.
+        emits=(
+            "report_title", "report_type", "report_subtitle",
+            "publication_date", "report_number", "issn",
+            "publisher_name", "publication_institute", "publication_department",
+        ),
     ),
     # ── Auto-generated list of tables — generated entries; can start a page.
     "tables-list": ComponentType(
@@ -193,6 +215,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
             "bmd-summary", "genomics-section", "sample-counts-table",
             "freeform-page", "freeform-block", "page-break",
         ),
+        emits=("section_heading",),
     ),
     # ── An explicit page break — a headingless, content-free structural marker
     #    the author drops between siblings to force a new page (the reference
@@ -208,11 +231,18 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     ),
     # ── Prose sections — editable text, breakable; never landscape (running
     #    body text doesn't rotate).
+    # front-matter emits SECTION-SPECIFIC roles derived from its data_key (see
+    # FRONT_MATTER_ROLES_BY_DATA_KEY / front_matter_roles_for): the NTP template
+    # styles the Abstract head differently from the Foreword title from the
+    # Reference head, so a generic section_heading/body_para would lose that.  The
+    # generic pair here is the FALLBACK for a data_key with no specific mapping.
     "front-matter": ComponentType(
         capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
+        emits=("section_heading", "body_para"),
     ),
     "narrative": ComponentType(
         capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
+        emits=("section_heading", "body_para"),
     ),
     # Appendices carry their own heading; a body is either a data-derived
     # roster (Appendix B, handled in the renderer) or authored freeform content
@@ -222,6 +252,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "appendix": ComponentType(
         capabilities=_PROSE, content_kinds=("text",),
         allowed_children=("freeform-block", "freeform-page"),
+        emits=("appendix_heading", "body_para"),
     ),
     # ── Prose + child tables — the section's own content is the narrative
     #    text; the wide tables are separate child `table` nodes, each
@@ -230,16 +261,19 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
         capabilities=_PROSE,
         content_kinds=("text",),
         allowed_children=("table", "incidence-table"),
+        emits=("section_heading", "body_para"),
     ),
     # ── Data tables — orientable + breakable, headingless (caption/label, no
     #    section heading); data comes from the integrated dataset, not text.
     "table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
         requires=("platform",), captionable=True,
+        emits=("table_title", "table_body_cell", "table_footnote"),
     ),
     "incidence-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
         requires=("platform",), captionable=True,
+        emits=("table_title", "table_body_cell", "table_footnote"),
     ),
     # ── The Methods sample-counts matrix — "Table 1. Final Sample Counts for
     #    BMD Analysis of the Transcriptomics Data" (organ×sex rows × dose
@@ -251,6 +285,22 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "sample-counts-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
         requires=("data_key",), captionable=True,
+        emits=("table_title", "table_body_cell", "table_footnote"),
+    ),
+    # ── A figure — the pictorial peer of `table` (ADR-0012).  Data/content as an
+    #    IMAGE (a lossless PNG), where `table` is data as a grid.  The KIND of
+    #    picture is a `subtype` (FIGURE_SUBTYPES: chart | logo; photograph/diagram
+    #    reserved): subtype=chart renders a data-derived plot via chart_style;
+    #    subtype=logo places a supplied branding asset.  Headingless + captionable
+    #    + orientable like a data table; emits the figure-furniture roles (caption/
+    #    title/source/note/alt-text + the graphic paragraph).  The graphic role is
+    #    subtype-dependent (fig_graphic vs logo_graphic), so it is NOT in `emits`
+    #    here — the handler selects it.  Its plot-internal styling is chart_style's
+    #    job, deliberately NOT folded into the paragraph vocabulary (ADR-0009).
+    "figure": ComponentType(
+        capabilities=_DATA_BLOCK, content_kinds=("chart", "image"), headingless=True,
+        captionable=True,
+        emits=("fig_title", "fig_caption", "fig_source", "fig_note", "fig_alt_text"),
     ),
     # ── A summary section whose body is one table (it DOES have a heading).
     #    Captionable because its body is the table whose <caption><p> is the
@@ -258,6 +308,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "bmd-summary": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), requires=("data_key",),
         captionable=True,
+        emits=("section_heading", "table_title", "table_body_cell", "table_footnote"),
     ),
     # ── The genomics monolith — a heading-bearing section carrying narrative
     #    + tables + charts.  ADR-0003 Phase 4 decomposes its content_kinds
@@ -265,6 +316,8 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "genomics-section": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("text", "table", "chart"),
         requires=("data_key", "narrative_key"),
+        emits=("section_heading", "body_para", "table_title",
+               "table_body_cell", "fig_caption"),
     ),
     # ── Freeform AUTHORED content — the only types whose content lives ON the
     #    node (content/content_file/representation) rather than in the pipeline
@@ -313,6 +366,67 @@ def capabilities_for(node_type: str) -> NodeCapabilities:
 def content_kinds_for(node_type: str) -> tuple[str, ...]:
     """Return the content kinds a component of this type may hold."""
     return component_for(node_type).content_kinds
+
+
+def emits_for(node_type: str) -> tuple[str, ...]:
+    """Return the vocabulary ROLE TYPES a node of this type emits (the crosswalk
+    from our structural node_type to the paragraph-granular semantic roles the
+    surfaces style).  Empty when the type is not yet crosswalked — the renderer
+    then falls back to the legacy per-node styling.  See ComponentType.emits."""
+    return component_for(node_type).emits
+
+
+# The front-matter DATA_KEY → (heading role, body role) crosswalk.  Each NTP
+# front-matter section is a distinct semantic type in the template's style family
+# (the Abstract head is 1-15_Abstract_Head, the Foreword title 1-21_Foreword_Title,
+# etc.), so a front-matter node styles its heading + body by roles DERIVED FROM
+# ITS data_key — not the generic section_heading/body_para.  Deriving from
+# data_key (rather than a new authored field) means existing templates need no
+# editing.  A data_key absent here falls back to the generic pair, so a new
+# front-matter section renders (generically) until it gains a mapping.  The role
+# names resolve against the active vocabulary (vocab/ntp-report.yaml).
+FRONT_MATTER_ROLES_BY_DATA_KEY: dict[str, tuple[str, str]] = {
+    "foreword":            ("foreword_title", "foreword_text"),
+    "abstract":            ("abstract_head", "abstract"),
+    "about_report":        ("about_this_report_head", "frontmatter_para"),
+    "peer_review":         ("peer_review_desc_head", "peer_review_desc_text"),
+    "acknowledgments":     ("acknowledgement_headfront", "acknowledgement"),
+    "publication_details": ("frontmatter_head1", "frontmatter_para"),
+    "references":          ("reference_head", "references"),
+}
+
+# The generic fallback pair (matches the front-matter catalog `emits`).
+_FRONT_MATTER_GENERIC_ROLES = ("section_heading", "body_para")
+
+
+def front_matter_roles_for(data_key: str | None) -> tuple[str, str]:
+    """Return the (heading_role, body_role) a front-matter node emits, derived
+    from its ``data_key``.  Falls back to the generic section_heading/body_para
+    pair for an unmapped/absent data_key so any front-matter section still
+    renders.  The renderer applies the heading role to the section heading and
+    the body role to each prose paragraph."""
+    return FRONT_MATTER_ROLES_BY_DATA_KEY.get(data_key or "", _FRONT_MATTER_GENERIC_ROLES)
+
+
+# The `figure` node's semantic subtype — the KIND of pictorial content (ADR-0012).
+# Closed but extensible; only `chart` and `logo` are implemented now (the real
+# cases: data-derived plots + cover/title branding).  photograph/diagram/... are
+# reserved: add here + give them an artifact source + a graphic role when a report
+# needs one.  A subtype absent here is a template authoring error (rejected at load).
+FIGURE_SUBTYPES = frozenset({"chart", "logo"})
+
+# Which figure-furniture GRAPHIC role a subtype's image paragraph uses.  A logo is
+# branding (1-26_Logo_Graphic); everything else is a content figure graphic
+# (0-32a_Fig_Graphic).  The image paragraph's role is therefore subtype-dependent
+# and chosen by the handler, not fixed in the catalog `emits`.
+_FIGURE_GRAPHIC_ROLE = {"logo": "logo_graphic"}
+_FIGURE_GRAPHIC_DEFAULT = "fig_graphic"
+
+
+def figure_graphic_role(subtype: str | None) -> str:
+    """The graphic-paragraph role for a figure of this subtype: `logo_graphic`
+    for a logo, `fig_graphic` for a chart / content image."""
+    return _FIGURE_GRAPHIC_ROLE.get(subtype or "", _FIGURE_GRAPHIC_DEFAULT)
 
 
 def is_headingless(node_type: str) -> bool:

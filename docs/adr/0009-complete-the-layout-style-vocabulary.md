@@ -80,15 +80,34 @@ four-part contract** and is not "done" until all four are in place:
 This preserves ADR-0006's invariant: the vocabulary is the single coupling
 point, and no surface may quietly diverge on what a key means.
 
-### Phase A — title-page / display typography (highest value)
+### Phase A — title-page / display typography (highest value) — SHIPPED 2026-07-22
 
-- **`text_transform`** — `enum {none, uppercase, lowercase, capitalize}`.
-  docx `w:caps`/`w:smallCaps` (rPr); CSS `text-transform`; LaTeX `\MakeUppercase`
-  (or `\textsc`). Needed by the NTP `Title` (all-caps).
-- **`letter_spacing`** — `length`. docx rPr `w:spacing w:val` (twips) and/or
-  `w:kern`; CSS `letter-spacing`; LaTeX `\textls`/`microtype` or `\addfontfeatures`.
-  Note the extractor bug to avoid: character `w:spacing` (rPr) must NOT be read
-  as paragraph `space_before` (pPr) — they are distinct elements.
+- **`text_transform`** — `enum {none, uppercase}`. docx `w:caps` (`Font.all_caps`,
+  a display transform — text unchanged); CSS `text-transform: uppercase`; LaTeX
+  the **primitive `\uppercase`**, NOT `\MakeUppercase`. Rationale recorded because
+  it was compile-discovered, not designed: (1) the enum is scoped to
+  `{none, uppercase}` — `lowercase`/`capitalize` are dropped because Word has no
+  faithful display-transform run property for them (only `w:caps` for all-caps),
+  so including them would silently no-op on docx (a four-part-contract drift bug)
+  or force irreversible text mutation. (2) `\MakeUppercase` is not `\long`, so a
+  `\par` in its argument is a hard error — and a node chunk is multi-paragraph
+  (heading + body); the `\uppercase` primitive tolerates `\par` and leaves control
+  sequences intact (verified by a real `tect` compile). Needed by the NTP `Title`
+  (all-caps) — which in the reverse-engineered `.dotx` sits on the built-in
+  `Title` style, not `1-03_Report_Title` (a hand-edit drift; the real template may
+  differ).
+- **`letter_spacing`** — `length`, **absolute units only** (pt/mm/cm/in; em/ex
+  rejected on every surface because soul and Word `w:spacing` both space by a
+  FIXED width that can't be derived from a relative unit without a font size).
+  docx rPr `w:spacing w:val` (twips = pt×20, set via oxml — `Font` has no
+  `spacing` accessor); CSS `letter-spacing`; LaTeX **soul** `\sodef`/`\so` (added
+  `\RequirePackage{soul}` to `niehs.cls` — works under BOTH pdflatex and XeTeX,
+  unlike fontspec's XeTeX-only `LetterSpace`). The extractor reads rPr
+  `w:spacing` off the FONT element via `_rpr_letter_spacing_twips`, structurally
+  distinct from paragraph pPr `w:spacing w:before/after` (`space_before/after`) —
+  the ADR trap, now guarded by a test that sets both and asserts they don't leak.
+  LaTeX nesting when combined with `text_transform`: `\uppercase{` OUTER,
+  `\rlmls{` (the soul wrap) INNER (soul is finicky with macros in its argument).
 
 ### Phase B — body flow & indentation
 

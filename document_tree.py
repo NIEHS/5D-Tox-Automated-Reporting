@@ -164,6 +164,35 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
             counter += 1
 
     walk_tree(tree, visit)
+    # Figures share every table-numbering call site (a separate counter); fold the
+    # figure pass in here so all ~10 callers get both without a second call each.
+    compute_figure_numbers(tree)
+
+
+# Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
+# from tables: a `figure` node is Figure 1, 2, ... in document order.  (Genomics
+# CHART figure numbers are still assigned data-side on chart payloads by
+# genomics_charts.attach_genomics_charts until those charts migrate to figure
+# nodes — the two counters must be reconciled when that decomposition lands.)
+NUMBERED_FIGURE_TYPES = frozenset({"figure"})
+
+
+def compute_figure_numbers(tree: list[DocNode] | None = None) -> None:
+    """Walk the tree in document order and assign figure_number to every node
+    whose node_type is in NUMBERED_FIGURE_TYPES.  Positional from Figure 1, the
+    figure sibling of compute_table_numbers.  Mutates nodes in place."""
+    if tree is None:
+        tree = DOCUMENT_TREE
+
+    counter = 1
+
+    def visit(node: DocNode) -> None:
+        nonlocal counter
+        if node.node_type in NUMBERED_FIGURE_TYPES:
+            node.figure_number = counter
+            counter += 1
+
+    walk_tree(tree, visit)
 
 
 # The two genomics-section nodes carry their role in `narrative_key`; the flat
