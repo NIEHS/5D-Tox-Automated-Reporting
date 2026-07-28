@@ -346,10 +346,17 @@ def test_apical_table_marks_sex_separator_and_n_rows(session_data):
     assert 'class="n-row"' in html
 
 
-def test_genomics_section_emits_per_organ_sex_h4(session_data):
-    """Gene-set + gene tables each get their own (organ, sex) h4 header."""
+def test_genomics_section_stacks_sexes_no_h4(session_data):
+    """Genomics tables are PER-ORGAN with both sexes stacked (reference Tables
+    9–12): no per-(organ, sex) H4 subsection, and the sexes are delineated by
+    full-width sex-separator rows inside the table instead."""
     html = generate_html(session_data, section_filter="gene-sets")
-    assert "<h4>Liver, Male</h4>" in html or "<h4>Liver, Female</h4>" in html
+    # The old per-(organ, sex) subsection headers are gone.
+    assert "<h4>Liver, Male</h4>" not in html
+    assert "<h4>Liver, Female</h4>" not in html
+    # Sexes are now separator rows within the stacked table.
+    assert 'class="sex-separator"' in html
+    assert "<strong>Male</strong>" in html and "<strong>Female</strong>" in html
 
 
 # ---------------------------------------------------------------------------

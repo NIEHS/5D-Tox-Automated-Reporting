@@ -24,13 +24,15 @@ from __future__ import annotations
 
 def _entry_base_id(entry: dict) -> str:
     """
-    Stable per-(organ, sex) id prefix, e.g. "liver-male".  Lower-cased and
-    hyphenated so it is a safe overlay-key and DOM-id component (display text
-    is capitalised separately by the renderers).
+    Stable per-ORGAN id prefix, e.g. "liver".  Lower-cased and hyphenated so it
+    is a safe overlay-key and DOM-id component (display text is capitalised
+    separately by the renderers).  Entries now group both sexes in one table
+    (reference Tables 9–12), so the id no longer carries a sex.  A stale
+    per-(organ, sex) entry still yields a stable id via the sex fallback.
     """
     organ = (entry.get("organ") or "").strip().lower().replace(" ", "-")
     sex = (entry.get("sex") or "").strip().lower().replace(" ", "-")
-    return f"{organ}-{sex}"
+    return f"{organ}-{sex}" if sex else organ
 
 
 # ---------------------------------------------------------------------------

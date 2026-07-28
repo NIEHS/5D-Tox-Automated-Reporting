@@ -381,9 +381,12 @@ def build_clinical_pathology_table_from_sidecar(
 
     finalize_footnotes(footnotes, serialized)
 
+    # The reference titles the hormone table "Summary of Select Hormone Data"
+    # (singular "Hormone"), while the platform key is the plural "Hormones".
+    caption_platform = "Hormone" if platform == "Hormones" else platform
     return {
         "title": platform,
-        "caption": CAPTION_TEMPLATE.replace("{platform}", platform).replace("{compound}", compound_name),
+        "caption": CAPTION_TEMPLATE.replace("{platform}", caption_platform).replace("{compound}", compound_name),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",

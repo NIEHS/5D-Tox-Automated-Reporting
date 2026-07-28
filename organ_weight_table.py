@@ -65,10 +65,44 @@ from table_builder_common import (
 # Constants
 # ---------------------------------------------------------------------------
 
+# Generic caption — used when the table spans more than one organ or both sexes
+# (a broad organ-weight panel).  When the report is narrowed to a single organ
+# and a single sex (the reference's Table 3), _organ_weight_caption swaps in the
+# specific "Summary of {Organ} Weights of {Sex} Rats …" form instead.
 CAPTION_TEMPLATE = (
     "Summary of Select Organ Weight Data for Male and Female Rats "
     "Administered {compound} for Five Days"
 )
+
+
+def _organ_weight_caption(serialized: dict, compound_name: str) -> str:
+    """Build the organ-weight table caption from what is actually rendered.
+
+    Mirrors the reference NIEHS-10: when the table shows exactly ONE organ for
+    ONE sex it reads "Summary of {Organ} Weights of {Sex} Rats Administered
+    {compound} for Five Days" (e.g. "Summary of Liver Weights of Male Rats…").
+    Otherwise it falls back to the generic multi-organ / multi-sex phrasing so a
+    broader panel (or another chemical) still reads sensibly."""
+    sexes = [s for s in ("Male", "Female") if serialized.get(s)]
+    # Distinct organ tokens across the rendered rows (labels look like
+    # "Liver Absolute (g)" / "Liver Relative (mg/g)"; the leading word before
+    # " Absolute"/" Relative" is the organ).  Terminal Body Weight is context.
+    organs: list[str] = []
+    for rows in serialized.values():
+        for r in rows:
+            label = r.get("label", "")
+            if r.get("is_n_row") or label.startswith("Terminal Body Weight"):
+                continue
+            token = label.split(" Absolute")[0].split(" Relative")[0].strip()
+            if token and token not in organs:
+                organs.append(token)
+
+    if len(organs) == 1 and len(sexes) == 1:
+        return (
+            f"Summary of {organs[0]} Weights of {sexes[0]} Rats "
+            f"Administered {compound_name} for Five Days"
+        )
+    return CAPTION_TEMPLATE.replace("{compound}", compound_name)
 
 FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean."
@@ -94,6 +128,55 @@ FOOTNOTE_RELATIVE_WEIGHT = (
 
 
 # ---------------------------------------------------------------------------
+# Terminal-day filtering
+# ---------------------------------------------------------------------------
+# Organ weights are recorded at scheduled terminal necropsy (study day 5 here).
+# Animals that died or were euthanized moribund before that day carry earlier
+# observation days ("SD0"/"SD1") — those are NOT terminal-sacrifice weights and
+# must NOT enter the organ-weight means (the reference renders "-" for whole
+# dose groups whose animals all died early; see the attrition footnote).  The
+# pivot discards observation day, so we recover it here from the sidecar's raw
+# per-observation `day` and keep only the study's terminal day.
+
+def _parse_study_day(day: str | None) -> int | None:
+    """Parse a study-day token ("SD5", "SD 5", "5") into its integer day, or
+    None when unparseable/absent."""
+    if not day:
+        return None
+    import re as _re
+    m = _re.search(r"(-?\d+)", str(day))
+    return int(m.group(1)) if m else None
+
+
+def _study_terminal_day(sc: dict) -> int | None:
+    """The study's scheduled terminal-necropsy day = the LATEST study day
+    present across all Core-Animal observations in the sidecar.  Moribund
+    early-death observations sit on earlier days and are excluded relative to
+    this.  Returns None when no observation carries a parseable day (older
+    sidecars) — callers then skip day-filtering (backward-compatible)."""
+    latest: int | None = None
+    for rec in sc.get("animals", {}).values():
+        if "biosampling" in rec.get("selection", "").lower():
+            continue
+        for obs in rec.get("observations", []):
+            d = _parse_study_day(obs.get("day"))
+            if d is not None and (latest is None or d > latest):
+                latest = d
+    return latest
+
+
+def _is_terminal_obs(obs: dict, terminal_day: int | None) -> bool:
+    """True when this observation should count toward organ-weight statistics:
+    it was taken on the study's terminal day.  When terminal_day is None (no day
+    metadata) or the observation has no parseable day, default to True so we
+    never silently drop data we can't classify."""
+    if terminal_day is None:
+        return True
+    d = _parse_study_day(obs.get("day"))
+    return d is None or d == terminal_day
+
+
+# ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
 
@@ -103,6 +186,7 @@ def build_organ_weight_table_from_sidecar(
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
     organ_allowlist: list[str] | None = None,
+    sex_allow: list[str] | None = None,
 ) -> dict:
     """
     Build NIEHS Table 3 (Organ Weights) from sidecar + NTP stats.
@@ -203,6 +287,7 @@ def build_organ_weight_table_from_sidecar(
     for sex, sc in sidecar_data.items():
         endpoint_vals: dict[str, dict[float, list[float]]] = {}
         tbw_vals: dict[float, dict[str, float]] = {}
+        terminal_day = _study_terminal_day(sc)
 
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
@@ -215,8 +300,14 @@ def build_organ_weight_table_from_sidecar(
             # Parse observations into endpoint values for this animal.
             # Each observation has: day, endpoint, value.
             # For organ weights, each animal has ONE observation per endpoint
-            # (all at the same Removal Day, typically SD5).
+            # (all at the same Removal Day, typically SD5).  Skip observations
+            # NOT taken on the study's terminal day — those come from animals
+            # that died/were euthanized moribund before scheduled necropsy and
+            # would otherwise contaminate the dose-group means (the reference
+            # renders "-" for such whole dose groups).
             for obs in rec.get("observations", []):
+                if not _is_terminal_obs(obs, terminal_day):
+                    continue
                 ep_name = obs.get("endpoint", "")
                 val_str = obs.get("value")
                 if not ep_name or not val_str:
@@ -262,12 +353,15 @@ def build_organ_weight_table_from_sidecar(
     raw_by_animal: dict[str, dict[str, dict[float, list[tuple[str, float]]]]] = {}
     for sex, sc in sidecar_data.items():
         organ_animal_vals: dict[str, dict[float, list[tuple[str, float]]]] = {}
+        terminal_day = _study_terminal_day(sc)
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             if "biosampling" in selection.lower():
                 continue
             dose = rec["dose"]
             for obs in rec.get("observations", []):
+                if not _is_terminal_obs(obs, terminal_day):
+                    continue
                 ep_name = obs.get("endpoint", "")
                 val_str = obs.get("value")
                 if not ep_name or not val_str:
@@ -308,7 +402,15 @@ def build_organ_weight_table_from_sidecar(
     # ── Build the table rows ──────────────────────────────────────────────
     serialized: dict[str, list[dict]] = {}
 
+    from table_builder_common import sex_allowed
     for sex in ("Male", "Female"):
+        # Report-level sex allowlist for the ORGAN-WEIGHT area only.  The
+        # reference's Table 3 shows just the sex that had a responsive organ
+        # (e.g. "Liver Weights of Male Rats"); this is how the default template
+        # drops female from the organ-weight table while keeping both sexes in
+        # every other apical table.  Empty/None ⇒ both sexes.
+        if not sex_allowed(sex, sex_allow):
+            continue
         ep_vals = raw_by_sex.get(sex, {})
         tbw = tbw_by_sex.get(sex, {})
         rel_data = relative_by_sex.get(sex, {})
@@ -521,7 +623,7 @@ def build_organ_weight_table_from_sidecar(
 
     return {
         "title": "Organ Weight",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name),
+        "caption": _organ_weight_caption(serialized, compound_name),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",

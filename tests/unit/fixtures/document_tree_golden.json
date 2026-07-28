@@ -14,19 +14,19 @@
     "type": "title-page"
   },
   {
-    "id": "toc",
-    "level": 0,
-    "region": "front",
-    "title": "Table of Contents",
-    "type": "toc"
-  },
-  {
     "data_key": "foreword",
     "id": "foreword",
     "level": 1,
     "region": "front",
     "title": "Foreword",
     "type": "front-matter"
+  },
+  {
+    "id": "toc",
+    "level": 0,
+    "region": "front",
+    "title": "Table of Contents",
+    "type": "toc"
   },
   {
     "id": "tables-list",

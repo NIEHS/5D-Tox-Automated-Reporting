@@ -68,55 +68,71 @@ function copyToClipboard() {
  *   type: "gene"     → Gene BMD Analysis tables + gene descriptions
  * ================================================================ */
 function buildGenomicsExportSections(entries, { onlyApproved = false } = {}) {
-    const secs = [];
+    // Group the per-(organ, sex) UI results into PER-ORGAN entries that stack
+    // both sexes in one table (matching the reference Tables 9–12: a Male block
+    // then a Female block).  Two entries per organ — one gene_set, one gene —
+    // each carrying an ordered `sexes` list.  Mirrors the Python
+    // latex_export._convert_genomics_cache grouping so both assembly paths feed
+    // the shared renderers the same shape (ADR-0006).  Organ order Liver then
+    // Kidney; Male before Female.
+    const organRank = (o) => ({ liver: 0, kidney: 1 }[(o || '').toLowerCase()] ?? 99);
+    const sexRank = (s) => ({ male: 0, female: 1 }[(s || '').toLowerCase()] ?? 99);
+
+    // Collect raw results grouped by organ.
+    const byOrgan = new Map();  // organLower -> [gData, ...]
     for (const [, gData] of Object.entries(entries)) {
         if (onlyApproved && !gData.approved) continue;
-
         const hasByStatSets = gData.gene_sets_by_stat
             && Object.values(gData.gene_sets_by_stat).some(s => s.length > 0);
         const hasLegacySets = gData.gene_sets && gData.gene_sets.length > 0;
-
         if (!hasByStatSets && !hasLegacySets && !gData.top_genes) continue;
+        const organLower = (gData.organ || '').toLowerCase();
+        if (!byOrgan.has(organLower)) byOrgan.set(organLower, []);
+        byOrgan.get(organLower).push(gData);
+    }
 
-        // Gene set sections — one per selected statistic
-        if (hasByStatSets) {
-            for (const [stat, sets] of Object.entries(gData.gene_sets_by_stat)) {
-                if (sets.length === 0) continue;
-                secs.push({
-                    type: 'gene_set',
-                    organ: gData.organ,
-                    sex: gData.sex,
-                    bmd_stat: stat,
-                    bmd_stat_label: _bmdStatLabel(stat),
-                    gene_sets: sets,
-                    go_descriptions: gData.go_descriptions || [],
-                    gene_set_narrative: gData.gene_set_narrative || [],
-                    dose_unit: 'mg/kg',
-                });
+    const secs = [];
+    const organsSorted = [...byOrgan.keys()].sort((a, b) => organRank(a) - organRank(b));
+    for (const organLower of organsSorted) {
+        const group = byOrgan.get(organLower).slice()
+            .sort((a, b) => sexRank(a.sex) - sexRank(b.sex));
+        const organDisp = group[0].organ || organLower;
+
+        const geneSetSexes = [];
+        const geneSexes = [];
+        for (const gData of group) {
+            // Gene-set rows: prefer the median stat (the canonical export view).
+            let sets = [];
+            if (gData.gene_sets_by_stat) {
+                sets = gData.gene_sets_by_stat.median
+                    || Object.values(gData.gene_sets_by_stat).find(s => s.length > 0)
+                    || [];
+            } else if (gData.gene_sets) {
+                sets = gData.gene_sets;
             }
-        } else if (hasLegacySets) {
-            secs.push({
-                type: 'gene_set',
-                organ: gData.organ,
-                sex: gData.sex,
-                gene_sets: gData.gene_sets,
-                go_descriptions: gData.go_descriptions || [],
-                gene_set_narrative: gData.gene_set_narrative || [],
-                dose_unit: 'mg/kg',
-            });
+            const gsBlock = { sex: gData.sex, gene_sets: sets };
+            if (gData.gene_set_narrative) gsBlock.narrative = gData.gene_set_narrative;
+            geneSetSexes.push(gsBlock);
+
+            const gnBlock = { sex: gData.sex, top_genes: gData.top_genes || [] };
+            if (gData.gene_narrative) gnBlock.narrative = gData.gene_narrative;
+            geneSexes.push(gnBlock);
         }
-        // Gene section (with gene descriptions)
-        if (gData.top_genes && gData.top_genes.length > 0) {
-            secs.push({
-                type: 'gene',
-                organ: gData.organ,
-                sex: gData.sex,
-                top_genes: gData.top_genes,
-                gene_descriptions: gData.gene_descriptions || [],
-                gene_narrative: gData.gene_narrative || [],
-                dose_unit: 'mg/kg',
-            });
-        }
+
+        secs.push({
+            type: 'gene_set',
+            organ: organDisp,
+            sexes: geneSetSexes,
+            go_descriptions: [],
+            dose_unit: 'mg/kg',
+        });
+        secs.push({
+            type: 'gene',
+            organ: organDisp,
+            sexes: geneSexes,
+            gene_descriptions: [],
+            dose_unit: 'mg/kg',
+        });
     }
     return secs;
 }

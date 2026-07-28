@@ -909,12 +909,11 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         blocks.append(intro)
 
     for entry in entries:
-        organ = (entry.get("organ") or "").capitalize()
-        sex = (entry.get("sex") or "").capitalize()
-        sub_title = f"{organ}, {sex}"
-        blocks.append(f"\\subsubsection{{{_escape_latex(sub_title)}}}")
-
-        # Each (organ, sex) block is an ordered list of sub-addressable content
+        # One entry per organ (both sexes stacked in a single table — reference
+        # Tables 9–12).  No per-sex subsection heading; the table's own Male /
+        # Female separator rows delineate the sexes.
+        #
+        # Each organ block is an ordered list of sub-addressable content
         # items (ADR-0003 Phase 4); the table is independently orientable, so a
         # wide gene table can flip landscape on its own via the composite
         # "(component, content-item)" orientation key.  Order/identity come from
@@ -1027,19 +1026,27 @@ def _genomics_caption_block(entry: dict) -> str:
 
 def _render_gene_set_table(entry: dict) -> str:
     """
-    Render the top-gene-sets table for one (organ, sex) of a genomics
-    section.  Schema (per gene_sets[i]):
-      rank, go_id, go_term, bmd, bmdl, n_genes, direction.
+    Render the top-gene-sets table for one organ (both sexes stacked) of a
+    genomics section.  8 columns (reference Table 9/10); rows carry `**Male**` /
+    `**Female**` separator rows (bold, full-width) between the sex blocks.
     """
     rows = gene_set_table_rows(entry)
     if rows is None:
-        return f"\\emph{{[Top gene sets pending: {_escape_latex(entry.get('organ', ''))}, {_escape_latex(entry.get('sex', ''))}]}}"
+        return f"\\emph{{[Top gene sets pending: {_escape_latex(entry.get('organ', ''))}]}}"
 
-    colspec = "l l l r r r l"
+    ncols = len(GENE_SET_TABLE_HEADERS)
+    colspec = "p{0.24\\linewidth} l l p{0.20\\linewidth} r r r r"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
              _emit_tabular_row(list(GENE_SET_TABLE_HEADERS)), "\\midrule"]
     for cells in rows:
-        lines.append(_emit_tabular_row(cells))
+        first = cells[0] if cells else ""
+        if first.startswith("**") and first.endswith("**"):
+            label = first.strip("*").strip()
+            lines.append(
+                f"\\multicolumn{{{ncols}}}{{l}}{{\\textbf{{{_escape_latex(label)}}}}} \\\\"
+            )
+        else:
+            lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     # Scale-to-fit: unlike apical tables (which float through the niehstable
@@ -1056,19 +1063,27 @@ def _render_gene_set_table(entry: dict) -> str:
 
 def _render_gene_table(entry: dict) -> str:
     """
-    Render the top-genes table for one (organ, sex) of a gene BMD section.
-    Schema (per top_genes[i]):
-      rank, gene, bmd, bmdl, direction, fold_change.
+    Render the top-genes table for one organ (both sexes stacked) of a gene BMD
+    section.  6 columns (reference Table 11/12); rows carry `**Male**` /
+    `**Female**` separator rows (bold, full-width) between the sex blocks.
     """
     rows = gene_table_rows(entry)
     if rows is None:
-        return f"\\emph{{[Top genes pending: {_escape_latex(entry.get('organ', ''))}, {_escape_latex(entry.get('sex', ''))}]}}"
+        return f"\\emph{{[Top genes pending: {_escape_latex(entry.get('organ', ''))}]}}"
 
-    colspec = "l l r r l r"
+    ncols = len(GENE_TABLE_HEADERS)
+    colspec = "l l l l r l"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
              _emit_tabular_row(list(GENE_TABLE_HEADERS)), "\\midrule"]
     for cells in rows:
-        lines.append(_emit_tabular_row(cells))
+        first = cells[0] if cells else ""
+        if first.startswith("**") and first.endswith("**"):
+            label = first.strip("*").strip()
+            lines.append(
+                f"\\multicolumn{{{ncols}}}{{l}}{{\\textbf{{{_escape_latex(label)}}}}} \\\\"
+            )
+        else:
+            lines.append(_emit_tabular_row(cells))
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
     # Scale-to-fit: unlike apical tables (which float through the niehstable

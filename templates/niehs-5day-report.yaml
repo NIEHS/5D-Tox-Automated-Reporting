@@ -32,10 +32,18 @@
 document:
 - region: front
   children:
+  - id: cover
+    type: cover
+    title: Cover Page
+    subtype: niehs-5d-tox
   - id: title-page
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
+  # Page breaks are NOT structural nodes — they are declared in the `styles`
+  # block below as `break_before: page` on the node that should start a new page
+  # (see the header note there).  This keeps pagination a single surface-agnostic
+  # spec that composes idempotently with the dotx's own style breaks on docx.
   - id: foreword
     type: front-matter
     title: Foreword
@@ -440,14 +448,18 @@ organs:
 # genes: [egr1, ddit4]
 # gene_sets: ["GO:1902893", "cell division"]
 
-# assays — restrict the Clinical Chemistry (Table 4) and Hematology (Table 5)
-# tables to the reference's "Select" endpoints.  These are PER-SEX: the NIEHS
-# reference shows different endpoints for males vs females (and the apical BMD
-# summary, Table 8, lists the same per-sex set).  An area value may be a flat
-# list (both sexes) OR this {male:/female:} mapping.  Tokens are matched
-# component-aware, so multi-word tokens ("manual hematocrit", "neutrophil
-# count") are used where a single word would over-match (e.g. bare "hematocrit"
-# would also keep "Hematocrit"; bare "count" spans every differential row).
+# assays — restrict the Clinical Chemistry (Table 4), Hematology (Table 5) and
+# Hormone (Table 6) tables to the reference's "Select" endpoints.  These are
+# PER-SEX: the NIEHS reference shows different endpoints for males vs females
+# (and the apical BMD summary, Table 8, lists the same per-sex set).  The
+# reference's "Select" is a HAND-CURATED subset that a data-driven
+# responsiveness gate does NOT reproduce (e.g. male Cholesterol is the only male
+# clin-chem row but is not NTP-responsive), so each panel is an explicit
+# allowlist.  An area value may be a flat list (both sexes) OR this
+# {male:/female:} mapping.  Tokens are matched component-aware, so multi-word
+# tokens ("manual hematocrit", "total thyroxine") are used where a single word
+# would over-match (bare "thyroxine" would also keep "Free Thyroxine"; bare
+# "count" spans every differential row).
 assays:
   clinical-chemistry:
     male: [cholesterol]
@@ -455,6 +467,22 @@ assays:
   hematology:
     male: ["neutrophil count"]
     female: ["manual hematocrit"]
+  hormones:
+    # Our row labels are "Triiodothyronine" / "Total Thyroxine" (the reference
+    # prints them "Total T3" / "Total T4").  Token "triiodothyronine" keeps the
+    # T3 row; "total thyroxine" keeps Total Thyroxine but NOT "Free Thyroxine".
+    male: ["triiodothyronine", "total thyroxine"]
+    female: ["total thyroxine"]
+
+# sex — the "organ-weight" area narrows ONLY the Organ Weight table (Table 3) to
+# the sex(es) that had a responsive organ, matching the reference (its Table 3
+# is "Summary of Liver Weights of MALE Rats" — female liver was not responsive,
+# so female is dropped from that ONE table while every other apical table keeps
+# both sexes).  Combined with `organs.organ-weight: [liver]` above, this yields
+# the single-organ / single-sex table; organ_weight_table then titles it
+# dynamically from what's shown.  Exact match (male|female).
+sex:
+  organ-weight: [male]
 
 
 # ---------------------------------------------------------------------------
@@ -574,3 +602,47 @@ charts: []
 #   instances:                      # applied to ONE node, keyed by DocNode id
 #     background:
 #       font_size: "10pt"
+
+# ---------------------------------------------------------------------------
+# PAGE BREAKS — the canonical, surface-agnostic pagination spec
+# ---------------------------------------------------------------------------
+# Every intended page break is declared here as `break_before: page` on the node
+# that should START a new page (keyed by DocNode id under `instances`).  This is
+# the SINGLE source of truth for pagination across all three surfaces:
+#   - docx  -> pageBreakBefore on the node's first paragraph;
+#   - LaTeX -> \clearpage before the node;
+#   - HTML  -> break-before:page.
+# We deliberately use break_before (a BOOLEAN toggle), never a standalone page
+# break, so a break declared here COMPOSES IDEMPOTENTLY with a docx dotx style
+# that already carries pageBreakBefore (both -> ONE boundary, no blank page).
+# So the list below enumerates EVERY reference break — including ones the docx
+# dotx auto-breaks via its heading styles (peer-review, abstract, results,
+# summary, references) — so LaTeX/HTML (which have no style-break template)
+# reproduce the same pagination.  The break set was verified against
+# examples/NIEHS-10 PFHxSAm_Final.docx (which tables/appendices start a page).
+styles:
+  instances:
+    # Front matter — new page before each of these sections.
+    toc: { break_before: page }
+    about: { break_before: page }
+    peer-review: { break_before: page }
+    publication: { break_before: page }
+    abstract: { break_before: page }
+    # Body — Results/Summary/References head their own page (docx dotx also
+    # auto-breaks these via 3-02a_Head1_NoNumber; listed for LaTeX/HTML parity).
+    results: { break_before: page }
+    summary: { break_before: page }
+    references: { break_before: page }
+    # Body apical tables that the reference puts on their own page (Tables 3/5/6;
+    # Tables 2/4/7/8 flow after prose, so NO break on those nodes).
+    table-organ-weight: { break_before: page }
+    table-hematology: { break_before: page }
+    table-hormones: { break_before: page }
+    # Appendices — each starts a new page (reference breaks before every
+    # appendix head; A/C/E carry authored bodies, B/D/F their data tables).
+    appendix-a: { break_before: page }
+    appendix-b: { break_before: page }
+    appendix-c: { break_before: page }
+    appendix-d: { break_before: page }
+    appendix-e: { break_before: page }
+    appendix-f: { break_before: page }

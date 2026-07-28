@@ -88,19 +88,19 @@
       "type": "title-page"
     },
     {
-      "id": "toc",
-      "level": 0,
-      "region": "front",
-      "title": "Table of Contents",
-      "type": "toc"
-    },
-    {
       "data_key": "foreword",
       "id": "foreword",
       "level": 1,
       "region": "front",
       "title": "Foreword",
       "type": "front-matter"
+    },
+    {
+      "id": "toc",
+      "level": 0,
+      "region": "front",
+      "title": "Table of Contents",
+      "type": "toc"
     },
     {
       "id": "tables-list",
@@ -602,7 +602,61 @@
     "paragraphs": []
   },
   "issn": "2768-5632",
-  "layout_style": {},
+  "layout_style": {
+    "instances": {
+      "about": {
+        "break_before": "page"
+      },
+      "abstract": {
+        "break_before": "page"
+      },
+      "appendix-a": {
+        "break_before": "page"
+      },
+      "appendix-b": {
+        "break_before": "page"
+      },
+      "appendix-c": {
+        "break_before": "page"
+      },
+      "appendix-d": {
+        "break_before": "page"
+      },
+      "appendix-e": {
+        "break_before": "page"
+      },
+      "appendix-f": {
+        "break_before": "page"
+      },
+      "peer-review": {
+        "break_before": "page"
+      },
+      "publication": {
+        "break_before": "page"
+      },
+      "references": {
+        "break_before": "page"
+      },
+      "results": {
+        "break_before": "page"
+      },
+      "summary": {
+        "break_before": "page"
+      },
+      "table-hematology": {
+        "break_before": "page"
+      },
+      "table-hormones": {
+        "break_before": "page"
+      },
+      "table-organ-weight": {
+        "break_before": "page"
+      },
+      "toc": {
+        "break_before": "page"
+      }
+    }
+  },
   "methods": {
     "paragraphs": [
       "Methods flat para."
@@ -685,12 +739,12 @@
     {
       "ready": true,
       "table_number": 8,
-      "title": "Apical Endpoint Benchmark Dose Summary"
+      "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
       "ready": false,
       "table_number": 9,
-      "title": "Top Liver Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
   ],
   "test_article": {

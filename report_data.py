@@ -782,15 +782,18 @@ def scaffold_report_data(
 
     # Genomics — section headings for gene set and gene analyses,
     # with organ sub-headings (liver, kidney) but no table data.
+    # Per-organ entries (both sexes stacked), matching the reference Tables 9–12
+    # and the shape _convert_genomics_cache / buildGenomicsExportSections emit.
+    # Empty `sexes` so the scaffold shows the section structure with no data.
     genomics_sections = [
-        {"type": "gene_set", "organ": "liver", "sex": "male",
-         "caption": "", "gene_sets": [], "go_descriptions": []},
-        {"type": "gene_set", "organ": "kidney", "sex": "male",
-         "caption": "", "gene_sets": [], "go_descriptions": []},
-        {"type": "gene", "organ": "liver", "sex": "male",
-         "caption": "", "top_genes": [], "gene_descriptions": []},
-        {"type": "gene", "organ": "kidney", "sex": "male",
-         "caption": "", "top_genes": [], "gene_descriptions": []},
+        {"type": "gene_set", "organ": "liver", "caption": "",
+         "sexes": [], "go_descriptions": []},
+        {"type": "gene_set", "organ": "kidney", "caption": "",
+         "sexes": [], "go_descriptions": []},
+        {"type": "gene", "organ": "liver", "caption": "",
+         "sexes": [], "gene_descriptions": []},
+        {"type": "gene", "organ": "kidney", "caption": "",
+         "sexes": [], "gene_descriptions": []},
     ]
 
     # --- Materials and Methods (structured H2/H3 hierarchy) ---

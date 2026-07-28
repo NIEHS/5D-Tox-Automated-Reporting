@@ -632,6 +632,10 @@ async def _get_sections(ctx):
     # narrative (both cached in the sections blob, so this is folded into
     # sections_hash upstream — see _hash_sections at the Layer-0 hash step).
     ow_allow = (ctx.organ_filters or {}).get("organ-weight")
+    # Organ-weight AREA sex allowlist — narrows ONLY the Organ Weight table's
+    # sexes (reference Table 3 = the responsive sex only).  Distinct from the
+    # apical sex allowlist below; also folded into sections_hash upstream.
+    ow_sex_allow = (ctx.sex_filters or {}).get("organ-weight")
     # Apical sex allowlist — the platform-table-derived cards are already
     # narrowed by apply_apical_filters, but the two sidecar-built cards
     # (Tissue Concentration, Clinical Observations) bypass platform_tables and
@@ -656,6 +660,7 @@ async def _get_sections(ctx):
             platform_tables, compound_name, dose_unit,
             dtxsid=dtxsid, imputed_cells=imputed_cells,
             organ_allowlist=ow_allow, sex_allow=apical_sex_allow,
+            ow_sex_allow=ow_sex_allow,
         ),
     )
     # Clinical obs tables bypass Java integration (categorical data).
@@ -1113,6 +1118,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
             organ_allowlist=(ctx.organ_filters or {}).get("organ-weight"),
             sex_allowlist=(ctx.sex_filters or {}).get("apical"),
             assay_filters=ctx.assay_filters,
+            ow_sex_allowlist=(ctx.sex_filters or {}).get("organ-weight"),
         )
         ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 
