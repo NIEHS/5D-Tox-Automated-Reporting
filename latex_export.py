@@ -348,54 +348,93 @@ def _convert_genomics_cache(
     ahead of the table.  Omitting the arg (default None) leaves `narrative`
     unset — the pre-feature behaviour, tables only.
     """
+    # Group the per-(organ, sex) cache into PER-ORGAN entries that stack both
+    # sexes in one table (matching the reference Tables 9–12, which show a Male
+    # sub-header block then a Female block).  Two entries per organ — one
+    # gene_set, one gene — each carrying an ordered `sexes` list.  Organ order
+    # is Liver then Kidney (the reference order); Male before Female within.
     out: list[dict] = []
     if not isinstance(genomics_cache, dict):
         return out
     interp = interpretations or {}
+
+    # Collect the raw per-(organ, sex) cache entries grouped by organ.
+    by_organ: dict[str, dict[str, dict]] = {}
     for key in sorted(genomics_cache.keys()):
         entry = genomics_cache[key]
         if not isinstance(entry, dict):
             continue
-        organ = entry.get("organ", "")
-        sex = entry.get("sex", "")
-        interp_entry = interp.get((organ.lower(), sex.lower()), {})
-        # Gene-set entry — pull from gene_sets_by_stat using the median
-        # statistic (the canonical default; the UI lets users switch
-        # but the LaTeX path renders one view).
-        gene_sets = (
-            (entry.get("gene_sets_by_stat") or {}).get("median")
-            or []
-        )
-        gene_set_section = {
+        organ = (entry.get("organ") or "").strip()
+        sex = (entry.get("sex") or "").strip()
+        by_organ.setdefault(organ.lower(), {})[sex.lower()] = entry
+
+    def _organ_rank(organ_lower: str) -> tuple[int, str]:
+        # Liver first, Kidney second, then anything else alphabetically.
+        order = {"liver": 0, "kidney": 1}
+        return (order.get(organ_lower, 99), organ_lower)
+
+    def _sex_rank(sex_lower: str) -> tuple[int, str]:
+        order = {"male": 0, "female": 1}
+        return (order.get(sex_lower, 99), sex_lower)
+
+    for organ_lower in sorted(by_organ, key=_organ_rank):
+        sexes = by_organ[organ_lower]
+        # Display organ name from the first cache entry (preserves casing).
+        any_entry = next(iter(sexes.values()))
+        organ_disp = (any_entry.get("organ") or organ_lower).strip()
+
+        gene_set_sexes: list[dict] = []
+        gene_sexes: list[dict] = []
+        for sex_lower in sorted(sexes, key=_sex_rank):
+            entry = sexes[sex_lower]
+            sex_disp = (entry.get("sex") or sex_lower).strip()
+            interp_entry = interp.get((organ_lower, sex_lower), {})
+
+            gene_sets = (entry.get("gene_sets_by_stat") or {}).get("median") or []
+            gs_block = {"sex": sex_disp, "gene_sets": gene_sets}
+            gs_narr = interp_entry.get("gene_set_narrative")
+            if gs_narr:
+                gs_block["narrative"] = gs_narr
+            gene_set_sexes.append(gs_block)
+
+            top_genes = [
+                {**g, "gene": g.get("gene_symbol") or g.get("gene", "")}
+                for g in (entry.get("top_genes", []) or [])
+            ]
+            gn_block = {"sex": sex_disp, "top_genes": top_genes}
+            gn_narr = interp_entry.get("gene_narrative")
+            if gn_narr:
+                gn_block["narrative"] = gn_narr
+            gene_sexes.append(gn_block)
+
+        # Aggregate the per-sex LLM interpretation paragraphs to the entry so the
+        # content plan renders them once per organ, ahead of the stacked table.
+        # (The section-level intro narrative is often empty for a session; these
+        # per-(organ, sex) interpretations are the substantive prose we have.)
+        gs_narr_all = [p for b in gene_set_sexes for p in (b.get("narrative") or [])]
+        gn_narr_all = [p for b in gene_sexes for p in (b.get("narrative") or [])]
+
+        gene_set_entry = {
             "type": "gene_set",
-            "organ": organ,
-            "sex": sex,
-            "caption": f"Top Gene Sets — {organ.capitalize()}, {sex.capitalize()}",
-            "gene_sets": gene_sets,
+            "organ": organ_disp,
+            "caption": f"Top Gene Sets — {organ_disp.capitalize()}",
+            "sexes": gene_set_sexes,
             "go_descriptions": [],
         }
-        gs_narr = interp_entry.get("gene_set_narrative")
-        if gs_narr:
-            gene_set_section["narrative"] = gs_narr
-        out.append(gene_set_section)
-        # Gene entry — map gene_symbol → gene to match generator's expected key
-        top_genes_raw = entry.get("top_genes", []) or []
-        top_genes = [
-            {**g, "gene": g.get("gene_symbol") or g.get("gene", "")}
-            for g in top_genes_raw
-        ]
-        gene_section = {
+        if gs_narr_all:
+            gene_set_entry["narrative"] = gs_narr_all
+        out.append(gene_set_entry)
+
+        gene_entry = {
             "type": "gene",
-            "organ": organ,
-            "sex": sex,
-            "caption": f"Top Genes — {organ.capitalize()}, {sex.capitalize()}",
-            "top_genes": top_genes,
+            "organ": organ_disp,
+            "caption": f"Top Genes — {organ_disp.capitalize()}",
+            "sexes": gene_sexes,
             "gene_descriptions": [],
         }
-        gn_narr = interp_entry.get("gene_narrative")
-        if gn_narr:
-            gene_section["narrative"] = gn_narr
-        out.append(gene_section)
+        if gn_narr_all:
+            gene_entry["narrative"] = gn_narr_all
+        out.append(gene_entry)
     return out
 
 
@@ -649,6 +688,21 @@ def load_session_data(
     # unaffected until that path opts in.
     from roundtrip.overrides import load_overrides
     data["overrides"] = load_overrides(dtxsid)
+
+    # ── Manual Table of Contents / Tables list ────────────────────────
+    # The docx and HTML surfaces render a STATIC contents list from
+    # data["toc_entries"] / data["table_entries"] (LaTeX uses native
+    # \tableofcontents, so it doesn't need this).  The web/marshal path
+    # builds these via _build_toc_entries after overlay; the session-cache
+    # path must too, or the docx/HTML Contents page comes up empty.  Runs
+    # after genomics table numbers are assigned so the Tables list is
+    # complete.  Also serialize the tree the same way marshal does.
+    from document_tree import serialize_tree
+    from report_data_toc import _build_toc_entries
+    data["document_tree"] = serialize_tree(DOCUMENT_TREE)
+    toc_entries, table_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
+    data["toc_entries"] = toc_entries
+    data["table_entries"] = table_entries
 
     return data
 

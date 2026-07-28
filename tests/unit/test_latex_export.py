@@ -237,8 +237,9 @@ def test_normalize_apical_section_handles_missing_dose():
     assert out["table_data"]["Female"][0]["values"] == ["5.5", "—", "3.2"]
 
 
-def test_convert_genomics_cache_produces_two_entries_per_organ_sex():
-    """One gene_set entry and one gene entry per (organ, sex) tuple."""
+def test_convert_genomics_cache_produces_two_entries_per_organ():
+    """One gene_set entry and one gene entry PER ORGAN (both sexes stacked in a
+    `sexes` list — reference Tables 9–12), not per (organ, sex)."""
     cache = {
         "liver_male": {
             "organ": "liver", "sex": "male",
@@ -250,14 +251,22 @@ def test_convert_genomics_cache_produces_two_entries_per_organ_sex():
                            "bmd": 0.1, "bmdl": 0.05, "direction": "down",
                            "fold_change": -2.5}],
         },
+        "liver_female": {
+            "organ": "liver", "sex": "female",
+            "gene_sets_by_stat": {"median": [{"rank": 1, "go_id": "GO:2"}]},
+            "top_genes": [{"rank": 1, "gene_symbol": "BAR"}],
+        },
     }
     out = _convert_genomics_cache(cache)
+    # Two organ×sex inputs for the SAME organ collapse to 2 entries total.
     assert len(out) == 2
     types = {e["type"] for e in out}
     assert types == {"gene_set", "gene"}
     gene_entry = next(e for e in out if e["type"] == "gene")
-    # gene_symbol → gene rename for generator compatibility
-    assert gene_entry["top_genes"][0]["gene"] == "FOXP1"
+    # Both sexes present as ordered blocks (Male before Female).
+    assert [b["sex"] for b in gene_entry["sexes"]] == ["male", "female"]
+    # gene_symbol → gene rename for generator compatibility, inside each block.
+    assert gene_entry["sexes"][0]["top_genes"][0]["gene"] == "FOXP1"
     # No interpretations arg ⇒ no narrative attached (pre-feature behavior).
     assert "narrative" not in gene_entry
     gene_set_entry = next(e for e in out if e["type"] == "gene_set")

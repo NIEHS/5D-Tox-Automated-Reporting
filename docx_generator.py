@@ -48,7 +48,13 @@ from io import BytesIO
 
 from docx import Document
 from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING
+from docx.enum.text import (
+    WD_ALIGN_PARAGRAPH,
+    WD_BREAK,
+    WD_LINE_SPACING,
+    WD_TAB_ALIGNMENT,
+    WD_TAB_LEADER,
+)
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -178,8 +184,11 @@ def _style_run(run, *, size_pt: int, font: str | None = None, bold: bool = False
 # Low-level docx helpers
 # ---------------------------------------------------------------------------
 
-def _add_heading(doc: Document, level: int, title: str, data: dict | None = None) -> None:
+def _add_heading(doc: Document, level: int, title: str, data: dict | None = None):
     """Append a heading paragraph for levels 1-3; level 0/empty adds nothing.
+
+    Returns the created paragraph (or None when nothing was added) so a caller can
+    post-adjust it — e.g. front-matter/tables-list headings center theirs.
 
     Role-driven path (ADR-0010 Phase 2): when a vocabulary is active (``data``
     carries it), the level maps to the section_heading_N role and the paragraph
@@ -187,13 +196,13 @@ def _add_heading(doc: Document, level: int, title: str, data: dict | None = None
     built-in Heading 1-3 styles (_HEADING_STYLE_BY_LEVEL) — the pre-vocabulary
     look."""
     if not title or level not in _HEADING_STYLE_BY_LEVEL:
-        return
+        return None
     style = _HEADING_STYLE_BY_LEVEL[level]
     if data is not None:
         role_style = _role_style_name(data, f"section_heading_{level}")
         if role_style and role_style in {s.name for s in doc.styles}:
             style = role_style
-    doc.add_paragraph(_clean(title), style=style)
+    return doc.add_paragraph(_clean(title), style=style)
 
 
 def _add_paragraphs(doc: Document, paragraphs, style: str | None = None) -> bool:
@@ -318,6 +327,109 @@ def _set_edge_border(el, edge: str, sz: str = "8") -> None:
     e.set(qn("w:color"), "000000")
 
 
+# The reference table-caption style + Table-of-Figures collect target.  A caption
+# in this style, with a SEQ number, is what the front-matter "Tables" TOF field
+# gathers (see _render_tables_list).  Values measured from NIEHS-10's
+# 0-25_Table_Title (Base_Text → 11pt bold, 14pt before / 3pt after, keepNext).
+_TABLE_TITLE_STYLE = "0-25_Table_Title"
+_TABLE_TITLE_PT = 11
+
+
+def _ensure_table_title_style(doc: Document):
+    """Create (once) the `0-25_Table_Title` paragraph style — the reference table-
+    caption style AND the target the Tables-list TOF field collects by.  Times New
+    Roman 11pt bold, 14pt before / 3pt after, keepNext (stay with the table)."""
+    name = _TABLE_TITLE_STYLE
+    try:
+        return doc.styles[name]
+    except KeyError:
+        from docx.enum.style import WD_STYLE_TYPE
+        style = doc.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+        style.font.name = _BODY_FONT
+        style.font.size = Pt(_TABLE_TITLE_PT)
+        style.font.bold = True
+        pf = style.paragraph_format
+        pf.space_before = Pt(14)
+        pf.space_after = Pt(3)
+        pf.keep_with_next = True
+        return style
+
+
+def _add_table_caption(doc: Document, caption: str) -> None:
+    r"""Emit a table caption ABOVE its table in `0-25_Table_Title` style, numbered
+    by a SEQ FIELD ("Table {SEQ Table}. <text>") rather than literal text — so the
+    number auto-renumbers AND the front-matter Table-of-Figures field can collect
+    it (a TOF collects by paragraph style).  The incoming caption already carries a
+    literal "Table N. " prefix (from render_common.table_caption); strip it and let
+    the SEQ supply the number.  A non-breaking space after "Table" keeps the label
+    with its number (matching the reference)."""
+    style = _ensure_table_title_style(doc)
+    para = doc.add_paragraph(style=style)
+    label, text = _split_table_prefix(_clean(caption))
+    if label and _re_arabic_label.match(label):
+        # Body table: "Table N." -> SEQ field cached to N (correct positional
+        # number so LibreOffice shows it right without a field refresh).
+        para.add_run("Table ")   # nbsp, so "Table" never wraps off its number
+        _add_seq_field(para, "Table", cached=label)
+        para.add_run(". ")
+        para.add_run(text)
+    elif label:
+        # Appendix table: "Table B-1." -> literal (letter+number the arabic SEQ
+        # can't express); emitting a SEQ here is what doubled the prefix.
+        para.add_run(f"Table {label}. ")
+        para.add_run(text)
+    else:
+        # No recognizable prefix -> plain SEQ-numbered caption.
+        para.add_run("Table ")
+        _add_seq_field(para, "Table")
+        para.add_run(". ")
+        para.add_run(text)
+
+
+# "N"  (body, arabic) vs  "B-1" (appendix, letter-prefixed).
+_re_arabic_label = re.compile(r"^\d+$")
+
+
+def _split_table_prefix(caption: str) -> tuple[str, str]:
+    """Split a caption into (number-label, descriptive-text).
+
+    Recognizes both the body form ("Table 3. Foo" -> ("3", "Foo")) and the
+    appendix form ("Table B-1. Bar" -> ("B-1", "Bar")).  Returns ("", caption)
+    when there is no recognizable "Table .... " prefix.  The SEQ field / TOF
+    numbering then supplies the label from the returned number for body tables;
+    appendix labels are emitted literally (see _add_table_caption)."""
+    m = re.match(r"^Table\s+([A-Za-z]?-?\d+)\.\s*(.*)$", caption or "", re.DOTALL)
+    if m:
+        return m.group(1), m.group(2).strip()
+    return "", (caption or "").strip()
+
+
+def _strip_table_prefix(caption: str) -> str:
+    """Drop a leading 'Table N. ' (or 'Table B-1. ') from a caption — the SEQ
+    field / TOF numbering supplies the label, so the stored text is just the
+    descriptive part.  Thin wrapper over _split_table_prefix for callers that
+    only want the text."""
+    return _split_table_prefix(caption)[1]
+
+
+def _add_seq_field(paragraph, seq_name: str, cached: str = "1") -> None:
+    r"""Insert a Word SEQ field ({ SEQ <name> \* ARABIC }) — an auto-incrementing
+    counter Word renumbers on update.  `cached` is the result shown until a field
+    refresh; set it to the correct positional number so LibreOffice (which never
+    refreshes a Word-origin field) still shows the right label."""
+    run = paragraph.add_run()
+    begin = OxmlElement("w:fldChar"); begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
+    instr.text = f" SEQ {seq_name} \\* ARABIC "
+    sep = OxmlElement("w:fldChar"); sep.set(qn("w:fldCharType"), "separate")
+    cached_t = OxmlElement("w:t"); cached_t.text = cached
+    cached_run = OxmlElement("w:r"); cached_run.append(cached_t)
+    end = OxmlElement("w:fldChar"); end.set(qn("w:fldCharType"), "end")
+    run._r.append(begin); run._r.append(instr); run._r.append(sep)
+    paragraph._p.append(cached_run)
+    tail = paragraph.add_run(); tail._r.append(end)
+
+
 def _booktabs_table(
     doc: Document,
     headers: list[str],
@@ -332,10 +444,10 @@ def _booktabs_table(
     vertical or inner-body rules) — the Word analogue of the ``niehstable``
     environment / HTML ``.niehstable``.
 
-    caption:            rendered as a bold paragraph ABOVE the table (NIEHS
-                        places table captions above), matching the "Table N."
-                        text the shared _table_caption / genomics_table_caption
-                        already built.
+    caption:            rendered ABOVE the table (NIEHS places captions above) in
+                        the reference `0-25_Table_Title` style with a SEQ-field
+                        number, so it is COLLECTABLE by the front-matter Table-of-
+                        Figures field and auto-renumbers (see _add_table_caption).
     footnotes:          the typed footnote dicts render as small paragraphs
                         below the table (lettered entries keep their letter).
     merged_label_rows:  when True, a body row whose first cell is wrapped in
@@ -344,8 +456,7 @@ def _booktabs_table(
                         columns — the Word twin of the HTML colspan row.
     """
     if caption:
-        cap = doc.add_paragraph()
-        cap.add_run(_clean(caption)).bold = True
+        _add_table_caption(doc, caption)
 
     ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
     table = doc.add_table(rows=0, cols=ncols)
@@ -433,9 +544,18 @@ def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
 
     heading_style = _role_style_name(data, heading_role) if heading_role else None
     if heading_style and node.title and heading_style in {s.name for s in doc.styles}:
-        doc.add_paragraph(_clean(node.title), style=doc.styles[heading_style])
+        head = doc.add_paragraph(_clean(node.title), style=doc.styles[heading_style])
     else:
-        _add_heading(doc, node.level, node.title, data)
+        head = _add_heading(doc, node.level, node.title, data)
+    # Front-matter section headers get the reference front-matter heading look
+    # (Arial 16pt bold, centered, 12pt after — matching the TOC/Tables headers).
+    # Body sections (Background/Summary/References are `narrative` nodes that ALSO
+    # route through here) stay as the left-aligned built-in Heading 1, matching
+    # the NTP reference's left body 3-0Na heads — so gate on the node actually
+    # being front-matter, not merely on the render path.  A role style (1-NN)
+    # already carries its own typography, so only the built-in path needs this.
+    if head is not None and not heading_style and node.node_type == "front-matter":
+        _style_front_matter_heading(head)
 
     body_style = _role_style_name(data, body_role) if body_role else None
     plan = front_matter_plan(node, data)
@@ -515,39 +635,293 @@ def _render_appendix(doc: Document, node: DocNode, data: dict) -> None:
         _add_pending(doc, f"Appendix body pending: {node.title}")
 
 
+# The Table-of-Figures instruction: collect paragraphs styled 0-25_Table_Title
+# (the body table captions), as hyperlinks (\h), leaders hidden in web view (\z),
+# caption/SEQ-based list (\c).  Byte-matches NIEHS-10's "Tables" field.
+_TOF_INSTR = r'TOC \h \z \t "0-25_Table_Title" \c'
+# The reference "table of figures" entry style: right dot-leader tab at the text
+# edge (9360 twips = 6.5"), basedOn Normal.  Line/after measured from NIEHS-10's
+# rendered PDF (see _ensure_tof_entry_style): tight 15.9pt within-entry line, 9.9pt
+# after between entries → 41.7pt two-line / 25.8pt single-line entry pitch.
+_TOF_ENTRY_STYLE = "table of figures"
+_TOF_RIGHT_TAB_PT = 468
+_TOF_LINE_PT = 15.9
+_TOF_AFTER_PT = 9.9
+
+
+def _ensure_tof_entry_style(doc: Document):
+    """Create (once) the `table of figures` entry style — basedOn Normal with a
+    right dot-leader tab at the text-block edge (matching NIEHS-10)."""
+    try:
+        return doc.styles[_TOF_ENTRY_STYLE]
+    except KeyError:
+        from docx.enum.style import WD_STYLE_TYPE
+        style = doc.styles.add_style(_TOF_ENTRY_STYLE, WD_STYLE_TYPE.PARAGRAPH)
+        style.font.name = _BODY_FONT
+        style.font.size = Pt(_BODY_PT)
+        spf = style.paragraph_format
+        # Match the reference `table of figures` rhythm (measured from NIEHS-10's
+        # PDF): a TIGHT 15.9pt line WITHIN an entry (captions wrap to 2+ lines) plus
+        # ~9.9pt AFTER between entries.  That yields the reference's 41.7pt two-line
+        # entry and 25.8pt single-line pitch.  A flat 25.9pt exact line (like the
+        # single-line TOC) over-spaced the wrapping table captions to 51.8pt.
+        spf.line_spacing = Pt(_TOF_LINE_PT)
+        spf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        spf.space_after = Pt(_TOF_AFTER_PT)
+        spf.tab_stops.add_tab_stop(
+            Pt(_TOF_RIGHT_TAB_PT), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS,
+        )
+        return style
+
+
 def _render_tables_list(doc: Document, node: DocNode, data: dict) -> None:
-    """Front-matter list of tables from data['table_entries']."""
-    _add_heading(doc, node.level, node.title, data)
+    """Front-matter list of tables — a native Word Table-of-Figures FIELD, the
+    SAME field class as the Table of Contents (the reviewer's observation, borne
+    out by NIEHS-10: its "Tables" section is `TOC \\h \\z \\t "0-25_Table_Title"
+    \\c`, not a plain list).  The field COLLECTS every body caption styled
+    0-25_Table_Title (see _add_table_caption) and renders "Table N.  <caption> …
+    <page>".
+
+    Pre-populated with cached entries for the same reason the TOC is (LibreOffice
+    won't auto-refresh a Word-origin field); _mark_fields_dirty flips updateFields
+    so Word offers to rebuild it, at which point it re-collects the real captions
+    with real page numbers."""
+    head = _add_heading(doc, node.level, node.title, data)
+    _style_front_matter_heading(head)  # reference front-matter heading look
     entries = data.get("table_entries") or []
     if not entries:
         _add_pending(doc, "List of tables: pending.")
         return
-    for entry in entries:
-        n = entry.get("table_number")
-        title = entry.get("title", "")
-        line = f"Table {n}. {title}" if n is not None else title
-        doc.add_paragraph(_clean(line), style="List Number")
+    _add_tof_field(doc, entries)
+
+
+def _add_tof_field(doc: Document, entries: list) -> None:
+    r"""Append a pre-populated Table-of-Figures FIELD (see _add_toc_field for the
+    same multi-paragraph field shape).  Instruction _TOF_INSTR; each cached entry
+    is a `table of figures` paragraph "Table N.  <title>  \t —" (page-number
+    placeholder, refreshed on update).  A well-formed empty field when there are
+    no entries."""
+    if not entries:
+        para = doc.add_paragraph()
+        r = para.add_run()
+        for kind in ("begin", "separate", "end"):
+            fc = OxmlElement("w:fldChar"); fc.set(qn("w:fldCharType"), kind)
+            if kind == "begin":
+                r._r.append(fc)
+                instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
+                instr.text = _TOF_INSTR
+                r._r.append(instr)
+            else:
+                r._r.append(fc)
+        return
+
+    style = _ensure_tof_entry_style(doc)
+    for i, entry in enumerate(entries):
+        num = entry.get("table_number")
+        title = _clean(entry.get("title", ""))
+        para = doc.add_paragraph(style=style)
+
+        if i == 0:
+            opener = para.add_run()
+            begin = OxmlElement("w:fldChar"); begin.set(qn("w:fldCharType"), "begin")
+            instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
+            instr.text = _TOF_INSTR
+            sep = OxmlElement("w:fldChar"); sep.set(qn("w:fldCharType"), "separate")
+            opener._r.append(begin); opener._r.append(instr); opener._r.append(sep)
+
+        label = f"Table {num}. " if num is not None else ""
+        para.add_run(f"{label}{title}")
+        para.add_run("\t")
+        para.add_run("—")  # page-number placeholder → real page on refresh
+
+    _close_field_with_spacer(doc)
 
 
 def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
     """
-    Contents — a STATIC list built from data['toc_entries'], indented by level.
+    Contents — a NATIVE Word TOC field ({ TOC \\o "1-3" \\h \\z \\u }),
+    PRE-POPULATED with cached entry paragraphs.
 
-    Word can auto-generate a TOC field, but that renders as "right-click →
-    update field" until the user does so; a static list is what actually shows
-    on open and mirrors the HTML preview exactly (the LaTeX path uses native
-    \\tableofcontents).
+    A field is the medium-native answer, mirroring the LaTeX \\tableofcontents:
+    Word/LibreOffice recompute it against the paginated document, so a reader who
+    updates the field gets exact page numbers, dot leaders, and clickable links —
+    which a static list can never carry (a page number does not exist until
+    layout).  Collection is by OUTLINE LEVEL, so every body heading style carries
+    outlineLvl 0-2 (built-in Heading 1-3 do; _build_vocabulary_styles stamps the
+    NTP role styles to match).
+
+    Why pre-populate: LibreOffice does NOT reliably honor <w:updateFields> for a
+    Word-origin TOC field — it shows the field's CACHED content until the user
+    runs Update Index (a known Word↔LibreOffice quirk).  An empty field therefore
+    reads as a bare placeholder on open.  So we write the field's cached result
+    the same way Word does when it saves: one TOC-N paragraph per heading between
+    the field's `separate` and `end` marks.  The document opens showing a real
+    contents list; updating the field then refreshes the page numbers in place.
+    We still set <w:updateFields> (see _mark_fields_dirty) so Word offers to
+    refresh; the cached content is what guarantees a non-empty TOC either way.
+
+    The heading uses "TOC Heading" (outlineLvl 9 → excluded from its own TOC),
+    restyled to the shared reference front-matter heading look (Arial 16pt bold,
+    centered, 12pt after — see _style_front_matter_heading).  The built-in TOC
+    Heading is basedOn Heading 1 (left, 14pt), so we override on the paragraph.
     """
-    doc.add_paragraph(_clean(node.title), style="Heading 1")
+    head = doc.add_paragraph(_clean(node.title), style="TOC Heading")
+    _style_front_matter_heading(head)
     entries = data.get("toc_entries") or []
-    if not entries:
-        _add_pending(doc, "Table of contents: pending.")
+    _add_toc_field(doc, entries)
+
+
+# Right tab stop for a TOC line: the text width (US-Letter, 1" margins = 6.5").
+# The page-number placeholder rides a dot-leader tab to this position, so the
+# cached TOC mirrors Word's own dotted-leader layout.
+_TOC_RIGHT_TAB_PT = 468
+
+# The reference front-matter HEADING look, shared by every front-matter section
+# header (Foreword, Table of Contents, Tables, About, Peer Review, Abstract, …).
+# Measured from NIEHS-10's 1-23_FrontMatter_Head1 / NTP Contents Heading, which
+# are identical: Arial 16pt bold, CENTERED, 12pt after.  Applying it uniformly
+# fixes the drift where only the Contents header got the treatment and the others
+# fell to built-in Heading 1 (17pt, 4pt-after → looked bigger AND jammed).
+_FRONT_HEADING_PT = 16
+_FRONT_HEADING_AFTER_PT = 12
+
+# TOC/TOF entry baseline pitch (points).  The reference renders every toc line at
+# ~25.9pt regardless of `before`; an EXACT line height reproduces that rhythm.
+_TOC_LINE_PT = 25.9
+
+
+def _style_front_matter_heading(para) -> None:
+    """Apply the reference front-matter heading look to a heading paragraph:
+    Arial 16pt bold, centered, 12pt after (1-23_FrontMatter_Head1)."""
+    if para is None:
         return
-    for entry in entries:
-        lvl = entry.get("level", 1)
-        para = doc.add_paragraph(_clean(entry.get("title", "")))
-        if isinstance(lvl, int) and lvl > 1:
-            para.paragraph_format.left_indent = Pt((lvl - 1) * 18)
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    para.paragraph_format.space_after = Pt(_FRONT_HEADING_AFTER_PT)
+    for r in para.runs:
+        r.font.name = _HEADING_FONT
+        r.font.size = Pt(_FRONT_HEADING_PT)
+        r.font.bold = True
+        r.font.color.rgb = _BLACK
+
+
+def _close_field_with_spacer(doc: Document) -> None:
+    """Close a pre-populated TOC/TOF field the way the reference does: an EMPTY
+    spacer paragraph whose paragraph-mark sits INSIDE the field (between separate
+    and end), then the `end` fldChar on a following run.
+
+    Why two steps rather than one closer paragraph: a reader (LibreOffice) shades
+    the field region only up to the `end` MARK.  If `end` is the sole content of a
+    paragraph, that paragraph's blank line is past the shaded region — the gray
+    stops at the last entry (the reported bug) and the lone end-paragraph adds an
+    extra blank line (the reported extra whitespace).  Putting the spacer's mark
+    BEFORE `end` makes that blank line fall inside the field → it shades, matching
+    the reference's one shaded blank line after the last entry; the `end` then
+    rides the same paragraph so no second blank line is added."""
+    spacer = doc.add_paragraph()
+    # Empty run first (the shaded blank), then the end fldChar in a trailing run —
+    # the paragraph-mark (and its blank line) is inside separate..end, so shaded.
+    spacer.add_run("")
+    end_run = spacer.add_run()
+    end = OxmlElement("w:fldChar"); end.set(qn("w:fldCharType"), "end")
+    end_run._r.append(end)
+
+
+def _add_toc_field(doc: Document, entries: list) -> None:
+    r"""Append a pre-populated Table-of-Contents FIELD spanning several paragraphs.
+
+    python-docx has no field API, so build the OOXML directly.  The field
+    instruction ``TOC \o "1-3" \h \z \u`` = collect outline levels 1-3 (\o), as
+    hyperlinks (\h), suppress leaders in web layout (\z), use applied paragraph
+    outline levels (\u).  Layout of the field across paragraphs (Word's own shape
+    for a saved TOC):
+
+        ¶  [fldChar begin][instrText TOC …][fldChar separate]  <entry 1 text>
+        ¶  <entry 2 text>
+        …
+        ¶  <entry N text>[fldChar end]
+
+    Each entry paragraph is styled TOC 1/2/3 by level and carries the title, a
+    dot-leader tab, and a page-number PLACEHOLDER ("—"); the real number lands
+    when the field is refreshed.  With no entries we still emit a well-formed
+    (empty) field so a scaffold render doesn't crash."""
+    if not entries:
+        para = doc.add_paragraph()
+        r = para.add_run()
+        for kind in ("begin", "separate", "end"):
+            fc = OxmlElement("w:fldChar"); fc.set(qn("w:fldCharType"), kind)
+            if kind == "begin":
+                r._r.append(fc)
+                instr = OxmlElement("w:instrText")
+                instr.set(qn("xml:space"), "preserve")
+                instr.text = r'TOC \o "1-3" \h \z \u'
+                r._r.append(instr)
+            else:
+                r._r.append(fc)
+        return
+
+    for i, entry in enumerate(entries):
+        level = entry.get("level", 1)
+        if not isinstance(level, int) or level < 1:
+            level = 1
+        level = min(level, 3)
+        para = _toc_entry_paragraph(doc, level)
+
+        if i == 0:
+            # First entry paragraph opens the field (begin + instr + separate).
+            opener = para.add_run()
+            begin = OxmlElement("w:fldChar"); begin.set(qn("w:fldCharType"), "begin")
+            instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
+            instr.text = r'TOC \o "1-3" \h \z \u'
+            sep = OxmlElement("w:fldChar"); sep.set(qn("w:fldCharType"), "separate")
+            opener._r.append(begin)
+            opener._r.append(instr)
+            opener._r.append(sep)
+
+        para.add_run(_clean(entry.get("title", "")))
+        # Tab to the right margin (dot leader) + a page-number placeholder.
+        para.add_run("\t")
+        para.add_run("—")  # em dash — refreshed to the page number on update
+
+    _close_field_with_spacer(doc)
+
+
+def _toc_entry_paragraph(doc: Document, level: int):
+    """A TOC entry paragraph styled TOC 1/2/3 (created on first use), with a
+    right dot-leader tab at the text-block edge and level indentation.
+
+    Spacing matches the reference `toc N` styles (examples/NIEHS-*.docx): DEFAULT
+    single line spacing (no line-spacing override, no forced space_after — the
+    earlier 0pt-after made entries tighter than the reference), with 6pt `before`
+    on top-level (`toc 1`) entries only, which visually groups each section block.
+    Baked onto the STYLE (the reference's model), so every entry inherits it.  The
+    built-in TOC styles are absent from a fresh Document(), so add them lazily."""
+    style_name = f"TOC {level}"
+    try:
+        style = doc.styles[style_name]
+    except KeyError:
+        from docx.enum.style import WD_STYLE_TYPE
+        style = doc.styles.add_style(style_name, WD_STYLE_TYPE.PARAGRAPH)
+        style.font.name = _BODY_FONT
+        style.font.size = Pt(_BODY_PT)
+        spf = style.paragraph_format
+        # The reference renders EVERY toc line at a ~25.9pt baseline pitch (measured
+        # from NIEHS-10's PDF: toc 1/2/3 all 25.8-25.9pt, independent of `before`).
+        # Our lines packed at ~19.8pt (single 12pt) and read cramped vs the example.
+        # Match it with an EXACT line height; `before` then no longer stacks (the
+        # reference absorbs it into the fixed pitch), so we drop the per-level
+        # `before` and let the exact line carry the rhythm.
+        spf.line_spacing = Pt(_TOC_LINE_PT)
+        spf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        spf.space_before = Pt(0)
+        spf.space_after = Pt(0)
+        if level > 1:
+            spf.left_indent = Pt((level - 1) * 18)
+    para = doc.add_paragraph(style=style)
+    # Right-aligned tab with a dotted leader → the classic TOC dot leader.
+    para.paragraph_format.tab_stops.add_tab_stop(
+        Pt(_TOC_RIGHT_TAB_PT), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS,
+    )
+    return para
 
 
 def _render_narrative_tables(doc: Document, node: DocNode, data: dict) -> None:
@@ -618,10 +992,10 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
             _add_pending(doc, f"Genomics data pending: {node.title}")
         return
 
+    # One entry per organ (both sexes stacked in a single table — reference
+    # Tables 9–12).  No per-sex subsection heading; the table's own **Male** /
+    # **Female** separator rows delineate the sexes.
     for entry in entries:
-        organ = (entry.get("organ") or "").capitalize()
-        sex = (entry.get("sex") or "").capitalize()
-        doc.add_paragraph(_clean(f"{organ}, {sex}"), style="Heading 4")
         for item in genomics_content_plan(entry, role):
             _render_genomics_item(doc, entry, role, item)
 
@@ -682,21 +1056,23 @@ def _render_figure(doc: Document, node: DocNode, data: dict) -> None:
 
 
 def _render_gene_set_table(doc: Document, entry: dict) -> None:
-    """Top-gene-sets table for one (organ, sex)."""
+    """Top-gene-sets table for one organ (both sexes stacked)."""
     rows = gene_set_table_rows(entry)
     if rows is None:
-        _add_pending(doc, f"Top gene sets pending: {entry.get('organ','')}, {entry.get('sex','')}")
+        _add_pending(doc, f"Top gene sets pending: {entry.get('organ','')}")
         return
-    _booktabs_table(doc, list(GENE_SET_TABLE_HEADERS), rows, caption=genomics_table_caption(entry))
+    _booktabs_table(doc, list(GENE_SET_TABLE_HEADERS), rows,
+                    caption=genomics_table_caption(entry), merged_label_rows=True)
 
 
 def _render_gene_table(doc: Document, entry: dict) -> None:
-    """Top-genes table for one (organ, sex)."""
+    """Top-genes table for one organ (both sexes stacked)."""
     rows = gene_table_rows(entry)
     if rows is None:
-        _add_pending(doc, f"Top genes pending: {entry.get('organ','')}, {entry.get('sex','')}")
+        _add_pending(doc, f"Top genes pending: {entry.get('organ','')}")
         return
-    _booktabs_table(doc, list(GENE_TABLE_HEADERS), rows, caption=genomics_table_caption(entry))
+    _booktabs_table(doc, list(GENE_TABLE_HEADERS), rows,
+                    caption=genomics_table_caption(entry), merged_label_rows=True)
 
 
 def _add_description_list(doc: Document, descriptions) -> None:
@@ -748,10 +1124,30 @@ def _render_cover(doc: Document, node: DocNode, data: dict) -> None:
 # stands in when a role has no configured style (so an empty config renders
 # byte-identically to the pre-role behavior).  `title` roles = Arial Bold 20pt
 # black; everything else = Times New Roman 12pt black; all centered.
+#
+# ``before``/``after`` are the per-role paragraph spacing IN POINTS, measured from
+# the NTP example title page (examples/NIEHS-07…docx, the 1-NN styles).  Without
+# them each line inherits Normal's 6pt-after, so the publisher block (five
+# separate paragraphs) opened a 6pt gap between every line — the reported spacing
+# bug.  The reference publisher lines are TIGHT (0 after); the deliberate gaps are
+# `before` on publication_date (18), publisher_name (100 — the big drop that seats
+# the block low on the page), and publisher_location (16), plus 6pt `after` on the
+# title, report_number, and ISSN.  An explicit 0 must be set (not omitted) so it
+# OVERRIDES Normal's inherited 6pt.
 _TITLE_PAGE_ROLE_DEFAULTS: dict = {
-    "report_title": {"font": _HEADING_FONT, "size": 20, "bold": True},
+    "report_title":           {"font": _HEADING_FONT, "size": 20, "bold": True,  "before": 0,   "after": 6},
+    "report_number":          {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 0,   "after": 6},
+    "publication_date":       {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 18,  "after": 0},
+    "publisher_name":         {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 100, "after": 0},
+    "publication_institute":  {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 0,   "after": 0},
+    "publication_department": {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 0,   "after": 0},
+    "issn":                   {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 0,   "after": 6},
+    "publisher_location":     {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 16,  "after": 0},
+    # publisher_affiliation is the flat-fallback role (a layout with no per-line
+    # roles); keep it tight so a fallback publisher block doesn't balloon either.
+    "publisher_affiliation":  {"font": _BODY_FONT,    "size": 12, "bold": False, "before": 0,   "after": 0},
 }
-_TITLE_PAGE_META_DEFAULT = {"font": _BODY_FONT, "size": 12, "bold": False}
+_TITLE_PAGE_META_DEFAULT = {"font": _BODY_FONT, "size": 12, "bold": False, "before": 0, "after": 6}
 
 
 def _resolve_title_page_role(layout_cfg: "dict | None", role: str) -> dict:
@@ -831,6 +1227,14 @@ def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
                 r.font.size = Pt(base["size"])
                 r.font.bold = base["bold"]
                 r.font.color.rgb = _BLACK
+            # Per-role paragraph spacing (points), measured from the NTP reference.
+            # Set explicitly — including 0 — so it overrides Normal's inherited
+            # 6pt-after; otherwise the multi-paragraph publisher block gaps out.
+            pf = para.paragraph_format
+            if "before" in base:
+                pf.space_before = Pt(base["before"])
+            if "after" in base:
+                pf.space_after = Pt(base["after"])
             role_style = _resolve_title_page_role(layout_cfg, role)
             if role_style:
                 _apply_paragraph_style(para, role_style)
@@ -1004,6 +1408,25 @@ def _apply_font_style(font, style: dict) -> None:
         spacing.set(qn("w:val"), str(int(round(ls_pt * 20))))
 
 
+def _apply_outline_level(style_element, style: dict) -> None:
+    """Stamp <w:outlineLvl w:val="N"> onto a style's pPr when the resolved style
+    carries ``outline_level`` (0-based).  Outline level is what a Word TOC field
+    (and the Navigation pane) collects by — the NTP role heading styles carry no
+    outlineLvl of their own, so without this the field on the vocabulary path
+    collects nothing.  A no-op when the key is absent (body/caption styles).
+    python-docx exposes no outline-level API on a style, so edit the pPr directly.
+    """
+    lvl = style.get("outline_level")
+    if not isinstance(lvl, (int, float)) or isinstance(lvl, bool):
+        return
+    pPr = style_element.get_or_add_pPr()
+    ol = pPr.find(qn("w:outlineLvl"))
+    if ol is None:
+        ol = OxmlElement("w:outlineLvl")
+        pPr.append(ol)
+    ol.set(qn("w:val"), str(int(lvl)))
+
+
 def _apply_style_props_to_style(word_style, style: dict) -> None:
     """Apply a resolved style dict to a Word STYLE object (not a paragraph): its
     paragraph_format + its font.  Used to bake a vocabulary type's OWN delta into
@@ -1036,6 +1459,7 @@ def _apply_style_props_to_style(word_style, style: dict) -> None:
         pf.keep_together = True
     if style.get("break_before") == "page":
         pf.page_break_before = True
+    _apply_outline_level(word_style.element, style)
     _apply_font_style(word_style.font, style)
 
 
@@ -1176,6 +1600,35 @@ def _insert_in_schema_order(parent, element, *, successors: tuple[str, ...]) -> 
             found.addprevious(element)
             return
     parent.append(element)
+
+
+def _mark_fields_dirty(doc: Document) -> None:
+    """Set <w:updateFields w:val="true"/> in settings.xml so Word/LibreOffice
+    recompute every field on open — the TOC field then populates (page numbers +
+    dot leaders + links) without a manual "update field".  LibreOffice applies
+    this silently; Word shows a one-time "update fields?" prompt.  Idempotent.
+
+    <w:updateFields> sits LATE in the CT_Settings sequence (after the XML/preview
+    settings, before compat/rsids/mathPr/...).  A bare prepend or append lands it
+    out of order, and an out-of-sequence settings child is SILENTLY DROPPED on
+    load — the same trap _set_section_page_numbering documents for pgNumType — so
+    the field would never update.  Insert it before the first of its schema
+    successors instead."""
+    settings = doc.settings.element
+    if settings.find(qn("w:updateFields")) is not None:
+        return
+    el = OxmlElement("w:updateFields")
+    el.set(qn("w:val"), "true")
+    _insert_in_schema_order(
+        settings, el,
+        successors=("w:hdrShapeDefaults", "w:footnotePr", "w:endnotePr",
+                    "w:compat", "w:rsids", "w:mathPr", "w:uiCompat97To2003",
+                    "w:attachedSchema", "w:themeFontLang", "w:clrSchemeMapping",
+                    "w:doNotIncludeSubdocsInStats", "w:doNotAutoCompressPictures",
+                    "w:forceUpgrade", "w:captions", "w:readModeInkLockDown",
+                    "w:smartTagType", "w:shapeDefaults", "w:doNotEmbedSmartTags",
+                    "w:decimalSymbol", "w:listSeparator", "w:docId"),
+    )
 
 
 def _add_page_number_field(paragraph) -> None:
@@ -1432,7 +1885,13 @@ def _configure_section(section, running_header: str, document: dict | None = Non
 
     footer_para = section.footer.paragraphs[0]
     footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _add_page_number_field(footer_para)
+    # A later section's footer is LINKED to the previous one (they share the same
+    # footer element), so configuring both sections would append a SECOND PAGE
+    # field to the one shared footer — the field then renders twice ("iii" → the
+    # reported "iiii").  The per-section roman/decimal split comes from pgNumType,
+    # not the footer, so one shared PAGE field is correct; only add it if absent.
+    if not footer_para._p.findall(".//" + qn("w:instrText")):
+        _add_page_number_field(footer_para)
 
 
 def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
@@ -1486,6 +1945,14 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
             # Section break → the body restarts page numbering at arabic 1.
             doc.add_section(WD_SECTION.NEW_PAGE)
             _configure_section(doc.sections[-1], running_header, document)
+            # add_section() copies the front section's sectPr, including its
+            # <w:titlePg> (different-first-page) flag — which the front section
+            # sets ONLY to suppress the header on the cover.  The body has no
+            # cover, so a distinct first page here just leaves an EMPTY, editable
+            # first-page header on page 1 of the body (the stray "add header"
+            # control the reviewer saw).  Turn it off so the body's first page
+            # uses the same running header as the rest of the body.
+            doc.sections[-1].different_first_page_header_footer = False
             added_body_section = True
             in_body = True
         _walk_docx_tree(doc, top, data)
@@ -1497,6 +1964,13 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     _set_section_page_numbering(doc.sections[0], "lowerRoman", 1)
     if added_body_section:
         _set_section_page_numbering(doc.sections[-1], "decimal", 1)
+
+    # A TOC (or any) field was emitted → tell the reader to recompute fields on
+    # open so the contents fill in without a manual refresh.  Detect from the
+    # rendered body rather than a data flag, so any future field-emitting handler
+    # is covered without threading state through the walk.
+    if doc.element.body.findall(".//" + qn("w:fldChar")):
+        _mark_fields_dirty(doc)
 
     buf = BytesIO()
     doc.save(buf)

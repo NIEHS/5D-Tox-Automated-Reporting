@@ -956,9 +956,9 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         blocks.append(intro)
 
     for entry in entries:
-        organ = (entry.get("organ") or "").capitalize()
-        sex = (entry.get("sex") or "").capitalize()
-        blocks.append(f"<h4>{_esc(f'{organ}, {sex}')}</h4>")
+        # One entry per organ (both sexes stacked in a single table — reference
+        # Tables 9–12).  No per-sex subsection heading; the table's own Male /
+        # Female separator rows delineate the sexes.
         # Ordered, sub-addressable content items (ADR-0003 Phase 4); the table
         # is independently orientable via the composite "(component, item)" key.
         for item in genomics_content_plan(entry, role):
@@ -1024,14 +1024,31 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
     return ""
 
 
+def _emit_genomics_rows(rows: list, ncols: int) -> str:
+    """Emit genomics table <tr>s, turning a `**Sex**` first-cell row into a
+    full-width bold sex-separator (mirrors the apical sex blocks and the LaTeX
+    \\multicolumn separator)."""
+    out: list[str] = []
+    for r in rows:
+        first = r[0] if r else ""
+        if isinstance(first, str) and first.startswith("**") and first.endswith("**"):
+            label = first.strip("*").strip()
+            out.append(
+                f'<tr class="sex-separator"><td colspan="{ncols}">'
+                f"<strong>{_esc(label)}</strong></td></tr>"
+            )
+        else:
+            out.append(_emit_table_row(r))
+    return "".join(out)
+
+
 def _render_gene_set_table(entry: dict) -> str:
-    """Top-gene-sets table for one (organ, sex). Rows from the shared EXTRACT."""
+    """Top-gene-sets table for one organ (both sexes stacked). Rows from the
+    shared EXTRACT; `**Sex**` rows become full-width separators."""
     rows = gene_set_table_rows(entry)
     if rows is None:
-        return _pending(
-            f"Top gene sets pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
-        )
-    body_rows = "".join(_emit_table_row(r) for r in rows)
+        return _pending(f"Top gene sets pending: {entry.get('organ', '')}")
+    body_rows = _emit_genomics_rows(rows, len(GENE_SET_TABLE_HEADERS))
     caption = genomics_table_caption(entry)
     cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (
@@ -1044,13 +1061,12 @@ def _render_gene_set_table(entry: dict) -> str:
 
 
 def _render_gene_table(entry: dict) -> str:
-    """Top-genes table for one (organ, sex). Rows from the shared EXTRACT."""
+    """Top-genes table for one organ (both sexes stacked). Rows from the shared
+    EXTRACT; `**Sex**` rows become full-width separators."""
     rows = gene_table_rows(entry)
     if rows is None:
-        return _pending(
-            f"Top genes pending: {entry.get('organ', '')}, {entry.get('sex', '')}"
-        )
-    body_rows = "".join(_emit_table_row(r) for r in rows)
+        return _pending(f"Top genes pending: {entry.get('organ', '')}")
+    body_rows = _emit_genomics_rows(rows, len(GENE_TABLE_HEADERS))
     caption = genomics_table_caption(entry)
     cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (

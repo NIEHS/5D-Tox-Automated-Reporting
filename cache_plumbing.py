@@ -233,6 +233,7 @@ def _hash_sections(
     organ_allowlist=None,
     sex_allowlist=None,
     assay_filters=None,
+    ow_sex_allowlist=None,
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -281,6 +282,11 @@ def _hash_sections(
     # unfiltered report hashes byte-identically to the pre-feature key.
     if sex_allowlist:
         payload["sex_allowlist"] = sorted(sex_allowlist)
+    # The organ-weight AREA sex allowlist narrows the Organ Weight table's sexes
+    # (reference Table 3 = responsive sex only) + drives its dynamic caption, both
+    # baked into this blob.  Injected only when set (backward-compatible key).
+    if ow_sex_allowlist:
+        payload["ow_sex_allowlist"] = sorted(ow_sex_allowlist)
     if assay_filters:
         # Order-stable key.  Each area value is EITHER a flat token list (both
         # sexes) OR a {sex: [tokens]} per-sex mapping — sort area keys, sex keys,

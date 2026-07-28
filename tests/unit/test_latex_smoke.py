@@ -226,16 +226,18 @@ def test_bmd_summary_renders_table(scaffold):
     assert "BMD" in tex and "BMDL" in tex
 
 
-def test_genomics_sections_render_subsubsections(scaffold):
+def test_genomics_sections_render_section_headings(scaffold):
     r"""
-    Genomics sections emit per-(organ, sex) \subsubsection headings
-    (scaffold has 4 entries: liver/kidney × male).
+    Genomics sections emit their two \subsection headings.  Tables are now
+    PER-ORGAN with both sexes stacked (reference Tables 9–12), so there are NO
+    per-(organ, sex) \subsubsection headings anymore — the sexes are separator
+    rows inside each stacked table instead.
     """
     tex = generate_latex(scaffold)
     assert r"\subsection{Gene Set Benchmark Dose Analysis}" in tex
     assert r"\subsection{Gene Benchmark Dose Analysis}" in tex
-    assert r"\subsubsection{Liver, Male}" in tex
-    assert r"\subsubsection{Kidney, Male}" in tex
+    assert r"\subsubsection{Liver, Male}" not in tex
+    assert r"\subsubsection{Kidney, Male}" not in tex
 
 
 def test_apical_table_nodes_emit_niehstable_envs(scaffold):

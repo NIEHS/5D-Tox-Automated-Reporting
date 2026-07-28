@@ -522,14 +522,22 @@ def load_layout_style(name: str) -> dict:
 # rather than silently filtering nothing.
 REPORT_ORGAN_AREAS: frozenset[str] = frozenset({"genomics", "organ-weight"})
 
-# Sex is a row/column axis in two places: the apical tables (a "Male"/"Female"
-# key in every table_data) and the genomics sections (one entry per organ×sex).
-REPORT_SEX_AREAS: frozenset[str] = frozenset({"apical", "genomics"})
+# Sex is a row/column axis in several places: the apical tables (a "Male"/
+# "Female" key in every table_data), the genomics sections (one entry per
+# organ×sex), and the Organ Weight table specifically (the reference's Table 3
+# shows only the sex that had a responsive organ — e.g. "Liver Weights of Male
+# Rats").  `apical` narrows EVERY apical table's sexes uniformly; `organ-weight`
+# narrows ONLY the organ-weight table, so the reference can drop female from
+# Table 3 while keeping both sexes in Tables 2/4/5/6.
+REPORT_SEX_AREAS: frozenset[str] = frozenset({"apical", "genomics", "organ-weight"})
 
-# Assays (individual clinical-pathology endpoints) are filterable for the two
-# multi-endpoint apical platforms only.  Hormones is intentionally excluded —
-# its short curated panel is always shown in full.
-REPORT_ASSAY_AREAS: frozenset[str] = frozenset({"clinical-chemistry", "hematology"})
+# Assays (individual clinical-pathology endpoints) are filterable for the
+# multi-endpoint apical platforms.  The reference's "Select" tables (4/5/6) show
+# a hand-curated per-sex subset that responsiveness alone does not reproduce, so
+# each is driven by an explicit per-sex allowlist.
+REPORT_ASSAY_AREAS: frozenset[str] = frozenset(
+    {"clinical-chemistry", "hematology", "hormones"}
+)
 
 
 def _load_per_area_block(

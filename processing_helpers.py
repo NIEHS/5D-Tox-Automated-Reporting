@@ -256,11 +256,13 @@ def _partition_by_platform(
 
 
 # Map the kebab-case assay AREA keys (REPORT_ASSAY_AREAS) to the display
-# platform names used as keys in platform_tables.  Only these two multi-endpoint
-# platforms are assay-filterable; Hormones is intentionally never filtered.
+# platform names used as keys in platform_tables.  The reference's "Select"
+# tables (Clinical Chemistry / Hematology / Hormones) each show a hand-curated
+# per-sex subset, so all three are assay-filterable through this one rail.
 _ASSAY_AREA_TO_PLATFORM: dict[str, str] = {
     "clinical-chemistry": "Clinical Chemistry",
     "hematology": "Hematology",
+    "hormones": "Hormones",
 }
 
 
@@ -365,6 +367,7 @@ def _build_section_cards(
     imputed_cells: dict | None = None,
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
+    ow_sex_allow: list[str] | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -404,6 +407,12 @@ def _build_section_cards(
                          loop, so their tables_json can still carry a dropped
                          sex.  Every built card's tables_json is pruned by this
                          at the end for a uniform guarantee.  Empty/None ⇒ no-op.
+        ow_sex_allow:    Report-level "organ-weight" AREA sex allowlist — narrows
+                         ONLY the Organ Weight table's sexes (the reference's
+                         Table 3 shows just the responsive sex, e.g. male), while
+                         leaving every other apical table's sexes intact.
+                         Distinct from `sex_allow` (the "apical" area, which
+                         prunes ALL cards).  Empty/None ⇒ both sexes.
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -568,6 +577,7 @@ def _build_section_cards(
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     organ_allowlist=organ_allowlist,
+                    sex_allow=ow_sex_allow,
                 )
 
                 if ow_result and ow_result.get("table_data"):
@@ -885,6 +895,10 @@ async def _extract_genomics(
                         "go_term": g["go_term"],
                         "bmd": _pick_go_stat(g, "bmd", stat),
                         "bmdl": _pick_go_stat(g, "bmdl", stat),
+                        # bmdu completes the reference's "Median BMDL–BMDU" range
+                        # column (Table 9/10).  _pick_go_stat is generic over
+                        # bmd/bmdl/bmdu and reads bmdu_stats / bmdu_median.
+                        "bmdu": _pick_go_stat(g, "bmdu", stat),
                         "n_genes": g.get("n_genes", 0),
                         "n_genes_with_bmd": g.get("n_passed", 0),
                         "direction": g.get("direction", ""),
@@ -897,9 +911,10 @@ async def _extract_genomics(
                 # Full list for charts — no cap, no rank (rank is table-specific).
                 gene_sets_chart_by_stat[stat] = all_rows
 
-                # Top-20 slice for report tables; rank is positional within this subset.
+                # Top-10 slice for report tables; rank is positional within this
+                # subset.  The reference (Tables 9/10) shows the top 10 gene sets.
                 gene_sets_by_stat[stat] = [
-                    {"rank": i + 1, **r} for i, r in enumerate(all_rows[:20])
+                    {"rank": i + 1, **r} for i, r in enumerate(all_rows[:10])
                 ]
 
             genomics_sections[key] = {
@@ -909,11 +924,14 @@ async def _extract_genomics(
                 "total_responsive_genes": len(genes),
                 "gene_sets_by_stat": gene_sets_by_stat,
                 "gene_sets_chart_by_stat": gene_sets_chart_by_stat,
-                # top_genes: ranked subset (top 20) shown in the UI gene table.
+                # top_genes: ranked subset (top 10) shown in the gene table.
+                # The reference (Tables 11/12) shows the top 10 genes and carries
+                # the probe id (e.g. "A2M_7932") as its own column.
                 "top_genes": [
                     {
                         "rank": i + 1,
                         "gene_symbol": g["gene_symbol"],
+                        "probe_id": g.get("probe_id", ""),
                         "bmd": g.get("bmd"),
                         "bmdl": g.get("bmdl"),
                         "bmdu": g.get("bmdu"),
@@ -921,7 +939,7 @@ async def _extract_genomics(
                         "fold_change": g.get("fold_change"),
                         "r_squared": g.get("r_squared"),
                     }
-                    for i, g in enumerate(genes[:20])
+                    for i, g in enumerate(genes[:10])
                 ],
                 # all_genes: full responsive gene list for pathway/GO enrichment
                 # in build_genomics_interpretation(). Kept lean (no rank/r²/bmdu)
@@ -967,6 +985,47 @@ async def _extract_genomics(
 
 
 
+# Endpoint-label normalizations for the apical BMD summary (Table 8).  The raw
+# row labels are the per-platform endpoint names ("Liver", "Neutrophil Count",
+# "Triiodothyronine"); the reference Table 8 uses fuller, title-cased forms and
+# — for organ weights — the "Absolute <Organ> Weight" phrasing (relative weight
+# gets its own row when modeled).  Keys are matched case-insensitively on the raw
+# label; unmatched labels pass through unchanged.
+_SUMMARY_LABEL_OVERRIDES = {
+    "triiodothyronine": "Total Triiodothyronine",
+    "total triiodothyronine": "Total Triiodothyronine",
+    "neutrophil count": "Neutrophils",
+    "neutrophils": "Neutrophils",
+    "sorbitol dehydrogenase": "Sorbitol Dehydrogenase",
+    "manual hematocrit": "Manual Hematocrit",
+    "total thyroxine": "Total Thyroxine",
+    "free thyroxine": "Free Thyroxine",
+    "thyroid stimulating hormone": "Thyroid Stimulating Hormone",
+}
+
+# Organ tokens that, on the Organ Weight platform, name an absolute organ weight.
+_ORGAN_WEIGHT_TOKENS = {"liver", "kidney", "heart", "spleen", "thymus",
+                        "adrenal", "brain", "lung", "testis", "epididymis"}
+
+
+def _summary_endpoint_label(label: str, platform: str) -> str:
+    """Normalize a raw endpoint label to the reference Table 8 phrasing.
+
+    Organ-weight rows carry a bare organ token ("Liver"); the reference names the
+    modeled absolute weight ("Absolute Liver Weight").  Other platforms get a
+    small fixed set of title-case / full-name overrides.  Anything unmatched is
+    returned unchanged."""
+    raw = (label or "").strip()
+    key = raw.lower()
+    if platform == "Organ Weight":
+        # Strip a laterality suffix ("Kidney-Right" -> "Kidney") for the token
+        # test; the reference reports whole-organ weights.
+        base = raw.split("-")[0].strip()
+        if base.lower() in _ORGAN_WEIGHT_TOKENS:
+            return f"Absolute {base} Weight"
+    return _SUMMARY_LABEL_OVERRIDES.get(key, raw)
+
+
 def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
@@ -999,12 +1058,26 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
     for platform, sex_rows in sorted(platform_tables.items()):
         for sex, rows in sex_rows.items():
             for row in rows:
-                has_bmd = row.bmd_status is not None
-                has_loel = row.loel is not None
-                if not has_bmd and not has_loel:
+                # ── Inclusion gate (matches the reference Table 8 row set) ──
+                # An endpoint qualifies when EITHER it passed the NTP
+                # responsive gate (significant trend + pairwise, so it has a
+                # trend DIRECTION) OR BMDExpress produced a modeled result
+                # (bmd_status is a real code: viable / NVM / UREP / NR).  A
+                # bare LOEL from a lone pairwise hit with no trend direction
+                # and no model (bmd_status None, direction '') is NOT enough —
+                # that is what leaked spurious rows like "Kidney-Right" and
+                # female "Free Thyroxine" into the summary.
+                reportable_status = row.bmd_status not in (None, "failure")
+                if not row.responsive and not reportable_status:
+                    continue
+                # Body-weight endpoints are context only, never apical BMD
+                # candidates — the reference omits Terminal Body Weight and the
+                # per-study-day body-weight rows from Table 8 even though the
+                # terminal-day decrease is statistically responsive.
+                if platform == "Body Weight" or row.label == "Terminal Body Weight":
                     continue
                 raw_entries.append({
-                    "endpoint": row.label,
+                    "endpoint": _summary_endpoint_label(row.label, platform),
                     "sex": sex,
                     "platform": platform,
                     "bmd": row.bmd_str,

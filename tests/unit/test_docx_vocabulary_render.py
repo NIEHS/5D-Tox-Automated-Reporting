@@ -105,6 +105,38 @@ def test_section_heading_uses_native_role_style_with_vocab(scaffold):
     assert bg.style.name == "3-02a_Head1_NoNumber"
 
 
+def test_ntp_heading_styles_carry_outline_levels(scaffold):
+    """The NTP role heading styles carry NO outlineLvl of their own, so on the
+    vocabulary path the TOC field (which collects by outline level) would find
+    nothing.  The vocabulary stamps outline_level 0/1/2 onto section_heading_N
+    and 0/1 onto appendix_heading_N; assert it lands in styles.xml."""
+    from docx.oxml.ns import qn
+    doc = _open(generate_docx(_with_vocab(scaffold)))
+    expected = {
+        "3-02a_Head1_NoNumber": "0",
+        "3-03a_Head2_NoNumber": "1",
+        "3-04a_Head3_NoNumber": "2",
+        "4-05_Appendix_Head_1": "0",
+        "4-06_Appendix_Head_2": "1",
+    }
+    for name, want in expected.items():
+        st = doc.styles[name]
+        pPr = st.element.find(qn("w:pPr"))
+        ol = pPr.find(qn("w:outlineLvl")) if pPr is not None else None
+        assert ol is not None, f"{name} has no outlineLvl"
+        assert ol.get(qn("w:val")) == want, f"{name} outlineLvl={ol.get(qn('w:val'))} != {want}"
+
+
+def test_toc_field_collects_on_vocabulary_path(scaffold):
+    """The TOC field is emitted regardless of styling path; with a vocabulary
+    active, the collectable headings are the NTP role styles (now outline-marked),
+    so the field will populate the same as the built-in Heading path."""
+    from docx.oxml.ns import qn
+    doc = _open(generate_docx(_with_vocab(scaffold)))
+    instrs = [e.text for e in doc.element.body.findall(".//" + qn("w:instrText"))]
+    assert any(i and i.strip().startswith("TOC") for i in instrs)
+
+
 # ---------------------------------------------------------------------------
 # No vocabulary → legacy path, unchanged
 # ---------------------------------------------------------------------------

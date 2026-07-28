@@ -14,13 +14,6 @@
     "type": "title-page"
   },
   {
-    "id": "toc",
-    "level": 0,
-    "region": "front",
-    "title": "Table of Contents",
-    "type": "toc"
-  },
-  {
     "data_key": "foreword",
     "id": "foreword",
     "level": 1,
@@ -29,11 +22,32 @@
     "type": "front-matter"
   },
   {
+    "id": "break-before-toc",
+    "level": 0,
+    "region": "front",
+    "title": "",
+    "type": "page-break"
+  },
+  {
+    "id": "toc",
+    "level": 0,
+    "region": "front",
+    "title": "Table of Contents",
+    "type": "toc"
+  },
+  {
     "id": "tables-list",
     "level": 1,
     "region": "front",
     "title": "Tables",
     "type": "tables-list"
+  },
+  {
+    "id": "break-after-tables-list",
+    "level": 0,
+    "region": "front",
+    "title": "",
+    "type": "page-break"
   },
   {
     "data_key": "about_report",
@@ -44,12 +58,26 @@
     "type": "front-matter"
   },
   {
+    "id": "break-before-peer-review",
+    "level": 0,
+    "region": "front",
+    "title": "",
+    "type": "page-break"
+  },
+  {
     "data_key": "peer_review",
     "id": "peer-review",
     "level": 1,
     "region": "front",
     "title": "Peer Review",
     "type": "front-matter"
+  },
+  {
+    "id": "break-after-peer-review",
+    "level": 0,
+    "region": "front",
+    "title": "",
+    "type": "page-break"
   },
   {
     "data_key": "publication_details",
@@ -66,6 +94,13 @@
     "region": "front",
     "title": "Acknowledgments",
     "type": "front-matter"
+  },
+  {
+    "id": "break-before-abstract",
+    "level": 0,
+    "region": "front",
+    "title": "",
+    "type": "page-break"
   },
   {
     "data_key": "abstract",

@@ -36,34 +36,43 @@ types:
   # Section headings by level (3-02a/03a/04a_HeadN_NoNumber).  The default
   # `section_heading` is level 1; the handler selects the level-specific role
   # directly for deeper headings.
+  # outline_level (0-based) is what a Word TOC field / Navigation pane collects
+  # by; the NTP 3-0Na styles carry none of their own, so we stamp it per level.
   section_heading:
     specializes: head1_nonumber
+    style: { outline_level: 0 }
     bind:
       docx: "3-02a_Head1_NoNumber"
   section_heading_1:
     specializes: head1_nonumber
+    style: { outline_level: 0 }
     bind:
       docx: "3-02a_Head1_NoNumber"
   section_heading_2:
     specializes: head2_nonumber
+    style: { outline_level: 1 }
     bind:
       docx: "3-03a_Head2_NoNumber"
   section_heading_3:
     specializes: head3_nonumber
+    style: { outline_level: 2 }
     bind:
       docx: "3-04a_Head3_NoNumber"
 
   # Appendix headings (4-05/4-06_Appendix_Head_N).
   appendix_heading:
     specializes: appendix_head_1
+    style: { outline_level: 0 }
     bind:
       docx: "4-05_Appendix_Head_1"
   appendix_heading_1:
     specializes: appendix_head_1
+    style: { outline_level: 0 }
     bind:
       docx: "4-05_Appendix_Head_1"
   appendix_heading_2:
     specializes: appendix_head_2
+    style: { outline_level: 1 }
     bind:
       docx: "4-06_Appendix_Head_2"
 

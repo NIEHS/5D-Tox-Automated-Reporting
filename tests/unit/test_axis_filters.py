@@ -353,11 +353,13 @@ def test_load_assays_per_area(template_dir):
 
 
 def test_load_assays_unknown_area_rejected(template_dir):
+    # "hormones" is now a VALID assay area (its Select panel is config-driven,
+    # like clinical-chemistry/hematology); use a genuinely unknown key here.
     import document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
-          hormones: [thyroxine]
+          urinalysis: [protein]
     """)
     with pytest.raises(ValueError, match="unknown assays area"):
         dt.load_report_assays(name)
@@ -382,6 +384,41 @@ def test_load_assays_per_sex_mapping(template_dir):
         },
         # A flat list still loads flat, alongside a per-sex area.
         "hematology": ["hemoglobin"],
+    }
+
+
+def test_load_assays_hormones_area(template_dir):
+    # Hormones is now a config-driven "Select" panel (reference Table 6), so it
+    # loads through the same assay rail as clin-chem / hematology.
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        assays:
+          hormones:
+            male: ["triiodothyronine", "total thyroxine"]
+            female: ["total thyroxine"]
+    """)
+    assert dt.load_report_assays(name) == {
+        "hormones": {
+            "male": ["triiodothyronine", "total thyroxine"],
+            "female": ["total thyroxine"],
+        },
+    }
+
+
+def test_load_sex_organ_weight_area(template_dir):
+    # The "organ-weight" sex area narrows ONLY the Organ Weight table (reference
+    # Table 3 shows just the responsive sex).  A valid area alongside apical.
+    import document_template as dt
+    name = _write(template_dir, """
+        document: []
+        sex:
+          apical: [male, female]
+          organ-weight: [Male]
+    """)
+    assert dt.load_report_sex(name) == {
+        "apical": ["male", "female"],
+        "organ-weight": ["male"],
     }
 
 

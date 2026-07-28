@@ -48,6 +48,7 @@ from table_builder_common import format_mean_se_display, format_display_number
 # render_common a leaf (the tree walk itself is still passed in, never imported).
 from render_capabilities import landscape_requested
 
+import math
 import re
 
 
@@ -748,13 +749,32 @@ def sample_counts_table(node: DocNode, data: dict) -> dict | None:
 # description (label, text) pairs, and each chart's "Figure N." caption text.
 
 # Column meaning of the two genomics tables (semantic vocabulary; each emitter
-# supplies its own markup and — LaTeX — column alignment).
+# supplies its own markup and — LaTeX — column alignment).  These mirror the
+# reference NIEHS-10 Tables 9–12 exactly (both sexes stacked; see
+# gene_set_table_rows / gene_table_rows for the sex-separator rows).
 GENE_SET_TABLE_HEADERS: tuple[str, ...] = (
-    "Rank", "GO ID", "Term", "BMD", "BMDL", "Genes", "Direction",
+    "Category Name",
+    "No. of Active Genes/ Platform Genes in Gene Set",
+    "% Gene Set Coverage",
+    "Active Genes",
+    "BMD1std Median of Gene Set Transcripts (mg/kg)",
+    "Median BMDL1Std–BMDU1Std (mg/kg)",
+    "Genes with Changed Direction Up",
+    "Genes with Changed Direction Down",
 )
 GENE_TABLE_HEADERS: tuple[str, ...] = (
-    "Rank", "Gene", "BMD", "BMDL", "Direction", "Fold Change",
+    "Gene Symbol",
+    "Entrez Gene IDs",
+    "Probe IDs",
+    "BMD1Std (BMDL1std–BMDU1std) in mg/kg",
+    "Maximum Fold Change",
+    "Direction of Expression Change",
 )
+
+# Entrez Gene IDs are not present in our extraction (the probe id suffix is a
+# probe number, not the Entrez id; no gene->Entrez source in the KB).  The
+# reference column is kept for structural parity, stubbed with an em dash.
+_ENTREZ_STUB = "—"
 
 
 def genomics_role(node: DocNode) -> str:
@@ -783,48 +803,138 @@ def genomics_entries(node: DocNode, data: dict) -> list[dict]:
     return [s for s in (data.get("genomics_sections", []) or []) if s.get("type") == role]
 
 
+# Genomics BMD values print to 3 decimals in the reference (e.g. "0.520",
+# "0.160–2.885") — one place finer than the apical default.
+_GENOMICS_DECIMALS = 3
+
+
+def _entry_sex_blocks(entry: dict, rows_key: str) -> list[tuple[str, list]]:
+    """Return the entry's per-sex row blocks as [(sex_label, rows), ...].
+
+    New shape: entry["sexes"] = [{"sex": "Male", <rows_key>: [...]}, ...] — one
+    table stacks both sexes (reference Tables 9–12).  Falls back to the OLD
+    single-(organ, sex) shape (entry["sex"] + entry[rows_key]) so a stale
+    payload still renders.  Blocks with no rows are dropped."""
+    out: list[tuple[str, list]] = []
+    sexes = entry.get("sexes")
+    if isinstance(sexes, list) and sexes:
+        for block in sexes:
+            rows = block.get(rows_key) or []
+            if rows:
+                out.append((str(block.get("sex", "")).strip().capitalize(), rows))
+    else:
+        rows = entry.get(rows_key) or []
+        if rows:
+            out.append((str(entry.get("sex", "")).strip().capitalize(), rows))
+    return out
+
+
+def _finite_or_none(v):
+    """Return v unless it is None or a non-finite float / "NaN"/"inf" string,
+    in which case None (so range/BMD formatting shows the em-dash placeholder
+    rather than a literal "nan")."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return v  # a label / pre-formatted string — leave as-is
+    return None if (math.isnan(f) or math.isinf(f)) else v
+
+
+def _bmd_range(lo, hi) -> str:
+    """Format a "BMDL–BMDU" range with an en dash, e.g. "0.160–2.885".  Either
+    bound missing / non-finite collapses to the single present value (or "—" for
+    none)."""
+    lo = _finite_or_none(lo)
+    hi = _finite_or_none(hi)
+    lo_s = format_display_number(lo, _GENOMICS_DECIMALS) if lo is not None else "—"
+    hi_s = format_display_number(hi, _GENOMICS_DECIMALS) if hi is not None else "—"
+    if lo_s == "—" and hi_s == "—":
+        return "—"
+    if hi_s == "—":
+        return lo_s
+    if lo_s == "—":
+        return hi_s
+    return f"{lo_s}–{hi_s}"
+
+
 def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
     """
-    Rows for the top-gene-sets table of one (organ, sex) entry, in
-    GENE_SET_TABLE_HEADERS order.  None when the entry has no gene sets yet (the
-    emitter shows its pending placeholder, which carries the organ/sex).
+    Rows for the top-gene-sets table of one PER-ORGAN entry, in
+    GENE_SET_TABLE_HEADERS order, with both sexes stacked: each sex contributes
+    a ``**Sex**`` separator row (rendered as a merged full-width label by all
+    three emitters) followed by that sex's Top-10 gene-set rows.  None when the
+    entry has no gene sets at all (emitter shows its pending placeholder).
+
+    Columns match the reference (Table 9/10): Category Name (GO id + tab +
+    term), No. Active/Platform Genes, % Coverage, Active Genes list, BMD median,
+    Median BMDL–BMDU range, Up count, Down count.
     """
-    rows = entry.get("gene_sets", []) or []
-    if not rows:
+    blocks = _entry_sex_blocks(entry, "gene_sets")
+    if not blocks:
         return None
-    return [
-        [
-            str(r.get("rank", "")),
-            str(r.get("go_id", "")),
-            str(r.get("go_term", "")),
-            str(format_display_number(r.get("bmd"))),
-            str(format_display_number(r.get("bmdl"))),
-            str(r.get("n_genes", "")),
-            str(r.get("direction", "")),
-        ]
-        for r in rows
-    ]
+    ncol = len(GENE_SET_TABLE_HEADERS)
+    out: list[list[str]] = []
+    for sex_label, rows in blocks:
+        if sex_label:
+            out.append([f"**{sex_label}**"] + [""] * (ncol - 1))
+        for r in rows:
+            n_genes = r.get("n_genes", 0) or 0
+            n_bmd = r.get("n_genes_with_bmd", 0) or 0
+            pct = f"{round(n_bmd / n_genes * 100)}%" if n_genes else ""
+            genes = str(r.get("genes", "") or "").replace(";", "; ")
+            out.append([
+                f"{r.get('go_id', '')}\t{r.get('go_term', '')}".strip(),
+                f"{n_bmd}/{n_genes}",
+                pct,
+                genes,
+                str(format_display_number(r.get("bmd"), _GENOMICS_DECIMALS)),
+                _bmd_range(r.get("bmdl"), r.get("bmdu")),
+                str(r.get("n_up", "")),
+                str(r.get("n_down", "")),
+            ])
+    return out
 
 
 def gene_table_rows(entry: dict) -> list[list[str]] | None:
     """
-    Rows for the top-genes table of one (organ, sex) entry, in
-    GENE_TABLE_HEADERS order.  None when the entry has no genes yet.
+    Rows for the top-genes table of one PER-ORGAN entry, in GENE_TABLE_HEADERS
+    order, both sexes stacked (``**Sex**`` separator + that sex's Top-10 genes).
+    None when the entry has no genes at all.
+
+    Columns match the reference (Table 11/12): Gene Symbol, Entrez Gene IDs
+    (STUBBED "—" — not in our data), Probe IDs, BMD (BMDL–BMDU), Maximum Fold
+    Change, Direction of Expression Change.
     """
-    rows = entry.get("top_genes", []) or []
-    if not rows:
+    blocks = _entry_sex_blocks(entry, "top_genes")
+    if not blocks:
         return None
-    return [
-        [
-            str(r.get("rank", "")),
-            str(r.get("gene") or r.get("gene_symbol", "")),
-            str(format_display_number(r.get("bmd"))),
-            str(format_display_number(r.get("bmdl"))),
-            str(r.get("direction", "")),
-            str(format_display_number(r.get("fold_change"))),
-        ]
-        for r in rows
-    ]
+    ncol = len(GENE_TABLE_HEADERS)
+    out: list[list[str]] = []
+    for sex_label, rows in blocks:
+        if sex_label:
+            out.append([f"**{sex_label}**"] + [""] * (ncol - 1))
+        for r in rows:
+            bmd = format_display_number(r.get("bmd"), _GENOMICS_DECIMALS)
+            rng = _bmd_range(r.get("bmdl"), r.get("bmdu"))
+            bmd_cell = f"{bmd} ({rng})" if bmd != "—" else "—"
+            # Reference "Maximum Fold Change" is the MAGNITUDE (always positive,
+            # 1 decimal); the sign lives in the Direction column instead.
+            fc = r.get("fold_change")
+            try:
+                fc_cell = f"{abs(float(fc)):.1f}"
+            except (TypeError, ValueError):
+                fc_cell = format_display_number(fc)
+            out.append([
+                str(r.get("gene") or r.get("gene_symbol", "")),
+                _ENTREZ_STUB,
+                str(r.get("probe_id", "") or ""),
+                bmd_cell,
+                fc_cell,
+                str(r.get("direction", "")).upper(),
+            ])
+    return out
 
 
 def genomics_description_items(descriptions) -> list[tuple[str, str]]:
@@ -862,33 +972,41 @@ def genomics_chart_caption(chart: dict) -> str:
 
 def genomics_table_caption(entry: dict) -> str:
     """
-    The "Table N. <descriptive>" caption for one genomics (organ, sex) table.
+    The "Table N. <descriptive>" caption for one PER-ORGAN genomics table.
 
     The number comes from ``entry["table_number"]``, assigned positionally by
     document_tree.assign_genomics_table_numbers (the data-side companion to
     compute_table_numbers, since genomics tables are not tree nodes).  The
-    descriptive text is DATA-DRIVEN from the entry's organ / sex / type and row
-    count — it mirrors the reference's phrasing ("Top N <Organ> Gene Ontology
-    Biological Process Gene Sets…" / "Top N <Organ> Genes…") but includes the
-    sex, because our config sex-splits the sections (the reference did not).
+    descriptive text is DATA-DRIVEN from the entry's organ / type and Top-N row
+    count and matches the reference phrasing exactly: "Top N <Organ> Gene
+    Ontology Biological Process Gene Sets Ranked by Potency of Perturbation,
+    Sorted by Benchmark Dose Median" / "Top N <Organ> Genes Ranked by Potency of
+    Perturbation, Sorted by Benchmark Dose Median".  No sex in the locator — the
+    table now stacks both sexes (reference Tables 9–12).
 
     Shared so both surfaces label the table identically; the emitter decides
     whether it becomes a LaTeX caption line or an HTML <caption>.  Returns the
     bare descriptive text when no number is assigned (scaffold / preview).
     """
     organ = (entry.get("organ") or "").strip().capitalize()
-    sex = (entry.get("sex") or "").strip().capitalize()
     role = entry.get("type")
-    rows = entry.get("gene_sets") if role == "gene_set" else entry.get("top_genes")
-    n = len(rows or [])
+
+    # Top-N: the per-sex Top-N is uniform (10), so report the max sex block's
+    # length rather than the summed row count across both sexes.
+    blocks = entry.get("sexes")
+    if isinstance(blocks, list) and blocks:
+        key = "gene_sets" if role == "gene_set" else "top_genes"
+        n = max((len(b.get(key) or []) for b in blocks), default=0)
+    else:
+        rows = entry.get("gene_sets") if role == "gene_set" else entry.get("top_genes")
+        n = len(rows or [])
 
     kind = ("Gene Ontology Biological Process Gene Sets"
             if role == "gene_set" else "Genes")
-    locator = " ".join(p for p in (organ, sex) if p)
     lead = f"Top {n} " if n else "Top "
     descriptive = (
-        f"{lead}{locator} {kind} Ranked by Potency of Perturbation, "
-        "Sorted by Benchmark Dose"
+        f"{lead}{organ} {kind} Ranked by Potency of Perturbation, "
+        "Sorted by Benchmark Dose Median"
     ).replace("  ", " ").strip()
 
     num = entry.get("table_number")

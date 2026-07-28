@@ -40,24 +40,36 @@ document:
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
-  - id: toc
-    type: toc
-    title: Table of Contents
   - id: foreword
     type: front-matter
     title: Foreword
     data_key: foreword
+  - id: break-before-toc
+    type: page-break
+    title: ""
+  - id: toc
+    type: toc
+    title: Table of Contents
   - id: tables-list
     type: tables-list
     title: Tables
+  - id: break-after-tables-list
+    type: page-break
+    title: ""
   - id: about
     type: front-matter
     title: About This Report
     data_key: about_report
+  - id: break-before-peer-review
+    type: page-break
+    title: ""
   - id: peer-review
     type: front-matter
     title: Peer Review
     data_key: peer_review
+  - id: break-after-peer-review
+    type: page-break
+    title: ""
   - id: publication
     type: front-matter
     title: Publication Details
@@ -66,6 +78,9 @@ document:
     type: front-matter
     title: Acknowledgments
     data_key: acknowledgments
+  - id: break-before-abstract
+    type: page-break
+    title: ""
   - id: abstract
     type: front-matter
     title: Abstract
@@ -444,14 +459,18 @@ organs:
 # genes: [egr1, ddit4]
 # gene_sets: ["GO:1902893", "cell division"]
 
-# assays — restrict the Clinical Chemistry (Table 4) and Hematology (Table 5)
-# tables to the reference's "Select" endpoints.  These are PER-SEX: the NIEHS
-# reference shows different endpoints for males vs females (and the apical BMD
-# summary, Table 8, lists the same per-sex set).  An area value may be a flat
-# list (both sexes) OR this {male:/female:} mapping.  Tokens are matched
-# component-aware, so multi-word tokens ("manual hematocrit", "neutrophil
-# count") are used where a single word would over-match (e.g. bare "hematocrit"
-# would also keep "Hematocrit"; bare "count" spans every differential row).
+# assays — restrict the Clinical Chemistry (Table 4), Hematology (Table 5) and
+# Hormone (Table 6) tables to the reference's "Select" endpoints.  These are
+# PER-SEX: the NIEHS reference shows different endpoints for males vs females
+# (and the apical BMD summary, Table 8, lists the same per-sex set).  The
+# reference's "Select" is a HAND-CURATED subset that a data-driven
+# responsiveness gate does NOT reproduce (e.g. male Cholesterol is the only male
+# clin-chem row but is not NTP-responsive), so each panel is an explicit
+# allowlist.  An area value may be a flat list (both sexes) OR this
+# {male:/female:} mapping.  Tokens are matched component-aware, so multi-word
+# tokens ("manual hematocrit", "total thyroxine") are used where a single word
+# would over-match (bare "thyroxine" would also keep "Free Thyroxine"; bare
+# "count" spans every differential row).
 assays:
   clinical-chemistry:
     male: [cholesterol]
@@ -459,6 +478,22 @@ assays:
   hematology:
     male: ["neutrophil count"]
     female: ["manual hematocrit"]
+  hormones:
+    # Our row labels are "Triiodothyronine" / "Total Thyroxine" (the reference
+    # prints them "Total T3" / "Total T4").  Token "triiodothyronine" keeps the
+    # T3 row; "total thyroxine" keeps Total Thyroxine but NOT "Free Thyroxine".
+    male: ["triiodothyronine", "total thyroxine"]
+    female: ["total thyroxine"]
+
+# sex — the "organ-weight" area narrows ONLY the Organ Weight table (Table 3) to
+# the sex(es) that had a responsive organ, matching the reference (its Table 3
+# is "Summary of Liver Weights of MALE Rats" — female liver was not responsive,
+# so female is dropped from that ONE table while every other apical table keeps
+# both sexes).  Combined with `organs.organ-weight: [liver]` above, this yields
+# the single-organ / single-sex table; organ_weight_table then titles it
+# dynamically from what's shown.  Exact match (male|female).
+sex:
+  organ-weight: [male]
 
 
 # ---------------------------------------------------------------------------

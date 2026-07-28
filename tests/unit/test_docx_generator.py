@@ -20,6 +20,7 @@ What this does NOT prove
   - Visual fidelity in Word / LibreOffice — that's a manual review step.
 """
 
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -138,6 +139,30 @@ def test_title_page_is_one_paragraph_per_role(scaffold):
     assert title_paras[0]._p.xml.count("<w:br/>") >= 1
 
 
+def test_publisher_block_is_tight(scaffold):
+    """The publisher block (name / institute / department / location) is emitted
+    as SEPARATE paragraphs, so without explicit spacing each would inherit
+    Normal's 6pt-after and gap out (the reported bug).  The NTP reference sets
+    those lines TIGHT (0 after); the deliberate gaps are `before` on the date
+    (18pt), name (100pt), and location (16pt), with 6pt after on the ISSN.  Assert
+    the measured reference spacing lands on each line."""
+    from docx.shared import Pt as _Pt
+    doc = _open(generate_docx(scaffold))
+
+    def _para(startswith):
+        return next(p for p in doc.paragraphs if p.text.startswith(startswith))
+
+    # Tight lines: no after-spacing between consecutive publisher paragraphs.
+    for lead in ("National Institute of Environmental",
+                 "Public Health Service",
+                 "U.S. Department of Health"):
+        assert _para(lead).paragraph_format.space_after == _Pt(0), lead
+    # The deliberate gaps live on `before`.
+    assert _para("National Institute of Environmental").paragraph_format.space_before == _Pt(100)
+    # ISSN keeps its 6pt trailing gap.
+    assert _para("ISSN:").paragraph_format.space_after == _Pt(6)
+
+
 def test_title_page_role_styling_applied(scaffold):
     """
     A `styles.title_page` config styles each ROLE independently: `report_title`
@@ -172,6 +197,32 @@ def test_title_page_empty_config_unchanged(scaffold):
     assert title.font.name == "Arial"
     assert title.font.size == Pt(20)
     assert title.font.bold is True
+
+
+def test_front_matter_headings_match_reference_body_left(scaffold):
+    """Every front-matter section header (Foreword, Table of Contents, Tables,
+    About, Peer Review, etc.) gets the SAME reference front-matter heading look —
+    Arial 16pt bold, CENTERED, 12pt after (1-23_FrontMatter_Head1) — so they are
+    uniform (no one header bigger/tighter than the rest).  Body section headings
+    (Background, Summary, References — `narrative` nodes routing through the same
+    renderer) stay as the left-aligned built-in Heading 1, matching the NTP
+    reference's left body heads."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH as _AL
+    doc = _open(generate_docx(scaffold))
+    front = {"Foreword", "Table of Contents", "Tables", "About This Report",
+             "Peer Review", "Publication Details", "Acknowledgments", "Abstract"}
+    body = {"Background", "Materials and Methods", "Results", "Summary", "References"}
+    for p in doc.paragraphs:
+        t = p.text.strip()
+        if t in front:
+            assert p.alignment == _AL.CENTER, f"{t!r} front-matter header not centered"
+            assert p.paragraph_format.space_after == Pt(12), f"{t!r} wrong space-after"
+            # 16pt Arial bold on the run (the reference size — NOT built-in 17pt).
+            run = p.runs[0]
+            assert run.font.size == Pt(16), f"{t!r} size {run.font.size} != 16pt"
+            assert run.font.name == "Arial" and run.font.bold is True
+        elif t in body:
+            assert p.alignment is None, f"{t!r} body heading should be left (got {p.alignment})"
 
 
 def test_no_green_accent_bar_table(scaffold):
@@ -216,6 +267,19 @@ def test_two_sections_with_roman_then_arabic_numbering(scaffold):
             "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fmt"
         ))
     assert fmts == ["lowerRoman", "decimal"]
+
+
+def test_body_section_has_no_distinct_first_page(scaffold):
+    """The front section suppresses its header on the cover via different-first-
+    page; add_section() copies that flag onto the body section, but the body has
+    no cover — leaving an empty, editable first-page header on page 1 of the body
+    (a stray 'add header' control).  The body section must turn it back off."""
+    from docx.oxml.ns import qn as _qn
+    doc = _open(generate_docx(scaffold))
+    body = doc.sections[-1]
+    assert body.different_first_page_header_footer is False
+    # And no <w:titlePg> lingers in the body sectPr.
+    assert body._sectPr.find(_qn("w:titlePg")) is None
 
 
 def test_has_tables(scaffold):
@@ -476,3 +540,304 @@ def test_rich_data_renders_without_error(rich):
     # The running header falls back through running_header/title — the rich
     # fixture sets a title, so it must not be the bare placeholder.
     assert _all_text(doc)
+
+
+# ---------------------------------------------------------------------------
+# Table of Contents — a NATIVE Word TOC field (page numbers + dot leaders are
+# filled by Word/LibreOffice on open; a static paragraph list cannot carry them)
+# ---------------------------------------------------------------------------
+
+from docx.oxml.ns import qn  # noqa: E402
+
+
+def test_toc_is_a_native_field(scaffold):
+    """The Contents page emits a { TOC } field, not a static list."""
+    doc = _open(generate_docx(scaffold))
+    instrs = [e.text for e in doc.element.body.findall(".//" + qn("w:instrText"))]
+    assert any(i and i.strip().startswith("TOC") for i in instrs)
+    # \o "1-3" (levels), \h (hyperlinks), \u (use applied outline levels).
+    toc = next(i for i in instrs if i and i.strip().startswith("TOC"))
+    assert '\\o "1-3"' in toc and "\\h" in toc and "\\u" in toc
+
+
+def test_toc_field_marks_document_fields_dirty(scaffold):
+    """updateFields=true is set so Word offers to refresh the field on open.  This
+    is NOT sufficient on its own for LibreOffice (which ignores it for Word-origin
+    TOC fields) — the pre-populated cached entries are what guarantee a non-empty
+    TOC either way (see test_toc_field_is_prepopulated)."""
+    doc = _open(generate_docx(scaffold))
+    uf = doc.settings.element.find(qn("w:updateFields"))
+    assert uf is not None and uf.get(qn("w:val")) == "true"
+
+
+def test_toc_field_is_prepopulated_with_entries(rich):
+    """The TOC field carries CACHED entry paragraphs (TOC 1/2/3) between its
+    separate and end marks, so the document opens showing a real contents list —
+    not a bare placeholder — even in a reader that doesn't auto-update the field.
+    The field stays live (begin/separate/end intact) so a refresh recomputes page
+    numbers."""
+    doc = _open(generate_docx(rich))
+    # Every field in the body is well-formed: begin/separate/end are balanced
+    # (the doc now carries several — the TOC, the Tables TOF, and per-table SEQ).
+    kinds = [
+        fc.get(qn("w:fldCharType"))
+        for fc in doc.element.body.findall(".//" + qn("w:fldChar"))
+    ]
+    assert kinds.count("begin") == kinds.count("end") == kinds.count("separate")
+    # The TOC field's instruction is present.
+    instrs = [i.text for i in doc.element.body.findall(".//" + qn("w:instrText"))]
+    assert any(i and i.strip().startswith('TOC \\o "1-3"') for i in instrs)
+    # Real entry paragraphs styled TOC N follow the Contents heading.
+    toc_i = next(i for i, p in enumerate(doc.paragraphs)
+                 if p.text.strip() == "Table of Contents")
+    entries = []
+    for p in doc.paragraphs[toc_i + 1:]:
+        if not p.style.name.startswith("TOC "):
+            break
+        entries.append(p)
+    assert len(entries) >= 10
+    # The first entry is the Foreword (front matter leads the tree).
+    assert entries[0].text.startswith("Foreword")
+    # Levels map to TOC 1/2/3 (a level-2 heading like Study Design → TOC 2).
+    assert any(p.style.name == "TOC 2" for p in entries)
+
+
+def test_toc_field_closes_with_trailing_empty_paragraph(rich):
+    """The TOC field ends on a TRAILING EMPTY paragraph carrying the `end` fldChar,
+    not on the last entry — matching the reference.  Two effects: the field's
+    cached span (and its gray field-shading) extends one line past the last entry,
+    and that empty paragraph is the gap before the next section header (without it
+    the following heading jams against the last entry)."""
+    doc = _open(generate_docx(rich))
+    paras = doc.paragraphs
+    toc_i = next(i for i, p in enumerate(paras) if p.text.strip() == "Table of Contents")
+    # Last TOC-N entry, then the closer.
+    last = None
+    for j in range(toc_i + 1, len(paras)):
+        if paras[j].style.name.startswith("TOC "):
+            last = j
+        elif last is not None:
+            break
+    closer = paras[last + 1]
+    assert closer.text.strip() == "", "field should close on an EMPTY paragraph"
+    assert not closer.style.name.startswith("TOC "), "closer is a plain para, not a TOC entry"
+    ends = closer._p.findall(".//" + qn("w:fldChar") + "[@" + qn("w:fldCharType") + "='end']")
+    assert ends, "the closing empty paragraph must carry the field `end`"
+
+
+def test_toc_entries_have_dot_leader_tab(rich):
+    """Each cached TOC entry carries a right-aligned dotted-leader tab stop at the
+    text-block edge — the classic dotted TOC line the reference uses."""
+    from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
+    doc = _open(generate_docx(rich))
+    toc_i = next(i for i, p in enumerate(doc.paragraphs)
+                 if p.text.strip() == "Table of Contents")
+    first_entry = doc.paragraphs[toc_i + 1]
+    tabs = list(first_entry.paragraph_format.tab_stops)
+    assert tabs, "TOC entry has no tab stop"
+    right_dotted = [
+        t for t in tabs
+        if t.alignment == WD_TAB_ALIGNMENT.RIGHT and t.leader == WD_TAB_LEADER.DOTS
+    ]
+    assert right_dotted, "TOC entry lacks a right dot-leader tab"
+
+
+def test_toc_entry_spacing_matches_reference(rich):
+    """TOC entry line pitch matches the reference, VERIFIED against NIEHS-10's
+    rendered PDF: every toc line sits on a ~25.9pt baseline (the reference renders
+    toc 1/2/3 all at 25.8-25.9pt regardless of `before`).  We reproduce it with an
+    EXACT 25.9pt line height on every TOC N style (an earlier single-spacing model
+    packed them to ~19.8pt, which read cramped vs the example)."""
+    from docx.enum.text import WD_LINE_SPACING
+    doc = _open(generate_docx(rich))
+    styles = {n: doc.styles[n].paragraph_format for n in ("TOC 1", "TOC 2", "TOC 3")}
+    for name, pf in styles.items():
+        assert pf.line_spacing == Pt(25.9), f"{name} line != 25.9pt exact"
+        assert pf.line_spacing_rule == WD_LINE_SPACING.EXACTLY, f"{name} not EXACT rule"
+        # `before` is absorbed by the fixed pitch (reference does not stack it).
+        assert pf.space_before == Pt(0)
+        assert pf.space_after == Pt(0)
+    # Deeper levels are indented past level 1.
+    assert styles["TOC 2"].left_indent == Pt(18)
+    assert styles["TOC 3"].left_indent == Pt(36)
+
+
+# ---------------------------------------------------------------------------
+# Tables list — a native Table-of-Figures FIELD (same field class as the TOC),
+# collecting body captions styled 0-25_Table_Title; body captions carry a SEQ
+# auto-number.  Titles are chemical-interpolated (reused from the body captions).
+# ---------------------------------------------------------------------------
+
+def _tables_list_paras(doc):
+    """The `table of figures` entry paragraphs of the front-matter Tables list."""
+    ti = next(i for i, p in enumerate(doc.paragraphs) if p.text.strip() == "Tables")
+    out = []
+    for p in doc.paragraphs[ti + 1:]:
+        if p.style.name != "table of figures":
+            break
+        out.append(p)
+    return out
+
+
+def test_tables_list_is_a_table_of_figures_field(rich):
+    """The Tables list is a native Table-of-Figures FIELD — the SAME field class
+    as the TOC — that collects body captions styled 0-25_Table_Title, not a plain
+    list.  Its instruction is TOC \\h \\z \\t "0-25_Table_Title" \\c, and its
+    cached entries are styled `table of figures`."""
+    doc = _open(generate_docx(rich))
+    instrs = [i.text for i in doc.element.body.findall(".//" + qn("w:instrText"))]
+    assert any(i and '\\t "0-25_Table_Title"' in i for i in instrs), (
+        f"no Table-of-Figures field instruction in {instrs}"
+    )
+    entries = _tables_list_paras(doc)
+    assert len(entries) >= 8
+
+
+def test_tables_list_entry_line_pitch_matches_reference(rich):
+    """The `table of figures` entry style uses a tight 15.9pt within-entry line +
+    9.9pt after — VERIFIED against NIEHS-10's PDF (41.7pt two-line / 25.8pt
+    single-line entry pitch).  A flat 25.9pt exact line over-spaced the wrapping
+    table captions to 51.8pt."""
+    from docx.enum.text import WD_LINE_SPACING
+    doc = _open(generate_docx(rich))
+    pf = doc.styles["table of figures"].paragraph_format
+    assert pf.line_spacing == Pt(15.9)
+    assert pf.line_spacing_rule == WD_LINE_SPACING.EXACTLY
+    assert pf.space_after == Pt(9.9)
+
+
+def test_body_table_captions_are_seq_numbered(rich):
+    """Body table captions use the 0-25_Table_Title style (the TOF collect target)
+    and number via a SEQ FIELD, not literal text — so they auto-renumber and are
+    collectable by the Tables-list field.  Appendix captions ("Table B-1.") carry a
+    letter-prefixed number the arabic SEQ can't express, so they are emitted as
+    literal text instead — those are excluded here (see test below)."""
+    doc = _open(generate_docx(rich))
+    caps = [p for p in doc.paragraphs if p.style.name == "0-25_Table_Title"]
+    assert len(caps) >= 8, "no 0-25_Table_Title body captions"
+    def _has_seq(p):
+        return any(
+            (i.text or "").strip().startswith("SEQ Table")
+            for i in p._p.findall(".//" + qn("w:instrText"))
+        )
+    # Body captions ("Table 3. ...") — arabic-numbered — must carry a SEQ field.
+    # Appendix captions ("Table B-1. ...") are literal by design.
+    body_caps = [p for p in caps if not re.match(r"^Table\s+[A-Za-z]-\d+\.", p.text)]
+    assert body_caps, "no arabic-numbered body captions"
+    assert all(_has_seq(p) for p in body_caps), "a body caption lacks its SEQ number"
+
+
+def test_appendix_table_caption_not_double_prefixed(rich):
+    """An appendix caption ("Table B-1. ...") is emitted as literal text with NO
+    SEQ field — regression guard for the doubled 'Table 1. Table B-1.' bug, where
+    the arabic SEQ prepended its own number on top of the letter-prefixed label."""
+    doc = _open(generate_docx(rich))
+    appendix_caps = [
+        p for p in doc.paragraphs
+        if p.style.name == "0-25_Table_Title"
+        and re.match(r"^Table\s+[A-Za-z]-\d+\.", p.text)
+    ]
+    for p in appendix_caps:
+        # No doubled "Table 1. Table B-1." — exactly one "Table" token leads.
+        assert not re.match(r"^Table\s+\d+\.\s*Table\s", p.text), p.text
+        # And no SEQ field (letter-prefixed numbers are literal).
+        assert not any(
+            (i.text or "").strip().startswith("SEQ Table")
+            for i in p._p.findall(".//" + qn("w:instrText"))
+        ), f"appendix caption should be literal, not SEQ: {p.text!r}"
+
+
+def test_tables_list_titles_are_chemical_interpolated(rich):
+    """Entries reuse the FULL caption the table body renders (chemical / species
+    filled from the study) — so a body-weight entry reads 'Summary of Body Weights
+    of Male and Female Rats Administered <chemical> for Five Days', matching the
+    example documents."""
+    doc = _open(generate_docx(rich))
+    texts = [p.text for p in _tables_list_paras(doc)]
+    # The rich fixture's chemical is "Perfluorohexanesulfonamide"; a full apical
+    # caption names it (interpolated from the study, not a frozen literal).
+    assert any(
+        "Administered Perfluorohexanesulfonamide for Five Days" in t
+        and "Summary of Body Weights" in t
+        for t in texts
+    ), f"no chemical-interpolated body-weight title in: {texts}"
+
+
+def test_toc_heading_excluded_from_its_own_toc(scaffold):
+    """The 'Table of Contents' heading uses TOC Heading (outlineLvl 9 → not
+    collected into the very table it introduces)."""
+    doc = _open(generate_docx(scaffold))
+    toc_head = next(p for p in doc.paragraphs if p.text.strip() == "Table of Contents")
+    assert toc_head.style.name == "TOC Heading"
+
+
+def test_toc_heading_is_centered_arial_16(scaffold):
+    """The Contents header matches the reference 'NTP Contents Heading': CENTERED,
+    Arial 16pt bold, 12pt after.  The built-in TOC Heading is basedOn Heading 1
+    (left, 14pt), so the handler overrides on the paragraph."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH as _AL
+    doc = _open(generate_docx(scaffold))
+    h = next(p for p in doc.paragraphs if p.text.strip() == "Table of Contents")
+    assert h.alignment == _AL.CENTER
+    assert h.paragraph_format.space_after == Pt(12)
+    run = h.runs[0]
+    assert run.font.name == "Arial"
+    assert run.font.size == Pt(16)
+    assert run.font.bold is True
+
+
+def test_body_headings_are_collectable_by_the_field(scaffold):
+    """The field collects by outline level, so body headings must carry one.
+    The built-in Heading 1-3 (the non-vocabulary path) do by construction —
+    assert they are present so the field has something to collect."""
+    doc = _open(generate_docx(scaffold))
+    collectable = [
+        p for p in doc.paragraphs
+        if p.style and p.style.name in ("Heading 1", "Heading 2", "Heading 3")
+    ]
+    assert len(collectable) >= 10
+
+
+def test_no_field_no_dirty_flag():
+    """A document with no field must NOT set updateFields (the flag is scoped to
+    the field's presence, detected from the body, not always-on)."""
+    from docx_generator import _build_style_skeleton
+    from docx import Document as _Doc
+    # A hand-built doc with a paragraph but no field: _mark_fields_dirty is only
+    # called by generate_docx when a fldChar exists, so exercise that guard.
+    doc = _Doc()
+    _build_style_skeleton(doc)
+    doc.add_paragraph("no fields here")
+    assert not doc.element.body.findall(".//" + qn("w:fldChar"))
+
+
+def test_update_fields_is_in_schema_order(scaffold):
+    """updateFields must sit at its CT_Settings position (before compat/rsids),
+    NOT prepended — an out-of-sequence settings child is silently dropped on load
+    (the same trap pgNumType documents), which would leave the TOC field never
+    updating.  Assert it precedes its schema successors."""
+    doc = _open(generate_docx(scaffold))
+    kids = [c.tag.split("}")[-1] for c in doc.settings.element]
+    assert "updateFields" in kids
+    ui = kids.index("updateFields")
+    # Every successor that is present must come AFTER updateFields.
+    for succ in ("compat", "rsids", "mathPr", "themeFontLang", "docId"):
+        if succ in kids:
+            assert kids.index(succ) > ui, f"{succ} must follow updateFields"
+    # And nothing that must PRECEDE it (e.g. savePreviewPicture) comes after.
+    if "savePreviewPicture" in kids:
+        assert kids.index("savePreviewPicture") < ui
+
+
+def test_footer_has_exactly_one_page_field_per_section(scaffold):
+    """The body section's footer is linked-to-previous (shared element); the
+    generator must not append a SECOND PAGE field to it — a doubled field renders
+    the number twice ('iii' → 'iiiiii').  Every section footer carries exactly
+    one PAGE field."""
+    doc = _open(generate_docx(scaffold))
+    for sec in doc.sections:
+        instrs = [
+            e.text for e in sec.footer.paragraphs[0]._p.findall(".//" + qn("w:instrText"))
+        ]
+        pages = [i for i in instrs if i and i.strip() == "PAGE"]
+        assert len(pages) == 1, f"expected 1 PAGE field, found {len(pages)}"

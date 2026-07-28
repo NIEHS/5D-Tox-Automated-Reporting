@@ -88,13 +88,6 @@
       "type": "title-page"
     },
     {
-      "id": "toc",
-      "level": 0,
-      "region": "front",
-      "title": "Table of Contents",
-      "type": "toc"
-    },
-    {
       "data_key": "foreword",
       "id": "foreword",
       "level": 1,
@@ -103,11 +96,32 @@
       "type": "front-matter"
     },
     {
+      "id": "break-before-toc",
+      "level": 0,
+      "region": "front",
+      "title": "",
+      "type": "page-break"
+    },
+    {
+      "id": "toc",
+      "level": 0,
+      "region": "front",
+      "title": "Table of Contents",
+      "type": "toc"
+    },
+    {
       "id": "tables-list",
       "level": 1,
       "region": "front",
       "title": "Tables",
       "type": "tables-list"
+    },
+    {
+      "id": "break-after-tables-list",
+      "level": 0,
+      "region": "front",
+      "title": "",
+      "type": "page-break"
     },
     {
       "data_key": "about_report",
@@ -118,12 +132,26 @@
       "type": "front-matter"
     },
     {
+      "id": "break-before-peer-review",
+      "level": 0,
+      "region": "front",
+      "title": "",
+      "type": "page-break"
+    },
+    {
       "data_key": "peer_review",
       "id": "peer-review",
       "level": 1,
       "region": "front",
       "title": "Peer Review",
       "type": "front-matter"
+    },
+    {
+      "id": "break-after-peer-review",
+      "level": 0,
+      "region": "front",
+      "title": "",
+      "type": "page-break"
     },
     {
       "data_key": "publication_details",
@@ -140,6 +168,13 @@
       "region": "front",
       "title": "Acknowledgments",
       "type": "front-matter"
+    },
+    {
+      "id": "break-before-abstract",
+      "level": 0,
+      "region": "front",
+      "title": "",
+      "type": "page-break"
     },
     {
       "data_key": "abstract",
@@ -623,19 +658,17 @@
   "genomics_sections": [
     {
       "caption": "",
-      "gene_sets": [],
       "go_descriptions": [],
       "organ": "liver",
-      "sex": "male",
+      "sexes": [],
       "table_number": 9,
       "type": "gene_set"
     },
     {
       "caption": "",
-      "gene_sets": [],
       "go_descriptions": [],
       "organ": "kidney",
-      "sex": "male",
+      "sexes": [],
       "table_number": 10,
       "type": "gene_set"
     },
@@ -643,18 +676,16 @@
       "caption": "",
       "gene_descriptions": [],
       "organ": "liver",
-      "sex": "male",
+      "sexes": [],
       "table_number": 11,
-      "top_genes": [],
       "type": "gene"
     },
     {
       "caption": "",
       "gene_descriptions": [],
       "organ": "kidney",
-      "sex": "male",
+      "sexes": [],
       "table_number": 12,
-      "top_genes": [],
       "type": "gene"
     }
   ],
@@ -852,27 +883,27 @@
     {
       "ready": false,
       "table_number": 8,
-      "title": "Apical Endpoint Benchmark Dose Summary"
+      "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
       "ready": false,
       "table_number": 9,
-      "title": "Top Liver Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+      "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
       "ready": false,
       "table_number": 10,
-      "title": "Top Kidney Male Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+      "title": "Top Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
       "ready": false,
       "table_number": 11,
-      "title": "Top Liver Male Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+      "title": "Top Liver Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     },
     {
       "ready": false,
       "table_number": 12,
-      "title": "Top Kidney Male Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose"
+      "title": "Top Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
   ],
   "test_article": {

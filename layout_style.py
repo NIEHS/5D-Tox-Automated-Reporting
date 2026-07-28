@@ -90,6 +90,7 @@ LAYOUT_KEY_SCHEMA: dict = {
     "break_before": ("enum", BREAKS),         # auto | page
     "break_after": ("enum", BREAKS),          # auto | page
     "keep_together": ("bool",),               # avoid breaking inside
+    "outline_level": ("number",),             # 0-based heading depth; a TOC/nav collects it
 }
 
 # A CSS/LaTeX length: a number (int or float, optionally signed) followed by a
