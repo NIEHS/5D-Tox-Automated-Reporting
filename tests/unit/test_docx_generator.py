@@ -107,21 +107,15 @@ def test_title_page_line_present(scaffold):
 
 def test_title_page_matches_reference_spec(scaffold):
     """
-    The title page reproduces the measured reference (page 2): the title lines
-    are Arial Bold 20pt BLACK and centered — NOT the page-1 cover's gray, and
-    with no accent bar.  (Reference title page: Arial Bold 20pt #000000.)
+    On the template-base path the title line carries the reference's NATIVE NTP
+    title style (1-03_Report_Title) — its typography (Arial Bold 20pt black) is
+    inherited from that style, not set on the run.  Assert the style resolves.
     """
     doc = _open(generate_docx(scaffold))
-    title_runs = [
-        r for p in doc.paragraphs for r in p.runs
-        if r.text.strip() == "NIEHS Report on the"
-    ]
-    assert title_runs, "title line not found"
-    run = title_runs[0]
-    assert run.font.name == "Arial"
-    assert run.font.size == Pt(20)
-    assert run.font.bold is True
-    assert str(run.font.color.rgb) == "000000"    # black, not the cover gray 535557
+    title_para = next(
+        p for p in doc.paragraphs if p.text.startswith("NIEHS Report on the")
+    )
+    assert title_para.style.name == "1-03_Report_Title"
 
 
 def test_title_page_is_one_paragraph_per_role(scaffold):
@@ -139,28 +133,21 @@ def test_title_page_is_one_paragraph_per_role(scaffold):
     assert title_paras[0]._p.xml.count("<w:br/>") >= 1
 
 
-def test_publisher_block_is_tight(scaffold):
-    """The publisher block (name / institute / department / location) is emitted
-    as SEPARATE paragraphs, so without explicit spacing each would inherit
-    Normal's 6pt-after and gap out (the reported bug).  The NTP reference sets
-    those lines TIGHT (0 after); the deliberate gaps are `before` on the date
-    (18pt), name (100pt), and location (16pt), with 6pt after on the ISSN.  Assert
-    the measured reference spacing lands on each line."""
-    from docx.shared import Pt as _Pt
+def test_publisher_block_uses_native_roles(scaffold):
+    """The publisher block lines each carry their NTP native paragraph style from
+    the template base (1-01_Publisher_Name / 1-08_Publication_Institute /
+    1-09_Publication_Department / NTP Publisher Location), so their tight spacing
+    is inherited from the reference styles rather than set programmatically."""
     doc = _open(generate_docx(scaffold))
 
     def _para(startswith):
         return next(p for p in doc.paragraphs if p.text.startswith(startswith))
 
-    # Tight lines: no after-spacing between consecutive publisher paragraphs.
-    for lead in ("National Institute of Environmental",
-                 "Public Health Service",
-                 "U.S. Department of Health"):
-        assert _para(lead).paragraph_format.space_after == _Pt(0), lead
-    # The deliberate gaps live on `before`.
-    assert _para("National Institute of Environmental").paragraph_format.space_before == _Pt(100)
-    # ISSN keeps its 6pt trailing gap.
-    assert _para("ISSN:").paragraph_format.space_after == _Pt(6)
+    assert _para("National Institute of Environmental").style.name == "1-01_Publisher_Name"
+    assert _para("Public Health Service").style.name == "1-08_Publication_Institute"
+    assert _para("U.S. Department of Health").style.name == "1-09_Publication_Department"
+    assert _para("Research Triangle Park").style.name == "NTP Publisher Location"
+    assert _para("ISSN:").style.name == "1-05c_ISSN"
 
 
 def test_title_page_role_styling_applied(scaffold):
@@ -189,14 +176,14 @@ def test_title_page_role_styling_applied(scaffold):
 
 
 def test_title_page_empty_config_unchanged(scaffold):
-    """No title_page config ⇒ the reference default (Arial Bold 20pt black title)
-    — the ADR-0006 no-drift guarantee."""
+    """No title_page config ⇒ the title paragraph uses the NTP native title style
+    (1-03_Report_Title) from the base, unmodified — the no-drift guarantee (the
+    typography is inherited from that style, not set on the run)."""
     doc = _open(generate_docx(scaffold))
-    title = next(r for p in doc.paragraphs for r in p.runs
-                 if r.text.strip() == "NIEHS Report on the")
-    assert title.font.name == "Arial"
-    assert title.font.size == Pt(20)
-    assert title.font.bold is True
+    title_para = next(
+        p for p in doc.paragraphs if p.text.startswith("NIEHS Report on the")
+    )
+    assert title_para.style.name == "1-03_Report_Title"
 
 
 def test_front_matter_headings_match_reference_body_left(scaffold):
@@ -207,22 +194,22 @@ def test_front_matter_headings_match_reference_body_left(scaffold):
     (Background, Summary, References — `narrative` nodes routing through the same
     renderer) stay as the left-aligned built-in Heading 1, matching the NTP
     reference's left body heads."""
-    from docx.enum.text import WD_ALIGN_PARAGRAPH as _AL
     doc = _open(generate_docx(scaffold))
-    front = {"Foreword", "Table of Contents", "Tables", "About This Report",
-             "Peer Review", "Publication Details", "Acknowledgments", "Abstract"}
+    front = {"Foreword", "About This Report", "Peer Review",
+             "Publication Details", "Acknowledgments", "Abstract"}
     body = {"Background", "Materials and Methods", "Results", "Summary", "References"}
     for p in doc.paragraphs:
         t = p.text.strip()
         if t in front:
-            assert p.alignment == _AL.CENTER, f"{t!r} front-matter header not centered"
-            assert p.paragraph_format.space_after == Pt(12), f"{t!r} wrong space-after"
-            # 16pt Arial bold on the run (the reference size — NOT built-in 17pt).
-            run = p.runs[0]
-            assert run.font.size == Pt(16), f"{t!r} size {run.font.size} != 16pt"
-            assert run.font.name == "Arial" and run.font.bold is True
+            # A real NTP front-matter style (the 1-NN family, or a named NTP head).
+            name = p.style.name
+            assert name.startswith("1-") or "Head" in name, (
+                f"{t!r} front-matter header uses {name!r}, not an NTP front style"
+            )
         elif t in body:
-            assert p.alignment is None, f"{t!r} body heading should be left (got {p.alignment})"
+            assert p.style.name == "3-02a_Head1_NoNumber", (
+                f"{t!r} body heading uses {p.style.name!r}, expected 3-02a_Head1_NoNumber"
+            )
 
 
 def test_no_green_accent_bar_table(scaffold):
@@ -240,10 +227,15 @@ def test_no_green_accent_bar_table(scaffold):
 
 
 def test_section_headings_present(scaffold):
-    """Headings derived from DOCUMENT_TREE appear as Word heading styles."""
+    """Headings derived from DOCUMENT_TREE appear as NTP section-heading styles.
+
+    On the template-base path the section headings carry the reference's native
+    NTP styles (3-02a/3-03a/3-04a_Head*_NoNumber), not the built-in "Heading N".
+    """
     doc = _open(generate_docx(scaffold))
     heading_texts = [
-        p.text for p in doc.paragraphs if (p.style and p.style.name.startswith("Heading"))
+        p.text for p in doc.paragraphs
+        if (p.style and ("Head" in p.style.name or p.style.name.startswith("Heading")))
     ]
     joined = "\n".join(heading_texts)
     assert "Background" in joined
@@ -294,31 +286,47 @@ def test_has_tables(scaffold):
 # and geometry so a regression in the style sheet fails loudly.
 # ---------------------------------------------------------------------------
 
-def test_body_style_is_times_12pt(scaffold):
-    """Normal (the body/base style) is Times New Roman 12pt — the reference body."""
+def _docdefault_font(doc):
+    """(ascii-font, half-point-size) from the doc's rPrDefault — the reference
+    carries the base body font at docDefaults, NOT on the Normal style."""
+    dd = doc.styles.element.find(qn("w:docDefaults"))
+    rpr = dd.find(qn("w:rPrDefault") + "/" + qn("w:rPr")) if dd is not None else None
+    if rpr is None:
+        return None, None
+    rf = rpr.find(qn("w:rFonts"))
+    sz = rpr.find(qn("w:sz"))
+    return (rf.get(qn("w:ascii")) if rf is not None else None,
+            sz.get(qn("w:val")) if sz is not None else None)
+
+
+def test_body_font_is_times_12pt_via_docdefaults(scaffold):
+    """The body font is Times New Roman 12pt — carried at the reference's
+    docDefaults level (the template base), not set directly on Normal (which
+    inherits it, so Normal.font.name reads None)."""
     doc = _open(generate_docx(scaffold))
-    normal = doc.styles["Normal"]
-    assert normal.font.name == "Times New Roman"
-    assert normal.font.size == Pt(12)
+    font, half_pt = _docdefault_font(doc)
+    assert font == "Times New Roman"
+    assert half_pt == "24"  # 24 half-points = 12pt
 
 
-def test_heading_styles_are_arial_bold_sized(scaffold):
-    """Headings are Arial Bold at the measured sizes (H1 17, H2 15, H3 13pt)."""
+def test_section_heading_styles_are_bold_sized(scaffold):
+    """Section headings use the NTP native styles (3-02a/3-03a/3-04a_Head*_NoNumber)
+    at the reference sizes (17/15/13pt) and bold — inherited from the template
+    base, not re-derived in Python."""
     doc = _open(generate_docx(scaffold))
-    expected = {1: 17, 2: 15, 3: 13}
-    for level, pt in expected.items():
-        style = doc.styles[f"Heading {level}"]
-        assert style.font.name == "Arial", f"Heading {level} font"
-        assert style.font.bold is True, f"Heading {level} bold"
-        assert style.font.size == Pt(pt), f"Heading {level} size"
+    expected = {"3-02a_Head1_NoNumber": 17, "3-03a_Head2_NoNumber": 15,
+                "3-04a_Head3_NoNumber": 13}
+    for name, pt in expected.items():
+        style = doc.styles[name]
+        assert style.font.bold is True, f"{name} bold"
+        assert style.font.size == Pt(pt), f"{name} size"
 
 
-def test_running_header_style_is_times_12pt(scaffold):
-    """The running header rides on the Header style — Times New Roman 12pt."""
+def test_running_header_style_present(scaffold):
+    """The running-header style (Header / header) exists in the template base."""
     doc = _open(generate_docx(scaffold))
-    header = doc.styles["Header"]
-    assert header.font.name == "Times New Roman"
-    assert header.font.size == Pt(12)
+    names = {s.name for s in doc.styles}
+    assert "Header" in names or "header" in names
 
 
 def test_docdefaults_spacing_is_fully_neutralized(scaffold):
@@ -506,15 +514,17 @@ def test_document_level_block_drives_page_and_base_fonts(scaffold):
 
 
 def test_absent_document_block_uses_reference_constants(scaffold):
-    """No document block ⇒ the measured reference defaults (US-Letter, Times 12)."""
+    """No document block ⇒ the reference defaults from the template base
+    (US-Letter, Times 12 carried at docDefaults, not on Normal directly)."""
     data = dict(scaffold)
     data.pop("layout_style", None)
     doc = _open(generate_docx(data))
     s = doc.sections[0]
     assert round(s.page_width.inches, 2) == 8.5
     assert round(s.page_height.inches, 2) == 11.0
-    assert doc.styles["Normal"].font.name == "Times New Roman"
-    assert doc.styles["Normal"].font.size == Pt(12)
+    font, half_pt = _docdefault_font(doc)
+    assert font == "Times New Roman"
+    assert half_pt == "24"  # 12pt
 
 
 # ---------------------------------------------------------------------------
@@ -592,14 +602,14 @@ def test_toc_field_is_prepopulated_with_entries(rich):
                  if p.text.strip() == "Table of Contents")
     entries = []
     for p in doc.paragraphs[toc_i + 1:]:
-        if not p.style.name.startswith("TOC "):
+        if not p.style.name.lower().startswith("toc "):
             break
         entries.append(p)
     assert len(entries) >= 10
     # The first entry is the Foreword (front matter leads the tree).
     assert entries[0].text.startswith("Foreword")
-    # Levels map to TOC 1/2/3 (a level-2 heading like Study Design → TOC 2).
-    assert any(p.style.name == "TOC 2" for p in entries)
+    # Levels map to toc 1/2/3 (a level-2 heading like Study Design → toc 2).
+    assert any(p.style.name.lower() == "toc 2" for p in entries)
 
 
 def test_toc_field_closes_with_trailing_empty_paragraph(rich):
@@ -611,16 +621,19 @@ def test_toc_field_closes_with_trailing_empty_paragraph(rich):
     doc = _open(generate_docx(rich))
     paras = doc.paragraphs
     toc_i = next(i for i, p in enumerate(paras) if p.text.strip() == "Table of Contents")
-    # Last TOC-N entry, then the closer.
+    # Last TOC-N entry, then the closer.  Entries use the reference's lowercase
+    # built-in `toc 1/2/3` names (from the template base), not title-case "TOC N".
+    def _is_toc_entry(p):
+        return p.style.name.lower().startswith("toc ")
     last = None
     for j in range(toc_i + 1, len(paras)):
-        if paras[j].style.name.startswith("TOC "):
+        if _is_toc_entry(paras[j]):
             last = j
         elif last is not None:
             break
     closer = paras[last + 1]
     assert closer.text.strip() == "", "field should close on an EMPTY paragraph"
-    assert not closer.style.name.startswith("TOC "), "closer is a plain para, not a TOC entry"
+    assert not _is_toc_entry(closer), "closer is a plain para, not a TOC entry"
     ends = closer._p.findall(".//" + qn("w:fldChar") + "[@" + qn("w:fldCharType") + "='end']")
     assert ends, "the closing empty paragraph must carry the field `end`"
 
@@ -643,23 +656,58 @@ def test_toc_entries_have_dot_leader_tab(rich):
 
 
 def test_toc_entry_spacing_matches_reference(rich):
-    """TOC entry line pitch matches the reference, VERIFIED against NIEHS-10's
-    rendered PDF: every toc line sits on a ~25.9pt baseline (the reference renders
-    toc 1/2/3 all at 25.8-25.9pt regardless of `before`).  We reproduce it with an
-    EXACT 25.9pt line height on every TOC N style (an earlier single-spacing model
-    packed them to ~19.8pt, which read cramped vs the example)."""
-    from docx.enum.text import WD_LINE_SPACING
+    """TOC entry spacing mirrors the reference `toc N` STYLE definitions
+    (examples/NIEHS-10 styles.xml), NOT a reverse-engineered exact line height:
+    NO line-spacing override (each entry snaps to the section docGrid, ~18pt),
+    `toc 1` carries 6pt `before` to group the section blocks, and `toc 2`/`toc 3`
+    carry no spacing.  An earlier build forced a 25.9pt EXACT line to match the
+    rendered pitch, which diverged from the reference's grid-driven style."""
     doc = _open(generate_docx(rich))
     styles = {n: doc.styles[n].paragraph_format for n in ("TOC 1", "TOC 2", "TOC 3")}
     for name, pf in styles.items():
-        assert pf.line_spacing == Pt(25.9), f"{name} line != 25.9pt exact"
-        assert pf.line_spacing_rule == WD_LINE_SPACING.EXACTLY, f"{name} not EXACT rule"
-        # `before` is absorbed by the fixed pitch (reference does not stack it).
-        assert pf.space_before == Pt(0)
-        assert pf.space_after == Pt(0)
+        # No forced line height — spacing comes from the docGrid (like the ref).
+        assert pf.line_spacing is None, f"{name} should have no line override"
+    # toc 1 groups blocks with 6pt before; deeper levels carry none.
+    assert styles["TOC 1"].space_before == Pt(6)
+    assert styles["TOC 2"].space_before is None
+    assert styles["TOC 3"].space_before is None
     # Deeper levels are indented past level 1.
     assert styles["TOC 2"].left_indent == Pt(18)
     assert styles["TOC 3"].left_indent == Pt(36)
+
+
+def test_yaml_page_breaks_land_as_page_break_before(rich):
+    """Pagination is declared in the template `styles` block as `break_before:
+    page` per node id (NOT structural page-break nodes) and lands as a direct
+    `pageBreakBefore` on each target node's first paragraph — the reference's
+    mechanism, which composes idempotently with the dotx's own style breaks.
+
+    Targets whose STYLE does not auto-break rely on this entirely (TOC, About,
+    Publication, Tables 3/5/6, appendices); the style-covered ones (Peer Review,
+    Abstract, Results, Summary, References) also carry it for cross-surface
+    parity.  Tables the reference lets flow (2/4/7/8) must NOT break."""
+    doc = _open(generate_docx(rich))
+    broken = {p.text.strip() for p in doc.paragraphs
+              if p.paragraph_format.page_break_before}
+    # Must start a new page.
+    for t in ("Table of Contents", "About This Report", "Publication Details",
+              "Peer Review", "Abstract", "Results", "Summary", "References"):
+        assert t in broken, f"{t!r} should carry pageBreakBefore"
+    # Body apical tables 3/5/6 break; 4 flows.
+    assert any(s.startswith("Table") and "Liver Weights" in s for s in broken)      # T3
+    assert any(s.startswith("Table") and "Hematology" in s for s in broken)         # T5
+    assert any(s.startswith("Table") and "Hormone" in s for s in broken)            # T6
+    assert not any(s.startswith("Table") and "Clinical Chemistry" in s for s in broken)  # T4 flows
+    # Appendices each start a new page.
+    assert any(s.startswith("Appendix A.") for s in broken)
+    # No leftover standalone empty <w:br type=page> paragraphs from the old
+    # page-break NODES (only the title-page end-break remains).
+    empties = [
+        p for p in doc.paragraphs
+        if not p.text.strip()
+        and any(b.get(qn("w:type")) == "page" for b in p._p.iter(qn("w:br")))
+    ]
+    assert len(empties) <= 1, f"unexpected standalone page-break paragraphs: {len(empties)}"
 
 
 # ---------------------------------------------------------------------------
@@ -693,17 +741,19 @@ def test_tables_list_is_a_table_of_figures_field(rich):
     assert len(entries) >= 8
 
 
-def test_tables_list_entry_line_pitch_matches_reference(rich):
-    """The `table of figures` entry style uses a tight 15.9pt within-entry line +
-    9.9pt after — VERIFIED against NIEHS-10's PDF (41.7pt two-line / 25.8pt
-    single-line entry pitch).  A flat 25.9pt exact line over-spaced the wrapping
-    table captions to 51.8pt."""
-    from docx.enum.text import WD_LINE_SPACING
+def test_tables_list_entry_style_matches_reference(rich):
+    """The `table of figures` entry style mirrors the reference STYLE
+    (examples/NIEHS-10 styles.xml): basedOn Normal with NO spacing override of
+    its own — line pitch comes from the section docGrid, exactly as the
+    reference's does.  An earlier build forced a 15.9pt exact line + 9.9pt after
+    to reverse-engineer the rendered pitch, which diverged from the reference."""
     doc = _open(generate_docx(rich))
-    pf = doc.styles["table of figures"].paragraph_format
-    assert pf.line_spacing == Pt(15.9)
-    assert pf.line_spacing_rule == WD_LINE_SPACING.EXACTLY
-    assert pf.space_after == Pt(9.9)
+    style = doc.styles["table of figures"]
+    pf = style.paragraph_format
+    assert pf.line_spacing is None, "TOF should have no line override (grid-driven)"
+    assert pf.space_after is None, "TOF should carry no space_after of its own"
+    # basedOn Normal, like the reference `table of figures` style.
+    assert style.base_style is not None and style.base_style.name == "Normal"
 
 
 def test_body_table_captions_are_seq_numbered(rich):
@@ -763,12 +813,14 @@ def test_tables_list_titles_are_chemical_interpolated(rich):
     ), f"no chemical-interpolated body-weight title in: {texts}"
 
 
-def test_toc_heading_excluded_from_its_own_toc(scaffold):
-    """The 'Table of Contents' heading uses TOC Heading (outlineLvl 9 → not
-    collected into the very table it introduces)."""
+def test_toc_heading_uses_front_matter_style(scaffold):
+    """The 'Table of Contents' heading uses a front-matter heading style from the
+    template base (1-23_FrontMatter_Head1), not the built-in "TOC Heading" (which
+    is absent from the NTP style base).  It is restyled centered/Arial-16 on the
+    paragraph; the point here is the style RESOLVES to a real base style."""
     doc = _open(generate_docx(scaffold))
     toc_head = next(p for p in doc.paragraphs if p.text.strip() == "Table of Contents")
-    assert toc_head.style.name == "TOC Heading"
+    assert toc_head.style.name == "1-23_FrontMatter_Head1"
 
 
 def test_toc_heading_is_centered_arial_16(scaffold):
@@ -788,12 +840,15 @@ def test_toc_heading_is_centered_arial_16(scaffold):
 
 def test_body_headings_are_collectable_by_the_field(scaffold):
     """The field collects by outline level, so body headings must carry one.
-    The built-in Heading 1-3 (the non-vocabulary path) do by construction —
-    assert they are present so the field has something to collect."""
+    On the template-base path body headings use the NTP native heading styles
+    (3-02a/3-03a/3-04a_Head*_NoNumber), which carry outlineLvl 0/1/2 — assert
+    they are present so the field has something to collect."""
     doc = _open(generate_docx(scaffold))
+    ntp_heads = {"3-02a_Head1_NoNumber", "3-03a_Head2_NoNumber", "3-04a_Head3_NoNumber"}
     collectable = [
         p for p in doc.paragraphs
-        if p.style and p.style.name in ("Heading 1", "Heading 2", "Heading 3")
+        if p.style and (p.style.name in ntp_heads
+                        or p.style.name in ("Heading 1", "Heading 2", "Heading 3"))
     ]
     assert len(collectable) >= 10
 

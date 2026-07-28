@@ -96,13 +96,6 @@
       "type": "front-matter"
     },
     {
-      "id": "break-before-toc",
-      "level": 0,
-      "region": "front",
-      "title": "",
-      "type": "page-break"
-    },
-    {
       "id": "toc",
       "level": 0,
       "region": "front",
@@ -117,13 +110,6 @@
       "type": "tables-list"
     },
     {
-      "id": "break-after-tables-list",
-      "level": 0,
-      "region": "front",
-      "title": "",
-      "type": "page-break"
-    },
-    {
       "data_key": "about_report",
       "id": "about",
       "level": 1,
@@ -132,26 +118,12 @@
       "type": "front-matter"
     },
     {
-      "id": "break-before-peer-review",
-      "level": 0,
-      "region": "front",
-      "title": "",
-      "type": "page-break"
-    },
-    {
       "data_key": "peer_review",
       "id": "peer-review",
       "level": 1,
       "region": "front",
       "title": "Peer Review",
       "type": "front-matter"
-    },
-    {
-      "id": "break-after-peer-review",
-      "level": 0,
-      "region": "front",
-      "title": "",
-      "type": "page-break"
     },
     {
       "data_key": "publication_details",
@@ -168,13 +140,6 @@
       "region": "front",
       "title": "Acknowledgments",
       "type": "front-matter"
-    },
-    {
-      "id": "break-before-abstract",
-      "level": 0,
-      "region": "front",
-      "title": "",
-      "type": "page-break"
     },
     {
       "data_key": "abstract",
@@ -637,7 +602,61 @@
     "paragraphs": []
   },
   "issn": "2768-5632",
-  "layout_style": {},
+  "layout_style": {
+    "instances": {
+      "about": {
+        "break_before": "page"
+      },
+      "abstract": {
+        "break_before": "page"
+      },
+      "appendix-a": {
+        "break_before": "page"
+      },
+      "appendix-b": {
+        "break_before": "page"
+      },
+      "appendix-c": {
+        "break_before": "page"
+      },
+      "appendix-d": {
+        "break_before": "page"
+      },
+      "appendix-e": {
+        "break_before": "page"
+      },
+      "appendix-f": {
+        "break_before": "page"
+      },
+      "peer-review": {
+        "break_before": "page"
+      },
+      "publication": {
+        "break_before": "page"
+      },
+      "references": {
+        "break_before": "page"
+      },
+      "results": {
+        "break_before": "page"
+      },
+      "summary": {
+        "break_before": "page"
+      },
+      "table-hematology": {
+        "break_before": "page"
+      },
+      "table-hormones": {
+        "break_before": "page"
+      },
+      "table-organ-weight": {
+        "break_before": "page"
+      },
+      "toc": {
+        "break_before": "page"
+      }
+    }
+  },
   "methods": {
     "paragraphs": [
       "Methods flat para."

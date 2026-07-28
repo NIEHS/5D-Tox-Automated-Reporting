@@ -40,36 +40,28 @@ document:
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
+  # Page breaks are NOT structural nodes — they are declared in the `styles`
+  # block below as `break_before: page` on the node that should start a new page
+  # (see the header note there).  This keeps pagination a single surface-agnostic
+  # spec that composes idempotently with the dotx's own style breaks on docx.
   - id: foreword
     type: front-matter
     title: Foreword
     data_key: foreword
-  - id: break-before-toc
-    type: page-break
-    title: ""
   - id: toc
     type: toc
     title: Table of Contents
   - id: tables-list
     type: tables-list
     title: Tables
-  - id: break-after-tables-list
-    type: page-break
-    title: ""
   - id: about
     type: front-matter
     title: About This Report
     data_key: about_report
-  - id: break-before-peer-review
-    type: page-break
-    title: ""
   - id: peer-review
     type: front-matter
     title: Peer Review
     data_key: peer_review
-  - id: break-after-peer-review
-    type: page-break
-    title: ""
   - id: publication
     type: front-matter
     title: Publication Details
@@ -78,9 +70,6 @@ document:
     type: front-matter
     title: Acknowledgments
     data_key: acknowledgments
-  - id: break-before-abstract
-    type: page-break
-    title: ""
   - id: abstract
     type: front-matter
     title: Abstract
@@ -613,3 +602,47 @@ charts: []
 #   instances:                      # applied to ONE node, keyed by DocNode id
 #     background:
 #       font_size: "10pt"
+
+# ---------------------------------------------------------------------------
+# PAGE BREAKS — the canonical, surface-agnostic pagination spec
+# ---------------------------------------------------------------------------
+# Every intended page break is declared here as `break_before: page` on the node
+# that should START a new page (keyed by DocNode id under `instances`).  This is
+# the SINGLE source of truth for pagination across all three surfaces:
+#   - docx  -> pageBreakBefore on the node's first paragraph;
+#   - LaTeX -> \clearpage before the node;
+#   - HTML  -> break-before:page.
+# We deliberately use break_before (a BOOLEAN toggle), never a standalone page
+# break, so a break declared here COMPOSES IDEMPOTENTLY with a docx dotx style
+# that already carries pageBreakBefore (both -> ONE boundary, no blank page).
+# So the list below enumerates EVERY reference break — including ones the docx
+# dotx auto-breaks via its heading styles (peer-review, abstract, results,
+# summary, references) — so LaTeX/HTML (which have no style-break template)
+# reproduce the same pagination.  The break set was verified against
+# examples/NIEHS-10 PFHxSAm_Final.docx (which tables/appendices start a page).
+styles:
+  instances:
+    # Front matter — new page before each of these sections.
+    toc: { break_before: page }
+    about: { break_before: page }
+    peer-review: { break_before: page }
+    publication: { break_before: page }
+    abstract: { break_before: page }
+    # Body — Results/Summary/References head their own page (docx dotx also
+    # auto-breaks these via 3-02a_Head1_NoNumber; listed for LaTeX/HTML parity).
+    results: { break_before: page }
+    summary: { break_before: page }
+    references: { break_before: page }
+    # Body apical tables that the reference puts on their own page (Tables 3/5/6;
+    # Tables 2/4/7/8 flow after prose, so NO break on those nodes).
+    table-organ-weight: { break_before: page }
+    table-hematology: { break_before: page }
+    table-hormones: { break_before: page }
+    # Appendices — each starts a new page (reference breaks before every
+    # appendix head; A/C/E carry authored bodies, B/D/F their data tables).
+    appendix-a: { break_before: page }
+    appendix-b: { break_before: page }
+    appendix-c: { break_before: page }
+    appendix-d: { break_before: page }
+    appendix-e: { break_before: page }
+    appendix-f: { break_before: page }

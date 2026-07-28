@@ -35,9 +35,11 @@ def generated_docx_path() -> str:
     os.unlink(path)
 
 
-def test_extract_returns_the_three_layers(generated_docx_path):
+def test_extract_returns_the_expected_layers(generated_docx_path):
     cfg = dse.extract_styles(generated_docx_path)
-    assert set(cfg) <= {"defaults", "types", "document"}
+    # The generated docx is now built on the NTP template base, which carries
+    # title-page styles too, so a `title_page` layer is also extracted.
+    assert set(cfg) <= {"defaults", "types", "document", "title_page"}
     assert "defaults" in cfg and "document" in cfg
 
 
@@ -50,10 +52,11 @@ def test_defaults_capture_the_body_font(generated_docx_path):
 
 def test_types_capture_heading_font_and_size(generated_docx_path):
     cfg = dse.extract_styles(generated_docx_path)
-    # Heading 1 → the level-1 body types at Arial Bold 17pt.
+    # Heading 1 → the level-1 body types at Arial Bold, sized from the NTP
+    # template base (16pt in the reference's Heading 1 chain).
     narrative = cfg["types"]["narrative"]
     assert narrative["font"] == "Arial"
-    assert narrative["font_size"] == "17pt"
+    assert narrative["font_size"] == "16pt"
     assert narrative["weight"] == "bold"
 
 
@@ -289,21 +292,22 @@ def test_coverage_finds_all_expected_styles_in_ntp_template():
     assert len(report["unmapped_with_props"]) > 50
 
 
-def test_coverage_reports_missing_expected_styles(generated_docx_path):
-    """The generated scaffold docx has Normal/Heading but NOT the NTP 1-NN family,
-    so those roles report missing — the exact signal a mismatched new template
-    would give."""
+def test_coverage_reports_full_ntp_library(generated_docx_path):
+    """The generated docx is now built on the NTP template base, so it carries the
+    FULL NTP style library — Normal AND the 1-NN family are all present, nothing
+    missing (the refactor's whole point: the reference styles come through
+    verbatim rather than being re-derived)."""
     report = dse.coverage_report(generated_docx_path)
     by_name = {r["style"]: r for r in report["expected"]}
     assert by_name["Normal"]["present"] is True
-    assert by_name["1-03_Report_Title"]["present"] is False
-    assert report["missing"] > 0
+    assert by_name["1-03_Report_Title"]["present"] is True
+    assert report["missing"] == 0
 
 
 def test_format_coverage_renders_marks(generated_docx_path):
     text = dse.format_coverage(dse.coverage_report(generated_docx_path))
     assert "expected styles present" in text
-    assert "MISSING" in text  # the absent 1-NN roles show the missing mark
+    assert "(0 missing)" in text  # full NTP coverage from the template base
 
 
 def test_coverage_cli_flag(generated_docx_path, capsys):

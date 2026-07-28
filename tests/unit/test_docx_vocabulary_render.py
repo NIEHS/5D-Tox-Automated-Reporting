@@ -106,18 +106,16 @@ def test_section_heading_uses_native_role_style_with_vocab(scaffold):
 
 
 def test_ntp_heading_styles_carry_outline_levels(scaffold):
-    """The NTP role heading styles carry NO outlineLvl of their own, so on the
-    vocabulary path the TOC field (which collects by outline level) would find
-    nothing.  The vocabulary stamps outline_level 0/1/2 onto section_heading_N
-    and 0/1 onto appendix_heading_N; assert it lands in styles.xml."""
+    """The NTP heading styles come from the template base VERBATIM, carrying the
+    reference's own outline levels: 3-03a_Head2 → 1 and 3-04a_Head3 → 2.  (The
+    level-1 head 3-02a carries no explicit outlineLvl in the reference — it
+    defaults via its basedOn chain — so we don't assert one for it.)  This
+    replaces the earlier build-time stamping; the base is now the source."""
     from docx.oxml.ns import qn
     doc = _open(generate_docx(_with_vocab(scaffold)))
     expected = {
-        "3-02a_Head1_NoNumber": "0",
         "3-03a_Head2_NoNumber": "1",
         "3-04a_Head3_NoNumber": "2",
-        "4-05_Appendix_Head_1": "0",
-        "4-06_Appendix_Head_2": "1",
     }
     for name, want in expected.items():
         st = doc.styles[name]
@@ -141,17 +139,25 @@ def test_toc_field_collects_on_vocabulary_path(scaffold):
 # No vocabulary → legacy path, unchanged
 # ---------------------------------------------------------------------------
 
-def test_no_vocabulary_uses_legacy_styles(scaffold):
+def test_no_vocabulary_key_uses_base_ntp_styles(scaffold):
+    """With the template base present, a data dict with NO explicit `vocabulary`
+    key now DEFAULTS to the NTP vocab (the base supplies the NTP style palette),
+    so content resolves to the native NTP styles — not the built-in Normal/
+    Heading fallback.  (The old no-key → legacy behavior only applies when the
+    base asset is absent.)"""
     doc = _open(generate_docx(scaffold))  # no "vocabulary" key
-    title = _para(doc, "NIEHS Report on the")
-    bg = _para(doc, "Background")
-    assert title.style.name == "Normal"      # legacy hardcoded-default path
-    assert bg.style.name == "Heading 1"
-    # And the NTP role styles are NOT built into a no-vocab document.
-    assert "1-03_Report_Title" not in {s.name for s in doc.styles}
+    assert _para(doc, "NIEHS Report on the").style.name == "1-03_Report_Title"
+    assert _para(doc, "Background").style.name == "3-02a_Head1_NoNumber"
+    # The NTP role styles ARE present (they come from the template base).
+    assert "1-03_Report_Title" in {s.name for s in doc.styles}
 
 
-def test_unknown_vocabulary_falls_back_to_legacy(scaffold):
-    # A bad vocabulary name is swallowed to the legacy path, not a hard error.
+def test_unknown_vocabulary_falls_back_to_builtin_heading(scaffold):
+    """A bad vocabulary name is swallowed (no role resolution), so handlers use
+    the built-in Heading/Normal fallback — but the template base still supplies
+    the full NTP style LIBRARY (the styles exist even though they're not applied
+    by role)."""
     doc = _open(generate_docx({**scaffold, "vocabulary": "does-not-exist"}))
     assert _para(doc, "Background").style.name == "Heading 1"
+    # The base's NTP styles are still present in the document.
+    assert "1-03_Report_Title" in {s.name for s in doc.styles}

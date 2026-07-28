@@ -45,6 +45,7 @@ from __future__ import annotations
 import base64
 import re
 from io import BytesIO
+from pathlib import Path
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -539,8 +540,14 @@ def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
     section_heading/Normal.  `narrative` nodes delegating here keep the generic
     heading (they are body sections, not front matter)."""
     heading_role = body_role = None
-    if node.node_type == "front-matter" and data.get("_vocabulary") is not None:
-        heading_role, body_role = front_matter_roles_for(node.data_key)
+    if data.get("_vocabulary") is not None:
+        if node.node_type == "front-matter":
+            heading_role, body_role = front_matter_roles_for(node.data_key)
+        else:
+            # `narrative` body sections (Background / Summary / References …) keep
+            # the generic section heading, but their prose is the canonical NTP
+            # body paragraph style (0-03_Paragraph), not Normal.
+            body_role = "body_para"
 
     heading_style = _role_style_name(data, heading_role) if heading_role else None
     if heading_style and node.title and heading_style in {s.name for s in doc.styles}:
@@ -579,7 +586,9 @@ def _render_methods_subsection(doc: Document, node: DocNode, data: dict) -> None
     """M&M subsection — prose + optional inline table, matched by methods_key."""
     _add_heading(doc, node.level, node.title, data)
     paragraphs, inline = methods_subsection_content(node, data)
-    added = _add_paragraphs(doc, paragraphs) if has_paragraph_content(paragraphs) else False
+    body_style = _pstyle_or_default(doc, data, "body_para")
+    added = (_add_paragraphs(doc, paragraphs, style=body_style)
+             if has_paragraph_content(paragraphs) else False)
     if inline is not None:
         _render_inline_table(doc, inline)
         added = True
@@ -645,29 +654,30 @@ _TOF_INSTR = r'TOC \h \z \t "0-25_Table_Title" \c'
 # after between entries → 41.7pt two-line / 25.8pt single-line entry pitch.
 _TOF_ENTRY_STYLE = "table of figures"
 _TOF_RIGHT_TAB_PT = 468
-_TOF_LINE_PT = 15.9
-_TOF_AFTER_PT = 9.9
 
 
 def _ensure_tof_entry_style(doc: Document):
-    """Create (once) the `table of figures` entry style — basedOn Normal with a
-    right dot-leader tab at the text-block edge (matching NIEHS-10)."""
+    """Create (once) the `table of figures` entry style — mirroring the reference
+    `table of figures` STYLE (examples/NIEHS-10 styles.xml): basedOn Normal, with
+    a right dot-leader tab at the text-block edge, and NO spacing override of its
+    own (line pitch comes from the section docGrid, ~18pt, exactly as the
+    reference's does).  An earlier build FORCED a tight 15.9pt exact line + 9.9pt
+    after to reverse-engineer the rendered pitch, but that diverged from the
+    reference's actual grid-driven style, so it's removed."""
     try:
         return doc.styles[_TOF_ENTRY_STYLE]
     except KeyError:
         from docx.enum.style import WD_STYLE_TYPE
         style = doc.styles.add_style(_TOF_ENTRY_STYLE, WD_STYLE_TYPE.PARAGRAPH)
+        # basedOn Normal (the reference's model) so it inherits Normal's font +
+        # grid-driven spacing rather than carrying its own line override.
+        try:
+            style.base_style = doc.styles["Normal"]
+        except KeyError:
+            pass
         style.font.name = _BODY_FONT
         style.font.size = Pt(_BODY_PT)
         spf = style.paragraph_format
-        # Match the reference `table of figures` rhythm (measured from NIEHS-10's
-        # PDF): a TIGHT 15.9pt line WITHIN an entry (captions wrap to 2+ lines) plus
-        # ~9.9pt AFTER between entries.  That yields the reference's 41.7pt two-line
-        # entry and 25.8pt single-line pitch.  A flat 25.9pt exact line (like the
-        # single-line TOC) over-spaced the wrapping table captions to 51.8pt.
-        spf.line_spacing = Pt(_TOF_LINE_PT)
-        spf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-        spf.space_after = Pt(_TOF_AFTER_PT)
         spf.tab_stops.add_tab_stop(
             Pt(_TOF_RIGHT_TAB_PT), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS,
         )
@@ -760,12 +770,16 @@ def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
     We still set <w:updateFields> (see _mark_fields_dirty) so Word offers to
     refresh; the cached content is what guarantees a non-empty TOC either way.
 
-    The heading uses "TOC Heading" (outlineLvl 9 → excluded from its own TOC),
-    restyled to the shared reference front-matter heading look (Arial 16pt bold,
-    centered, 12pt after — see _style_front_matter_heading).  The built-in TOC
-    Heading is basedOn Heading 1 (left, 14pt), so we override on the paragraph.
+    The heading is a front-matter heading (restyled to the shared reference look:
+    Arial 16pt bold, centered, 12pt after — see _style_front_matter_heading).  We
+    resolve its base paragraph style through _pstyle_or_default so it uses a style
+    that EXISTS in the doc (the NTP `1-23_FrontMatter_Head1` on the vocab/base
+    path; plain Normal otherwise) — the old hardcoded "TOC Heading" name is a Word
+    built-in absent from the NTP style base.
     """
-    head = doc.add_paragraph(_clean(node.title), style="TOC Heading")
+    style_name = _pstyle_or_default(doc, data, "frontmatter_head1")
+    head = (doc.add_paragraph(_clean(node.title), style=style_name)
+            if style_name else doc.add_paragraph(_clean(node.title)))
     _style_front_matter_heading(head)
     entries = data.get("toc_entries") or []
     _add_toc_field(doc, entries)
@@ -785,9 +799,10 @@ _TOC_RIGHT_TAB_PT = 468
 _FRONT_HEADING_PT = 16
 _FRONT_HEADING_AFTER_PT = 12
 
-# TOC/TOF entry baseline pitch (points).  The reference renders every toc line at
-# ~25.9pt regardless of `before`; an EXACT line height reproduces that rhythm.
-_TOC_LINE_PT = 25.9
+# The reference `toc 1` style adds 6pt (spacing before=120 twips) before each
+# top-level entry to group the section blocks; `toc 2`/`toc 3` carry no spacing.
+# Line pitch itself comes from the section's docGrid (18pt), not a line override.
+_TOC1_BEFORE_PT = 6
 
 
 def _style_front_matter_heading(para) -> None:
@@ -904,16 +919,16 @@ def _toc_entry_paragraph(doc: Document, level: int):
         style.font.name = _BODY_FONT
         style.font.size = Pt(_BODY_PT)
         spf = style.paragraph_format
-        # The reference renders EVERY toc line at a ~25.9pt baseline pitch (measured
-        # from NIEHS-10's PDF: toc 1/2/3 all 25.8-25.9pt, independent of `before`).
-        # Our lines packed at ~19.8pt (single 12pt) and read cramped vs the example.
-        # Match it with an EXACT line height; `before` then no longer stacks (the
-        # reference absorbs it into the fixed pitch), so we drop the per-level
-        # `before` and let the exact line carry the rhythm.
-        spf.line_spacing = Pt(_TOC_LINE_PT)
-        spf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
-        spf.space_before = Pt(0)
-        spf.space_after = Pt(0)
+        # Mirror the reference `toc N` STYLE definitions exactly (examples/
+        # NIEHS-10 styles.xml): NO line-spacing override — every entry snaps to
+        # the section's docGrid (linePitch 360 = 18pt), which is what gives the
+        # reference its even line rhythm.  `toc 1` adds 6pt `before` (spacing
+        # before=120) to group each top-level block; `toc 2`/`toc 3` carry NO
+        # spacing at all.  An earlier build FORCED an exact 25.9pt line here to
+        # reverse-engineer the rendered pitch — but that diverged from the
+        # reference's actual style (grid-driven), so it's removed.
+        if level == 1:
+            spf.space_before = Pt(_TOC1_BEFORE_PT)
         if level > 1:
             spf.left_indent = Pt((level - 1) * 18)
     para = doc.add_paragraph(style=style)
@@ -929,7 +944,7 @@ def _render_narrative_tables(doc: Document, node: DocNode, data: dict) -> None:
     _add_heading(doc, node.level, node.title, data)
     paragraphs = unified_narrative_paragraphs(node, data)
     if has_paragraph_content(paragraphs):
-        _add_paragraphs(doc, paragraphs)
+        _add_paragraphs(doc, paragraphs, style=_pstyle_or_default(doc, data, "body_para"))
     else:
         _add_pending(doc, f"Narrative pending: {node.title}")
 
@@ -972,7 +987,7 @@ def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
     """Apical Endpoint BMD Summary — prose + one row per endpoint."""
     plan = bmd_summary_plan(node, data)
     _add_heading(doc, node.level, node.title, data)
-    prose = _add_paragraphs(doc, plan.paragraphs)
+    prose = _add_paragraphs(doc, plan.paragraphs, style=_pstyle_or_default(doc, data, "body_para"))
     if plan.rows is None:
         if not prose:
             _add_pending(doc, f"BMD summary endpoints pending: {node.title}")
@@ -984,7 +999,8 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     """Gene Set / Gene BMD section — per-(organ, sex) subsections."""
     role = genomics_role(node)
     _add_heading(doc, node.level, node.title, data)
-    intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data))
+    _body_style = _pstyle_or_default(doc, data, "body_para")
+    intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data), style=_body_style)
 
     entries = genomics_entries(node, data)
     if not entries:
@@ -1235,9 +1251,13 @@ def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
                 pf.space_before = Pt(base["before"])
             if "after" in base:
                 pf.space_after = Pt(base["after"])
-            role_style = _resolve_title_page_role(layout_cfg, role)
-            if role_style:
-                _apply_paragraph_style(para, role_style)
+        # A styles.title_page per-role config override ALWAYS applies on top —
+        # on the base/vocab path it overlays the NTP named style, on the legacy
+        # path it overlays the measured defaults above.  So a user can still
+        # re-font/re-size an individual title-page role regardless of the base.
+        role_style = _resolve_title_page_role(layout_cfg, role)
+        if role_style:
+            _apply_paragraph_style(para, role_style)
 
     # The title page is a self-contained front page: always end it so the next
     # node (Foreword) starts fresh, regardless of the active tree or whether a
@@ -1681,6 +1701,18 @@ def _role_style_name(data: dict, role: str) -> "str | None":
     return _vocab.resolve_bindings(vocab, role)["docx"]
 
 
+def _pstyle_or_default(doc: Document, data: dict, role: str) -> "str | None":
+    """Resolve a vocabulary ``role`` to a Word style NAME that actually EXISTS in
+    ``doc``, or None when it can't (no vocab, unknown role, or the bound style is
+    absent from the style base).  Callers apply the returned name as a pStyle and
+    treat None as "use the default (Normal)" — so a missing style degrades to
+    plain body text instead of raising KeyError (the old hardcoded-name trap)."""
+    name = _role_style_name(data, role)
+    if name and name in {s.name for s in doc.styles}:
+        return name
+    return None
+
+
 def _build_vocabulary_styles(doc: Document, vocab) -> None:
     """Emit the vocabulary's type graph as native Word paragraph styles (ADR-0010
     Phase 2): one <w:style> per type, styleId/name = its docx binding, basedOn =
@@ -1894,6 +1926,81 @@ def _configure_section(section, running_header: str, document: dict | None = Non
         _add_page_number_field(footer_para)
 
 
+# The styles-only base docx (built by _build_docx_base.py from the NIEHS-10
+# reference): a full 386-style NTP library with an empty body.  Opening it as the
+# base — instead of a blank Document() whose python-docx defaults we'd re-derive
+# in Python — makes styles/docDefaults/numbering/theme/sectPr come from the
+# reference VERBATIM.  Absent ⇒ fall back to a blank Document() + the
+# programmatic style skeleton (the legacy path), so generation never hard-breaks.
+_DOCX_BASE_PATH = Path(__file__).with_name("assets") / "templates" / "niehs-10-base.docx"
+
+# The vocabulary applied by default on the docx surface when the style base is
+# used: role → NTP named style (3-02a_Head1_NoNumber, 0-03_Paragraph, …).  The
+# base already CONTAINS these styles, so we only need the vocab for role→name
+# resolution in the content path, not to build styles.
+_DEFAULT_DOCX_VOCAB = "ntp-report"
+
+
+def _open_base_document() -> "tuple[Document, bool]":
+    """Open the NTP styles-only base docx; return (doc, used_base).
+
+    used_base=False when the asset is absent — the caller then builds the legacy
+    programmatic style skeleton on the blank doc instead.  The base's single
+    placeholder body paragraph is cleared here so the content walk starts clean;
+    its trailing sectPr (page geometry / docGrid) is preserved."""
+    if _DOCX_BASE_PATH.exists():
+        try:
+            doc = Document(str(_DOCX_BASE_PATH))
+            _clear_base_body(doc)
+            return doc, True
+        except Exception:
+            # A corrupt/unreadable base must never break generation — fall back.
+            pass
+    return Document(), False
+
+
+def _clear_base_body(doc: Document) -> None:
+    """Remove the base's placeholder body content, preserving the trailing sectPr
+    (page geometry lives there) so the section is well-formed for the walk."""
+    body = doc.element.body
+    sectPr = body.find(qn("w:sectPr"))
+    for child in list(body):
+        if child is sectPr:
+            continue
+        body.remove(child)
+
+
+def _apply_document_font_overrides(doc: Document, document: dict) -> None:
+    """On the template-base path, honor the styles.document block's base-FONT
+    overrides (default_font / default_font_size / header_font / header_font_size)
+    by setting them on Normal + Header.  The base already supplies the reference
+    fonts, so this ONLY runs when the caller explicitly overrides them — geometry
+    overrides are handled separately by _configure_section.  A no-op when the
+    document block names no fonts (the common case), so the base's own fonts win."""
+    if not document:
+        return
+    body_font = (document.get("default_font") or "").strip()
+    body_size = _length_to_pt(document.get("default_font_size"))
+    header_font = (document.get("header_font") or "").strip()
+    header_size = _length_to_pt(document.get("header_font_size"))
+    if body_font or body_size:
+        normal = doc.styles["Normal"]
+        if body_font:
+            normal.font.name = body_font
+        if body_size:
+            normal.font.size = Pt(body_size)
+    if header_font or header_size:
+        try:
+            header = doc.styles["Header"]
+        except KeyError:
+            header = None
+        if header is not None:
+            if header_font:
+                header.font.name = header_font
+            if header_size:
+                header.font.size = Pt(header_size)
+
+
 def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     """
     Walk the document tree + data and produce a complete .docx as bytes.
@@ -1917,18 +2024,34 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     # reads, under its own "document" key.
     document = (data.get("layout_style") or {}).get("document") or {}
 
-    doc = Document()
-    _build_style_skeleton(doc, document)
-    # Opt-in role-driven styling (ADR-0010 Phase 2): when the data dict names a
-    # vocabulary, build its type graph as native Word styles so handlers can apply
-    # them by pStyle and a co-author sees the real NTP palette.  Absent ⇒ the
-    # legacy per-node styling path, byte-identical to before.
+    # Open the NTP styles-only base (386-style reference library, empty body) so
+    # every style comes from the reference VERBATIM.  When the asset is absent,
+    # fall back to a blank doc + the programmatic style skeleton (legacy path).
+    doc, used_base = _open_base_document()
+    if used_base:
+        # The base supplies the reference fonts; honor an explicit styles.document
+        # font override on top (geometry override is applied in _configure_section).
+        _apply_document_font_overrides(doc, document)
+    else:
+        _build_style_skeleton(doc, document)
+
+    # Role-driven styling (ADR-0010): resolve each role → NTP named style so the
+    # content path applies real pStyles (3-02a_Head1_NoNumber, 0-03_Paragraph, …).
+    # On the BASE path those styles already EXIST in the doc, so we DO NOT rebuild
+    # them from the vocab graph (that would overwrite the reference's authentic
+    # definitions with delta-derived approximations) — the vocab is used ONLY for
+    # role→name resolution.  Default to the NTP vocab when the base is used; a
+    # data-supplied `vocabulary` still wins.  On the legacy path, keep the prior
+    # opt-in behaviour (build styles from the vocab only when explicitly named).
+    if used_base and not data.get("vocabulary"):
+        data = {**data, "vocabulary": _DEFAULT_DOCX_VOCAB}
     vocab = _load_active_vocabulary(data)
     if vocab is not None:
-        _build_vocabulary_styles(doc, vocab)
-        # Stash on a shallow copy so handlers can resolve a role → Word style name
-        # (via _role_style_name) without threading a new parameter.  Copy, don't
-        # mutate the caller's dict.
+        if not used_base:
+            # Legacy path: the blank doc has no NTP styles, so emit them.
+            _build_vocabulary_styles(doc, vocab)
+        # Stash on a shallow copy so handlers resolve a role → Word style name
+        # (via _role_style_name) without threading a new parameter.
         data = {**data, "_vocabulary": vocab}
     front_section = doc.sections[0]
     _configure_section(front_section, running_header, document)

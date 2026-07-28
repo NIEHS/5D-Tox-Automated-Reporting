@@ -704,7 +704,36 @@ def load_session_data(
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
 
+    # ── Per-node layout styling (page breaks, typography) ─────────────
+    # The template's `styles:` block (+ any per-session styles.yaml override) is
+    # the canonical, surface-agnostic per-node style config — including page
+    # breaks declared as `break_before: page` on a node id.  The WEB path wires
+    # this via report_data._resolve_layout_config; the session/export path (this
+    # function) did NOT, so template `styles.instances` breaks were silently
+    # ignored on the docx/Overleaf output.  Resolve it here the same way (global
+    # template ← per-session override), keyed by this session's dtxsid, so all
+    # three surfaces see the same break/typography decisions.
+    data["layout_style"] = _resolve_export_layout_style(dtxsid)
+
     return data
+
+
+def _resolve_export_layout_style(dtxsid: str) -> dict:
+    """The resolved {defaults, types, instances} layout-style config for the
+    export path: the global template `styles:` block merged with an optional
+    per-session `styles.yaml` override (session wins).  Mirrors
+    report_data._resolve_layout_config minus the request-body layer (there is no
+    live request on the export path).  Empty ⇒ {} ⇒ no per-node styling."""
+    from chart_style import deep_merge
+    from document_template import load_layout_style
+    from document_tree import ACTIVE_TEMPLATE
+
+    template_cfg = load_layout_style(ACTIVE_TEMPLATE)
+    session_cfg = None
+    if dtxsid:
+        from document_config import load_session_layout_style
+        session_cfg = load_session_layout_style(dtxsid)
+    return deep_merge(template_cfg, session_cfg)
 
 
 # Appendix B / Table B-1 reconstructs the reference's "Animal Numbers and FASTQ
