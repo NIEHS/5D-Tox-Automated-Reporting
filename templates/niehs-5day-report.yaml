@@ -32,21 +32,17 @@
 document:
 - region: front
   children:
-  - id: cover
-    type: cover
-    title: Cover Page
-    subtype: niehs-5d-tox
   - id: title-page
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
-  - id: toc
-    type: toc
-    title: Table of Contents
   - id: foreword
     type: front-matter
     title: Foreword
     data_key: foreword
+  - id: toc
+    type: toc
+    title: Table of Contents
   - id: tables-list
     type: tables-list
     title: Tables
