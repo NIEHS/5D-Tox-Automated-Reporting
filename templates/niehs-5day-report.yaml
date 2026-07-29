@@ -32,10 +32,10 @@
 document:
 - region: front
   children:
-  - id: cover
-    type: cover
-    title: Cover Page
-    subtype: niehs-5d-tox
+  # No cover page: the NIEHS-10 reference DOCX opens directly on the title page
+  # (the branded page-1 cover in the PDF was a PDF-production artifact, not part
+  # of the source document).  The title page is therefore the first front node
+  # on every surface.
   - id: title-page
     type: title-page
     title: Title Page

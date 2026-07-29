@@ -74,13 +74,6 @@
   "chemical_name": "Test Article",
   "document_tree": [
     {
-      "id": "cover",
-      "level": 0,
-      "region": "front",
-      "title": "Cover Page",
-      "type": "cover"
-    },
-    {
       "id": "title-page",
       "level": 0,
       "region": "front",

@@ -522,6 +522,35 @@ def _add_page_break(doc: Document) -> None:
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
+def _suppress_outline_level(paragraph) -> None:
+    """Force a paragraph to body-text outline level so the Contents field
+    (`TOC \\o "1-3"`, which collects outline levels 1-3) never captures it.
+
+    Some NTP styles carry an outline level via their `basedOn` chain that isn't
+    semantically a document heading: `1-03_Report_Title` → `Base_Heading`
+    (outlineLvl 0) and `1-23_FrontMatter_Head1` (outlineLvl 0, used for the
+    Contents heading itself).  Left alone, a LIVE TOC rebuild sweeps the report
+    title and the "Table of Contents" heading in as the first entries — the
+    reference excludes both (its title uses a headingless style and its Contents
+    heading is `NTP_Contents_Heading`, neither of which has an outline level).
+
+    A paragraph-level `<w:outlineLvl w:val="9"/>` (body text, the OOXML
+    no-outline value) overrides the inherited level for THIS paragraph only,
+    leaving the shared base styles untouched.  Idempotent."""
+    pPr = paragraph._p.get_or_add_pPr()
+    ol = pPr.find(qn("w:outlineLvl"))
+    if ol is None:
+        ol = OxmlElement("w:outlineLvl")
+        # CT_PPr order: outlineLvl sits after numPr/... and before several
+        # run/spacing props; a bare append is tolerated by Word/LibreOffice here,
+        # but insert defensively before its known successors when present.
+        _insert_in_schema_order(
+            pPr, ol,
+            successors=("w:divId", "w:cnfStyle", "w:rPr", "w:sectPr", "w:pPrChange"),
+        )
+    ol.set(qn("w:val"), "9")
+
+
 # ---------------------------------------------------------------------------
 # Per-node-type render handlers — _render_<type>(doc, node, data) -> None
 # ---------------------------------------------------------------------------
@@ -781,6 +810,11 @@ def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
     head = (doc.add_paragraph(_clean(node.title), style=style_name)
             if style_name else doc.add_paragraph(_clean(node.title)))
     _style_front_matter_heading(head)
+    # The "Table of Contents" heading must not list ITSELF: 1-23_FrontMatter_Head1
+    # carries outlineLvl 0, so a live TOC rebuild would capture this heading as an
+    # entry.  The reference's Contents heading uses NTP_Contents_Heading (no
+    # outline level) precisely to avoid that — mirror it by suppressing here.
+    _suppress_outline_level(head)
     entries = data.get("toc_entries") or []
     _add_toc_field(doc, entries)
 
@@ -1224,6 +1258,11 @@ def _render_title_page(doc: Document, node: DocNode, data: dict) -> None:
         for extra in lines[1:]:
             run.add_break(WD_BREAK.LINE)
             run = para.add_run(extra)
+        # A title-page paragraph is not a document heading: keep it out of the
+        # Contents field even though 1-03_Report_Title inherits an outline level
+        # from Base_Heading (the reference's title likewise never appears in its
+        # ToC).  See _suppress_outline_level.
+        _suppress_outline_level(para)
         # Role-driven path (ADR-0010 Phase 2): when a vocabulary is active, tag the
         # paragraph with the role's NATIVE Word style — the title inherits the NTP
         # 1-NN typography (incl. the neutral single line spacing) with NO hardcoded

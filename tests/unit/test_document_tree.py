@@ -66,10 +66,11 @@ class TestDocumentTreeStructure:
     def test_tree_is_non_empty(self):
         assert len(DOCUMENT_TREE) > 0
 
-    def test_has_cover_and_title(self):
+    def test_has_title_page_and_no_cover(self):
+        # No cover node — the reference DOCX opens directly on the title page.
         ids = [n.id for n in DOCUMENT_TREE]
-        assert "cover" in ids
         assert "title-page" in ids
+        assert "cover" not in ids
 
     def test_has_background(self):
         ids = [n.id for n in DOCUMENT_TREE]

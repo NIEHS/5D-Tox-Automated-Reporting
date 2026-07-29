@@ -88,10 +88,11 @@ def test_generates_document_skeleton(scaffold):
     assert r"\documentclass{niehs}" in tex
     assert r"\begin{document}" in tex
     assert r"\end{document}" in tex
-    # The cover / title-page tree nodes now render the front pages (a tikz
-    # cover + centered inner title page), replacing the old \maketitle path.
+    # The title-page tree node renders the front page (centered inner title
+    # page), replacing the old \maketitle path.  There is no cover node — the
+    # reference DOCX opens directly on the title page — so no tikz cover.
     assert r"\maketitle" not in tex
-    assert r"\begin{tikzpicture}" in tex
+    assert r"\begin{tikzpicture}" not in tex
     assert r"\tableofcontents" in tex
 
 
@@ -113,9 +114,9 @@ def test_roman_front_matter_then_arabic_body(scaffold):
     r"""
     Front matter is numbered in roman, the body in arabic restarted at 1
     (NIEHS Report 10: Background = arabic page 1).  The preamble sets
-    \pagenumbering{roman} before the body renders (the cover node keeps page i
-    unnumbered via \thispagestyle{empty}); \pagenumbering{arabic} is injected at
-    the front-matter/body boundary, before \section{Background}.
+    \pagenumbering{roman} before the body renders (the title-page node keeps
+    page i unnumbered via \thispagestyle{empty}); \pagenumbering{arabic} is
+    injected at the front-matter/body boundary, before \section{Background}.
     """
     tex = generate_latex(scaffold)
     assert r"\pagenumbering{roman}" in tex
@@ -187,19 +188,17 @@ def test_tables_list_renders_listoftables(scaffold):
 # Tests — unimplemented node_types emit visible placeholders
 # ---------------------------------------------------------------------------
 
-def test_cover_and_title_page_render(scaffold):
+def test_title_page_renders(scaffold):
     """
-    Cover and title-page are now real emitters (decision #6 retired): the cover
-    is a full-bleed tikz page with the cover-bg.jpg background, and the inner
-    title page is a centered title + publisher block.  Neither emits a pending
-    placeholder any more.
+    The title-page node is a real emitter (decision #6 retired): a centered
+    title + publisher block.  There is NO cover node — the reference DOCX opens
+    directly on the title page — so no tikz cover / cover-bg.jpg is emitted.
     """
     tex = generate_latex(scaffold)
-    assert "[Section pending: cover" not in tex
     assert "[Section pending: title-page" not in tex
-    # Cover: tikz overlay + the shipped background image.
-    assert r"\begin{tikzpicture}" in tex
-    assert "cover-bg.jpg" in tex
+    # No cover: neither the tikz overlay nor the cover background image.
+    assert r"\begin{tikzpicture}" not in tex
+    assert "cover-bg.jpg" not in tex
     # Inner title page: the publisher block (unique to the title page).
     assert "Public Health Service" in tex
     assert "Research Triangle Park, North Carolina, USA" in tex
