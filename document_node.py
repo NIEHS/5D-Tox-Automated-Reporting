@@ -43,6 +43,14 @@ class DocNode:
                         yet — genomics chart figure numbers are assigned on the
                         chart payloads by genomics_charts.attach_genomics_charts,
                         not here — so this field is currently always None.
+        appendix_letter: Positional appendix letter ("A", "B", …) assigned by
+                        compute_appendix_letters() to each `appendix` node in
+                        document order.  None until computed (and on non-appendix
+                        nodes).  The single source of the appendix letter: the
+                        renderers compose "Appendix {letter}. {title}" from it
+                        (titles no longer carry a literal "Appendix A." prefix),
+                        and the docx surface uses it to drive chapter-relative
+                        page numbering (pgNumType chapStyle → "A-1, B-1, …").
         ready_key:      Alpine store ready flag name (for navigation panel enable/disable).
                         None if always enabled.
         methods_key:    For M&M subsection nodes — the key in data["methods"]["sections"]
@@ -104,6 +112,7 @@ class DocNode:
     children: list[DocNode] = field(default_factory=list)
     table_number: int | None = None
     figure_number: int | None = None
+    appendix_letter: str | None = None
     ready_key: str | None = None
     methods_key: str | None = None
     orientation: str | None = None

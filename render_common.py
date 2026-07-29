@@ -237,6 +237,28 @@ def has_paragraph_content(paragraphs) -> bool:
     return any(inline_plain_text(p).strip() for p in (paragraphs or []))
 
 
+def appendix_heading_text(node: DocNode) -> str:
+    """Compose an appendix heading's display text: "Appendix {letter}. {title}".
+
+    The letter comes from ``node.appendix_letter`` (assigned positionally by
+    document_tree.compute_appendix_letters — the single source of truth; titles
+    no longer bake in a literal "Appendix A." prefix).  Falls back to the bare
+    title when no letter is set (scaffold/test nodes, or a non-appendix caller),
+    so this never fabricates a prefix it wasn't given.
+
+    Used by the LaTeX and HTML surfaces, which have no auto-numbering machinery
+    and must put the letter into the visible heading text.  The docx surface
+    does NOT use this: it applies the NTP `4-05_Appendix_Head_1` style whose own
+    numbered list emits "Appendix A." (and feeds the chapter-relative page
+    numbering), matching the reference byte-for-byte with a bare-title run.
+    """
+    letter = node.appendix_letter
+    title = node.title or ""
+    if not letter:
+        return title
+    return f"Appendix {letter}. {title}" if title else f"Appendix {letter}"
+
+
 def labeled_section_parts(sections) -> list[tuple[str, str]]:
     """
     Normalise a structured-abstract "sections" list into [(label, text)],

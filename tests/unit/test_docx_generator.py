@@ -245,14 +245,14 @@ def test_section_headings_present(scaffold):
 def test_roman_then_arabic_numbering_across_flow_sections(scaffold):
     """
     Front matter is lower-roman, the body restarts at arabic 1.  The document is
-    split into more than two sections because orientable (landscape) nodes lower
-    into their own page-geometry sections (FLOW axis → Word sections); those
-    landscape "islands" are REGION-TRANSPARENT — they carry NO <w:pgNumType>, so
-    the body's arabic counter flows through them unbroken.  The invariant is
-    therefore about the NUMBERED sections, not a fixed section count: exactly two
-    sections declare a pgNumType — the roman front matter and the decimal
-    body-start — and every other section (the landscape islands and their
-    portrait resumes) inherits numbering.
+    split into more sections than that because (a) orientable landscape nodes
+    lower into their own page-geometry sections (FLOW islands, REGION-TRANSPARENT
+    — no <w:pgNumType>, so the arabic counter flows through), and (b) each
+    back-matter appendix opens its OWN page-numbering region.
+
+    So the NUMBERED sections, in document order, are: the front (lowerRoman), the
+    body-start (decimal), then one decimal+chapStyle section per appendix (A-1,
+    B-1, …).  The FLOW islands + portrait resumes carry no pgNumType.
     """
     from docx.oxml.ns import qn as _qn
     doc = _open(generate_docx(scaffold))
@@ -260,10 +260,15 @@ def test_roman_then_arabic_numbering_across_flow_sections(scaffold):
     for section in doc.sections:
         pgNumType = section._sectPr.find(_qn("w:pgNumType"))
         if pgNumType is not None:
-            numbered.append(pgNumType.get(_qn("w:fmt")))
-    # Exactly the front (roman) and body-start (decimal) sections are numbered,
-    # in document order; the interleaved FLOW islands add no pgNumType.
-    assert numbered == ["lowerRoman", "decimal"]
+            numbered.append((pgNumType.get(_qn("w:fmt")),
+                             pgNumType.get(_qn("w:chapStyle"))))
+    # Front roman + body decimal (neither chapter-relative)…
+    assert numbered[0] == ("lowerRoman", None)
+    assert numbered[1] == ("decimal", None)
+    # …then six chapter-relative appendix sections (A–F).
+    appendix_numbered = numbered[2:]
+    assert len(appendix_numbered) == 6
+    assert all(fmt == "decimal" and chap == "1" for fmt, chap in appendix_numbered)
 
 
 def test_landscape_nodes_lower_into_transparent_sections(scaffold):
@@ -304,6 +309,49 @@ def test_landscape_nodes_lower_into_transparent_sections(scaffold):
     # The scaffold carries orientable landscape tables, so at least one island
     # must have formed (guards against the lowering silently no-op-ing).
     assert landscape, "expected at least one landscape section from orientable nodes"
+
+
+def test_each_appendix_opens_a_chapter_relative_section(scaffold):
+    """Each back-matter appendix (A–F) lowers into its OWN page-numbering region:
+    a Word section carrying <w:pgNumType w:start="1" w:chapStyle="1"/>.  chapStyle
+    reuses the level-1 appendix head's upperLetter list number (A/B/C…) as the
+    page-number chapter prefix, so pages read "A-1, B-1, …" (the reference's
+    appendix numbering).  The appendix heading paragraph uses the numbered
+    4-05_Appendix_Head_1 style with a BARE title run (the list supplies the
+    "Appendix A." prefix)."""
+    from docx.oxml.ns import qn as _qn
+    doc = _open(generate_docx(scaffold))
+
+    chap_sections = [
+        s for s in doc.sections
+        if (pn := s._sectPr.find(_qn("w:pgNumType"))) is not None
+        and pn.get(_qn("w:chapStyle")) == "1"
+    ]
+    # Six appendices A–F, each its own chapter-relative section.
+    assert len(chap_sections) == 6
+    for s in chap_sections:
+        pn = s._sectPr.find(_qn("w:pgNumType"))
+        assert pn.get(_qn("w:start")) == "1"
+        assert pn.get(_qn("w:fmt")) == "decimal"
+
+    # The front/body sections must NOT be chapter-relative (no stray chapStyle
+    # cloned from the base sectPr).
+    front = doc.sections[0]._sectPr.find(_qn("w:pgNumType"))
+    assert front.get(_qn("w:chapStyle")) is None
+    assert front.get(_qn("w:fmt")) == "lowerRoman"
+
+    # Appendix TITLES use the numbered "Heading 1" style (numId 8, ilvl 0 →
+    # "Appendix A.") with a BARE-title run — the reference's mechanism.  (NOT
+    # 4-05_Appendix_Head_1, which is the appendix SUB-heading, numId 8 ilvl 1 →
+    # "A.1.".)  The list supplies the "Appendix A." prefix and the chapter letter
+    # chapStyle reads, so the run text is just the descriptive title.
+    appendix_heads = [
+        p for p in doc.paragraphs
+        if p.style is not None and p.style.name == "Heading 1"
+    ]
+    assert len(appendix_heads) == 6
+    # Bare descriptive title — no literal "Appendix A." baked in.
+    assert not any(p.text.strip().startswith("Appendix ") for p in appendix_heads)
 
 
 def test_body_section_has_no_distinct_first_page(scaffold):
@@ -657,6 +705,39 @@ def test_toc_field_is_prepopulated_with_entries(rich):
     assert any(p.style.name.lower() == "toc 2" for p in entries)
 
 
+def test_toc_entries_carry_pageref_fields_anchored_to_heading_bookmarks(rich):
+    """Each cached TOC entry's page number is a `PAGEREF _Toc_<id> \\h` FIELD (not
+    a literal placeholder), and a matching `<w:bookmarkStart w:name="_Toc_<id>">`
+    sits on the target heading.  This is what lets Word for Web resolve each entry
+    to its OWN page on refresh — without it the reader collapses every entry to a
+    single page.  The anchors must match the bookmarks 1:1 (no dangling ref)."""
+    doc = _open(generate_docx(rich))
+    body = doc.element.body
+    instrs = [i.text or "" for i in body.findall(".//" + qn("w:instrText"))]
+    pagerefs = {
+        m.group(1)
+        for t in instrs
+        if (m := re.search(r"PAGEREF (_Toc_\S+) \\h", t))
+    }
+    bookmarks = {
+        bs.get(qn("w:name"))
+        for bs in body.findall(".//" + qn("w:bookmarkStart"))
+        if (bs.get(qn("w:name")) or "").startswith("_Toc_")
+    }
+    # There is at least one appendix entry, and its PAGEREF resolves.
+    assert "_Toc_appendix-a" in pagerefs
+    # Every PAGEREF anchor has a real bookmark target (no dangling reference).
+    assert pagerefs, "expected PAGEREF fields in the TOC"
+    assert pagerefs <= bookmarks, f"dangling anchors: {pagerefs - bookmarks}"
+    # Entries are hyperlinks to those anchors (clickable + \\h).
+    anchors = {
+        h.get(qn("w:anchor"))
+        for h in body.findall(".//" + qn("w:hyperlink"))
+        if (h.get(qn("w:anchor")) or "").startswith("_Toc_")
+    }
+    assert "_Toc_appendix-a" in anchors
+
+
 def test_toc_field_closes_with_trailing_empty_paragraph(rich):
     """The TOC field ends on a TRAILING EMPTY paragraph carrying the `end` fldChar,
     not on the last entry — matching the reference.  Two effects: the field's
@@ -716,9 +797,15 @@ def test_toc_entry_spacing_matches_reference(rich):
     assert styles["TOC 1"].space_before == Pt(6)
     assert styles["TOC 2"].space_before is None
     assert styles["TOC 3"].space_before is None
-    # Deeper levels are indented past level 1.
-    assert styles["TOC 2"].left_indent == Pt(18)
-    assert styles["TOC 3"].left_indent == Pt(36)
+    # Reference `toc N` indents (twips): left/hanging per level, and a constant
+    # 0.5" (720 twip) RIGHT indent on every level that reserves the page-number
+    # column so long titles wrap inside the text area (the appendix-wrap fix).
+    from docx.shared import Twips
+    assert styles["TOC 1"].left_indent == Twips(360)
+    assert styles["TOC 2"].left_indent == Twips(792)
+    assert styles["TOC 3"].left_indent == Twips(1296)
+    for name in ("TOC 1", "TOC 2", "TOC 3"):
+        assert styles[name].right_indent == Twips(720), f"{name} needs the right indent"
 
 
 def test_yaml_page_breaks_land_as_page_break_before(rich):
@@ -743,8 +830,10 @@ def test_yaml_page_breaks_land_as_page_break_before(rich):
     assert any(s.startswith("Table") and "Hematology" in s for s in broken)         # T5
     assert any(s.startswith("Table") and "Hormone" in s for s in broken)            # T6
     assert not any(s.startswith("Table") and "Clinical Chemistry" in s for s in broken)  # T4 flows
-    # Appendices each start a new page.
-    assert any(s.startswith("Appendix A.") for s in broken)
+    # Appendices each start a new page.  The heading run text is the BARE
+    # descriptive title (the 4-05_Appendix_Head_1 numbered list supplies the
+    # "Appendix A." prefix), so match on the title, not the letter prefix.
+    assert "Internal Dose Assessment" in broken
     # No leftover standalone empty <w:br type=page> paragraphs from the old
     # page-break NODES (only the title-page end-break remains).
     empties = [

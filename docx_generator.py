@@ -58,7 +58,7 @@ from docx.enum.text import (
 )
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor, Twips
 
 from cover_layouts import get_cover_layout
 from document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
@@ -69,6 +69,7 @@ from render_common import (
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     apical_table_plan,
+    appendix_heading_text,
     appendix_roster_rows,
     assert_dispatch_covers,
     bmd_summary_plan,
@@ -431,6 +432,36 @@ def _add_seq_field(paragraph, seq_name: str, cached: str = "1") -> None:
     tail = paragraph.add_run(); tail._r.append(end)
 
 
+def _toc_bookmark_name(node_id: str) -> str:
+    """The bookmark name a TOC entry's PAGEREF anchors to, for a given node id.
+
+    Word only requires the bookmarkStart `w:name` to equal the PAGEREF anchor
+    (the reference's numeric `_Toc124…` form is not required).  We derive a
+    stable name from the node slug so the producer side (heading bookmark) and
+    the consumer side (TOC entry PAGEREF) agree without threading a shared map."""
+    return f"_Toc_{node_id}"
+
+
+def _add_toc_bookmark(paragraph, name: str, bid: int) -> None:
+    """Wrap a heading paragraph's content in a TOC bookmark so a PAGEREF field can
+    resolve to it.  `<w:bookmarkStart>` goes AFTER the paragraph's `<w:pPr>` and
+    before its first run (the reference's placement); `<w:bookmarkEnd>` is
+    appended after the runs.  `bid` is a document-unique numeric id.  Idempotent
+    per paragraph is NOT guaranteed — call once per target."""
+    p = paragraph._p
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bid))
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bid))
+    pPr = p.find(qn("w:pPr"))
+    if pPr is not None:
+        pPr.addnext(start)
+    else:
+        p.insert(0, start)
+    p.append(end)
+
+
 def _booktabs_table(
     doc: Document,
     headers: list[str],
@@ -659,9 +690,38 @@ def _render_heading_only(doc: Document, node: DocNode, data: dict) -> None:
     _add_heading(doc, node.level, node.title, data)
 
 
+# The Word style the reference uses for an appendix TITLE (the "Appendix A."
+# page).  It is the built-in "heading 1" (styleId Heading1): numId 8 at ilvl 0,
+# whose upperLetter lvlText is "Appendix %1." → "Appendix A.", and outlineLvl 0.
+# NOT 4-05_Appendix_Head_1 — that is the appendix SUB-heading (numId 8 ilvl 1,
+# lvlText "%1.%2." → "A.1."), used for headings WITHIN an appendix.  Routing the
+# title through Heading1 is what makes the run a bare title while the list emits
+# the "Appendix A." prefix AND supplies the chapter letter that chapStyle reads
+# for the "A-1" page numbers.
+# python-docx normalizes the built-in style's UI name to "Heading 1" (the raw
+# w:name is "heading 1"); match the python-docx form.
+_APPENDIX_TITLE_STYLE_NAME = "Heading 1"
+
+
+def _add_appendix_heading(doc: Document, node: DocNode, data: dict):
+    """Emit an appendix TITLE using the reference's numbered "heading 1" style.
+
+    That style's numId-8 list (upperLetter, ilvl 0) auto-emits the "Appendix A."
+    prefix, so we write only the BARE descriptive title as the run text — matching
+    the reference byte-for-byte — and the same list number is what the section's
+    `pgNumType chapStyle="1"` reads to build the "A-1" page numbers.  Falls back to
+    the generic heading with the composed "Appendix {letter}. {title}" text when
+    that style is unavailable (legacy path), so the letter is never lost."""
+    if _APPENDIX_TITLE_STYLE_NAME in {s.name for s in doc.styles}:
+        return doc.add_paragraph(_clean(node.title),
+                                 style=_APPENDIX_TITLE_STYLE_NAME)
+    # Legacy fallback: no numbered appendix-title style → put the letter in text.
+    return _add_heading(doc, node.level, appendix_heading_text(node), data)
+
+
 def _render_appendix(doc: Document, node: DocNode, data: dict) -> None:
     """Appendix — B renders the animal roster; others heading + stub/children."""
-    _add_heading(doc, node.level, node.title, data)
+    _add_appendix_heading(doc, node, data)
     rows = appendix_roster_rows(node, data)
     if rows is not None:
         _booktabs_table(
@@ -824,6 +884,12 @@ def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
 # cached TOC mirrors Word's own dotted-leader layout.
 _TOC_RIGHT_TAB_PT = 468
 
+# Reference `toc N` indents (examples/NIEHS-10 styles.xml), in TWIPS.  Each level
+# has a (left, hanging) pair; the RIGHT indent is a constant 0.5" (720 twips)
+# across all levels and reserves the page-number column (the wrap fix).
+_TOC_INDENT_TWIPS_BY_LEVEL = {1: (360, 360), 2: (792, 504), 3: (1296, 576)}
+_TOC_RIGHT_INDENT_TWIPS = 720
+
 # The reference front-matter HEADING look, shared by every front-matter section
 # header (Foreword, Table of Contents, Tables, About, Peer Review, Abstract, …).
 # Measured from NIEHS-10's 1-23_FrontMatter_Head1 / NTP Contents Heading, which
@@ -926,12 +992,78 @@ def _add_toc_field(doc: Document, entries: list) -> None:
             opener._r.append(instr)
             opener._r.append(sep)
 
-        para.add_run(_clean(entry.get("title", "")))
-        # Tab to the right margin (dot leader) + a page-number placeholder.
-        para.add_run("\t")
-        para.add_run("—")  # em dash — refreshed to the page number on update
+        # Each entry mirrors the reference: a hyperlink anchored to the target
+        # heading's bookmark, holding the title, a dot-leader tab, and a PAGEREF
+        # field that resolves to the target's page on refresh.  The anchor name
+        # matches the bookmark _add_toc_bookmark stamped on that heading.
+        anchor = _toc_bookmark_name(entry.get("id", "")) if entry.get("id") else None
+        _add_toc_entry_content(para, _clean(entry.get("title", "")), anchor)
 
     _close_field_with_spacer(doc)
+
+
+def _add_toc_entry_content(paragraph, title: str, anchor: "str | None") -> None:
+    r"""Emit one TOC entry's inner content: title + dot-leader tab + page number.
+
+    When ``anchor`` is set (the normal path), the whole entry is wrapped in a
+    ``<w:hyperlink w:anchor=...>`` and the page number is a ``PAGEREF <anchor> \h``
+    FIELD — the reference's structure, so Word for Web resolves each entry to its
+    own page on refresh (a literal placeholder collapses every entry to one page).
+    The tab and page-number runs carry ``<w:webHidden/>`` (matches the reference;
+    the \\z flag hides the leader in web view).  With no anchor (a stray entry
+    with no id) it degrades to a plain title + tab + placeholder."""
+    if not anchor:
+        paragraph.add_run(title)
+        paragraph.add_run("\t")
+        paragraph.add_run("—")
+        return
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), anchor)
+    hyperlink.set(qn("w:history"), "1")
+
+    # Title run (styled as a hyperlink).
+    title_run = OxmlElement("w:r")
+    trpr = OxmlElement("w:rPr")
+    rstyle = OxmlElement("w:rStyle"); rstyle.set(qn("w:val"), "Hyperlink")
+    trpr.append(rstyle); title_run.append(trpr)
+    t = OxmlElement("w:t"); t.set(qn("xml:space"), "preserve"); t.text = title
+    title_run.append(t)
+    hyperlink.append(title_run)
+
+    def _webhidden_run():
+        r = OxmlElement("w:r")
+        rpr = OxmlElement("w:rPr"); rpr.append(OxmlElement("w:webHidden"))
+        r.append(rpr)
+        return r
+
+    # Dot-leader tab (web-hidden).
+    tab_run = _webhidden_run(); tab_run.append(OxmlElement("w:tab"))
+    hyperlink.append(tab_run)
+
+    # PAGEREF field: begin / instrText / separate / cached number / end.
+    begin_run = _webhidden_run()
+    begin = OxmlElement("w:fldChar"); begin.set(qn("w:fldCharType"), "begin")
+    begin_run.append(begin); hyperlink.append(begin_run)
+
+    instr_run = _webhidden_run()
+    instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
+    instr.text = f" PAGEREF {anchor} \\h "
+    instr_run.append(instr); hyperlink.append(instr_run)
+
+    sep_run = _webhidden_run()
+    sep = OxmlElement("w:fldChar"); sep.set(qn("w:fldCharType"), "separate")
+    sep_run.append(sep); hyperlink.append(sep_run)
+
+    num_run = _webhidden_run()
+    num_t = OxmlElement("w:t"); num_t.text = "1"  # cached; refreshed on update
+    num_run.append(num_t); hyperlink.append(num_run)
+
+    end_run = _webhidden_run()
+    end = OxmlElement("w:fldChar"); end.set(qn("w:fldCharType"), "end")
+    end_run.append(end); hyperlink.append(end_run)
+
+    paragraph._p.append(hyperlink)
 
 
 def _toc_entry_paragraph(doc: Document, level: int):
@@ -963,8 +1095,16 @@ def _toc_entry_paragraph(doc: Document, level: int):
         # reference's actual style (grid-driven), so it's removed.
         if level == 1:
             spf.space_before = Pt(_TOC1_BEFORE_PT)
-        if level > 1:
-            spf.left_indent = Pt((level - 1) * 18)
+        # Reference `toc N` indent (examples/NIEHS-10 styles.xml, in twips): a
+        # left+hanging indent per level AND a 0.5" (720 twip) RIGHT indent that
+        # RESERVES the page-number column, so a long title wraps inside the text
+        # area instead of running under the number (the reported appendix-line
+        # wrap).  The right indent is the load-bearing fix; the left/hanging match
+        # the reference's nested look.
+        left_twips, hanging_twips = _TOC_INDENT_TWIPS_BY_LEVEL.get(level, (360, 360))
+        spf.left_indent = Twips(left_twips)
+        spf.first_line_indent = Twips(-hanging_twips)
+        spf.right_indent = Twips(_TOC_RIGHT_INDENT_TWIPS)
     para = doc.add_paragraph(style=style)
     # Right-aligned tab with a dotted leader → the classic TOC dot leader.
     para.paragraph_format.tab_stops.add_tab_stop(
@@ -1679,6 +1819,13 @@ def _walk_docx_tree(
     the body region; front matter carries no orientable nodes.
     """
     layout_cfg = data.get("layout_style")
+    # TOC targets: the set of node ids that appear as Contents entries.  A bookmark
+    # on each target's first paragraph lets the cached TOC PAGEREF fields resolve
+    # to distinct pages on refresh (without it, Word for Web collapses every entry
+    # to one page).  `_toc_bookmark_state` carries the running numeric bookmark id
+    # (document-unique) across the whole walk.
+    toc_target_ids = {e.get("id") for e in (data.get("toc_entries") or []) if e.get("id")}
+    bk_state = data.setdefault("_toc_bookmark_state", {"next_id": 0})
 
     def _visit(n: DocNode) -> None:
         # FLOW axis → Word sections: open/resume a section when orientation flips.
@@ -1697,20 +1844,35 @@ def _walk_docx_tree(
             style = resolve_layout_style(layout_cfg, n.node_type, n.id)
             if style:
                 _layout_to_docx(doc.paragraphs[before:], style)
+        # Bookmark this node's FIRST emitted paragraph when it is a TOC target, so
+        # the Contents PAGEREF for `n.id` has an anchor.  The first paragraph a
+        # heading node emits IS its heading (doc.paragraphs[before]).
+        if n.id in toc_target_ids and before < len(doc.paragraphs):
+            _add_toc_bookmark(doc.paragraphs[before],
+                              _toc_bookmark_name(n.id), bk_state["next_id"])
+            bk_state["next_id"] += 1
 
     walk_tree([node], _visit)
 
 
-def _set_section_page_numbering(section, fmt: str, start: int) -> None:
+def _set_section_page_numbering(section, fmt: str, start: int,
+                                chap_style: int | None = None) -> None:
     """
-    Set a section's <w:pgNumType> format (lowerRoman / decimal) + start.
+    Set a section's <w:pgNumType> format (lowerRoman / decimal) + start, and
+    optionally a chapter style for chapter-relative numbering.
 
     <w:pgNumType> must sit at its schema-mandated position in CT_SectPr (after
     pgSz/pgMar, before cols) — a bare append lands it after docGrid, which is
     out of sequence and gets silently dropped on save.  We insert it before the
     first of the elements the schema says follow it, so the ordering is valid
     regardless of which of those a given section happens to carry.
-    """
+
+    ``chap_style`` (the reference's appendix numbering): sets w:chapStyle to the
+    outline level whose heading number prefixes the page number.  chapStyle="1"
+    means "prefix with the level-1 heading's number"; the appendix heads carry an
+    upperLetter list (A, B, C…), so with the default chapSep (hyphen) the pages
+    read "A-1, A-2, B-1, …".  fmt/start/chapStyle are ATTRIBUTES on the one
+    <w:pgNumType> element (not child elements)."""
     sectPr = section._sectPr
     pgNumType = sectPr.find(qn("w:pgNumType"))
     if pgNumType is None:
@@ -1723,6 +1885,14 @@ def _set_section_page_numbering(section, fmt: str, start: int) -> None:
         )
     pgNumType.set(qn("w:fmt"), fmt)
     pgNumType.set(qn("w:start"), str(start))
+    if chap_style is not None:
+        pgNumType.set(qn("w:chapStyle"), str(chap_style))
+    else:
+        # The styles base's own sectPr carries a chapStyle that add_section clones
+        # into every section; clear it on non-chapter sections (front roman / body
+        # decimal) so only the appendices number chapter-relative.
+        if pgNumType.get(qn("w:chapStyle")) is not None:
+            del pgNumType.attrib[qn("w:chapStyle")]
 
 
 def _insert_in_schema_order(parent, element, *, successors: tuple[str, ...]) -> None:
@@ -2178,6 +2348,11 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
 
     body_first_id = first_body_node_id(nodes)
     body_section_idx: int | None = None
+    # Each back-matter appendix opens its OWN page-numbering region (chapter-
+    # relative: A-1, B-1, …).  Collect the section POSITIONS here and apply
+    # chapStyle numbering at the end (by index, not captured Section objects,
+    # which go stale as add_section relocates sectPr elements).
+    appendix_section_idxs: list[int] = []
     # FLOW state threaded across the WHOLE body walk (not reset per top-level
     # node): which orientation the current section is, and whether we've entered
     # the body region (front matter has no orientable nodes, so islands only
@@ -2207,6 +2382,21 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
             # Index by final position at the end instead.
             body_section_idx = len(doc.sections) - 1
             flow["in_body"] = True
+        # Each back-matter APPENDIX starts a new REGION section so its page
+        # numbering can restart chapter-relative (A-1, B-1, …).  Distinct from a
+        # FLOW island: this is a page-NUMBERING region, not an orientation flip.
+        # References (region "back" but not an appendix) stays in the body
+        # decimal section, matching the reference (only appendices are
+        # chapter-relative).
+        if top.region == "back" and top.node_type == "appendix":
+            doc.add_section(WD_SECTION.NEW_PAGE)
+            _configure_section(doc.sections[-1], running_header, document)
+            doc.sections[-1].different_first_page_header_footer = False
+            # A FLOW island cannot precede an appendix (back matter is portrait),
+            # but the section we just opened is portrait — keep flow consistent so
+            # a stray orientable back node wouldn't double-open.
+            flow["landscape"] = False
+            appendix_section_idxs.append(len(doc.sections) - 1)
         _walk_docx_tree(doc, top, data, flow, document)
 
     # Page-number formats: front matter lower-roman, body decimal-from-1.
@@ -2219,6 +2409,11 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     _set_section_page_numbering(doc.sections[0], "lowerRoman", 1)
     if body_section_idx is not None:
         _set_section_page_numbering(doc.sections[body_section_idx], "decimal", 1)
+    # Each appendix section: chapter-relative page numbering (A-1, B-1, …).
+    # chapStyle=1 → the level-1 appendix head's upperLetter list number (A/B/C…)
+    # prefixes the restarted page number.  start=1 restarts each appendix at 1.
+    for idx in appendix_section_idxs:
+        _set_section_page_numbering(doc.sections[idx], "decimal", 1, chap_style=1)
 
     # A TOC (or any) field was emitted → tell the reader to recompute fields on
     # open so the contents fill in without a manual refresh.  Detect from the
