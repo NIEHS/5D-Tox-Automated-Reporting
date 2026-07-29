@@ -48,7 +48,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document
-from docx.enum.section import WD_SECTION
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.text import (
     WD_ALIGN_PARAGRAPH,
     WD_BREAK,
@@ -94,7 +94,7 @@ from render_common import (
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
-from render_capabilities import front_matter_roles_for
+from render_capabilities import front_matter_roles_for, landscape_requested
 
 _REL_HYPERLINK = _REL.HYPERLINK
 from table_builder_common import format_display_number, format_mean_se_display
@@ -1551,7 +1551,69 @@ def _layout_to_docx(paragraphs, style: dict) -> None:
 # Tree walk + document skeleton
 # ---------------------------------------------------------------------------
 
-def _walk_docx_tree(doc: Document, node: DocNode, data: dict) -> None:
+def _effective_landscape(node: DocNode, data: dict) -> bool:
+    """The node's EFFECTIVE orientation, as the shared FLOW-axis decision.
+
+    Delegates to render_capabilities.landscape_requested so all three surfaces
+    resolve orientation in exactly ONE place (override > template default >
+    portrait, gated on the type's orientable capability).  This is the abstract
+    per-node FLOW value; the Word adapter's job is to LOWER it into sections."""
+    return landscape_requested(
+        node.node_type, node.id, data.get("orientations"), default=node.orientation
+    )
+
+
+def _open_flow_section(doc: Document, document: dict | None, landscape: bool):
+    """Open a new page-geometry section for a FLOW (orientation) transition.
+
+    Word entangles orientation with the section (`w:sectPr`) construct: there is
+    no per-paragraph orientation, so flipping orientation REQUIRES a new section.
+    This is the lowering from our orthogonal, per-node FLOW axis to Word's
+    per-region one — a landscape "island" is a section bracketed by portrait
+    sections (exactly how the NIEHS-10 reference encodes its two wide-table
+    spreads).
+
+    The section is REGION-TRANSPARENT: it is created but NOT run through
+    _configure_section, so it does not declare its own footer/header or
+    <w:pgNumType>.  A fresh section's header/footer start LINKED to the previous
+    one and it carries no page-number restart, so the body's running footer and
+    arabic counter FLOW THROUGH the island unbroken — the reference's landscape
+    sections likewise omit footerReference and pgNumType.  (Orientation and page
+    numbering are independent axes that Word happens to store in the same
+    element; keeping the FLOW section transparent is what keeps them orthogonal.)
+
+    Geometry: python-docx does NOT auto-swap width/height on orientation change,
+    and add_section CLONES the previous section's pgSz (including its `orient`
+    attribute), so BOTH the orientation flag and the dimensions must be set
+    explicitly on every transition — including the portrait RESUME, whose clone
+    would otherwise inherit the landscape orientation with portrait dimensions.
+    """
+    document = document or {}
+    pw = _emu_or_default(document, "page_width", _PAGE_WIDTH)
+    ph = _emu_or_default(document, "page_height", _PAGE_HEIGHT)
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    if landscape:
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width, section.page_height = ph, pw
+    else:
+        section.orientation = WD_ORIENT.PORTRAIT
+        section.page_width, section.page_height = pw, ph
+    # No cover here, so no distinct first-page header (matches the body sections).
+    section.different_first_page_header_footer = False
+    # add_section CLONES the previous section's whole sectPr, so it drags along a
+    # <w:pgNumType> (the styles base carries one, w:start="1").  Left in place,
+    # this FLOW section would RESTART page numbering to 1 mid-body — the opposite
+    # of region-transparency.  Strip it so the section inherits the body counter;
+    # the reference's landscape sections carry no pgNumType at all.
+    pgNumType = section._sectPr.find(qn("w:pgNumType"))
+    if pgNumType is not None:
+        section._sectPr.remove(pgNumType)
+    return section
+
+
+def _walk_docx_tree(
+    doc: Document, node: DocNode, data: dict, flow: dict, document: dict | None = None
+) -> None:
     """
     Render a node and its descendants into the Document in document order.
 
@@ -1566,10 +1628,26 @@ def _walk_docx_tree(doc: Document, node: DocNode, data: dict) -> None:
     node's handler added, by snapshotting the paragraph count before/after the
     handler runs.  The DECISION (resolved spec) is shared via
     data["layout_style"]; only this object-model application is surface-specific.
+
+    FLOW lowering: ``flow`` is a mutable {"landscape", "in_body"} state threaded
+    across the whole body walk (it persists between top-level nodes).  When a
+    node's EFFECTIVE orientation differs from the current section's, a new
+    section is opened BEFORE the node renders — coalescing a maximal contiguous
+    run of same-orientation nodes into ONE section (per-node FLOW → per-region
+    Word section).  The transition runs before the paragraph-count snapshot so
+    the empty paragraph add_section injects (which carries the CLOSING section's
+    sectPr) is not misattributed to this node's layout styling.  Only active in
+    the body region; front matter carries no orientable nodes.
     """
     layout_cfg = data.get("layout_style")
 
     def _visit(n: DocNode) -> None:
+        # FLOW axis → Word sections: open/resume a section when orientation flips.
+        if flow.get("in_body"):
+            want = _effective_landscape(n, data)
+            if want != flow["landscape"]:
+                _open_flow_section(doc, document, landscape=want)
+                flow["landscape"] = want
         before = len(doc.paragraphs)
         handler = _DISPATCH.get(n.node_type, _render_unimplemented)
         handler(doc, n, data)
@@ -2060,11 +2138,17 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     front_section.different_first_page_header_footer = True
 
     body_first_id = first_body_node_id(nodes)
-    added_body_section = False
-    in_body = False
+    body_section_idx: int | None = None
+    # FLOW state threaded across the WHOLE body walk (not reset per top-level
+    # node): which orientation the current section is, and whether we've entered
+    # the body region (front matter has no orientable nodes, so islands only
+    # open in the body).  The body-start REGION section is portrait, matching the
+    # initial landscape=False, so the first orientable node cleanly triggers the
+    # first island.
+    flow = {"landscape": False, "in_body": False}
 
     for top in nodes:
-        if body_first_id is not None and top.id == body_first_id and not in_body:
+        if body_first_id is not None and top.id == body_first_id and not flow["in_body"]:
             # Section break → the body restarts page numbering at arabic 1.
             doc.add_section(WD_SECTION.NEW_PAGE)
             _configure_section(doc.sections[-1], running_header, document)
@@ -2076,17 +2160,26 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
             # control the reviewer saw).  Turn it off so the body's first page
             # uses the same running header as the rest of the body.
             doc.sections[-1].different_first_page_header_footer = False
-            added_body_section = True
-            in_body = True
-        _walk_docx_tree(doc, top, data)
+            # Capture the body-start section's POSITION.  FLOW (landscape)
+            # sections open only inside the body and are always appended AFTER
+            # this one, so its index stays valid — but a captured Section OBJECT
+            # does not (add_section relocates sectPr elements between paragraphs,
+            # so an object reference goes stale / points at the wrong region).
+            # Index by final position at the end instead.
+            body_section_idx = len(doc.sections) - 1
+            flow["in_body"] = True
+        _walk_docx_tree(doc, top, data, flow, document)
 
     # Page-number formats: front matter lower-roman, body decimal-from-1.
     # add_section() relocates the FIRST section's <w:sectPr> into the last
     # body paragraph, so a reference captured before that call goes stale —
-    # re-fetch both sections from doc.sections here, after all breaks are in.
+    # re-fetch both sections from doc.sections by POSITION here, after all breaks
+    # (REGION + FLOW islands) are in.  The body-start is NOT doc.sections[-1] once
+    # landscape islands interleave — the last section is then a portrait resume —
+    # so pin decimal to the captured body-start index, not the tail.
     _set_section_page_numbering(doc.sections[0], "lowerRoman", 1)
-    if added_body_section:
-        _set_section_page_numbering(doc.sections[-1], "decimal", 1)
+    if body_section_idx is not None:
+        _set_section_page_numbering(doc.sections[body_section_idx], "decimal", 1)
 
     # A TOC (or any) field was emitted → tell the reader to recompute fields on
     # open so the contents fill in without a manual refresh.  Detect from the

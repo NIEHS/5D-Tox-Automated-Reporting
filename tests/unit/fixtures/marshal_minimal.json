@@ -264,7 +264,6 @@
               "data_key": "sample_counts",
               "id": "table-sample-counts",
               "level": 0,
-              "orientation": "landscape",
               "region": "body",
               "table_number": 1,
               "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",

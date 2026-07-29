@@ -242,23 +242,68 @@ def test_section_headings_present(scaffold):
     assert heading_texts, "no heading-styled paragraphs were emitted"
 
 
-def test_two_sections_with_roman_then_arabic_numbering(scaffold):
+def test_roman_then_arabic_numbering_across_flow_sections(scaffold):
     """
-    Front matter is lower-roman, the body restarts at arabic 1 — a section
-    break with two distinct <w:pgNumType> formats.
+    Front matter is lower-roman, the body restarts at arabic 1.  The document is
+    split into more than two sections because orientable (landscape) nodes lower
+    into their own page-geometry sections (FLOW axis → Word sections); those
+    landscape "islands" are REGION-TRANSPARENT — they carry NO <w:pgNumType>, so
+    the body's arabic counter flows through them unbroken.  The invariant is
+    therefore about the NUMBERED sections, not a fixed section count: exactly two
+    sections declare a pgNumType — the roman front matter and the decimal
+    body-start — and every other section (the landscape islands and their
+    portrait resumes) inherits numbering.
     """
+    from docx.oxml.ns import qn as _qn
     doc = _open(generate_docx(scaffold))
-    assert len(doc.sections) == 2
-    fmts = []
+    numbered = []
     for section in doc.sections:
-        pgNumType = section._sectPr.find(
-            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}pgNumType"
-        )
-        assert pgNumType is not None
-        fmts.append(pgNumType.get(
-            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}fmt"
-        ))
-    assert fmts == ["lowerRoman", "decimal"]
+        pgNumType = section._sectPr.find(_qn("w:pgNumType"))
+        if pgNumType is not None:
+            numbered.append(pgNumType.get(_qn("w:fmt")))
+    # Exactly the front (roman) and body-start (decimal) sections are numbered,
+    # in document order; the interleaved FLOW islands add no pgNumType.
+    assert numbered == ["lowerRoman", "decimal"]
+
+
+def test_landscape_nodes_lower_into_transparent_sections(scaffold):
+    """
+    FLOW axis → Word sections.  Orientable nodes marked landscape lower into
+    their own page-geometry section; a maximal contiguous run of same-orientation
+    nodes coalesces into ONE section (per-node FLOW → per-region Word construct).
+    Each landscape island is region-transparent: it swaps pgSz to landscape
+    dimensions but declares NO pgNumType and NO footerReference, so the body's
+    page numbering and running footer flow through it unbroken — exactly how the
+    NIEHS-10 reference encodes its wide-table spreads.
+
+    Every portrait section keeps portrait dimensions (12240 wide); a resumed
+    portrait section after a landscape run must NOT inherit the landscape
+    orientation flag its sectPr was cloned from.
+    """
+    from docx.oxml.ns import qn as _qn
+    doc = _open(generate_docx(scaffold))
+
+    landscape = []
+    for s in doc.sections:
+        pg = s._sectPr.find(_qn("w:pgSz"))
+        orient = pg.get(_qn("w:orient"))
+        width = int(pg.get(_qn("w:w")))
+        if orient == "landscape":
+            landscape.append(s)
+            # Landscape geometry: US-Letter rotated (15840 × 12240).
+            assert width == 15840
+            # Region-transparent: no own page numbering, no own footer.
+            assert s._sectPr.find(_qn("w:pgNumType")) is None
+            assert s._sectPr.find(_qn("w:footerReference")) is None
+        else:
+            # A portrait section (incl. a resume after a landscape run) keeps
+            # portrait dimensions and no lingering landscape orient flag.
+            assert orient is None
+            assert width == 12240
+
+    # The scaffold carries orientable landscape tables, so at least one island
+    # must have formed (guards against the lowering silently no-op-ing).
+    assert landscape, "expected at least one landscape section from orientable nodes"
 
 
 def test_body_section_has_no_distinct_first_page(scaffold):
