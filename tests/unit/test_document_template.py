@@ -149,11 +149,12 @@ def test_level_is_derived_not_authored():
 def test_template_file_loads_as_a_list():
     # ADR-0004 amendment d: top level is three region containers, not bare
     # node entries.  The first one is the front-matter container; its first
-    # child is the cover.
+    # child is the title page (there is no cover node — the reference DOCX opens
+    # directly on the title page).
     data = load_template(TEMPLATE_NAME)
     assert isinstance(data, list) and data, "template should be a non-empty list"
     assert data[0]["region"] == "front"
-    assert data[0]["children"][0]["id"] == "cover"
+    assert data[0]["children"][0]["id"] == "title-page"
     assert [c["region"] for c in data] == ["front", "body", "back"]
 
 

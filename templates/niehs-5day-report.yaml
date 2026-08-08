@@ -32,10 +32,10 @@
 document:
 - region: front
   children:
-  - id: cover
-    type: cover
-    title: Cover Page
-    subtype: niehs-5d-tox
+  # No cover page: the NIEHS-10 reference DOCX opens directly on the title page
+  # (the branded page-1 cover in the PDF was a PDF-production artifact, not part
+  # of the source document).  The title page is therefore the first front node
+  # on every surface.
   - id: title-page
     type: title-page
     title: Title Page
@@ -156,7 +156,6 @@ document:
         type: sample-counts-table
         title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
         data_key: sample_counts
-        orientation: landscape
         caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
       - id: mm-tx-norm
         type: narrative
@@ -284,9 +283,13 @@ document:
   # under templates/freeform/.  Appendix B renders the data-derived animal
   # roster (no child).  Appendix C stays a pending stub (its QC/eFDR figures
   # need transcriptomics data the pipeline does not retain).
+  # Appendix titles carry ONLY the descriptive name — the "Appendix A." letter
+  # prefix is assigned positionally by compute_appendix_letters() and composed by
+  # the renderers (and drives docx chapter-relative page numbering).  Do NOT bake
+  # the letter into the title.
   - id: appendix-a
     type: appendix
-    title: Appendix A. Internal Dose Assessment
+    title: Internal Dose Assessment
     children:
     - id: appendix-a-body
       type: freeform-block
@@ -296,13 +299,13 @@ document:
         html: freeform/appendix-a.html
   - id: appendix-b
     type: appendix
-    title: Appendix B. Animal Identifiers
+    title: Animal Identifiers
   - id: appendix-c
     type: appendix
-    title: Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate
+    title: Transcriptomic Quality Control and Empirical False Discovery Rate
   - id: appendix-d
     type: appendix
-    title: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies
+    title: Benchmark Dose Model Recommendation and Selection Methodologies
     children:
     - id: appendix-d-body
       type: freeform-block
@@ -312,7 +315,7 @@ document:
         html: freeform/appendix-d.html
   - id: appendix-e
     type: appendix
-    title: Appendix E. Organ Weight Descriptions
+    title: Organ Weight Descriptions
     children:
     - id: appendix-e-body
       type: freeform-block
@@ -322,7 +325,7 @@ document:
         html: freeform/appendix-e.html
   - id: appendix-f
     type: appendix
-    title: Appendix F. Supplemental Data
+    title: Supplemental Data
     children:
     - id: appendix-f-body
       type: freeform-block

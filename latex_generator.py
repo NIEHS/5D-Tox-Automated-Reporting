@@ -91,6 +91,7 @@ from render_common import (
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
     appendix_roster_rows,
+    appendix_heading_text,
     ANIMAL_ROSTER_HEADERS,
     methods_subsection_content,
     sample_counts_table,
@@ -496,7 +497,7 @@ def _render_appendix(node: DocNode, data: dict) -> str:
       - An appendix with neither (Appendix C, whose content needs pipeline data
         we don't retain) still emits the visible "[Appendix body pending]" line.
     """
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, appendix_heading_text(node))
     rows = appendix_roster_rows(node, data)
     if rows is not None:
         return f"{heading}\n\n{_emit_animal_roster(rows)}"

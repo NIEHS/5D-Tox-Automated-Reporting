@@ -14,6 +14,7 @@ import pytest
 from document_tree import (
     DOCUMENT_TREE,
     DocNode,
+    compute_appendix_letters,
     compute_table_numbers,
     find_node,
     first_body_node_id,
@@ -66,10 +67,11 @@ class TestDocumentTreeStructure:
     def test_tree_is_non_empty(self):
         assert len(DOCUMENT_TREE) > 0
 
-    def test_has_cover_and_title(self):
+    def test_has_title_page_and_no_cover(self):
+        # No cover node — the reference DOCX opens directly on the title page.
         ids = [n.id for n in DOCUMENT_TREE]
-        assert "cover" in ids
         assert "title-page" in ids
+        assert "cover" not in ids
 
     def test_has_background(self):
         ids = [n.id for n in DOCUMENT_TREE]
@@ -212,6 +214,38 @@ class TestComputeTableNumbers:
 
         walk_tree(tree, _collect)
         assert numbers == list(range(1, 1 + len(numbers)))
+
+
+class TestComputeAppendixLetters:
+    """Verify appendix letters are auto-assigned A, B, C… in document order."""
+
+    def test_appendices_get_sequential_letters(self):
+        import copy
+        tree = copy.deepcopy(DOCUMENT_TREE)
+        compute_appendix_letters(tree)
+        # Appendix a–f in order → A–F.
+        expected = {
+            "appendix-a": "A", "appendix-b": "B", "appendix-c": "C",
+            "appendix-d": "D", "appendix-e": "E", "appendix-f": "F",
+        }
+        for node_id, letter in expected.items():
+            assert find_node(node_id, tree).appendix_letter == letter
+
+    def test_non_appendix_nodes_have_no_letter(self):
+        import copy
+        tree = copy.deepcopy(DOCUMENT_TREE)
+        compute_appendix_letters(tree)
+        assert find_node("background", tree).appendix_letter is None
+        assert find_node("results", tree).appendix_letter is None
+
+    def test_folded_into_compute_table_numbers(self):
+        """compute_table_numbers assigns appendix letters too (folded call site),
+        so every caller gets them without a separate call."""
+        import copy
+        tree = copy.deepcopy(DOCUMENT_TREE)
+        compute_table_numbers(tree)
+        assert find_node("appendix-a", tree).appendix_letter == "A"
+        assert find_node("appendix-f", tree).appendix_letter == "F"
 
 
 class TestFindNode:

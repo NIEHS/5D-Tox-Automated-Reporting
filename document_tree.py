@@ -167,6 +167,9 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     # Figures share every table-numbering call site (a separate counter); fold the
     # figure pass in here so all ~10 callers get both without a second call each.
     compute_figure_numbers(tree)
+    # Appendix letters share the same call sites (a positional letter counter);
+    # fold them in too so every caller assigns A/B/C… without a third call.
+    compute_appendix_letters(tree)
 
 
 # Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
@@ -190,6 +193,27 @@ def compute_figure_numbers(tree: list[DocNode] | None = None) -> None:
         nonlocal counter
         if node.node_type in NUMBERED_FIGURE_TYPES:
             node.figure_number = counter
+            counter += 1
+
+    walk_tree(tree, visit)
+
+
+def compute_appendix_letters(tree: list[DocNode] | None = None) -> None:
+    """Walk the tree in document order and assign appendix_letter ("A", "B", …)
+    to every `appendix` node, positional from A.  The letter sibling of
+    compute_table_numbers / compute_figure_numbers: it is the SINGLE source of
+    the appendix letter (titles no longer carry a literal "Appendix A." prefix).
+    Renderers compose "Appendix {letter}. {title}" from it, and the docx surface
+    feeds it into chapter-relative page numbering.  Mutates nodes in place."""
+    if tree is None:
+        tree = DOCUMENT_TREE
+
+    counter = 0  # 0 → "A"
+
+    def visit(node: DocNode) -> None:
+        nonlocal counter
+        if node.node_type == "appendix":
+            node.appendix_letter = chr(ord("A") + counter)
             counter += 1
 
     walk_tree(tree, visit)
@@ -411,6 +435,8 @@ def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
             d["table_number"] = node.table_number
         if node.figure_number is not None:
             d["figure_number"] = node.figure_number
+        if node.appendix_letter is not None:
+            d["appendix_letter"] = node.appendix_letter
         if node.ready_key:
             d["ready_key"] = node.ready_key
         if node.orientation:

@@ -1,12 +1,5 @@
 [
   {
-    "id": "cover",
-    "level": 0,
-    "region": "front",
-    "title": "Cover Page",
-    "type": "cover"
-  },
-  {
     "id": "title-page",
     "level": 0,
     "region": "front",
@@ -190,7 +183,6 @@
             "data_key": "sample_counts",
             "id": "table-sample-counts",
             "level": 0,
-            "orientation": "landscape",
             "region": "body",
             "table_number": 1,
             "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
@@ -424,6 +416,7 @@
     "type": "narrative"
   },
   {
+    "appendix_letter": "A",
     "children": [
       {
         "id": "appendix-a-body",
@@ -436,24 +429,27 @@
     "id": "appendix-a",
     "level": 1,
     "region": "back",
-    "title": "Appendix A. Internal Dose Assessment",
+    "title": "Internal Dose Assessment",
     "type": "appendix"
   },
   {
+    "appendix_letter": "B",
     "id": "appendix-b",
     "level": 1,
     "region": "back",
-    "title": "Appendix B. Animal Identifiers",
+    "title": "Animal Identifiers",
     "type": "appendix"
   },
   {
+    "appendix_letter": "C",
     "id": "appendix-c",
     "level": 1,
     "region": "back",
-    "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate",
+    "title": "Transcriptomic Quality Control and Empirical False Discovery Rate",
     "type": "appendix"
   },
   {
+    "appendix_letter": "D",
     "children": [
       {
         "id": "appendix-d-body",
@@ -466,10 +462,11 @@
     "id": "appendix-d",
     "level": 1,
     "region": "back",
-    "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies",
+    "title": "Benchmark Dose Model Recommendation and Selection Methodologies",
     "type": "appendix"
   },
   {
+    "appendix_letter": "E",
     "children": [
       {
         "id": "appendix-e-body",
@@ -482,10 +479,11 @@
     "id": "appendix-e",
     "level": 1,
     "region": "back",
-    "title": "Appendix E. Organ Weight Descriptions",
+    "title": "Organ Weight Descriptions",
     "type": "appendix"
   },
   {
+    "appendix_letter": "F",
     "children": [
       {
         "id": "appendix-f-body",
@@ -498,7 +496,7 @@
     "id": "appendix-f",
     "level": 1,
     "region": "back",
-    "title": "Appendix F. Supplemental Data",
+    "title": "Supplemental Data",
     "type": "appendix"
   }
 ]
