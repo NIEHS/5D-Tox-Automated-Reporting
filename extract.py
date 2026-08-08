@@ -229,27 +229,31 @@ Respond with ONLY a JSON object (no markdown, no explanation) with these fields:
 # Text chunking for long full texts
 # ---------------------------------------------------------------------------
 
-def _chunk_text_for_extraction(text: str, max_chunk_chars: int = 30_000) -> list[str]:
+def _chunk_text_for_extraction(text: str, max_chunk_chars: int = 30_000,
+                               overlap: int = 2_000) -> list[str]:
     """
-    Split long text into overlapping chunks for extraction.
+    Tile long text into sequential overlapping windows covering the WHOLE text.
 
-    If text <= max_chunk_chars: return as single chunk.
-    Otherwise: return intro+methods (~first 40%) and results+discussion (~last 60%).
+    If text <= max_chunk_chars: return as a single chunk. Otherwise walk the
+    entire text in windows of max_chunk_chars that share `overlap` chars with
+    their neighbour, so no content is dropped and boundary context is preserved.
+    Downstream, extract_one() runs each window and _merge_extractions() unions
+    the results, so an arbitrary window count is fine.
     """
     if len(text) <= max_chunk_chars:
         return [text]
 
-    # Split into two chunks with some overlap
-    split_point = int(len(text) * 0.4)
-    overlap = 2000  # 2k char overlap to avoid missing context at boundaries
-    chunk1 = text[:split_point + overlap]
-    chunk2 = text[max(0, split_point - overlap):]
-
-    # Truncate each chunk to max size
-    chunk1 = chunk1[:max_chunk_chars]
-    chunk2 = chunk2[:max_chunk_chars]
-
-    return [chunk1, chunk2]
+    chunks: list[str] = []
+    step = max_chunk_chars - overlap
+    start = 0
+    n = len(text)
+    while start < n:
+        end = start + max_chunk_chars
+        chunks.append(text[start:end])
+        if end >= n:
+            break
+        start += step
+    return chunks
 
 
 def _merge_extractions(extractions: list[PaperExtraction]) -> PaperExtraction:

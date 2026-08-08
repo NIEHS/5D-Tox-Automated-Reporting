@@ -21,6 +21,43 @@ top-level imports beyond what the functions pull in locally.
 # can render a manual TOC with placeholder styling for incomplete sections.
 # ---------------------------------------------------------------------------
 
+def _strip_table_prefix(caption: str) -> str:
+    """Drop a leading "Table N. " from a caption — the Tables-list numbering adds
+    its own "Table N." label, so the stored title is just the descriptive text."""
+    import re
+    return re.sub(r"^Table\s+\d+\.\s*", "", caption or "").strip()
+
+
+def _table_list_title(node, data: dict) -> str:
+    """The Tables-list title for a numbered table node: the FULL caption its body
+    renders (chemical/species interpolated by the platform builder), with the
+    "Table N." prefix stripped.  Falls back to node.title when no plan caption is
+    available (scaffold render / node with no data), so the list is never blank.
+
+    Reuses the SAME plan functions the renderers call, so the Tables list can't
+    drift from the captions on the tables themselves."""
+    from render_common import (
+        apical_table_plan, incidence_table_plan, bmd_summary_plan, table_caption,
+    )
+    caption = None
+    try:
+        if node.node_type == "table":
+            plan = apical_table_plan(node, data)
+            caption = plan.caption if plan else None
+        elif node.node_type == "incidence-table":
+            plan = incidence_table_plan(node, data)
+            caption = plan.caption if plan else None
+        elif node.node_type == "bmd-summary":
+            plan = bmd_summary_plan(node, data)
+            caption = getattr(plan, "caption", None)
+        elif node.node_type == "sample-counts-table":
+            caption = table_caption(node, node.caption or node.title)
+    except Exception:
+        caption = None
+    stripped = _strip_table_prefix(caption) if caption else ""
+    return stripped or node.title
+
+
 def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dict], list[dict]]:
     """
     Walk the document tree and build two arrays for the Typst template:
@@ -176,10 +213,14 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
             if node.node_type == "tables-list":
                 continue
 
-            # Appendix nodes — always show as placeholders in the TOC
+            # Appendix nodes — always show as placeholders in the TOC.  The entry
+            # text is composed "Appendix {letter}. {title}" from the positional
+            # letter (node.title no longer carries the literal prefix), matching
+            # the reference ToC and the rendered appendix headings.
             if node.node_type == "appendix":
+                from render_common import appendix_heading_text
                 toc_entries.append({
-                    "title": node.title,
+                    "title": appendix_heading_text(node),
                     "level": node.level,
                     "ready": False,
                     "id": node.id,
@@ -199,11 +240,18 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                     "id": node.id,
                 })
 
-            # Table entries (numbered tables) go into the Tables list
+            # Table entries (numbered tables) go into the Tables list.  Use the
+            # FULL caption the table body renders (chemical/species interpolated
+            # via each platform builder's CAPTION_TEMPLATE), not the short
+            # node.title — so the Tables list reads "Summary of Body Weights of
+            # Male and Female Rats Administered <chemical> for Five Days", matching
+            # the example documents.  The "Table N." prefix is stripped (the list's
+            # own numbering supplies it); falls back to node.title when no plan
+            # caption is available (scaffold / no data).
             if node.table_number is not None:
                 ready = _is_ready(node)
                 table_entries.append({
-                    "title": node.title,
+                    "title": _table_list_title(node, data),
                     "table_number": node.table_number,
                     "ready": ready,
                 })

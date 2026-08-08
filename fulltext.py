@@ -41,10 +41,22 @@ class FullTextResult:
     text: str             # plain text (not HTML/XML)
     char_count: int = 0
     truncated: bool = False
+    raw_kind: str = ""    # "pdf" | "html" | "xml" — kind of the stored raw artifact
+    resolved_url: str = ""  # the URL the artifact actually came from (post-redirect)
 
     def __post_init__(self):
         if not self.char_count:
             self.char_count = len(self.text)
+
+
+@dataclass
+class _Fetched:
+    """Internal: what a source fetcher returns — extracted text plus the raw
+    artifact bytes and the URL they came from, so the raw file can be cached."""
+    text: str
+    raw_bytes: Optional[bytes]
+    raw_kind: str          # "pdf" | "html" | "xml"
+    resolved_url: str
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +70,7 @@ _REFERENCE_PATTERNS = [
 ]
 
 
-def _clean_text(text: str, max_chars: int = 80_000) -> tuple[str, bool]:
+def _clean_text(text: str, max_chars: int = 500_000) -> tuple[str, bool]:
     """Strip tags, normalize whitespace, remove references, truncate."""
     # Strip any remaining XML/HTML tags
     text = re.sub(r'<[^>]+>', ' ', text)
@@ -142,7 +154,7 @@ class FullTextFetcher:
         self,
         email: str = "user@example.com",
         proxy_url: str | None = None,
-        max_chars: int = 80_000,
+        max_chars: int = 500_000,
         cache_dir: str = ".fulltext_cache",
         rate_limit: float = 1.0,
     ):
@@ -163,7 +175,7 @@ class FullTextFetcher:
             "arxiv": 0,
             "s2_oa": 0,
             "unpaywall": 0,
-            "doi_proxy": 0,
+            "doi": 0,
             "failed": 0,
         }
 
@@ -171,13 +183,19 @@ class FullTextFetcher:
     # Cache
     # -------------------------------------------------------------------
 
+    @staticmethod
+    def _safe(paper_id: str) -> str:
+        return re.sub(r'[^\w\-]', '_', paper_id)
+
     def _cache_key(self, paper_id: str) -> Path:
-        safe = re.sub(r'[^\w\-]', '_', paper_id)
-        return self.cache_dir / f"{safe}.txt"
+        return self.cache_dir / f"{self._safe(paper_id)}.txt"
 
     def _cache_meta_key(self, paper_id: str) -> Path:
-        safe = re.sub(r'[^\w\-]', '_', paper_id)
-        return self.cache_dir / f"{safe}.meta.json"
+        return self.cache_dir / f"{self._safe(paper_id)}.meta.json"
+
+    def _raw_path(self, paper_id: str, kind: str) -> Path:
+        ext = {"pdf": "pdf", "html": "html", "xml": "xml"}.get(kind, "bin")
+        return self.cache_dir / f"{self._safe(paper_id)}.{ext}"
 
     def _get_cached(self, paper_id: str) -> FullTextResult | None:
         txt_path = self._cache_key(paper_id)
@@ -191,28 +209,57 @@ class FullTextFetcher:
                 text=text,
                 char_count=len(text),
                 truncated=meta.get("truncated", False),
+                raw_kind=meta.get("raw_kind", ""),
+                resolved_url=meta.get("resolved_url", ""),
             )
         return None
 
-    def _put_cache(self, result: FullTextResult):
+    def _put_cache(self, result: FullTextResult, raw_bytes: Optional[bytes] = None):
         txt_path = self._cache_key(result.paper_id)
         meta_path = self._cache_meta_key(result.paper_id)
         txt_path.write_text(result.text, encoding="utf-8")
+        raw_rel = ""
+        if raw_bytes and result.raw_kind:
+            raw_path = self._raw_path(result.paper_id, result.raw_kind)
+            raw_path.write_bytes(raw_bytes)
+            raw_rel = raw_path.name
         meta_path.write_text(json.dumps({
             "source": result.source,
             "char_count": result.char_count,
             "truncated": result.truncated,
+            "raw_kind": result.raw_kind,
+            "raw_file": raw_rel,
+            "resolved_url": result.resolved_url,
         }), encoding="utf-8")
 
     # -------------------------------------------------------------------
     # Source fetchers
     # -------------------------------------------------------------------
 
-    def _fetch_pmc(self, pmcid: str) -> str | None:
+    def _bytes_to_fetched(self, r, min_pdf: int = 200,
+                          min_html: int = 500) -> _Fetched | None:
+        """Classify an HTTP response body as PDF or HTML, extract text, and
+        return it together with the raw bytes + resolved (post-redirect) URL."""
+        resolved = str(r.url)
+        ctype = r.headers.get("Content-Type", "").lower()
+        is_pdf = "pdf" in ctype or r.content[:1024].find(b'%PDF') != -1
+        if is_pdf:
+            if not HAS_PDF:
+                return None
+            text = _extract_text_from_pdf(r.content)
+            if text and len(text.strip()) > min_pdf:
+                return _Fetched(text, r.content, "pdf", resolved)
+            return None
+        # treat as HTML
+        text = _extract_text_from_html(r.text)
+        if text and len(text.strip()) > min_html:
+            return _Fetched(text, r.content, "html", resolved)
+        return None
+
+    def _fetch_pmc(self, pmcid: str) -> _Fetched | None:
         """Fetch full text XML from Europe PMC."""
         if not pmcid.startswith("PMC"):
             pmcid = f"PMC{pmcid}"
-
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmcid}/fullTextXML"
         try:
             time.sleep(self.rate_limit)
@@ -221,12 +268,12 @@ class FullTextFetcher:
                 return None
             text = _extract_text_from_xml(r.text)
             if text and len(text.strip()) > 200:
-                return text
+                return _Fetched(text, r.content, "xml", str(r.url))
         except requests.RequestException:
             pass
         return None
 
-    def _fetch_arxiv(self, arxiv_id: str) -> str | None:
+    def _fetch_arxiv(self, arxiv_id: str) -> _Fetched | None:
         """Fetch HTML from ar5iv mirror and extract text."""
         url = f"https://ar5iv.labs.arxiv.org/html/{arxiv_id}"
         try:
@@ -236,35 +283,25 @@ class FullTextFetcher:
                 return None
             text = _extract_text_from_html(r.text)
             if text and len(text.strip()) > 500:
-                return text
+                return _Fetched(text, r.content, "html", str(r.url))
         except requests.RequestException:
             pass
         return None
 
-    def _fetch_s2_oa(self, pdf_url: str) -> str | None:
-        """Fetch PDF from S2 openAccessPdf URL and extract text."""
-        if not HAS_PDF:
-            return None
+    def _fetch_s2_oa(self, pdf_url: str) -> _Fetched | None:
+        """Fetch the S2 openAccessPdf URL (PDF or HTML) and extract text."""
         try:
             time.sleep(self.rate_limit)
-            r = self.session.get(pdf_url, timeout=60)
+            r = self.session.get(pdf_url, timeout=60, allow_redirects=True)
             if r.status_code != 200:
                 return None
-            if b'%PDF' not in r.content[:1024]:
-                # Not actually a PDF, try as HTML
-                text = _extract_text_from_html(r.text)
-                if text and len(text.strip()) > 500:
-                    return text
-                return None
-            text = _extract_text_from_pdf(r.content)
-            if text and len(text.strip()) > 200:
-                return text
+            return self._bytes_to_fetched(r)
         except requests.RequestException:
             pass
         return None
 
-    def _fetch_unpaywall(self, doi: str) -> str | None:
-        """Find OA copy via Unpaywall API."""
+    def _fetch_unpaywall(self, doi: str) -> _Fetched | None:
+        """Find OA copy via Unpaywall API, then fetch the PDF or landing page."""
         url = f"https://api.unpaywall.org/v2/{doi}"
         try:
             time.sleep(self.rate_limit)
@@ -276,64 +313,39 @@ class FullTextFetcher:
             pdf_url = best.get("url_for_pdf")
             landing_url = best.get("url_for_landing_page")
 
-            # Try PDF first
-            if pdf_url and HAS_PDF:
+            for target in (pdf_url, landing_url):
+                if not target:
+                    continue
                 try:
                     time.sleep(self.rate_limit)
-                    r2 = self.session.get(pdf_url, timeout=60)
-                    if r2.status_code == 200 and b'%PDF' in r2.content[:1024]:
-                        text = _extract_text_from_pdf(r2.content)
-                        if text and len(text.strip()) > 200:
-                            return text
+                    rr = self.session.get(target, timeout=60, allow_redirects=True)
+                    if rr.status_code != 200:
+                        continue
+                    got = self._bytes_to_fetched(rr)
+                    if got:
+                        return got
                 except requests.RequestException:
-                    pass
-
-            # Fall back to landing page HTML
-            if landing_url:
-                try:
-                    time.sleep(self.rate_limit)
-                    r3 = self.session.get(landing_url, timeout=30)
-                    if r3.status_code == 200:
-                        text = _extract_text_from_html(r3.text)
-                        if text and len(text.strip()) > 500:
-                            return text
-                except requests.RequestException:
-                    pass
-
+                    continue
         except (requests.RequestException, ValueError, KeyError):
             pass
         return None
 
-    def _fetch_doi_proxy(self, doi: str) -> str | None:
-        """Resolve DOI through institutional proxy and fetch."""
-        if not self.proxy_url:
-            return None
+    def _fetch_doi(self, doi: str) -> _Fetched | None:
+        """Resolve the DOI (following redirects to the publisher) and fetch.
 
+        Uses the institutional proxy when configured, else a direct request —
+        inside NIH the direct path already carries institutional access.
+        """
         doi_url = f"https://doi.org/{doi}"
-        proxies = {"http": self.proxy_url, "https": self.proxy_url}
+        proxies = ({"http": self.proxy_url, "https": self.proxy_url}
+                   if self.proxy_url else None)
         try:
             time.sleep(self.rate_limit)
             r = self.session.get(doi_url, proxies=proxies, timeout=60,
                                  allow_redirects=True)
             if r.status_code != 200:
                 return None
-
-            content_type = r.headers.get("Content-Type", "")
-
-            # PDF response
-            if "pdf" in content_type or b'%PDF' in r.content[:1024]:
-                if HAS_PDF:
-                    text = _extract_text_from_pdf(r.content)
-                    if text and len(text.strip()) > 200:
-                        return text
-                return None
-
-            # HTML response
-            if "html" in content_type:
-                text = _extract_text_from_html(r.text)
-                if text and len(text.strip()) > 500:
-                    return text
-
+            return self._bytes_to_fetched(r)
         except requests.RequestException:
             pass
         return None
@@ -359,7 +371,10 @@ class FullTextFetcher:
         oa_pdf = paper.get("open_access_pdf")
         doi = paper.get("doi")
 
-        # Try sources in priority order
+        # Try sources in priority order. PMC (structured XML) and arXiv first,
+        # then the direct OA PDF, then Unpaywall discovery, then the DOI resolver
+        # (follows redirects to the publisher — inside NIH this reaches paywalled
+        # content). Each returns a _Fetched carrying raw bytes + resolved URL.
         sources = []
         if pmcid:
             sources.append(("pmc", lambda: self._fetch_pmc(pmcid)))
@@ -369,16 +384,16 @@ class FullTextFetcher:
             sources.append(("s2_oa", lambda: self._fetch_s2_oa(oa_pdf)))
         if doi:
             sources.append(("unpaywall", lambda: self._fetch_unpaywall(doi)))
-            sources.append(("doi_proxy", lambda: self._fetch_doi_proxy(doi)))
+            sources.append(("doi", lambda: self._fetch_doi(doi)))
 
         for source_name, fetch_fn in sources:
             try:
-                raw_text = fetch_fn()
+                got = fetch_fn()
             except Exception:
                 continue
 
-            if raw_text:
-                text, truncated = _clean_text(raw_text, self.max_chars)
+            if got and got.text:
+                text, truncated = _clean_text(got.text, self.max_chars)
                 if len(text.strip()) > 200:
                     result = FullTextResult(
                         paper_id=paper_id,
@@ -386,8 +401,10 @@ class FullTextFetcher:
                         text=text,
                         char_count=len(text),
                         truncated=truncated,
+                        raw_kind=got.raw_kind,
+                        resolved_url=got.resolved_url,
                     )
-                    self._put_cache(result)
+                    self._put_cache(result, raw_bytes=got.raw_bytes)
                     self.stats[source_name] += 1
                     return result
 
@@ -428,7 +445,7 @@ class FullTextFetcher:
         total = sum(v for k, v in self.stats.items() if k != "failed")
         print(f"\nFull text fetch stats:")
         print(f"  Total fetched: {total}")
-        for source in ["cache_hits", "pmc", "arxiv", "s2_oa", "unpaywall", "doi_proxy"]:
+        for source in ["cache_hits", "pmc", "arxiv", "s2_oa", "unpaywall", "doi"]:
             count = self.stats[source]
             if count:
                 print(f"  {source}: {count}")
@@ -513,6 +530,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
         print("  python fulltext.py <papers.json>              — fetch full texts")
+        print("  python fulltext.py catalog <catalog.json>     — fetch full text for whole catalog")
         print("  python fulltext.py backfill <papers.json>     — backfill S2 metadata")
         print()
         print("Options:")
@@ -520,6 +538,7 @@ if __name__ == "__main__":
         print("  --proxy URL         Institutional proxy URL")
         print("  --max-workers N     Parallel fetch workers (default: 4)")
         print("  --s2-key KEY        Semantic Scholar API key (for backfill)")
+        print("  --limit N           Only process first N papers (debug)")
         sys.exit(1)
 
     # Parse args
@@ -531,6 +550,7 @@ if __name__ == "__main__":
 
     i = 0
     positional = []
+    limit = None
     while i < len(args):
         if args[i] == "--email" and i + 1 < len(args):
             email = args[i + 1]
@@ -544,6 +564,9 @@ if __name__ == "__main__":
         elif args[i] == "--s2-key" and i + 1 < len(args):
             s2_key = args[i + 1]
             i += 2
+        elif args[i] == "--limit" and i + 1 < len(args):
+            limit = int(args[i + 1])
+            i += 2
         else:
             positional.append(args[i])
             i += 1
@@ -553,6 +576,21 @@ if __name__ == "__main__":
             print("Usage: python fulltext.py backfill <papers.json>")
             sys.exit(1)
         backfill_metadata(positional[1], s2_api_key=s2_key, rate_limit=1.5)
+    elif positional and positional[0] == "catalog":
+        catalog_file = positional[1] if len(positional) > 1 else "catalog.json"
+        catalog = json.load(open(catalog_file))
+        # catalog is {guid: record}; record already carries paper_id/pmcid/
+        # arxiv_id/open_access_pdf/doi under the same names fetch_batch expects.
+        papers = list(catalog.values())
+        if limit:
+            papers = papers[:limit]
+        print(f"Fetching full text + raw artifacts for {len(papers)} papers "
+              f"from {catalog_file}...")
+        fetcher = FullTextFetcher(email=email, proxy_url=proxy)
+        results = fetcher.fetch_batch(papers, max_workers=max_workers)
+        fetcher.print_stats()
+        print(f"\nFull text available for {len(results)}/{len(papers)} papers "
+              f"({100*len(results)/max(len(papers),1):.1f}%)")
     else:
         papers_file = positional[0] if positional else "citegraph_output/papers.json"
         with open(papers_file) as f:
@@ -562,7 +600,6 @@ if __name__ == "__main__":
         fetcher = FullTextFetcher(
             email=email,
             proxy_url=proxy,
-            max_chars=80_000,
         )
         results = fetcher.fetch_batch(papers, max_workers=max_workers)
         fetcher.print_stats()
