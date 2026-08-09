@@ -58,7 +58,8 @@ from document_tree import (
 )
 from render_capabilities import content_item_landscape_requested
 from render_common import (
-    front_matter_plan,
+    NarrativeContent,
+    resolve_narrative_content,
     has_paragraph_content,
     normalize_inline,
     inline_plain_text,
@@ -68,13 +69,11 @@ from render_common import (
     walk_emit,
     incidence_table_plan,
     apical_table_plan,
-    unified_narrative_paragraphs,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
     appendix_roster_rows,
     appendix_heading_text,
     ANIMAL_ROSTER_HEADERS,
-    methods_subsection_content,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -561,25 +560,55 @@ def _format_dose_label(dose, unit: str) -> str:
 # latex_generator.py, and register it in both _DISPATCH tables.
 
 
+def _emit_narrative_body(rc: NarrativeContent) -> str:
+    """EMIT the body of a resolved NarrativeContent as HTML — no heading, no
+    pending fallback (those are the caller's, since emptiness is per-surface).
+
+    The content SOURCE was already chosen by render_common.resolve_narrative_
+    content; this is the pure HTML EMIT for each resulting kind:
+      labeled    → run-in bold-label <p> blocks;
+      paragraphs → flat <p> list;
+      methods    → the same <p> list plus, when present, the inline table
+                   (its <table-wrap> analogue in HTML);
+      none       → "" (caller substitutes its pending placeholder).
+    The has_paragraph_content guard reproduces the old methods handler exactly
+    (an inline-table-only section emits just the table); for the labeled/
+    paragraphs kinds the resolver already guarantees non-empty content."""
+    if rc.kind == "labeled":
+        return _render_labeled_sections(rc.labeled_parts)
+    if rc.kind in ("paragraphs", "methods"):
+        body = _render_paragraphs(rc.paragraphs) if has_paragraph_content(rc.paragraphs) else ""
+        if rc.kind == "methods" and rc.inline_table is not None:
+            body = (body + "\n" + _render_inline_table(rc.inline_table)).strip()
+        return body
+    return ""
+
+
+def _render_narrative_family(node: DocNode, data: dict, pending_label: str) -> str:
+    """Heading + resolved narrative body, with the surface's pending fallback.
+
+    The single HTML entry point for every narrative-family node type
+    (front-matter / narrative / narrative+tables): resolve the content ONCE via
+    the shared dispatch, emit it, and fall back to `pending_label` when the body
+    is empty.  Callers differ only in that label ("Section pending" vs
+    "Narrative pending"), preserving the pre-refactor per-type wording."""
+    rc = resolve_narrative_content(node, data)
+    body = _emit_narrative_body(rc)
+    if not body:
+        body = _pending(pending_label)
+    return f"{_heading(node.level, node.title)}\n{body}"
+
+
 def _render_front_matter(node: DocNode, data: dict) -> str:
     """
     Front matter section (foreword, about, peer review, publication
     details, acknowledgments, abstract).  Heading + paragraphs.
 
-    ADR-0006: the content-source decision (labeled-sections vs paragraphs vs
-    nothing) is the shared render_common.front_matter_plan EXTRACT; only the
-    HTML markup below — and the format-dependent "empty body → pending"
-    fallback — is EMIT and lives here.
+    The content-source decision now lives in the shared
+    render_common.resolve_narrative_content dispatch; only the HTML markup and
+    the format-dependent "empty body → pending" fallback are EMIT here.
     """
-    plan = front_matter_plan(node, data)
-    if plan.kind == "labeled":
-        body = _render_labeled_sections(plan.labeled_parts)
-    else:
-        # "paragraphs" carries the flat list; "none" carries [] → "" → pending.
-        body = _render_paragraphs(plan.paragraphs)
-    if not body:
-        body = _pending(f"Section pending: {node.title}")
-    return f"{_heading(node.level, node.title)}\n{body}"
+    return _render_narrative_family(node, data, f"Section pending: {node.title}")
 
 
 def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
@@ -600,31 +629,10 @@ def _render_labeled_sections(parts: list[tuple[str, str]]) -> str:
 
 def _render_narrative(node: DocNode, data: dict) -> str:
     """
-    Plain narrative section.  M&M subsections route through the
-    methods-specific lookup because their content lives in a flat
-    sections list, not at data[data_key]["paragraphs"].
+    Plain narrative section.  M&M subsections (methods_key) and plain prose both
+    route through the shared resolver, which picks the right content source.
     """
-    if node.methods_key:
-        return _render_methods_subsection(node, data)
-    return _render_front_matter(node, data)
-
-
-def _render_methods_subsection(node: DocNode, data: dict) -> str:
-    """
-    M&M subsection — content lives in data["methods"]["sections"], matched
-    to this node by the stable methods_key (see methods_subsection_content).
-    Mirrors the LaTeX handler's lookup strategy.
-    """
-    # ADR-0006 Amendment 1: the key-match lookup and content-present
-    # decision are shared; the markup is HTML emit.  A section with no real
-    # paragraph text and no inline table is "pending" on both surfaces.
-    paragraphs, inline = methods_subsection_content(node, data)
-    body = _render_paragraphs(paragraphs) if has_paragraph_content(paragraphs) else ""
-    if inline is not None:
-        body = (body + "\n" + _render_inline_table(inline)).strip()
-    if not body:
-        body = _pending(f"Section pending: {node.title}")
-    return f"{_heading(node.level, node.title)}\n{body}"
+    return _render_narrative_family(node, data, f"Section pending: {node.title}")
 
 
 def _render_inline_table(table: dict) -> str:
@@ -848,15 +856,11 @@ def _render_narrative_tables(node: DocNode, data: dict) -> str:
     H2 group under Results (Animal Condition, Clinical Pathology, etc.).
     Emits the heading + unified narrative paragraphs.  Child table nodes
     are walked separately by _walk_html.
+
+    The narrative-paragraph selection is the shared resolve_narrative_content
+    dispatch; only the markup + the "Narrative pending" wording are HTML emit.
     """
-    # ADR-0006 Amendment 1: the narrative-paragraph selection AND the
-    # content-present decision are shared; only the markup is HTML emit.
-    paragraphs = unified_narrative_paragraphs(node, data)
-    if has_paragraph_content(paragraphs):
-        body = _render_paragraphs(paragraphs)
-    else:
-        body = _pending(f"Narrative pending: {node.title}")
-    return f"{_heading(node.level, node.title)}\n{body}"
+    return _render_narrative_family(node, data, f"Narrative pending: {node.title}")
 
 
 def _render_figure(node: DocNode, data: dict) -> str:
