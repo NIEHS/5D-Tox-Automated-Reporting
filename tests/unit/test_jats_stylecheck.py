@@ -20,7 +20,12 @@ from pathlib import Path
 import pytest
 
 from jats_generator import generate_jats
-from jats_stylecheck import STYLECHECKER_DIR, stylecheck
+from jats_stylecheck import (
+    JATS_DTD_DIR,
+    STYLECHECKER_DIR,
+    dtd_validate,
+    stylecheck,
+)
 from report_data import scaffold_report_data
 
 
@@ -86,3 +91,73 @@ def test_reporter_renders_html(scaffold):
     result = stylecheck(generate_jats(scaffold), style="article")
     html = result.html_report()
     assert "5.48" in html and "</html>" in html.lower()
+
+
+# ---------------------------------------------------------------------------
+# DTD content-model validation — the check the PMC Article Previewer runs and
+# the StyleChecker does NOT (StyleChecker = tagging conformance, DTD = content
+# model).  A real Previewer upload once failed with "body content does not
+# follow the DTD" when a <table-wrap> was emitted after a <sec>; these guard
+# that regression offline.
+# ---------------------------------------------------------------------------
+
+def test_jats_dtd_assets_present():
+    """The DTD gate is worthless without the vendored module set."""
+    assert (JATS_DTD_DIR / "JATS-archivearticle1-3.dtd").exists(), \
+        "missing vendored JATS entry DTD"
+    # A handful of the transitively-included modules must be present too, or the
+    # parse silently degrades to "no DTD found".
+    for name in ("JATS-common1-3.ent", "JATS-section1-3.ent", "mathml2.dtd"):
+        assert (JATS_DTD_DIR / name).exists(), f"missing vendored DTD module {name}"
+
+
+def _real_session_jats() -> str:
+    from latex_export import load_session_data
+    data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    return generate_jats(data)
+
+
+def test_scaffold_is_dtd_valid(scaffold):
+    """The metadata + narrative spine validates against the real JATS 1.3 DTD."""
+    errors = dtd_validate(generate_jats(scaffold))
+    assert not errors, "scaffold JATS is not DTD-valid:\n  " + "\n  ".join(errors)
+
+
+def test_real_session_is_dtd_valid():
+    """The full report WITH data tables (the case that broke the Previewer:
+    <table-wrap>s interleaved among <sec> siblings) must be DTD-valid — every
+    table now sits in a proper nested <sec>, honoring body's (block)*, sec*."""
+    errors = dtd_validate(_real_session_jats())
+    assert not errors, "real-session JATS is not DTD-valid:\n  " + "\n  ".join(errors)
+
+
+def test_dtd_validate_catches_body_ordering_violation():
+    """Negative control: dtd_validate actually REJECTS a <table-wrap> after a
+    <sec> in <body> — proving the guard has teeth (the exact Previewer error)."""
+    bad = (
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE article PUBLIC "-//NLM//DTD JATS (Z39.96) Journal Archiving '
+        'and Interchange DTD v1.3 20210610//EN" "JATS-archivearticle1-3.dtd">\n'
+        '<article article-type="research-article" dtd-version="1.3"><front>'
+        '<journal-meta><journal-id journal-id-type="publisher-id">x</journal-id>'
+        '<journal-title-group><journal-title>T</journal-title></journal-title-group>'
+        '<issn pub-type="epub">2768-5632</issn></journal-meta><article-meta>'
+        '<article-categories><subj-group subj-group-type="heading"><subject>S'
+        '</subject></subj-group></article-categories><title-group><article-title>'
+        'T</article-title></title-group><pub-date date-type="pub" '
+        'publication-format="electronic"><year>2026</year></pub-date>'
+        '<elocation-id>e1</elocation-id></article-meta></front>'
+        '<body><sec id="s1"><title>A</title><p>x</p></sec>'
+        '<table-wrap id="T1"><label>Table 1</label><caption><p>c</p></caption>'
+        '<table><tbody><tr><td>x</td></tr></tbody></table></table-wrap>'
+        '</body></article>'
+    )
+    errors = dtd_validate(bad)
+    assert any("body" in e for e in errors), (
+        "dtd_validate should reject a <table-wrap> after a <sec> in <body>; "
+        f"got: {errors}"
+    )

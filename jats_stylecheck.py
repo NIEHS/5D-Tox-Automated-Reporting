@@ -33,6 +33,17 @@ _REPORTER_XSL = STYLECHECKER_DIR / "style-reporter.xsl"
 # The checker announces the vocabulary/version; surfaced for provenance in logs.
 STYLECHECKER_VERSION = "5.48"
 
+# Vendored NISO JATS 1.3 Archiving DTD + its full module set (MathML, ISO char
+# entities, OASIS/XHTML table models).  The StyleChecker validates TAGGING-
+# GUIDELINE conformance, NOT the DTD content model — so it cannot catch a
+# structural error like a <table-wrap> emitted after a <sec> (the JATS body model
+# is (block)*, sec*).  The PMC Article Previewer DOES a real DTD parse and
+# rejects that.  dtd_validate() reproduces that parse offline so the same class
+# of error is caught locally.  The entry DTD's relative module refs resolve
+# against this dir, so validation runs with the CWD pinned here.
+JATS_DTD_DIR = Path(__file__).resolve().parent / "assets" / "jats-dtd"
+_JATS_DTD = JATS_DTD_DIR / "JATS-archivearticle1-3.dtd"
+
 
 @dataclass(frozen=True)
 class StyleCheckResult:
@@ -100,3 +111,42 @@ def stylecheck(xml: str | bytes, style: str = "article") -> StyleCheckResult:
     errors = tuple(_message(e) for e in root.findall(".//error"))
     warnings = tuple(_message(w) for w in root.findall(".//warning"))
     return StyleCheckResult(errors=errors, warnings=warnings, err_tree=err_doc)
+
+
+def dtd_validate(xml: str | bytes) -> tuple[str, ...]:
+    """Validate a JATS document against the vendored NISO JATS 1.3 DTD and return
+    the content-model errors (empty tuple = valid).
+
+    This is the check the PMC Article Previewer runs and the StyleChecker does
+    NOT: the DTD content model (e.g. <body> is (block)*, sec* — a <table-wrap>
+    after a <sec> is invalid).  The parse resolves the DTD's relative module
+    entities against JATS_DTD_DIR, so we pin CWD there for the duration (lxml
+    resolves a relative SYSTEM id against the current directory).  Deduplicated,
+    first-seen order; only genuine validity errors are returned (a missing module
+    file would surface here too, signalling the vendored set is incomplete)."""
+    import os
+
+    if not _JATS_DTD.exists():
+        raise FileNotFoundError(
+            f"JATS DTD not found at {_JATS_DTD}. The module set is vendored under "
+            "assets/jats-dtd/ (fetched on the host; PMC/jats.nlm.nih.gov is "
+            "firewalled in-sandbox)."
+        )
+    data = xml.encode("utf-8") if isinstance(xml, str) else xml
+    parser = ET.XMLParser(
+        load_dtd=True, dtd_validation=True, no_network=True, resolve_entities=True,
+    )
+    cwd = os.getcwd()
+    os.chdir(JATS_DTD_DIR)
+    try:
+        try:
+            ET.fromstring(data, parser)
+        except ET.XMLSyntaxError:
+            pass  # errors captured in parser.error_log below
+        seen: dict[str, None] = {}
+        for e in parser.error_log:
+            msg = " ".join(e.message.split())
+            seen.setdefault(f"L{e.line}: {msg}", None)
+        return tuple(seen)
+    finally:
+        os.chdir(cwd)

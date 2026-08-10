@@ -305,18 +305,27 @@ def _build_front(data: dict) -> etree._Element:
     )
 
     # Structured abstract: reuse the SAME IR the html/latex fronts consume.
+    # PMC's production renderer keys structured-abstract body rendering off @id
+    # attributes: real PMC articles always carry <abstract id> and P-prefixed
+    # <p id> on each abstract paragraph (verified against live PMC XML). Without
+    # them the Previewer shows each <sec>'s <title> but DROPS its <p> text — even
+    # though the markup is StyleChecker-clean and DTD-valid. So we id the abstract
+    # and every abstract <p> (P-prefix per the StyleChecker id-content rule); the
+    # <sec> ids match our body convention.
     abstract_node = find_node("abstract")
     if abstract_node is not None:
         plan = front_matter_plan(abstract_node, data)
         if plan.kind == "labeled" and plan.labeled_parts:
-            abstract = E.abstract()
-            for label, body in plan.labeled_parts:
+            abstract = E.abstract({"id": "abstract1"})
+            for i, (label, body) in enumerate(plan.labeled_parts, start=1):
                 if not (body or "").strip():
                     continue
-                sec = E.sec()
+                sec = E.sec({"id": f"Sabs{i}"})
                 if label:
                     sec.append(E.title(label))
-                sec.append(_p(body))
+                para = _p(body)
+                para.set("id", f"Pabs{i}")
+                sec.append(para)
                 abstract.append(sec)
             if len(abstract):
                 article_meta.append(abstract)
@@ -436,10 +445,24 @@ def _emit_genomics_tables(node: DocNode, data: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Body — prose narrative sections + data tables
+# Body — nested <sec> tree of narrative sections + data tables
 # ---------------------------------------------------------------------------
-
-_PROSE_TYPES = frozenset({"narrative", "narrative+tables", "front-matter"})
+# The JATS DTD content model for <body> and every <sec> is
+#     (block-level content)* , sec* , sig-block?
+# i.e. all block content (prose <p>, <table-wrap>, …) must precede any child
+# <sec> — a <table-wrap> after a <sec> sibling is a DTD validity error (which the
+# StyleChecker does NOT catch — it checks tagging-guideline conformance, not the
+# content model — but the PMC Article Previewer's real DTD parse does).  So the
+# body is built as a genuine NESTED tree that mirrors the document tree, with two
+# rules that keep every container valid while preserving document order:
+#   1. a heading-only container becomes a <sec> whose children are themselves
+#      emitted (recursively) — its child narratives/containers are <sec>s;
+#   2. a "loose" titled data-table node (sample-counts / bmd-summary / genomics)
+#      sitting AMONG <sec> siblings is wrapped in its OWN <sec> (it has a title),
+#      so it keeps its slot without becoming a block interleaved after a <sec>.
+# The only raw blocks are the pure `table`/`incidence-table` nodes, which appear
+# ONLY as trailing children of a narrative+tables node — emitted inside that
+# section after its prose, where "blocks after prose, no child sec" stays valid.
 
 # node_type → its data-table EMIT handler (returns a list of body blocks).
 _TABLE_EMITTERS = {
@@ -450,62 +473,84 @@ _TABLE_EMITTERS = {
     "genomics-section": _emit_genomics_tables,
 }
 
+# Pure table nodes emit raw <table-wrap> blocks (no wrapping <sec>): they only
+# ever sit inside a narrative+tables section, after its prose.
+_RAW_TABLE_TYPES = frozenset({"table", "incidence-table"})
+
+
+def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
+    """A <sec> for a narrative / narrative+tables node: title, resolved prose,
+    then (for narrative+tables) its child table nodes as trailing blocks.
+
+    Content order is title → prose <p>s → child table <table-wrap>s, which is
+    DTD-valid (all block content, no child <sec>) and matches document order."""
+    rc = resolve_narrative_content(node, data)
+    sec = E.sec({"id": f"sec-{node.id}"})
+    if node.title:
+        sec.append(E.title(node.title))
+    if rc.kind in ("paragraphs", "methods"):
+        for para in rc.paragraphs:
+            if isinstance(para, str) and not para.strip():
+                continue
+            sec.append(_p(para if isinstance(para, str) else str(para)))
+        if rc.kind == "methods" and rc.inline_table is not None:
+            sec.append(etree.Comment(
+                f" TODO tracer: inline methods table for '{node.id}' "
+                f"deferred to data-tables phase "))
+    elif rc.kind == "labeled":
+        for label, btext in rc.labeled_parts:
+            if (btext or "").strip():
+                sec.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
+    # narrative+tables: its child `table` nodes become trailing blocks in THIS
+    # section (they have no <sec> siblings here, so blocks-after-prose is valid).
+    for child in node.children:
+        _append_node(sec, child, data)
+    return sec
+
+
+def _append_node(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """Append `node`'s contribution to `parent` (<body> or a <sec>), recursively,
+    keeping every container within the JATS (blocks)*, sec* content model."""
+    nt = node.node_type
+    if nt in ("narrative", "narrative+tables"):
+        parent.append(_narrative_sec(node, data))
+    elif nt == "heading-only":
+        sec = E.sec({"id": f"sec-{node.id}"})
+        if node.title:
+            sec.append(E.title(node.title))
+        for child in node.children:
+            _append_node(sec, child, data)
+        parent.append(sec)
+    elif nt in _RAW_TABLE_TYPES:
+        # Pure table: raw <table-wrap> block(s) inside the parent narrative sec.
+        for block in _TABLE_EMITTERS[nt](node, data):
+            parent.append(block)
+    elif nt in _TABLE_EMITTERS:
+        # A titled block-bundle (sample-counts / bmd-summary / genomics) sitting
+        # among <sec> siblings — wrap in its OWN <sec> so the container stays
+        # DTD-valid and the node keeps its document-order slot.
+        sec = E.sec({"id": f"sec-{node.id}"})
+        if node.title:
+            sec.append(E.title(node.title))
+        for block in _TABLE_EMITTERS[nt](node, data):
+            sec.append(block)
+        parent.append(sec)
+    elif nt == "figure":
+        parent.append(_todo(node, "figure not yet projected"))
+    # else: a non-body structural type with no body contribution — skip.
+
 
 def _build_body(data: dict) -> etree._Element:
-    """Walk the tree; emit body content for each node in document order.
-
-    Narrative nodes (narrative / narrative+tables) become <sec> blocks via the
-    shared resolve_narrative_content dispatch; data-table nodes project to
-    <table-wrap> via _TABLE_EMITTERS.  Figures and the genomics chart/narrative
-    parts emit a visible TODO comment so a gap is never silent.  Front-matter
-    prose is handled in <front>, so it is skipped here.
-
-    Emission is flat (document order); a faithful nested <sec> tree mirroring the
-    heading-only containers is a follow-up.
-    """
+    """Build <body> as a nested <sec> tree mirroring the body-region document
+    tree.  Narrative nodes become <sec>s via the shared resolve_narrative_content
+    dispatch; data tables project to <table-wrap>; heading-only nodes nest their
+    children.  Ordering follows the JATS content model (blocks before child secs)
+    — see the module-level note above.  Front-matter prose is handled in <front>,
+    so only region == "body" top-level nodes are walked here."""
     body = E.body()
-
-    def visit(node: DocNode) -> None:
-        if node.region != "body":
-            return
-        if node.node_type in {"narrative", "narrative+tables"}:
-            # ONE shared dispatch (render_common.resolve_narrative_content) picks
-            # the content source — the same call html/latex/docx make — so JATS no
-            # longer sees only the front_matter_plan shape and silently drops the
-            # Methods (methods_key) + Results (unified_narratives) prose.
-            rc = resolve_narrative_content(node, data)
-            sec = E.sec({"id": f"sec-{node.id}"})
-            if node.title:
-                sec.append(E.title(node.title))
-            if rc.kind in ("paragraphs", "methods"):
-                for para in rc.paragraphs:
-                    if isinstance(para, str) and not para.strip():
-                        continue
-                    sec.append(_p(para if isinstance(para, str) else str(para)))
-                # DECIDED: the methods inline table (Final Sample Counts) is
-                # deferred to the data-tables phase — carry a visible marker here
-                # instead of a <table-wrap>, so the gap stays explicit.
-                if rc.kind == "methods" and rc.inline_table is not None:
-                    sec.append(etree.Comment(
-                        f" TODO tracer: inline methods table for '{node.id}' "
-                        f"deferred to data-tables phase "))
-            elif rc.kind == "labeled":
-                for label, btext in rc.labeled_parts:
-                    if (btext or "").strip():
-                        sub = E.sec(E.title(label) if label else E.title(), _p(btext))
-                        sec.append(sub)
-            body.append(sec)
-        elif node.node_type in _TABLE_EMITTERS:
-            # Data tables (apical / incidence / sample-counts / bmd-summary /
-            # genomics grids) project to <table-wrap> via the shared plans.
-            for block in _TABLE_EMITTERS[node.node_type](node, data):
-                body.append(block)
-        elif node.node_type == "figure":
-            # Figures (BITS <fig>/<graphic>) are the next phase — image packaging
-            # is a distinct concern; keep the gap explicit.
-            body.append(_todo(node, "figure not yet projected"))
-
-    walk_tree(DOCUMENT_TREE, visit)
+    for node in DOCUMENT_TREE:
+        if node.region == "body":
+            _append_node(body, node, data)
     return body
 
 
