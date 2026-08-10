@@ -52,6 +52,9 @@ from document_tree import (
 from render_common import (
     front_matter_plan,
     resolve_narrative_content,
+    inline_plain_text,
+    normalize_inline,
+    INLINE_EXT_LINK,
     apical_table_plan,
     incidence_table_plan,
     sample_counts_table,
@@ -132,6 +135,54 @@ def _resolve_xrefs_jats(text: str, parent: etree._Element) -> None:
             _emit_text(f"[[xref:??{target_id}]]")
         pos = m.end()
     _emit_text((text or "")[pos:])
+
+
+def _append_ext_link(parent: etree._Element, unit: dict) -> etree._Element:
+    """Append a BITS <ext-link ext-link-type="uri" xlink:href="…">text</ext-link>
+    to `parent` for an inline ext-link unit; returns it (so its tail can carry the
+    following literal run).  The xlink namespace is declared on the root article/
+    book element (via the dummy-attr carrier), so the prefix resolves here."""
+    href = str(unit.get("href", ""))
+    link = etree.SubElement(parent, "ext-link", {
+        "ext-link-type": "uri",
+        f"{{{_XLINK}}}href": href,
+    })
+    link.text = str(unit.get("text", ""))
+    return link
+
+
+def _append_run(parent: etree._Element, text: str) -> None:
+    """Append a plain-text run to `parent` with xref tokens resolved, correctly
+    whether or not `parent` already has children (character data after an element
+    must go on that element's tail, not the parent's text)."""
+    if len(parent):
+        # Resolve into a scratch <p>, then graft its leading text onto the current
+        # last child's tail and move any <xref> children over in order.
+        scratch = E.p()
+        _resolve_xrefs_jats(text, scratch)
+        last = parent[-1]
+        last.tail = (last.tail or "") + (scratch.text or "")
+        for child in scratch:
+            child.tail = (child.tail or "")
+            parent.append(child)
+    else:
+        _resolve_xrefs_jats(text, parent)
+
+
+def _p_inline(paragraph) -> etree._Element:
+    """A <p> from a paragraph that may be a plain string OR a list of inline units
+    (plain-string runs + typed ext-link dicts — render_common's inline model).
+
+    Plain-string runs go through the xref resolver (so [[xref:…]] tokens still
+    resolve); an ext-link unit becomes a real <ext-link>.  This is the general
+    paragraph builder; _p() is the plain-string fast path that delegates here."""
+    p = E.p()
+    for unit in normalize_inline(paragraph):
+        if isinstance(unit, dict) and unit.get("type") == INLINE_EXT_LINK:
+            _append_ext_link(p, unit)
+        else:
+            _append_run(p, unit if isinstance(unit, str) else str(unit.get("text", "")))
+    return p
 
 
 def _p(text: str) -> etree._Element:
@@ -490,9 +541,9 @@ def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
         sec.append(E.title(node.title))
     if rc.kind in ("paragraphs", "methods"):
         for para in rc.paragraphs:
-            if isinstance(para, str) and not para.strip():
+            if not inline_plain_text(para).strip():
                 continue
-            sec.append(_p(para if isinstance(para, str) else str(para)))
+            sec.append(_p_inline(para))
         if rc.kind == "methods" and rc.inline_table is not None:
             sec.append(etree.Comment(
                 f" TODO tracer: inline methods table for '{node.id}' "
@@ -555,6 +606,167 @@ def _build_body(data: dict) -> etree._Element:
 
 
 # ---------------------------------------------------------------------------
+# BITS <book> projection — the reports publish as Bookshelf books (NBK589955),
+# not journal articles.  BITS reuses the JATS content modules, so ALL of the
+# above (_p, xref, _table_wrap, the table emitters, _append_node's nested-<sec>
+# discipline) is reused verbatim; only the top-level shell + metadata + front
+# matter differ.  Element homes below are per the vendored BITS 2.0 DTD and match
+# the published reference's part structure (foreword1 / fm-peer / fm1 / ack1).
+# ---------------------------------------------------------------------------
+
+_BITS_DOCTYPE = (
+    '<!DOCTYPE book PUBLIC '
+    '"-//NLM//DTD BITS Book Interchange DTD v2.0 20151225//EN" '
+    '"BITS-book2.dtd">'
+)
+
+# Which BITS front-matter element each front-matter node projects to (by data_key):
+# Foreword has its own <foreword> element; Acknowledgments is an <ack>; everything
+# else is a generic <front-matter-part> (the reference serves About This Report /
+# Peer Review / Publication Details as front-matter parts — fm1 / fm-peer).
+_FOREWORD_KEYS = frozenset({"foreword"})
+_ACK_KEYS = frozenset({"acknowledgments"})
+
+
+def _build_book_meta(data: dict) -> etree._Element:
+    """<book-meta>: book-id, title, pub-date, issn, publisher, and the structured
+    <abstract>.  Reuses the same data fields the journal metadata layer read, in
+    the order the BITS book-meta content model requires."""
+    title = str(data.get("chemical_name") or data.get("title") or "Untitled Report")
+    issn = str(data.get("issn") or "")
+    publisher = str(data.get("publisher")
+                    or "National Institute of Environmental Health Sciences")
+
+    bm = E("book-meta",
+        E("book-id", {"book-id-type": "publisher-id"}, "niehs-report"),
+        E("book-title-group", E("book-title", title)),
+    )
+    bm.append(_build_pub_date(data))
+    if issn:
+        bm.append(E.issn({"publication-format": "electronic"}, issn))
+    publisher_loc = str(data.get("publisher_loc") or "Research Triangle Park, NC")
+    bm.append(E.publisher(E("publisher-name", publisher),
+                          E("publisher-loc", publisher_loc)))
+
+    # Structured abstract — same IR + @id pattern the article path uses (PMC keys
+    # abstract-body rendering off @id; see _build_front).
+    abstract_node = find_node("abstract")
+    if abstract_node is not None:
+        plan = front_matter_plan(abstract_node, data)
+        if plan.kind == "labeled" and plan.labeled_parts:
+            abstract = E.abstract({"id": "abstract1"})
+            for i, (label, body) in enumerate(plan.labeled_parts, start=1):
+                if not (body or "").strip():
+                    continue
+                sec = E.sec({"id": f"Sabs{i}"})
+                if label:
+                    sec.append(E.title(label))
+                para = _p(body)
+                para.set("id", f"Pabs{i}")
+                sec.append(para)
+                abstract.append(sec)
+            if len(abstract):
+                bm.append(abstract)
+    return bm
+
+
+def _fm_prose_blocks(node: DocNode, data: dict) -> list:
+    """The prose blocks of a front-matter node, resolved via the shared dispatch:
+    a list of <p> (and, for a labeled node, run-in <sec>s).  Shared by the
+    foreword / front-matter-part / ack emitters, which differ only in wrapper."""
+    rc = resolve_narrative_content(node, data)
+    out: list = []
+    if rc.kind in ("paragraphs", "methods"):
+        for para in rc.paragraphs:
+            if not inline_plain_text(para).strip():
+                continue
+            out.append(_p_inline(para))
+    elif rc.kind == "labeled":
+        for label, btext in rc.labeled_parts:
+            if (btext or "").strip():
+                out.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
+    return out
+
+
+def _build_front_matter(data: dict) -> etree._Element | None:
+    """<front-matter> holding the prose front-matter sections in tree order.
+
+    Per the BITS DTD + the published reference: <foreword> for the foreword,
+    <ack> for acknowledgments, <front-matter-part> for the rest (About This
+    Report, Peer Review, Publication Details).  foreword/front-matter-part carry
+    their prose inside <named-book-part-body> (which has no title slot, so the
+    title becomes a leading <sec><title>); <ack> takes a <title> directly.
+    Returns None when nothing has content (front-matter-model requires ≥1 child).
+    """
+    fm = E("front-matter")
+    for node in DOCUMENT_TREE:
+        if node.region != "front" or node.node_type != "front-matter":
+            continue
+        if node.data_key == "abstract":
+            continue  # the abstract lives in <book-meta>
+        blocks = _fm_prose_blocks(node, data)
+        if not blocks:
+            continue
+        if node.data_key in _ACK_KEYS:
+            # <ack> takes a <title> directly (sec-opt-title-model).
+            fm.append(E.ack({"id": f"fm-{node.id}"}, E.title(node.title), *blocks))
+        else:
+            # foreword / front-matter-part use named-book-part-model: the title
+            # lives in <book-part-meta><title-group>, the prose in
+            # <named-book-part-body> (which has no title slot of its own).
+            meta = E("book-part-meta", E("title-group", E.title(node.title)))
+            body = E("named-book-part-body", *blocks)
+            tag = "foreword" if node.data_key in _FOREWORD_KEYS else "front-matter-part"
+            fm.append(E(tag, {"id": f"fm-{node.id}"}, meta, body))
+    return fm if len(fm) else None
+
+
+def _build_book_body(data: dict) -> etree._Element:
+    """<book-body>: the body-region tree grouped into <book-part>s.  Each
+    top-level body node (Materials and Methods, Results, Summary — the reference's
+    bp2/bp3/bp4) becomes a <book-part> whose <body> holds that node's rendered
+    subtree via the shared _append_node (all table/narrative emit reused)."""
+    book_body = E("book-body")
+    for node in DOCUMENT_TREE:
+        if node.region != "body":
+            continue
+        inner = E.body()
+        _append_node(inner, node, data)
+        # The chapter title goes in <book-part-meta><title-group> (StyleChecker
+        # "book main unit check").  A heading-only container node (Methods,
+        # Results) already emits its own inner <sec><title>; hoisting the title
+        # to the part-meta is what the book model wants, so drop the now-duplicate
+        # leading inner heading is unnecessary — the part-meta title is the
+        # chapter head, the inner sec titles are its sub-sections.
+        meta = E("book-part-meta", E("title-group", E.title(node.title)))
+        book_body.append(
+            E("book-part", {"book-part-type": "chapter", "id": f"bp-{node.id}"},
+              meta, inner)
+        )
+    return book_body
+
+
+def generate_bits(data: dict) -> str:
+    """Project the report to a BITS <book> XML string (the Bookshelf submission
+    format).  Numbering first (positional xref labels), then book-meta +
+    front-matter + book-body.  Returns XML decl + BITS 2.0 DOCTYPE + book."""
+    compute_table_numbers()
+    # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
+    # with the literal "xlink" prefix the BITS/JATS DTD fixes (an auto-assigned
+    # ns0 prefix is rejected: "No declaration for attribute href").
+    book = etree.Element("book", {"dtd-version": "2.0"}, nsmap={"xlink": _XLINK})
+    book.append(_build_book_meta(data))
+    fm = _build_front_matter(data)
+    if fm is not None:
+        book.append(fm)
+    book.append(_build_book_body(data))
+    return etree.tostring(
+        book, xml_declaration=True, encoding="UTF-8", pretty_print=True,
+        doctype=_BITS_DOCTYPE,
+    ).decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -567,18 +779,15 @@ def generate_jats(data: dict) -> str:
     pretty-printed article.
     """
     compute_table_numbers()  # positional numbers → xref labels resolve
-    article = E.article(
-        {
-            "dtd-version": "1.3",
-            "article-type": _ARTICLE_TYPE,
-            f"{{{_XLINK}}}dummy": "x",  # xlink ns decl carrier
-        },
-        _build_front(data),
-        _build_body(data),
+    # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
+    # with the literal "xlink" prefix the JATS DTD fixes (see generate_bits).
+    article = etree.Element(
+        "article",
+        {"dtd-version": "1.3", "article-type": _ARTICLE_TYPE},
+        nsmap={"xlink": _XLINK},
     )
-    # Drop the dummy attr used only to force the xlink namespace declaration.
-    del article.attrib[f"{{{_XLINK}}}dummy"]
-    etree.cleanup_namespaces(article)
+    article.append(_build_front(data))
+    article.append(_build_body(data))
     return etree.tostring(
         article, xml_declaration=True, encoding="UTF-8", pretty_print=True,
         doctype=_JATS_DOCTYPE,

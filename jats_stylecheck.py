@@ -44,6 +44,21 @@ STYLECHECKER_VERSION = "5.48"
 JATS_DTD_DIR = Path(__file__).resolve().parent / "assets" / "jats-dtd"
 _JATS_DTD = JATS_DTD_DIR / "JATS-archivearticle1-3.dtd"
 
+# Vendored BITS 2.0 Book Interchange DTD + its module set (BITS reuses the JATS
+# 1.x modules, plus its own BITS-book*/BITS-bookmeta* modules and the MathML/ISO
+# char-entity subtrees shared with the JATS set).  The reports are published as
+# BITS <book>s (NBK589955 = NIEHS Report 10), so the book export validates
+# against this.  Same offline parse as the JATS DTD, different root grammar.
+BITS_DTD_DIR = Path(__file__).resolve().parent / "assets" / "bits-dtd"
+_BITS_DTD = BITS_DTD_DIR / "BITS-book2.dtd"
+
+# The two vocabularies dtd_validate() can check against: the grammar dir + the
+# entry DTD filename its relative module refs resolve against.
+_DTD_GRAMMARS = {
+    "article": (JATS_DTD_DIR, _JATS_DTD),
+    "book": (BITS_DTD_DIR, _BITS_DTD),
+}
+
 
 @dataclass(frozen=True)
 class StyleCheckResult:
@@ -113,31 +128,37 @@ def stylecheck(xml: str | bytes, style: str = "article") -> StyleCheckResult:
     return StyleCheckResult(errors=errors, warnings=warnings, err_tree=err_doc)
 
 
-def dtd_validate(xml: str | bytes) -> tuple[str, ...]:
-    """Validate a JATS document against the vendored NISO JATS 1.3 DTD and return
-    the content-model errors (empty tuple = valid).
+def dtd_validate(xml: str | bytes, grammar: str = "article") -> tuple[str, ...]:
+    """Validate a document against a vendored NISO DTD and return the content-
+    model errors (empty tuple = valid).
 
-    This is the check the PMC Article Previewer runs and the StyleChecker does
-    NOT: the DTD content model (e.g. <body> is (block)*, sec* — a <table-wrap>
-    after a <sec> is invalid).  The parse resolves the DTD's relative module
-    entities against JATS_DTD_DIR, so we pin CWD there for the duration (lxml
+    `grammar` selects the vocabulary: "article" → NISO JATS 1.3 Archiving (a
+    journal <article>), "book" → BITS 2.0 Book Interchange (a <book>).  This is
+    the check the PMC/Bookshelf pipeline runs and the StyleChecker does NOT: the
+    DTD content model (e.g. <body> is (block)*, sec* — a <table-wrap> after a
+    <sec> is invalid).  The parse resolves the DTD's relative module entities
+    against the grammar's dir, so we pin CWD there for the duration (lxml
     resolves a relative SYSTEM id against the current directory).  Deduplicated,
     first-seen order; only genuine validity errors are returned (a missing module
     file would surface here too, signalling the vendored set is incomplete)."""
     import os
 
-    if not _JATS_DTD.exists():
+    try:
+        dtd_dir, entry = _DTD_GRAMMARS[grammar]
+    except KeyError:
+        raise ValueError(f"unknown DTD grammar {grammar!r}; use 'article' or 'book'")
+    if not entry.exists():
         raise FileNotFoundError(
-            f"JATS DTD not found at {_JATS_DTD}. The module set is vendored under "
-            "assets/jats-dtd/ (fetched on the host; PMC/jats.nlm.nih.gov is "
-            "firewalled in-sandbox)."
+            f"{grammar} DTD not found at {entry}. The module set is vendored under "
+            f"{dtd_dir.relative_to(entry.parents[2])}/ (fetched from "
+            "jats.nlm.nih.gov)."
         )
     data = xml.encode("utf-8") if isinstance(xml, str) else xml
     parser = ET.XMLParser(
         load_dtd=True, dtd_validation=True, no_network=True, resolve_entities=True,
     )
     cwd = os.getcwd()
-    os.chdir(JATS_DTD_DIR)
+    os.chdir(dtd_dir)
     try:
         try:
             ET.fromstring(data, parser)

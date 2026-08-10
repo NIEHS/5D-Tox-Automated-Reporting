@@ -19,8 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from jats_generator import generate_jats
+from jats_generator import generate_bits, generate_jats
 from jats_stylecheck import (
+    BITS_DTD_DIR,
     JATS_DTD_DIR,
     STYLECHECKER_DIR,
     dtd_validate,
@@ -161,3 +162,59 @@ def test_dtd_validate_catches_body_ordering_violation():
         "dtd_validate should reject a <table-wrap> after a <sec> in <body>; "
         f"got: {errors}"
     )
+
+
+# ---------------------------------------------------------------------------
+# BITS <book> path — the reports publish as Bookshelf books (NBK589955), so the
+# book export is validated against the BITS 2.0 DTD and StyleChecker style=book.
+# ---------------------------------------------------------------------------
+
+def test_bits_dtd_assets_present():
+    """The book gate needs the vendored BITS module set."""
+    assert (BITS_DTD_DIR / "BITS-book2.dtd").exists(), "missing vendored BITS entry DTD"
+    for name in ("BITS-bookmeta2.ent", "JATS-modules1.ent", "mathml3.dtd"):
+        assert (BITS_DTD_DIR / name).exists(), f"missing vendored BITS module {name}"
+
+
+def _real_session_bits() -> str:
+    from latex_export import load_session_data
+    data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    return generate_bits(data)
+
+
+def test_bits_scaffold_valid_and_clean(scaffold):
+    """The book shell (scaffold) is BITS-DTD-valid and StyleChecker(book)-clean."""
+    xml = generate_bits(scaffold)
+    assert not dtd_validate(xml, "book"), "scaffold BITS not DTD-valid"
+    assert not stylecheck(xml, "book").errors, "scaffold BITS has StyleChecker errors"
+
+
+def test_bits_real_session_valid_and_clean():
+    """The full book WITH front matter + body chapters + 12 data tables passes
+    both book gates (DTD content model + StyleChecker style=book)."""
+    xml = _real_session_bits()
+    dtd = dtd_validate(xml, "book")
+    assert not dtd, "real-session BITS not DTD-valid:\n  " + "\n  ".join(dtd)
+    sc = stylecheck(xml, "book")
+    assert not sc.errors, "real-session BITS StyleChecker errors:\n  " + "\n  ".join(sc.errors)
+
+
+def test_bits_emits_front_matter_sections():
+    """The five front-matter sections that were dropped in the article <body>
+    now appear as BITS front-matter (foreword / front-matter-part / ack).  About
+    This Report is empty in this session, so 3 of 4 populated sections show."""
+    xml = _real_session_bits()
+    assert "<foreword" in xml and "<ack" in xml and "<front-matter-part" in xml
+    for title in ("Foreword", "Peer Review", "Publication Details", "Acknowledgments"):
+        assert title in xml, f"front-matter section missing: {title}"
+
+
+def test_bits_body_is_book_parts_with_tables():
+    """The body is chapters (<book-part>), and all 12 data tables survive."""
+    xml = _real_session_bits()
+    assert xml.count("<book-part ") == 4, "expected 4 body chapters"
+    assert xml.count("<table-wrap ") == 12, "expected 12 data tables"
