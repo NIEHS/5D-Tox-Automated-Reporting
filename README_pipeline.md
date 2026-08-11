@@ -122,7 +122,7 @@ This is the main analytical step. You provide a **dose-response CSV** (BMDExpres
 6. **Formats context** — assembles all structured analysis into a text block
 7. **Generates narratives** — sends the context to multiple LLM models (e.g. qwen2.5:14b, gemma2:9b, claude-sonnet-4-6) with multiple runs each, requesting a toxicological interpretation narrative
 8. **Runs concordance analysis** — compares narratives across models to identify consistent findings vs. model-specific hallucinations
-9. **Exports results** — Markdown report + Word document (.docx)
+9. **Exports results** — Markdown report(s): the interpretation (`--output`, default `output/interpretation.md`), plus combined all-narratives and concordance markdown
 
 ```
 uv run python interpret.py dose_response_data.csv \
