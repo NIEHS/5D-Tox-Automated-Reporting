@@ -73,7 +73,8 @@ from render_common import (
     appendix_roster_rows,
     assert_dispatch_covers,
     bmd_summary_plan,
-    front_matter_plan,
+    NarrativeContent,
+    resolve_narrative_content,
     gene_set_table_rows,
     gene_table_rows,
     genomics_chart_caption,
@@ -87,10 +88,8 @@ from render_common import (
     inline_plain_text,
     INLINE_EXT_LINK,
     incidence_table_plan,
-    methods_subsection_content,
     sample_counts_table,
     table_caption as _table_caption,
-    unified_narrative_paragraphs,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from genomics_content import genomics_content_plan
@@ -625,34 +624,55 @@ def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
         _style_front_matter_heading(head)
 
     body_style = _role_style_name(data, body_role) if body_role else None
-    plan = front_matter_plan(node, data)
-    if plan.kind == "labeled":
-        _add_labeled_sections(doc, plan.labeled_parts)
-    elif plan.kind == "paragraphs":
-        _add_paragraphs(doc, plan.paragraphs, style=body_style)
+    rc = resolve_narrative_content(node, data)
+    if rc.kind == "labeled":
+        _add_labeled_sections(doc, rc.labeled_parts)
+    elif rc.kind == "paragraphs":
+        _add_paragraphs(doc, rc.paragraphs, style=body_style)
     else:
         _add_pending(doc, f"Section pending: {node.title}")
 
 
+def _emit_narrative_body(
+    doc: Document, rc: NarrativeContent, body_style: "str | None"
+) -> bool:
+    """EMIT a resolved NarrativeContent's body into ``doc`` (no heading, no
+    pending — the caller owns those).  Returns True iff any content was added, so
+    the caller can decide the (format-dependent) pending fallback.
+
+    The content SOURCE was chosen by render_common.resolve_narrative_content;
+    this is the Word EMIT per kind:
+      labeled    → bold run-in-label paragraphs (_add_labeled_sections);
+      paragraphs → body paragraphs in ``body_style``;
+      methods    → body paragraphs plus, when present, the inline table;
+      none       → nothing added (returns False).
+    Mirrors the old per-handler logic exactly, including the methods guard where
+    an inline-table-only section still counts as content."""
+    if rc.kind == "labeled":
+        _add_labeled_sections(doc, rc.labeled_parts)
+        return True
+    if rc.kind in ("paragraphs", "methods"):
+        added = (_add_paragraphs(doc, rc.paragraphs, style=body_style)
+                 if has_paragraph_content(rc.paragraphs) else False)
+        if rc.kind == "methods" and rc.inline_table is not None:
+            _render_inline_table(doc, rc.inline_table)
+            added = True
+        return added
+    return False
+
+
 def _render_narrative(doc: Document, node: DocNode, data: dict) -> None:
-    """Plain narrative — M&M subsections route through the methods lookup."""
-    if node.methods_key:
-        _render_methods_subsection(doc, node, data)
-    else:
-        _render_front_matter(doc, node, data)
+    """Plain narrative (background, summary, references, and M&M subsections).
 
-
-def _render_methods_subsection(doc: Document, node: DocNode, data: dict) -> None:
-    """M&M subsection — prose + optional inline table, matched by methods_key."""
+    The content-source decision is the shared resolve_narrative_content dispatch;
+    heading + body ROLE styling and the pending fallback stay Word EMIT here.
+    `narrative` body sections keep the generic heading (a role style is only used
+    for genuine `front-matter` nodes — see _render_front_matter), and their prose
+    is the canonical body_para style."""
     _add_heading(doc, node.level, node.title, data)
-    paragraphs, inline = methods_subsection_content(node, data)
     body_style = _pstyle_or_default(doc, data, "body_para")
-    added = (_add_paragraphs(doc, paragraphs, style=body_style)
-             if has_paragraph_content(paragraphs) else False)
-    if inline is not None:
-        _render_inline_table(doc, inline)
-        added = True
-    if not added:
+    rc = resolve_narrative_content(node, data)
+    if not _emit_narrative_body(doc, rc, body_style):
         _add_pending(doc, f"Section pending: {node.title}")
 
 
@@ -1114,12 +1134,15 @@ def _toc_entry_paragraph(doc: Document, level: int):
 
 
 def _render_narrative_tables(doc: Document, node: DocNode, data: dict) -> None:
-    """H2 group under Results: heading + unified narrative; tables walked after."""
+    """H2 group under Results: heading + unified narrative; tables walked after.
+
+    The narrative-paragraph selection is the shared resolve_narrative_content
+    dispatch; heading + body_para styling and the pending fallback stay Word EMIT.
+    """
     _add_heading(doc, node.level, node.title, data)
-    paragraphs = unified_narrative_paragraphs(node, data)
-    if has_paragraph_content(paragraphs):
-        _add_paragraphs(doc, paragraphs, style=_pstyle_or_default(doc, data, "body_para"))
-    else:
+    body_style = _pstyle_or_default(doc, data, "body_para")
+    rc = resolve_narrative_content(node, data)
+    if not _emit_narrative_body(doc, rc, body_style):
         _add_pending(doc, f"Narrative pending: {node.title}")
 
 

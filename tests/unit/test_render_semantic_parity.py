@@ -316,8 +316,11 @@ def test_methods_subsection_matches_by_key_not_title():
     )
 
     # And both surfaces render it as content, not the pending placeholder.
-    html = html_generator._render_methods_subsection(node, data)
-    tex = latex_generator._render_methods_subsection(node, data)
+    # The methods dispatch now lives in the shared render_common.resolve_narrative_
+    # content; a methods_key node reaches it through each surface's public
+    # _render_narrative (the private methods handler was folded into the resolver).
+    html = html_generator._render_narrative(node, data)
+    tex = latex_generator._render_narrative(node, data)
     assert "REAL STUDY DESIGN PROSE" in html and "REAL STUDY DESIGN PROSE" in tex
     assert "pending" not in html.lower() and "pending" not in tex.lower()
 

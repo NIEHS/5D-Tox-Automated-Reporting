@@ -215,6 +215,55 @@ class FrontMatterPlan:
     paragraphs: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class NarrativeContent:
+    """The resolved content of ONE narrative-family node, source-agnostic.
+
+    A narrative-family node (`narrative`, `front-matter`, `narrative+tables`)
+    keeps its prose in one of three DIFFERENT data shapes, and which shape
+    applies is decided by the node itself (its node_type + whether it carries a
+    methods_key).  Historically each render surface re-implemented that dispatch
+    in its own `_render_narrative` — three hand-copies that agreed only by
+    discipline, and a fourth (JATS) that copied one branch and silently dropped
+    ~20 sections.  `resolve_narrative_content` makes the decision ONCE and returns
+    this union; every surface consumes it and owns only its markup.  This is the
+    narrative-content analogue of the node-type dispatch centralization ADR-0006
+    did with RENDERABLE_NODE_TYPES / assert_dispatch_covers.
+
+    The union is LOSSLESS — it carries every shape a surface consumes today, so
+    relocating the dispatch here changes no surface's output:
+
+        kind:          which content source won —
+                         "labeled"    → labeled_parts (structured-abstract parts);
+                         "paragraphs" → paragraphs (flat prose: background, summary,
+                                        references, and the Results narrative+tables
+                                        groups via unified_narratives);
+                         "methods"    → paragraphs (+ optional inline_table) for an
+                                        M&M subsection matched by methods_key;
+                         "none"       → no content source; the emitter shows its own
+                                        (format-dependent) pending placeholder.
+        level:         heading level (0 = none) — passed straight to the emitter.
+        title:         heading text (raw, unescaped — the emitter escapes).
+        labeled_parts: [(label, text)] for kind == "labeled"; label may be "".
+        paragraphs:    raw paragraph units for kind in {"paragraphs", "methods"}.
+        inline_table:  the neutral {caption, headers, rows, footnotes} dict for a
+                       methods subsection that carries an inline table (only the
+                       "methods" kind ever sets it); None otherwise.  Surfaces
+                       that render inline tables read this; a surface may ignore
+                       it (JATS defers <table-wrap> to the data-tables phase).
+
+    Emptiness stays a per-surface EMIT decision (see module docstring): kind
+    "none" is the ONLY signal here, and a surface may additionally treat an
+    all-whitespace paragraphs list as pending in its own way.
+    """
+    kind: str
+    level: int
+    title: str
+    labeled_parts: list[tuple[str, str]] = field(default_factory=list)
+    paragraphs: list = field(default_factory=list)
+    inline_table: dict | None = None
+
+
 # ---------------------------------------------------------------------------
 # Extractors — pure, markup-free
 # ---------------------------------------------------------------------------
@@ -735,6 +784,55 @@ def methods_subsection_content(
             return _unpack(section)
 
     return [], None
+
+
+def resolve_narrative_content(node: DocNode, data: dict) -> NarrativeContent:
+    """Resolve a narrative-family node's content, source-agnostic (THE dispatch).
+
+    This is the single place that decides WHICH of the three narrative content
+    shapes a node uses — the decision every render surface used to hand-copy into
+    its own `_render_narrative`/`_render_narrative_tables` (and that JATS copied
+    incompletely, dropping the Methods + Results prose).  Precedence, verbatim
+    from the surfaces:
+
+      1. `narrative+tables` group node → prose from `unified_narratives`
+         (`unified_narrative_paragraphs`).  Its child `table` nodes are walked
+         separately by each surface; this resolves only the group's own prose.
+      2. a node carrying `methods_key` → the M&M subsection lookup
+         (`methods_subsection_content`), which returns (paragraphs, inline_table).
+      3. otherwise (plain `narrative` / `front-matter`) → `front_matter_plan`,
+         whose labeled/paragraphs/none kinds map straight onto NarrativeContent.
+
+    Returns a NarrativeContent whose `kind` drives the emitter's markup switch.
+    "none" means no content source was found; the emitter applies its own
+    (format-dependent) pending placeholder — this function never decides
+    emptiness beyond "no source at all" (see module docstring).
+
+    Note the ordering: the `narrative+tables` check is first and independent of
+    `methods_key` (a group node has a narrative_key, not a methods_key, so the
+    order only matters defensively), and `front_matter_plan` is the fallback that
+    also serves genuine `front-matter` nodes — so this one function covers all
+    three narrative-family node types uniformly.
+    """
+    if node.node_type == "narrative+tables":
+        paragraphs = unified_narrative_paragraphs(node, data)
+        kind = "paragraphs" if has_paragraph_content(paragraphs) else "none"
+        return NarrativeContent(kind, node.level, node.title, paragraphs=paragraphs)
+
+    if node.methods_key:
+        paragraphs, inline = methods_subsection_content(node, data)
+        has = has_paragraph_content(paragraphs) or inline is not None
+        return NarrativeContent(
+            "methods" if has else "none",
+            node.level, node.title,
+            paragraphs=paragraphs, inline_table=inline,
+        )
+
+    plan = front_matter_plan(node, data)
+    return NarrativeContent(
+        plan.kind, plan.level, plan.title,
+        labeled_parts=plan.labeled_parts, paragraphs=plan.paragraphs,
+    )
 
 
 def sample_counts_table(node: DocNode, data: dict) -> dict | None:

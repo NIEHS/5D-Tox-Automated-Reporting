@@ -13,6 +13,41 @@ The crawlers read configuration from the environment — no flags:
   a single run without editing code. Applies to `citegraph.py`, `crawl_phase2.py`, and
   `genefunc_crawl.py`.
 
+## Corpus acquisition: two paths
+
+There are two ways to build the paper corpus that Steps 3+ consume. Both emit the same
+output contract — `citegraph_output_<name>/papers.json` + `edges.json` — so everything
+downstream is identical.
+
+- **Step 1 (graph crawl, `citegraph.py`)** — walk references/citations from seed papers at
+  ~1 req/sec. Good for a focused citation-neighborhood; slow and rate-limited for breadth.
+- **Datasets API (`datasets_pipeline.py`)** — download whole-corpus snapshots in bulk and
+  filter locally. Far more comprehensive and not per-request rate-limited, but the shard
+  bytes come from an S3 host (`ai2-s2ag.s3.amazonaws.com`) that must be allowlisted.
+
+### Bulk path — Datasets API (datasets_pipeline.py)
+
+Three stages, so the network-gated download is isolated from the logic that can run offline:
+
+```
+# 1. manifest — fetch shard download URLs (api.semanticscholar.org; works today)
+S2_API_KEY=<key> uv run python datasets_pipeline.py manifest
+
+# 2. download — pull gzipped-JSONL shards from S3 (needs ai2-s2ag.s3 allowlisted)
+S2_API_KEY=<key> uv run python datasets_pipeline.py download [--max-shards N]
+
+# 3. filter — stream shards → tox-relevant papers.json/edges.json (offline, no network)
+uv run python datasets_pipeline.py filter [--threshold 0.3]
+```
+
+The filter reuses `citegraph.score_relevance` / `tag_organs` for the toxicogenomics cut,
+gates on S2 fields-of-study first, and keeps only papers that have an abstract (the Claude
+extractor needs text) and citation edges internal to the kept set. Output lands in
+`citegraph_output_datasets/`. Datasets used: `papers`, `abstracts`, `citations`, `tldrs`
+(joined on `corpusid`, which becomes `paper_id`). The signed shard URLs expire, so run
+`download` soon after `manifest`. For offline testing, `filter --local-shards DIR` reads a
+local `DIR/<dataset>/*.gz` layout.
+
 ## Step 1 — Crawl papers (citegraph.py)
 
 The citation graph crawler queries the Semantic Scholar API starting from seed DOIs and
@@ -122,7 +157,7 @@ This is the main analytical step. You provide a **dose-response CSV** (BMDExpres
 6. **Formats context** — assembles all structured analysis into a text block
 7. **Generates narratives** — sends the context to multiple LLM models (e.g. qwen2.5:14b, gemma2:9b, claude-sonnet-4-6) with multiple runs each, requesting a toxicological interpretation narrative
 8. **Runs concordance analysis** — compares narratives across models to identify consistent findings vs. model-specific hallucinations
-9. **Exports results** — Markdown report + Word document (.docx)
+9. **Exports results** — Markdown report(s): the interpretation (`--output`, default `output/interpretation.md`), plus combined all-narratives and concordance markdown
 
 ```
 uv run python interpret.py dose_response_data.csv \

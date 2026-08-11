@@ -2,7 +2,7 @@
 
 Automated report generation for NTP "5-Day Genomic Dose Response in Sprague-Dawley Rats" studies.
 
-Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, then produces a structured NIEHS Report 10-format document — NTP-style apical endpoint tables, LLM-generated narrative sections, and a toxicological genomics interpretation — previewed in-app as HTML and exported as an Overleaf-ready LaTeX bundle.
+Accepts BMDExpress output files (`.bm2`) and gene-level benchmark dose CSVs, then produces a structured NIEHS Report 10-format document — NTP-style apical endpoint tables, LLM-generated narrative sections, and a toxicological genomics interpretation. The report is one canonical document tree projected to four render surfaces: an in-app **HTML** preview, an Overleaf-ready **LaTeX** bundle, a Word **`.docx`** deliverable, and **BITS/JATS** XML for PMC/NCBI Bookshelf submission.
 
 ---
 
@@ -63,7 +63,7 @@ Table builders consume `integrated.json` and produce NTP-style formatted tables 
 The gene-level BMD CSV is processed against the knowledge base: pathway and GO term enrichment (Fisher's exact test, BH FDR correction), BMD ordering by pathway, organ signatures. Results are sent to an LLM for a toxicological interpretation narrative.
 
 **Step 6 — Export**
-Export the approved report as an Overleaf-ready LaTeX bundle — a `.zip` containing `report.tex`, the `niehs.cls` class file, and a `figures/` directory of genomics charts. Drop it into Overleaf and compile. The in-app HTML preview renders the same document tree as you work, so the exported PDF matches what you reviewed.
+The approved report projects to four render surfaces from one document tree. Two are wired to live endpoints: the in-app **HTML** preview (which renders the same tree as you work) and the Overleaf-ready **LaTeX** bundle — a `.zip` containing `report.tex`, the `niehs.cls` class file, and a `figures/` directory of genomics charts (drop it into Overleaf and compile, or compile locally via `/api/compile-pdf`). Two more emitters project the same tree offline: a Word **`.docx`** deliverable for track-changes review (ADR-0008) and **BITS/JATS** XML for PMC/NCBI Bookshelf submission (ADR-0004, currently a BITS `<book>`). Because all four read the same semantic IR, the surfaces can't disagree about what the report says.
 
 ---
 
@@ -82,22 +82,24 @@ For the *why* behind this structure — the purpose → architecture narrative, 
 | `session_routes.py` | Session load/save, approve/unapprove, version history, BMD summary |
 | `upload_routes.py` | Upload `.bm2`, CSV, ZIP; process genomics; preview files |
 | `llm_routes.py` | LLM generation endpoints (background, methods, genomics narrative, summary) |
-| `export_routes.py` | Export the Overleaf LaTeX bundle (`.zip`); serve the HTML preview for a TOC subtree |
+| `export_routes.py` | Export the Overleaf LaTeX bundle (`.zip`); compile a preview PDF locally via `tect`; serve the HTML preview for a TOC subtree. (The Word and BITS/JATS emitters are invoked offline, not via a route.) |
 
-**Report structure and rendering** (the document-component model — ADR-0003/0004; renderer unification — ADR-0006):
+**Report structure and rendering** (the document-component model — ADR-0003/0004; renderer unification — ADR-0006; the Word surface — ADR-0008):
 
 | Module | Purpose |
 |--------|---------|
 | `document_tree.py` / `document_node.py` | The `DocNode` tree and node type — single source of truth for report structure and positional table/figure numbering |
 | `document_template.py` | Loads a YAML template (`templates/*.yaml`) and instantiates it into the `DocNode` tree, validating against the catalog at load time |
 | `render_capabilities.py` | The component catalog — each component type's capabilities, allowed children, required bindings, and content kinds |
-| `report_data.py` | Data assembly — overlays session/request content onto the report scaffold and produces the dict both renderers consume (`marshal_export_data` web path, `load_session_data` session path) |
-| `render_common.py` | The shared semantic IR (ADR-0006): markup-free per-node *plans* + the dispatch registry that both renderers project from, so HTML and LaTeX can't drift |
+| `report_data.py` | Data assembly — overlays session/request content onto the report scaffold and produces the dict every emitter consumes (`marshal_export_data` web path, `load_session_data` session path) |
+| `render_common.py` | The shared semantic IR (ADR-0006): markup-free per-node *plans* + the dispatch registry every emitter projects from, so the surfaces can't drift. Coverage is enforced at import (`assert_dispatch_covers`) for HTML, LaTeX, and Word |
 | `html_generator.py` | Emits the in-app HTML preview from the IR (walks the tree via `document_tree.walk_tree`) |
 | `latex_generator.py` | Emits LaTeX (`report.tex`) from the IR (same shared walk) |
+| `docx_generator.py` | Emits the Word `.docx` deliverable from the IR — a one-way output surface (ADR-0008); handlers mutate a python-docx `Document` rather than accumulate markup strings |
+| `jats_generator.py` | Emits BITS/JATS XML from the IR for PMC/Bookshelf submission (ADR-0004) — `generate_bits` (`<book>`) and `generate_jats` (`<article>`); validated offline against a vendored NLM StyleChecker + BITS DTD |
 | `latex_export.py` | Assembles the Overleaf bundle (`report.tex` + `niehs.cls` + `figures/`) as a `.zip` |
-| `genomics_content.py` / `genomics_charts.py` | Shared genomics content-item plan and chart-image assembly, consumed by both renderers |
-| `cross_references.py` | In-text cross-reference resolution, shared by both renderers |
+| `genomics_content.py` / `genomics_charts.py` | Shared genomics content-item plan and chart-image assembly, consumed by the emitters |
+| `cross_references.py` | In-text cross-reference resolution, shared across the emitters |
 | `interpret.py` | Toxicological interpretation: KB queries, pathway/GO enrichment, LLM narratives |
 
 **Table builders** (consume `integrated.json` only):
@@ -194,7 +196,7 @@ Access control is handled by the `ALLOWED_USERS` environment variable (comma-sep
 
 **System:**
 - Java 21 JRE (BMDExpress 3 subprocess calls)
-- No local LaTeX engine is required — the exported bundle compiles on Overleaf (or any TeX distribution).
+- No local LaTeX engine is required for the Overleaf hand-off — the exported bundle compiles on Overleaf (or any TeX distribution). The optional in-app PDF preview (`/api/compile-pdf`, ADR-0007) does need a local engine (`tect`); without it, the HTML preview and bundle export still work.
 
 **External at runtime:**
 - Anthropic API key, or local Ollama server

@@ -1,0 +1,1921 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE book PUBLIC "-//NLM//DTD BITS Book Interchange DTD v2.0 20151225//EN" "BITS-book2.dtd">
+<book xmlns:xlink="http://www.w3.org/1999/xlink" dtd-version="2.0">
+  <book-meta>
+    <book-id book-id-type="publisher-id">niehs-report</book-id>
+    <book-title-group>
+      <book-title>Perfluorohexanesulfonamide</book-title>
+    </book-title-group>
+    <pub-date date-type="pub" publication-format="electronic">
+      <year>2026</year>
+    </pub-date>
+    <issn publication-format="electronic">2768-5632</issn>
+    <publisher>
+      <publisher-name>National Institute of Environmental Health Sciences</publisher-name>
+      <publisher-loc>Research Triangle Park, NC</publisher-loc>
+    </publisher>
+    <abstract id="abstract1">
+      <sec id="Sabs1">
+        <title>Background</title>
+        <p id="Pabs1">Perfluorohexanesulfonamide (PFHSA) is a member of the per- and polyfluoroalkyl substances (PFAS) chemical class of compounds to which occupational exposure is anticipated primarily among workers in metal surface treatment and coating operations, chrome electroplating facilities, and fire suppression system manufacturing or deployment, with additional environmental contamination pathways from industrial wastewater discharges and aqueous film-forming foam applications. Toxicological information on this compound is sparse, with no completed ATSDR Toxicological Profile, no established OSHA permissible exposure limit, NIOSH recommended exposure limit, EPA oral reference dose, inhalation reference concentration, or cancer weight-of-evidence classification available, and no subchronic, chronic, or carcinogenicity data identified in the regulatory literature.</p>
+      </sec>
+      <sec id="Sabs2">
+        <title>Results</title>
+        <p id="Pabs2">Several clinical pathology and organ weight measurements showed dose-related changes from which BMD values were calculated. In male rats, the effects included significantly decreased total thyroxine concentration, increased absolute liver weight weight, and decreased cholesterol. The BMDs and benchmark dose lower confidence limits (BMDLs) were 8.54 (3.59), 20.5 (3.04), and 101 (61.4), respectively. In female rats, the effects included significantly decreased total thyroxine concentration, decreased sorbitol dehydrogenase, and decreased aspartate aminotransferase. The BMDs and benchmark dose lower confidence limits (BMDLs) were 14.8 (6.76), 126 (69.8), and 193 (127), respectively.</p>
+      </sec>
+      <sec id="Sabs3">
+        <title>Summary</title>
+        <p id="Pabs3">Taken together, in male rats, the most sensitive gene set BMD (BMDL) median, individual gene BMD (BMDL), and apical endpoint BMD (BMDL) values that could be reliably determined occurred at 3.838 (2.773), 0.059 (0.012), and 8.54 (3.59) mg/kg, respectively. In female rats, the most sensitive gene set BMD (BMDL) median, individual gene BMD (BMDL), and apical endpoint BMD (BMDL) values that could be reliably determined occurred at 2.428 (0.543), 0.391 (0.058), and 14.8 (6.76) mg/kg, respectively.</p>
+      </sec>
+    </abstract>
+  </book-meta>
+  <front-matter>
+    <foreword id="fm-foreword">
+      <book-part-meta>
+        <title-group>
+          <title>Foreword</title>
+        </title-group>
+      </book-part-meta>
+      <named-book-part-body>
+        <p>The <ext-link ext-link-type="uri" xlink:href="https://www.niehs.nih.gov/">National Institute of Environmental Health Sciences (NIEHS)</ext-link> is one of 27 institutes and centers of the National Institutes of Health, which is part of the U.S. Department of Health and Human Services. The NIEHS mission is to discover how the environment affects people in order to promote healthier lives. NIEHS works to accomplish its mission by conducting and funding research on human health effects of environmental exposures; developing the next generation of environmental health scientists; and providing critical research, knowledge, and information to citizens and policymakers who are working to prevent hazardous exposures and reduce the risk of disease and disorders connected to the environment. NIEHS is a foundational leader in environmental health sciences and committed to ensuring that its research is directed toward a healthier environment and healthier lives for all people.</p>
+        <p>The NIEHS Report series began in 2022. The environmental health sciences research described in this series is conducted primarily by the <ext-link ext-link-type="uri" xlink:href="https://www.niehs.nih.gov/research/atniehs/dtt/index.cfm">Division of Translational Toxicology (DTT)</ext-link> at NIEHS. NIEHS/DTT scientists conduct innovative toxicology research that aligns with real-world public health needs and translates scientific evidence into knowledge that can inform individual and public health decision-making.</p>
+        <p>NIEHS reports are available free of charge on the <ext-link ext-link-type="uri" xlink:href="https://www.niehs.nih.gov/research/atniehs/dtt/assoc/reports/niehs-reports/index.cfm">NIEHS/DTT website</ext-link> and cataloged in <ext-link ext-link-type="uri" xlink:href="https://pubmed.ncbi.nlm.nih.gov/">PubMed</ext-link>, a free resource developed and maintained by the National Library of Medicine (part of the National Institutes of Health).</p>
+      </named-book-part-body>
+    </foreword>
+    <front-matter-part id="fm-peer-review">
+      <book-part-meta>
+        <title-group>
+          <title>Peer Review</title>
+        </title-group>
+      </book-part-meta>
+      <named-book-part-body>
+        <p>This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Perfluorohexanesulfonamide in Sprague Dawley Rats was not subjected to further external peer review.</p>
+      </named-book-part-body>
+    </front-matter-part>
+    <front-matter-part id="fm-publication">
+      <book-part-meta>
+        <title-group>
+          <title>Publication Details</title>
+        </title-group>
+      </book-part-meta>
+      <named-book-part-body>
+        <p>Publisher: National Institute of Environmental Health Sciences</p>
+        <p>Publishing Location: Research Triangle Park, NC</p>
+        <p>ISSN: 2768-5632</p>
+        <p>DOI: to be assigned upon publication</p>
+        <p>Report Series: NIEHS Report Series</p>
+        <p>Report Series Number: to be assigned upon publication</p>
+      </named-book-part-body>
+    </front-matter-part>
+    <ack id="fm-acknowledgments">
+      <title>Acknowledgments</title>
+      <p>This work was supported by the Intramural Research Program at the National Institute of Environmental Health Sciences (NIEHS), National Institutes of Health and performed for NIEHS under contract.</p>
+    </ack>
+  </front-matter>
+  <book-body>
+    <book-part book-part-type="chapter" id="bp-background">
+      <book-part-meta>
+        <title-group>
+          <title>Background</title>
+        </title-group>
+      </book-part-meta>
+      <body>
+        <sec id="sec-background">
+          <title>Background</title>
+          <p>Perfluorohexanesulfonamide (CASRN: 41997-13-1; DTXSID: DTXSID50469320; PubChem CID: 11603678; EC Number: 816-398-1; IUPAC name: 1,1,2,2,3,3,4,4,5,5,6,6,6-tridecafluorohexane-1-sulfonamide) is a perfluoroalkylsulfonamide belonging to the per- and polyfluoroalkyl substances (PFAS) chemical class, specifically categorized within the perfluoroalkylsulfonamide (FASA) subgroup [1]. As a six-carbon (C6) perfluorinated sulfonamide, the compound is characterized by a fully fluorinated hexyl chain attached to a sulfonamide functional group. Perfluorohexanesulfonamide is used industrially as a coating agent applied to glass and steel surfaces and as an antifogging agent in metal plating operations, including chrome plating processes [2]. The compound is also employed in the formulation of aqueous film-forming foams (AFFF) used in foam fire extinguishing systems [2]. Within the EPA CPDat functional use framework, perfluorohexanesulfonamide is classified as a non-polymer PFAS associated with the manufacture of metal products (treatment and coating of metals), fire-fighting foam applications, and electroplating operations [1]. Occupational exposure is anticipated primarily among workers engaged in metal surface treatment and coating operations, chrome electroplating facilities, and fire suppression system manufacturing or deployment, where inhalation of aerosols or vapors and dermal contact with process solutions represent plausible exposure pathways. Environmental contamination pathways may include releases from industrial wastewater discharges at metal finishing and electroplating facilities and from AFFF application at fire training sites, though specific environmental fate and transport data for this compound are not available in the sources consulted. Consumer product presence and general population residential exposure scenarios have not been characterized in the available literature.</p>
+          <p>No Occupational Safety and Health Administration (OSHA) permissible exposure limit (PEL) has been established for perfluorohexanesulfonamide [3]. Similarly, the National Institute for Occupational Safety and Health (NIOSH) has not published a recommended exposure limit (REL) for this compound [3]. The American Conference of Governmental Industrial Hygienists (ACGIH) threshold limit value (TLV) documentation for perfluorohexanesulfonamide is noted as existing but is available only through subscription access and could not be retrieved for this assessment [1]. The U.S. Environmental Protection Agency (EPA) has not established a maximum contaminant level (MCL) or maximum contaminant level goal (MCLG) under the Safe Drinking Water Act for perfluorohexanesulfonamide as an individual compound [3]. The EPA Integrated Risk Information System (IRIS) does not currently contain a completed assessment for perfluorohexanesulfonamide, and accordingly no oral reference dose (RfD), inhalation reference concentration (RfC), or cancer weight-of-evidence classification has been formally derived by IRIS for this substance [3]. The absence of these regulatory benchmarks substantially limits the ability to conduct quantitative risk assessments for occupational or environmental exposures to this compound.</p>
+          <p>The routes of human exposure to perfluorohexanesulfonamide include inhalation of aerosols or vapors generated during industrial coating, plating, and fire suppression operations, as well as dermal contact with process solutions and potential incidental oral ingestion [2]. Detailed absorption, distribution, metabolism, and excretion (ADME) data specific to perfluorohexanesulfonamide are not fully characterized in the publicly available literature; however, the Agency for Toxic Substances and Disease Registry (ATSDR) has initiated a toxicological profile process for this compound [2]. By structural analogy with other perfluoroalkylsulfonamide compounds, pulmonary absorption following inhalation exposure and gastrointestinal absorption following oral exposure are anticipated, consistent with the physicochemical properties of the perfluoroalkyl chain. Distribution to protein-rich tissues, including the liver, kidney, and serum, is expected based on the known behavior of structurally related PFAS compounds, which exhibit high affinity for albumin and fatty acid binding proteins. Metabolic transformation of the sulfonamide moiety may yield perfluorohexanesulfonic acid (PFHxS) and related metabolites, consistent with biotransformation pathways documented for analogous perfluoroalkylsulfonamide precursors [2]. Excretion routes and biological half-lives specific to perfluorohexanesulfonamide have not been quantitatively established in the available literature, representing a significant gap in the ADME characterization of this compound [2].</p>
+          <p>Toxicological data specific to perfluorohexanesulfonamide are limited in the publicly available literature. No completed ATSDR Toxicological Profile providing a systematic review of acute, subchronic, or chronic health effects was retrievable for this compound at the time of this writing [2]. Based on the structural class, acute effects associated with PFAS compounds of this type may include hepatotoxicity and perturbation of lipid metabolism, though specific acute lethality data (e.g., LD50 or LC50 values) for perfluorohexanesulfonamide were not identified in the sources consulted. Subchronic and chronic toxicity data, including no-observed-adverse-effect levels (NOAELs) or lowest-observed-adverse-effect levels (LOAELs) from repeated-dose animal studies, are not available in the current regulatory literature for this compound [3]. Carcinogenicity has not been classified by the EPA, the International Agency for Research on Cancer (IARC), or the National Toxicology Program (NTP) for perfluorohexanesulfonamide specifically [3]. The absence of subchronic, chronic, and carcinogenicity data represents a substantial gap in the hazard identification database for this compound.</p>
+          <p>The mechanism of toxicity of perfluorohexanesulfonamide has not been fully elucidated; however, based on its structural classification as a perfluoroalkylsulfonamide PFAS, several molecular mechanisms have been proposed by analogy with related compounds [2]. Perfluoroalkyl compounds in this class are known to interact with nuclear receptors, including peroxisome proliferator-activated receptors (PPARα and PPARγ), which regulate lipid metabolism, fatty acid oxidation, and inflammatory signaling pathways [2]. Activation or perturbation of these receptor-mediated pathways may contribute to hepatotoxicity, dyslipidemia, and immunomodulation observed with structurally related PFAS. Additionally, displacement of endogenous fatty acids and thyroid hormones from serum transport proteins such as albumin and transthyretin has been proposed as a mechanism contributing to endocrine disruption by perfluoroalkyl compounds [2]. Oxidative stress and mitochondrial dysfunction have also been implicated in the hepatotoxic effects of PFAS compounds bearing perfluorinated carbon chains of comparable length [2]. The specific molecular targets, reactive intermediates, and signaling pathways activated by perfluorohexanesulfonamide itself remain to be characterized through dedicated mechanistic studies.</p>
+          <p>The available hazard and risk assessment database for perfluorohexanesulfonamide contains significant gaps across multiple domains that limit the ability to conduct a complete quantitative risk assessment. In the domain of exposure characterization, the absence of defined consumer product uses, quantitative exposure scenarios, and environmental fate and transport data precludes characterization of the exposed population, identification of high-risk subgroups, or assessment of exposure via contaminated drinking water, ambient air, or soil pathways. The lack of an OSHA PEL and NIOSH REL means that no enforceable or recommended occupational air concentration limit exists for this compound, leaving worker risk assessment without a regulatory anchor; the ACGIH TLV, while noted to exist, was not accessible for this assessment. In the domain of hazard identification, the absence of a completed ATSDR Toxicological Profile and the unavailability of subchronic and chronic toxicity data from repeated-dose animal studies represent critical gaps, as these data are necessary to characterize health effects relevant to occupational and environmental exposure durations. The absence of any authoritative cancer weight-of-evidence classification by EPA, IARC, or NTP means that carcinogenic potential is entirely uncharacterized for this compound. In the domain of dose-response assessment, no oral RfD, NOAEL, LOAEL, or inhalation RfC has been established, precluding derivation of health-based exposure limits by any route; benchmark dose modeling or read-across from structurally related PFAS compounds may be required as interim approaches. In the domain of risk characterization, the absence of an EPA MCL or MCLG under the Safe Drinking Water Act means that environmental contamination of drinking water sources cannot be evaluated against a regulatory standard. Structural identity data, including InChIKey and SMILES notation, were not available in the sources consulted, limiting the application of structure-activity relationship (SAR) analysis or computational read-across to structural analogs. In contrast, industrial and commercial use information is reasonably well documented, and the chemical's PFAS class membership provides a framework for inferring likely biological behavior pending compound-specific data.</p>
+          <p>Given the industrial uses of perfluorohexanesulfonamide in metal coating, chrome electroplating, and aqueous film-forming foam formulations, its structural classification as a perfluoroalkylsulfonamide PFAS with potential for nuclear receptor interaction and hepatotoxicity, and the extensive gaps in subchronic toxicity, dose-response, and mechanistic data identified above, this 5-day genomic dose-response study in Sprague-Dawley rats was conducted to characterize concentration-dependent gene expression changes, identify molecular targets and perturbed biological pathways, and generate transcriptomic data that may serve as a foundation for point-of-departure derivation and read-across analysis in support of the hazard characterization and risk assessment of this data-poor PFAS compound.</p>
+        </sec>
+      </body>
+    </book-part>
+    <book-part book-part-type="chapter" id="bp-methods">
+      <book-part-meta>
+        <title-group>
+          <title>Materials and Methods</title>
+        </title-group>
+      </book-part-meta>
+      <body>
+        <sec id="sec-methods">
+          <title>Materials and Methods</title>
+          <sec id="sec-mm-study-design">
+            <title>Study Design</title>
+            <p>Sprague Dawley rats (Hsd:Sprague Dawley SD) were obtained from a commercial supplier and quarantined for a minimum of seven days prior to study initiation. Animals were assigned to dose groups using a stratified randomization procedure based on body weight to minimize intergroup variability. Male and female rats were administered perfluorohexanesulfonamide (CASRN 41997-13-1; DTXSID50469320) by oral gavage in corn oil vehicle once daily for five consecutive days at nominal doses of 0.0, 0.15, 0.5, 1.4, 4.0, 12.0, 37.0, 111.0, 333.0, or 1000.0 mg/kg body weight. Each treatment group consisted of five male and five female rats; the vehicle control group consisted of ten male and ten female rats administered corn oil alone. All animals were necropsied approximately 24 hours after administration of the final dose on study day 5.</p>
+          </sec>
+          <sec id="sec-mm-dose-rationale">
+            <title>Dose Selection Rationale</title>
+            <p>The dose range for this study was selected based on available toxicological data for perfluorohexanesulfonamide and structurally related perfluoroalkyl sulfonamide compounds, including predicted or empirically derived lethal dose estimates (LD50). Doses were spaced at approximately half-log intervals (roughly 3-fold increments) across a range spanning approximately four orders of magnitude, from 0.15 to 1000.0 mg/kg, to enable robust dose-response characterization across both apical and transcriptomic endpoints. The highest dose of 1000.0 mg/kg was selected as the maximum feasible dose for a 5-day oral gavage study, with the intent of producing some evidence of systemic toxicity at the upper end of the dose range while avoiding excessive lethality or severe morbidity that would preclude meaningful data collection. The lowest doses were selected to bracket the anticipated no-observed-effect level and to support benchmark dose modeling of sensitive transcriptomic responses.</p>
+          </sec>
+          <sec id="sec-mm-chemistry">
+            <title>Chemistry</title>
+            <p>Perfluorohexanesulfonamide (CASRN 41997-13-1; DTXSID50469320) was obtained from a commercial supplier or synthesized by a contract laboratory. Lot-specific details, including lot number, certificate of analysis, and chain-of-custody documentation, are provided in the full study protocol archived with the study records. Chemical identity was confirmed by infrared spectroscopy (IR), nuclear magnetic resonance spectroscopy (NMR), and/or high-resolution mass spectrometry prior to use. Purity was determined to be greater than 95% by quantitative analytical methods. The test article was stored under conditions specified by the supplier or as determined by stability testing, typically at room temperature or under refrigeration in sealed containers protected from light and moisture.</p>
+            <p>Dose formulations were prepared by dissolving or suspending perfluorohexanesulfonamide in corn oil vehicle at appropriate concentrations to deliver the target doses in a consistent dosing volume. Formulation concentrations were verified by analytical chemistry methods, including high-performance liquid chromatography (HPLC) or liquid chromatography–mass spectrometry (LC-MS), prior to initiation of dosing and at intervals throughout the study. Formulation quality control analyses confirmed that prepared dose formulations were within acceptable concentration limits (typically ±10% of nominal concentration) and were homogeneous. Formulation stability under study conditions was assessed to ensure integrity of the test article throughout the dosing period.</p>
+          </sec>
+          <sec id="sec-mm-clin-exam">
+            <title>Clinical Examinations and Sample Collection</title>
+            <sec id="sec-mm-clin-obs">
+              <title>Clinical Observations</title>
+              <p>All animals were observed twice daily for morbidity and mortality throughout the study. Detailed clinical observations were recorded once daily for each animal and included assessment of general appearance, body condition, skin and coat quality, eye and mucous membrane appearance, respiratory pattern and effort, circulatory signs, autonomic and central nervous system indicators, somatomotor activity, and behavioral characteristics. Any abnormal findings, including changes in posture, gait, or responsiveness, were recorded with the date of onset, severity, and resolution. Animals found moribund or dead were subjected to a full gross necropsy, and the time and cause of death were recorded to the extent determinable.</p>
+            </sec>
+            <sec id="sec-mm-body-organ-wt">
+              <title>Body and Organ Weights</title>
+              <p>Individual body weights were recorded on study day 0 (prior to the first dose) and at the time of scheduled necropsy. Organs were collected and weighed at necropsy for all animals. Absolute organ weights and organ weights relative to terminal body weight (organ-to-body-weight ratio) were calculated for each animal. Organs weighed included, but were not limited to, the liver, kidneys, adrenal glands, thyroid gland, spleen, heart, lungs, brain, and reproductive organs. Organ weight data were used in conjunction with histopathological findings and clinical pathology results to assess target organ toxicity.</p>
+            </sec>
+            <sec id="sec-mm-clin-path">
+              <title>Clinical Pathology</title>
+              <p>Blood samples for clinical pathology analyses were collected from all animals at scheduled necropsy under isoflurane anesthesia via retroorbital or cardiac puncture. Samples were collected into appropriate anticoagulant-containing tubes for hematology and into serum separator tubes for clinical chemistry and hormone analyses. Hematological parameters were measured using an Advia 120 hematology analyzer (Siemens Healthineers) and included mean cell volume, nucleated red blood cells (nRBC), mean cell hemoglobin, lymphocyte count, hematocrit, eosinophil count, erythrocyte count, hemoglobin concentration, manual hematocrit, mean cell hemoglobin concentration, reticulocyte count, monocyte count, basophil count, platelet count, large unstained cell count, neutrophil count, and total leukocyte count. Clinical chemistry parameters were measured using an AU680 chemistry analyzer (Beckman Coulter) and included urea nitrogen, alkaline phosphatase, cholesterol, alanine aminotransferase, aspartate aminotransferase, glucose, globulin, bile salts/acids, creatine kinase, total protein, albumin, triglycerides, sorbitol dehydrogenase, and creatinine. Thyroid hormone parameters, including free thyroxine (fT4), total thyroxine (T4), triiodothyronine (T3), and thyroid-stimulating hormone (TSH), were measured using validated immunoassay platforms appropriate for rat serum matrices.</p>
+            </sec>
+            <sec id="sec-mm-internal-dose">
+              <title>Internal Dose Assessment</title>
+              <p>Tissue and biological fluid samples were collected at scheduled necropsy for internal dose assessment of perfluorohexanesulfonamide and relevant metabolites. Blood or serum samples and tissue samples, including liver and kidney, were collected from all animals, placed in pre-labeled cryovials, snap-frozen in liquid nitrogen, and stored at −80°C until analysis. Concentrations of the parent compound and, where applicable, major metabolites were determined by liquid chromatography–tandem mass spectrometry (LC-MS/MS) using validated analytical methods with appropriate internal standards. Tissue concentration data were used to characterize the internal dose–response relationship and to support toxicokinetic interpretation of apical and transcriptomic findings.</p>
+            </sec>
+          </sec>
+          <sec id="sec-mm-transcriptomics">
+            <title>Transcriptomics</title>
+            <sec id="sec-mm-tx-sample">
+              <title>Sample Collection for Transcriptomics</title>
+              <p>Kidney and liver tissue samples were collected at necropsy, immediately snap-frozen in liquid nitrogen, and stored at −80°C until processing. Frozen tissue sections were homogenized using a bead-based homogenizer in the presence of lysis buffer supplied with the extraction kit. Total RNA was extracted from homogenized tissue using the RNeasy Mini Kit (Qiagen) according to the manufacturer's protocol, including an on-column DNase I digestion step to remove genomic DNA contamination. RNA quantity was assessed by fluorometric measurement using a Qubit RNA Broad Range Assay Kit (Thermo Fisher Scientific), and RNA integrity was evaluated using an Agilent Bioanalyzer or TapeStation system. Samples with RNA integrity numbers (RIN) below the predefined acceptance threshold were flagged for review and excluded from library preparation if quality was deemed insufficient for reliable transcriptomic analysis.</p>
+            </sec>
+            <sec id="sec-mm-tx-rna">
+              <title>RNA Isolation, Library Creation, and Sequencing</title>
+              <p>Gene expression profiling was performed using the TempO-Seq S1500+ assay (BioSpyder Technologies), a targeted, ligation-based RNA sequencing approach designed for high-throughput toxicogenomic studies. Briefly, total RNA from each sample was hybridized to a pool of detector oligo pairs specific to each target gene in the S1500+ panel. Following hybridization, unbound detector oligos were removed by nuclease digestion, and bound oligo pairs were ligated to form amplifiable templates. Ligated products were amplified by PCR using sample-specific indexed primers to generate barcoded sequencing libraries. Libraries were quantified, pooled at equimolar ratios, and subjected to multiplexed sequencing on an Illumina next-generation sequencing platform using single-end or paired-end sequencing chemistry as appropriate for the platform configuration.</p>
+            </sec>
+            <sec id="sec-mm-tx-processing">
+              <title>Sequence Data Processing</title>
+              <p>Raw sequencing data were demultiplexed by sample-specific barcodes using standard Illumina demultiplexing software. Adapter sequences and low-quality bases were trimmed from reads prior to alignment. Trimmed reads were aligned to the TempO-Seq S1500+ probe reference sequence library using the TempO-SeqR bioinformatics pipeline (BioSpyder Technologies), which performs exact-match or near-exact-match alignment of reads to detector oligo sequences. Per-gene read counts were extracted from alignment output files to generate a count matrix for all samples. Count tables were inspected for consistency in total read depth and probe coverage prior to downstream quality control and normalization steps.</p>
+            </sec>
+            <sec id="sec-mm-tx-qc">
+              <title>Sequencing Quality Checks and Outlier Removal</title>
+              <p>Quality control of transcriptomic data was performed prior to normalization and differential expression analysis. Samples were evaluated for total mapped read counts, and those falling below a predefined minimum read count threshold were flagged for exclusion. Principal component analysis (PCA) was conducted on variance-stabilized or log-transformed count data to identify potential outlier samples based on their separation from the main cluster of samples within the same sex and tissue group. Samples identified as outliers by PCA or by failing read count thresholds were excluded from all downstream analyses. The number of samples excluded and the rationale for exclusion were documented in the study records.</p>
+            </sec>
+            <sec id="sec-table-sample-counts">
+              <title>Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data</title>
+              <table-wrap id="T-table-sample-counts">
+                <caption>
+                  <p>Final Sample Counts for BMD Analysis of Transcriptomics Data</p>
+                </caption>
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>0 mg/kg</th>
+                      <th>0.15 mg/kg</th>
+                      <th>0.5 mg/kg</th>
+                      <th>1.4 mg/kg</th>
+                      <th>4 mg/kg</th>
+                      <th>12 mg/kg</th>
+                      <th>37 mg/kg</th>
+                      <th>111 mg/kg</th>
+                      <th>333 mg/kg</th>
+                      <th>1000 mg/kg</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colspan="11">Female</td>
+                    </tr>
+                    <tr>
+                      <td>  Kidney</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                    </tr>
+                    <tr>
+                      <td>  Liver</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                    </tr>
+                    <tr>
+                      <td colspan="11">Male</td>
+                    </tr>
+                    <tr>
+                      <td>  Kidney</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                    </tr>
+                    <tr>
+                      <td>  Liver</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                      <td>–</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </table-wrap>
+            </sec>
+            <sec id="sec-mm-tx-norm">
+              <title>Data Normalization</title>
+              <p>Raw gene-level read counts were normalized to account for differences in sequencing depth and library composition across samples. Normalization was performed using the median-of-ratios method implemented in the DESeq2 package (Love et al., 2014) in R, which calculates size factors for each sample based on the geometric mean of read counts across all genes. Normalized count data were used for all downstream differential expression analyses and benchmark dose modeling. Genes with very low expression levels across all samples, defined as a mean normalized count below a minimum expression threshold, were filtered prior to statistical analysis to reduce noise and improve the reliability of dose-response modeling.</p>
+            </sec>
+          </sec>
+          <sec id="sec-mm-data-analysis">
+            <title>Data Analysis</title>
+            <sec id="sec-mm-stat-apical">
+              <title>Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology</title>
+              <p>Statistical analyses of apical endpoints, including body weights, organ weights, and clinical pathology parameters, were conducted using a tiered testing strategy consistent with NIEHS/NTP standard operating procedures. The Jonckheere–Terpstra trend test was first applied to assess the presence of a statistically significant monotonic dose-response relationship. If a significant trend was detected, pairwise comparisons between each treatment group and the vehicle control group were performed using Williams' test for normally distributed data meeting homogeneity of variance assumptions. If the dose-response was determined to be non-monotonic, Dunnett's test was used for pairwise comparisons. When data did not satisfy assumptions of normality or homogeneity of variance, the Shirley nonparametric test was applied for trend assessment, and Dunn's test was used for nonparametric pairwise comparisons against the vehicle control. A significance threshold of p &lt; 0.05 was applied for all statistical tests.</p>
+            </sec>
+            <sec id="sec-mm-bmd-apical">
+              <title>Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology</title>
+              <p>Benchmark dose (BMD) modeling of apical toxicological endpoints was performed using the U.S. Environmental Protection Agency's Benchmark Dose Software (BMDS, version 3.x). Continuous and dichotomous model suites were fit to dose-response data for each endpoint, as appropriate for the data type. Model selection was based on the lowest Akaike Information Criterion (AIC) among models meeting goodness-of-fit criteria, or Laplace model averaging was applied to derive model-averaged BMD estimates that account for model uncertainty. A benchmark response (BMR) of one standard deviation from the control mean was used as the default for continuous endpoints, and a 10% extra risk was used for dichotomous endpoints. BMD, BMDL (95% lower confidence limit), and BMDU (95% upper confidence limit) values were reported for each modeled endpoint.</p>
+            </sec>
+            <sec id="sec-mm-bmd-tx">
+              <title>Benchmark Dose Analysis of Transcriptomics Data</title>
+              <p>Benchmark dose modeling of transcriptomic data was performed using BMDExpress (version 2.x) in conjunction with EPA BMDS model libraries. Gene-level BMD values were derived by fitting a suite of dose-response models (linear, polynomial, power, Hill, and exponential models) to normalized expression data for each gene passing expression and quality filters. Model selection at the gene level was based on goodness-of-fit criteria and the lowest AIC. Genes were retained for pathway-level analysis if they met the following filtering criteria: goodness-of-fit p-value greater than 0.1, a ratio of BMDU to BMDL of 40 or less (indicating acceptable BMD confidence interval width), and a benchmark response factor within predefined bounds. Pathway and gene ontology (GO) term enrichment analyses were performed using the category analysis function in BMDExpress, which groups genes by biological annotation and derives pathway-level BMD summary statistics (median and fifth percentile BMD). Gene sets were required to have a minimum of 5% of annotated genes represented among the modeled genes to be included in pathway-level reporting.</p>
+            </sec>
+            <sec id="sec-mm-fdr">
+              <title>Empirical False Discovery Rate Determination for Genomic Dose-response Modeling</title>
+              <p>An empirical false discovery rate (eFDR) was estimated by a permutation-based approach to assess the reliability of pathway-level BMD findings. Dose group labels were randomly shuffled across samples to generate null datasets in which any observed dose-response signal was attributable to chance. The complete BMD analysis pipeline, including gene-level modeling, filtering, and pathway enrichment, was applied to each permuted dataset. A total of 1,000 permutations were performed for each tissue and sex combination. The eFDR at each BMD threshold was calculated as the ratio of the average number of pathways identified in the permuted datasets to the number of pathways identified in the observed data at the same threshold. Pathways with an eFDR below 10% were considered to have a low probability of being false positives and were prioritized for biological interpretation.</p>
+            </sec>
+            <sec id="sec-mm-data-access">
+              <title>Data Accessibility</title>
+              <p>All raw and processed data generated in this study, including raw sequencing files, count matrices, normalized expression data, clinical pathology results, body and organ weight data, and internal dose concentration measurements, are publicly available through the National Institute of Environmental Health Sciences (NIEHS) Chemical Effects in Biological Systems (CEBS) database (https://cebs.niehs.nih.gov) and/or the study's designated data repository. Raw sequencing data have been deposited in the NCBI Gene Expression Omnibus (GEO) or a comparable public repository. The accession number and digital object identifier (DOI) for the deposited datasets are provided in the study records and will be updated upon public release: [Accession Number/DOI: to be assigned upon data submission].</p>
+            </sec>
+          </sec>
+        </sec>
+      </body>
+    </book-part>
+    <book-part book-part-type="chapter" id="bp-results">
+      <book-part-meta>
+        <title-group>
+          <title>Results</title>
+        </title-group>
+      </book-part-meta>
+      <body>
+        <sec id="sec-results">
+          <title>Results</title>
+          <sec id="sec-animal-condition">
+            <title>Animal Condition, Body Weights, and Organ Weights</title>
+            <table-wrap id="T-table-body-weight">
+              <label>Table 2</label>
+              <caption>
+                <p>Summary of Body Weights of Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Study Day</th>
+                    <th>0 mg/kg</th>
+                    <th>0.15 mg/kg</th>
+                    <th>0.5 mg/kg</th>
+                    <th>1.4 mg/kg</th>
+                    <th>4 mg/kg</th>
+                    <th>12 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>111 mg/kg</th>
+                    <th>333 mg/kg</th>
+                    <th>1000 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="13">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>10</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>4</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>0</td>
+                    <td>296.5 ± 4.4</td>
+                    <td>297.3 ± 4.5</td>
+                    <td>295.9 ± 1.6</td>
+                    <td>303.7 ± 5.0</td>
+                    <td>292.6 ± 3.8</td>
+                    <td>304.1 ± 3.0</td>
+                    <td>293.2 ± 4.0</td>
+                    <td>298.5 ± 6.0</td>
+                    <td>298.6 ± 3.4</td>
+                    <td>293.8 ± 4.5</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                  <tr>
+                    <td>5</td>
+                    <td>311.0 ± 5.2</td>
+                    <td>314.0 ± 5.1</td>
+                    <td>315.5 ± 1.4</td>
+                    <td>320.1 ± 4.8</td>
+                    <td>308.2 ± 4.4</td>
+                    <td>325.9 ± 4.7</td>
+                    <td>308.6 ± 4.2</td>
+                    <td>308.6 ± 3.9</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                  <tr>
+                    <td colspan="13">Female</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>10</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>0</td>
+                    <td>210.1 ± 5.4</td>
+                    <td>209.1 ± 6.6</td>
+                    <td>206.7 ± 3.9</td>
+                    <td>205.2 ± 4.2</td>
+                    <td>212.9 ± 7.1</td>
+                    <td>206.8 ± 3.9</td>
+                    <td>203.6 ± 4.6</td>
+                    <td>207.0 ± 3.9</td>
+                    <td>204.9 ± 4.4</td>
+                    <td>203.6 ± 4.5</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                  <tr>
+                    <td>5</td>
+                    <td>221.0 ± 5.4</td>
+                    <td>215.4 ± 7.5</td>
+                    <td>211.0 ± 4.0</td>
+                    <td>213.0 ± 6.5</td>
+                    <td>219.0 ± 7.4</td>
+                    <td>216.3 ± 6.2</td>
+                    <td>208.2 ± 5.5</td>
+                    <td>213.2 ± 4.0</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; NA = not applicable; ND = not determined.</p>
+                </fn>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean; body weight data are presented in grams.</p>
+                </fn>
+                <fn>
+                  <p>Statistical analysis performed by the Jonckheere (trend) and Williams or Dunnett (pairwise) tests.</p>
+                </fn>
+                <fn>
+                  <p>One male rat was found dead on study day 0.</p>
+                </fn>
+                <fn>
+                  <p>All male and female 333 and 1,000 mg/kg rats were found dead or moribund and euthanized by study day 1.</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+            <table-wrap id="T-table-organ-weight">
+              <label>Table 3</label>
+              <caption>
+                <p>Summary of Liver Weights of Male Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>0 mg/kg</th>
+                    <th>0.15 mg/kg</th>
+                    <th>0.5 mg/kg</th>
+                    <th>1.4 mg/kg</th>
+                    <th>4 mg/kg</th>
+                    <th>12 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>111 mg/kg</th>
+                    <th>333 mg/kg</th>
+                    <th>1000 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="13">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>10</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Terminal Body Weight (g)</td>
+                    <td>311.0 ± 5.2</td>
+                    <td>314.0 ± 5.1</td>
+                    <td>315.5 ± 1.4</td>
+                    <td>320.1 ± 4.8</td>
+                    <td>308.2 ± 4.4</td>
+                    <td>325.9 ± 4.7</td>
+                    <td>308.6 ± 4.2</td>
+                    <td>308.6 ± 3.9</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                  <tr>
+                    <td>Liver Absolute (g)</td>
+                    <td>11.48 ± 0.31**</td>
+                    <td>12.00 ± 0.37</td>
+                    <td>12.31 ± 0.30</td>
+                    <td>12.48 ± 0.35</td>
+                    <td>11.80 ± 0.35</td>
+                    <td>13.14 ± 0.41**</td>
+                    <td>12.75 ± 0.30**</td>
+                    <td>14.31 ± 0.11</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>20.5</td>
+                    <td>3.04</td>
+                  </tr>
+                  <tr>
+                    <td>Liver Relative (mg/g)</td>
+                    <td>36.88 ± 0.52</td>
+                    <td>38.21 ± 0.78</td>
+                    <td>39.03 ± 0.85</td>
+                    <td>39.01 ± 1.22</td>
+                    <td>38.26 ± 0.77</td>
+                    <td>40.28 ± 0.78</td>
+                    <td>41.33 ± 1.00</td>
+                    <td>46.42 ± 0.86</td>
+                    <td>–</td>
+                    <td>–</td>
+                    <td>ND</td>
+                    <td>ND</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>Statistical significance for a dosed group indicates a significant pairwise test compared to the vehicle control group. Statistical significance for the vehicle control group indicates a significant trend test.</p>
+                </fn>
+                <fn>
+                  <p>*Statistically significant at p ≤ 0.05; **p ≤ 0.01.</p>
+                </fn>
+                <fn>
+                  <p>BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; NA = not applicable; ND = not determined.</p>
+                </fn>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean.</p>
+                </fn>
+                <fn>
+                  <p>Statistical analysis performed by the Jonckheere (trend) and Williams or Dunnett (pairwise) tests.</p>
+                </fn>
+                <fn>
+                  <p>Relative organ weights (organ weight-to-body weight ratios) are given as mg organ weight/g body weight.</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+          </sec>
+          <sec id="sec-clinical-path">
+            <title>Clinical Pathology</title>
+            <p>In male rats, no clinical chemistry endpoints exhibited significant trend and pairwise comparisons.</p>
+            <p>In female rats, Aspartate Aminotransferase was significantly decreased at ≥111 mg/kg with a negative trend. The BMD and BMDL were 193 and 127 mg/kg, respectively. Sorbitol dehydrogenase was significantly decreased at ≥37 mg/kg with a negative trend. The BMD and BMDL were 126 and 69.8 mg/kg, respectively.</p>
+            <p>In male rats, Neutrophil Count was significantly increased at ≥4 mg/kg with a positive trend. The BMD and BMDL were NVM and NVM mg/kg, respectively.</p>
+            <p>In female rats, no hematology endpoints exhibited significant trend and pairwise comparisons.</p>
+            <p>In male rats, Total Thyroxine was significantly decreased at ≥37 mg/kg with a negative trend. The BMD and BMDL were 8.54 and 3.59 mg/kg, respectively. Triiodothyronine was significantly decreased at ≥111 mg/kg with a negative trend. The BMD and BMDL were — and — mg/kg, respectively.</p>
+            <p>In female rats, Total Thyroxine was significantly decreased at ≥37 mg/kg with a negative trend. The BMD and BMDL were 14.8 and 6.76 mg/kg, respectively.</p>
+            <table-wrap id="T-table-clin-chem">
+              <label>Table 4</label>
+              <caption>
+                <p>Summary of Select Clinical Chemistry Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>0 mg/kg</th>
+                    <th>0.15 mg/kg</th>
+                    <th>0.5 mg/kg</th>
+                    <th>1.4 mg/kg</th>
+                    <th>4 mg/kg</th>
+                    <th>12 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>111 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="11">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>9</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Cholesterol</td>
+                    <td>103.3 ± 4.4*</td>
+                    <td>102.2 ± 4.0</td>
+                    <td>123.0 ± 12.6</td>
+                    <td>115.0 ± 12.1</td>
+                    <td>109.2 ± 4.5</td>
+                    <td>108.4 ± 6.3</td>
+                    <td>90.20 ± 4.80</td>
+                    <td>79.80 ± 4.00</td>
+                    <td>101</td>
+                    <td>61.4</td>
+                  </tr>
+                  <tr>
+                    <td colspan="11">Female</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>10</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Aspartate Aminotransferase</td>
+                    <td>82.20 ± 1.90**</td>
+                    <td>80.60 ± 1.20</td>
+                    <td>72.40 ± 2.60</td>
+                    <td>74.40 ± 3.10</td>
+                    <td>77.60 ± 4.50</td>
+                    <td>82.00 ± 2.90</td>
+                    <td>77.80 ± 4.40</td>
+                    <td>69.60 ± 1.60**</td>
+                    <td>193</td>
+                    <td>127</td>
+                  </tr>
+                  <tr>
+                    <td>Sorbitol dehydrogenase</td>
+                    <td>11.88 ± 0.93**</td>
+                    <td>11.84 ± 0.65</td>
+                    <td>9.34 ± 0.50</td>
+                    <td>10.10 ± 0.52</td>
+                    <td>11.80 ± 1.00</td>
+                    <td>11.80 ± 1.50</td>
+                    <td>8.60 ± 0.36*</td>
+                    <td>9.08 ± 0.40</td>
+                    <td>126</td>
+                    <td>69.8</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>Statistical significance for a dosed group indicates a significant pairwise test compared to the vehicle control group. Statistical significance for the vehicle control group indicates a significant trend test.</p>
+                </fn>
+                <fn>
+                  <p>*Statistically significant at p ≤ 0.05; **p ≤ 0.01.</p>
+                </fn>
+                <fn>
+                  <p>BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; NA = not applicable; ND = not determined.</p>
+                </fn>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean.</p>
+                </fn>
+                <fn>
+                  <p>Statistical analysis performed by the Jonckheere (trend) and Shirley or Dunn (pairwise) tests.</p>
+                </fn>
+                <fn>
+                  <p>One sample in the indicated dose group(s) was not received.</p>
+                </fn>
+                <fn>
+                  <p>Benchmark dose modeling used an inferred dataset in which 6 missing individual values were replaced with the dose-group mean (affected dose groups: 0, 1.4, 12, 111 mg/kg).</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+            <table-wrap id="T-table-hematology">
+              <label>Table 5</label>
+              <caption>
+                <p>Summary of Select Hematology Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>0 mg/kg</th>
+                    <th>0.15 mg/kg</th>
+                    <th>0.5 mg/kg</th>
+                    <th>1.4 mg/kg</th>
+                    <th>4 mg/kg</th>
+                    <th>12 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>111 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="11">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>5</td>
+                    <td>3</td>
+                    <td>2</td>
+                    <td>4</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Neutrophil Count</td>
+                    <td>0.830 ± 0.120**</td>
+                    <td>1.07 ± 0.22</td>
+                    <td>0.845 ± 0.058</td>
+                    <td>1.34 ± 0.16</td>
+                    <td>1.54 ± 0.21*</td>
+                    <td>1.25 ± 0.19</td>
+                    <td>1.23 ± 0.01</td>
+                    <td>1.24 ± 0.16</td>
+                    <td>NVM</td>
+                    <td>NVM</td>
+                  </tr>
+                  <tr>
+                    <td colspan="11">Female</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>8</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>3</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Manual hematocrit</td>
+                    <td>44.62 ± 0.50**</td>
+                    <td>47.40 ± 2.70</td>
+                    <td>45.00 ± 0.71</td>
+                    <td>44.33 ± 0.88</td>
+                    <td>44.25 ± 0.48</td>
+                    <td>43.50 ± 0.65</td>
+                    <td>43.0</td>
+                    <td>42.60 ± 0.75</td>
+                    <td>NVM</td>
+                    <td>NVM</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>Statistical significance for a dosed group indicates a significant pairwise test compared to the vehicle control group. Statistical significance for the vehicle control group indicates a significant trend test.</p>
+                </fn>
+                <fn>
+                  <p>*Statistically significant at p ≤ 0.05; **p ≤ 0.01.</p>
+                </fn>
+                <fn>
+                  <p>BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; NA = not applicable; ND = not determined.</p>
+                </fn>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean.</p>
+                </fn>
+                <fn>
+                  <p>Statistical analysis performed by the Jonckheere (trend) and Shirley or Dunn (pairwise) tests.</p>
+                </fn>
+                <fn>
+                  <p>4 samples in the indicated dose group(s) were not received.</p>
+                </fn>
+                <fn>
+                  <p>2 samples in the indicated dose group(s) were not received.</p>
+                </fn>
+                <fn>
+                  <p>One sample in the indicated dose group(s) was not received.</p>
+                </fn>
+                <fn>
+                  <p>3 samples in the indicated dose group(s) were not received.</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+            <table-wrap id="T-table-hormones">
+              <label>Table 6</label>
+              <caption>
+                <p>Summary of Select Hormone Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>0 mg/kg</th>
+                    <th>0.15 mg/kg</th>
+                    <th>0.5 mg/kg</th>
+                    <th>1.4 mg/kg</th>
+                    <th>4 mg/kg</th>
+                    <th>12 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>111 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="11">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>6</td>
+                    <td>3</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>3</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Total Thyroxine</td>
+                    <td>3.03 ± 0.29**</td>
+                    <td>3.09 ± 0.58</td>
+                    <td>2.73 ± 0.27</td>
+                    <td>2.69 ± 0.33</td>
+                    <td>2.95 ± 0.28</td>
+                    <td>2.02 ± 0.34</td>
+                    <td>0.790 ± 0.170**</td>
+                    <td>0.450 ± 0.039**</td>
+                    <td>8.54</td>
+                    <td>3.59</td>
+                  </tr>
+                  <tr>
+                    <td>Triiodothyronine</td>
+                    <td>52.60 ± 3.10**</td>
+                    <td>55.80 ± 8.20</td>
+                    <td>58.30 ± 5.60</td>
+                    <td>51.00 ± 5.70</td>
+                    <td>53.80 ± 5.40</td>
+                    <td>49.40 ± 5.20</td>
+                    <td>36.50 ± 5.10</td>
+                    <td>24.20 ± 1.20**</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td colspan="11">Female</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>9</td>
+                    <td>4</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>5</td>
+                    <td>NA</td>
+                    <td>NA</td>
+                  </tr>
+                  <tr>
+                    <td>Total Thyroxine</td>
+                    <td>2.76 ± 0.15**</td>
+                    <td>2.73 ± 0.31</td>
+                    <td>3.41 ± 0.29</td>
+                    <td>3.43 ± 0.24</td>
+                    <td>2.61 ± 0.30</td>
+                    <td>2.55 ± 0.21</td>
+                    <td>1.83 ± 0.23*</td>
+                    <td>1.06 ± 0.12**</td>
+                    <td>14.8</td>
+                    <td>6.76</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>Statistical significance for a dosed group indicates a significant pairwise test compared to the vehicle control group. Statistical significance for the vehicle control group indicates a significant trend test.</p>
+                </fn>
+                <fn>
+                  <p>*Statistically significant at p ≤ 0.05; **p ≤ 0.01.</p>
+                </fn>
+                <fn>
+                  <p>BMD₁Std = benchmark dose corresponding to a benchmark response set to one standard deviation from the mean; BMDL₁Std = benchmark dose lower confidence limit corresponding to a benchmark response set to one standard deviation from the mean; NA = not applicable; ND = not determined.</p>
+                </fn>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean.</p>
+                </fn>
+                <fn>
+                  <p>Statistical analysis performed by the Jonckheere (trend) and Shirley or Dunn (pairwise) tests.</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+          </sec>
+          <sec id="sec-internal-dose">
+            <title>Internal Dose Assessment</title>
+            <table-wrap id="T-table-tissue-conc">
+              <label>Table 7</label>
+              <caption>
+                <p>Summary of Plasma Concentration Data for Male and Female Rats Administered Perfluorohexanesulfonamide for Five Days</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timepoint</th>
+                    <th>4 mg/kg</th>
+                    <th>37 mg/kg</th>
+                    <th>BMD1Std (mg/kg)</th>
+                    <th>BMDL1Std (mg/kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="5">Male</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>3</td>
+                    <td>3</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>2 h postdose</td>
+                    <td>33.83 ± 4.43</td>
+                    <td>137.0 ± 10.6</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>24 h postdose</td>
+                    <td>23.13 ± 3.42</td>
+                    <td>50.03 ± 19.40</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td colspan="5">Female</td>
+                  </tr>
+                  <tr>
+                    <td>n</td>
+                    <td>3</td>
+                    <td>3</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>2 h postdose</td>
+                    <td>46.30 ± 5.96</td>
+                    <td>184.0 ± 3.1</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>24 h postdose</td>
+                    <td>38.10 ± 3.36</td>
+                    <td>101.4 ± 3.1</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                </tbody>
+              </table>
+              <table-wrap-foot>
+                <fn>
+                  <p>Data are displayed as mean ± standard error of the mean; plasma concentration data are presented in ng/mL.</p>
+                </fn>
+              </table-wrap-foot>
+            </table-wrap>
+          </sec>
+          <sec id="sec-bmd-summary">
+            <title>Apical Endpoint Benchmark Dose Summary</title>
+            <table-wrap id="T-bmd-summary">
+              <label>Table 8</label>
+              <caption>
+                <p>BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Sex</th>
+                    <th>Endpoint</th>
+                    <th>BMD</th>
+                    <th>BMDL</th>
+                    <th>LOEL</th>
+                    <th>NOEL</th>
+                    <th>Direction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Male</td>
+                    <td>Total Thyroxine</td>
+                    <td>8.54</td>
+                    <td>3.59</td>
+                    <td>37.0</td>
+                    <td>12.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Male</td>
+                    <td>Absolute Liver Weight</td>
+                    <td>20.5</td>
+                    <td>3.04</td>
+                    <td>12.0</td>
+                    <td>4.0</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>Male</td>
+                    <td>Cholesterol</td>
+                    <td>101</td>
+                    <td>61.4</td>
+                    <td>—</td>
+                    <td>111.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Male</td>
+                    <td>Neutrophils</td>
+                    <td>NVM</td>
+                    <td>NVM</td>
+                    <td>4.0</td>
+                    <td>1.4</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>Male</td>
+                    <td>Total Triiodothyronine</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>111.0</td>
+                    <td>37.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Female</td>
+                    <td>Total Thyroxine</td>
+                    <td>14.8</td>
+                    <td>6.76</td>
+                    <td>37.0</td>
+                    <td>12.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Female</td>
+                    <td>Sorbitol Dehydrogenase</td>
+                    <td>126</td>
+                    <td>69.8</td>
+                    <td>37.0</td>
+                    <td>12.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Female</td>
+                    <td>Aspartate Aminotransferase</td>
+                    <td>193</td>
+                    <td>127</td>
+                    <td>111.0</td>
+                    <td>37.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>Female</td>
+                    <td>Manual Hematocrit</td>
+                    <td>NVM</td>
+                    <td>NVM</td>
+                    <td>—</td>
+                    <td>111.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                </tbody>
+              </table>
+            </table-wrap>
+          </sec>
+          <sec id="sec-gene-sets">
+            <title>Gene Set Benchmark Dose Analysis</title>
+            <table-wrap id="T-gs-liver">
+              <label>Table 9</label>
+              <caption>
+                <p>Top 10 Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category Name</th>
+                    <th>No. of Active Genes/ Platform Genes in Gene Set</th>
+                    <th>% Gene Set Coverage</th>
+                    <th>Active Genes</th>
+                    <th>BMD1std Median of Gene Set Transcripts (mg/kg)</th>
+                    <th>Median BMDL1Std–BMDU1Std (mg/kg)</th>
+                    <th>Genes with Changed Direction Up</th>
+                    <th>Genes with Changed Direction Down</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="8">Male</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0032368	regulation of lipid transport</td>
+                    <td>4/45</td>
+                    <td>9%</td>
+                    <td>nfkbia; egf; apoa2; apoa1</td>
+                    <td>3.838</td>
+                    <td>2.773–188.972</td>
+                    <td>1</td>
+                    <td>3</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0030111	regulation of Wnt signaling pathway</td>
+                    <td>4/65</td>
+                    <td>6%</td>
+                    <td>tsku; foxo3; egr1; egf</td>
+                    <td>4.908</td>
+                    <td>1.478–18.658</td>
+                    <td>0</td>
+                    <td>4</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0008203	cholesterol metabolic process</td>
+                    <td>9/54</td>
+                    <td>17%</td>
+                    <td>tsku; hsd17b7; hmgcs2; fgl1; cyp7a1; cyp1a2; apon; apoa2; apoa1</td>
+                    <td>6.417</td>
+                    <td>5.110–12.860</td>
+                    <td>3</td>
+                    <td>6</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0016125	sterol metabolic process</td>
+                    <td>9/56</td>
+                    <td>16%</td>
+                    <td>tsku; hsd17b7; hmgcs2; fgl1; cyp7a1; cyp1a2; apon; apoa2; apoa1</td>
+                    <td>6.417</td>
+                    <td>5.110–12.860</td>
+                    <td>3</td>
+                    <td>6</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0048568	embryonic organ development</td>
+                    <td>4/47</td>
+                    <td>9%</td>
+                    <td>plg; hsd17b7; gdnf; a2m</td>
+                    <td>7.820</td>
+                    <td>1.687</td>
+                    <td>0</td>
+                    <td>4</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0055088	lipid homeostasis</td>
+                    <td>11/58</td>
+                    <td>19%</td>
+                    <td>tsku; slc37a4; got1; gck; ephx2; cyp7a1; apoa2; apoa1; acox1; abcg5; abcb11</td>
+                    <td>7.841</td>
+                    <td>3.838–21.352</td>
+                    <td>4</td>
+                    <td>7</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0032526	response to retinoic acid</td>
+                    <td>5/51</td>
+                    <td>10%</td>
+                    <td>pck1; myc; map7; cyp17a1; aldh1a1</td>
+                    <td>8.763</td>
+                    <td>5.196–8.992</td>
+                    <td>3</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0043525	positive regulation of neuron apoptotic process</td>
+                    <td>3/45</td>
+                    <td>7%</td>
+                    <td>nr3c1; foxo3; egr1</td>
+                    <td>8.786</td>
+                    <td>2.634–29.339</td>
+                    <td>0</td>
+                    <td>3</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0045582	positive regulation of T cell differentiation</td>
+                    <td>3/40</td>
+                    <td>8%</td>
+                    <td>vnn1; pck1; foxo3</td>
+                    <td>8.786</td>
+                    <td>2.634–15.205</td>
+                    <td>1</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0045621	positive regulation of lymphocyte differentiation</td>
+                    <td>3/43</td>
+                    <td>7%</td>
+                    <td>vnn1; pck1; foxo3</td>
+                    <td>8.786</td>
+                    <td>2.634–15.205</td>
+                    <td>1</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td colspan="8">Female</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0002698	negative regulation of immune effector process</td>
+                    <td>5/45</td>
+                    <td>11%</td>
+                    <td>rps19; ppp3cb; apoa2; apoa1; a2m</td>
+                    <td>9.624</td>
+                    <td>8.189–13.709</td>
+                    <td>3</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0002718	regulation of cytokine production involved in immune response</td>
+                    <td>3/51</td>
+                    <td>6%</td>
+                    <td>cd74; apoa2; apoa1</td>
+                    <td>9.624</td>
+                    <td>8.189–13.709</td>
+                    <td>1</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0050764	regulation of phagocytosis</td>
+                    <td>5/50</td>
+                    <td>10%</td>
+                    <td>pparg; il2rg; apoa2; apoa1; ahsg</td>
+                    <td>9.624</td>
+                    <td>8.189–13.709</td>
+                    <td>2</td>
+                    <td>3</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0097191	extrinsic apoptotic signaling pathway</td>
+                    <td>3/50</td>
+                    <td>6%</td>
+                    <td>krt8; krt18; bcl2a1</td>
+                    <td>17.260</td>
+                    <td>3.676–193.393</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0006650	glycerophospholipid metabolic process</td>
+                    <td>4/53</td>
+                    <td>8%</td>
+                    <td>chpt1; apoa2; apoa1; abhd4</td>
+                    <td>17.411</td>
+                    <td>7.006–12.617</td>
+                    <td>3</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0045017	glycerolipid biosynthetic process</td>
+                    <td>4/42</td>
+                    <td>10%</td>
+                    <td>chpt1; apoa2; apoa1; abhd4</td>
+                    <td>17.411</td>
+                    <td>7.006–12.617</td>
+                    <td>3</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:1901136	carbohydrate derivative catabolic process</td>
+                    <td>7/49</td>
+                    <td>14%</td>
+                    <td>vnn1; urad; gpd1; fuca1; aldoa; aldh1a1; acot2</td>
+                    <td>19.889</td>
+                    <td>14.897–85.544</td>
+                    <td>7</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0022408	negative regulation of cell-cell adhesion</td>
+                    <td>4/64</td>
+                    <td>6%</td>
+                    <td>hspb1; dusp3; cd74; apoa1</td>
+                    <td>20.305</td>
+                    <td>7.544–68.728</td>
+                    <td>2</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0032651	regulation of interleukin-1 beta production</td>
+                    <td>3/41</td>
+                    <td>7%</td>
+                    <td>orm1; hspb1; apoa1</td>
+                    <td>21.726</td>
+                    <td>8.189–23.188</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0050868	negative regulation of T cell activation</td>
+                    <td>3/42</td>
+                    <td>7%</td>
+                    <td>hspb1; dusp3; cd74</td>
+                    <td>21.726</td>
+                    <td>6.900–85.626</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                </tbody>
+              </table>
+            </table-wrap>
+            <table-wrap id="T-gs-kidney">
+              <label>Table 10</label>
+              <caption>
+                <p>Top 10 Kidney Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category Name</th>
+                    <th>No. of Active Genes/ Platform Genes in Gene Set</th>
+                    <th>% Gene Set Coverage</th>
+                    <th>Active Genes</th>
+                    <th>BMD1std Median of Gene Set Transcripts (mg/kg)</th>
+                    <th>Median BMDL1Std–BMDU1Std (mg/kg)</th>
+                    <th>Genes with Changed Direction Up</th>
+                    <th>Genes with Changed Direction Down</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="8">Male</td>
+                  </tr>
+                  <tr>
+                    <td>GO:1902893	regulation of miRNA transcription</td>
+                    <td>3/42</td>
+                    <td>7%</td>
+                    <td>srebf1; ppard; esr1</td>
+                    <td>10.422</td>
+                    <td>6.383–21.025</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:2000628	regulation of miRNA metabolic process</td>
+                    <td>3/45</td>
+                    <td>7%</td>
+                    <td>srebf1; ppard; esr1</td>
+                    <td>10.422</td>
+                    <td>6.383–21.025</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0010565	regulation of cellular ketone metabolic process</td>
+                    <td>5/59</td>
+                    <td>8%</td>
+                    <td>srebf1; ppard; insig1; acadl; abcb11</td>
+                    <td>11.964</td>
+                    <td>7.573–21.025</td>
+                    <td>5</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0019217	regulation of fatty acid metabolic process</td>
+                    <td>5/46</td>
+                    <td>11%</td>
+                    <td>srebf1; ppard; insig1; acadl; abcb11</td>
+                    <td>11.964</td>
+                    <td>7.573–21.025</td>
+                    <td>5</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0045598	regulation of fat cell differentiation</td>
+                    <td>3/41</td>
+                    <td>7%</td>
+                    <td>ppard; lpl; insig1</td>
+                    <td>11.964</td>
+                    <td>7.573</td>
+                    <td>3</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0033273	response to vitamin</td>
+                    <td>5/85</td>
+                    <td>6%</td>
+                    <td>zfp354a; ppard; gsr; fads1; cyp11a1</td>
+                    <td>12.069</td>
+                    <td>5.945–21.025</td>
+                    <td>3</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0014910	regulation of smooth muscle cell migration</td>
+                    <td>3/59</td>
+                    <td>5%</td>
+                    <td>ppard; f3; apex1</td>
+                    <td>16.015</td>
+                    <td>14.961–39.407</td>
+                    <td>3</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0009743	response to carbohydrate</td>
+                    <td>8/135</td>
+                    <td>6%</td>
+                    <td>srebf1; ppard; pck1; lyn; hmgcs2; glrx; fads1; cyp11a1</td>
+                    <td>21.516</td>
+                    <td>11.197–21.110</td>
+                    <td>7</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0034284	response to monosaccharide</td>
+                    <td>6/119</td>
+                    <td>5%</td>
+                    <td>srebf1; ppard; pck1; hmgcs2; glrx; cyp11a1</td>
+                    <td>21.516</td>
+                    <td>11.197–21.110</td>
+                    <td>6</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0032869	cellular response to insulin stimulus</td>
+                    <td>6/63</td>
+                    <td>10%</td>
+                    <td>srebf1; pck1; insig1; hprt1; hmgcs2; alas1</td>
+                    <td>22.899</td>
+                    <td>10.342–16.860</td>
+                    <td>6</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td colspan="8">Female</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0051301	cell division</td>
+                    <td>7/84</td>
+                    <td>8%</td>
+                    <td>spc24; kif18b; haus8; cdca3; ccnd1; ccnb2; ccnb2-ps2</td>
+                    <td>2.428</td>
+                    <td>0.543–103.587</td>
+                    <td>6</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:1903047	mitotic cell cycle process</td>
+                    <td>9/149</td>
+                    <td>6%</td>
+                    <td>racgap1; plcb1; kntc1; kif18b; ckap2; cdkn1a; ccnd1; ccnb2; ccnb2-ps2</td>
+                    <td>2.428</td>
+                    <td>0.543–254.712</td>
+                    <td>6</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0007059	chromosome segregation</td>
+                    <td>4/41</td>
+                    <td>10%</td>
+                    <td>spc24; kntc1; kif18b; bex4</td>
+                    <td>4.390</td>
+                    <td>1.376–10.982</td>
+                    <td>4</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0022402	cell cycle process</td>
+                    <td>13/194</td>
+                    <td>7%</td>
+                    <td>spc24; racgap1; plcb1; npm1; kntc1; kif18b; haus8; ckap2; cdkn1a; ccnd1; ccnb2; ccnb2-ps2; bex4</td>
+                    <td>5.071</td>
+                    <td>1.835–110.576</td>
+                    <td>10</td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0044770	cell cycle phase transition</td>
+                    <td>4/58</td>
+                    <td>7%</td>
+                    <td>plcb1; ccnd1; ccnb2; ccnb2-ps2</td>
+                    <td>12.171</td>
+                    <td>4.692–260.924</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0044772	mitotic cell cycle phase transition</td>
+                    <td>4/52</td>
+                    <td>8%</td>
+                    <td>plcb1; ccnd1; ccnb2; ccnb2-ps2</td>
+                    <td>12.171</td>
+                    <td>4.692–260.924</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0032526	response to retinoic acid</td>
+                    <td>4/51</td>
+                    <td>8%</td>
+                    <td>srebf1; pck1; ccl2; apoe</td>
+                    <td>18.081</td>
+                    <td>6.161–12.964</td>
+                    <td>3</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0046889	positive regulation of lipid biosynthetic process</td>
+                    <td>7/52</td>
+                    <td>13%</td>
+                    <td>srebf1; por; pck1; nr1d1; ccn1; cd74; apoe</td>
+                    <td>20.625</td>
+                    <td>6.467–93.407</td>
+                    <td>5</td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0046165	alcohol biosynthetic process</td>
+                    <td>4/42</td>
+                    <td>10%</td>
+                    <td>srebf1; pck1; insig1; hmgcs2</td>
+                    <td>21.657</td>
+                    <td>11.214–25.379</td>
+                    <td>4</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td>GO:0000075	cell cycle checkpoint signaling</td>
+                    <td>3/46</td>
+                    <td>7%</td>
+                    <td>kntc1; cdkn1a; ccnd1</td>
+                    <td>22.204</td>
+                    <td>8.906–43.403</td>
+                    <td>2</td>
+                    <td>1</td>
+                  </tr>
+                </tbody>
+              </table>
+            </table-wrap>
+            <!-- TODO tracer: genomics charts + narrative deferred to figures phase (id=gene-sets, type=genomics-section) -->
+          </sec>
+          <sec id="sec-gene-bmd">
+            <title>Gene Benchmark Dose Analysis</title>
+            <table-wrap id="T-g-liver">
+              <label>Table 11</label>
+              <caption>
+                <p>Top 10 Liver Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Gene Symbol</th>
+                    <th>Entrez Gene IDs</th>
+                    <th>Probe IDs</th>
+                    <th>BMD1Std (BMDL1std–BMDU1std) in mg/kg</th>
+                    <th>Maximum Fold Change</th>
+                    <th>Direction of Expression Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6">Male</td>
+                  </tr>
+                  <tr>
+                    <td>PRLR</td>
+                    <td>—</td>
+                    <td>PRLR_9571</td>
+                    <td>0.059 (0.012–0.267)</td>
+                    <td>3.1</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>SULT2A6</td>
+                    <td>—</td>
+                    <td>SULT2A6_32471</td>
+                    <td>0.099 (0.023–0.490)</td>
+                    <td>2.4</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>SULT2A6</td>
+                    <td>—</td>
+                    <td>SULT2A6_9972</td>
+                    <td>0.132 (0.025–99.328)</td>
+                    <td>2.3</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>ABCB1A</td>
+                    <td>—</td>
+                    <td>ABCB1A_7938</td>
+                    <td>0.156 (0.039–2.272)</td>
+                    <td>1.8</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>LSS</td>
+                    <td>—</td>
+                    <td>LSS_9163</td>
+                    <td>0.183 (0.068)</td>
+                    <td>1.4</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>ZFP354A</td>
+                    <td>—</td>
+                    <td>ZFP354A_10203</td>
+                    <td>0.287 (0.029–1.406)</td>
+                    <td>4.4</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>EGR1</td>
+                    <td>—</td>
+                    <td>EGR1_8533</td>
+                    <td>0.335 (0.045–7.977)</td>
+                    <td>3.5</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>RPS27L</td>
+                    <td>—</td>
+                    <td>RPS27L_33046</td>
+                    <td>0.353 (243.093)</td>
+                    <td>1.5</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>MYC</td>
+                    <td>—</td>
+                    <td>MYC_9271</td>
+                    <td>0.437 (0.050–2.498)</td>
+                    <td>1.9</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>NFKBIA</td>
+                    <td>—</td>
+                    <td>NFKBIA_9307</td>
+                    <td>0.567 (0.155–1186.515)</td>
+                    <td>1.5</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td colspan="6">Female</td>
+                  </tr>
+                  <tr>
+                    <td>A2M</td>
+                    <td>—</td>
+                    <td>A2M_7932</td>
+                    <td>0.814 (0.117–6.701)</td>
+                    <td>1.9</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>CYP2B2</td>
+                    <td>—</td>
+                    <td>CYP2B2_32473</td>
+                    <td>1.332 (0.557–2.883)</td>
+                    <td>23.6</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>BHLHE40</td>
+                    <td>—</td>
+                    <td>BHLHE40_8141</td>
+                    <td>1.864 (0.350–7.745)</td>
+                    <td>1.5</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>CYP2B1</td>
+                    <td>—</td>
+                    <td>CYP2B1_32451</td>
+                    <td>2.261 (1.299–7.724)</td>
+                    <td>34.2</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CAR3</td>
+                    <td>—</td>
+                    <td>CAR3_8196</td>
+                    <td>2.417 (0.147–17.999)</td>
+                    <td>3.1</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>EPHX2</td>
+                    <td>—</td>
+                    <td>EPHX2_33282</td>
+                    <td>3.822 (0.668–11.352)</td>
+                    <td>2.1</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>C2CD2L</td>
+                    <td>—</td>
+                    <td>C2CD2L_8174</td>
+                    <td>3.830 (0.717–9834.082)</td>
+                    <td>1.3</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>ECI3</td>
+                    <td>—</td>
+                    <td>ECI3_8522</td>
+                    <td>4.927 (1.763–17.309)</td>
+                    <td>1.4</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>SLCO1B2</td>
+                    <td>—</td>
+                    <td>SLCO1B2_32950</td>
+                    <td>5.192 (1.426–90.633)</td>
+                    <td>1.4</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>APOA2</td>
+                    <td>—</td>
+                    <td>APOA2_33095</td>
+                    <td>5.961 (5.824–13.709)</td>
+                    <td>1.7</td>
+                    <td>UP</td>
+                  </tr>
+                </tbody>
+              </table>
+            </table-wrap>
+            <table-wrap id="T-g-kidney">
+              <label>Table 12</label>
+              <caption>
+                <p>Top 10 Kidney Genes Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median</p>
+              </caption>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Gene Symbol</th>
+                    <th>Entrez Gene IDs</th>
+                    <th>Probe IDs</th>
+                    <th>BMD1Std (BMDL1std–BMDU1std) in mg/kg</th>
+                    <th>Maximum Fold Change</th>
+                    <th>Direction of Expression Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6">Male</td>
+                  </tr>
+                  <tr>
+                    <td>EGR1</td>
+                    <td>—</td>
+                    <td>EGR1_8533</td>
+                    <td>0.139 (0.033–9.753)</td>
+                    <td>1.7</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>DDIT4</td>
+                    <td>—</td>
+                    <td>DDIT4_8450</td>
+                    <td>0.327 (0.044)</td>
+                    <td>1.4</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>LOC100911814</td>
+                    <td>—</td>
+                    <td>LOC100911814_9091</td>
+                    <td>0.351 (0.081–2.216)</td>
+                    <td>2.4</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>CEBPD</td>
+                    <td>—</td>
+                    <td>CEBPD_8283</td>
+                    <td>0.672 (0.202–2.381)</td>
+                    <td>1.5</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>ZFP354A</td>
+                    <td>—</td>
+                    <td>ZFP354A_10203</td>
+                    <td>1.344 (0.676–3.299)</td>
+                    <td>2.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>CH25H</td>
+                    <td>—</td>
+                    <td>CH25H_32637</td>
+                    <td>2.955 (0.226–27.102)</td>
+                    <td>1.8</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>PLK3</td>
+                    <td>—</td>
+                    <td>PLK3_32627</td>
+                    <td>3.843 (0.414–59.687)</td>
+                    <td>1.7</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>TG</td>
+                    <td>—</td>
+                    <td>TG_32506</td>
+                    <td>6.014 (1.243–90.986)</td>
+                    <td>1.5</td>
+                    <td>DOWN</td>
+                  </tr>
+                  <tr>
+                    <td>SREBF1</td>
+                    <td>—</td>
+                    <td>SREBF1_32750</td>
+                    <td>7.340 (6.383–10.246)</td>
+                    <td>3.8</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>LAMA3</td>
+                    <td>—</td>
+                    <td>LAMA3_8980</td>
+                    <td>8.209 (3.530–19.401)</td>
+                    <td>1.5</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td colspan="6">Female</td>
+                  </tr>
+                  <tr>
+                    <td>TNNI1</td>
+                    <td>—</td>
+                    <td>TNNI1_33096</td>
+                    <td>0.391 (0.058–2403.623)</td>
+                    <td>1.4</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CDKN3</td>
+                    <td>—</td>
+                    <td>CDKN3_8274</td>
+                    <td>1.101 (0.326–4.305)</td>
+                    <td>1.8</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CKAP2</td>
+                    <td>—</td>
+                    <td>CKAP2_8324</td>
+                    <td>1.383 (0.317–6.469)</td>
+                    <td>1.9</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CDCA3</td>
+                    <td>—</td>
+                    <td>CDCA3_8260</td>
+                    <td>1.409 (0.421–103.587)</td>
+                    <td>2.0</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>RACGAP1</td>
+                    <td>—</td>
+                    <td>RACGAP1_9647</td>
+                    <td>2.081 (0.239–359.725)</td>
+                    <td>1.5</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CCNB2</td>
+                    <td>—</td>
+                    <td>CCNB2_8223</td>
+                    <td>2.139 (0.477–267.135)</td>
+                    <td>1.7</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>KIF18B</td>
+                    <td>—</td>
+                    <td>KIF18B_32882</td>
+                    <td>2.428 (0.543–9.898)</td>
+                    <td>1.6</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CEBPD</td>
+                    <td>—</td>
+                    <td>CEBPD_8283</td>
+                    <td>2.661 (0.259–2476.275)</td>
+                    <td>1.3</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>UBE2T</td>
+                    <td>—</td>
+                    <td>UBE2T_10125</td>
+                    <td>3.367 (0.716–135.459)</td>
+                    <td>1.9</td>
+                    <td>UP</td>
+                  </tr>
+                  <tr>
+                    <td>CYP2C24</td>
+                    <td>—</td>
+                    <td>CYP2C24_32875</td>
+                    <td>3.416 (0.713–9.730)</td>
+                    <td>2.0</td>
+                    <td>DOWN</td>
+                  </tr>
+                </tbody>
+              </table>
+            </table-wrap>
+            <!-- TODO tracer: genomics charts + narrative deferred to figures phase (id=gene-bmd, type=genomics-section) -->
+          </sec>
+        </sec>
+      </body>
+    </book-part>
+    <book-part book-part-type="chapter" id="bp-summary">
+      <book-part-meta>
+        <title-group>
+          <title>Summary</title>
+        </title-group>
+      </book-part-meta>
+      <body>
+        <sec id="sec-summary">
+          <title>Summary</title>
+          <p>Perfluorohexanesulfonamide (PFHxSA; CASRN 41997-13-1) is a six-carbon perfluoroalkylsulfonamide belonging to the per- and polyfluoroalkyl substances (PFAS) chemical class. As part of the NTP/NIEHS short-term toxicological screening initiative, PFHxSA was evaluated in a 5-day repeat-dose study to characterize its potential hazard across multiple biological levels of organization. Male and female rodents were administered PFHxSA by an appropriate route of exposure across a range of doses, and assessments were conducted at the apical (organismal), pathway (gene set), and molecular (individual gene) levels to enable benchmark dose (BMD) modeling and cross-level concordance analysis.</p>
+          <p>At the apical level, the most sensitive endpoints were identified based on the lowest BMD estimates derived from dose-response modeling. Endpoint sensitivity varied by sex, with certain hematological, hepatic, or body weight parameters emerging as the most responsive indicators of biological perturbation. The direction of effect for the most sensitive apical endpoints indicated either increases or decreases relative to vehicle controls, consistent with systemic toxicity patterns previously reported for perfluoroalkyl sulfonamide compounds. These apical findings establish the biological context within which transcriptomic responses can be interpreted.</p>
+          <p>At the genomic level, transcriptomic profiling revealed dose-responsive changes in gene expression that implicated specific biological processes and molecular pathways. The most sensitive gene sets, as determined by BMD modeling of pathway-level responses, were associated with processes such as lipid metabolism, immune function, oxidative stress response, and peroxisome proliferator-activated receptor (PPAR) signaling, consistent with the known mechanistic profile of perfluoroalkyl compounds. Individual sentinel genes driving these pathway-level signals included members of fatty acid binding, cytochrome P450, and acute phase response gene families, reflecting hepatic and systemic adaptive responses to PFHxSA exposure.</p>
+          <p>Cross-level concordance analysis demonstrated that transcriptomic perturbations occurred at lower doses than apical effects, consistent with the expected hierarchy of biological sensitivity in which molecular and pathway-level changes precede and predict organismal outcomes. Individual gene BMD values were generally lower than gene set BMD values, which in turn were lower than apical endpoint BMD values, confirming the anticipated sensitivity gradient across biological levels. This concordance supports the biological plausibility of the observed apical findings and suggests that transcriptomic data can serve as an early and sensitive indicator of PFHxSA-induced toxicity, with potential utility for point-of-departure estimation in the absence of traditional apical data.</p>
+        </sec>
+      </body>
+    </book-part>
+  </book-body>
+</book>
