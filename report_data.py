@@ -426,7 +426,7 @@ def marshal_export_data(
     if summary_paragraphs:
         data["summary"] = {"paragraphs": summary_paragraphs}
 
-    # Inject the document structure tree so the Typst template can walk
+    # Inject the document structure tree so the renderers can walk
     # it for heading hierarchy, table numbering, and section ordering.
     from document_tree import serialize_tree, find_node, is_leaf_table
     data["document_tree"] = serialize_tree(active_tree)
@@ -445,7 +445,7 @@ def marshal_export_data(
     # belong to the requested TOC node — no hardcoded maps.
     if section_filter:
         _apply_section_filter(data, section_filter, tree=tree)
-        # Tell the Typst template whether this is a leaf table preview
+        # Tell the renderer whether this is a leaf table preview
         # (no headings, just the table) vs a group/section preview.
         node = find_node(section_filter, tree)
         if node and is_leaf_table(node):
@@ -497,7 +497,7 @@ def build_test_article_forms(
       - "text": the rendered string for that context
       - "placement": list of template positions where this form is used
 
-    The placement tags are consumed by the Typst template to select the
+    The placement tags are consumed by the renderers to select the
     correct form at each structural position.  They also serve as
     documentation for human readers of the data.
 
@@ -589,7 +589,7 @@ def build_test_article_forms(
 
         # --- Pre-computed name forms ---
         # Each form has a "text" string and a "placement" list documenting
-        # which template positions consume it.  The Typst template uses
+        # which template positions consume it.  The renderers use
         # these form keys (ta.forms.title, ta.forms.prose, etc.) to select
         # the correct name form at each structural position.
         "forms": {
@@ -638,7 +638,7 @@ def _build_methods_sections_from_tree() -> list[dict]:
     """
     Walk the "methods" node in the document tree and build a flat list
     of {"level": N, "heading": "...", "paragraphs": []} dicts matching
-    the format expected by the Typst template's methods rendering.
+    the format expected by the renderers' methods rendering.
 
     This replaces a hardcoded 20-entry list — the tree is the single
     source of truth for the M&M heading hierarchy.  If a section is
@@ -685,7 +685,7 @@ def scaffold_report_data(
 ) -> dict:
     """
     Generate a complete report data dict with placeholder content for every
-    section defined in the NIEHS Report 10 template (report.typ).
+    section defined in the NIEHS Report 10 document-tree template.
 
     Purpose: produce a full-structure scaffold PDF that shows the exact page
     flow of a canonical NIEHS report — title page, roman-numeral front matter,

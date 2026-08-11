@@ -61,7 +61,7 @@ you're inventing language the project doesn't use, or there's a real gap.
 | **Knowledge base (KB)** | `bmdx.duckdb` — a toxicogenomics database (genes, GO terms, pathways, papers, claims) that *grounds* the genomics narrative in literature rather than model training data. |
 | **Pool** | The set of uploaded files for a session as they move through fingerprint → validate → integrate → process. The UI's phase is derived from what pool artifacts exist. |
 | **Narrative** | Prose for a section. Some narratives are LLM-generated (background, methods, genomics interpretation), some are programmatic/deterministic. A narrative the user has edited is **user-owned** and never silently recomputed. |
-| **Render surface** | An output projection of the document tree: the in-app **HTML preview** and the **Overleaf LaTeX bundle** today; **BITS/JATS** XML is a planned third (ADR-0004). |
+| **Render surface** | An output projection of the document tree. Four emitters exist, all over the shared IR (`render_common`): the in-app **HTML preview** and the **Overleaf LaTeX bundle** (both live HTTP endpoints), plus a **Word/OOXML `.docx`** deliverable (ADR-0008) and **BITS/JATS** XML for PMC/Bookshelf submission (ADR-0004); the latter two are built emitters, invoked offline rather than wired to a route. |
 
 ---
 
@@ -96,26 +96,53 @@ data is missing, the fix belongs in the integration step, not a bypass. (See
 ADR-0001: the BMDProject schema acts as a *load barrier* — bad data fails at the
 boundary, not deep in a table builder.)
 
-### Two audiences, one document → two render surfaces over one model
+### Many audiences, one document → N render surfaces over one model
 
-The author needs a fast in-browser **HTML preview**; the published artifact is
-an **Overleaf-ready LaTeX bundle** (`report.tex` + class file + `figures/`). Both
-are *projections of the same `DocNode` tree*. The two renderers
-(`html_generator.py`, `latex_generator.py`) are thin **emit** layers over a
-shared semantic **IR** (`render_common.py`): one tree walk (`walk_tree`, owned
-by `document_tree`) and a markup-free *plan* per node type that decides *what*
-to render; each renderer decides only *how* (its markup and escaping). Parity is
-enforced structurally, not by convention — a node-type registry fails at import
-if a type lacks an emitter on either surface, and a cross-surface
-semantic-parity test asserts both surfaces *and* the IR agree on the same facts
-(table/figure numbers, BMD endpoints). This is **ADR-0006**: drift between the
-preview and the Overleaf hand-off is the failure it removes. Underneath,
-assembly parity still holds — content is assembled into the data dict the same
-way for both paths (`marshal_export_data` for the web/preview path,
-`load_session_data` for the session-export path). A planned third surface,
-**BITS/JATS** XML for PMC/Bookshelf submission, is a *projection only* — the
-model already carries what it needs (ADR-0004), and the IR is the artifact it
-projects from.
+Different audiences need the same report in different forms: the author needs a
+fast in-browser **HTML preview**; the committee-review artifact is an
+**Overleaf-ready LaTeX bundle** (`report.tex` + class file + `figures/`);
+Word-driven reviewers need a **`.docx`** they can track-change; PMC/NCBI
+Bookshelf needs **BITS/JATS** XML. Every one of these is a *projection of the
+same `DocNode` tree*. The emitters (`html_generator.py`, `latex_generator.py`,
+`docx_generator.py`, `jats_generator.py`) are thin **emit** layers over a shared
+semantic **IR** (`render_common.py`): one tree walk (`walk_tree`, owned by
+`document_tree`) and a markup-free *plan* per node type that decides *what* to
+render; each emitter decides only *how* (its markup and escaping). This is the
+**ADR-0006** thesis, generalized in its Amendment 1: the surfaces are not just
+deduplicated, they are *provably describing the same study* because they read one
+description — drift between them would be a **semantic inconsistency**, not a
+code smell.
+
+Parity is enforced structurally, not by convention. A node-type registry
+(`RENDERABLE_NODE_TYPES`) fails at **import** if a registered type lacks an
+emitter on the HTML, LaTeX, or Word surface (`assert_dispatch_covers`), and a
+cross-surface semantic-parity test asserts the surfaces *and* the IR agree on the
+same facts (table/figure numbers, BMD endpoints). Underneath, assembly parity
+still holds — content is assembled into the data dict the same way for both the
+web/preview path (`marshal_export_data`) and the session-export path
+(`load_session_data`).
+
+The four surfaces differ in **how far into the pipeline they sit**, not in what
+they read:
+
+- **HTML** (`html_generator.py`) and **LaTeX** (`latex_generator.py`) are **live
+  HTTP endpoints** — `/api/preview-latex-html` and `/api/export-overleaf-bundle`
+  (plus `/api/compile-pdf`, which compiles the LaTeX bundle locally with `tect`
+  for an in-app truth-check, ADR-0007).
+- **Word/OOXML** (`docx_generator.py`, **ADR-0008**) is a native third emitter
+  and a one-way OUTPUT surface — Word is never a source of truth for structure.
+  It shares the same IR and import-time parity coverage but is invoked offline
+  (regeneration script + tests), not yet wired to an export route. Its one
+  deliberate divergence is mechanical, not semantic: Word is an object model, so
+  handlers *mutate* a python-docx `Document` rather than accumulate markup
+  strings.
+- **BITS/JATS** XML (`jats_generator.py`, **ADR-0004**) is the fourth projection,
+  for PMC/Bookshelf submission — a *projection only*, the model already carries
+  what it needs. As of 2026-08-10 it targets a **BITS `<book>`** (the reports are
+  books on NCBI Bookshelf, not journal articles); the article-`<article>` path is
+  kept alongside it. Validation is offline — a vendored NLM/PMC **StyleChecker**
+  transform and a vendored **BITS DTD** gate, run in-process — because a BITS book
+  goes through NCBI's manual Bookshelf QA rather than the article Previewer.
 
 ### The transcriptomic interpretation must be credible → it is KB-grounded
 
@@ -177,6 +204,20 @@ contradicts one, surface it explicitly rather than silently overriding.
 | [0004](docs/adr/0004-bits-jats-export-surface.md) | BITS/JATS as a third export surface for PMC/Bookshelf — a projection of the model, not a parallel one. |
 | [0005](docs/adr/0005-overleaf-round-trip-content-sync.md) | Overleaf round-trip: committee edits in Overleaf reconcile back into the content model via stable per-node anchors, with the author in the middle. |
 | [0006](docs/adr/0006-unify-html-latex-renderers.md) | Unify the HTML/LaTeX renderers behind one semantic IR (`render_common`) + a shared `walk_tree`; both surfaces are thin projections, with parity enforced by a node-type registry and a cross-surface parity test. |
+| [0007](docs/adr/0007-in-app-html-and-pdf-preview.md) | In-app preview: a live HTML view + an on-demand PDF view compiled locally from our own LaTeX (`tect`), side-by-side with a reference PDF — fewer Overleaf round trips, no new renderer. |
+| [0008](docs/adr/0008-docx-render-surface.md) | Word/OOXML `.docx` as a third emitter over the shared IR — a one-way OUTPUT surface (Word is never a source of truth), with import-time parity coverage. |
+| [0009](docs/adr/0009-complete-the-layout-style-vocabulary.md) | Complete the shared `layout_style` vocabulary so a Word/`.dotx` template can drive per-block typography on every surface. *(Proposed.)* |
+| [0010](docs/adr/0010-semantic-type-vocabulary-system.md) | A descriptive semantic-type vocabulary reconciling the component catalog with Word named-styles/`basedOn`. *(Proposed; Phase 0 landed.)* |
+| [0011](docs/adr/0011-lossless-canonical-dotx-layer.md) | A lossless canonical `.dotx` styling layer — a conservation law with hard-fail, so styling round-trips without silent loss. *(Proposed.)* |
+| [0012](docs/adr/0012-semantic-figure-content-type.md) | A first-class semantic `figure` content type. *(Proposed; implemented alongside the vocabulary work.)* |
 
 > **Note (2026-05):** the report's output pivoted from Typst/PDF to
-> **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface.
+> **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface. A
+> vestigial `report.typ` remains on disk as a historical artifact but is dead —
+> no live code compiles it.
+>
+> **Note (2026-08):** there are now **four** render surfaces (HTML, LaTeX, Word,
+> BITS/JATS), all projections of the one `DocNode` tree via the `render_common`
+> IR. The BITS surface targets a NCBI Bookshelf **`<book>`** (ADR-0004), and the
+> newer ADRs (0007–0012) extend the model with a local-compile preview, the Word
+> surface, and a semantic styling vocabulary.
