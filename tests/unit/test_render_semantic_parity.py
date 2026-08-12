@@ -33,8 +33,8 @@ import latex_generator
 from latex_export import load_session_data
 from html_generator import generate_html
 from latex_generator import generate_latex
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE, find_node
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE, find_node
 from render_common import bmd_summary_plan
 
 

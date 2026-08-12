@@ -495,8 +495,8 @@ async def _build_charts(ctx):
         # blocks).  Load the raw blocks (for the cache key) and the built
         # registry (for rendering).  Absent config ⇒ {} / built-in types ⇒
         # today's render.
-        from document_tree import ACTIVE_TEMPLATE
-        from document_template import load_chart_style, load_chart_types
+        from document_model.document_tree import ACTIVE_TEMPLATE
+        from document_model.document_template import load_chart_style, load_chart_types
         chart_style_cfg = load_chart_style(ACTIVE_TEMPLATE)
         chart_types_reg = load_chart_types(ACTIVE_TEMPLATE)
 
@@ -1014,8 +1014,8 @@ async def api_process_integrated(dtxsid: str, request: Request):
     # Per-area organ allowlist from the active template's `organs:` block
     # ({area: [tokens]}; {} ⇒ no filtering).  Loaded from the template like the
     # chart config.  See document_template.load_report_organs.
-    from document_tree import ACTIVE_TEMPLATE
-    from document_template import (
+    from document_model.document_tree import ACTIVE_TEMPLATE
+    from document_model.document_template import (
         load_report_organs,
         load_report_sex,
         load_report_assays,

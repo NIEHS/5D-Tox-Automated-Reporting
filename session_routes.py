@@ -451,8 +451,8 @@ async def api_session_load(dtxsid: str):
                 # Chart styling + data-driven types come from the same active
                 # template as the document structure (WP-6), so this migration
                 # render matches the pool_orchestrator render.
-                from document_tree import ACTIVE_TEMPLATE
-                from document_template import load_chart_style, load_chart_types
+                from document_model.document_tree import ACTIVE_TEMPLATE
+                from document_model.document_template import load_chart_style, load_chart_types
                 rerendered = render_chart_images_for_sections(
                     genomics_sections=genomics_cache,
                     bmd_stat=bmd_stat,

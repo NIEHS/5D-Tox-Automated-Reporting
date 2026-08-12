@@ -251,8 +251,8 @@ async def serve_ui():
 # from the single source of truth (document_tree.py) instead of
 # hardcoding them in HTML/JS.
 
-from document_tree import serialize_tree, compute_table_numbers, DOCUMENT_TREE
-from render_capabilities import annotate_capabilities
+from document_model.document_tree import serialize_tree, compute_table_numbers, DOCUMENT_TREE
+from document_model.render_capabilities import annotate_capabilities
 
 # Ensure table numbers are computed before serializing
 compute_table_numbers()
@@ -293,8 +293,8 @@ def refresh_serialized_tree() -> None:
 # block; __CHART_REGISTRY__ is one entry per chart type ({name, type, spec?}).
 # Both are injected into the served HTML so the JS chart surfaces resolve the
 # same effective style the Python export path uses.
-from document_tree import ACTIVE_TEMPLATE
-from document_template import load_chart_style, load_chart_types
+from document_model.document_tree import ACTIVE_TEMPLATE
+from document_model.document_template import load_chart_style, load_chart_types
 from genomics.chart_registry import registry_payload
 
 _CHART_STYLE_CFG = load_chart_style(ACTIVE_TEMPLATE)
@@ -305,8 +305,8 @@ _CHART_REGISTRY_PAYLOAD = registry_payload(load_chart_types(ACTIVE_TEMPLATE))
 # the form is generated from the SAME source of truth the validator uses (no
 # hand-duplicated key/type list in JS).  __LAYOUT_SCHEMA__ is {key: {kind,
 # values?/units?}}; __CONTENT_TYPES__ is the catalog's node-type list.
-from layout_style import style_schema_payload as _layout_style_schema_payload
-from render_capabilities import COMPONENT_CATALOG as _COMPONENT_CATALOG
+from document_model.layout_style import style_schema_payload as _layout_style_schema_payload
+from document_model.render_capabilities import COMPONENT_CATALOG as _COMPONENT_CATALOG
 
 _LAYOUT_SCHEMA_PAYLOAD = _layout_style_schema_payload()
 _CONTENT_TYPES_PAYLOAD = sorted(_COMPONENT_CATALOG)
@@ -330,7 +330,7 @@ async def get_document_tree(dtxsid: str | None = None):
     """
     if dtxsid:
         try:
-            from document_config import build_session_tree
+            from document_model.document_config import build_session_tree
             session_tree = build_session_tree(dtxsid)
             if session_tree is not None:
                 return JSONResponse(

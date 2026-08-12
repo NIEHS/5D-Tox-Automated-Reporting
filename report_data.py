@@ -190,15 +190,15 @@ def _resolve_layout_config(body: dict) -> dict:
     layout_style.resolve_layout_style.  All sources empty ⇒ {} ⇒ no styling.
     """
     from genomics.chart_style import deep_merge
-    from document_template import load_layout_style
-    from document_tree import ACTIVE_TEMPLATE
+    from document_model.document_template import load_layout_style
+    from document_model.document_tree import ACTIVE_TEMPLATE
 
     template_cfg = load_layout_style(ACTIVE_TEMPLATE)
 
     session_cfg = None
     dtxsid = body.get("dtxsid", "")
     if dtxsid:
-        from document_config import load_session_layout_style
+        from document_model.document_config import load_session_layout_style
         session_cfg = load_session_layout_style(dtxsid)
 
     request_cfg = body.get("layout_style")
@@ -260,7 +260,7 @@ def marshal_export_data(
         The render-ready data dict (the shape generate_html / generate_latex
         walk).
     """
-    from document_tree import DOCUMENT_TREE
+    from document_model.document_tree import DOCUMENT_TREE
     # Resolve once: `active_tree` is a concrete list for the walks that need one;
     # the raw `tree` param (possibly None) is passed to find_node so the default
     # path keeps its O(1) index lookup (an explicit tree forces a linear scan).
@@ -399,7 +399,7 @@ def marshal_export_data(
     # those fields are None until compute_table_numbers() has run.  Computing
     # here (rather than relying on a later call leaking numbers across requests)
     # makes a fresh process produce correct numbers on the first call.
-    from document_tree import compute_table_numbers
+    from document_model.document_tree import compute_table_numbers
     compute_table_numbers(active_tree)
 
     from report_data_overlays import (
@@ -418,7 +418,7 @@ def marshal_export_data(
     # finalized.  Same helper the LaTeX session path calls, so both surfaces
     # number identically; runs before _build_toc_entries so the Tables list
     # picks the numbers up.  A no-op when there are no genomics sections.
-    from document_tree import assign_genomics_table_numbers
+    from document_model.document_tree import assign_genomics_table_numbers
     assign_genomics_table_numbers(active_tree, data.get("genomics_sections"))
 
     # Summary
@@ -428,7 +428,7 @@ def marshal_export_data(
 
     # Inject the document structure tree so the renderers can walk
     # it for heading hierarchy, table numbering, and section ordering.
-    from document_tree import serialize_tree, find_node, is_leaf_table
+    from document_model.document_tree import serialize_tree, find_node, is_leaf_table
     data["document_tree"] = serialize_tree(active_tree)
 
     # Build manual TOC entries from the document tree BEFORE the section
@@ -645,7 +645,7 @@ def _build_methods_sections_from_tree() -> list[dict]:
     added or reordered in document_tree.py, the scaffold PDF picks
     it up automatically.
     """
-    from document_tree import find_node, walk_tree
+    from document_model.document_tree import find_node, walk_tree
 
     methods_node = find_node("methods")
     if not methods_node or not methods_node.children:

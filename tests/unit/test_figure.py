@@ -13,12 +13,12 @@ import pytest
 from docx import Document
 from docx.oxml.ns import qn
 
-import render_capabilities as rc
+import document_model.render_capabilities as rc
 import docx_generator as dg
 import latex_generator as lg
 import html_generator as hg
-from document_node import DocNode
-from document_tree import compute_table_numbers, compute_figure_numbers
+from document_model.document_node import DocNode
+from document_model.document_tree import compute_table_numbers, compute_figure_numbers
 
 
 # A minimal VALID 4x4 PNG, base64 (no data-URI prefix) — must be a real PNG so
@@ -68,7 +68,7 @@ def test_figure_subtypes_and_graphic_role():
 
 
 def test_figure_furniture_roles_resolve_in_the_vocabulary():
-    import vocabulary as V
+    import document_model.vocabulary as V
     vocab = V.load_vocabulary("ntp-report")
     for role in rc.emits_for("figure") + ("fig_graphic", "logo_graphic"):
         assert vocab.get(role) is not None, f"figure role {role!r} unresolved"

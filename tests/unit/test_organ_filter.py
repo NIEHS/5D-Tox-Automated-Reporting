@@ -68,7 +68,7 @@ def test_multi_token_allowlist():
 
 @pytest.fixture
 def template_dir(tmp_path, monkeypatch):
-    import document_template as dt
+    import document_model.document_template as dt
     monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
     return tmp_path
 
@@ -80,7 +80,7 @@ def _write(template_dir, body: str) -> str:
 
 
 def test_missing_organs_key_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document:
           - id: x
@@ -92,7 +92,7 @@ def test_missing_organs_key_returns_empty(template_dir):
 
 
 def test_bare_list_template_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         - id: x
           type: narrative
@@ -103,7 +103,7 @@ def test_bare_list_template_returns_empty(template_dir):
 
 
 def test_per_area_block_lowercased_and_stripped(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -118,7 +118,7 @@ def test_per_area_block_lowercased_and_stripped(template_dir):
 
 def test_flat_list_organs_block_is_rejected(template_dir):
     # The old flat-list shape is no longer valid — must be a per-area mapping.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -129,7 +129,7 @@ def test_flat_list_organs_block_is_rejected(template_dir):
 
 
 def test_unknown_area_key_is_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -140,7 +140,7 @@ def test_unknown_area_key_is_rejected(template_dir):
 
 
 def test_area_value_must_be_a_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -152,7 +152,7 @@ def test_area_value_must_be_a_list(template_dir):
 
 
 def test_area_entries_must_be_strings(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:

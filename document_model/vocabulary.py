@@ -63,7 +63,7 @@ from genomics.chart_style import deep_merge
 # The per-key style schema + value validator live in layout_style; a type's
 # ``style`` delta is an ordinary layout_style dict, so we validate it the same
 # way and reject a bad VALUE loudly at load time.
-import layout_style
+import document_model.layout_style as layout_style
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +326,7 @@ def _read_vocab_file(name: str) -> dict:
     from pathlib import Path
     import yaml
 
-    vocab_dir = Path(__file__).resolve().parent / "vocab"
+    vocab_dir = Path(__file__).resolve().parent.parent / "vocab"
     path = vocab_dir / f"{name}.yaml"
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}

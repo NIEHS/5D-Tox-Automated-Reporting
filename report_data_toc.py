@@ -89,7 +89,7 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
     Returns:
         (toc_entries, table_entries) — both are lists of dicts.
     """
-    from document_tree import DOCUMENT_TREE, compute_table_numbers
+    from document_model.document_tree import DOCUMENT_TREE, compute_table_numbers
 
     nodes = tree if tree is not None else DOCUMENT_TREE
     # Ensure table numbers are computed before we walk
@@ -304,7 +304,7 @@ def _apply_section_filter(data: dict, section_filter: str, tree: "list | None" =
         section_filter: Any TOC node ID (e.g., "animal-condition",
                         "table-body-weight", "background", "foreword").
     """
-    from document_tree import (
+    from document_model.document_tree import (
         find_node, collect_data_keys, collect_platforms, collect_methods_keys,
     )
 

@@ -28,7 +28,7 @@ import pytest
 import docx_generator
 import html_generator
 import latex_generator
-from document_tree import DOCUMENT_TREE
+from document_model.document_tree import DOCUMENT_TREE
 from render_common import (
     RENDERABLE_NODE_TYPES,
     LATEX_OMITS,

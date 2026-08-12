@@ -20,9 +20,9 @@ import copy
 import pytest
 import yaml
 
-import document_config as dc
-from document_template import load_template
-from document_tree import ACTIVE_TEMPLATE, DOCUMENT_TREE
+import document_model.document_config as dc
+from document_model.document_template import load_template
+from document_model.document_tree import ACTIVE_TEMPLATE, DOCUMENT_TREE
 
 
 def _default_document_list():
@@ -172,8 +172,8 @@ def isolated_template(tmp_path, monkeypatch):
     """Redirect TEMPLATES_DIR + the golden fixture to a temp copy of templates/,
     and restore the global DOCUMENT_TREE from the real template on teardown."""
     import shutil
-    import document_template
-    import document_tree
+    import document_model.document_template as document_template
+    import document_model.document_tree as document_tree
 
     real_templates = document_template.TEMPLATES_DIR
     tmp_templates = tmp_path / "templates"
@@ -205,7 +205,7 @@ def test_default_save_preserves_sibling_blocks(isolated_template):
 
 
 def test_default_save_applies_live_in_place(isolated_template):
-    import document_tree
+    import document_model.document_tree as document_tree
     before = [n.id for n in document_tree.DOCUMENT_TREE]
     obj_id = id(document_tree.DOCUMENT_TREE)
     dc.save_default_document_yaml(_reorder_body_yaml())

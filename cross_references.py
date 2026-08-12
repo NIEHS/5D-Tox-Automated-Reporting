@@ -54,8 +54,8 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from document_node import DocNode
-from document_tree import NUMBERED_TABLE_TYPES, find_node
+from document_model.document_node import DocNode
+from document_model.document_tree import NUMBERED_TABLE_TYPES, find_node
 
 
 # ---------------------------------------------------------------------------

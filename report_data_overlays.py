@@ -284,7 +284,7 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
             # Table 3 = Organ Weight, etc.).  Overrides any user-provided
             # table_number from the UI.  (_find_table_number is a module-level
             # helper so it isn't rebuilt on every loop iteration.)
-            from document_tree import DOCUMENT_TREE
+            from document_model.document_tree import DOCUMENT_TREE
             nodes = tree if tree is not None else DOCUMENT_TREE
             platform = apical_entry["platform"]
             tree_table_num = _find_table_number(nodes, platform)
@@ -408,7 +408,7 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
             )
             _table_num = None
             try:
-                from document_tree import find_node, compute_table_numbers
+                from document_model.document_tree import find_node, compute_table_numbers
                 compute_table_numbers()
                 _bmd_node = find_node("bmd-summary")
                 if _bmd_node and _bmd_node.table_number is not None:
@@ -464,8 +464,8 @@ def _overlay_genomics(data: dict, body: dict) -> None:
                 try:
                     import orjson
                     from genomics.genomics_charts import attach_genomics_charts
-                    from document_tree import ACTIVE_TEMPLATE
-                    from document_template import load_report_charts
+                    from document_model.document_tree import ACTIVE_TEMPLATE
+                    from document_model.document_template import load_report_charts
                     charts_cache = orjson.loads(_charts.read_bytes())
                     if isinstance(charts_cache, list):
                         attach_genomics_charts(

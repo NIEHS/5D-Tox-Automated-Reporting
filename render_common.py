@@ -36,7 +36,7 @@ from __future__ import annotations
 # instantiated DOCUMENT_TREE, only the node type for hints.
 from dataclasses import dataclass, field
 
-from document_node import DocNode
+from document_model.document_node import DocNode
 # Render-time numeric re-rounding for mean ± SE cells — already the shared
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
@@ -46,7 +46,7 @@ from tables.table_builder_common import format_mean_se_display, format_display_n
 # render_capabilities is a clean low-level module that imports nothing from
 # document_tree / the renderers / this module, so importing it here keeps
 # render_common a leaf (the tree walk itself is still passed in, never imported).
-from render_capabilities import landscape_requested
+from document_model.render_capabilities import landscape_requested
 
 import math
 import re

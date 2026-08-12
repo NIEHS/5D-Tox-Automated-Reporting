@@ -12,7 +12,7 @@ Two concerns:
      (verified more strongly by the byte-identical golden/baseline checks).
 """
 
-from document_node import DocNode
+from document_model.document_node import DocNode
 from genomics.genomics_content import genomics_content_plan
 from latex_generator import _render_genomics_section
 

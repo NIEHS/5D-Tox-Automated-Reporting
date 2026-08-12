@@ -13,8 +13,8 @@ import sys
 import process_integrated as P
 from process_integrated import ProcessContext, _build_ntp_stats, _get_sections, _build_bmd_summary
 from pool_globals import _session_dir
-from document_tree import ACTIVE_TEMPLATE
-from document_template import (
+from document_model.document_tree import ACTIVE_TEMPLATE
+from document_model.document_template import (
     load_report_organs, load_report_sex, load_report_assays,
     load_report_genes, load_report_gene_sets,
 )

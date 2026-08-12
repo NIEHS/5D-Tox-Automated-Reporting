@@ -13,8 +13,8 @@ Covers the three moving parts:
 
 import json
 
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE, compute_table_numbers, find_node
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE, compute_table_numbers, find_node
 from latex_generator import _render_sample_counts_table as latex_sc
 from html_generator import _render_sample_counts_table as html_sc
 

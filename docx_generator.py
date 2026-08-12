@@ -60,8 +60,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor, Twips
 
-from cover_layouts import get_cover_layout
-from document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
+from document_model.cover_layouts import get_cover_layout
+from document_model.document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from render_common import (
     ANIMAL_ROSTER_HEADERS,
@@ -93,8 +93,8 @@ from render_common import (
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from genomics.genomics_content import genomics_content_plan
-from layout_style import resolve_layout_style
-from render_capabilities import front_matter_roles_for, landscape_requested
+from document_model.layout_style import resolve_layout_style
+from document_model.render_capabilities import front_matter_roles_for, landscape_requested
 
 _REL_HYPERLINK = _REL.HYPERLINK
 from tables.table_builder_common import format_display_number, format_mean_se_display
@@ -1993,7 +1993,7 @@ def _load_active_vocabulary(data: dict):
     if not name:
         return None
     try:
-        import vocabulary as _vocab
+        import document_model.vocabulary as _vocab
         return _vocab.load_vocabulary(name)
     except Exception:
         return None
@@ -2007,7 +2007,7 @@ def _role_style_name(data: dict, role: str) -> "str | None":
     vocab = data.get("_vocabulary")
     if vocab is None or vocab.get(role) is None:
         return None
-    import vocabulary as _vocab
+    import document_model.vocabulary as _vocab
     return _vocab.resolve_bindings(vocab, role)["docx"]
 
 
@@ -2034,7 +2034,7 @@ def _build_vocabulary_styles(doc: Document, vocab) -> None:
     Built in specialization order (parents before children) so base_style can be
     assigned.  A type whose docx binding is an EXISTING style (Normal, Heading 1)
     updates that style in place rather than adding a duplicate."""
-    import vocabulary as _vocab
+    import document_model.vocabulary as _vocab
     from docx.enum.style import WD_STYLE_TYPE
 
     styles = doc.styles
@@ -2190,7 +2190,7 @@ def _set_header_text(header_para, text: str) -> None:
     so it breaks at word boundaries rather than auto-wrapping mid-phrase (the
     reported header-wrap bug).  Reuses cover_layouts._wrap_words for the same
     greedy packing the title uses.  A short header stays one line."""
-    from cover_layouts import _wrap_words
+    from document_model.cover_layouts import _wrap_words
 
     for run in list(header_para.runs):        # clear any existing runs
         run._element.getparent().remove(run._element)

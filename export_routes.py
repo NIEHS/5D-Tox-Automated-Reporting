@@ -135,7 +135,7 @@ def _session_tree_for(body: dict):
     if not dtxsid:
         return None
     try:
-        from document_config import build_session_tree
+        from document_model.document_config import build_session_tree
         return build_session_tree(dtxsid)
     except Exception:
         logger.exception("per-session document tree failed to build for %s; "
@@ -853,7 +853,7 @@ async def api_get_document_config(dtxsid: str, default: int = 0):
     "Load default" affordance, so a session that already has an override can
     still get back to the default in the editor (unsaved until the user saves).
     """
-    from document_config import load_session_document_yaml, default_document_yaml
+    from document_model.document_config import load_session_document_yaml, default_document_yaml
 
     if default:
         return JSONResponse({"yaml": default_document_yaml(), "is_default": True})
@@ -874,7 +874,7 @@ async def api_save_document_config(dtxsid: str, request: Request):
     re-fetches /api/document-tree?dtxsid=… and re-renders (no re-integration —
     only the structure changed).
     """
-    from document_config import save_session_document_yaml
+    from document_model.document_config import save_session_document_yaml
 
     body = await request.json()
     text = body.get("yaml")
@@ -904,7 +904,7 @@ async def api_save_document_config(dtxsid: str, request: Request):
 @router.get("/api/document-config-default")
 async def api_get_document_config_default():
     """Return the default (template) document-structure YAML for the editor."""
-    from document_config import load_default_document_yaml
+    from document_model.document_config import load_default_document_yaml
     return JSONResponse({"yaml": load_default_document_yaml()})
 
 
@@ -919,7 +919,7 @@ async def api_save_document_config_default(request: Request):
     fixture is regenerated — so every report without its own override, plus the
     nav/preview, reflect the new default with no restart.
     """
-    from document_config import save_default_document_yaml
+    from document_model.document_config import save_default_document_yaml
 
     body = await request.json()
     text = body.get("yaml")
@@ -960,7 +960,7 @@ async def api_get_layout_style(dtxsid: str, default: int = 0):
     forces the shared default — the "Load default" affordance.
     """
     import yaml as _yaml
-    from document_config import (
+    from document_model.document_config import (
         load_session_layout_style,
         default_layout_style_yaml,
         default_layout_style_config,
@@ -996,7 +996,7 @@ async def api_save_layout_style(dtxsid: str, request: Request):
     presentation).
     """
     import yaml as _yaml
-    from document_config import save_session_layout_style
+    from document_model.document_config import save_session_layout_style
 
     body = await request.json()
     text = body.get("yaml")
@@ -1024,7 +1024,7 @@ async def api_save_layout_style(dtxsid: str, request: Request):
 @router.get("/api/layout-style-default")
 async def api_get_layout_style_default():
     """Return the default (template) layout-styles YAML for the editor."""
-    from document_config import default_layout_style_yaml
+    from document_model.document_config import default_layout_style_yaml
     return JSONResponse({"yaml": default_layout_style_yaml()})
 
 
@@ -1037,7 +1037,7 @@ async def api_save_layout_style_default(request: Request):
     On success only the template's ``styles:`` sibling is rewritten; no tree
     rebuild is needed (styles are pure presentation, re-read live per render).
     """
-    from document_config import save_default_layout_style
+    from document_model.document_config import save_default_layout_style
 
     body = await request.json()
     text = body.get("yaml")

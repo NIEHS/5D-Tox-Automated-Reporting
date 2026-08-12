@@ -289,7 +289,7 @@ def test_prune_card_sexes_noop_without_allowlist():
 
 @pytest.fixture
 def template_dir(tmp_path, monkeypatch):
-    import document_template as dt
+    import document_model.document_template as dt
     monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
     return tmp_path
 
@@ -301,7 +301,7 @@ def _write(template_dir, body: str) -> str:
 
 
 def test_load_sex_per_area_lowercased(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -312,13 +312,13 @@ def test_load_sex_per_area_lowercased(template_dir):
 
 
 def test_load_sex_missing_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_sex(name) == {}
 
 
 def test_load_sex_unknown_area_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -329,7 +329,7 @@ def test_load_sex_unknown_area_rejected(template_dir):
 
 
 def test_load_sex_flat_list_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex: [male]
@@ -339,7 +339,7 @@ def test_load_sex_flat_list_rejected(template_dir):
 
 
 def test_load_assays_per_area(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -355,7 +355,7 @@ def test_load_assays_per_area(template_dir):
 def test_load_assays_unknown_area_rejected(template_dir):
     # "hormones" is now a VALID assay area (its Select panel is config-driven,
     # like clinical-chemistry/hematology); use a genuinely unknown key here.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -368,7 +368,7 @@ def test_load_assays_unknown_area_rejected(template_dir):
 def test_load_assays_per_sex_mapping(template_dir):
     # An area value may be a {male:/female:} mapping — the reference's "Select"
     # tables show different endpoints per sex.  Tokens lower-cased/stripped.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -390,7 +390,7 @@ def test_load_assays_per_sex_mapping(template_dir):
 def test_load_assays_hormones_area(template_dir):
     # Hormones is now a config-driven "Select" panel (reference Table 6), so it
     # loads through the same assay rail as clin-chem / hematology.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -409,7 +409,7 @@ def test_load_assays_hormones_area(template_dir):
 def test_load_sex_organ_weight_area(template_dir):
     # The "organ-weight" sex area narrows ONLY the Organ Weight table (reference
     # Table 3 shows just the responsive sex).  A valid area alongside apical.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -423,7 +423,7 @@ def test_load_sex_organ_weight_area(template_dir):
 
 
 def test_load_assays_unknown_sex_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -435,7 +435,7 @@ def test_load_assays_unknown_sex_rejected(template_dir):
 
 
 def test_load_assays_per_sex_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -447,7 +447,7 @@ def test_load_assays_per_sex_non_string_rejected(template_dir):
 
 
 def test_load_genes_flat_list_lowercased(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes: [EGR1, "  Ddit4 "]
@@ -456,13 +456,13 @@ def test_load_genes_flat_list_lowercased(template_dir):
 
 
 def test_load_genes_missing_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_genes(name) == []
 
 
 def test_load_genes_mapping_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes:
@@ -473,7 +473,7 @@ def test_load_genes_mapping_rejected(template_dir):
 
 
 def test_load_gene_sets_flat_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         gene_sets: ["GO:1902893", "cell division"]
@@ -482,7 +482,7 @@ def test_load_gene_sets_flat_list(template_dir):
 
 
 def test_load_genes_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes: [42]
@@ -496,14 +496,14 @@ def test_load_genes_non_string_rejected(template_dir):
 def test_load_charts_absent_returns_none(template_dir):
     # Distinct from the token allowlists: absence means "no filtering" (None),
     # so every chart type renders.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_charts(name) is None
 
 
 def test_load_charts_empty_list_is_render_none(template_dir):
     # An explicit empty list is NOT "no filtering" — it renders zero charts.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: []
@@ -512,7 +512,7 @@ def test_load_charts_empty_list_is_render_none(template_dir):
 
 
 def test_load_charts_lowercased_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: [UMAP, "  Cluster  "]
@@ -521,7 +521,7 @@ def test_load_charts_lowercased_list(template_dir):
 
 
 def test_load_charts_mapping_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: { umap: true }
@@ -531,7 +531,7 @@ def test_load_charts_mapping_rejected(template_dir):
 
 
 def test_load_charts_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: [42]

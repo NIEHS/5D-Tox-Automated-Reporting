@@ -19,7 +19,7 @@ from docx import Document
 
 import styling_export.docx_style_extract as dse
 from docx_generator import generate_docx
-from document_config import _parse_styles_yaml
+from document_model.document_config import _parse_styles_yaml
 from report_data import scaffold_report_data
 
 
@@ -189,7 +189,7 @@ def test_title_page_layer_validates_as_styles_yaml(ntp_template_cfg):
     validated = _parse_styles_yaml(dse.to_yaml(ntp_template_cfg))
     assert "title_page" in validated
     # Every extracted role is a known TITLE_PAGE_ROLE (else validation would raise).
-    import layout_style
+    import document_model.layout_style as layout_style
     for role in validated["title_page"]:
         assert role in layout_style.TITLE_PAGE_ROLES
 
@@ -378,7 +378,7 @@ def test_used_only_scope_is_smaller_than_full():
 def test_generated_vocabulary_resolves_through_vocabulary_module(tmp_path):
     """End to end: generate → write → load_vocabulary (with the shipped base) →
     resolve report_title to the reference look with NO line spacing."""
-    import vocabulary as V
+    import document_model.vocabulary as V
 
     vocab_dict = dse.generate_vocabulary(_vocab_source())
     if "report_title" not in vocab_dict["types"]:

@@ -41,7 +41,7 @@ from datetime import date
 from lxml import etree
 from lxml.builder import ElementMaker
 
-from document_tree import (
+from document_model.document_tree import (
     DOCUMENT_TREE,
     DocNode,
     NUMBERED_TABLE_TYPES,

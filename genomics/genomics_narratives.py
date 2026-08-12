@@ -73,7 +73,7 @@ def _collect_table_numbers(parent_id: str) -> list[int]:
     no tables have been assigned numbers — the intro builders fall back
     to a generic "the tables below" phrasing in that case.
     """
-    from document_tree import find_node, compute_table_numbers
+    from document_model.document_tree import find_node, compute_table_numbers
     compute_table_numbers()
     node = find_node(parent_id)
     if not node:

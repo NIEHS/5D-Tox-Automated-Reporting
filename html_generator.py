@@ -49,14 +49,14 @@ from __future__ import annotations
 import html as _html
 from typing import Optional
 
-from document_tree import (
+from document_model.document_tree import (
     DOCUMENT_TREE,
     DocNode,
     find_node,
     first_body_node_id,
     walk_tree,
 )
-from render_capabilities import content_item_landscape_requested
+from document_model.render_capabilities import content_item_landscape_requested
 from render_common import (
     NarrativeContent,
     resolve_narrative_content,
@@ -89,9 +89,9 @@ from render_common import (
     table_caption as _table_caption,
 )
 from genomics.genomics_content import genomics_content_plan
-from layout_style import resolve_layout_style
+from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
-from cover_layouts import get_cover_layout
+from document_model.cover_layouts import get_cover_layout
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.

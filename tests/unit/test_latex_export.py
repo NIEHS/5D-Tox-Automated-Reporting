@@ -30,7 +30,7 @@ from latex_export import (
     CLASS_FILE,
     build_overleaf_bundle,
 )
-from cover_layouts import asset_path
+from document_model.cover_layouts import asset_path
 from latex_generator import generate_main_tex, generate_report_body
 from report_data import scaffold_report_data
 

@@ -20,9 +20,9 @@ The tree matches the NIEHS Report 10 (NBK589955) Table of Contents exactly.
 
 from __future__ import annotations
 
-from document_node import DocNode  # node shape; re-exported so existing
+from document_model.document_node import DocNode  # node shape; re-exported so existing
                                    # `from document_tree import DocNode` keeps working
-from document_template import build_tree
+from document_model.document_template import build_tree
 
 
 # The node SHAPE is defined in document_node.py (DocNode, re-exported above);

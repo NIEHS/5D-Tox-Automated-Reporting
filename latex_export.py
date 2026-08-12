@@ -77,7 +77,7 @@ CLASS_FILE = REPO_ROOT / "latex" / "niehs.cls"
 # not a hardcoded list here — a new report cover ships its own assets with no
 # edit to this module.  ALL_COVER_ASSETS is every registered layout's assets
 # (used to declare the managed-dir entries, which must be static).
-import cover_layouts as _cover_layouts
+import document_model.cover_layouts as _cover_layouts
 
 ALL_COVER_ASSETS = _cover_layouts.required_assets(_cover_layouts._COVER_LAYOUTS)
 
@@ -232,7 +232,7 @@ def _cover_subtypes_in_tree(tree) -> "list":
     node carries none), so the assembler ships exactly the assets those covers
     need.  Falls back to the global DOCUMENT_TREE when tree is None.
     """
-    from document_tree import DOCUMENT_TREE, walk_tree
+    from document_model.document_tree import DOCUMENT_TREE, walk_tree
     subtypes: list = []
     seen = set()
 
@@ -608,8 +608,8 @@ def load_session_data(
     genomics_path = _latest(session_dir, "_cache_genomics_*.json")
     genomics_cache = _load_json(genomics_path)
     if isinstance(genomics_cache, dict) and genomics_cache:
-        from document_tree import ACTIVE_TEMPLATE
-        from document_template import (
+        from document_model.document_tree import ACTIVE_TEMPLATE
+        from document_model.document_template import (
             load_report_organs, load_report_sex,
             load_report_genes, load_report_gene_sets,
         )
@@ -639,7 +639,7 @@ def load_session_data(
     # the tree sequence (Table 8 → 9, 10, ...).  Same helper the web/marshal path
     # calls, so both surfaces number identically.  Runs after genomics_sections
     # is finalized; a no-op when there are none.
-    from document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
+    from document_model.document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
     assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
@@ -649,8 +649,8 @@ def load_session_data(
     charts_path = _latest(session_dir, "_cache_charts_*.json")
     charts_cache = _load_json(charts_path)
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
-        from document_tree import ACTIVE_TEMPLATE
-        from document_template import load_report_charts
+        from document_model.document_tree import ACTIVE_TEMPLATE
+        from document_model.document_template import load_report_charts
         _attach_genomics_charts(
             data["genomics_sections"], charts_cache,
             enabled_types=load_report_charts(ACTIVE_TEMPLATE),
@@ -697,7 +697,7 @@ def load_session_data(
     # path must too, or the docx/HTML Contents page comes up empty.  Runs
     # after genomics table numbers are assigned so the Tables list is
     # complete.  Also serialize the tree the same way marshal does.
-    from document_tree import serialize_tree
+    from document_model.document_tree import serialize_tree
     from report_data_toc import _build_toc_entries
     data["document_tree"] = serialize_tree(DOCUMENT_TREE)
     toc_entries, table_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
@@ -725,13 +725,13 @@ def _resolve_export_layout_style(dtxsid: str) -> dict:
     report_data._resolve_layout_config minus the request-body layer (there is no
     live request on the export path).  Empty ⇒ {} ⇒ no per-node styling."""
     from genomics.chart_style import deep_merge
-    from document_template import load_layout_style
-    from document_tree import ACTIVE_TEMPLATE
+    from document_model.document_template import load_layout_style
+    from document_model.document_tree import ACTIVE_TEMPLATE
 
     template_cfg = load_layout_style(ACTIVE_TEMPLATE)
     session_cfg = None
     if dtxsid:
-        from document_config import load_session_layout_style
+        from document_model.document_config import load_session_layout_style
         session_cfg = load_session_layout_style(dtxsid)
     return deep_merge(template_cfg, session_cfg)
 

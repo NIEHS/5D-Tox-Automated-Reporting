@@ -349,7 +349,7 @@ def test_table_caption_prefers_node_caption_over_data_overlay():
     (the current state for all real nodes), the data-overlay caption is used,
     preserving the existing data-driven path.
     """
-    from document_node import DocNode
+    from document_model.document_node import DocNode
     from latex_generator import _table_caption
     node = DocNode(id="t", title="Summary of X", level=0, node_type="table",
                    platform="P", table_number=2, caption="Node-authored caption.")
@@ -370,7 +370,7 @@ def test_abstract_renders_structured_sections_with_bold_labels():
     and empty sections (e.g. a Methods abstract with no MethodsContext) are
     skipped rather than shown as a placeholder.
     """
-    from document_node import DocNode
+    from document_model.document_node import DocNode
     from latex_generator import _render_front_matter
     node = DocNode(id="abstract", title="Abstract", level=1,
                    node_type="front-matter", data_key="abstract")

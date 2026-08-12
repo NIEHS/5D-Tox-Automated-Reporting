@@ -27,8 +27,8 @@ import pathlib
 
 import pytest
 
-from document_tree import compute_table_numbers, serialize_tree
-from document_template import build_tree, instantiate, load_template
+from document_model.document_tree import compute_table_numbers, serialize_tree
+from document_model.document_template import build_tree, instantiate, load_template
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "document_tree_golden.json"
 TEMPLATE_NAME = "niehs-5day-report"

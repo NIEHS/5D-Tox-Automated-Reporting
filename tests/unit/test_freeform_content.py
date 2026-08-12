@@ -23,8 +23,8 @@ import pathlib
 import pytest
 
 import styling_export.freeform_content as fc
-from document_node import DocNode
-from document_template import instantiate
+from document_model.document_node import DocNode
+from document_model.document_template import instantiate
 
 TEMPLATES_DIR = pathlib.Path(__file__).resolve().parents[2] / "templates"
 

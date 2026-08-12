@@ -27,9 +27,9 @@ from pathlib import Path
 
 import yaml
 
-from document_node import DocNode
-from document_template import instantiate, load_template
-from document_tree import (
+from document_model.document_node import DocNode
+from document_model.document_template import instantiate, load_template
+from document_model.document_tree import (
     ACTIVE_TEMPLATE,
     build_node_index,
     compute_table_numbers,
@@ -188,8 +188,8 @@ def _validate_styles_cfg(cfg: dict) -> None:
     document_template.load_layout_style enforces on the template block, factored
     here so the per-session path validates identically.  Raises ValueError.
     """
-    import layout_style
-    from document_template import COMPONENT_CATALOG
+    import document_model.layout_style as layout_style
+    from document_model.document_template import COMPONENT_CATALOG
 
     for sub in ("defaults", "types", "instances", "document", "title_page"):
         if sub in cfg and not isinstance(cfg[sub], dict):
@@ -269,7 +269,7 @@ def save_session_layout_style(dtxsid: str, text: str) -> None:
 
 def _template_path() -> Path:
     """Path to the active template file (the git-tracked default structure)."""
-    from document_template import TEMPLATES_DIR
+    from document_model.document_template import TEMPLATES_DIR
     return TEMPLATES_DIR / f"{ACTIVE_TEMPLATE}.yaml"
 
 
@@ -277,7 +277,7 @@ def _template_path() -> Path:
 # a valid default save so a UI edit doesn't red the guard (matches the exact
 # serialization tests/unit/test_document_template.py uses).
 _GOLDEN_FIXTURE = (
-    Path(__file__).resolve().parent
+    Path(__file__).resolve().parent.parent
     / "tests" / "unit" / "fixtures" / "document_tree_golden.json"
 )
 
@@ -296,7 +296,7 @@ def _regenerate_golden_fixture() -> None:
     + newline).  Keeps the guard green after an intentional UI default-edit.
     """
     import json
-    from document_tree import DOCUMENT_TREE, serialize_tree, compute_table_numbers
+    from document_model.document_tree import DOCUMENT_TREE, serialize_tree, compute_table_numbers
     compute_table_numbers(DOCUMENT_TREE)
     serialized = json.dumps(
         serialize_tree(DOCUMENT_TREE), sort_keys=True, indent=2, ensure_ascii=False
@@ -335,7 +335,7 @@ def save_default_document_yaml(text: str) -> None:
     path.write_text(new_text, encoding="utf-8")
 
     # Apply live + keep the browser and the golden guard in sync.
-    from document_tree import rebuild_document_tree
+    from document_model.document_tree import rebuild_document_tree
     rebuild_document_tree()
     try:
         import background_server
@@ -361,7 +361,7 @@ def default_layout_style_yaml() -> str:
     editor's initial content.  Empty ``styles: {}`` when the template has none
     (the no-styling baseline), so the editor opens on a valid, editable stub.
     """
-    from document_template import load_layout_style
+    from document_model.document_template import load_layout_style
     cfg = load_layout_style(ACTIVE_TEMPLATE)
     return yaml.safe_dump({"styles": cfg or {}}, sort_keys=False, allow_unicode=True)
 
@@ -372,7 +372,7 @@ def default_layout_style_config() -> dict:
     initial state when a session has no override (the JSON-only sibling of
     default_layout_style_yaml).  ``{}`` when the template declares no styles.
     """
-    from document_template import load_layout_style
+    from document_model.document_template import load_layout_style
     return load_layout_style(ACTIVE_TEMPLATE) or {}
 
 

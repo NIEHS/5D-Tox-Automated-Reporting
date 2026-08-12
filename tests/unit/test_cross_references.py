@@ -14,7 +14,7 @@ Covers:
 import re
 
 from cross_references import resolve_xrefs_latex, resolve_xrefs_html, latex_label_key
-from document_node import DocNode
+from document_model.document_node import DocNode
 from latex_generator import _escape_latex, _emit_table_placeholder
 
 

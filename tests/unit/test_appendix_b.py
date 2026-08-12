@@ -11,7 +11,7 @@ rows via the shared appendix_roster_rows EXTRACT.
 
 import json
 
-from document_node import DocNode
+from document_model.document_node import DocNode
 from latex_generator import _render_appendix as latex_appendix
 from html_generator import _render_appendix as html_appendix
 

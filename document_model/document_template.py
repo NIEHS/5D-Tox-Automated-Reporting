@@ -43,9 +43,9 @@ from pathlib import Path
 
 import yaml
 
-from document_node import DocNode
+from document_model.document_node import DocNode
 from styling_export.freeform_content import VALID_REPRESENTATIONS, resolve_freeform
-from render_capabilities import (
+from document_model.render_capabilities import (
     COMPONENT_CATALOG,
     capabilities_for,
     is_allowed_child,
@@ -62,7 +62,7 @@ from render_capabilities import (
 # Where authored templates live.  One file per template; YAML is the authoring
 # format (comments, readability), JSON is the canonical comparison form used by
 # the golden-tree test.
-TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 # DocNode fields the instantiator computes or handles specially, so a template
 # must NOT bind them by name:
@@ -460,7 +460,7 @@ def load_layout_style(name: str) -> dict:
     Unknown style KEYS stay non-fatal (reported at render time via
     layout_style.unknown_layout_keys), mirroring chart_style's discipline.
     """
-    import layout_style
+    import document_model.layout_style as layout_style
 
     data = _load_raw(name)
     if not isinstance(data, dict):

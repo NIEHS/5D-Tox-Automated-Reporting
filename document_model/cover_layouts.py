@@ -37,7 +37,7 @@ from typing import Callable, Iterable
 
 # Static cover assets live under assets/ (resolved relative to this module, the
 # REPO_ROOT idiom used by document_template.TEMPLATES_DIR / latex_export.CLASS_FILE).
-ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 
 # ---------------------------------------------------------------------------
