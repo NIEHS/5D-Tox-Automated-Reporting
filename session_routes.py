@@ -435,7 +435,7 @@ async def api_session_load(dtxsid: str):
 
     if chart_images and genomics_cache and chart_cache_path:
         try:
-            from genomics_viz import (
+            from genomics.genomics_viz import (
                 cache_has_svg, render_chart_images_for_sections,
             )
             if not cache_has_svg(chart_images):
@@ -498,7 +498,7 @@ async def api_session_load(dtxsid: str):
             if identity:
                 chem_name = identity.get("name") or identity.get("chemical_name")
 
-            from genomics_narratives import build_genomics_body_narratives
+            from genomics.genomics_narratives import build_genomics_body_narratives
             narratives = build_genomics_body_narratives(
                 genomics_sections=genomics_cache,
                 methods_context=methods_ctx,
@@ -527,7 +527,7 @@ async def api_session_load(dtxsid: str):
                 # the cleanup in generate_genomics_narrative_async, but
                 # be defensive).  The prefix is built by the shared helper
                 # so this reload path can't drift from the writer's naming.
-                from genomics_narratives import interpretation_cache_prefix
+                from genomics.genomics_narratives import interpretation_cache_prefix
                 prefix = interpretation_cache_prefix(organ_k, sex_k)
                 latest = None
                 latest_mtime = -1.0
@@ -561,7 +561,7 @@ async def api_session_load(dtxsid: str):
                 except Exception:
                     pass
 
-            from genomics_narratives import aggregate_organ_llm_narratives
+            from genomics.genomics_narratives import aggregate_organ_llm_narratives
             llm_gs, llm_gn = aggregate_organ_llm_narratives(
                 per_organ_bundles, overrides=_overrides,
             )

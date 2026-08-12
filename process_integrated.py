@@ -287,7 +287,7 @@ def _build_genomics_body_narratives(ctx):
     gene_narrative = None
     if genomics_sections:
         try:
-            from genomics_narratives import build_genomics_body_narratives
+            from genomics.genomics_narratives import build_genomics_body_narratives
             _methods_ctx = (
                 methods_result.get("context") if methods_result else None
             )
@@ -415,7 +415,7 @@ async def _build_genomics_llm_narratives(ctx):
                     "gn": llm_out.get("gene_narrative") or [],
                 }
 
-            from genomics_narratives import aggregate_organ_llm_narratives
+            from genomics.genomics_narratives import aggregate_organ_llm_narratives
             llm_gs_by_organ, llm_gene_by_organ = aggregate_organ_llm_narratives(
                 per_organ_bundles, overrides=_overrides,
             )
@@ -525,7 +525,7 @@ async def _build_charts(ctx):
         # `cache_has_svg` probe + `render_chart_images_for_sections`
         # batch render live in genomics_viz so this code path and
         # the session-load migration stay in lockstep.
-        from genomics_viz import (
+        from genomics.genomics_viz import (
             cache_has_svg, render_chart_images_for_sections,
         )
 

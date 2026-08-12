@@ -13,7 +13,7 @@ import importlib
 
 import pytest
 
-import chart_registry as cr
+import genomics.chart_registry as cr
 
 
 @pytest.fixture

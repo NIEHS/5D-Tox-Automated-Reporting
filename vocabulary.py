@@ -58,7 +58,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from chart_style import deep_merge
+from genomics.chart_style import deep_merge
 
 # The per-key style schema + value validator live in layout_style; a type's
 # ``style`` delta is an ordinary layout_style dict, so we validate it the same

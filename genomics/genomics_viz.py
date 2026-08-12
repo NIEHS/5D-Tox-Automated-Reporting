@@ -24,8 +24,8 @@ import numpy as np
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-import chart_registry
-import chart_style
+import genomics.chart_registry as chart_registry
+import genomics.chart_style as chart_style
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ router = APIRouter()
 # min_samples=500).  Extracted from BMDExpress-Web-Edition.
 # ---------------------------------------------------------------------------
 
-_UMAP_REF_PATH = Path(__file__).parent / "web" / "data" / "umap_reference.json"
+_UMAP_REF_PATH = Path(__file__).parent.parent / "web" / "data" / "umap_reference.json"
 _UMAP_REF: list[dict] = []
 # Lookup: go_id → {x, y, cluster}
 _UMAP_LOOKUP: dict[str, dict] = {}

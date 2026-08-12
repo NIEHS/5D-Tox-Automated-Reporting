@@ -88,7 +88,7 @@ from render_common import (
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
-from genomics_content import genomics_content_plan
+from genomics.genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
 from freeform_content import pending_note as _freeform_pending_note
 from cover_layouts import get_cover_layout

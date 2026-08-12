@@ -34,7 +34,7 @@ import re
 # Reuse the generic, well-tested deep-merge (recurse dicts, replace
 # scalars/lists/None wholesale, deep-copy, never mutate inputs).  It is domain-
 # neutral, so there is no reason to re-implement it here.
-from chart_style import deep_merge
+from genomics.chart_style import deep_merge
 
 
 # ---------------------------------------------------------------------------

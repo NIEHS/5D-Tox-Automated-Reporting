@@ -189,7 +189,7 @@ def _resolve_layout_config(body: dict) -> dict:
     (defaults ← types ← instances) is resolved later, per-node, at emit time by
     layout_style.resolve_layout_style.  All sources empty ⇒ {} ⇒ no styling.
     """
-    from chart_style import deep_merge
+    from genomics.chart_style import deep_merge
     from document_template import load_layout_style
     from document_tree import ACTIVE_TEMPLATE
 

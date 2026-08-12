@@ -429,7 +429,7 @@ def load_chart_types(name: str):
     list or a missing ``chart_types`` key yields just the built-ins (today's
     behaviour).
     """
-    import chart_registry
+    import genomics.chart_registry as chart_registry
 
     data = _load_raw(name)
     raw = data.get("chart_types") if isinstance(data, dict) else None

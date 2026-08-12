@@ -182,7 +182,7 @@ import export_routes
 app.include_router(export_routes.router)
 
 # Genomics visualization: clustering endpoint and server-side chart rendering
-import genomics_viz
+import genomics.genomics_viz as genomics_viz
 app.include_router(genomics_viz.router)
 
 
@@ -295,7 +295,7 @@ def refresh_serialized_tree() -> None:
 # same effective style the Python export path uses.
 from document_tree import ACTIVE_TEMPLATE
 from document_template import load_chart_style, load_chart_types
-from chart_registry import registry_payload
+from genomics.chart_registry import registry_payload
 
 _CHART_STYLE_CFG = load_chart_style(ACTIVE_TEMPLATE)
 _CHART_REGISTRY_PAYLOAD = registry_payload(load_chart_types(ACTIVE_TEMPLATE))

@@ -13,7 +13,7 @@ Two concerns:
 """
 
 from document_node import DocNode
-from genomics_content import genomics_content_plan
+from genomics.genomics_content import genomics_content_plan
 from latex_generator import _render_genomics_section
 
 _GENE_SET_ROW = {

@@ -127,7 +127,7 @@ from abstract_genomics import (
     build_abstract_results_genomics,
 )
 from abstract_pk import build_abstract_results_pk
-from gene_bodies import (
+from genomics.gene_bodies import (
     build_gene_set_body_intro,
     build_gene_set_body_findings,
     build_gene_body_intro,

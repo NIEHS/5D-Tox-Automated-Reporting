@@ -1012,7 +1012,7 @@ async def generate_genomics_narrative_async(
         if dtxsid:
             # The organ×sex cache prefix is built by the shared helper so the
             # naming convention lives in one place (genomics_narratives).
-            from genomics_narratives import interpretation_cache_prefix
+            from genomics.genomics_narratives import interpretation_cache_prefix
             prefix = interpretation_cache_prefix(organ, sex)
             session_dir = SESSIONS_DIR / dtxsid
             cache_path = session_dir / f"{prefix}{gene_hash}.json"
@@ -1479,7 +1479,7 @@ async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
             "gn": out.get("gene_narrative") or [],
         }
 
-    from genomics_narratives import aggregate_organ_llm_narratives
+    from genomics.genomics_narratives import aggregate_organ_llm_narratives
     gs_by_organ, gn_by_organ = aggregate_organ_llm_narratives(
         per_organ_bundles, overrides=None,
     )

@@ -463,7 +463,7 @@ def _overlay_genomics(data: dict, body: dict) -> None:
             if _charts is not None:
                 try:
                     import orjson
-                    from genomics_charts import attach_genomics_charts
+                    from genomics.genomics_charts import attach_genomics_charts
                     from document_tree import ACTIVE_TEMPLATE
                     from document_template import load_report_charts
                     charts_cache = orjson.loads(_charts.read_bytes())
@@ -506,7 +506,7 @@ def _overlay_genomics(data: dict, body: dict) -> None:
 
     if _genomics_cache:
         try:
-            from genomics_narratives import build_genomics_body_narratives
+            from genomics.genomics_narratives import build_genomics_body_narratives
 
             _ctx_dict = (methods_data or {}).get("context") or {}
             _chem_name = (

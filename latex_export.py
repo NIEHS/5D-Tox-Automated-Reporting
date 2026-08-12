@@ -306,7 +306,7 @@ def _load_genomics_interpretations(
     out: dict[tuple[str, str], dict] = {}
     if not isinstance(genomics_cache, dict):
         return out
-    from genomics_narratives import interpretation_cache_prefix
+    from genomics.genomics_narratives import interpretation_cache_prefix
     for key in genomics_cache.keys():
         if "_" not in key:
             continue
@@ -444,8 +444,8 @@ def _convert_genomics_cache(
 # module's header for why the logic can't live privately in either path.  We
 # re-bind them to the original private names so this module's internal callers
 # (and the unit tests that import them from here) keep working unchanged.
-from genomics_charts import decode_png as _decode_png
-from genomics_charts import attach_genomics_charts as _attach_genomics_charts
+from genomics.genomics_charts import decode_png as _decode_png
+from genomics.genomics_charts import attach_genomics_charts as _attach_genomics_charts
 
 
 def _collect_figure_files(data: dict) -> dict:
@@ -724,7 +724,7 @@ def _resolve_export_layout_style(dtxsid: str) -> dict:
     per-session `styles.yaml` override (session wins).  Mirrors
     report_data._resolve_layout_config minus the request-body layer (there is no
     live request on the export path).  Empty ⇒ {} ⇒ no per-node styling."""
-    from chart_style import deep_merge
+    from genomics.chart_style import deep_merge
     from document_template import load_layout_style
     from document_tree import ACTIVE_TEMPLATE
 

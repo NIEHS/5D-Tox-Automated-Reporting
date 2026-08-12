@@ -92,7 +92,7 @@ from render_common import (
     table_caption as _table_caption,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
-from genomics_content import genomics_content_plan
+from genomics.genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
 from render_capabilities import front_matter_roles_for, landscape_requested
 
