@@ -467,7 +467,7 @@ def backfill_metadata(
     Loads papers from JSON, fetches missing fields from S2 API,
     updates and re-saves the JSON. Rate-limited.
     """
-    from citegraph import S2Client
+    from knowledge_base.citegraph import S2Client
 
     path = Path(papers_json_path)
     with open(path) as f:

@@ -13,7 +13,7 @@ Designed to be imported by genomics_viz.py for per-cluster enrichment of
 the gene-overlap scatter plot.
 
 Usage:
-    from enrichr_client import enrichr_submit, enrichr_fetch, enrichr_enrich_genes
+    from knowledge_base.enrichr_client import enrichr_submit, enrichr_fetch, enrichr_enrich_genes
 
     # Low-level: submit then fetch
     list_id = enrichr_submit(["BRCA1", "TP53", ...], "my genes")

@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 import pandas as pd
 import requests
 
-from enrichment_stats import enrich_pathways, enrich_go_terms
-from toxkb import ToxKBQuerier
+from knowledge_base.enrichment_stats import enrich_pathways, enrich_go_terms
+from knowledge_base.toxkb import ToxKBQuerier
 
 logger = logging.getLogger(__name__)
 

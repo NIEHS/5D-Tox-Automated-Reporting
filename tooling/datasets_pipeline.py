@@ -38,7 +38,7 @@ from typing import Iterator
 
 import requests
 
-from citegraph import (
+from knowledge_base.citegraph import (
     Paper,
     GovernorConfig,
     score_relevance,

@@ -268,7 +268,7 @@ def enrich_clusters(
     # Attempt Enrichr enrichment per cluster
     cluster_summary = []
     try:
-        from enrichr_client import enrichr_enrich_genes
+        from knowledge_base.enrichr_client import enrichr_enrich_genes
 
         for cid in ranked_clusters:
             gs_list = by_cluster.get(cid, [])

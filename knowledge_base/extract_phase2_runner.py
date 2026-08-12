@@ -1,6 +1,6 @@
 """Run Phase 2 extraction across all 9 new crawl dirs."""
 import time
-from extract import ParallelExtractionEngine
+from knowledge_base.extract import ParallelExtractionEngine
 
 DIRS = [
     "citegraph_output_nrf2dose",

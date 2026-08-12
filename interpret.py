@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from enrichment_stats import enrich_pathways, enrich_go_terms
-from extract import normalize_gene
+from knowledge_base.enrichment_stats import enrich_pathways, enrich_go_terms
+from knowledge_base.extract import normalize_gene
 from llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key, resolve_model_name
-from toxkb import ToxKBQuerier
+from knowledge_base.toxkb import ToxKBQuerier
 from interpret_narrative import (
     NarrativeRun,
     synthesize_interpretation,

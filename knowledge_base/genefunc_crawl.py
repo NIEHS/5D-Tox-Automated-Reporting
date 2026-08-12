@@ -18,7 +18,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from citegraph import (
+from knowledge_base.citegraph import (
     S2Client,
     Paper,
     GovernorConfig,

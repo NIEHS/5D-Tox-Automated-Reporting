@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from scipy.stats import fisher_exact
 
 if TYPE_CHECKING:
-    from toxkb import ToxKBQuerier
+    from knowledge_base.toxkb import ToxKBQuerier
 
 
 # ---------------------------------------------------------------------------

@@ -17,8 +17,8 @@ from pathlib import Path
 
 import duckdb
 
-from extract import normalize_gene, normalize_organ
-from go_gene_map import parse_reference_umap
+from knowledge_base.extract import normalize_gene, normalize_organ
+from knowledge_base.go_gene_map import parse_reference_umap
 
 # ---------------------------------------------------------------------------
 # Paths

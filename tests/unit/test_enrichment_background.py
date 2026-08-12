@@ -29,7 +29,7 @@ sums to less than bg_total, so the margin-consistency assertion fails.
 import pytest
 from scipy.stats import fisher_exact
 
-import enrichment_stats
+import knowledge_base.enrichment_stats as enrichment_stats
 import interpret
 
 

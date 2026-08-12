@@ -1151,7 +1151,7 @@ if __name__ == "__main__":
         # Fetch full texts if requested
         fulltext_results = None
         if use_fulltext:
-            from fulltext import FullTextFetcher
+            from knowledge_base.fulltext import FullTextFetcher
 
             with open(papers_file) as f:
                 papers_data = json.load(f)

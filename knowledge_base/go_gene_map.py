@@ -110,7 +110,7 @@ def build_tox_lookup(
     # Import the normalizer from extract.py
     import sys
     sys.path.insert(0, ".")
-    from extract import normalize_gene, normalize_organ
+    from knowledge_base.extract import normalize_gene, normalize_organ
 
     with open(extractions_path) as f:
         extractions = json.load(f)

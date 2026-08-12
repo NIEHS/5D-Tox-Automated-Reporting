@@ -18,7 +18,7 @@ import json
 import sys
 import time
 
-from enrichr_client import enrichr_submit, enrichr_fetch, API_DELAY
+from knowledge_base.enrichr_client import enrichr_submit, enrichr_fetch, API_DELAY
 
 # ---------------------------------------------------------------------------
 # Configuration

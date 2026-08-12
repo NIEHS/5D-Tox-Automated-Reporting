@@ -29,7 +29,7 @@ Usage:
 import sys
 import time
 
-from citegraph import (
+from knowledge_base.citegraph import (
     CitationGraphCrawler,
     GovernorConfig,
     load_known_genes,
@@ -37,7 +37,7 @@ from citegraph import (
     resolve_caps,
     log_s2_auth_status,
 )
-from genefunc_crawl import run_genetox_crawl
+from knowledge_base.genefunc_crawl import run_genetox_crawl
 
 
 # ---------------------------------------------------------------------------

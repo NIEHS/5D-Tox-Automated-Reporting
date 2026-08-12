@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-from extract import OllamaEndpoint, LOCAL_OLLAMA
+from knowledge_base.extract import OllamaEndpoint, LOCAL_OLLAMA
 from llm_endpoints import AnthropicEndpoint
 
 
