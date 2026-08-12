@@ -64,3 +64,10 @@ times*.ttf
 # are per-user; skills/ is team-shared.
 .claude/*
 !.claude/skills/
+
+# Per-session data store (persisted working data + documents). NOT repo
+# content — it's the local mount / working mirror of the GCS session buckets
+# (gs://rlm-bmdx-sessions-<user>, see mount-gcs.sh); GCS is the safekeeping
+# backend, not GitHub (this is a public HHS repo — never push study data here).
+# The golden TEST fixtures are separate, under tests/fixtures/golden/.
+sessions/
