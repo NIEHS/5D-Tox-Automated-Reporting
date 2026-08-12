@@ -62,7 +62,7 @@ from docx.shared import Inches, Pt, RGBColor, Twips
 
 from cover_layouts import get_cover_layout
 from document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
-from freeform_content import pending_note as _freeform_pending_note
+from styling_export.freeform_content import pending_note as _freeform_pending_note
 from render_common import (
     ANIMAL_ROSTER_HEADERS,
     BMD_SUMMARY_HEADERS,

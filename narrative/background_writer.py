@@ -665,7 +665,7 @@ Rules:
         # Reuse the centralized JSON-mode helper.  Default model matches
         # the body Background generator (claude-sonnet-4-6) — distillation
         # doesn't need the strongest model.
-        from llm_helpers import llm_generate_json
+        from styling_export.llm_helpers import llm_generate_json
         kwargs = {"max_tokens": 1024, "temperature": 0.1}
         if model:
             kwargs["model"] = model

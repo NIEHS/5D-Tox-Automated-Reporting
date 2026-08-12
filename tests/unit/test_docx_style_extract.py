@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-import docx_style_extract as dse
+import styling_export.docx_style_extract as dse
 from docx_generator import generate_docx
 from document_config import _parse_styles_yaml
 from report_data import scaffold_report_data

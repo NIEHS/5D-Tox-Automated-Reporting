@@ -30,7 +30,7 @@ from pathlib import Path
 # scanned by the reverse soft-link below.  Resolved relative to this module.
 # `_repo_binding.json` is the Am.3 name; `_overleaf_binding.json` is the legacy
 # name we still read so pre-rename sessions resolve.
-_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+_DEFAULT_SESSIONS_DIR = Path(__file__).resolve().parent.parent / "sessions"
 _BINDING_FILENAME = "_repo_binding.json"
 _LEGACY_BINDING_FILENAME = "_overleaf_binding.json"
 

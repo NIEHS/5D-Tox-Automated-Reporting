@@ -646,7 +646,7 @@ async def api_provision_report(dtxsid: str, request: Request):
 
     Optional body {private}.
     """
-    from github_provision import ensure_repo, repo_slug
+    from styling_export.github_provision import ensure_repo, repo_slug
     from roundtrip.transport import set_binding
 
     if safe_filename(dtxsid) != dtxsid:
@@ -682,7 +682,7 @@ async def api_provision_report(dtxsid: str, request: Request):
 @router.get("/api/report-for-project/{project_id}")
 async def api_report_for_project(project_id: str):
     """Resolve an Overleaf project id back to the report (dtxsid) bound to it."""
-    from overleaf_provision import dtxsid_for_project
+    from styling_export.overleaf_provision import dtxsid_for_project
     return JSONResponse({"dtxsid": dtxsid_for_project(project_id)})
 
 

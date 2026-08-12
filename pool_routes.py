@@ -59,7 +59,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 
 from bmdx_pipe import integrate_pool, validate_pool
-from llm_helpers import llm_generate_json as _llm_generate_json
+from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 
 from pool_globals import (
     router,

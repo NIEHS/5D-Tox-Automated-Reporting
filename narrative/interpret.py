@@ -15,7 +15,7 @@ import pandas as pd
 
 from knowledge_base.enrichment_stats import enrich_pathways, enrich_go_terms
 from knowledge_base.extract import normalize_gene
-from llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key, resolve_model_name
+from styling_export.llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key, resolve_model_name
 from knowledge_base.toxkb import ToxKBQuerier
 from narrative.interpret_narrative import (
     NarrativeRun,

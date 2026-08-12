@@ -21,7 +21,7 @@ from typing import Optional
 
 import requests
 
-from llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key
+from styling_export.llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key
 
 
 # ---------------------------------------------------------------------------

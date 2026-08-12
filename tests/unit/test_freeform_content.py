@@ -22,7 +22,7 @@ import pathlib
 
 import pytest
 
-import freeform_content as fc
+import styling_export.freeform_content as fc
 from document_node import DocNode
 from document_template import instantiate
 

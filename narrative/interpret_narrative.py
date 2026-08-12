@@ -16,7 +16,7 @@ from pathlib import Path
 import requests
 
 from knowledge_base.extract import OllamaEndpoint, LOCAL_OLLAMA
-from llm_endpoints import AnthropicEndpoint
+from styling_export.llm_endpoints import AnthropicEndpoint
 
 
 # ---------------------------------------------------------------------------

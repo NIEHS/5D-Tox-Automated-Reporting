@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from bmdx_pipe import bm2_cache
 from session_store import SESSIONS_DIR
-from llm_helpers import llm_generate_json_async
+from styling_export.llm_helpers import llm_generate_json_async
 from narrative.style_learning import load_style_profile
 from narrative.chem_resolver import ChemicalIdentity
 from narrative.data_gatherer import gather_all

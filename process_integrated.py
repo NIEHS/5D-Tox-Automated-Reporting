@@ -58,7 +58,7 @@ from bmdx_pipe import (
     report_to_dict,
 )
 from tables.apical_bmds import run_bmds_for_endpoints
-from llm_helpers import llm_generate_json_async as _llm_generate_json_async
+from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
 from pool_globals import router, _session_dir, _pool_fingerprints
 from pool_fingerprints import ensure_fingerprints

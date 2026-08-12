@@ -90,7 +90,7 @@ from render_common import (
 )
 from genomics.genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
-from freeform_content import pending_note as _freeform_pending_note
+from styling_export.freeform_content import pending_note as _freeform_pending_note
 from cover_layouts import get_cover_layout
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both

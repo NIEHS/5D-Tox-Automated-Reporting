@@ -109,7 +109,7 @@ from render_common import (
 )
 from genomics.genomics_content import genomics_content_plan
 from layout_style import resolve_layout_style
-from freeform_content import pending_note as _freeform_pending_note
+from styling_export.freeform_content import pending_note as _freeform_pending_note
 from cover_layouts import get_cover_layout
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor

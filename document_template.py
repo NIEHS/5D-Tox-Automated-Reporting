@@ -44,7 +44,7 @@ from pathlib import Path
 import yaml
 
 from document_node import DocNode
-from freeform_content import VALID_REPRESENTATIONS, resolve_freeform
+from styling_export.freeform_content import VALID_REPRESENTATIONS, resolve_freeform
 from render_capabilities import (
     COMPONENT_CATALOG,
     capabilities_for,

@@ -68,7 +68,7 @@ def test_no_built_style_is_based_on_itself(scaffold):
 def test_publisher_location_resolves_centered(scaffold):
     """NTP Publisher Location inherits center alignment from 1-09_Publication_
     Department (not a broken self-basedOn) — the reported left/italic bug is gone."""
-    import docx_style_extract as dse
+    import styling_export.docx_style_extract as dse
     doc = _open(generate_docx(_with_vocab(scaffold)))
     s = doc.styles["NTP Publisher Location"]
     assert s.base_style.name == "1-09_Publication_Department"
@@ -78,7 +78,7 @@ def test_publisher_location_resolves_centered(scaffold):
 
 
 def test_built_report_title_resolves_through_chain(scaffold):
-    import docx_style_extract as dse
+    import styling_export.docx_style_extract as dse
     doc = _open(generate_docx(_with_vocab(scaffold)))
     props = dse._resolved_style_props(doc.styles["1-03_Report_Title"])
     assert props["font"] == "Arial"        # inherited from Base_Heading
