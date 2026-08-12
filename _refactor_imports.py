@@ -54,6 +54,13 @@ def build_patterns(module_pkg: dict[str, str]):
     return pats
 
 
+# NOTE: string-literal module paths (monkeypatch.setattr("mod.attr", ...),
+# mock.patch("mod.attr")) are NOT auto-rewritten — a blanket quote+module+dot
+# regex also corrupts human-readable message strings that merely mention a
+# module. Grep for them per move and fix by hand:
+#   grep -rnE '(setattr|patch)\(["\x27][a-z_]+\.' tests/
+
+
 def rewrite_text(text: str, pats) -> tuple[str, int]:
     total = 0
     for rx, repl in pats:

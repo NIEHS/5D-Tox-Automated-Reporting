@@ -19,15 +19,15 @@ from pathlib import Path
 
 import pytest
 
-from jats_generator import generate_bits, generate_jats
-from jats_stylecheck import (
+from rendering.jats_generator import generate_bits, generate_jats
+from rendering.jats_stylecheck import (
     BITS_DTD_DIR,
     JATS_DTD_DIR,
     STYLECHECKER_DIR,
     dtd_validate,
     stylecheck,
 )
-from report_data import scaffold_report_data
+from rendering.report_data import scaffold_report_data
 
 
 # ADR-0004 migration step 1 (article-meta completeness) is now BUILT — the
@@ -113,7 +113,7 @@ def test_jats_dtd_assets_present():
 
 
 def _real_session_jats() -> str:
-    from latex_export import load_session_data
+    from rendering.latex_export import load_session_data
     data = load_session_data(
         dtxsid="DTXSID50469320",
         chemical_name="Perfluorohexanesulfonamide",
@@ -177,7 +177,7 @@ def test_bits_dtd_assets_present():
 
 
 def _real_session_bits() -> str:
-    from latex_export import load_session_data
+    from rendering.latex_export import load_session_data
     data = load_session_data(
         dtxsid="DTXSID50469320",
         chemical_name="Perfluorohexanesulfonamide",

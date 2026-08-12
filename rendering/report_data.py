@@ -26,7 +26,7 @@ from MethodsContext, genomics body narratives, ChemicalIdentity name
 forms, deterministic TOC and table entries, and section_filter trimming.
 
 Usage:
-    from report_data import marshal_export_data, scaffold_report_data
+    from rendering.report_data import marshal_export_data, scaffold_report_data
     data = marshal_export_data(request_body)
     # ... pass to generate_latex / build_overleaf_bundle / render_html_preview ...
 
@@ -402,7 +402,7 @@ def marshal_export_data(
     from document_model.document_tree import compute_table_numbers
     compute_table_numbers(active_tree)
 
-    from report_data_overlays import (
+    from rendering.report_data_overlays import (
         _overlay_abstract,
         _overlay_apical_sections,
         _overlay_unified_and_bmd,
@@ -435,7 +435,7 @@ def marshal_export_data(
     # filter strips content.  This lets the tables-list preview render a
     # complete Table of Contents with ready/placeholder styling, even
     # though the body headings are stripped from the compiled document.
-    from report_data_toc import _build_toc_entries, _apply_section_filter
+    from rendering.report_data_toc import _build_toc_entries, _apply_section_filter
     toc_entries, table_entries = _build_toc_entries(data, tree=active_tree)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries

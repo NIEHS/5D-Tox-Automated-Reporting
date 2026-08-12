@@ -12,8 +12,8 @@ rows via the shared appendix_roster_rows EXTRACT.
 import json
 
 from document_model.document_node import DocNode
-from latex_generator import _render_appendix as latex_appendix
-from html_generator import _render_appendix as html_appendix
+from rendering.latex_generator import _render_appendix as latex_appendix
+from rendering.html_generator import _render_appendix as html_appendix
 
 # Post-join rows (the shape appendix_roster_rows / the emitters consume): one
 # row per (animal, tissue).
@@ -109,7 +109,7 @@ def _write_report(tmp_path, animals: dict) -> object:
 
 
 def test_load_identifiers_joins_id_forms_into_tissue_rows(tmp_path):
-    from latex_export import _load_animal_identifiers
+    from rendering.latex_export import _load_animal_identifiers
     # One physical animal (111) under all three id-forms.
     animals = {
         "111": {"animal_id": "111", "sex": "Female", "dose": 0.0},
@@ -126,7 +126,7 @@ def test_load_identifiers_joins_id_forms_into_tissue_rows(tmp_path):
 
 
 def test_load_identifiers_sorts_by_number_then_kidney_before_liver(tmp_path):
-    from latex_export import _load_animal_identifiers
+    from rendering.latex_export import _load_animal_identifiers
     animals = {
         "Plate1-2": {"animal_id": "Plate1-2", "sex": "Male", "dose": 1.0},
         "Plate5-2": {"animal_id": "Plate5-2", "sex": "Male", "dose": 1.0},
@@ -139,5 +139,5 @@ def test_load_identifiers_sorts_by_number_then_kidney_before_liver(tmp_path):
 
 
 def test_load_identifiers_missing_file_returns_empty(tmp_path):
-    from latex_export import _load_animal_identifiers
+    from rendering.latex_export import _load_animal_identifiers
     assert _load_animal_identifiers(tmp_path) == []

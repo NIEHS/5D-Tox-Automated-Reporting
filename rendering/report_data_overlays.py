@@ -218,7 +218,7 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
 
     `tree` defaults to the global DOCUMENT_TREE; a per-session tree is passed so
     table numbers resolve against the session's own structure."""
-    from report_data import normalize_apical_section_for_render
+    from rendering.report_data import normalize_apical_section_for_render
 
     chemical_name = body.get("chemical_name", "Chemical")
     # Apical endpoint sections
@@ -440,7 +440,7 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
 
 def _overlay_genomics(data: dict, body: dict) -> None:
     """Overlay genomics gene-set/gene sections and auto-populate the gene-set / gene body narratives."""
-    from report_data import _ensure_paragraphs
+    from rendering.report_data import _ensure_paragraphs
 
     methods_data = body.get("methods_data")
     _dtxsid = body.get("dtxsid", "")

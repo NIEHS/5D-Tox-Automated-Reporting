@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from render_common import scan_pending_markers, PendingContentError
-from latex_export import build_overleaf_bundle, _assemble_bundle_files
-from report_data import scaffold_report_data
+from rendering.render_common import scan_pending_markers, PendingContentError
+from rendering.latex_export import build_overleaf_bundle, _assemble_bundle_files
+from rendering.report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------

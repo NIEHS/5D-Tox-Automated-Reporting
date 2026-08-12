@@ -18,9 +18,9 @@ import pytest
 from docx import Document
 
 import styling_export.docx_style_extract as dse
-from docx_generator import generate_docx
+from rendering.docx_generator import generate_docx
 from document_model.document_config import _parse_styles_yaml
-from report_data import scaffold_report_data
+from rendering.report_data import scaffold_report_data
 
 
 @pytest.fixture(scope="module")

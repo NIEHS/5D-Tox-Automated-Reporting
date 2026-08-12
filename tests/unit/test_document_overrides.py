@@ -23,8 +23,8 @@ import pytest
 
 import roundtrip._io as rio
 import roundtrip.overrides as do
-from latex_generator import generate_latex
-from report_data import scaffold_report_data
+from rendering.latex_generator import generate_latex
+from rendering.report_data import scaffold_report_data
 
 
 # A node region as the generator emits it: everything between the begin/end

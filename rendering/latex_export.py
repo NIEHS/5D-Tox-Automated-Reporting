@@ -30,8 +30,8 @@ Usage
 -----
 Programmatic:
 
-    from report_data import scaffold_report_data
-    from latex_export import build_overleaf_bundle
+    from rendering.report_data import scaffold_report_data
+    from rendering.latex_export import build_overleaf_bundle
     data = scaffold_report_data(chemical_name="Perfluorohexanesulfonamide", ...)
     build_overleaf_bundle(data, Path("dist/niehs-overleaf-bundle.zip"))
 
@@ -58,7 +58,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from latex_generator import generate_main_tex, generate_report_body
+from rendering.latex_generator import generate_main_tex, generate_report_body
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ from latex_generator import generate_main_tex, generate_report_body
 
 # The class file ships at <repo>/latex/niehs.cls and travels with the bundle.
 # Resolved relative to this module so callers can be in any CWD.
-REPO_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
 CLASS_FILE = REPO_ROOT / "latex" / "niehs.cls"
 
 # Cover assets (background image, NIH badge) are declared per report-cover
@@ -285,7 +285,7 @@ def _normalize_apical_section(sec: dict) -> dict:
     report_data so the CLI path and the web-export marshaling path share
     one implementation.
     """
-    from report_data import normalize_apical_section_for_render
+    from rendering.report_data import normalize_apical_section_for_render
     return normalize_apical_section_for_render(sec)
 
 
@@ -504,7 +504,7 @@ def load_session_data(
     # Import lazily — scaffold_report_data has heavy transitive deps
     # (methods_report → llm_helpers → anthropic) we don't want pulled
     # in when latex_export is imported as a library by the web app.
-    from report_data import scaffold_report_data
+    from rendering.report_data import scaffold_report_data
 
     data = scaffold_report_data(
         chemical_name=chemical_name,
@@ -670,7 +670,7 @@ def load_session_data(
     # The Methods abstract sentence is assembled by overlay_abstract itself; we
     # don't pass an explicit methods_context here (the M&M prose is overlaid
     # onto data["methods"] above and rendered directly by the M&M nodes).
-    from report_data_overlays import overlay_abstract
+    from rendering.report_data_overlays import overlay_abstract
     overlay_abstract(
         data,
         abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
@@ -698,7 +698,7 @@ def load_session_data(
     # after genomics table numbers are assigned so the Tables list is
     # complete.  Also serialize the tree the same way marshal does.
     from document_model.document_tree import serialize_tree
-    from report_data_toc import _build_toc_entries
+    from rendering.report_data_toc import _build_toc_entries
     data["document_tree"] = serialize_tree(DOCUMENT_TREE)
     toc_entries, table_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
     data["toc_entries"] = toc_entries
@@ -920,7 +920,7 @@ def _assemble_bundle_files(
     files: "dict[str, bytes]" = {}
     report_body = generate_report_body(data, tree=tree)
     if strict:
-        from render_common import scan_pending_markers, PendingContentError
+        from rendering.render_common import scan_pending_markers, PendingContentError
         markers = scan_pending_markers(report_body)
         if markers:
             raise PendingContentError(markers)
@@ -1073,7 +1073,7 @@ def _main() -> None:
     """
     # Import here to keep module import cheap when latex_export is used
     # purely as a library (the web export endpoint, for instance).
-    from report_data import scaffold_report_data
+    from rendering.report_data import scaffold_report_data
 
     parser = argparse.ArgumentParser(
         description="Build an Overleaf-ready zip from session or scaffold data.",

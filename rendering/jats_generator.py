@@ -49,7 +49,7 @@ from document_model.document_tree import (
     find_node,
     walk_tree,
 )
-from render_common import (
+from rendering.render_common import (
     front_matter_plan,
     resolve_narrative_content,
     inline_plain_text,
@@ -103,7 +103,7 @@ def _resolve_xrefs_jats(text: str, parent: etree._Element) -> None:
     the other surfaces' _broken() behavior.
     """
     import re
-    from cross_references import _XREF_RE  # reuse the one token pattern
+    from rendering.cross_references import _XREF_RE  # reuse the one token pattern
 
     pos = 0
     last_el: etree._Element | None = None

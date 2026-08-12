@@ -63,7 +63,7 @@ from docx.shared import Inches, Pt, RGBColor, Twips
 from document_model.cover_layouts import get_cover_layout
 from document_model.document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
-from render_common import (
+from rendering.render_common import (
     ANIMAL_ROSTER_HEADERS,
     BMD_SUMMARY_HEADERS,
     GENE_SET_TABLE_HEADERS,
@@ -2242,7 +2242,7 @@ def _configure_section(section, running_header: str, document: dict | None = Non
 # in Python — makes styles/docDefaults/numbering/theme/sectPr come from the
 # reference VERBATIM.  Absent ⇒ fall back to a blank Document() + the
 # programmatic style skeleton (the legacy path), so generation never hard-breaks.
-_DOCX_BASE_PATH = Path(__file__).with_name("assets") / "templates" / "niehs-10-base.docx"
+_DOCX_BASE_PATH = Path(__file__).resolve().parent.parent / "assets" / "templates" / "niehs-10-base.docx"
 
 # The vocabulary applied by default on the docx surface when the style base is
 # used: role → NTP named style (3-02a_Head1_NoNumber, 0-03_Paragraph, …).  The

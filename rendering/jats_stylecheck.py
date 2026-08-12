@@ -26,7 +26,7 @@ from pathlib import Path
 import lxml.etree as ET
 
 # Vendored StyleChecker lives beside the fonts/templates under assets/.
-STYLECHECKER_DIR = Path(__file__).resolve().parent / "assets" / "stylechecker"
+STYLECHECKER_DIR = Path(__file__).resolve().parent.parent / "assets" / "stylechecker"
 _MAIN_XSL = STYLECHECKER_DIR / "nlm-stylechecker.xsl"
 _REPORTER_XSL = STYLECHECKER_DIR / "style-reporter.xsl"
 
@@ -41,7 +41,7 @@ STYLECHECKER_VERSION = "5.48"
 # rejects that.  dtd_validate() reproduces that parse offline so the same class
 # of error is caught locally.  The entry DTD's relative module refs resolve
 # against this dir, so validation runs with the CWD pinned here.
-JATS_DTD_DIR = Path(__file__).resolve().parent / "assets" / "jats-dtd"
+JATS_DTD_DIR = Path(__file__).resolve().parent.parent / "assets" / "jats-dtd"
 _JATS_DTD = JATS_DTD_DIR / "JATS-archivearticle1-3.dtd"
 
 # Vendored BITS 2.0 Book Interchange DTD + its module set (BITS reuses the JATS
@@ -49,7 +49,7 @@ _JATS_DTD = JATS_DTD_DIR / "JATS-archivearticle1-3.dtd"
 # char-entity subtrees shared with the JATS set).  The reports are published as
 # BITS <book>s (NBK589955 = NIEHS Report 10), so the book export validates
 # against this.  Same offline parse as the JATS DTD, different root grammar.
-BITS_DTD_DIR = Path(__file__).resolve().parent / "assets" / "bits-dtd"
+BITS_DTD_DIR = Path(__file__).resolve().parent.parent / "assets" / "bits-dtd"
 _BITS_DTD = BITS_DTD_DIR / "BITS-book2.dtd"
 
 # The two vocabularies dtd_validate() can check against: the grammar dir + the

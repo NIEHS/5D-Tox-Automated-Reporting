@@ -13,9 +13,9 @@ Covers:
 
 import re
 
-from cross_references import resolve_xrefs_latex, resolve_xrefs_html, latex_label_key
+from rendering.cross_references import resolve_xrefs_latex, resolve_xrefs_html, latex_label_key
 from document_model.document_node import DocNode
-from latex_generator import _escape_latex, _emit_table_placeholder
+from rendering.latex_generator import _escape_latex, _emit_table_placeholder
 
 
 def test_table_xref_resolves_to_latex_ref():
@@ -121,7 +121,7 @@ def test_niehstable_label_matches_ref_for_underscore_id(monkeypatch):
                          node_type="incidence-table")
     # The ref site resolves the target via find_node; point it at our node so
     # the table-typed branch (which emits \ref{tab:...}) is exercised.
-    monkeypatch.setattr("cross_references.find_node", lambda _id: table_node)
+    monkeypatch.setattr("rendering.cross_references.find_node", lambda _id: table_node)
 
     placeholder = _emit_table_placeholder(table_node)
     label_key = re.search(r"\\begin\{niehstable\}\{([^}]*)\}", placeholder).group(1)

@@ -15,8 +15,8 @@ from io import BytesIO
 import pytest
 from docx import Document
 
-from docx_generator import generate_docx
-from report_data import scaffold_report_data
+from rendering.docx_generator import generate_docx
+from rendering.report_data import scaffold_report_data
 
 
 @pytest.fixture(scope="module")

@@ -75,7 +75,7 @@ from document_model.document_tree import (
     walk_tree,
 )
 from document_model.render_capabilities import content_item_landscape_requested
-from render_common import (
+from rendering.render_common import (
     NarrativeContent,
     resolve_narrative_content,
     has_paragraph_content,
@@ -113,7 +113,7 @@ from styling_export.freeform_content import pending_note as _freeform_pending_no
 from document_model.cover_layouts import get_cover_layout
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
-from cross_references import resolve_xrefs_latex, latex_label_key
+from rendering.cross_references import resolve_xrefs_latex, latex_label_key
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
 # table_builder_common.DISPLAY_DECIMALS).

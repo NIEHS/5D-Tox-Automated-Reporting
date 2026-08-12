@@ -36,7 +36,7 @@ def _table_list_title(node, data: dict) -> str:
 
     Reuses the SAME plan functions the renderers call, so the Tables list can't
     drift from the captions on the tables themselves."""
-    from render_common import (
+    from rendering.render_common import (
         apical_table_plan, incidence_table_plan, bmd_summary_plan, table_caption,
     )
     caption = None
@@ -218,7 +218,7 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
             # letter (node.title no longer carries the literal prefix), matching
             # the reference ToC and the rendered appendix headings.
             if node.node_type == "appendix":
-                from render_common import appendix_heading_text
+                from rendering.render_common import appendix_heading_text
                 toc_entries.append({
                     "title": appendix_heading_text(node),
                     "level": node.level,
@@ -267,7 +267,7 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
     # append them to the Tables list in table_number order so the front-matter
     # list continues Table 8 → 9, 10, ...  Title/readiness come from the same
     # shared caption + row presence the renderers use, so all three agree.
-    from render_common import genomics_table_caption
+    from rendering.render_common import genomics_table_caption
     genomics_tables = [
         {
             "title": genomics_table_caption(entry).split(". ", 1)[-1],

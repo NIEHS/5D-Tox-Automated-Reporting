@@ -161,14 +161,14 @@ async def api_export_overleaf_bundle(request: Request):
     Pipeline:
       body → marshal_export_data → generate_latex → build_overleaf_bundle
     """
-    from report_data import marshal_export_data
-    from latex_export import build_overleaf_bundle
+    from rendering.report_data import marshal_export_data
+    from rendering.latex_export import build_overleaf_bundle
 
     body = await request.json()
     _resolve_bm2_into_body(body)
     session_tree = _session_tree_for(body)
 
-    from render_common import PendingContentError
+    from rendering.render_common import PendingContentError
 
     try:
         report_data = marshal_export_data(body, tree=session_tree)
@@ -258,8 +258,8 @@ async def api_compile_pdf(request: Request):
     import subprocess
     import tempfile
 
-    from report_data import marshal_export_data
-    from latex_export import _assemble_bundle_files, _write_files_to_dir
+    from rendering.report_data import marshal_export_data
+    from rendering.latex_export import _assemble_bundle_files, _write_files_to_dir
 
     body = await request.json()
     _resolve_bm2_into_body(body)
@@ -352,7 +352,7 @@ async def api_sync_document(dtxsid: str, request: Request):
     LIVE marshaled request body for download; this one syncs the on-disk session
     CACHE into a tracked working directory.
     """
-    from latex_export import sync_document, DOCUMENTS_DIR
+    from rendering.latex_export import sync_document, DOCUMENTS_DIR
 
     # dtxsid becomes a path segment under documents/ — reject anything that
     # isn't a clean filename so it can't escape the documents/ root.
@@ -488,8 +488,8 @@ async def api_commit_local(dtxsid: str, request: Request):
     Returns {head, committed, ahead}: the new local HEAD, whether anything was
     recorded, and how many local commits now await Push.
     """
-    from report_data import marshal_export_data
-    from latex_export import write_overleaf_dir, DOCUMENTS_DIR
+    from rendering.report_data import marshal_export_data
+    from rendering.latex_export import write_overleaf_dir, DOCUMENTS_DIR
     from roundtrip.transport import get_binding, commit_document
 
     if safe_filename(dtxsid) != dtxsid:
@@ -714,8 +714,8 @@ async def api_preview_latex_html(request: Request):
     text/html so the browser can drop it straight into an iframe via
     srcdoc.
     """
-    from report_data import marshal_export_data
-    from html_generator import generate_html
+    from rendering.report_data import marshal_export_data
+    from rendering.html_generator import generate_html
 
     body = await request.json()
     _resolve_bm2_into_body(body)

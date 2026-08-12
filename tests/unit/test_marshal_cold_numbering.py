@@ -22,7 +22,7 @@ import copy
 
 import pytest
 
-from report_data import marshal_export_data
+from rendering.report_data import marshal_export_data
 from document_model.document_tree import DOCUMENT_TREE, walk_tree
 
 

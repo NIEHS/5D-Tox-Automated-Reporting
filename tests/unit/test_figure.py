@@ -14,9 +14,9 @@ from docx import Document
 from docx.oxml.ns import qn
 
 import document_model.render_capabilities as rc
-import docx_generator as dg
-import latex_generator as lg
-import html_generator as hg
+import rendering.docx_generator as dg
+import rendering.latex_generator as lg
+import rendering.html_generator as hg
 from document_model.document_node import DocNode
 from document_model.document_tree import compute_table_numbers, compute_figure_numbers
 

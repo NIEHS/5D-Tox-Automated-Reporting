@@ -57,7 +57,7 @@ from document_model.document_tree import (
     walk_tree,
 )
 from document_model.render_capabilities import content_item_landscape_requested
-from render_common import (
+from rendering.render_common import (
     NarrativeContent,
     resolve_narrative_content,
     has_paragraph_content,
@@ -92,7 +92,7 @@ from genomics.genomics_content import genomics_content_plan
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from document_model.cover_layouts import get_cover_layout
-from cross_references import resolve_xrefs_html
+from rendering.cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
 from tables.table_builder_common import format_display_number, format_mean_se_display
