@@ -31,7 +31,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.staticfiles import StaticFiles
 
 from narrative.chem_resolver import resolve_chemical
-from session_store import SESSIONS_DIR
+from pipeline.session_store import SESSIONS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ app = FastAPI(
 # semantically invalid for this operation."
 # ---------------------------------------------------------------------------
 
-from bmd_project_schema import BMDProjectValidationError
+from pipeline.bmd_project_schema import BMDProjectValidationError
 
 
 @app.exception_handler(BMDProjectValidationError)
@@ -159,7 +159,7 @@ async def user_gate_middleware(request: Request, call_next):
 
 # File pool lifecycle: /api/pool/*, /api/integrated/*, /api/process-integrated/*,
 # /api/generate-animal-report/*
-import pool_orchestrator
+import pipeline.pool_orchestrator as pool_orchestrator
 app.include_router(pool_orchestrator.router)
 
 # Session persistence: load, approve, unapprove, history, restore, BMD summary

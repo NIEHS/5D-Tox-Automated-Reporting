@@ -33,7 +33,7 @@ from tables.table_builder_common import (
     gene_set_allowed,
     filter_genomics_sections,
 )
-from processing_helpers import apply_apical_filters, prune_card_sexes
+from pipeline.processing_helpers import apply_apical_filters, prune_card_sexes
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +545,7 @@ def test_load_charts_non_string_rejected(template_dir):
 # ---------------------------------------------------------------------------
 
 def test_hash_sections_unfiltered_is_backward_compatible():
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
                            imputed_cells=None, sex_allowlist=None, assay_filters=None)
@@ -558,7 +558,7 @@ def test_hash_sections_unfiltered_is_backward_compatible():
 
 
 def test_hash_sections_changes_with_sex_allowlist():
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
                           imputed_cells=None, sex_allowlist=["male"])
@@ -566,7 +566,7 @@ def test_hash_sections_changes_with_sex_allowlist():
 
 
 def test_hash_sections_changes_with_assay_filters_order_independent():
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
                           assay_filters={"clinical-chemistry": ["albumin"]})
@@ -582,7 +582,7 @@ def test_hash_sections_per_sex_assay_filters_stable_and_distinct():
     # A {area: {sex: [tokens]}} per-sex config hashes order-independently
     # (area keys, sex keys, and token lists all sorted) and differs from both
     # the unfiltered key and the flat-list key with the same tokens.
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     per_sex = {"clinical-chemistry": {"male": ["cholesterol"],
                                       "female": ["ast", "sdh"]}}
@@ -604,7 +604,7 @@ def test_hash_sections_per_sex_assay_filters_stable_and_distinct():
 def test_hash_sections_per_sex_empty_inner_is_backward_compatible():
     # A per-sex mapping whose sex lists are all empty ⇒ no effective filter,
     # so the key matches the unfiltered one (existing caches stay valid).
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     empty_per_sex = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
                                    imputed_cells=None,

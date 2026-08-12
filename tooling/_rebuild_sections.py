@@ -10,9 +10,9 @@ Not part of the shipped surface.
 import asyncio
 import sys
 
-import process_integrated as P
-from process_integrated import ProcessContext, _build_ntp_stats, _get_sections, _build_bmd_summary
-from pool_globals import _session_dir
+import pipeline.process_integrated as P
+from pipeline.process_integrated import ProcessContext, _build_ntp_stats, _get_sections, _build_bmd_summary
+from pipeline.pool_globals import _session_dir
 from document_model.document_tree import ACTIVE_TEMPLATE
 from document_model.document_template import (
     load_report_organs, load_report_sex, load_report_assays,

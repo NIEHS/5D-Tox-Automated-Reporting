@@ -62,7 +62,7 @@ mount every endpoint without any other change.
 # ---------------------------------------------------------------------------
 # Re-exports: shared state, router, path helpers
 # ---------------------------------------------------------------------------
-from pool_globals import (
+from pipeline.pool_globals import (
     router,
     _pool_fingerprints,
     _integrated_pool,
@@ -77,7 +77,7 @@ from pool_globals import (
 # ---------------------------------------------------------------------------
 # Re-exports: pool-state mutation
 # ---------------------------------------------------------------------------
-from pool_state import (
+from pipeline.pool_state import (
     pool_has_progressed,
     remove_old_file_entries,
     invalidate_pool_artifacts,
@@ -96,7 +96,7 @@ from section_serializers import (
 # ---------------------------------------------------------------------------
 # Re-exports: fingerprint lifecycle
 # ---------------------------------------------------------------------------
-from pool_fingerprints import (
+from pipeline.pool_fingerprints import (
     fingerprint_and_store,
     _save_fingerprints_to_disk,
     load_cached_fingerprint,
@@ -126,7 +126,7 @@ from pool_routes import (
 # Side-effect import also: integrated_io's @router.get decorators register
 # /api/integrated/{dtxsid} and /api/integrated-summary/{dtxsid} on the
 # shared router.
-from integrated_io import (
+from pipeline.integrated_io import (
     _safe_float,
     _safe_float_from_bmdl,
     _pick_go_stat,
@@ -141,7 +141,7 @@ from integrated_io import (
 # ---------------------------------------------------------------------------
 # Re-exports: cache plumbing
 # ---------------------------------------------------------------------------
-from cache_plumbing import (
+from pipeline.cache_plumbing import (
     _load_cache,
     _save_cache,
     _NTP_CACHE_SCHEMA_VERSION,
@@ -163,7 +163,7 @@ from cache_plumbing import (
 # ---------------------------------------------------------------------------
 # Re-exports: process-integrated pipeline phase functions
 # ---------------------------------------------------------------------------
-from processing_helpers import (
+from pipeline.processing_helpers import (
     _filter_gene_expression,
     _partition_by_platform,
     _build_section_cards,
@@ -179,7 +179,7 @@ from processing_helpers import (
 # Importing process_integrated runs its @router.post decorators against
 # the shared pool_globals.router, so /api/process-integrated/{dtxsid} and
 # /api/generate-animal-report/{dtxsid} register at module load time.
-from process_integrated import (
+from pipeline.process_integrated import (
     api_process_integrated,
     api_generate_animal_report,
     _BMD_STAT_LABELS,

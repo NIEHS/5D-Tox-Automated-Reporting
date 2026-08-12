@@ -21,7 +21,7 @@ Re-exports from pool_orchestrator (for convenience):
   - get_integrated_pool()   — dtxsid → merged BMDProject dict
 """
 
-from pool_orchestrator import (
+from pipeline.pool_orchestrator import (
     get_data_uploads,
     get_pool_fingerprints,
     get_integrated_pool,

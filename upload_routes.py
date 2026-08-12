@@ -31,8 +31,8 @@ from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response
 
 from bmdx_pipe import bm2_cache
-from session_store import session_dir
-from pool_orchestrator import (
+from pipeline.session_store import session_dir
+from pipeline.pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, serialize_table_rows,
     remove_old_file_entries, invalidate_pool_artifacts, pool_has_progressed,
 )

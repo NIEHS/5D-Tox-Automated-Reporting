@@ -34,7 +34,7 @@ from document_model.document_tree import (
     build_node_index,
     compute_table_numbers,
 )
-from session_store import SESSIONS_DIR
+from pipeline.session_store import SESSIONS_DIR
 
 _SESSION_DOCUMENT_FILE = "document.yaml"
 _SESSION_STYLES_FILE = "styles.yaml"

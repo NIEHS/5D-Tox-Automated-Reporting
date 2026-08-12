@@ -277,7 +277,7 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
 # ---------------------------------------------------------------------------
 
 def test_hash_sections_unfiltered_is_backward_compatible():
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
                            imputed_cells=None, organ_allowlist=None)
@@ -287,7 +287,7 @@ def test_hash_sections_unfiltered_is_backward_compatible():
 
 
 def test_hash_sections_changes_with_allowlist_and_is_order_independent():
-    from cache_plumbing import _hash_sections
+    from pipeline.cache_plumbing import _hash_sections
     base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
                           imputed_cells=None, organ_allowlist=["kidney"])

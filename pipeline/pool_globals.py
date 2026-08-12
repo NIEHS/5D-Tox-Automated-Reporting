@@ -44,7 +44,7 @@ from bmdx_pipe import FileFingerprint
 
 # session_store.session_dir is the canonical session-directory locator.
 # Aliased on import to avoid a name collision with our _session_dir wrapper.
-from session_store import session_dir as _session_dir_imported
+from pipeline.session_store import session_dir as _session_dir_imported
 
 
 logger = logging.getLogger(__name__)

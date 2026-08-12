@@ -65,7 +65,7 @@ class TestFullPipeline:
         """
         from fastapi.testclient import TestClient
         from background_server import app
-        import pool_orchestrator
+        import pipeline.pool_orchestrator as pool_orchestrator
         import server_state
 
         client = TestClient(app)

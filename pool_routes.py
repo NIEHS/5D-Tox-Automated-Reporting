@@ -61,15 +61,15 @@ from fastapi.responses import JSONResponse, Response
 from bmdx_pipe import integrate_pool, validate_pool
 from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 
-from pool_globals import (
+from pipeline.pool_globals import (
     router,
     _session_dir,
     _pool_fingerprints,
     _integrated_pool,
     get_pool_fingerprints,
 )
-from pool_fingerprints import ensure_fingerprints
-from integrated_io import _enrich_source_experiment_counts
+from pipeline.pool_fingerprints import ensure_fingerprints
+from pipeline.integrated_io import _enrich_source_experiment_counts
 
 
 logger = logging.getLogger(__name__)

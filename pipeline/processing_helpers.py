@@ -74,9 +74,9 @@ from bmdx_pipe import (
     generate_results_narrative,
 )
 
-from pool_globals import _session_dir
+from pipeline.pool_globals import _session_dir
 from section_serializers import serialize_table_rows
-from integrated_io import _pick_go_stat, _safe_float, _safe_float_from_bmdl
+from pipeline.integrated_io import _pick_go_stat, _safe_float, _safe_float_from_bmdl
 
 
 logger = logging.getLogger(__name__)

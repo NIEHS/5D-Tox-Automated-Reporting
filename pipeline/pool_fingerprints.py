@@ -53,7 +53,7 @@ from bmdx_pipe import (
     lightweight_validate,
 )
 
-from pool_globals import (
+from pipeline.pool_globals import (
     _session_dir,
     _pool_fingerprints,
     _data_uploads,

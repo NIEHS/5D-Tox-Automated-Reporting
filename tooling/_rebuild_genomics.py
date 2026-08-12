@@ -10,9 +10,9 @@ Not part of the shipped surface.
 import asyncio
 import sys
 
-import process_integrated as P
-from pool_globals import _session_dir
-from cache_plumbing import _hash_genomics
+import pipeline.process_integrated as P
+from pipeline.pool_globals import _session_dir
+from pipeline.cache_plumbing import _hash_genomics
 
 DTXSID = sys.argv[1] if len(sys.argv) > 1 else "DTXSID50469320"
 

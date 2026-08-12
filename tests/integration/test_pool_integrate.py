@@ -70,7 +70,7 @@ class TestPoolIntegrate:
         """
         from fastapi.testclient import TestClient
         from background_server import app
-        import pool_orchestrator
+        import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 
@@ -89,7 +89,7 @@ class TestPoolIntegrate:
         """Integration should cache the result in _integrated_pool."""
         from fastapi.testclient import TestClient
         from background_server import app
-        import pool_orchestrator
+        import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 

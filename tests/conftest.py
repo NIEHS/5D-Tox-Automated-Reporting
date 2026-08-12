@@ -77,7 +77,7 @@ def _patch_sessions_dir(monkeypatch, sessions_path: Path):
             # Module not yet imported — that's fine, the test doesn't use it
             pass
     # Always patch session_store directly (it's the canonical source)
-    import session_store
+    import pipeline.session_store as session_store
     monkeypatch.setattr(session_store, "SESSIONS_DIR", sessions_path)
 
 
@@ -89,7 +89,7 @@ def _patch_sessions_dir(monkeypatch, sessions_path: Path):
 
 def _clear_server_state():
     """Reset all module-level mutable dicts to empty."""
-    import pool_orchestrator
+    import pipeline.pool_orchestrator as pool_orchestrator
     pool_orchestrator._pool_fingerprints.clear()
     pool_orchestrator._integrated_pool.clear()
     pool_orchestrator._data_uploads.clear()
@@ -188,17 +188,17 @@ def mock_bmdx_pipe():
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
         "build_table_data": patch(
-            "process_integrated.build_table_data",
+            "pipeline.process_integrated.build_table_data",
             return_value={"Male": [], "Female": []},
         ),
         # ExportGenomics.java — gene expression extraction
         "export_genomics": patch(
-            "processing_helpers.export_genomics",
+            "pipeline.processing_helpers.export_genomics",
             return_value={},
         ),
         # ExportCategories.java — BMD category lookup
         "generate_results_narrative": patch(
-            "processing_helpers.generate_results_narrative",
+            "pipeline.processing_helpers.generate_results_narrative",
             return_value=[],
         ),
         # ExportBm2.java — .bm2 deserialization
@@ -208,7 +208,7 @@ def mock_bmdx_pipe():
         ),
         # pybmds — CPU-heavy BMD modeling
         "run_bmds_for_endpoints": patch(
-            "process_integrated.run_bmds_for_endpoints",
+            "pipeline.process_integrated.run_bmds_for_endpoints",
             return_value={},
         ),
         # LMDB cache — mock across all importing modules.  get_json must

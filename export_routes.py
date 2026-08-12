@@ -30,12 +30,12 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from session_store import safe_filename
+from pipeline.session_store import safe_filename
 from narrative.style_learning import (
     load_style_profile, save_style_profile,
 )
 from server_state import get_bm2_uploads
-from pool_orchestrator import load_integrated
+from pipeline.pool_orchestrator import load_integrated
 
 logger = logging.getLogger(__name__)
 
@@ -769,7 +769,7 @@ async def api_export_bm2(dtxsid: str):
 
     Returns the .bm2 file as a download attachment.
     """
-    from session_store import session_dir
+    from pipeline.session_store import session_dir
     from bmdx_pipe import export_integrated_bm2
 
     sess_path = session_dir(dtxsid)

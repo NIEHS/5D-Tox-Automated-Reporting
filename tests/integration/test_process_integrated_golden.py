@@ -150,7 +150,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     # and table1 but no LLM prose, so the methods closure's captured locals
     # (integrated, fingerprints, dtxsid) still drive the output.
     monkeypatch.setattr(
-        "process_integrated._llm_generate_json_async",
+        "pipeline.process_integrated._llm_generate_json_async",
         AsyncMock(return_value={}),
     )
 

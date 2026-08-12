@@ -40,14 +40,14 @@ pool_orchestrator.py re-exports the three names so the original API
 import json
 import logging
 
-from pool_globals import (
+from pipeline.pool_globals import (
     _session_dir,
     _pool_fingerprints,
     _data_uploads,
     _integrated_pool,
     _get_bm2_uploads,
 )
-from pool_fingerprints import _save_fingerprints_to_disk
+from pipeline.pool_fingerprints import _save_fingerprints_to_disk
 
 
 logger = logging.getLogger(__name__)

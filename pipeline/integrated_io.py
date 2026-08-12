@@ -54,12 +54,12 @@ import logging
 
 from fastapi.responses import FileResponse, JSONResponse
 
-from bmd_project_schema import (
+from pipeline.bmd_project_schema import (
     BMDProjectValidationError,
     load_and_validate as _load_and_validate_bmd_project,
 )
 
-from pool_globals import router, _session_dir, _integrated_pool
+from pipeline.pool_globals import router, _session_dir, _integrated_pool
 
 
 logger = logging.getLogger(__name__)

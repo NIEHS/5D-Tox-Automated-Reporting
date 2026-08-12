@@ -32,14 +32,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from bmdx_pipe import bm2_cache
-from session_store import (
+from pipeline.session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
     save_section, delete_section,
 )
 from narrative.style_learning import (
     load_style_profile, extract_and_merge_style_rules,
 )
-from pool_orchestrator import (
+from pipeline.pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
     load_integrated, save_integrated,

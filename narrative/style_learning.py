@@ -28,7 +28,7 @@ import json
 import logging
 import traceback
 
-from session_store import SESSIONS_DIR, now_iso
+from pipeline.session_store import SESSIONS_DIR, now_iso
 from styling_export.llm_helpers import llm_generate_json
 
 

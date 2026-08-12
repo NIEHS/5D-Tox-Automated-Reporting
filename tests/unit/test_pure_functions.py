@@ -17,7 +17,7 @@ import pytest
 
 # Import the functions under test directly from pool_orchestrator.
 # These are module-private (prefixed _) but Python allows direct access.
-from pool_orchestrator import (
+from pipeline.pool_orchestrator import (
     _js_dose_key,
     _safe_float,
     _safe_float_from_bmdl,

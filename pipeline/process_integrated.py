@@ -60,11 +60,11 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
-from pool_globals import router, _session_dir, _pool_fingerprints
-from pool_fingerprints import ensure_fingerprints
+from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
+from pipeline.pool_fingerprints import ensure_fingerprints
 from section_serializers import _build_clinical_obs_section
-from integrated_io import _load_integrated, load_integrated, save_integrated
-from cache_plumbing import (
+from pipeline.integrated_io import _load_integrated, load_integrated, save_integrated
+from pipeline.cache_plumbing import (
     _load_cache,
     _save_cache,
     _CHARTS_CACHE_SCHEMA_VERSION,
@@ -79,7 +79,7 @@ from cache_plumbing import (
     _deserialize_platform_tables,
     _restore_category_lookup,
 )
-from processing_helpers import (
+from pipeline.processing_helpers import (
     _filter_gene_expression,
     _partition_by_platform,
     _build_section_cards,

@@ -40,7 +40,7 @@ from pathlib import Path
 # this source file), but can be overridden via the SESSIONS_DIR environment
 # variable — used when mounting a GCS bucket locally via gcsfuse or when
 # Cloud Run's GCS FUSE volume is mounted at a non-default path.
-SESSIONS_DIR = Path(os.environ.get("SESSIONS_DIR", Path(__file__).parent / "sessions"))
+SESSIONS_DIR = Path(os.environ.get("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
 
 
 # ---------------------------------------------------------------------------

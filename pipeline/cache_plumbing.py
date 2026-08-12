@@ -49,7 +49,7 @@ import orjson
 
 from bmdx_pipe import TableRow
 
-from pool_globals import _session_dir
+from pipeline.pool_globals import _session_dir
 
 
 logger = logging.getLogger(__name__)
