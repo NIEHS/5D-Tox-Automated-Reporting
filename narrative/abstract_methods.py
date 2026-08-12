@@ -27,8 +27,8 @@ the shim to assemble the Abstract block.
 
 from __future__ import annotations
 
-from methods_models import MethodsContext
-from narrative_helpers import _format_dose_list, _format_organ_list
+from narrative.methods_models import MethodsContext
+from narrative.narrative_helpers import _format_dose_list, _format_organ_list
 
 
 # ---------------------------------------------------------------------------

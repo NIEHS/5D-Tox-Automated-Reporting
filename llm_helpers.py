@@ -17,7 +17,7 @@ from typing import Any
 
 # AnthropicEndpoint wraps the Claude API — provides a simple
 # `generate(prompt, system=...)` interface that returns raw text.
-from interpret import AnthropicEndpoint
+from narrative.interpret import AnthropicEndpoint
 
 
 # ---------------------------------------------------------------------------

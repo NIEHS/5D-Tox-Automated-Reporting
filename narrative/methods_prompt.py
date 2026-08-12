@@ -39,7 +39,7 @@ together) keep working.
 
 from __future__ import annotations
 
-from methods_models import MethodsContext, SUBSECTION_SKELETON
+from narrative.methods_models import MethodsContext, SUBSECTION_SKELETON
 
 
 # ---------------------------------------------------------------------------

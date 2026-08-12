@@ -30,8 +30,8 @@ import re
 import sys
 from dataclasses import dataclass, field
 
-from chem_resolver import ChemicalIdentity, resolve_chemical
-from data_gatherer import BackgroundData, gather_all
+from narrative.chem_resolver import ChemicalIdentity, resolve_chemical
+from narrative.data_gatherer import BackgroundData, gather_all
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ from data_gatherer import BackgroundData, gather_all
 # AnthropicEndpoint wraps the proxy's Anthropic-format endpoint (reads
 # ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL from env).  Every model — Claude,
 # Gemini, Llama, ollama-* — is served through it, so there is one code path.
-from interpret import AnthropicEndpoint
+from narrative.interpret import AnthropicEndpoint
 
 
 # ---------------------------------------------------------------------------

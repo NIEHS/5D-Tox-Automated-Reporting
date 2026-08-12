@@ -49,7 +49,7 @@ from typing import Any
 # The four prose builders live in methods_report.  Intros are organ-level
 # boilerplate (methodology + caveat); findings are per-organ data-driven
 # paragraphs.  Both are pure functions — no I/O.
-from methods_report import (
+from narrative.methods_report import (
     build_gene_set_body_intro,
     build_gene_set_body_findings,
     build_gene_body_intro,

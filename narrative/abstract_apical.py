@@ -43,7 +43,7 @@ assembling the platform sections) keep working unchanged.
 
 from __future__ import annotations
 
-from narrative_helpers import (
+from narrative.narrative_helpers import (
     _DIRECTION_WORDS,
     _is_reliable_bmd,
     _is_anomalous_bmd,

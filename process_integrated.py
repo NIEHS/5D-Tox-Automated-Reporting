@@ -224,7 +224,7 @@ async def _build_apical_bmd_narrative(ctx):
     apical_bmd_narrative: dict = {}
     if apical_bmd_summary:
         try:
-            from methods_report import build_apical_bmd_summary_narrative
+            from narrative.methods_report import build_apical_bmd_summary_narrative
             _methods_ctx = (
                 methods_result.get("context") if methods_result else None
             ) or {}
@@ -724,7 +724,7 @@ async def _get_sections(ctx):
     # per-platform isolated narratives.  These are generated here
     # alongside the per-card narratives (which are kept for backward
     # compatibility with old approved sessions).
-    from unified_narrative import (
+    from narrative.unified_narrative import (
         extract_mortality,
         generate_apical_narrative,
         generate_clinical_pathology_narrative,
@@ -852,7 +852,7 @@ async def _get_methods(ctx):
         ctx.methods_result = methods_cached
         return
 
-    from methods_report import (
+    from narrative.methods_report import (
         MethodsReport,
         MethodsSection,
         build_methods_prompt,

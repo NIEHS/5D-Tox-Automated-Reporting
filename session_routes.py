@@ -36,7 +36,7 @@ from session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
     save_section, delete_section,
 )
-from style_learning import (
+from narrative.style_learning import (
     load_style_profile, extract_and_merge_style_rules,
 )
 from pool_orchestrator import (

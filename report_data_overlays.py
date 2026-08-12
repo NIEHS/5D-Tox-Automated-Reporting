@@ -76,7 +76,7 @@ def overlay_abstract(
     # Abstract → Methods (deterministic from the extracted study facts).
     if methods_context:
         try:
-            from methods_report import MethodsContext, build_abstract_methods
+            from narrative.methods_report import MethodsContext, build_abstract_methods
             abstract_updates["Methods"] = build_abstract_methods(
                 MethodsContext.from_dict(methods_context)
             )
@@ -87,7 +87,7 @@ def overlay_abstract(
     study_purpose_sentence = ""
     if methods_context:
         try:
-            from methods_report import MethodsContext as _MC
+            from narrative.methods_report import MethodsContext as _MC
             _ctx = _MC.from_dict(methods_context)
             ta = _ctx.chemical_name or "the test article"
             descriptor = "transcriptomic" if _ctx.has_gene_expression else "toxicological"
@@ -110,7 +110,7 @@ def overlay_abstract(
 
     if endpoints or genomics_cache or methods_context:
         try:
-            from methods_report import build_abstract_results, build_abstract_summary
+            from narrative.methods_report import build_abstract_results, build_abstract_summary
             results_text = build_abstract_results(
                 apical_bmd_summary=endpoints,
                 genomics_sections=genomics_cache,

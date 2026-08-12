@@ -1052,7 +1052,7 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
     # Import the anomaly heuristic from methods_report — same threshold
     # the abstract Results uses to drop endpoints from the "effects
     # included..." list, so the body table and abstract stay in sync.
-    from methods_report import _is_anomalous_bmd
+    from narrative.methods_report import _is_anomalous_bmd
 
     raw_entries: list[dict] = []
     for platform, sex_rows in sorted(platform_tables.items()):

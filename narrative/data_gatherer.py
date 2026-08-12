@@ -31,7 +31,7 @@ from typing import Optional
 
 import requests
 
-from chem_resolver import ChemicalIdentity, resolve_chemical
+from narrative.chem_resolver import ChemicalIdentity, resolve_chemical
 
 
 # ---------------------------------------------------------------------------

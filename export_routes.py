@@ -31,7 +31,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 from session_store import safe_filename
-from style_learning import (
+from narrative.style_learning import (
     load_style_profile, save_style_profile,
 )
 from server_state import get_bm2_uploads

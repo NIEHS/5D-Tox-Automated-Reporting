@@ -209,7 +209,7 @@ def _row(label: str, responsive: bool = True) -> TableRow:
 
 
 def test_organ_weight_narrative_honors_allowlist():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -228,7 +228,7 @@ def test_organ_weight_narrative_honors_allowlist():
 
 
 def test_organ_weight_narrative_component_match_laterality():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -244,7 +244,7 @@ def test_organ_weight_narrative_component_match_laterality():
 
 
 def test_organ_weight_narrative_unfiltered_when_no_allowlist():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -261,7 +261,7 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
     """Scope guard: the clinical-pathology narrative takes NO organ allowlist, so
     a clinical-chemistry endpoint (which _parse_organ_label also names) survives
     regardless of any organ-weight filter."""
-    from unified_narrative import generate_clinical_pathology_narrative
+    from narrative.unified_narrative import generate_clinical_pathology_narrative
 
     platform_tables = {
         "Clinical Chemistry": {

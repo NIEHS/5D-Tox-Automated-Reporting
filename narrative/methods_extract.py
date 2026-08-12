@@ -57,7 +57,7 @@ from __future__ import annotations
 import logging
 import re
 
-from methods_models import MethodsContext
+from narrative.methods_models import MethodsContext
 
 
 logger = logging.getLogger(__name__)

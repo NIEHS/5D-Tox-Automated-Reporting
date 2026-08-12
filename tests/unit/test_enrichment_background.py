@@ -30,7 +30,7 @@ import pytest
 from scipy.stats import fisher_exact
 
 import knowledge_base.enrichment_stats as enrichment_stats
-import interpret
+import narrative.interpret as interpret
 
 
 # Background universe: 100 genes (g1..g100).

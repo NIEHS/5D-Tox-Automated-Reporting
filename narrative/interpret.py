@@ -17,13 +17,13 @@ from knowledge_base.enrichment_stats import enrich_pathways, enrich_go_terms
 from knowledge_base.extract import normalize_gene
 from llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key, resolve_model_name
 from knowledge_base.toxkb import ToxKBQuerier
-from interpret_narrative import (
+from narrative.interpret_narrative import (
     NarrativeRun,
     synthesize_interpretation,
     generate_all_narratives,
     run_concordance_analysis,
 )
-from interpret_analysis import (
+from narrative.interpret_analysis import (
     rank_go_sets_by_bmd,
     rank_genes_by_bmd,
     fetch_go_descriptions,

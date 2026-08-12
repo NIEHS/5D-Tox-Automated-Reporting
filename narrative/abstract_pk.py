@@ -28,7 +28,7 @@ narrative_helpers.
 
 from __future__ import annotations
 
-from narrative_helpers import _format_dose_value, _join_oxford
+from narrative.narrative_helpers import _format_dose_value, _join_oxford
 
 
 def build_abstract_results_pk(

@@ -39,8 +39,8 @@ from __future__ import annotations
 
 import json
 
-from methods_models import MethodsContext
-from narrative_helpers import (
+from narrative.methods_models import MethodsContext
+from narrative.narrative_helpers import (
     _format_dose_value,
     _format_rat_gene_symbol,
     _stat_display_name,

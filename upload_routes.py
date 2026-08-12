@@ -45,7 +45,7 @@ from bmdx_pipe import (
     build_table_data_from_bm2,
     generate_results_narrative,
 )
-from interpret import (
+from narrative.interpret import (
     ToxKBQuerier,
     fetch_gene_descriptions,
     fetch_go_descriptions,

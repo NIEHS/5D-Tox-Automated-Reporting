@@ -34,7 +34,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from methods_models import MethodsContext
+from narrative.methods_models import MethodsContext
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ def build_sample_counts_from_context(
         return None
     ctx = MethodsContext.from_dict(methods_context)
     if not ctx.genomics_sample_counts and session_dir is not None:
-        from methods_extract import _build_genomics_sample_counts
+        from narrative.methods_extract import _build_genomics_sample_counts
         fingerprints = _load_session_fingerprints(session_dir)
         if fingerprints:
             ctx.genomics_sample_counts = _build_genomics_sample_counts(

@@ -30,7 +30,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.staticfiles import StaticFiles
 
-from chem_resolver import resolve_chemical
+from narrative.chem_resolver import resolve_chemical
 from session_store import SESSIONS_DIR
 
 logger = logging.getLogger(__name__)

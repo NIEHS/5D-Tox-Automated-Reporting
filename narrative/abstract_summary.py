@@ -38,8 +38,8 @@ shim when assembling the Abstract block.
 
 from __future__ import annotations
 
-from methods_models import MethodsContext
-from narrative_helpers import (
+from narrative.methods_models import MethodsContext
+from narrative.narrative_helpers import (
     _format_dose_value,
     _stat_display_name,
     _picks_above_lle,
@@ -47,9 +47,9 @@ from narrative_helpers import (
     _is_reliable_bmd,
     _is_anomalous_bmd,
 )
-from abstract_apical import build_abstract_results_apical
-from abstract_pk import build_abstract_results_pk
-from abstract_genomics import build_abstract_results_genomics
+from narrative.abstract_apical import build_abstract_results_apical
+from narrative.abstract_pk import build_abstract_results_pk
+from narrative.abstract_genomics import build_abstract_results_genomics
 
 
 def build_abstract_summary(

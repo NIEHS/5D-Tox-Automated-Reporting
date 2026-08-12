@@ -258,7 +258,7 @@ def build_organ_weight_table_from_sidecar(
     # organ token ("Liver") that organ_allowed matches component-wise (so
     # "kidney" covers the "Kidney-Left"/"Kidney-Right" laterality labels).
     from tables.table_builder_common import organ_allowed
-    from unified_narrative import _parse_organ_label
+    from narrative.unified_narrative import _parse_organ_label
 
     all_organs: set[str] = set()
     ntp_by_sex_label: dict[str, dict[str, dict]] = {}

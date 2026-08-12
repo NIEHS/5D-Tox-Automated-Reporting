@@ -29,13 +29,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from bmdx_pipe import bm2_cache
 from session_store import SESSIONS_DIR
 from llm_helpers import llm_generate_json_async
-from style_learning import load_style_profile
-from chem_resolver import ChemicalIdentity
-from data_gatherer import gather_all
-from background_writer import DEFAULT_CLAUDE_MODEL, generate_background
+from narrative.style_learning import load_style_profile
+from narrative.chem_resolver import ChemicalIdentity
+from narrative.data_gatherer import gather_all
+from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
 from server_state import get_pool_fingerprints
 from pool_orchestrator import load_integrated
-from interpret import build_genomics_interpretation, resolve_anthropic_api_key
+from narrative.interpret import build_genomics_interpretation, resolve_anthropic_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ async def api_generate_methods(request: Request):
         "model_used": "claude-sonnet-4-6"
       }
     """
-    from methods_report import (
+    from narrative.methods_report import (
         MethodsReport,
         MethodsSection,
         build_methods_prompt,
@@ -458,7 +458,7 @@ async def api_methods_context(dtxsid: str):
 
     Used by the "Preview Data" button in the Methods section UI.
     """
-    from methods_report import (
+    from narrative.methods_report import (
         extract_methods_context,
         build_subsection_skeleton,
         build_table1_data,
@@ -886,7 +886,7 @@ async def generate_apical_bmd_narrative_async(
 
     try:
         from anthropic import AsyncAnthropic
-        from interpret import resolve_anthropic_api_key, resolve_model_name
+        from narrative.interpret import resolve_anthropic_api_key, resolve_model_name
         # Route the model id through the shared remap (hyphen → dot version) so
         # the proxy accepts it.  This call uses AsyncAnthropic directly rather
         # than AnthropicEndpoint, so without the remap the proxy rejected
