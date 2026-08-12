@@ -31,7 +31,7 @@ pipeline provides significance markers and BMD/BMDL values.
 
 from __future__ import annotations
 
-from table_builder_common import (
+from tables.table_builder_common import (
     BMD_DEFINITION,
     SIGNIFICANCE_EXPLANATION,
     SIGNIFICANCE_MARKER_LEGEND,

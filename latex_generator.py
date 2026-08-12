@@ -117,7 +117,7 @@ from cross_references import resolve_xrefs_latex, latex_label_key
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
 # table_builder_common.DISPLAY_DECIMALS).
-from table_builder_common import format_display_number, format_mean_se_display
+from tables.table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------

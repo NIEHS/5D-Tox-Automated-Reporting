@@ -592,7 +592,7 @@ def load_session_data(
     # reconstructs them from this session's _fingerprints.json, so an older
     # session still renders Table 1.  None ⇒ the node shows its pending stub.
     if isinstance(methods_cache, dict) and methods_cache.get("context"):
-        from methods_table1 import build_sample_counts_from_context
+        from tables.methods_table1 import build_sample_counts_from_context
         sample_counts = build_sample_counts_from_context(
             methods_cache["context"], session_dir,
         )
@@ -613,7 +613,7 @@ def load_session_data(
             load_report_organs, load_report_sex,
             load_report_genes, load_report_gene_sets,
         )
-        from table_builder_common import filter_genomics_sections
+        from tables.table_builder_common import filter_genomics_sections
         genomics_cache = filter_genomics_sections(
             genomics_cache,
             organ=load_report_organs(ACTIVE_TEMPLATE).get("genomics"),

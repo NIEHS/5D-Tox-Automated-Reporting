@@ -57,7 +57,7 @@ from bmdx_pipe import (
     build_table_data,
     report_to_dict,
 )
-from apical_bmds import run_bmds_for_endpoints
+from tables.apical_bmds import run_bmds_for_endpoints
 from llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
 from pool_globals import router, _session_dir, _pool_fingerprints
@@ -678,8 +678,8 @@ async def _get_sections(ctx):
     # no entries in platform_tables, so it must be built separately
     # from sidecar data (similar to Clinical Observations).
     if dtxsid:
-        from table_builder_common import find_sidecar_paths as _find_sidecar
-        from tissue_concentration_table import build_tissue_concentration_table_from_sidecar
+        from tables.table_builder_common import find_sidecar_paths as _find_sidecar
+        from tables.tissue_concentration_table import build_tissue_concentration_table_from_sidecar
 
         session_dir = str(_session_dir(dtxsid))
         tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
@@ -692,7 +692,7 @@ async def _get_sections(ctx):
             # Prune by the apical sex allowlist (this card bypasses
             # platform_tables / apply_apical_filters).
             if tc_result and apical_sex_allow:
-                from table_builder_common import sex_allowed
+                from tables.table_builder_common import sex_allowed
                 tc_result["table_data"] = {
                     sex: rows
                     for sex, rows in (tc_result.get("table_data") or {}).items()
@@ -729,7 +729,7 @@ async def _get_sections(ctx):
         generate_apical_narrative,
         generate_clinical_pathology_narrative,
     )
-    from body_weight_table import find_sidecar_paths
+    from tables.body_weight_table import find_sidecar_paths
 
     # 1. Load mortality data from body weight sidecars
     session_dir = str(_session_dir(dtxsid))
@@ -822,7 +822,7 @@ async def _get_genomics(ctx):
     # the result cascades to charts, narratives, and the gene tables, which all
     # read this dict.
     if ctx.genomics_sections:
-        from table_builder_common import filter_genomics_sections
+        from tables.table_builder_common import filter_genomics_sections
         ctx.genomics_sections = filter_genomics_sections(
             ctx.genomics_sections,
             organ=(ctx.organ_filters or {}).get("genomics"),

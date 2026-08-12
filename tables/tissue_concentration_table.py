@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import re
 
-from table_builder_common import (
+from tables.table_builder_common import (
     js_dose_key,
     mean_se,
     format_mean_se,

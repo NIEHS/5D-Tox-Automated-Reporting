@@ -61,7 +61,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from table_builder_common import (
+from tables.table_builder_common import (
     js_dose_key as _js_dose_key,
     mean_se as _mean_se,
     format_mean_se as _format_mean_se,

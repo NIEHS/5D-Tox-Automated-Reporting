@@ -40,7 +40,7 @@ from document_node import DocNode
 # Render-time numeric re-rounding for mean ± SE cells — already the shared
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
-from table_builder_common import format_mean_se_display, format_display_number
+from tables.table_builder_common import format_mean_se_display, format_display_number
 # The per-node landscape DECISION is format-agnostic (it inspects the node type,
 # the orientation overlay, and the node default) — only the WRAP markup differs.
 # render_capabilities is a clean low-level module that imports nothing from

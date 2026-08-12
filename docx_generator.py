@@ -97,7 +97,7 @@ from layout_style import resolve_layout_style
 from render_capabilities import front_matter_roles_for, landscape_requested
 
 _REL_HYPERLINK = _REL.HYPERLINK
-from table_builder_common import format_display_number, format_mean_se_display
+from tables.table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------

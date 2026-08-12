@@ -300,7 +300,7 @@ def apply_apical_filters(
     if not sex_allow and not assay_filters:
         return platform_tables
 
-    from table_builder_common import sex_allowed, assay_allowed
+    from tables.table_builder_common import sex_allowed, assay_allowed
 
     assay_filters = assay_filters or {}
     out: dict[str, dict[str, list]] = {}
@@ -348,7 +348,7 @@ def prune_card_sexes(card: dict | None, sex_allow: list[str] | None) -> dict | N
     """
     if not sex_allow or not card:
         return card
-    from table_builder_common import sex_allowed
+    from tables.table_builder_common import sex_allowed
 
     tables = card.get("tables_json")
     if isinstance(tables, dict):
@@ -445,7 +445,7 @@ def _build_section_cards(
         # groups (including those where animals died), and proper attrition
         # footnotes.
         if platform == "Body Weight" and dtxsid:
-            from body_weight_table import (
+            from tables.body_weight_table import (
                 build_body_weight_table_from_sidecar,
                 find_sidecar_paths,
             )
@@ -513,8 +513,8 @@ def _build_section_cards(
         # significance markers, BMD/BMDL columns.  The sidecar provides correct
         # Core Animals N counts; the NTP stats provide mean±SE with markers.
         if platform in ("Clinical Chemistry", "Hematology", "Hormones") and dtxsid:
-            from table_builder_common import find_sidecar_paths as _find_sidecar
-            from clinical_pathology_table import build_clinical_pathology_table_from_sidecar
+            from tables.table_builder_common import find_sidecar_paths as _find_sidecar
+            from tables.clinical_pathology_table import build_clinical_pathology_table_from_sidecar
 
             session_dir = str(_session_dir(dtxsid))
             sidecar_paths = _find_sidecar(session_dir, platform=platform)
@@ -564,8 +564,8 @@ def _build_section_cards(
         # appear; the responsive gate controls BMD column values only.
         # Terminal Body Weight is always shown as a context row.
         if platform == "Organ Weight" and dtxsid:
-            from table_builder_common import find_sidecar_paths as _find_sidecar
-            from organ_weight_table import build_organ_weight_table_from_sidecar
+            from tables.table_builder_common import find_sidecar_paths as _find_sidecar
+            from tables.organ_weight_table import build_organ_weight_table_from_sidecar
 
             session_dir = str(_session_dir(dtxsid))
             sidecar_paths = _find_sidecar(session_dir, platform="Organ Weight")

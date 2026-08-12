@@ -95,7 +95,7 @@ from cover_layouts import get_cover_layout
 from cross_references import resolve_xrefs_html
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
-from table_builder_common import format_display_number, format_mean_se_display
+from tables.table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------

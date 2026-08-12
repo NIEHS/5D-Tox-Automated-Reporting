@@ -108,7 +108,7 @@ from methods_prompt import (
 # ---------------------------------------------------------------------------
 # Re-exports: Table 1 builder
 # ---------------------------------------------------------------------------
-from methods_table1 import build_table1_data
+from tables.methods_table1 import build_table1_data
 
 # ---------------------------------------------------------------------------
 # Re-exports: narrative builders (apical, genomics, pk, gene bodies, summary)

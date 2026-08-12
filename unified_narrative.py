@@ -623,7 +623,7 @@ def _build_organ_weight_paragraphs(
     Returns:
         List of paragraph strings (one per sex that has data).
     """
-    from table_builder_common import organ_allowed
+    from tables.table_builder_common import organ_allowed
 
     ow_data = platform_tables.get("Organ Weight", {})
     if not ow_data:

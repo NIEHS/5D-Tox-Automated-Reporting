@@ -21,7 +21,7 @@ import textwrap
 import pytest
 
 from bmdx_pipe import TableRow
-from table_builder_common import organ_allowed
+from tables.table_builder_common import organ_allowed
 
 
 # ---------------------------------------------------------------------------

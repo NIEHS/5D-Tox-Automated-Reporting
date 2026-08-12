@@ -20,7 +20,7 @@ those two helpers at call time.
 import logging
 from pathlib import Path
 
-from table_builder_common import lettered_footnote, finalize_footnotes
+from tables.table_builder_common import lettered_footnote, finalize_footnotes
 
 
 # ---------------------------------------------------------------------------
