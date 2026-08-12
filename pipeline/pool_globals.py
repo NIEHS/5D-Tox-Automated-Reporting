@@ -115,7 +115,7 @@ def _get_bm2_uploads() -> dict[str, dict]:
     import inside the function body defers it until first call, by which
     time both modules have finished loading and the cycle is harmless.
     """
-    from server_state import get_bm2_uploads
+    from web_routes.server_state import get_bm2_uploads
     return get_bm2_uploads()
 
 

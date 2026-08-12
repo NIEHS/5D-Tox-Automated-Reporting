@@ -86,7 +86,7 @@ from pipeline.pool_state import (
 # ---------------------------------------------------------------------------
 # Re-exports: section-card serialization helpers
 # ---------------------------------------------------------------------------
-from section_serializers import (
+from web_routes.section_serializers import (
     _js_dose_key,
     serialize_table_rows,
     serialize_incidence_rows,
@@ -112,7 +112,7 @@ from pipeline.pool_fingerprints import (
 # shared pool_globals.router, so the four /api/pool/* endpoints register
 # at module load time.  The named re-exports preserve callers that import
 # the handlers by name (background_server / session_routes for testing).
-from pool_routes import (
+from web_routes.pool_routes import (
     api_pool_validate,
     api_pool_resolve,
     api_pool_confirm_metadata,

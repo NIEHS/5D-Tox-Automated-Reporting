@@ -75,7 +75,7 @@ from bmdx_pipe import (
 )
 
 from pipeline.pool_globals import _session_dir
-from section_serializers import serialize_table_rows
+from web_routes.section_serializers import serialize_table_rows
 from pipeline.integrated_io import _pick_go_stat, _safe_float, _safe_float_from_bmdl
 
 

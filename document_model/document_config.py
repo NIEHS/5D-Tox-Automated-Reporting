@@ -338,7 +338,7 @@ def save_default_document_yaml(text: str) -> None:
     from document_model.document_tree import rebuild_document_tree
     rebuild_document_tree()
     try:
-        import background_server
+        import web_routes.background_server as background_server
         background_server.refresh_serialized_tree()
     except Exception:
         # The served singleton refresh is best-effort (e.g. background_server not

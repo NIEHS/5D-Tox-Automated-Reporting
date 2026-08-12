@@ -36,7 +36,7 @@ from pipeline.pool_orchestrator import (
     fingerprint_and_store, run_lightweight_validation, serialize_table_rows,
     remove_old_file_entries, invalidate_pool_artifacts, pool_has_progressed,
 )
-from server_state import (
+from web_routes.server_state import (
     get_bm2_uploads,
     get_csv_uploads,
     get_data_uploads,
@@ -642,7 +642,7 @@ async def api_process_genomics(request: Request):
         def _run_genomics():
             # Open a read-only connection to the knowledge base for GO term
             # lookups.  The KB is the bmdx.duckdb file in the project root.
-            db_path = str(Path(__file__).parent / "bmdx.duckdb")
+            db_path = str(Path(__file__).parent.parent / "bmdx.duckdb")
             kb = ToxKBQuerier(db_path)
             try:
                 gene_sets = rank_go_sets_by_bmd(df, kb, top_n=10)

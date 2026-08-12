@@ -64,9 +64,9 @@ class TestFullPipeline:
         → clear state → restore from disk.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
         import pipeline.pool_orchestrator as pool_orchestrator
-        import server_state
+        import web_routes.server_state as server_state
 
         client = TestClient(app)
         dtxsid = "DTXSID50469320"

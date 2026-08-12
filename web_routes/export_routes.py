@@ -34,7 +34,7 @@ from pipeline.session_store import safe_filename
 from narrative.style_learning import (
     load_style_profile, save_style_profile,
 )
-from server_state import get_bm2_uploads
+from web_routes.server_state import get_bm2_uploads
 from pipeline.pool_orchestrator import load_integrated
 
 logger = logging.getLogger(__name__)

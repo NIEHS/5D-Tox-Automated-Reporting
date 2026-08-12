@@ -62,7 +62,7 @@ from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_
 
 from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
 from pipeline.pool_fingerprints import ensure_fingerprints
-from section_serializers import _build_clinical_obs_section
+from web_routes.section_serializers import _build_clinical_obs_section
 from pipeline.integrated_io import _load_integrated, load_integrated, save_integrated
 from pipeline.cache_plumbing import (
     _load_cache,
@@ -242,7 +242,7 @@ async def _build_apical_bmd_narrative(ctx):
             # LLM analytical paragraph (async, cached per summary hash).
             llm_paras: list[str] = []
             try:
-                from llm_routes import generate_apical_bmd_narrative_async
+                from web_routes.llm_routes import generate_apical_bmd_narrative_async
                 llm_result = await generate_apical_bmd_narrative_async(
                     dtxsid=dtxsid,
                     compound_name=_chem_name,
@@ -342,7 +342,7 @@ async def _build_genomics_llm_narratives(ctx):
     llm_gene_by_organ: dict[str, list[str]] = {}
     if genomics_sections:
         try:
-            from llm_routes import generate_genomics_narrative_async
+            from web_routes.llm_routes import generate_genomics_narrative_async
 
             # Load identity from session for chemical name — used in
             # the LLM prompt's "{compound} exposure" phrasing.  Falls

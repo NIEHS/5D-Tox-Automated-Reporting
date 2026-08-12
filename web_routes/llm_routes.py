@@ -33,7 +33,7 @@ from narrative.style_learning import load_style_profile
 from narrative.chem_resolver import ChemicalIdentity
 from narrative.data_gatherer import gather_all
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL, generate_background
-from server_state import get_pool_fingerprints
+from web_routes.server_state import get_pool_fingerprints
 from pipeline.pool_orchestrator import load_integrated
 from narrative.interpret import build_genomics_interpretation, resolve_anthropic_api_key
 

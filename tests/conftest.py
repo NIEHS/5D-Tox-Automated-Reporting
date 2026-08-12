@@ -48,12 +48,12 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "golden"
 
 # All modules that import SESSIONS_DIR by name (found via grep).
 _SESSIONS_DIR_MODULES = [
-    "session_store",
-    "session_routes",
-    "llm_routes",
-    "background_server",
-    "style_learning",
-    "document_config",
+    "pipeline.session_store",
+    "web_routes.session_routes",
+    "web_routes.llm_routes",
+    "web_routes.background_server",
+    "narrative.style_learning",
+    "document_model.document_config",
 ]
 
 # pool_orchestrator imports session_dir (the function), which reads
@@ -94,7 +94,7 @@ def _clear_server_state():
     pool_orchestrator._integrated_pool.clear()
     pool_orchestrator._data_uploads.clear()
 
-    import server_state
+    import web_routes.server_state as server_state
     server_state._bm2_uploads.clear()
     server_state._csv_uploads.clear()
 
@@ -126,7 +126,7 @@ def client(sessions_dir):
     all in-memory state is cleared before each test.
     """
     from fastapi.testclient import TestClient
-    from background_server import app
+    from web_routes.background_server import app
     return TestClient(app)
 
 
@@ -183,7 +183,7 @@ def mock_bmdx_pipe():
     patches = {
         # IntegrateProject.java — merges files into unified BMDProject
         "integrate_pool": patch(
-            "pool_routes.integrate_pool",
+            "web_routes.pool_routes.integrate_pool",
             return_value={"doseResponseExperiments": [], "_meta": {}},
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
@@ -203,7 +203,7 @@ def mock_bmdx_pipe():
         ),
         # ExportBm2.java — .bm2 deserialization
         "build_table_data_from_bm2": patch(
-            "upload_routes.build_table_data_from_bm2",
+            "web_routes.upload_routes.build_table_data_from_bm2",
             return_value={},
         ),
         # pybmds — CPU-heavy BMD modeling
@@ -216,13 +216,13 @@ def mock_bmdx_pipe():
         # dict on hit, None on miss); a bare MagicMock leaks into the
         # preview route's orjson.dumps and fails to serialize.
         "bm2_cache_session": patch(
-            "session_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.session_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
         "bm2_cache_upload": patch(
-            "upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
         "bm2_cache_llm": patch(
-            "llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
     }
 

@@ -45,7 +45,7 @@ class TestPoolIntegrate:
         integration should succeed and return 200.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
 
@@ -69,7 +69,7 @@ class TestPoolIntegrate:
         (which is mocked here), so we verify the in-memory cache instead.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
         import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
@@ -88,7 +88,7 @@ class TestPoolIntegrate:
     def test_integrate_populates_memory(self, golden_50469320, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
         import pipeline.pool_orchestrator as pool_orchestrator
 
         mock_bmdx_pipe.integrate_pool.return_value = self._make_integrated()
@@ -105,7 +105,7 @@ class TestPoolIntegrate:
     def test_integrate_without_validation_returns_400(self, sessions_dir):
         """Integration without prior validation should fail (no fingerprints)."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
@@ -121,7 +121,7 @@ class TestPoolIntegrate:
     def test_integrate_without_files_returns_404(self, sessions_dir):
         """Integration with no files/ directory returns 404."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         (sessions_dir / "DTXSID_EMPTY").mkdir(parents=True)

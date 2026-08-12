@@ -163,22 +163,22 @@ import pipeline.pool_orchestrator as pool_orchestrator
 app.include_router(pool_orchestrator.router)
 
 # Session persistence: load, approve, unapprove, history, restore, BMD summary
-import session_routes
+import web_routes.session_routes as session_routes
 app.include_router(session_routes.router)
 
 # Upload and processing: upload-bm2, upload-csv, upload-zip, process-bm2,
 # process-genomics, preview
-import upload_routes
+import web_routes.upload_routes as upload_routes
 app.include_router(upload_routes.router)
 
 # LLM generation: generate (SSE), generate-methods, methods-context,
 # generate-summary, generate-genomics-narrative
-import llm_routes
+import web_routes.llm_routes as llm_routes
 app.include_router(llm_routes.router)
 
 # Export and style: export-overleaf-bundle, preview-latex-html,
 # sync/commit/push/pull-document, export-bm2, style-profile GET/DELETE
-import export_routes
+import web_routes.export_routes as export_routes
 app.include_router(export_routes.router)
 
 # Genomics visualization: clustering endpoint and server-side chart rendering
@@ -206,7 +206,7 @@ async def serve_ui():
     """
     import json
 
-    html_path = Path(__file__).parent / "web" / "index.html"
+    html_path = Path(__file__).parent.parent / "web" / "index.html"
     if not html_path.exists():
         return HTMLResponse(
             "<h1>Error</h1><p>web/index.html not found</p>",
@@ -470,7 +470,7 @@ async def no_cache_dev_assets(request: Request, call_next):
 # take priority.  The StaticFiles handler is a catch-all that serves anything
 # inside the web/ directory (style.css, js/state.js, js/utils.js, js/main.js,
 # images, etc.) with correct MIME types and caching headers.
-app.mount("/", StaticFiles(directory=Path(__file__).parent / "web"), name="static")
+app.mount("/", StaticFiles(directory=Path(__file__).parent.parent / "web"), name="static")
 
 
 # ---------------------------------------------------------------------------

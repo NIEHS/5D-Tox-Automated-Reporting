@@ -139,7 +139,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     Returns the parsed JSON payload.
     """
     from fastapi.testclient import TestClient
-    from background_server import app
+    from web_routes.background_server import app
 
     _setup_session(sessions_dir)
     mock_bmdx_pipe.build_table_data.return_value = _make_enriched_table_data()
@@ -158,7 +158,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     # the handler as `from llm_routes import generate_apical_bmd_narrative_async`,
     # so patch it on the llm_routes module.
     monkeypatch.setattr(
-        "llm_routes.generate_apical_bmd_narrative_async",
+        "web_routes.llm_routes.generate_apical_bmd_narrative_async",
         AsyncMock(return_value={
             "paragraphs": ["MOCK analytical paragraph for the BMD summary."],
             "model_used": "mock-model",

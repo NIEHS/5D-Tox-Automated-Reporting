@@ -84,8 +84,8 @@ def find_session_dir(dtxsid: str) -> Path:
     Searches the standard location: sessions/{dtxsid}/ relative to this
     script's directory (which is the project root).
     """
-    # Try relative to script location first, then cwd
-    for base in [Path(__file__).parent, Path.cwd()]:
+    # Try relative to project root (one level up from this package), then cwd
+    for base in [Path(__file__).parent.parent, Path.cwd()]:
         d = base / "sessions" / dtxsid
         if d.exists():
             return d
