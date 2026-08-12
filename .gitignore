@@ -39,3 +39,28 @@ output/session_exports/
 assets/fonts/
 ttfonts.zip
 times*.ttf
+
+# Personal shell / environment dotfiles that live in the sandbox home dir but
+# happen to sit at the repo root. Per-user, never shared.
+.bash_profile
+.bashrc
+.profile
+.zshrc
+.zprofile
+.gitconfig
+.ripgreprc
+
+# Editor / IDE local state (match both dir and stray-file forms)
+.idea
+.vscode
+
+# Local caches and backups (regenerable; never committed)
+.fulltext_cache/
+*.bak-*
+.rlm-code.duckdb.prereindex
+
+# Claude Code local state: ignore everything under .claude EXCEPT shared,
+# checked-in tooling (skills). settings.local.json / hooks / scheduled tasks
+# are per-user; skills/ is team-shared.
+.claude/*
+!.claude/skills/

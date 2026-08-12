@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "rlm-code": {
+      "command": "/workspace/rlm-code/.venv/bin/rlm-code",
+      "args": [
+        "serve"
+      ]
+    }
+  }
+}
