@@ -40,6 +40,15 @@ the result is exported for publication.
 
 ---
 
+> **Module paths (2026-08-12, ADR-0013):** the code is organized into concern
+> packages (`web_routes/`, `pipeline/`, `document_model/`, `rendering/`, `tables/`,
+> `narrative/`, `genomics/`, `knowledge_base/`, `styling_export/`, `tooling/`).
+> Bare module names below (e.g. `render_common.py`, `document_template.py`,
+> `html_generator.py`) are package-qualified in code — see the package table in
+> `CLAUDE.md` for which package each lives in. Imports are
+> `from <package>.<module> import ...`; the app entrypoint is
+> `python -m web_routes.background_server`.
+
 ## Domain glossary
 
 Use these terms (and only these) when naming concepts in code, issues, tests,
