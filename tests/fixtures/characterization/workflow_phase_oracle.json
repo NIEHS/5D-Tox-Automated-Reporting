@@ -1,0 +1,604 @@
+{
+  "derive_phase": [
+    {
+      "name": "no_files_is_empty",
+      "input": {
+        "hasFiles": false,
+        "hasStale": true,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": true,
+        "hasIntegrated": true,
+        "hasAnimalReport": true
+      },
+      "output": "EMPTY"
+    },
+    {
+      "name": "files_no_validation_is_uploaded",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": null,
+        "hasValidationErrors": false,
+        "hasIntegrated": false,
+        "hasAnimalReport": false
+      },
+      "output": "UPLOADED"
+    },
+    {
+      "name": "stale_regresses_to_uploaded_over_everything",
+      "input": {
+        "hasFiles": true,
+        "hasStale": true,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": true,
+        "hasAnimalReport": true
+      },
+      "output": "UPLOADED"
+    },
+    {
+      "name": "stale_beats_validation_errors",
+      "input": {
+        "hasFiles": true,
+        "hasStale": true,
+        "validationReport": {
+          "issues": [
+            {
+              "severity": "error"
+            }
+          ]
+        },
+        "hasValidationErrors": true,
+        "hasIntegrated": false,
+        "hasAnimalReport": false
+      },
+      "output": "UPLOADED"
+    },
+    {
+      "name": "validation_errors",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": [
+            {
+              "severity": "error"
+            }
+          ]
+        },
+        "hasValidationErrors": true,
+        "hasIntegrated": false,
+        "hasAnimalReport": false
+      },
+      "output": "VALIDATION_ERRORS"
+    },
+    {
+      "name": "validated_clean_not_integrated",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": false,
+        "hasAnimalReport": false
+      },
+      "output": "VALIDATED"
+    },
+    {
+      "name": "integrated_not_approved",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": true,
+        "hasAnimalReport": false
+      },
+      "output": "INTEGRATED"
+    },
+    {
+      "name": "fully_approved",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": true,
+        "hasAnimalReport": true
+      },
+      "output": "APPROVED"
+    },
+    {
+      "name": "independent_flags_integrated_true_animal_false",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": []
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": true,
+        "hasAnimalReport": false
+      },
+      "output": "INTEGRATED"
+    },
+    {
+      "name": "validation_report_present_errors_flag_false_takes_precedence_over_missing_integrated",
+      "input": {
+        "hasFiles": true,
+        "hasStale": false,
+        "validationReport": {
+          "issues": [
+            {
+              "severity": "warning"
+            }
+          ]
+        },
+        "hasValidationErrors": false,
+        "hasIntegrated": false,
+        "hasAnimalReport": false
+      },
+      "output": "VALIDATED"
+    }
+  ],
+  "section_completeness": [
+    {
+      "name": "body_weight_complete",
+      "input": {
+        "Body Weight|tox_study": {
+          "xlsx": null,
+          "txt_csv": [
+            "f1"
+          ],
+          "bm2": "f2"
+        }
+      },
+      "output": {
+        "Body Weight": {
+          "hasToxStudy": true,
+          "hasBm2": true,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "body_weight_missing_bm2",
+      "input": {
+        "Body Weight|tox_study": {
+          "xlsx": null,
+          "txt_csv": [
+            "f1"
+          ],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Body Weight": {
+          "hasToxStudy": true,
+          "hasBm2": false,
+          "complete": false,
+          "missing": [
+            "Requires .bm2 for BMD/BMDL values"
+          ]
+        }
+      }
+    },
+    {
+      "name": "body_weight_missing_tox",
+      "input": {
+        "Body Weight|tox_study": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": "f2"
+        }
+      },
+      "output": {
+        "Body Weight": {
+          "hasToxStudy": false,
+          "hasBm2": true,
+          "complete": false,
+          "missing": [
+            "Requires study data (.txt/.csv) for NTP statistics"
+          ]
+        }
+      }
+    },
+    {
+      "name": "body_weight_missing_both",
+      "input": {
+        "Body Weight|tox_study": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Body Weight": {
+          "hasToxStudy": false,
+          "hasBm2": false,
+          "complete": false,
+          "missing": [
+            "Requires study data (.txt/.csv) for NTP statistics",
+            "Requires .bm2 for BMD/BMDL values"
+          ]
+        }
+      }
+    },
+    {
+      "name": "apical_xlsx_counts_as_toxstudy",
+      "input": {
+        "Hormones|tox_study": {
+          "xlsx": "f1",
+          "txt_csv": [],
+          "bm2": "f2"
+        }
+      },
+      "output": {
+        "Hormones": {
+          "hasToxStudy": true,
+          "hasBm2": true,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "clinical_alias_collapses_and_completes",
+      "input": {
+        "Clinical|tox_study": {
+          "xlsx": null,
+          "txt_csv": [
+            "f1"
+          ],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Clinical Observations": {
+          "hasToxStudy": true,
+          "hasBm2": false,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "clinical_observations_missing_csv",
+      "input": {
+        "Clinical|x": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Clinical Observations": {
+          "hasToxStudy": false,
+          "hasBm2": false,
+          "complete": false,
+          "missing": [
+            "Requires clinical observation CSV data"
+          ]
+        }
+      }
+    },
+    {
+      "name": "tissue_concentration_xlsx_complete",
+      "input": {
+        "Tissue Concentration|biosampling": {
+          "xlsx": "f1",
+          "txt_csv": [],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Tissue Concentration": {
+          "hasToxStudy": true,
+          "hasBm2": false,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "tissue_concentration_txt_only_still_incomplete",
+      "input": {
+        "Tissue Concentration|x": {
+          "xlsx": null,
+          "txt_csv": [
+            "f1"
+          ],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Tissue Concentration": {
+          "hasToxStudy": true,
+          "hasBm2": false,
+          "complete": false,
+          "missing": [
+            "Requires .xlsx with Biosampling Animal data"
+          ]
+        }
+      }
+    },
+    {
+      "name": "gene_expression_bare_key_complete",
+      "input": {
+        "gene_expression": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": "f1"
+        }
+      },
+      "output": {
+        "gene_expression": {
+          "hasToxStudy": false,
+          "hasBm2": true,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "gene_expression_missing_bm2",
+      "input": {
+        "gene_expression": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": null
+        }
+      },
+      "output": {
+        "gene_expression": {
+          "hasToxStudy": false,
+          "hasBm2": false,
+          "complete": false,
+          "missing": [
+            "Requires .bm2 with gene expression data"
+          ]
+        }
+      }
+    },
+    {
+      "name": "unknown_platform_defaults_complete",
+      "input": {
+        "Peer Review|x": {
+          "xlsx": null,
+          "txt_csv": [
+            "f1"
+          ],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Peer Review": {
+          "hasToxStudy": true,
+          "hasBm2": false,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "compound_keys_collapse_and_merge_tiers",
+      "input": {
+        "Body Weight|tox_study": {
+          "xlsx": null,
+          "txt_csv": [],
+          "bm2": "a"
+        },
+        "Body Weight|other": {
+          "xlsx": null,
+          "txt_csv": [
+            "b"
+          ],
+          "bm2": null
+        }
+      },
+      "output": {
+        "Body Weight": {
+          "hasToxStudy": true,
+          "hasBm2": true,
+          "complete": true,
+          "missing": []
+        }
+      }
+    },
+    {
+      "name": "empty_matrix_yields_empty_map",
+      "input": {},
+      "output": {}
+    }
+  ],
+  "node_complete": [
+    {
+      "name": "non_data_node_always_complete",
+      "input": {
+        "nodeId": "background",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": true,
+        "missing": []
+      }
+    },
+    {
+      "name": "leaf_complete_when_platform_complete",
+      "input": {
+        "nodeId": "table-body-weight",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": true,
+        "missing": []
+      }
+    },
+    {
+      "name": "leaf_incomplete_propagates_missing",
+      "input": {
+        "nodeId": "table-body-weight",
+        "completeness": {
+          "Body Weight": {
+            "complete": false,
+            "missing": [
+              "Requires .bm2 for BMD/BMDL values"
+            ]
+          }
+        }
+      },
+      "output": {
+        "complete": false,
+        "missing": [
+          "Requires .bm2 for BMD/BMDL values"
+        ]
+      }
+    },
+    {
+      "name": "leaf_platform_absent_from_map",
+      "input": {
+        "nodeId": "table-body-weight",
+        "completeness": {
+          "Organ Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": false,
+        "missing": [
+          "No data for platform: Body Weight"
+        ]
+      }
+    },
+    {
+      "name": "group_complete_when_all_children_complete",
+      "input": {
+        "nodeId": "animal-condition",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          },
+          "Organ Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": true,
+        "missing": []
+      }
+    },
+    {
+      "name": "group_incomplete_labels_child_by_platform",
+      "input": {
+        "nodeId": "animal-condition",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          },
+          "Organ Weight": {
+            "complete": false,
+            "missing": [
+              "Requires .bm2 for BMD/BMDL values"
+            ]
+          }
+        }
+      },
+      "output": {
+        "complete": false,
+        "missing": [
+          "Organ Weight: Requires .bm2 for BMD/BMDL values"
+        ]
+      }
+    },
+    {
+      "name": "group_child_platform_absent_from_map",
+      "input": {
+        "nodeId": "animal-condition",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": false,
+        "missing": [
+          "Organ Weight: No data for Organ Weight"
+        ]
+      }
+    },
+    {
+      "name": "group_with_no_table_children_is_complete",
+      "input": {
+        "nodeId": "narrative-group",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": true,
+        "missing": []
+      }
+    },
+    {
+      "name": "unknown_node_id_is_complete",
+      "input": {
+        "nodeId": "does-not-exist",
+        "completeness": {
+          "Body Weight": {
+            "complete": true,
+            "missing": []
+          }
+        }
+      },
+      "output": {
+        "complete": true,
+        "missing": []
+      }
+    },
+    {
+      "name": "empty_completeness_map_blocks_everything",
+      "input": {
+        "nodeId": "table-body-weight",
+        "completeness": {}
+      },
+      "output": {
+        "complete": false,
+        "missing": [
+          "No completeness data — validate the pool first"
+        ]
+      }
+    }
+  ]
+}
