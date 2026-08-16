@@ -17,10 +17,10 @@ hash-keyed disk cache from cache_plumbing.py, so unchanged inputs hit
 the cache instead of re-running the work (BMDS alone can take 8+
 minutes uncached).
 
-api_generate_animal_report is much smaller: it fans out
-build_animal_report (from bmdx_pipe) on the session's fingerprinted
-files in a thread pool to produce a per-animal traceability report,
-then persists the result as animal_report.json.
+api_generate_animal_report is much smaller: a thin transport wrapper over
+workflow.steps.generate_animal_report_step (ADR-0014 step 2), run in a thread
+pool, which builds a per-animal traceability report and persists it as
+animal_report.json.
 
 The _BMD_STAT_LABELS dict lives here because it's used only by
 api_process_integrated to set human-readable column headers for the
@@ -52,16 +52,13 @@ from fastapi.responses import JSONResponse, Response
 from bmdx_pipe import (
     annotate_missing_animals,
     backfill_missing_doses,
-    build_animal_report,
     build_clinical_obs_tables,
     build_table_data,
-    report_to_dict,
 )
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
 from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
-from pipeline.pool_fingerprints import ensure_fingerprints
 from web_routes.section_serializers import _build_clinical_obs_section
 from pipeline.integrated_io import _load_integrated, load_integrated, save_integrated
 from pipeline.cache_plumbing import (
@@ -89,6 +86,9 @@ from pipeline.processing_helpers import (
     apply_apical_filters,
     prune_card_sexes,
 )
+from workflow.errors import StepError
+from workflow.store import DiskPoolStore
+from workflow.steps import generate_animal_report_step
 
 
 logger = logging.getLogger(__name__)
@@ -1243,50 +1243,19 @@ async def api_generate_animal_report(dtxsid: str):
     If no fingerprints are cached, re-fingerprints all files first.
 
     Returns the full AnimalReport as JSON.
+
+    ADR-0014 (step 2): logic lives in workflow.steps.generate_animal_report_step;
+    this handler is the thin transport layer. The step is blocking (xlsx/bm2
+    parsing), so it runs in a thread executor to keep the event loop free.
     """
-    session_path = _session_dir(dtxsid)
-    files_dir = session_path / "files"
-
-    if not files_dir.exists():
-        return JSONResponse(
-            {"error": "No files directory found for this session"},
-            status_code=404,
-        )
-
-    # Ensure we have fingerprints -- re-fingerprint if the pool is empty.
-    # This can happen if the server restarted since the last validation.
-    fps = ensure_fingerprints(dtxsid)
-
-    if not fps:
-        return JSONResponse(
-            {"error": "No fingerprinted files found -- upload files first"},
-            status_code=400,
-        )
-
-    # Build the animal report in a thread executor to avoid blocking
-    # the event loop (xlsx/bm2 parsing can take a few seconds).
+    store = DiskPoolStore()
     loop = asyncio.get_running_loop()
     try:
-        report = await loop.run_in_executor(
-            None,
-            build_animal_report,
-            str(session_path),
-            fps,
+        report_dict = await loop.run_in_executor(
+            None, lambda: generate_animal_report_step(dtxsid, store)
         )
-    except Exception as e:
-        logger.exception("Failed to build animal report for %s", dtxsid)
-        return JSONResponse(
-            {"error": f"Animal report generation failed: {e}"},
-            status_code=500,
-        )
-
-    # Serialize and persist to disk
-    report_dict = report_to_dict(report)
-    report_path = session_path / "animal_report.json"
-    report_path.write_text(
-        json.dumps(report_dict, indent=2, default=str),
-        encoding="utf-8",
-    )
+    except StepError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
 
     return Response(
         content=orjson.dumps(report_dict),

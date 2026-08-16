@@ -181,9 +181,11 @@ def mock_bmdx_pipe():
     (e.g., mock_bmdx_pipe.integrate_pool.return_value = {...}).
     """
     patches = {
-        # IntegrateProject.java — merges files into unified BMDProject
+        # IntegrateProject.java — merges files into unified BMDProject.
+        # Patched at workflow.steps (ADR-0014 step 2 moved the call site there
+        # from web_routes.pool_routes when the handler was unwrapped).
         "integrate_pool": patch(
-            "web_routes.pool_routes.integrate_pool",
+            "workflow.steps.integrate_pool",
             return_value={"doseResponseExperiments": [], "_meta": {}},
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
