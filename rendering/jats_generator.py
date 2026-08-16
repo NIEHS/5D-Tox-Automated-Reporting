@@ -54,6 +54,8 @@ from rendering.render_common import (
     resolve_narrative_content,
     inline_plain_text,
     normalize_inline,
+    is_protected,
+    resolve_protection,
     INLINE_EXT_LINK,
     apical_table_plan,
     incidence_table_plan,
@@ -560,6 +562,26 @@ def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
 
 
 def _append_node(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """Append `node`'s contribution to `parent`, then mark it if guarded.
+
+    Thin wrapper over `_append_node_content` (the actual projection).  ADR-0014
+    step 5: when the node's pre-resolved guard level is >= GUARDED, an XML COMMENT
+    marker is inserted before the first element the node contributed — the same
+    comment-marker convention as `_todo`, and DTD-/StyleChecker-safe (comments are
+    content-model-exempt).  No protection map ⇒ no marker ⇒ byte-identical.  The
+    child recursion runs inside `_append_node_content`, so each nested node gets
+    its own marker independently."""
+    before = len(parent)
+    _append_node_content(parent, node, data)
+    level = resolve_protection(node.id, data)
+    if is_protected(level) and len(parent) > before:
+        marker = etree.Comment(
+            f" protected id={node.id} level={level.name.lower()} "
+        )
+        parent[before].addprevious(marker)
+
+
+def _append_node_content(parent: etree._Element, node: DocNode, data: dict) -> None:
     """Append `node`'s contribution to `parent` (<body> or a <sec>), recursively,
     keeping every container within the JATS (blocks)*, sec* content model."""
     nt = node.node_type

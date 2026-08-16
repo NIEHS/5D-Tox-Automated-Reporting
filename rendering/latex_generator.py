@@ -85,6 +85,8 @@ from rendering.render_common import (
     INLINE_EXT_LINK,
     assert_dispatch_covers,
     walk_emit,
+    resolve_protection,
+    is_protected,
     LATEX_OMITS,
     incidence_table_plan,
     apical_table_plan,
@@ -1367,6 +1369,60 @@ def _apply_override(generated: str, overrides: dict, anchor_id: str, data: dict)
     return override.get("latex_region", generated)
 
 
+# ADR-0014 step 5: the guarded-region wrapper is a pair of ZERO-argument
+# commands (not a braced ``\cmd{...}`` argument) so a chunk containing blank-line
+# paragraph breaks, floats, or tables wraps safely — the same reason the ADR-0005
+# round-trip anchors are comment sentinels rather than a macro argument.  They
+# default to the identity (draw nothing) via ``\providecommand`` in the preamble
+# (see _protection_preamble); a class file may ``\renewcommand`` them to draw a
+# real visual mark.  Injected ONLY when a protection map is present, so a report
+# with no protection is byte-identical to before this feature.
+_PROTECT_BEGIN_CMD = r"\rlmprotectedbegin"
+_PROTECT_END_CMD = r"\rlmprotectedend"
+
+
+def _protection_preamble(data: dict) -> str:
+    r"""
+    The ``\providecommand`` identity definitions for the protection wrapper, or
+    "" when no protection map is present (the byte-identical default).
+
+    Emitted once at the top of the body when ``data["protection"]`` is present so
+    the zero-arg begin/end wrappers resolve; ``\providecommand`` keeps it inert if
+    the class already defines a real visual mark.
+    """
+    if not data.get("protection"):
+        return ""
+    return (
+        "%% ADR-0014 protection marks: identity by default; a class file may\n"
+        "%% \\renewcommand these to draw a visual guard mark on protected regions.\n"
+        f"\\providecommand{{{_PROTECT_BEGIN_CMD}}}{{}}\n"
+        f"\\providecommand{{{_PROTECT_END_CMD}}}{{}}\n"
+    )
+
+
+def _apply_protection(chunk: str, node_id: str, data: dict) -> str:
+    r"""
+    Mark a guarded node's region with the ADR-0014 protection sentinel + wrapper.
+
+    Mirrors _apply_override's layering: reads a pre-resolved per-node guard level
+    off ``data["protection"]`` (via render_common.resolve_protection) and, only
+    when it is >= GUARDED, brackets the chunk in a COMMENT sentinel (inert in the
+    PDF, greppable in the .tex) plus the zero-arg ``\rlmprotectedbegin`` /
+    ``\rlmprotectedend`` wrapper commands.  Those default to identity in the
+    preamble (see _protection_preamble), so this compiles under ``tect`` whether
+    or not the class file overrides them with a real visual mark.
+
+    OPEN (no protection entry / absent map) returns the chunk UNCHANGED — the
+    byte-identical default.  The comment carries the level NAME so a reader / the
+    round-trip reconciler can see the intensity without re-deriving it.
+    """
+    level = resolve_protection(node_id, data)
+    if not is_protected(level):
+        return chunk
+    marker = f"%% @protected node={node_id} level={level.name}"
+    return f"{marker}\n{_PROTECT_BEGIN_CMD}\n{chunk}\n{_PROTECT_END_CMD}"
+
+
 # ---------------------------------------------------------------------------
 # Per-content-type layout styling (the LaTeX half of the abstract spec)
 # ---------------------------------------------------------------------------
@@ -1569,6 +1625,12 @@ def _walk_latex(node: DocNode, data: dict) -> list[str]:
         # one.  Applied AFTER the orientation wrap so the override region matches
         # exactly what sits between the sentinels.
         chunk = _apply_override(chunk, data.get("overrides") or {}, n.id, data)
+        # ADR-0014 step 5: mark the region when the node is guarded.  Applied
+        # after the override (protection is a property of the NODE, independent
+        # of whether a human owns the region) and INSIDE the round-trip anchors
+        # (the anchor stays the outermost node boundary the reconciler keys on).
+        # No protection entry → chunk unchanged → byte-identical.
+        chunk = _apply_protection(chunk, n.id, data)
         # Then bracket the whole node block in begin/end sentinels keyed to
         # node.id, so the round-trip reconciler can attribute an edited region
         # back to this node.  Inert in the PDF.
@@ -1728,6 +1790,11 @@ def generate_latex(
             body = f"% No node found for section_filter={section_filter!r}\n"
             return _fragment_skeleton(body)
         body_chunks = _walk_latex(node, data)
+        # ADR-0014 step 5: define the protection wrapper for the fragment too,
+        # only when a protection map is present (else byte-identical).
+        preamble = _protection_preamble(data)
+        if preamble:
+            body_chunks.insert(0, preamble.rstrip("\n"))
         return _fragment_skeleton("\n\n".join(body_chunks))
 
     # ── Full-report path ─────────────────────────────────────────────
@@ -1781,6 +1848,11 @@ def generate_report_body(data: dict, tree: "list | None" = None) -> str:
     nodes = tree if tree is not None else DOCUMENT_TREE
     body_first_id = first_body_node_id(nodes)
     body_chunks: list[str] = []
+    # ADR-0014 step 5: the protection wrapper's identity definitions, only when a
+    # protection map is present (else "" → byte-identical output).
+    preamble = _protection_preamble(data)
+    if preamble:
+        body_chunks.append(preamble.rstrip("\n"))
     for top in nodes:
         if top.id == body_first_id:
             body_chunks.append("\\clearpage\n\\pagenumbering{arabic}")

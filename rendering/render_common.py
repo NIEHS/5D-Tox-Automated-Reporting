@@ -47,6 +47,13 @@ from tables.table_builder_common import format_mean_se_display, format_display_n
 # document_tree / the renderers / this module, so importing it here keeps
 # render_common a leaf (the tree walk itself is still passed in, never imported).
 from document_model.render_capabilities import landscape_requested
+# Guard is the DERIVED edit-hardness scale (ADR-0015).  rendering may import
+# workflow (workflow must never import rendering); this pulls in only the small
+# GuardLevel enum, no engine/store, so render_common stays a leaf on the render
+# side.  resolve_protection (below) reads a pre-resolved per-node level map off
+# `data` — step 5 renders the mark; computing the level from facts is another
+# step's job.
+from workflow.guard import GuardLevel
 
 import math
 import re
@@ -1327,3 +1334,70 @@ def walk_emit(
 
     walk([node], _visit)
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# Per-node protection mark (ADR-0014 step 5) — the render-channel half.
+# ---------------------------------------------------------------------------
+# The workflow's human-facing guard (workflow.guard.human_guard) is the intensity
+# of the "protected" visual mark; step 5 only SURFACES a pre-resolved per-node
+# level so every output surface can draw it.  The level map is threaded on the
+# report data under data["protection"] — a plain {node_id -> GuardLevel} dict,
+# keyed by the globally-unique DocNode.id (the same key the ADR-0005 override
+# overlay uses).  Computing the level from facts is deferred to a later step;
+# this step never touches facts.  An ABSENT or empty map ⇒ every node resolves
+# to OPEN ⇒ no mark ⇒ byte-identical output to before this feature (the same
+# no-op safety property the layout-style / override overlays guarantee).
+
+def resolve_protection(node_id: str, data: dict) -> GuardLevel:
+    """Look up the pre-resolved human-facing guard level for one node.
+
+    Reads ``data["protection"]`` (a ``{node_id -> level}`` map) and returns the
+    stored level for ``node_id``, or ``GuardLevel.OPEN`` when the map is absent,
+    empty, or has no entry for this node.  The stored value is tolerated as a
+    ``GuardLevel``, a plain ``int`` (its numeric value), or a ``str`` (its member
+    NAME, case-insensitive) — the map is produced by another step / surface and
+    may arrive JSON-round-tripped, so this stays permissive.  An unrecognized
+    value degrades to OPEN (no mark) rather than raising: a malformed protection
+    entry must never break a render.
+
+    Pure and dependency-light: no I/O, no fact computation, no mutation of
+    ``data`` — just a lookup + coercion.
+    """
+    protection = data.get("protection")
+    if not protection:
+        return GuardLevel.OPEN
+    raw = protection.get(node_id)
+    if raw is None:
+        return GuardLevel.OPEN
+    return _coerce_guard_level(raw)
+
+
+def _coerce_guard_level(raw) -> GuardLevel:
+    """Coerce a stored protection value to a GuardLevel; OPEN on anything odd."""
+    if isinstance(raw, GuardLevel):
+        return raw
+    if isinstance(raw, bool):
+        # bool is an int subclass; treat True as GUARDED, False as OPEN rather
+        # than as the int 1/0 (a stored boolean flag reads as "protected?").
+        return GuardLevel.GUARDED if raw else GuardLevel.OPEN
+    if isinstance(raw, int):
+        try:
+            return GuardLevel(raw)
+        except ValueError:
+            return GuardLevel.OPEN
+    if isinstance(raw, str):
+        try:
+            return GuardLevel[raw.strip().upper()]
+        except KeyError:
+            # Also accept a stringified int ("1") for JSON-lossy transports.
+            try:
+                return GuardLevel(int(raw.strip()))
+            except (ValueError, TypeError):
+                return GuardLevel.OPEN
+    return GuardLevel.OPEN
+
+
+def is_protected(level: GuardLevel) -> bool:
+    """Does this level warrant a visual protection mark? (>= GUARDED)."""
+    return level >= GuardLevel.GUARDED

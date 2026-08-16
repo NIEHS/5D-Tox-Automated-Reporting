@@ -88,6 +88,8 @@ from rendering.render_common import (
     inline_plain_text,
     INLINE_EXT_LINK,
     incidence_table_plan,
+    is_protected,
+    resolve_protection,
     sample_counts_table,
     table_caption as _table_caption,
 )
@@ -459,6 +461,58 @@ def _add_toc_bookmark(paragraph, name: str, bid: int) -> None:
     else:
         p.insert(0, start)
     p.append(end)
+
+
+# ADR-0014 step 5: the docx protection cue.  A guarded paragraph gets a light
+# shaded background (w:shd fill) — a benign, python-docx-safe pPr child that Word
+# and LibreOffice both honour and that leaves the paragraph/run counts unchanged
+# (so it never perturbs the layout-style overlay or TOC bookmarking that key off
+# doc.paragraphs slices).  INFORM-only, mirroring the other surfaces.  Published
+# reads louder (amber) than guarded (a light green tint).
+_PROTECTION_SHADE = {
+    "guarded": "E6F4EA",
+    "published": "FDF3E1",
+}
+
+
+def _apply_protection_docx(paragraphs, node_id: str, data: dict) -> None:
+    """Shade a guarded node's paragraphs to surface the ADR-0014 protection mark.
+
+    Reads the pre-resolved per-node guard level off ``data["protection"]`` (via
+    render_common.resolve_protection).  When it is >= GUARDED, adds a ``<w:shd>``
+    fill to each of ``paragraphs`` (the paragraphs this node's handler emitted,
+    snapshotted by the caller exactly like the layout-style overlay).  OPEN (no
+    entry / absent map) is a NO-OP — no property added — so a document with no
+    protection map is byte-identical to before this feature.
+    """
+    level = resolve_protection(node_id, data)
+    if not is_protected(level):
+        return
+    fill = _PROTECTION_SHADE.get(level.name.lower(), _PROTECTION_SHADE["guarded"])
+    for paragraph in paragraphs:
+        pPr = paragraph._p.get_or_add_pPr()
+        if pPr.find(qn("w:shd")) is not None:
+            continue
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill)
+        # <w:shd> sits after pBdr and before tabs/spacing/ind/jc… in CT_PPr — a
+        # bare append lands it after those and gets SILENTLY DROPPED on load (the
+        # same schema-order trap _set_section_page_numbering / _mark_fields_dirty
+        # document).  Insert before the first of its schema successors.
+        _insert_in_schema_order(
+            pPr, shd,
+            successors=("w:tabs", "w:suppressAutoHyphens", "w:kinsoku",
+                        "w:wordWrap", "w:overflowPunct", "w:topLinePunct",
+                        "w:autoSpaceDE", "w:autoSpaceDN", "w:bidi",
+                        "w:adjustRightInd", "w:snapToGrid", "w:spacing",
+                        "w:ind", "w:contextualSpacing", "w:mirrorIndents",
+                        "w:suppressOverlap", "w:jc", "w:textDirection",
+                        "w:textAlignment", "w:textboxTightWrap", "w:outlineLvl",
+                        "w:divId", "w:cnfStyle", "w:rPr", "w:sectPr",
+                        "w:pPrChange"),
+        )
 
 
 def _booktabs_table(
@@ -1867,6 +1921,10 @@ def _walk_docx_tree(
             style = resolve_layout_style(layout_cfg, n.node_type, n.id)
             if style:
                 _layout_to_docx(doc.paragraphs[before:], style)
+        # ADR-0014 step 5: shade this node's paragraphs when it is guarded.  Uses
+        # the SAME before/after paragraph snapshot as the layout overlay; a no-op
+        # when no protection map is present (byte-identical default).
+        _apply_protection_docx(doc.paragraphs[before:], n.id, data)
         # Bookmark this node's FIRST emitted paragraph when it is a TOC target, so
         # the Contents PAGEREF for `n.id` has an anchor.  The first paragraph a
         # heading node emits IS its heading (doc.paragraphs[before]).

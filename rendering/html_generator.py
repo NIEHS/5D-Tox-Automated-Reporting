@@ -67,6 +67,8 @@ from rendering.render_common import (
     INLINE_EXT_LINK,
     assert_dispatch_covers,
     walk_emit,
+    resolve_protection,
+    is_protected,
     incidence_table_plan,
     apical_table_plan,
     bmd_summary_plan,
@@ -197,6 +199,19 @@ em.pending {
 }
 .override-edited {
   border-left: 3px solid #2563eb;
+}
+/* ADR-0014 step 5: the per-node protection mark.  A guarded node (final /
+   manually protected) gets a subtle left rule + tint; a published node reads
+   louder.  The mark is INFORM-only (workflow.guard axis 2) — never a wall — so
+   it stays a light, non-intrusive cue.  Absent protection → no wrapper div → no
+   rule, byte-identical to before this feature. */
+.protected {
+  border-left: 3px solid #059669;
+  padding-left: 8px;
+}
+.protected-published {
+  border-left-color: #b45309;
+  background: #fffbeb;
 }
 table.niehstable {
   border-collapse: collapse;
@@ -1293,6 +1308,33 @@ def _apply_override_html(chunk: str, anchor_id: str, data: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Per-node protection mark (ADR-0014 step 5) — preview side
+# ---------------------------------------------------------------------------
+
+def _apply_protection_html(chunk: str, node_id: str, data: dict) -> str:
+    """
+    Wrap a guarded node's HTML in a .protected marker div for the preview.
+
+    Mirrors the .override-edited/.override-stale class pattern: reads the
+    pre-resolved per-node guard level off ``data["protection"]`` (via
+    render_common.resolve_protection) and, only when it is >= GUARDED, wraps the
+    chunk in ``<div class="protected protected-<levelname>">…</div>``.  The CSS
+    for these classes sits beside the override rules in the document <style>
+    block.  OPEN (no entry / absent map) returns the chunk UNCHANGED — the
+    byte-identical default.
+    """
+    level = resolve_protection(node_id, data)
+    if not is_protected(level):
+        return chunk
+    cls = f"protected protected-{level.name.lower()}"
+    return (
+        f'<div class="{cls}" '
+        f'data-protection-level="{level.name.lower()}" '
+        f'title="Protected ({level.name.lower()})">{chunk}</div>'
+    )
+
+
+# ---------------------------------------------------------------------------
 # Tree walk
 # ---------------------------------------------------------------------------
 
@@ -1445,8 +1487,14 @@ def _walk_html(node: DocNode, data: dict) -> list[str]:
         # styled node still rotates and any override substitution sees final markup.
         wrap_style=_wrap_style,
         # ADR-0005 node-grain override: mark/render a region a human edited in
-        # Overleaf instead of silently showing the regenerated content.
-        wrap_post=lambda n, chunk: _apply_override_html(chunk, n.id, data),
+        # Overleaf instead of silently showing the regenerated content.  ADR-0014
+        # step 5: then wrap a guarded node in its .protected marker (a property of
+        # the NODE, applied outside the override so the mark surrounds whichever
+        # content — generated or overridden — is shown).  No protection entry →
+        # chunk unchanged → byte-identical.
+        wrap_post=lambda n, chunk: _apply_protection_html(
+            _apply_override_html(chunk, n.id, data), n.id, data
+        ),
     )
 
 
