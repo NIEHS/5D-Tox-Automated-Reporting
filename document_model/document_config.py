@@ -50,6 +50,56 @@ def session_styles_path(dtxsid: str) -> Path:
     return SESSIONS_DIR / dtxsid / _SESSION_STYLES_FILE
 
 
+# ---------------------------------------------------------------------------
+# Structure / style PROVENANCE (ADR-0014 step 7).
+#
+# document.yaml and styles.yaml were plain-overwrite — a per-session structure or
+# style edit erased the prior version with no record. Under the reports-never-
+# terminate model ("record how the structure was built"), that history must be
+# kept, mirroring how session_store.save_section archives each prior section
+# version before overwrite. Each save copies the CURRENT file (if any) into a
+# timestamped file under sessions/<dtxsid>/history/<kind>/ before writing the new
+# one. Behavior-preserving for readers: the canonical file stays where it was.
+# ---------------------------------------------------------------------------
+
+# history/ subdirectory name per config kind (siblings of section history dirs).
+_DOCUMENT_HISTORY = "_document_yaml"
+_STYLES_HISTORY = "_styles_yaml"
+
+
+def _history_dir(dtxsid: str, kind: str) -> Path:
+    """The history directory for a config kind (mirrors session_store's layout:
+    sessions/<dtxsid>/history/<kind>/). Underscore-prefixed kind names keep these
+    from colliding with per-section history dirs (which are named by section key)."""
+    return SESSIONS_DIR / dtxsid / "history" / kind
+
+
+def _archive_before_overwrite(path: Path, history_dir: Path) -> None:
+    """Copy `path`'s current contents into `history_dir` under a timestamped name,
+    before it is overwritten. No-op when the file doesn't exist yet (first save).
+
+    Mirrors session_store.save_section's archive step: ISO timestamp with colons
+    → hyphens for a filesystem-safe name; the file suffix is preserved so an
+    archived .yaml stays a .yaml.
+    """
+    if not path.exists():
+        return
+    from pipeline.session_store import now_iso
+    safe_ts = now_iso().replace(":", "-")
+    history_dir.mkdir(parents=True, exist_ok=True)
+    (history_dir / f"{safe_ts}{path.suffix}").write_text(
+        path.read_text(encoding="utf-8"), encoding="utf-8",
+    )
+
+
+def _list_history(history_dir: Path) -> list[str]:
+    """Archived versions in a history dir, oldest→newest by filename (timestamp-
+    sortable). Empty when there's no history yet."""
+    if not history_dir.exists():
+        return []
+    return sorted(p.name for p in history_dir.glob("*") if p.is_file())
+
+
 def _parse_document_yaml(text: str) -> list[dict]:
     """
     Parse a document-structure YAML STRING into the node-entry list.
@@ -140,6 +190,9 @@ def save_session_document_yaml(dtxsid: str, text: str) -> None:
     _tree_from_document_list(_parse_document_yaml(text))  # validate; raises on failure
     path = session_document_path(dtxsid)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # ADR-0014 step 7: archive the prior structure before overwriting, so "how the
+    # structure was built" is recorded (reports never terminate). No-op on first save.
+    _archive_before_overwrite(path, _history_dir(dtxsid, _DOCUMENT_HISTORY))
     path.write_text(text, encoding="utf-8")
 
 
@@ -257,7 +310,62 @@ def save_session_layout_style(dtxsid: str, text: str) -> None:
     _parse_styles_yaml(text)  # validate; raises on failure
     path = session_styles_path(dtxsid)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # ADR-0014 step 7: archive the prior styles before overwriting (same provenance
+    # discipline as the structure YAML above). No-op on first save.
+    _archive_before_overwrite(path, _history_dir(dtxsid, _STYLES_HISTORY))
     path.write_text(text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Structure / style history access (ADR-0014 step 7).
+# The archived versions are only provenance if they're reachable — these list
+# and read them, and restore one as the current file (itself archiving the
+# now-current version first, so a restore is just another recorded edit).
+# ---------------------------------------------------------------------------
+
+def list_document_history(dtxsid: str) -> list[str]:
+    """Archived document.yaml versions, oldest→newest (timestamped filenames)."""
+    return _list_history(_history_dir(dtxsid, _DOCUMENT_HISTORY))
+
+
+def list_styles_history(dtxsid: str) -> list[str]:
+    """Archived styles.yaml versions, oldest→newest (timestamped filenames)."""
+    return _list_history(_history_dir(dtxsid, _STYLES_HISTORY))
+
+
+def read_document_history(dtxsid: str, version: str) -> str | None:
+    """Raw text of one archived document.yaml version, or None if absent."""
+    p = _history_dir(dtxsid, _DOCUMENT_HISTORY) / version
+    return p.read_text(encoding="utf-8") if p.is_file() else None
+
+
+def read_styles_history(dtxsid: str, version: str) -> str | None:
+    """Raw text of one archived styles.yaml version, or None if absent."""
+    p = _history_dir(dtxsid, _STYLES_HISTORY) / version
+    return p.read_text(encoding="utf-8") if p.is_file() else None
+
+
+def restore_document_version(dtxsid: str, version: str) -> None:
+    """Make an archived document.yaml version current again.
+
+    Routes through save_session_document_yaml, so the restore is itself
+    validated AND archives the now-current version first — a restore is just
+    another recorded structure edit, not a history rewrite. Raises ValueError if
+    the archived version is missing or (somehow) no longer valid.
+    """
+    text = read_document_history(dtxsid, version)
+    if text is None:
+        raise ValueError(f"no archived document version {version!r} for {dtxsid}")
+    save_session_document_yaml(dtxsid, text)
+
+
+def restore_styles_version(dtxsid: str, version: str) -> None:
+    """Make an archived styles.yaml version current again (see
+    restore_document_version — same validate-and-archive discipline)."""
+    text = read_styles_history(dtxsid, version)
+    if text is None:
+        raise ValueError(f"no archived styles version {version!r} for {dtxsid}")
+    save_session_layout_style(dtxsid, text)
 
 
 # ---------------------------------------------------------------------------

@@ -103,6 +103,90 @@ def test_default_document_yaml_parses_to_full_tree(sessions_dir):
     assert len(tree) == len(DOCUMENT_TREE)
 
 
+# ---------------------------------------------------------------------------
+# Structure / style PROVENANCE (ADR-0014 step 7): archive-before-overwrite.
+# ---------------------------------------------------------------------------
+
+def test_first_document_save_leaves_no_history(sessions_dir):
+    # Nothing to archive on the first save — the canonical file exists, history
+    # is empty (byte-identical behavior for a session edited only once).
+    d = "DTXSID_HIST1"
+    dc.save_session_document_yaml(d, dc.default_document_yaml())
+    assert dc.list_document_history(d) == []
+
+
+def test_document_edit_archives_prior_version(sessions_dir):
+    d = "DTXSID_HIST2"
+    v1 = dc.default_document_yaml()
+    v2 = _reorder_body_yaml()
+    dc.save_session_document_yaml(d, v1)
+    dc.save_session_document_yaml(d, v2)
+
+    history = dc.list_document_history(d)
+    assert len(history) == 1  # the prior (v1) version was archived
+    # The canonical file is the latest; the archive holds the prior text.
+    assert dc.load_session_document_yaml(d) == v2
+    assert dc.read_document_history(d, history[0]) == v1
+
+
+def test_document_restore_reinstates_and_records(sessions_dir):
+    d = "DTXSID_HIST3"
+    v1 = dc.default_document_yaml()
+    v2 = _reorder_body_yaml()
+    dc.save_session_document_yaml(d, v1)
+    dc.save_session_document_yaml(d, v2)  # history: [v1]
+
+    v1_archived = dc.list_document_history(d)[0]
+    dc.restore_document_version(d, v1_archived)
+
+    # v1 is current again; the restore itself archived v2 (a recorded edit, not a
+    # history rewrite) → history now holds both prior versions.
+    assert dc.load_session_document_yaml(d) == v1
+    assert len(dc.list_document_history(d)) == 2
+
+
+def test_restore_missing_version_raises(sessions_dir):
+    d = "DTXSID_HIST4"
+    dc.save_session_document_yaml(d, dc.default_document_yaml())
+    with pytest.raises(ValueError):
+        dc.restore_document_version(d, "2020-01-01T00-00-00+00-00.yaml")
+
+
+def test_styles_edit_archives_prior_version(sessions_dir):
+    d = "DTXSID_HIST5"
+    v1 = dc.default_layout_style_yaml()
+    dc.save_session_layout_style(d, v1)
+    assert dc.list_styles_history(d) == []  # first save, nothing archived
+
+    # A second (identical-shape but re-saved) version archives the prior one.
+    dc.save_session_layout_style(d, v1)
+    history = dc.list_styles_history(d)
+    assert len(history) == 1
+    assert dc.read_styles_history(d, history[0]) == v1
+
+
+def test_styles_restore_reinstates(sessions_dir):
+    d = "DTXSID_HIST6"
+    v1 = dc.default_layout_style_yaml()
+    dc.save_session_layout_style(d, v1)
+    dc.save_session_layout_style(d, v1)  # archive v1
+    archived = dc.list_styles_history(d)[0]
+    dc.restore_styles_version(d, archived)
+    assert dc.load_session_layout_style(d) is not None
+
+
+def test_document_and_styles_history_are_separate(sessions_dir):
+    # The two config kinds archive into distinct history dirs — a structure edit
+    # must not appear in the styles history and vice versa.
+    d = "DTXSID_HIST7"
+    dc.save_session_document_yaml(d, dc.default_document_yaml())
+    dc.save_session_document_yaml(d, _reorder_body_yaml())
+    dc.save_session_layout_style(d, dc.default_layout_style_yaml())
+
+    assert len(dc.list_document_history(d)) == 1
+    assert dc.list_styles_history(d) == []
+
+
 class TestDocumentConfigRoutes:
     """GET/POST /api/document-config/{dtxsid} through the real FastAPI app."""
 
