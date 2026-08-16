@@ -144,6 +144,19 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 _NTP_CACHE_SCHEMA_VERSION = 2  # bumped: schema repoints bMDResult refs onto truth siblings
 
 
+# The BMDS *modeling method* version — the algorithm/settings that turn raw
+# dose-response numbers into BMD/BMDL/BMDU.  _hash_bmds hashes only the DATA
+# (doses/means/SEs/Ns), so recomputing BMDs with a NEW algorithm or new modeling
+# settings on IDENTICAL data would otherwise yield an identical hash and serve
+# STALE cached BMDs (the currency gap ADR-0014 step 6 closes).  Fold this into
+# the BMDS hash and BUMP IT BY HAND whenever the modeling method changes — a
+# bump invalidates ALL cached BMDs even when the underlying dose-response data
+# is unchanged, because the model that produced them changed.  Because
+# _hash_bmd_summary folds in bmds_hash (and _hash_sections chains ntp_hash),
+# bumping here also cascades the BMD-summary and narrative caches.
+_BMDS_METHOD_VERSION = 1  # initial: pybmds modeling method/settings v1
+
+
 def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     """
     Hash inputs that affect NTP stats computation.
@@ -318,6 +331,11 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
     Uses CONTENT of _bmds_input dicts (doses, means, SEs, Ns) — NOT the
     ntp_hash.  This means BMDS stays cached even when bmd_stat changes,
     because the underlying dose-response data hasn't changed.
+
+    _BMDS_METHOD_VERSION is folded in so that a change to the modeling
+    algorithm/settings (which does NOT touch the dose-response numbers) still
+    forces a cache miss — otherwise recomputing BMDs with a new method on
+    identical data would collide with the old hash and serve stale results.
     """
     # Sort by endpoint key for deterministic hashing
     content = []
@@ -329,7 +347,10 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
             "means": inp.get("means", []),
             "stdevs": inp.get("stdevs", []),
         })
-    key = json.dumps(content, sort_keys=True)
+    key = json.dumps({
+        "method_version": _BMDS_METHOD_VERSION,
+        "content": content,
+    }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
