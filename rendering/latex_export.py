@@ -689,6 +689,17 @@ def load_session_data(
     from roundtrip.overrides import load_overrides
     data["overrides"] = load_overrides(dtxsid)
 
+    # ── Per-node protection marks (ADR-0014 step 5 render channel, 4b) ─
+    # Derive {node.id -> GuardLevel} from the ownership state overlaid onto
+    # `data` (approved / user-edited sections), keyed by the SAME node ids the
+    # generator emits. render_common.resolve_protection reads it under
+    # data["protection"]; an all-OPEN result is omitted → {} → byte-identical.
+    from document_model.document_tree import DOCUMENT_TREE as _DOC_TREE
+    from workflow.ownership import protection_map
+    _protection = protection_map(_DOC_TREE, data)
+    if _protection:
+        data["protection"] = _protection
+
     # ── Manual Table of Contents / Tables list ────────────────────────
     # The docx and HTML surfaces render a STATIC contents list from
     # data["toc_entries"] / data["table_entries"] (LaTeX uses native

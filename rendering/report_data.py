@@ -462,6 +462,18 @@ def marshal_export_data(
         from roundtrip.overrides import load_overrides
         data["overrides"] = load_overrides(dtxsid)
 
+    # Per-node protection marks (ADR-0014 step 5 render channel, wired by 4b).
+    # Derive {node.id -> GuardLevel} from the ownership state already overlaid
+    # onto `data` (approved/user-edited sections), keyed by the SAME node ids the
+    # generators emit. render_common.resolve_protection reads this under
+    # data["protection"]; an all-OPEN result is omitted → {} → byte-identical.
+    # report_published is False here (the web preview has no report-level publish
+    # signal yet — a later step feeds it); the floor simply doesn't apply.
+    from workflow.ownership import protection_map
+    protection = protection_map(active_tree, data)
+    if protection:
+        data["protection"] = protection
+
     return data
 
 

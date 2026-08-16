@@ -1054,6 +1054,15 @@ async def generate_genomics_narrative_async(
         # this organ×sex.  Skip enrichment recompute AND the LLM call —
         # the narrative is the user's to edit/approve/unlock; we never
         # silently regenerate over it.
+        #
+        # ADR-0015 §Consolidation (deferred follow-up): this "return the store,
+        # full stop" refusal + the `force` escape hatch above are the genomics
+        # instance of the machine-guard predicate now unified in
+        # workflow.ownership.may_machine_write(section, force=force).  Converging
+        # THIS path onto it requires migrating the ad-hoc organ×sex narrative
+        # cache (store 3) onto the section-fact shape may_machine_write reads —
+        # explicitly out of scope for the narrow 4b step (predicate + render
+        # wiring only).  Left as-is; the predicate is the target to converge on.
         if (
             cached
             and cached.get("gene_set_narrative")

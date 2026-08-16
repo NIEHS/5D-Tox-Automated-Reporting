@@ -172,17 +172,32 @@ def _shaded_paragraph_count(docx_bytes: bytes) -> int:
     return n
 
 
-def test_docx_empty_map_is_byte_identical(scaffold):
-    baseline = generate_docx(scaffold)
-    assert generate_docx({**scaffold, "protection": {}}) == baseline
+def _docx_document_xml(docx_bytes: bytes) -> bytes:
+    """The word/document.xml payload — the meaningful content, WITHOUT the zip
+    envelope. A .docx is a zip and its entries embed wall-clock mod-times (2s
+    granularity), so comparing raw archive bytes is timing-flaky; comparing the
+    document part is both timestamp-free and what "byte-identical output" actually
+    means for our purposes."""
+    import zipfile
+
+    with zipfile.ZipFile(BytesIO(docx_bytes)) as z:
+        return z.read("word/document.xml")
+
+
+def test_docx_empty_map_is_content_identical(scaffold):
+    # Compare the document part, not the zip bytes (which carry flaky timestamps).
+    baseline = _docx_document_xml(generate_docx(scaffold))
+    with_empty = _docx_document_xml(generate_docx({**scaffold, "protection": {}}))
+    assert with_empty == baseline
 
 
 def test_docx_mark_appears_when_guarded(scaffold, guarded):
     baseline = generate_docx(scaffold)
     marked = generate_docx(guarded)
-    # The bytes differ, the doc still re-opens, and the guarded node's paragraphs
-    # are now shaded (none were in the baseline).
-    assert marked != baseline
+    # The document content differs (compared timestamp-free), the doc still
+    # re-opens, and the guarded node's paragraphs are now shaded (none were in the
+    # baseline).
+    assert _docx_document_xml(marked) != _docx_document_xml(baseline)
     assert _shaded_paragraph_count(baseline) == 0
     assert _shaded_paragraph_count(marked) >= 1
     # Still a valid, re-openable .docx.

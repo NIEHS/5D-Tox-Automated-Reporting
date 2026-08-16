@@ -1,8 +1,12 @@
 # 0015 — Label + guard model: facts humans assert, consequences the system derives
 
 - **Status:** Accepted (2026-08-16) for the model + `workflow/labels.py` +
-  `workflow/guard.py`. **Proposed** for the store consolidation (§Consolidation,
-  step 4b) — that part changes render-surface behavior and is deferred.
+  `workflow/guard.py`, AND for the guard PREDICATE + render wiring
+  (`workflow/ownership.py`, step 4b-narrow, 2026-08-16). **Proposed** still for the
+  content-STORE convergence (§Consolidation "deferred") — migrating the ad-hoc
+  genomics narrative store onto `roundtrip/overrides.py` and deduping the
+  "override wins" merge; that part changes genomics render behavior and needs the
+  genomics render-parity snapshot tests, so it remains a follow-up.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0014](0014-ui-agnostic-workflow-engine.md) (the engine this is
   a layer of; its concept-model caveat enumerates the six kinds — labels are #4,
@@ -110,19 +114,46 @@ graph are handoff step 6, not this ADR.
 - The model is pure and fully unit-tested (`tests/unit/test_workflow_labels_guard.py`,
   30 cases) with no I/O — it composes with any store.
 
-## Consolidation (step 4b — Proposed, deferred)
+## Consolidation
 
-The three existing override stores must converge onto this one predicate, with
-`roundtrip/overrides.py` (the cleanest — real `set/clear/get_override` +
-`region_hash` for currency) as the convergence target:
+Recon found the "three stores" are not one shape — there are two separable jobs.
+Step 4b was scoped (2026-08-16, with the maintainer) to the first, lower-risk one.
 
-1. per-section `approved`/`stale` stamped in `session_routes.py`,
-2. the ADR-0005 round-trip override store,
-3. the ad-hoc genomics-narrative override JSON (duplicated across
-   `process_integrated.py`, `session_routes.py`, `llm_routes.py`).
+### 4b-narrow — the guard PREDICATE + render wiring (DONE, Accepted)
 
-This is the largest, riskiest piece — it changes behavior at render time across
-four surfaces and touches the LLM regen `force` path. It is deferred to pair with
-step 5 (render the guard) so the consolidation and its visible effect land and are
-tested together, behind the render snapshot tests. The pure model (this ADR's
-accepted part) is a prerequisite and stands alone until then.
+`workflow/ownership.py` gives every caller ONE lens on content ownership:
+
+- **The adapter** (`section_facts`) maps the on-disk section booleans
+  (`approved`/`user_edited`, with `stale` handled separately as a currency signal)
+  into the step-4a `Fact` set **at read time** — deliberately an ADAPTER, not a
+  migration (the section JSONs keep their current shape; fully reversible; no
+  session migration). Chosen over a facts-on-disk write-format change to keep the
+  step low-risk.
+- **`may_machine_write(section, *, force)`** is the single machine-guard predicate
+  that unifies the scattered checks (the genomics `force`-flag reasoning, the
+  per-surface override-presence tests, the "user-owned → never silently
+  regenerate" rule): refuse over user-owned content unless `force` (the explicit
+  Regenerate escape hatch).
+- **`protection_map(tree, data)`** wires real ownership → `data["protection"]`
+  (the map step 5's renderer surfaces), keyed by `DocNode.id`, reusing the
+  renderer's own `data_key`/`narrative_key` resolution so no node→section-key
+  mapping is reinvented. Wired into `report_data.marshal_export_data` and
+  `latex_export` beside the existing override load.
+  - **Mark semantics decided (2026-08-16):** the visual mark shows what the SYSTEM
+    won't silently overwrite (MACHINE-PROTECTED — axis 1: approved/user-edited
+    lights up NOW), not pure human maturity (axis 2, which would stay dark until a
+    `final`/`protected` fact the approve path doesn't yet write). This matches the
+    original "show what is protected content" driver and delivers visible value
+    this step. `published` still floors louder.
+  - Byte-identical safety preserved: an all-OPEN walk yields `{}` and no
+    `data["protection"]` key is set.
+
+### Content-STORE convergence (still Proposed, deferred follow-up)
+
+NOT done: migrating store (3) — the ad-hoc genomics-narrative override JSON
+(`genomics_narrative_overrides.json`, duplicated across `process_integrated.py`,
+`session_routes.py`, `llm_routes.py`) — onto `roundtrip/overrides.py`'s shape, and
+deduping the "override wins" merge. That is the larger, riskier half: it changes
+genomics render behavior across surfaces and needs genomics render-parity snapshot
+tests. The genomics `force`-path in `llm_routes.py` carries a pointer comment to
+`may_machine_write` as the convergence target; the predicate is ready for it.
