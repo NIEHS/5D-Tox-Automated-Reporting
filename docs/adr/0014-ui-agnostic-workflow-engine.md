@@ -1,7 +1,33 @@
 # 0014 — Extract a UI-agnostic workflow engine from the browser
 
-- **Status:** Proposed (2026-08-13).
+- **Status:** Proposed (2026-08-13). **Framing under revision (2026-08-16):
+  do not implement the engine yet** — see the caveat below.
 - **Deciders:** Dan Svoboda
+
+> **⚠ Concept-model caveat (2026-08-16).** A concept-nailing session after this
+> ADR was drafted established that its framing — a single `Phase`/`Action`
+> readiness machine as *the* workflow — is **too narrow**. "Phase" is only ONE of
+> six distinct kinds of concept the workflow spans, and the pool readiness machine
+> this ADR centers on turned out to be the *innermost/smallest* of them, not the
+> whole. Before the engine is built, its model must widen to the six-kind taxonomy:
+> **(1) phases** (ordered derived readiness — pool, section authoring; keep "phase"
+> here only), **(2) transforms/views** (render, preview — not phases),
+> **(3) report lifecycle** (one living bundle, MUTABLE FOREVER — nothing freezes at
+> FINAL/PUBLISHED; status = guardrails + history-capture, not an immutability
+> boundary; one snapshot, no version tree), **(4) labels** (an OPEN, per-content-
+> kind set of assertions — ladders like narrative maturity + orthogonal flags like
+> `protected`; NOT a closed status enum; `approved` splits into data-readiness vs
+> narrative-maturity; `protected` ≠ `approved`), **(5) provenance** (how content
+> was built — history dimension; structure/style edits currently have none),
+> **(6) currency** (whether a label is still valid vs its inputs — derived; stale
+> content is **BLOCKED** from advancing until a human re-blesses; generalizing the
+> trigger to methodology-change makes the derivation dependency graph load-bearing).
+> Guardrail principle: **enforce against actors that can't reason (LLM/errors/stray
+> clicks), inform the humans that can** (visual protection marks) — which pulls a
+> per-node protection signal into the render IR. The characterization gate already
+> committed (`b6479e9`) is still valid — it pins the pool readiness machine (#1),
+> which remains real and is still the first thing to port. Full detail:
+> memory `project_workflow_concept_model.md`.
 - **Related:** [ADR-0002](0002-decompose-api-process-integrated.md) (decompose the
   process-integrated god function — the pipeline *steps* this engine sequences);
   [ADR-0013](0013-package-layout.md) (the concern-package layout this adds a
