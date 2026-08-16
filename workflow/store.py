@@ -61,6 +61,18 @@ class PoolStore(Protocol):
     def set_integrated(self, dtxsid: str, data: dict) -> None:
         """Cache an integrated BMDProject for the session in the process cache."""
 
+    # --- artifact presence (cheap — no large reads) ---------------------
+    def has_files(self, dtxsid: str) -> bool:
+        """Whether the session's files/ directory exists and is non-empty."""
+
+    def artifact_exists(self, dtxsid: str, name: str) -> bool:
+        """Whether sessions/{dtxsid}/{name} exists (without reading it — the
+        integrated project can be 60MB+, so phase derivation must not load it)."""
+
+    def has_stale_sections(self, dtxsid: str) -> bool:
+        """Whether any approved section JSON is flagged stale (pool mutated after
+        approval — set by invalidate_pool_artifacts, cleared on re-approval)."""
+
     # --- session-scoped JSON documents ----------------------------------
     def read_json(self, dtxsid: str, name: str) -> dict | list | None:
         """Read sessions/{dtxsid}/{name} as JSON, or None if absent/unreadable."""
@@ -105,6 +117,27 @@ class DiskPoolStore:
     def set_integrated(self, dtxsid: str, data: dict) -> None:
         from pipeline.pool_globals import get_integrated_pool
         get_integrated_pool()[dtxsid] = data
+
+    def has_files(self, dtxsid: str) -> bool:
+        files_dir = self.session_dir(dtxsid) / "files"
+        if not files_dir.exists():
+            return False
+        return any(files_dir.iterdir())
+
+    def artifact_exists(self, dtxsid: str, name: str) -> bool:
+        return (self.session_dir(dtxsid) / name).exists()
+
+    def has_stale_sections(self, dtxsid: str) -> bool:
+        d = self.session_dir(dtxsid)
+        for pattern in ("bm2_*.json", "genomics_*.json"):
+            for section_file in d.glob(pattern):
+                try:
+                    data = json.loads(section_file.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError, ValueError):
+                    continue
+                if isinstance(data, dict) and data.get("stale"):
+                    return True
+        return False
 
     def read_json(self, dtxsid: str, name: str):
         path = self.session_dir(dtxsid) / name

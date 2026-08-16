@@ -47,6 +47,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse, Response
 
 from pipeline.pool_globals import router
+from workflow.engine import WorkflowEngine
 from workflow.errors import StepError
 from workflow.store import DiskPoolStore
 from workflow.steps import (
@@ -67,6 +68,23 @@ def _step_error_response(exc: StepError) -> JSONResponse:
     """Translate an HTTP-free StepError into the JSON error response the UI
     expects (same {'error': msg} shape + status the pre-unwrap handlers used)."""
     return JSONResponse({"error": exc.message}, status_code=exc.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Workflow-state route (ADR-0014 step 3) — server-derived phase + legal actions
+# ---------------------------------------------------------------------------
+
+@router.get("/api/workflow/{dtxsid}/state")
+async def api_workflow_state(dtxsid: str):
+    """Return the server-derived pool workflow state.
+
+    This is the seam that lets a UI stop deriving phase itself: it reports the
+    settled Phase, the Actions legal in it, the raw artifact flags, and per-
+    platform completeness. Phase is derived from disk on every call (never
+    cached — CONTEXT.md invariant 3). The `hasIntegrated`/`hasAnimalReport`
+    flags are de-conflated here (see WorkflowEngine), unlike the JS caller.
+    """
+    return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).state().to_dict())
 
 
 # ---------------------------------------------------------------------------
