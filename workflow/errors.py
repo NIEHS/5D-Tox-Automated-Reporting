@@ -23,3 +23,17 @@ class StepError(Exception):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+
+
+class GuardViolation(Exception):
+    """A label transition was refused because it moves against the guard without
+    the deliberate release the ratchet requires (ADR-0015):
+
+      * demoting a fact without a DemoteReason (against-guard, unrecorded), or
+      * advancing stale content to final/published (currency BLOCK — kind #6).
+
+    This is the enforcement half of "enforce against actors that can't reason":
+    the mechanism refuses; a human-with-rights uses the recorded override path
+    (a demote with reason) instead.
+    """
+
