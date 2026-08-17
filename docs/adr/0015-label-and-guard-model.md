@@ -105,6 +105,19 @@ humans" does not soften it here. `CURRENCY_FORCED` is the demote reason the bloc
 uses. The trigger generalization (method-version in the hash) + the dependency
 graph are handoff step 6, not this ADR.
 
+> **Note (2026-08-17) — the BMDS-method → narrative dependency is ALREADY correct
+> (verified non-gap).** Step 6 added `_BMDS_METHOD_VERSION` to `_hash_bmds` but left
+> `_hash_sections` folding `ntp_hash` only, which looked like a gap ("a method bump
+> doesn't restale the narratives"). Tracing the full chain shows it is NOT a gap:
+> the prose that CITES BMD values already restales — `_hash_bmds`(+method version)
+> → the `bmd_summary` cache (`_hash_bmd_summary(ntp_hash, bmds_hash)`) rebuilds
+> `apical_bmd_summary` → the apical-BMD-narrative LLM cache is CONTENT-ADDRESSED on
+> `md5(apical_bmd_summary)` (`llm_routes.generate_apical_bmd_narrative_async`), so a
+> changed summary auto-recomputes the narrative. The `_hash_sections` cards describe
+> NTP statistics (trend/pairwise), which don't depend on the BMDS algorithm — so
+> folding `bmds_hash` there would OVER-STALE (needless ~8-min rebuilds), not fix a
+> gap. Decision: no change; the dependency graph is already right for this edge.
+
 ## Consequences
 
 - One place defines what each fact means (`labels.py`) and what edit-hardness it
