@@ -136,6 +136,27 @@ def test_real_session_is_dtd_valid():
     assert not errors, "real-session JATS is not DTD-valid:\n  " + "\n  ".join(errors)
 
 
+def test_real_session_genomics_narrative_present():
+    """ADR-0003 Part B / Stage 1: the genomics-section now emits its narrative
+    <p> prose (previously DROPPED — JATS only emitted the tables). Assert the
+    real session's genomics narrative text surfaces in the JATS body, so the
+    JATS surface reaches parity with LaTeX/HTML/docx on genomics prose."""
+    from rendering.latex_export import load_session_data
+    data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    entries = [e for e in (data.get("genomics_sections") or []) if e.get("narrative")]
+    if not entries:
+        import pytest
+        pytest.skip("real session has no genomics narrative to assert on")
+    first = entries[0]["narrative"]
+    snippet = (first[0] if isinstance(first, list) else str(first))[:40]
+    xml = generate_jats(data)
+    assert snippet in xml, "genomics narrative prose is missing from JATS output"
+
+
 def test_dtd_validate_catches_body_ordering_violation():
     """Negative control: dtd_validate actually REJECTS a <table-wrap> after a
     <sec> in <body> — proving the guard has teeth (the exact Previewer error)."""

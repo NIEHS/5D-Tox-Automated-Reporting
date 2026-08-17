@@ -64,12 +64,15 @@ from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
     genomics_entries,
     genomics_role,
+    genomics_intro_paragraphs,
+    genomics_description_items,
     genomics_table_caption,
     gene_set_table_rows,
     gene_table_rows,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
 )
+from genomics.genomics_content import genomics_content_plan
 
 # JATS has no default namespace in the archiving/publishing tag set (elements
 # are unqualified); xlink IS namespaced.  ElementMaker with no namespace emits
@@ -470,30 +473,69 @@ def _emit_bmd_summary(node: DocNode, data: dict) -> list:
     return out
 
 
-def _emit_genomics_tables(node: DocNode, data: dict) -> list:
-    """Partial `genomics-section`: emit the gene-set / gene GRID tables as
-    <table-wrap>s (one per organ entry); charts + narrative stay TODO markers
-    (deferred to the figures phase — see project_bits_export).
+def _emit_genomics_section(node: DocNode, data: dict) -> list:
+    """`genomics-section` → BITS blocks, iterating the SAME ordered content plan
+    (genomics_content.genomics_content_plan) the LaTeX/HTML/docx surfaces use, so
+    the four emitters cannot drift on which items a genomics section contains.
 
-    Genomics tables are not tree nodes, so their number/caption come from the
-    entry (genomics_table_caption); the <table-wrap> id is derived per entry
-    (Tgs-/Tg-<organ>) rather than from a node id."""
+    Per section: the intro paragraph(s), then for each (organ) entry the plan's
+    ordered items — narrative <p>s (was previously DROPPED — this closes the JATS
+    narrative gap), the gene-set/gene GRID <table-wrap>, and the go/gene
+    descriptions as <p>s. CHARTS remain deferred (a visible <!-- TODO --> marker):
+    a BITS <fig>/<graphic> needs the separate image-packaging phase.
+
+    Genomics tables are not tree nodes, so their caption comes from the entry
+    (genomics_table_caption); the <table-wrap> id is derived per entry
+    (gs-/g-<organ>) rather than from a node id (unchanged from before)."""
     role = genomics_role(node)
     entries = genomics_entries(node, data)
     out: list = []
+
+    # Section intro paragraph(s) — the gene_set_narrative / gene_narrative prose
+    # that leads the section, ahead of the per-entry items.
+    for para in genomics_intro_paragraphs(node, data):
+        if isinstance(para, str) and para.strip():
+            out.append(_p(para))
+
     if not entries:
-        return [_todo(node, "genomics data pending")]
+        out.append(_todo(node, "genomics data pending"))
+        return out
+
+    charts_deferred = False
     for entry in entries:
-        rows = gene_set_table_rows(entry) if role == "gene_set" else gene_table_rows(entry)
-        headers = GENE_SET_TABLE_HEADERS if role == "gene_set" else GENE_TABLE_HEADERS
         organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
         wrap_id = f"{'gs' if role == 'gene_set' else 'g'}-{organ}"
-        if rows:
-            out.append(_table_wrap(
-                wrap_id, genomics_table_caption(entry), list(headers), rows,
-            ))
-    # Charts + section narrative are deferred — mark the gap explicitly.
-    out.append(_todo(node, "genomics charts + narrative deferred to figures phase"))
+        for item in genomics_content_plan(entry, role):
+            part = item.get("part")
+            if part == "narrative":
+                for para in entry.get("narrative") or []:
+                    if isinstance(para, str) and para.strip():
+                        out.append(_p(para))
+            elif part == "table":
+                rows = (
+                    gene_set_table_rows(entry) if role == "gene_set"
+                    else gene_table_rows(entry)
+                )
+                headers = GENE_SET_TABLE_HEADERS if role == "gene_set" else GENE_TABLE_HEADERS
+                if rows:
+                    out.append(_table_wrap(
+                        wrap_id, genomics_table_caption(entry), list(headers), rows,
+                    ))
+            elif part == "descriptions":
+                descriptions = (
+                    entry.get("go_descriptions") if role == "gene_set"
+                    else entry.get("gene_descriptions")
+                ) or []
+                for label, text in genomics_description_items(descriptions):
+                    combined = f"{label}: {text}" if label else text
+                    if combined and combined.strip():
+                        out.append(_p(combined))
+            elif part == "chart":
+                charts_deferred = True
+
+    # Charts are the one remaining gap — mark it explicitly (image-packaging phase).
+    if charts_deferred:
+        out.append(_todo(node, "genomics charts deferred to figures phase"))
     return out
 
 
@@ -523,7 +565,7 @@ _TABLE_EMITTERS = {
     "incidence-table": _emit_incidence_table,
     "sample-counts-table": _emit_sample_counts_table,
     "bmd-summary": _emit_bmd_summary,
-    "genomics-section": _emit_genomics_tables,
+    "genomics-section": _emit_genomics_section,
 }
 
 # Pure table nodes emit raw <table-wrap> blocks (no wrapping <sec>): they only
