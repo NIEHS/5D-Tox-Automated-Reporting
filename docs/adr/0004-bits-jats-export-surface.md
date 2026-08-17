@@ -1,9 +1,27 @@
 # 0004 — BITS/JATS export surface for PMC/Bookshelf submission
 
-- **Status:** Proposed (2026-05-27)
+- **Status:** **Partially implemented (verified 2026-08-17)** — the export surface
+  this ADR called "roadmap" is BUILT: `rendering/jats_generator.py` emits both a
+  JATS `<article>` (`generate_jats`) and a BITS `<book>` (`generate_bits`, the
+  2026-08-10 pivot — the reports are books, not articles); a vendored offline
+  gate (`rendering/jats_stylecheck.py` + NLM StyleChecker v5.48 in
+  `assets/stylechecker/` + BITS 2.0 DTD in `assets/bits-dtd/`, 77 tracked asset
+  files) runs `stylecheck()`/`dtd_validate()` in-process. All tracked; 17 tests in
+  `test_jats_stylecheck.py` pass (0 errors / 0 warnings on scaffold + real
+  DTXSID50469320). **Two real limits keep it from "fully done":** (1) NO HTTP
+  export route — `generate_bits`/`generate_jats` are invoked by tooling / the
+  deliverable build / tests, not a `web_routes` endpoint, so it is an implemented
+  CAPABILITY, not a UI-reachable surface; (2) genuine BITS gaps remain —
+  structured `<element-citation>` references (we emit flat pre-formatted strings),
+  the upstream LLM emitting `[[xref:id]]` tokens (renderer half shipped, content
+  half not), and validator enforcement of the `(blocks)*, (sec)*` containment
+  rule. The prerequisite work (a)–(e) at the end is mostly shipped (see each
+  item's "shipped" note). Was Proposed 2026-05-27.
 - **Status update:** 2026-05-29 — BITS-readiness assessed after ADR-0003
   Phases 0–5 + the declarative-layout amendment (see "BITS-readiness status" at
-  the end).
+  the end). NOTE: the "Net: … remains this ADR's roadmap" conclusion at the very
+  end predates the build and is SUPERSEDED by the status above — the surface
+  shipped; what remains are the two limits named above, not the whole surface.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (the
   integrated dataset every component reads through); [ADR-0002](0002-decompose-api-process-integrated.md)
