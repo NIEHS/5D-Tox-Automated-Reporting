@@ -1,15 +1,54 @@
 # 0014 — Extract a UI-agnostic workflow engine from the browser
 
-- **Status:** Proposed (2026-08-13). **Framing under revision (2026-08-16):
-  do not implement the engine yet** — see the caveat below.
+- **Status:** **Implemented (2026-08-16)** — steps 1–7 built and pushed to
+  `origin/package-layout-workflow-engine` (chain `1482138`→`339611e`), except two
+  deliberate carve-outs (the JS cutover 3b, and the genomics content-store
+  convergence) noted under "Implementation status" below. Superseded framing: this
+  ADR was Proposed 2026-08-13, then its framing was widened 2026-08-16 (the
+  six-kind caveat below) BEFORE building. It is no longer "do not implement" — the
+  widened model was implemented directly.
 - **Deciders:** Dan Svoboda
 
-> **⚠ Concept-model caveat (2026-08-16).** A concept-nailing session after this
-> ADR was drafted established that its framing — a single `Phase`/`Action`
+> **Implementation status (2026-08-16).** The engine was BUILT to the widened
+> six-kind model below, in the order set by
+> `docs/workflow-engine-implementation-handoff.md`. Each step is its own commit on
+> `package-layout-workflow-engine` (all pushed to origin; `main` NOT merged):
+> - **Step 1** — pool phase machine ported → `workflow/phases.py` (`Phase`/`Action`
+>   enums, `LEGAL_ACTIONS`, `derive_phase`/completeness); characterization gate
+>   armed. `1482138`.
+> - **Step 2** — pool step handlers unwrapped → HTTP-free `workflow/steps.py` over
+>   an injectable `workflow/store.py` (**Q2 decided: injectable PoolStore**). `783e860`.
+> - **Step 3a** — `workflow/engine.py` (`WorkflowEngine.state()`, derived-never-
+>   stored) + `GET /api/workflow/{dtxsid}/state`; hasIntegrated/hasAnimalReport
+>   de-conflation fixed; import-isolation guard. `57f5c55`.
+>   **Step 3b (JS cutover) — NOT DONE:** deleting `derivePoolPhase` from
+>   `pool_state.js` and rewiring its ~13 call sites to consume the state route needs
+>   a browser to verify (E2E is `page.pause()`-gated); left to the host.
+> - **Step 4a** — the label + guard model → ADR-0015 + `workflow/labels.py` +
+>   `workflow/guard.py`. `3581965`.
+> - **Step 4b (narrow)** — the guard PREDICATE + real render wiring →
+>   `workflow/ownership.py` (`may_machine_write`, `protection_map`). The genomics
+>   content-STORE convergence remains deferred (ADR-0015 §Consolidation). `24789a9`.
+> - **Step 5** — the guard rendered as a per-node protection mark across all four
+>   emitters (byte-identical when absent). `e3f8ab7`.
+> - **Step 6** — currency: `_BMDS_METHOD_VERSION` folded into `_hash_bmds` +
+>   `workflow/currency.py` (`is_stale`, `can_advance` BLOCK, `demote_for_currency`).
+>   `d1db206`.
+> - **Step 7** — structure/style provenance: `document.yaml`/`styles.yaml` now
+>   archive-before-overwrite with list/read/restore helpers. `339611e`.
+>
+> Open follow-ups (not blocking the arc): 3b above; the genomics content-store
+> convergence; and whether a BMDS method-version bump should also restale section
+> narratives (`_hash_sections` folds `ntp_hash` only, by current design).
+
+> **⚠ Concept-model caveat (2026-08-16) — the widened model that WAS built.** A
+> concept-nailing session after this ADR was drafted established that its framing —
+> a single `Phase`/`Action`
 > readiness machine as *the* workflow — is **too narrow**. "Phase" is only ONE of
 > six distinct kinds of concept the workflow spans, and the pool readiness machine
 > this ADR centers on turned out to be the *innermost/smallest* of them, not the
-> whole. Before the engine is built, its model must widen to the six-kind taxonomy:
+> whole. The model was widened to the six-kind taxonomy BEFORE building (and the
+> build followed it — see Implementation status above):
 > **(1) phases** (ordered derived readiness — pool, section authoring; keep "phase"
 > here only), **(2) transforms/views** (render, preview — not phases),
 > **(3) report lifecycle** (one living bundle, MUTABLE FOREVER — nothing freezes at
@@ -24,10 +63,9 @@
 > trigger to methodology-change makes the derivation dependency graph load-bearing).
 > Guardrail principle: **enforce against actors that can't reason (LLM/errors/stray
 > clicks), inform the humans that can** (visual protection marks) — which pulls a
-> per-node protection signal into the render IR. The characterization gate already
-> committed (`b6479e9`) is still valid — it pins the pool readiness machine (#1),
-> which remains real and is still the first thing to port. Full detail:
-> memory `project_workflow_concept_model.md`.
+> per-node protection signal into the render IR. The characterization gate
+> (`b6479e9`) pinned the pool readiness machine (#1) and armed at step 1. Full
+> detail: memory `project_workflow_concept_model.md`.
 - **Related:** [ADR-0002](0002-decompose-api-process-integrated.md) (decompose the
   process-integrated god function — the pipeline *steps* this engine sequences);
   [ADR-0013](0013-package-layout.md) (the concern-package layout this adds a
