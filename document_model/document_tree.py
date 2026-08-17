@@ -363,6 +363,12 @@ def collect_data_keys(node: DocNode) -> set[str]:
             keys.add(node.narrative_key)
         else:
             keys.add("unified_narratives")
+    # ADR-0003 Part B: a template-authored content item may carry its own
+    # data_key (a table/chart pointer); keep it so the preview section-filter
+    # doesn't drop that item's data.  No-op while no node authors content_items.
+    for ci in node.content_items:
+        if ci.data_key:
+            keys.add(ci.data_key)
     for child in node.children:
         keys.update(collect_data_keys(child))
     return keys
@@ -449,11 +455,44 @@ def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
         # noise-free for the legacy unit-test cases.
         if node.region:
             d["region"] = node.region
+        # ADR-0003 Part B: a component's sub-addressable content items.  Only
+        # serialize when present (mirrors the `children` guard) so every current
+        # node — none author content_items yet — serializes byte-identically.
+        if node.content_items:
+            d["content_items"] = [_content_item_to_dict(ci) for ci in node.content_items]
         if node.children:
             d["children"] = [_to_dict(c) for c in node.children]
         return d
 
     return [_to_dict(n) for n in tree]
+
+
+def _content_item_to_dict(ci) -> dict:
+    """Serialize a ContentItem to a JSON-friendly dict (ADR-0003 Part B).
+
+    Emits `id`/`kind` always, and every other attribute only when set — the same
+    noise-free discipline serialize_tree uses for DocNode, so an item's JSON stays
+    minimal and stable."""
+    d: dict = {"id": ci.id, "kind": ci.kind}
+    if ci.part:
+        d["part"] = ci.part
+    if ci.orientable:
+        d["orientable"] = True
+    if ci.breakable:
+        d["breakable"] = True
+    if ci.orientation:
+        d["orientation"] = ci.orientation
+    if ci.break_before:
+        d["break_before"] = True
+    if ci.break_after:
+        d["break_after"] = True
+    if ci.text is not None:
+        d["text"] = ci.text
+    if ci.data_key:
+        d["data_key"] = ci.data_key
+    if ci.caption:
+        d["caption"] = ci.caption
+    return d
 
 
 # ---------------------------------------------------------------------------

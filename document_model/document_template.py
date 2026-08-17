@@ -44,9 +44,11 @@ from pathlib import Path
 import yaml
 
 from document_model.document_node import DocNode
+from document_model.content_item import ContentItem
 from styling_export.freeform_content import VALID_REPRESENTATIONS, resolve_freeform
 from document_model.render_capabilities import (
     COMPONENT_CATALOG,
+    CONTENT_KINDS,
     capabilities_for,
     is_allowed_child,
     is_captionable,
@@ -75,8 +77,8 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 #               content/content_file/representation (freeform nodes); never
 #               authored.
 _COMPUTED_OR_SPECIAL = frozenset(
-    {"level", "node_type", "children", "table_number", "figure_number", "region",
-     "resolved_content"}
+    {"level", "node_type", "children", "content_items", "table_number",
+     "figure_number", "region", "resolved_content"}
 )
 
 # The freeform component types whose content is AUTHORED (in the template or an
@@ -105,9 +107,10 @@ _BINDING_FIELDS = tuple(
 )
 
 # Every key a template node entry may carry: the binding fields plus `type`
-# (→ node_type) and `children` (recursion).  Anything else is an authoring
-# mistake (a typo, a stale field) and is rejected loudly.
-_KNOWN_KEYS = frozenset(_BINDING_FIELDS) | {"type", "children"}
+# (→ node_type), `children` (recursion), and `content_items` (ADR-0003 Part B
+# ordered sub-addressable items).  Anything else is an authoring mistake (a typo,
+# a stale field) and is rejected loudly.
+_KNOWN_KEYS = frozenset(_BINDING_FIELDS) | {"type", "children", "content_items"}
 
 # Keys every node entry must supply regardless of type.
 _REQUIRED_KEYS = ("id", "type", "title")
@@ -213,6 +216,61 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             f"subtype is only valid on {sorted(_SUBTYPABLE_TYPES)}"
         )
 
+    # ADR-0003 Part B: validate an authored content_items list (if any).
+    if entry.get("content_items"):
+        _validate_content_items(entry["content_items"], node_id)
+
+
+def _validate_content_items(items, node_id: str) -> None:
+    """Validate a node's authored content_items list (ADR-0003 Part B).
+
+    Loud, load-time checks mirroring _validate_entry's discipline: the list is a
+    list of mappings; each item has `id` + `kind`; no unknown keys; `kind` is in
+    CONTENT_KINDS; content source is exactly one of `text` xor `data_key`;
+    `orientation` (if set) is portrait/landscape; and item ids are UNIQUE WITHIN
+    the component (not global — the composite "<node>::<item>" key is what is
+    addressed, so cross-component reuse is legitimate and must NOT be indexed
+    globally)."""
+    if not isinstance(items, list):
+        raise ValueError(
+            f"template node {node_id!r}: content_items must be a list, "
+            f"got {type(items).__name__}"
+        )
+    seen: set[str] = set()
+    for i, item in enumerate(items):
+        where = f"template node {node_id!r} content_items[{i}]"
+        if not isinstance(item, dict):
+            raise ValueError(f"{where}: each item must be a mapping, got {type(item).__name__}")
+        unknown = set(item) - _CONTENT_ITEM_KEYS
+        if unknown:
+            raise ValueError(f"{where}: unknown key(s) {sorted(unknown)}")
+        item_id = item.get("id")
+        if not item_id:
+            raise ValueError(f"{where}: missing required 'id'")
+        kind = item.get("kind")
+        if kind not in CONTENT_KINDS:
+            raise ValueError(
+                f"{where} (id={item_id!r}): kind {kind!r} is not a content kind "
+                f"(known: {sorted(CONTENT_KINDS)})"
+            )
+        # Content source: exactly one of inline `text` or a `data_key` pointer.
+        has_text = item.get("text") is not None
+        has_data_key = bool(item.get("data_key"))
+        if has_text and has_data_key:
+            raise ValueError(f"{where} (id={item_id!r}): set only one of 'text' or 'data_key'")
+        orientation = item.get("orientation")
+        if orientation is not None and orientation not in ("portrait", "landscape"):
+            raise ValueError(
+                f"{where} (id={item_id!r}): orientation must be 'portrait' or "
+                f"'landscape', got {orientation!r}"
+            )
+        if item_id in seen:
+            raise ValueError(
+                f"{where}: duplicate content-item id {item_id!r} within node "
+                f"{node_id!r} (item ids must be unique within a component)"
+            )
+        seen.add(item_id)
+
 
 def _validate_freeform_entry(entry: dict, node_id: str) -> None:
     """
@@ -300,6 +358,37 @@ def _validate_region_container(entry: dict) -> None:
         raise ValueError("region container 'children' must be a list")
 
 
+# The keys a content_item entry may carry (ADR-0003 Part B).  Mirrors the
+# ContentItem dataclass fields; an unknown key is a loud authoring error, same
+# discipline as _KNOWN_KEYS for nodes.
+_CONTENT_ITEM_KEYS = frozenset({
+    "id", "kind", "part", "orientable", "breakable", "orientation",
+    "break_before", "break_after", "text", "data_key", "caption",
+})
+
+
+def _instantiate_content_item(item: dict) -> ContentItem:
+    """Build one ContentItem from a validated template entry (ADR-0003 Part B).
+
+    Validation (kind membership, text-xor-data_key, id-uniqueness) has already
+    run in _validate_content_items; this only constructs.  Absent optional keys
+    take the ContentItem dataclass defaults.
+    """
+    return ContentItem(
+        id=item["id"],
+        kind=item["kind"],
+        part=item.get("part"),
+        orientable=bool(item.get("orientable", False)),
+        breakable=bool(item.get("breakable", False)),
+        orientation=item.get("orientation"),
+        break_before=bool(item.get("break_before", False)),
+        break_after=bool(item.get("break_after", False)),
+        text=item.get("text"),
+        data_key=item.get("data_key"),
+        caption=item.get("caption"),
+    )
+
+
 def _instantiate_node(
     entry: dict,
     depth: int,
@@ -321,11 +410,16 @@ def _instantiate_node(
         _instantiate_node(c, depth + 1, node_type, region)
         for c in entry.get("children", [])
     ]
+    # ADR-0003 Part B: an ordered list of sub-addressable content items the
+    # component owns.  Built like `children` (a special, non-scalar-binding key);
+    # empty for every current node (none author content_items yet).
+    content_items = [_instantiate_content_item(ci) for ci in entry.get("content_items", [])]
     # Forward every binding field by name; an absent optional field becomes
     # None (DocNode's default), exactly matching the old hand-written literal.
     bindings = {name: entry.get(name) for name in _BINDING_FIELDS}
     node = DocNode(
-        node_type=node_type, level=level, children=children, region=region, **bindings
+        node_type=node_type, level=level, children=children,
+        content_items=content_items, region=region, **bindings
     )
     # Freeform nodes carry AUTHORED content; resolve it to per-surface markup
     # ONCE here (a docx file is parsed a single time) and store it on the node so

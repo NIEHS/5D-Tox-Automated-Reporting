@@ -256,3 +256,87 @@ def test_top_level_unrolls_regions_into_flat_list():
     ])
     assert [n.id for n in tree] == ["cover", "bg"]
     assert [n.region for n in tree] == ["front", "body"]
+
+
+# ---------------------------------------------------------------------------
+# ADR-0003 Part B — authored content_items instantiation + validation
+# ---------------------------------------------------------------------------
+
+def _node_with_items(items):
+    return [{"id": "sec", "type": "narrative", "title": "Sec",
+             "data_key": "d", "content_items": items}]
+
+
+def test_content_items_instantiate_onto_node():
+    tree = instantiate(_node_with_items([
+        {"id": "intro", "kind": "text", "text": "Hello."},
+        {"id": "tbl", "kind": "table", "data_key": "some_table", "orientable": True},
+    ]))
+    node = tree[0]
+    assert [ci.id for ci in node.content_items] == ["intro", "tbl"]
+    assert node.content_items[0].kind == "text"
+    assert node.content_items[1].orientable is True
+    assert node.content_items[1].data_key == "some_table"
+
+
+def test_content_item_unknown_kind_rejected():
+    with pytest.raises(ValueError, match="is not a content kind"):
+        instantiate(_node_with_items([{"id": "x", "kind": "bogus"}]))
+
+
+def test_content_item_duplicate_id_rejected():
+    with pytest.raises(ValueError, match="duplicate content-item id"):
+        instantiate(_node_with_items([
+            {"id": "dup", "kind": "text", "text": "a"},
+            {"id": "dup", "kind": "text", "text": "b"},
+        ]))
+
+
+def test_content_item_unknown_key_rejected():
+    with pytest.raises(ValueError, match="unknown key"):
+        instantiate(_node_with_items([{"id": "x", "kind": "text", "bogus": 1}]))
+
+
+def test_content_item_text_and_data_key_both_rejected():
+    with pytest.raises(ValueError, match="only one of 'text' or 'data_key'"):
+        instantiate(_node_with_items([
+            {"id": "x", "kind": "table", "text": "t", "data_key": "d"},
+        ]))
+
+
+def test_content_item_missing_id_rejected():
+    with pytest.raises(ValueError, match="missing required 'id'"):
+        instantiate(_node_with_items([{"kind": "text", "text": "t"}]))
+
+
+def test_content_item_bad_orientation_rejected():
+    with pytest.raises(ValueError, match="orientation must be"):
+        instantiate(_node_with_items([
+            {"id": "x", "kind": "table", "data_key": "d", "orientation": "sideways"},
+        ]))
+
+
+def test_content_items_serialize_round_trips():
+    from document_model.document_tree import serialize_tree
+    tree = instantiate(_node_with_items([
+        {"id": "tbl", "kind": "table", "data_key": "d2", "orientable": True,
+         "caption": "Cap"},
+    ]))
+    d = serialize_tree(tree)[0]
+    assert d["content_items"] == [
+        {"id": "tbl", "kind": "table", "orientable": True,
+         "data_key": "d2", "caption": "Cap"},
+    ]
+
+
+def test_cross_component_item_id_reuse_is_allowed():
+    """Item ids are unique WITHIN a component, not globally — two sibling nodes
+    may each own an item with the same id (the composite <node>::<item> key
+    disambiguates). This must NOT raise."""
+    tree = instantiate([
+        {"id": "a", "type": "narrative", "title": "A", "data_key": "da",
+         "content_items": [{"id": "table", "kind": "table", "data_key": "x"}]},
+        {"id": "b", "type": "narrative", "title": "B", "data_key": "db",
+         "content_items": [{"id": "table", "kind": "table", "data_key": "y"}]},
+    ])
+    assert tree[0].content_items[0].id == tree[1].content_items[0].id == "table"

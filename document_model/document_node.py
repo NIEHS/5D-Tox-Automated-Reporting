@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from document_model.content_item import ContentItem
+
 
 @dataclass
 class DocNode:
@@ -37,6 +39,12 @@ class DocNode:
         narrative_key:  For narrative+tables nodes — which key in unified_narratives
                         holds the group narrative (e.g., "apical", "clinical_pathology").
         children:       Child nodes (sub-sections, tables within a section).
+        content_items:  Ordered, sub-addressable ContentItems this component owns
+                        (ADR-0003 Part B).  Distinct from children: children are
+                        their own tree nodes (headings/sections); content_items
+                        are the addressable blocks INSIDE one component (a text /
+                        table / chart block), keyed "<node.id>::<item.id>".  Empty
+                        for every node until a template authors them.
         table_number:   Auto-assigned by compute_table_numbers().  None until computed.
         figure_number:  Reserved positional figure number for a figure-bearing
                         node.  There is NO DocNode-level figure-numbering pass
@@ -110,6 +118,7 @@ class DocNode:
     platform: str | None = None
     narrative_key: str | None = None
     children: list[DocNode] = field(default_factory=list)
+    content_items: list[ContentItem] = field(default_factory=list)
     table_number: int | None = None
     figure_number: int | None = None
     appendix_letter: str | None = None
