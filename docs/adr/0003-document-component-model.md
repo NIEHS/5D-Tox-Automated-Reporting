@@ -1,12 +1,38 @@
 # 0003 — Composable document-component model: catalog, data-driven templates, generated ToC
 
-- **Status:** Proposed (2026-05-26). **Largely realized (noted 2026-08-17):** this
-  ADR records a design and says "no code is changed by this ADR", but the model it
-  describes is live — `COMPONENT_CATALOG` (`render_capabilities.py`), the
-  data-driven YAML templates + instantiator, and the generated ToC all shipped
-  (across later commits, not this ADR). Kept as Proposed because it is a design
-  record, not an implementation ticket; the roadmap items at the end are the
-  residual work.
+- **Status:** Proposed (2026-05-26). **Mostly realized (verified part-by-part
+  2026-08-17):** this ADR records a design ("no code is changed by this ADR"), but
+  most of the model is now live —
+  - **Part A (component catalog)** — DONE: `COMPONENT_CATALOG` + `CONTENT_ITEM_KINDS`
+    in `render_capabilities.py`.
+  - **Part C (data-driven templates)** — DONE: `document_template.instantiate()` /
+    `build_tree()`; `DOCUMENT_TREE` is instantiated from YAML, not hand-written.
+  - **Part D (generated ToC)** — DONE: `report_data_toc._build_toc_entries` walks
+    the tree; distinct from the nav panel.
+  - **Migration step 1 (nav/ToC rename)** — DONE: JS uses `data-nav-id` / `nav-*`;
+    zero `data-toc-id` remain.
+  - **Amendment 1 (declarative layout)** — DONE: the `landscape_requested` resolver
+    + YAML `orientation`/`break_before`/`break_after` + capability-gated validation
+    (this line of work also became ADR-0009).
+  - **Part B (sub-addressable content items)** — ⚠ **HALF-BUILT, and the rest is a
+    CONFIRMED LIVE REQUIREMENT (user 2026-08-17), NOT superseded.** The
+    `component_id::item_id` addressing scheme exists and drives per-content-item
+    ORIENTATION today (`render_capabilities.content_item_landscape_requested`,
+    :506). STILL TO BUILD: (1) per-content-item BREAKS (orientation half shipped,
+    breaks half not); (2) a renderer-consumed `content_items` list on `DocNode`
+    (today `DocNode` carries no content-item structure and no emitter iterates one);
+    (3) decomposing the `genomics-section` MONOLITH (one `data_key="genomics_sections"`
+    node that expands at render time) into that declared content-item iteration.
+    Note this is authoring/tree tidiness + a real breaks feature — it is NOT a BITS
+    prerequisite: BITS containment is entirely the `jats_generator` emitter's job
+    (the StyleChecker/DTD gate is already green on the current monolith), and tree
+    granularity does not touch it.
+  - **Migration step 6 (transcriptomics greenfield)** — a validation exercise for
+    the model, never a shipped deliverable; author it as a template selection if/when
+    a transcriptomics section is actually needed.
+
+  Kept as **Proposed** because it is a design record, not an implementation ticket;
+  the residual work is Part B (above).
 - **Amended:** 2026-05-29 — Amendment 1 (declarative layout settings + the
   YAML / UI coordination model); see the end of this document.
 - **Deciders:** Dan Svoboda
