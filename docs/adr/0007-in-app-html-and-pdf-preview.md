@@ -1,10 +1,14 @@
 # 0007 — In-app HTML live view + PDF view (local compile + reference compare)
 
-- **Status:** **Partially implemented (verified 2026-08-17).** The in-app HTML
-  live view shipped — `/api/preview-latex-html` renders the editable HTML from the
-  same tree walk as the `.tex` (ADR-0006). The title page shipped as `\maketitle`
-  (its page-1 branded cover remains deferred). Deferred per the body: shipping the
-  reference-compare PDF through the server (not chosen for P1). Was Proposed
+- **Status:** **Partially implemented; remainder RETIRED (user 2026-08-17).** The
+  in-app HTML live view SHIPPED and stays — `/api/preview-latex-html` renders the
+  editable HTML from the same tree walk as the `.tex` (ADR-0006), and the title
+  page shipped as `\maketitle`. The still-deferred parts — the **server-side
+  local-compile PDF view** and the **reference-compare PDF** — are **NO LONGER
+  NEEDED** (user decision 2026-08-17): with the Overleaf compile path live
+  (`/api/compile-pdf`) and Overleaf as the committee-review surface, an in-app PDF
+  preview is redundant. Do NOT build the PDF-view / reference-compare half. What
+  this ADR leaves live is exactly the shipped HTML preview. Was Proposed
   2026-07-07.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0005](0005-overleaf-round-trip-content-sync.md) (Overleaf is
