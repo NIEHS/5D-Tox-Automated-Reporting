@@ -33,6 +33,16 @@
 
 ## Context
 
+> **★ Product anchor (confirmed 2026-08-17).** This is not one export among peers —
+> the **Bookshelf BITS `<book>` bundle is THE ultimate deliverable of the app**:
+> every report created with the tool ultimately ships as a Bookshelf submission.
+> The other render surfaces are means to that end (HTML = author preview,
+> LaTeX/Overleaf = committee review, Word/docx = co-author prose editing); all roll
+> up to this book. Consequence for prioritization: the remaining BITS gaps
+> (structured `<element-citation>` references, the upstream LLM emitting `[[xref:id]]`
+> tokens, `(blocks)*, (sec)*` containment validation) are work on the app's PRIMARY
+> output, not optional polish — and this ADR is the opposite of conceptually stale.
+
 A new requirement has landed: **NIEHS reports must be submittable to PMC / the
 NCBI Bookshelf (LitArch).** Submission means producing XML that
 
