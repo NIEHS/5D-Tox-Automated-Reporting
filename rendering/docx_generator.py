@@ -82,6 +82,7 @@ from rendering.render_common import (
     genomics_entries,
     genomics_intro_paragraphs,
     resolve_content_items,
+    authored_item_paragraphs,
     genomics_table_caption,
     has_paragraph_content,
     normalize_inline,
@@ -1251,8 +1252,9 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     _body_style = _pstyle_or_default(doc, data, "body_para")
     intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data), style=_body_style)
 
-    entries = genomics_entries(node, data)
-    if not entries:
+    resolved = resolve_content_items(node, data)
+    if not resolved:
+        # No content items at all (no authored items, no genomics data).
         if not intro:
             _add_pending(doc, f"Genomics data pending: {node.title}")
         return
@@ -1261,9 +1263,26 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     # Tables 9–12).  No per-sex subsection heading; the table's own **Male** /
     # **Female** separator rows delineate the sexes.
     # ADR-0003 Part B: iterate the shared resolve_content_items sequence (same
-    # order/identity as the former entry×item nested loop, byte-identical).
-    for r in resolve_content_items(node, data):
-        _render_genomics_item(doc, r.entry, r.role, r.item)
+    # order/identity as the former entry×item nested loop, byte-identical for a
+    # pure-genomics node). Template-authored items (if any) come first.
+    for r in resolved:
+        if r.source == "authored":
+            _render_authored_item(doc, r.content_item, data)
+        else:
+            _render_genomics_item(doc, r.entry, r.role, r.item)
+
+
+def _render_authored_item(doc: Document, ci, data: dict) -> None:
+    """Render a template-authored ContentItem (ADR-0003 Part B) into the docx.
+
+    `text` is fully wired; table/chart/image authored kinds add a visible pending
+    note (no report authors them yet)."""
+    paras = authored_item_paragraphs(ci, surface="html")
+    if paras is not None:
+        if paras:
+            _add_paragraphs(doc, paras)
+        return
+    _add_pending(doc, f"authored {ci.kind} item {ci.id} — rendering not yet wired")
 
 
 def _render_genomics_item(doc: Document, entry: dict, role: str, item: dict) -> None:

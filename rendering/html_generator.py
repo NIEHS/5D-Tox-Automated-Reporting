@@ -81,6 +81,7 @@ from rendering.render_common import (
     genomics_intro_paragraphs,
     genomics_entries,
     resolve_content_items,
+    authored_item_paragraphs,
     gene_set_table_rows,
     gene_table_rows,
     genomics_description_items,
@@ -954,6 +955,17 @@ def _render_incidence_table(node: DocNode, data: dict) -> str:
     )
 
 
+def _render_authored_item(ci, data: dict) -> str:
+    """Render a template-authored ContentItem (ADR-0003 Part B) to HTML.
+
+    `text` is fully wired; table/chart/image authored kinds emit a visible
+    pending marker (no report authors them yet)."""
+    paras = authored_item_paragraphs(ci, surface="html")
+    if paras is not None:
+        return _render_paragraphs(paras) if paras else ""
+    return _pending(f"authored {ci.kind} item {ci.id} — rendering not yet wired")
+
+
 def _render_genomics_section(node: DocNode, data: dict) -> str:
     """
     Gene Set or Gene BMD section — per-(organ, sex) subsections.
@@ -966,8 +978,9 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     heading = _heading(node.level, node.title)
     intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
-    entries = genomics_entries(node, data)
-    if not entries:
+    resolved = resolve_content_items(node, data)
+    if not resolved:
+        # No content items at all (no authored items, no genomics data).
         body = intro or _pending(f"Genomics data pending: {node.title}")
         return f"{heading}\n{body}"
 
@@ -981,8 +994,11 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     # ADR-0003 Part B: the entry×item nested loop is now the shared
     # resolve_content_items sequence (same order/identity, byte-identical). The
     # table is independently orientable via the composite "(component, item)" key.
-    for r in resolve_content_items(node, data):
-        chunk = _render_genomics_item(r.entry, r.role, r.item)
+    for r in resolved:
+        if r.source == "authored":
+            chunk = _render_authored_item(r.content_item, data)
+        else:
+            chunk = _render_genomics_item(r.entry, r.role, r.item)
         if not chunk:
             continue
         if r.orientable and content_item_landscape_requested(

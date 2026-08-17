@@ -72,6 +72,7 @@ from rendering.render_common import (
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     resolve_content_items,
+    authored_item_paragraphs,
 )
 
 # JATS has no default namespace in the archiving/publishing tag set (elements
@@ -497,12 +498,20 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
         if isinstance(para, str) and para.strip():
             out.append(_p(para))
 
-    if not entries:
-        out.append(_todo(node, "genomics data pending"))
-        return out
-
     charts_deferred = False
     for r in resolve_content_items(node, data):
+        # ADR-0003 Part B: a template-authored item (text fully wired; other
+        # kinds a visible pending marker) comes before the data-derived items.
+        if r.source == "authored":
+            ci = r.content_item
+            paras = authored_item_paragraphs(ci, surface="html")
+            if paras is not None:
+                for para in paras:
+                    out.append(_p(para))
+            else:
+                out.append(_todo(node, f"authored {ci.kind} item {ci.id} not yet wired"))
+            continue
+
         entry, part = r.entry, r.item.get("part")
         if part == "narrative":
             for para in entry.get("narrative") or []:
@@ -532,6 +541,8 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
         elif part == "chart":
             charts_deferred = True
 
+    if not entries:
+        out.append(_todo(node, "genomics data pending"))
     # Charts are the one remaining gap — mark it explicitly (image-packaging phase).
     if charts_deferred:
         out.append(_todo(node, "genomics charts deferred to figures phase"))

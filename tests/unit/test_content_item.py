@@ -91,3 +91,67 @@ def test_resolved_content_item_overlay_key():
     r = ResolvedContentItem(component_id="gene-bmd", item_id="kidney-table",
                             orientable=True, source="genomics")
     assert r.overlay_key == "gene-bmd::kidney-table"
+
+
+# --- Stage 4: hybrid authored + data-derived; authored rendering per surface --
+
+from document_model.content_item import ContentItem  # noqa: E402
+
+
+def _hybrid_node():
+    """A genomics node carrying an authored intro text item, plus data entries."""
+    return DocNode(
+        id="gene-sets", title="Gene Set BMD Analysis",
+        node_type="genomics-section", data_key="genomics_sections",
+        narrative_key="gene_set_narrative",
+        content_items=[ContentItem(id="intro", kind="text",
+                                   text="AUTHOREDINTROSENTINEL.")],
+    )
+
+
+def _hybrid_data():
+    return {"genomics_sections": [
+        {"type": "gene_set", "organ": "Liver",
+         "gene_sets": [{"name": "GO:x", "bmd_median": "0.5"}]},
+    ]}
+
+
+def test_hybrid_authored_item_precedes_data_items():
+    seq = resolve_content_items(_hybrid_node(), _hybrid_data())
+    assert seq[0].source == "authored" and seq[0].item_id == "intro"
+    assert any(r.source == "genomics" for r in seq)
+
+
+def test_authored_text_renders_on_all_surfaces():
+    # The authored intro sentinel must appear in every surface's output for a
+    # hybrid genomics node — the payoff of the resolver+emitter wiring.
+    from rendering.render_common import resolve_content_items as _r  # noqa: F401
+    node, data = _hybrid_node(), _hybrid_data()
+
+    # LaTeX
+    from rendering.latex_generator import _render_genomics_section as latex_gs
+    assert "AUTHOREDINTROSENTINEL." in latex_gs(node, data)
+    # HTML
+    from rendering.html_generator import _render_genomics_section as html_gs
+    assert "AUTHOREDINTROSENTINEL." in html_gs(node, data)
+    # JATS
+    from rendering.jats_generator import _emit_genomics_section as jats_gs
+    from lxml import etree
+    blocks = jats_gs(node, data)
+    joined = "".join(etree.tostring(b, encoding="unicode") for b in blocks)
+    assert "AUTHOREDINTROSENTINEL." in joined
+    # docx
+    from docx import Document as _Doc
+    from rendering.docx_generator import _render_genomics_section as docx_gs
+    doc = _Doc()
+    docx_gs(doc, node, data)
+    assert any("AUTHOREDINTROSENTINEL." in p.text for p in doc.paragraphs)
+
+
+def test_authored_unwired_kind_emits_pending_marker_not_crash():
+    # A table authored item (not yet wired) must degrade to a visible marker,
+    # never raise — the gap-is-never-silent discipline.
+    node = _hybrid_node()
+    node.content_items = [ContentItem(id="t", kind="table", data_key="nope")]
+    from rendering.latex_generator import _render_genomics_section as latex_gs
+    assert "not yet wired" in latex_gs(node, {"genomics_sections": []})

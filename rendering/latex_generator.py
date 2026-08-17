@@ -100,6 +100,7 @@ from rendering.render_common import (
     genomics_intro_paragraphs,
     genomics_entries,
     resolve_content_items,
+    authored_item_paragraphs,
     gene_set_table_rows,
     gene_table_rows,
     genomics_description_items,
@@ -896,8 +897,11 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     heading = _heading(node.level, node.title)
     intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
-    entries = genomics_entries(node, data)
-    if not entries:
+    resolved = resolve_content_items(node, data)
+    if not resolved:
+        # No content items at all (no authored items, no genomics data) — the
+        # heading + intro, or a pending placeholder. (Authored items, if any,
+        # keep this from firing even when genomics data is absent.)
         body = intro or f"\\emph{{[Genomics data pending: {_escape_latex(node.title)}]}}"
         return f"{heading}\n\n{body}"
 
@@ -914,8 +918,14 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     # organ block's items are sub-addressable: the table is independently
     # orientable, so a wide gene table can flip landscape on its own via the
     # composite "(component, content-item)" orientation key.
-    for r in resolve_content_items(node, data):
-        chunk = _render_genomics_item(r.entry, r.role, r.item)
+    for r in resolved:
+        # ADR-0003 Part B: an item is either template-AUTHORED (static text/table)
+        # or a data-derived genomics item; both share the sub-addressable
+        # orientation + override + anchor treatment below.
+        if r.source == "authored":
+            chunk = _render_authored_item(r.content_item, data)
+        else:
+            chunk = _render_genomics_item(r.entry, r.role, r.item)
         if not chunk:
             continue
         if r.orientable and content_item_landscape_requested(
@@ -932,6 +942,19 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
         blocks.append(chunk)
 
     return "\n\n".join(b for b in blocks if b)
+
+
+def _render_authored_item(ci, data: dict) -> str:
+    """Render a template-authored ContentItem (ADR-0003 Part B) to LaTeX.
+
+    `text` is fully wired (the production genomics-hybrid use is an authored
+    intro paragraph). `table`/`chart`/`image` authored kinds are not yet wired to
+    a per-surface renderer — they emit a visible pending marker so the gap is
+    never silent (no report authors them today; wire when one does)."""
+    paras = authored_item_paragraphs(ci, surface="latex")
+    if paras is not None:
+        return _render_paragraphs(paras) if paras else ""
+    return f"\\emph{{[authored {_escape_latex(ci.kind)} item {_escape_latex(ci.id)} — rendering not yet wired]}}"
 
 
 def _render_genomics_item(entry: dict, role: str, item: dict) -> str:

@@ -956,10 +956,10 @@ class ResolvedContentItem:
     """
 
     __slots__ = ("component_id", "item_id", "orientable", "source", "entry",
-                 "role", "item")
+                 "role", "item", "content_item")
 
     def __init__(self, *, component_id, item_id, orientable, source,
-                 entry=None, role=None, item=None):
+                 entry=None, role=None, item=None, content_item=None):
         self.component_id = component_id
         self.item_id = item_id
         self.orientable = orientable
@@ -967,6 +967,7 @@ class ResolvedContentItem:
         self.entry = entry            # genomics: the source entry dict
         self.role = role              # genomics: "gene_set" | "gene"
         self.item = item              # genomics: the plan dict
+        self.content_item = content_item  # authored: the ContentItem instance
 
     @property
     def overlay_key(self) -> str:
@@ -976,18 +977,36 @@ class ResolvedContentItem:
 def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentItem]":
     """The ordered content items a component contributes, medium-agnostically.
 
-    Genomics-section → the per-entry genomics_content_plan flattened in document
-    order, each item wrapped with its (entry, role). Any other node → [] (the
-    template-authored branch lands in a later stage). This is the single sequence
-    all four emitters iterate; it reproduces the former per-handler
-    entry×item nested loop exactly (byte-identical) while removing the
-    per-surface duplication of that loop.
+    Two authoring modes converge here, IN ORDER:
+      1. TEMPLATE-AUTHORED — the node's own `content_items` (static, from YAML),
+         first, in declaration order. Each yields a "authored" ResolvedContentItem
+         carrying its ContentItem.
+      2. RENDER-TIME (genomics) — for a genomics-section, the per-entry
+         genomics_content_plan flattened in document order, each wrapped with its
+         (entry, role).
+
+    A pure-genomics node (no authored items) is byte-identical to before Part B;
+    a pure-authored node yields only its items; a HYBRID node yields authored
+    items THEN its data-derived items (the genomics case the production template
+    uses). Non-genomics nodes with no authored items → [].
     """
     from genomics.genomics_content import genomics_content_plan
 
+    resolved: list[ResolvedContentItem] = []
+
+    # (1) template-authored items first (declaration order).
+    for ci in node.content_items:
+        resolved.append(ResolvedContentItem(
+            component_id=node.id,
+            item_id=ci.id,
+            orientable=ci.orientable,
+            source="authored",
+            content_item=ci,
+        ))
+
+    # (2) render-time data-derived items (genomics).
     if node.node_type == "genomics-section":
         role = genomics_role(node)
-        resolved: list[ResolvedContentItem] = []
         for entry in genomics_entries(node, data):
             for item in genomics_content_plan(entry, role):
                 resolved.append(ResolvedContentItem(
@@ -999,8 +1018,28 @@ def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentIte
                     role=role,
                     item=item,
                 ))
-        return resolved
 
+    return resolved
+
+
+def authored_item_paragraphs(content_item, *, surface: str = "text") -> "list[str] | None":
+    """The paragraph list for a TEXT authored ContentItem, or None if the item is
+    not a text kind (a signal to the caller to fall through to its
+    not-yet-wired-kind path).
+
+    `text` may be a single string, a list of paragraph strings, or a dual-source
+    {"latex": ..., "html": ...} dict — `surface` selects the branch of a dual
+    source ("latex" | "html"); other surfaces fall back to any string form.
+    Empty/whitespace text yields []."""
+    if content_item.kind != "text":
+        return None
+    text = content_item.text
+    if isinstance(text, dict):
+        text = text.get(surface) or text.get("latex") or text.get("html") or ""
+    if isinstance(text, str):
+        return [text] if text.strip() else []
+    if isinstance(text, list):
+        return [p for p in text if isinstance(p, str) and p.strip()]
     return []
 
 
