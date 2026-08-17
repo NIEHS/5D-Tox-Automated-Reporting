@@ -1,6 +1,10 @@
 # 0009 — Complete the layout-style vocabulary (roadmap)
 
-- **Status:** Proposed (2026-07-22).
+- **Status:** Proposed — roadmap, in progress (noted 2026-08-17). **Phase A**
+  (title-page / display typography) **SHIPPED 2026-07-22**; the four-part contract's
+  remaining phases (B–D) are not done. This is an explicit multi-phase roadmap, so
+  it stays Proposed until the contract is complete — the per-phase markers in the
+  body are the source of truth for what's built.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0006](0006-unify-html-latex-renderers.md) (the single tree
   walk + shared per-node styling the three surfaces resolve identically; this

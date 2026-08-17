@@ -1,6 +1,16 @@
 # 0005 — Overleaf round-trip: human-in-the-loop content sync
 
-- **Status:** Proposed (2026-06-01)
+- **Status:** **Partially implemented (verified 2026-08-17)** — the round-trip
+  core is built and tracked: an 8-module `roundtrip/` package (anchors, region
+  parse/`reconcile`, `overrides` store, git-clone reconcile) with
+  `test_document_reconcile.py` + `test_document_overrides.py`, and app-wired
+  endpoints `/api/repo-binding` (GET/POST), `/api/repo-status`,
+  `/api/provision-report`, `/api/report-for-project`, `/api/export-overleaf-bundle`.
+  (Terminology landed as the doc's own reframe: `repo-binding`, not
+  `overleaf-binding`.) Still design-only per the body: the git-bridge as the LIVE
+  remote (a GitHub remote is the decided mechanism), and structured app-side
+  editing as a later complement. Was Proposed 2026-06-01; the amendment at the end
+  is still marked Proposed (2026-06-11) but its decisions are the ones that shipped.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (the
   integrated dataset every component reads through);

@@ -1,9 +1,11 @@
 # 0010 — A semantic-type vocabulary (design) system
 
-- **Status:** Proposed (2026-07-23). Phase 0 landed this session (`vocabulary.py`,
-  `vocab/base.yaml` + `vocab/ntp-report{,-generated}.yaml`, `docx_style_extract
-  --emit-vocabulary`, the `render_capabilities` `emits` crosswalk, tests); Phases
-  1–2 (render the three surfaces from the vocabulary) not yet wired.
+- **Status:** **Partially implemented — Phase 0 (verified 2026-08-17).** Phase 0
+  landed (`document_model/vocabulary.py`, `vocab/base.yaml` +
+  `vocab/ntp-report{,-generated}.yaml`, `docx_style_extract --emit-vocabulary`, the
+  `render_capabilities` `emits` crosswalk, tests — all present). Phases 1–2 (render
+  the three surfaces FROM the vocabulary) are NOT yet wired. Was Proposed
+  2026-07-23.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0006](0006-unify-html-latex-renderers.md) (the single tree
   walk + shared per-key `layout_style` vocabulary the three surfaces resolve

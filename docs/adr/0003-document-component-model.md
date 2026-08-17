@@ -1,6 +1,12 @@
 # 0003 — Composable document-component model: catalog, data-driven templates, generated ToC
 
-- **Status:** Proposed (2026-05-26)
+- **Status:** Proposed (2026-05-26). **Largely realized (noted 2026-08-17):** this
+  ADR records a design and says "no code is changed by this ADR", but the model it
+  describes is live — `COMPONENT_CATALOG` (`render_capabilities.py`), the
+  data-driven YAML templates + instantiator, and the generated ToC all shipped
+  (across later commits, not this ADR). Kept as Proposed because it is a design
+  record, not an implementation ticket; the roadmap items at the end are the
+  residual work.
 - **Amended:** 2026-05-29 — Amendment 1 (declarative layout settings + the
   YAML / UI coordination model); see the end of this document.
 - **Deciders:** Dan Svoboda
