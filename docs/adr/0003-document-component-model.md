@@ -14,19 +14,33 @@
   - **Amendment 1 (declarative layout)** — DONE: the `landscape_requested` resolver
     + YAML `orientation`/`break_before`/`break_after` + capability-gated validation
     (this line of work also became ADR-0009).
-  - **Part B (sub-addressable content items)** — ⚠ **HALF-BUILT, and the rest is a
-    CONFIRMED LIVE REQUIREMENT (user 2026-08-17), NOT superseded.** The
-    `component_id::item_id` addressing scheme exists and drives per-content-item
-    ORIENTATION today (`render_capabilities.content_item_landscape_requested`,
-    :506). STILL TO BUILD: (1) per-content-item BREAKS (orientation half shipped,
-    breaks half not); (2) a renderer-consumed `content_items` list on `DocNode`
-    (today `DocNode` carries no content-item structure and no emitter iterates one);
-    (3) decomposing the `genomics-section` MONOLITH (one `data_key="genomics_sections"`
-    node that expands at render time) into that declared content-item iteration.
-    Note this is authoring/tree tidiness + a real breaks feature — it is NOT a BITS
+  - **Part B (sub-addressable content items)** — **Feature 1 DONE (2026-08-17,
+    stages 1–4, commits `fd024ef`→`9715e07`); Feature 2 (breaks) DEFERRED.** The
+    `content_items` feature is built and landed:
+    - `document_model/content_item.py` `ContentItem` (leaf) + a
+      `DocNode.content_items` field threaded through serialize/instantiate/validate/
+      collectors as a NO-OP (empty default; frozen-tree golden byte-identical).
+    - `render_common.resolve_content_items(node, data)` — the ONE ordered sequence
+      all four emitters iterate: template-AUTHORED items first, then RENDER-TIME
+      genomics items (the hybrid). The genomics monolith is retired — the four
+      `_render_genomics_section` handlers now share this resolver instead of each
+      duplicating the entry×item loop (proven byte-identical on all 4 surfaces).
+    - JATS genomics NARRATIVE reached parity for free (stage 1): the emitter no
+      longer drops genomics prose.
+    - Authored `text` items render on all four surfaces; table/chart/image authored
+      kinds emit a visible pending marker (no report authors them yet).
+    - Per-content-item ORIENTATION already shipped earlier
+      (`render_capabilities.content_item_landscape_requested`, :506).
+    STILL TO DO: **Feature 2 — the per-node + per-content-item BREAK stack** (stages
+    5–8: `break_requested`/`content_item_break_requested` resolvers, a `data["breaks"]`
+    overlay, DocNode break fields, capability-gated validation, per-surface + client
+    wiring — retiring the dead `breakable` capability). A separate pass; the plan is
+    recorded (memory `project_document_component_model` / the silly-noodling-sunset
+    plan). Also pending: real production authoring of a static genomics intro
+    (mechanism is wired + dormant; waits on actual prose).
+    Note Part B is authoring/tree tidiness + a real breaks feature — it is NOT a BITS
     prerequisite: BITS containment is entirely the `jats_generator` emitter's job
-    (the StyleChecker/DTD gate is already green on the current monolith), and tree
-    granularity does not touch it.
+    (the StyleChecker/DTD gate is already green), and tree granularity does not touch it.
   - **Migration step 6 (transcriptomics greenfield)** — a validation exercise for
     the model, never a shipped deliverable; author it as a template selection if/when
     a transcriptomics section is actually needed.
