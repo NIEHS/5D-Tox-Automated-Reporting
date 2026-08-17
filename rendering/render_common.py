@@ -930,6 +930,80 @@ def genomics_entries(node: DocNode, data: dict) -> list[dict]:
     return [s for s in (data.get("genomics_sections", []) or []) if s.get("type") == role]
 
 
+# ---------------------------------------------------------------------------
+# Content-item resolution (ADR-0003 Part B) — the one sequence every emitter
+# iterates for a component's sub-addressable content items.
+# ---------------------------------------------------------------------------
+# The two authoring modes converge HERE, at the emitter boundary, rather than by
+# mutating the process-global DOCUMENT_TREE (which per-session data-derived items
+# must never touch):
+#   * RENDER-TIME (genomics) — flatten genomics_content_plan across the section's
+#     entries; each resolved item carries its (entry, role) so the surface's
+#     existing per-item renderer works unchanged.
+#   * TEMPLATE-AUTHORED (static) — a node's own content_items list (wired in a
+#     later stage; not yet consumed here).
+# Stage 2 covers ONLY the genomics branch as a behavior-preserving refactor: the
+# four _render_genomics_section handlers stop calling genomics_content_plan
+# directly and iterate resolve_content_items instead, byte-identically.
+
+class ResolvedContentItem:
+    """One content item ready for an emitter, carrying everything the surface's
+    per-item renderer needs. For genomics: the plan dict (`item`) plus its source
+    `entry` and `role`, so `_render_genomics_item(entry, role, item)` is unchanged.
+
+    `component_id` + `item_id` give the composite overlay/anchor key
+    "<component_id>::<item_id>". `orientable` mirrors the plan flag.
+    """
+
+    __slots__ = ("component_id", "item_id", "orientable", "source", "entry",
+                 "role", "item")
+
+    def __init__(self, *, component_id, item_id, orientable, source,
+                 entry=None, role=None, item=None):
+        self.component_id = component_id
+        self.item_id = item_id
+        self.orientable = orientable
+        self.source = source          # "genomics" | "authored"
+        self.entry = entry            # genomics: the source entry dict
+        self.role = role              # genomics: "gene_set" | "gene"
+        self.item = item              # genomics: the plan dict
+
+    @property
+    def overlay_key(self) -> str:
+        return f"{self.component_id}::{self.item_id}"
+
+
+def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentItem]":
+    """The ordered content items a component contributes, medium-agnostically.
+
+    Genomics-section → the per-entry genomics_content_plan flattened in document
+    order, each item wrapped with its (entry, role). Any other node → [] (the
+    template-authored branch lands in a later stage). This is the single sequence
+    all four emitters iterate; it reproduces the former per-handler
+    entry×item nested loop exactly (byte-identical) while removing the
+    per-surface duplication of that loop.
+    """
+    from genomics.genomics_content import genomics_content_plan
+
+    if node.node_type == "genomics-section":
+        role = genomics_role(node)
+        resolved: list[ResolvedContentItem] = []
+        for entry in genomics_entries(node, data):
+            for item in genomics_content_plan(entry, role):
+                resolved.append(ResolvedContentItem(
+                    component_id=node.id,
+                    item_id=item["item_id"],
+                    orientable=item.get("orientable", False),
+                    source="genomics",
+                    entry=entry,
+                    role=role,
+                    item=item,
+                ))
+        return resolved
+
+    return []
+
+
 # Genomics BMD values print to 3 decimals in the reference (e.g. "0.520",
 # "0.160–2.885") — one place finer than the apical default.
 _GENOMICS_DECIMALS = 3

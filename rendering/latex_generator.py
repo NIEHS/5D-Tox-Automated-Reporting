@@ -99,6 +99,7 @@ from rendering.render_common import (
     genomics_role,
     genomics_intro_paragraphs,
     genomics_entries,
+    resolve_content_items,
     gene_set_table_rows,
     gene_table_rows,
     genomics_description_items,
@@ -109,7 +110,6 @@ from rendering.render_common import (
     find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
-from genomics.genomics_content import genomics_content_plan
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from document_model.cover_layouts import get_cover_layout
@@ -905,33 +905,31 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     if intro:
         blocks.append(intro)
 
-    for entry in entries:
-        # One entry per organ (both sexes stacked in a single table — reference
-        # Tables 9–12).  No per-sex subsection heading; the table's own Male /
-        # Female separator rows delineate the sexes.
-        #
-        # Each organ block is an ordered list of sub-addressable content
-        # items (ADR-0003 Phase 4); the table is independently orientable, so a
-        # wide gene table can flip landscape on its own via the composite
-        # "(component, content-item)" orientation key.  Order/identity come from
-        # the shared content plan; this loop reproduces the former monolith's
-        # output when no per-item orientation is set.
-        for item in genomics_content_plan(entry, role):
-            chunk = _render_genomics_item(entry, role, item)
-            if not chunk:
-                continue
-            if item["orientable"] and content_item_landscape_requested(
-                node.id, item["item_id"], data.get("orientations")
-            ):
-                chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
-            # ADR-0005: sub-addressable item grain — key on the composite
-            # "<node-id>::<item-id>" (the same key the orientation overlay uses)
-            # so a single genomics narrative/table can be overridden + attributed
-            # on its own.  Override first, then bracket in item sentinels.
-            item_key = f"{node.id}::{item['item_id']}"
-            chunk = _apply_override(chunk, data.get("overrides") or {}, item_key, data)
-            chunk = _anchor("item", item_key, chunk)
-            blocks.append(chunk)
+    # One entry per organ (both sexes stacked in a single table — reference
+    # Tables 9–12).  No per-sex subsection heading; the table's own Male /
+    # Female separator rows delineate the sexes.
+    #
+    # ADR-0003 Part B: the entry×item nested loop is now the shared
+    # resolve_content_items sequence (same order/identity, byte-identical). Each
+    # organ block's items are sub-addressable: the table is independently
+    # orientable, so a wide gene table can flip landscape on its own via the
+    # composite "(component, content-item)" orientation key.
+    for r in resolve_content_items(node, data):
+        chunk = _render_genomics_item(r.entry, r.role, r.item)
+        if not chunk:
+            continue
+        if r.orientable and content_item_landscape_requested(
+            r.component_id, r.item_id, data.get("orientations")
+        ):
+            chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+        # ADR-0005: sub-addressable item grain — key on the composite
+        # "<node-id>::<item-id>" (the same key the orientation overlay uses)
+        # so a single genomics narrative/table can be overridden + attributed
+        # on its own.  Override first, then bracket in item sentinels.
+        item_key = r.overlay_key
+        chunk = _apply_override(chunk, data.get("overrides") or {}, item_key, data)
+        chunk = _anchor("item", item_key, chunk)
+        blocks.append(chunk)
 
     return "\n\n".join(b for b in blocks if b)
 

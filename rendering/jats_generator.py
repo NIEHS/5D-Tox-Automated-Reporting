@@ -71,8 +71,8 @@ from rendering.render_common import (
     gene_table_rows,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
+    resolve_content_items,
 )
-from genomics.genomics_content import genomics_content_plan
 
 # JATS has no default namespace in the archiving/publishing tag set (elements
 # are unqualified); xlink IS namespaced.  ElementMaker with no namespace emits
@@ -502,36 +502,35 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
         return out
 
     charts_deferred = False
-    for entry in entries:
-        organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
-        wrap_id = f"{'gs' if role == 'gene_set' else 'g'}-{organ}"
-        for item in genomics_content_plan(entry, role):
-            part = item.get("part")
-            if part == "narrative":
-                for para in entry.get("narrative") or []:
-                    if isinstance(para, str) and para.strip():
-                        out.append(_p(para))
-            elif part == "table":
-                rows = (
-                    gene_set_table_rows(entry) if role == "gene_set"
-                    else gene_table_rows(entry)
-                )
-                headers = GENE_SET_TABLE_HEADERS if role == "gene_set" else GENE_TABLE_HEADERS
-                if rows:
-                    out.append(_table_wrap(
-                        wrap_id, genomics_table_caption(entry), list(headers), rows,
-                    ))
-            elif part == "descriptions":
-                descriptions = (
-                    entry.get("go_descriptions") if role == "gene_set"
-                    else entry.get("gene_descriptions")
-                ) or []
-                for label, text in genomics_description_items(descriptions):
-                    combined = f"{label}: {text}" if label else text
-                    if combined and combined.strip():
-                        out.append(_p(combined))
-            elif part == "chart":
-                charts_deferred = True
+    for r in resolve_content_items(node, data):
+        entry, part = r.entry, r.item.get("part")
+        if part == "narrative":
+            for para in entry.get("narrative") or []:
+                if isinstance(para, str) and para.strip():
+                    out.append(_p(para))
+        elif part == "table":
+            rows = (
+                gene_set_table_rows(entry) if role == "gene_set"
+                else gene_table_rows(entry)
+            )
+            headers = GENE_SET_TABLE_HEADERS if role == "gene_set" else GENE_TABLE_HEADERS
+            if rows:
+                organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
+                wrap_id = f"{'gs' if role == 'gene_set' else 'g'}-{organ}"
+                out.append(_table_wrap(
+                    wrap_id, genomics_table_caption(entry), list(headers), rows,
+                ))
+        elif part == "descriptions":
+            descriptions = (
+                entry.get("go_descriptions") if role == "gene_set"
+                else entry.get("gene_descriptions")
+            ) or []
+            for label, text in genomics_description_items(descriptions):
+                combined = f"{label}: {text}" if label else text
+                if combined and combined.strip():
+                    out.append(_p(combined))
+        elif part == "chart":
+            charts_deferred = True
 
     # Charts are the one remaining gap — mark it explicitly (image-packaging phase).
     if charts_deferred:

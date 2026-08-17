@@ -81,7 +81,7 @@ from rendering.render_common import (
     genomics_description_items,
     genomics_entries,
     genomics_intro_paragraphs,
-    genomics_role,
+    resolve_content_items,
     genomics_table_caption,
     has_paragraph_content,
     normalize_inline,
@@ -94,7 +94,6 @@ from rendering.render_common import (
     table_caption as _table_caption,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
-from genomics.genomics_content import genomics_content_plan
 from document_model.layout_style import resolve_layout_style
 from document_model.render_capabilities import front_matter_roles_for, landscape_requested
 
@@ -1248,7 +1247,6 @@ def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     """Gene Set / Gene BMD section — per-(organ, sex) subsections."""
-    role = genomics_role(node)
     _add_heading(doc, node.level, node.title, data)
     _body_style = _pstyle_or_default(doc, data, "body_para")
     intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data), style=_body_style)
@@ -1262,9 +1260,10 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     # One entry per organ (both sexes stacked in a single table — reference
     # Tables 9–12).  No per-sex subsection heading; the table's own **Male** /
     # **Female** separator rows delineate the sexes.
-    for entry in entries:
-        for item in genomics_content_plan(entry, role):
-            _render_genomics_item(doc, entry, role, item)
+    # ADR-0003 Part B: iterate the shared resolve_content_items sequence (same
+    # order/identity as the former entry×item nested loop, byte-identical).
+    for r in resolve_content_items(node, data):
+        _render_genomics_item(doc, r.entry, r.role, r.item)
 
 
 def _render_genomics_item(doc: Document, entry: dict, role: str, item: dict) -> None:
