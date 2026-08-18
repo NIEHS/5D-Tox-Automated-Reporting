@@ -1033,6 +1033,10 @@ async function buildExportPayload() {
         // flipped (tables / charts / figures).  Consumed by both renderers
         // (pdflscape in LaTeX, @page landscape in the HTML preview).
         orientations: (typeof getOrientations === 'function') ? getOrientations() : {},
+        // ADR-0003 Part B Feature 2: per-content-item page breaks, keyed by the
+        // composite "<node>::<item>" string ({before, after}).  Consumed as
+        // data["breaks"] server-side; empty → no item breaks.
+        breaks: (typeof getBreaks === 'function') ? getBreaks() : {},
     };
 }
 

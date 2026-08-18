@@ -232,6 +232,32 @@ function _saveOrientations(map) {
     localStorage.setItem(_orientationStoreKey(), JSON.stringify(map));
 }
 
+// ADR-0003 Part B Feature 2: per-CONTENT-ITEM page breaks. The break overlay is
+// keyed by the composite "<node-id>::<item-id>" string (the same shape the
+// orientation overlay uses at item grain), with a {before, after} value, so an
+// individual table/chart inside a section can start its own page. NODE-level
+// breaks are the styles.instances break channel (server-side), not this overlay.
+// Like orientation, this is persisted per session and read into the export
+// payload; there is no in-app toggle UI yet (matches getOrientations).
+function _breaksStoreKey() {
+    const dtxsid = (typeof currentIdentity !== 'undefined' && currentIdentity && currentIdentity.dtxsid)
+        || 'session';
+    return `breaks:${dtxsid}`;
+}
+
+// Read the {"<node>::<item>": {before, after}} break map for the current session.
+function getBreaks() {
+    try {
+        return JSON.parse(localStorage.getItem(_breaksStoreKey()) || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function _saveBreaks(map) {
+    localStorage.setItem(_breaksStoreKey(), JSON.stringify(map));
+}
+
 // Find a node object in the served document tree (depth-first).  The tree
 // is annotated server-side with per-node capabilities (see
 // render_capabilities.annotate_capabilities), so callers read

@@ -70,6 +70,7 @@
       "A summary of the calculated BMDs for each toxicological endpoint is provided in Table 8. The endpoint-specific LOEL and NOEL are included and could be informative for endpoints that lack a calculated BMD either because no viable model was available or because the estimated BMD was below the lower limit of extrapolation (<1 mg/kg)."
     ]
   },
+  "breaks": {},
   "casrn": "1-1-1",
   "chemical_name": "Test Article",
   "document_tree": [

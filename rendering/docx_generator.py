@@ -96,7 +96,11 @@ from rendering.render_common import (
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from document_model.layout_style import resolve_layout_style
-from document_model.render_capabilities import front_matter_roles_for, landscape_requested
+from document_model.render_capabilities import (
+    front_matter_roles_for,
+    landscape_requested,
+    content_item_break_requested,
+)
 
 _REL_HYPERLINK = _REL.HYPERLINK
 from tables.table_builder_common import format_display_number, format_mean_se_display
@@ -1266,10 +1270,24 @@ def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     # order/identity as the former entry×item nested loop, byte-identical for a
     # pure-genomics node). Template-authored items (if any) come first.
     for r in resolved:
+        # ADR-0003 Part B Feature 2: per-content-item page break, gated by the
+        # item's `breakable` flag + the composite-key break overlay. Emitted
+        # around the item's paragraphs (docx page_break_before / trailing PAGE
+        # run — the same mechanism the node-level style break uses). A
+        # break-BEFORE on a table-only item (no leading paragraph) is carried by
+        # a dedicated empty break paragraph inserted first.
+        _brk = data.get("breaks") if r.breakable else None
+        if _brk and content_item_break_requested(r.component_id, r.item_id, _brk, "before"):
+            doc.add_paragraph().paragraph_format.page_break_before = True
+        before = len(doc.paragraphs)
         if r.source == "authored":
             _render_authored_item(doc, r.content_item, data)
         else:
             _render_genomics_item(doc, r.entry, r.role, r.item)
+        if _brk and content_item_break_requested(r.component_id, r.item_id, _brk, "after"):
+            # Trailing page break after the item (Word has no pageBreakAfter).
+            new_paras = doc.paragraphs[before:]
+            (new_paras[-1] if new_paras else doc.add_paragraph()).add_run().add_break(WD_BREAK.PAGE)
 
 
 def _render_authored_item(doc: Document, ci, data: dict) -> None:

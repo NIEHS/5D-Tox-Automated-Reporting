@@ -56,7 +56,10 @@ from document_model.document_tree import (
     first_body_node_id,
     walk_tree,
 )
-from document_model.render_capabilities import content_item_landscape_requested
+from document_model.render_capabilities import (
+    content_item_landscape_requested,
+    content_item_break_requested,
+)
 from rendering.render_common import (
     NarrativeContent,
     resolve_narrative_content,
@@ -1005,6 +1008,18 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
             r.component_id, r.item_id, data.get("orientations")
         ):
             chunk = f'<div class="landscape-block">{chunk}</div>'
+        # ADR-0003 Part B Feature 2: per-content-item page break, gated by the
+        # item's `breakable` flag + the composite-key break overlay. Print-CSS
+        # break-before/after:page at the item boundary (Paged.js honors it).
+        if r.breakable:
+            _brk = data.get("breaks")
+            styles = []
+            if content_item_break_requested(r.component_id, r.item_id, _brk, "before"):
+                styles.append("break-before:page")
+            if content_item_break_requested(r.component_id, r.item_id, _brk, "after"):
+                styles.append("break-after:page")
+            if styles:
+                chunk = f'<div style="{";".join(styles)}">{chunk}</div>'
         # ADR-0005 item-grain override: a single genomics narrative/table
         # can be edited + attributed on its own via the composite
         # "<node-id>::<item-id>" key (mirrors latex_generator).  Applied

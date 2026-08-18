@@ -307,6 +307,14 @@ def marshal_export_data(
     # nodes render normally.
     data["orientations"] = body.get("orientations") or {}
 
+    # Per-CONTENT-ITEM page breaks (ADR-0003 Part B Feature 2): a composite-key
+    # overlay {"<node-id>::<item-id>": {"before": bool, "after": bool}} for a
+    # break INSIDE a component (e.g. a genomics table item starts its own page).
+    # NODE-level breaks are handled separately by the styles.instances break
+    # channel (resolve_layout_style) — this overlay is the item grain that
+    # channel cannot reach.  Absent → no item breaks (byte-identical default).
+    data["breaks"] = body.get("breaks") or {}
+
     # Per-content-type layout styling (fonts + page flow).  A single ``styles``
     # config, resolved per-node by layout_style.resolve_layout_style, that BOTH
     # renderers consume identically (LaTeX wraps each chunk, HTML emits CSS —

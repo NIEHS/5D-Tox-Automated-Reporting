@@ -155,3 +155,85 @@ def test_authored_unwired_kind_emits_pending_marker_not_crash():
     node.content_items = [ContentItem(id="t", kind="table", data_key="nope")]
     from rendering.latex_generator import _render_genomics_section as latex_gs
     assert "not yet wired" in latex_gs(node, {"genomics_sections": []})
+
+
+# --- Feature 2: per-content-item page breaks --------------------------------
+
+def _genomics_data_with_table():
+    return {"genomics_sections": [
+        {"type": "gene_set", "organ": "Liver",
+         "gene_sets": [{"name": "GO:x", "bmd_median": "0.5"}]},
+    ]}
+
+
+def test_break_overlay_fires_per_item_on_latex_html_docx():
+    node = _genomics_node()  # a genomics-section node
+    data = _genomics_data_with_table()
+    # break BEFORE the liver table item (composite key)
+    withbrk = {**data, "breaks": {"gene-sets::liver-table": {"before": True}}}
+
+    from rendering.latex_generator import _render_genomics_section as latex_gs
+    assert "\\clearpage" in latex_gs(node, withbrk)
+    from rendering.html_generator import _render_genomics_section as html_gs
+    assert "break-before:page" in html_gs(node, withbrk)
+    from docx import Document
+    from rendering.docx_generator import _render_genomics_section as docx_gs
+    doc = Document()
+    docx_gs(doc, node, withbrk)
+    assert any(p.paragraph_format.page_break_before for p in doc.paragraphs)
+
+
+def test_break_absent_is_byte_identical_baseline():
+    # No break overlay → no break markup anywhere (the no-op safety property).
+    node = _genomics_node()
+    data = _genomics_data_with_table()
+    from rendering.latex_generator import _render_genomics_section as latex_gs
+    assert "\\clearpage" not in latex_gs(node, data)
+    from rendering.html_generator import _render_genomics_section as html_gs
+    assert "break-before:page" not in html_gs(node, data)
+
+
+def test_break_only_fires_on_breakable_items():
+    # The narrative item is not breakable; a break keyed to it must NOT emit.
+    node = _genomics_node()
+    data = {"genomics_sections": [
+        {"type": "gene_set", "organ": "Liver", "narrative": ["Prose."],
+         "gene_sets": [{"name": "GO:x"}]},
+    ], "breaks": {"gene-sets::liver-narrative": {"before": True}}}
+    from rendering.latex_generator import _render_genomics_section as latex_gs
+    # narrative is not breakable → its break key is ignored → no clearpage
+    assert "\\clearpage" not in latex_gs(node, data)
+
+
+def test_content_item_break_requested_resolver():
+    from document_model.render_capabilities import content_item_break_requested
+    brk = {"gene-sets::liver-table": {"before": True, "after": False}}
+    assert content_item_break_requested("gene-sets", "liver-table", brk, "before") is True
+    assert content_item_break_requested("gene-sets", "liver-table", brk, "after") is False
+    # absent key / None overlay / non-dict entry → False (never raises)
+    assert content_item_break_requested("gene-sets", "kidney-table", brk, "before") is False
+    assert content_item_break_requested("gene-sets", "liver-table", None, "before") is False
+    assert content_item_break_requested("x", "y", {"x::y": "page"}, "before") is False
+
+
+def test_resolved_content_item_carries_breakable():
+    seq = resolve_content_items(_genomics_node(), _genomics_data_with_table())
+    table = next(r for r in seq if r.item_id == "liver-table")
+    assert table.breakable is True
+
+
+def test_breaks_overlay_ingested_from_request_body():
+    # The client sends a `breaks` composite-key map in the export payload;
+    # marshal_export_data must surface it as data["breaks"] (mirrors orientations).
+    from rendering.report_data import marshal_export_data
+    body = {
+        "chemical_name": "Test Article", "casrn": "1-1-1",
+        "dtxsid": "DTXSID_TEST_NO_SESSION",
+        "breaks": {"gene-sets::liver-table": {"before": True}},
+    }
+    out = marshal_export_data(body)
+    assert out["breaks"] == {"gene-sets::liver-table": {"before": True}}
+    # absent → empty (byte-identical default)
+    out2 = marshal_export_data({"chemical_name": "X", "casrn": "1",
+                                "dtxsid": "DTXSID_TEST_NO_SESSION"})
+    assert out2["breaks"] == {}

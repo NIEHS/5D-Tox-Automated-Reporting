@@ -74,7 +74,10 @@ from document_model.document_tree import (
     first_body_node_id,
     walk_tree,
 )
-from document_model.render_capabilities import content_item_landscape_requested
+from document_model.render_capabilities import (
+    content_item_landscape_requested,
+    content_item_break_requested,
+)
 from rendering.render_common import (
     NarrativeContent,
     resolve_narrative_content,
@@ -932,6 +935,16 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
             r.component_id, r.item_id, data.get("orientations")
         ):
             chunk = "\\begin{landscape}\n" + chunk + "\n\\end{landscape}"
+        # ADR-0003 Part B Feature 2: per-content-item page break. Gated by the
+        # item's `breakable` flag + the composite-key break overlay (the item
+        # grain the node-level styles.instances break channel cannot reach).
+        # \clearpage at the item boundary, outside the landscape wrap.
+        if r.breakable:
+            _brk = data.get("breaks")
+            if content_item_break_requested(r.component_id, r.item_id, _brk, "before"):
+                chunk = "\\clearpage\n" + chunk
+            if content_item_break_requested(r.component_id, r.item_id, _brk, "after"):
+                chunk = chunk + "\n\\clearpage"
         # ADR-0005: sub-addressable item grain — key on the composite
         # "<node-id>::<item-id>" (the same key the orientation overlay uses)
         # so a single genomics narrative/table can be overridden + attributed

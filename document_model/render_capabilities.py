@@ -523,6 +523,31 @@ def content_item_landscape_requested(
     return (orientations or {}).get(f"{component_id}::{item_id}") == "landscape"
 
 
+def content_item_break_requested(
+    component_id: str, item_id: str, breaks: dict | None, edge: str = "before",
+) -> bool:
+    """
+    Whether a page break should be placed before/after a specific content item
+    INSIDE a component (ADR-0003 Part B Feature 2, sub-addressable page breaks).
+
+    The twin of content_item_landscape_requested: the break overlay is keyed by
+    the SAME composite "component_id::content_item_id" string, so an individual
+    table or chart inside a section can start (or end) its own page independently
+    of the whole node. Node-level breaks stay on the separate, established
+    `styles.instances.<id>.break_before` channel (resolve_layout_style) — this
+    resolver is ONLY for the item grain that channel cannot reach.
+
+    The overlay value is a mapping ``{"before": bool, "after": bool}``; `edge`
+    selects which. There is no per-type capability gate (like the orientation
+    twin): the caller consults this only for items its content plan marks
+    `breakable`, so breakability is decided by the plan, not the node type.
+    """
+    entry = (breaks or {}).get(f"{component_id}::{item_id}")
+    if not isinstance(entry, dict):
+        return False
+    return entry.get(edge) is True
+
+
 def annotate_capabilities(nodes: list[dict]) -> list[dict]:
     """
     Walk a *serialized* tree (the list-of-dicts from serialize_tree) and add

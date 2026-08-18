@@ -952,17 +952,19 @@ class ResolvedContentItem:
     `entry` and `role`, so `_render_genomics_item(entry, role, item)` is unchanged.
 
     `component_id` + `item_id` give the composite overlay/anchor key
-    "<component_id>::<item_id>". `orientable` mirrors the plan flag.
+    "<component_id>::<item_id>". `orientable` / `breakable` mirror the plan flags
+    (they gate the per-item landscape / page-break overlays).
     """
 
-    __slots__ = ("component_id", "item_id", "orientable", "source", "entry",
-                 "role", "item", "content_item")
+    __slots__ = ("component_id", "item_id", "orientable", "breakable", "source",
+                 "entry", "role", "item", "content_item")
 
     def __init__(self, *, component_id, item_id, orientable, source,
-                 entry=None, role=None, item=None, content_item=None):
+                 breakable=False, entry=None, role=None, item=None, content_item=None):
         self.component_id = component_id
         self.item_id = item_id
         self.orientable = orientable
+        self.breakable = breakable
         self.source = source          # "genomics" | "authored"
         self.entry = entry            # genomics: the source entry dict
         self.role = role              # genomics: "gene_set" | "gene"
@@ -1000,6 +1002,7 @@ def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentIte
             component_id=node.id,
             item_id=ci.id,
             orientable=ci.orientable,
+            breakable=ci.breakable,
             source="authored",
             content_item=ci,
         ))
@@ -1013,6 +1016,7 @@ def resolve_content_items(node: DocNode, data: dict) -> "list[ResolvedContentIte
                     component_id=node.id,
                     item_id=item["item_id"],
                     orientable=item.get("orientable", False),
+                    breakable=item.get("breakable", False),
                     source="genomics",
                     entry=entry,
                     role=role,

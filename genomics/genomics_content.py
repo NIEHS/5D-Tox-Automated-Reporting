@@ -43,12 +43,12 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
     """
     The ordered content items for one (organ, sex) genomics entry.
 
-    Returns a list of dicts {item_id, kind, part, orientable}, where `part`
-    tells the renderer which payload to emit.  Order matches the original
+    Returns a list of dicts {item_id, kind, part, orientable, breakable}, where
+    `part` tells the renderer which payload to emit.  Order matches the original
     monolith exactly: narrative (only if present) -> table (always) ->
-    descriptions (only if present).  The table is the one orientable item (it
-    is wide and may flip landscape); prose is not.  Phase 5 inserts chart items
-    into this list (orientable charts), with no change to the renderers' loop.
+    descriptions (only if present).  The table + charts are orientable (wide,
+    may flip landscape) AND breakable (may start their own page via the
+    composite-key break overlay, ADR-0003 Part B Feature 2); prose is neither.
 
     item_ids are scoped to the (organ, sex) block, so the full overlay key for
     a content item is "<component-id>::<item_id>" (see
@@ -60,14 +60,16 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
     if entry.get("narrative"):
         plan.append(
             {"item_id": f"{base}-narrative", "kind": "text",
-             "part": "narrative", "orientable": False}
+             "part": "narrative", "orientable": False, "breakable": False}
         )
 
     # The table is always planned: even with no rows the renderer emits a
     # visible "pending" placeholder, matching the pre-decomposition behaviour.
+    # A table is both orientable (wide → landscape) and breakable (may start its
+    # own page via the composite-key break overlay — ADR-0003 Part B Feature 2).
     plan.append(
         {"item_id": f"{base}-table", "kind": "table",
-         "part": "table", "orientable": True}
+         "part": "table", "orientable": True, "breakable": True}
     )
 
     # Charts (Phase 5): one orientable content item per attached chart image
@@ -82,7 +84,7 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
         key = chart.get("key", "chart")
         plan.append(
             {"item_id": f"{base}-{key}", "kind": "chart", "part": "chart",
-             "chart_key": key, "orientable": True}
+             "chart_key": key, "orientable": True, "breakable": True}
         )
 
     descriptions = (
@@ -92,7 +94,7 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
     if descriptions:
         plan.append(
             {"item_id": f"{base}-descriptions", "kind": "text",
-             "part": "descriptions", "orientable": False}
+             "part": "descriptions", "orientable": False, "breakable": False}
         )
 
     return plan
