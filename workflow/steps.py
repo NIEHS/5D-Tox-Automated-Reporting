@@ -333,3 +333,26 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
     report_dict = report_to_dict(report)
     store.write_json(dtxsid, "animal_report.json", report_dict)
     return report_dict
+
+
+# ---------------------------------------------------------------------------
+# process
+# ---------------------------------------------------------------------------
+
+async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
+    """Turn the integrated project into report content (the heavy compute).
+
+    Runs NTP statistics, BMDS dose-response modeling, genomics extraction,
+    section cards, and LLM narratives, returning the assembled `result_payload`
+    dict. `params` is the settings dict a UI would post (compound_name,
+    dose_unit, bmd_stats, go_* cutoffs); template-derived filters are resolved
+    inside the core. Raises StepError(400) if the session has not been
+    integrated, StepError(500) on a processing failure.
+
+    The core lives in `pipeline.process_integrated.run_process` (it owns the
+    ProcessContext + layer orchestration). We import it lazily because that
+    module imports this one at module load (it reuses generate_animal_report_step
+    for the animal-report route) — a top-level import here would be a cycle.
+    """
+    from pipeline.process_integrated import run_process
+    return await run_process(dtxsid, params or {}, store)

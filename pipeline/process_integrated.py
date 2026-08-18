@@ -961,8 +961,9 @@ async def _get_methods(ctx):
 @router.post("/api/process-integrated/{dtxsid}")
 async def api_process_integrated(dtxsid: str, request: Request):
     """
-    Process the integrated BMDProject JSON into section cards with tables
-    and narratives for each apical endpoint platform.
+    HTTP transport for the processing pipeline. Parses the request body and
+    delegates to the HTTP-free core `run_process` (ADR-0014). A StepError from
+    the core becomes the {'error': msg} JSONResponse the UI expects.
 
     Input JSON:
       {
@@ -974,9 +975,34 @@ async def api_process_integrated(dtxsid: str, request: Request):
         "go_max_genes": 500,
         "go_min_bmd": 3
       }
+    """
+    # Tolerate empty or missing request bodies — the UI sometimes sends
+    # POST with no content (e.g., from a simple fetch without JSON body).
+    try:
+        params = await request.json()
+    except Exception:
+        params = {}
+
+    try:
+        result_payload = await run_process(dtxsid, params, DiskPoolStore())
+    except StepError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status_code)
+    return JSONResponse(result_payload)
+
+
+async def run_process(dtxsid: str, params: dict, store) -> dict:
+    """
+    HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
+
+    Turns the integrated BMDProject into section cards with tables and narratives
+    for each apical endpoint platform. Callers pass already-parsed `params` (the
+    request-body dict) and an injected `PoolStore`; the function returns the plain
+    `result_payload` dict and raises `StepError` on failure (the route translates
+    it to a status code; a notebook/TUI shows a message). Behavior is preserved
+    byte-for-byte against the pre-unwrap route handler.
 
     Orchestrates the processing pipeline:
-      1. Load integrated data (memory or disk)
+      1. Load integrated data (via the store)
       2. Check disk cache (return instantly on hit)
       3. Restore category lookup from serialized keys
       4. Filter gene expression experiments
@@ -988,13 +1014,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
       10. Build BMD summaries (BMDExpress 3 + BMDS)
       11. Cache and return
     """
-    # --- Parse request parameters ---
-    # Tolerate empty or missing request bodies — the UI sometimes sends
-    # POST with no content (e.g., from a simple fetch without JSON body).
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
+    body = params or {}
     compound_name = body.get("compound_name", "Test Compound")
     dose_unit = body.get("dose_unit", "mg/kg")
 
@@ -1028,12 +1048,11 @@ async def api_process_integrated(dtxsid: str, request: Request):
     gene_filter = load_report_genes(ACTIVE_TEMPLATE)
     gene_set_filter = load_report_gene_sets(ACTIVE_TEMPLATE)
 
-    # --- Load integrated data ---
-    integrated = _load_integrated(dtxsid)
+    # --- Load integrated data (through the injected store) ---
+    integrated = store.get_integrated(dtxsid)
     if not integrated:
-        return JSONResponse(
-            {"error": "No integrated data found -- run integration first"},
-            status_code=400,
+        raise StepError(
+            "No integrated data found -- run integration first", status_code=400
         )
 
     # Bundle the parsed request inputs into the context object threaded
@@ -1219,14 +1238,11 @@ async def api_process_integrated(dtxsid: str, request: Request):
             "methods": ctx.methods_result,
         }
 
-        return JSONResponse(result_payload)
+        return result_payload
 
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)
-        return JSONResponse(
-            {"error": f"Processing failed: {e}"},
-            status_code=500,
-        )
+        raise StepError(f"Processing failed: {e}", status_code=500)
 
 
 @router.post("/api/generate-animal-report/{dtxsid}")
