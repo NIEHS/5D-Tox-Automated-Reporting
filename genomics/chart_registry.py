@@ -92,9 +92,30 @@ class ChartType:
         return "code" if self.is_code else "data"
 
     @property
+    def resolved_builder(self) -> Callable | None:
+        """
+        The live builder for this type.
+
+        For a code type (``is_code``), the builder is looked up from the
+        module-level ``_BUILTIN_CHART_TYPES`` *at access time* rather than trusting
+        ``self.builder``.  This matters because a ChartType can be constructed
+        (e.g. by ``build_registry`` inside ``load_chart_types``) in the import
+        window *before* genomics_viz has run its ``register_builder`` calls — such
+        an instance captures ``builder=None`` permanently and would otherwise be
+        silently misrouted to the generic data-driven builder, producing a blank
+        chart.  Resolving against the live registry makes binding independent of
+        import order.  Data-driven types return their own (always-None) builder.
+        """
+        if self.is_code:
+            live = _BUILTIN_CHART_TYPES.get(self.name)
+            if live is not None and live.builder is not None:
+                return live.builder
+        return self.builder
+
+    @property
     def has_builder(self) -> bool:
         """Whether a Python figure builder is actually bound (runtime check)."""
-        return self.builder is not None
+        return self.resolved_builder is not None
 
 
 # ---------------------------------------------------------------------------

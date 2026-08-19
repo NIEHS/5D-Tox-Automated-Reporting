@@ -71,3 +71,6 @@ times*.ttf
 # backend, not GitHub (this is a public HHS repo — never push study data here).
 # The golden TEST fixtures are separate, under tests/fixtures/golden/.
 sessions/
+
+# generated offline kaleido MathJax stub (see genomics_viz._ensure_offline_kaleido)
+**/assets/mathjax_noop.js

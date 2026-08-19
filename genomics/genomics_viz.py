@@ -29,6 +29,57 @@ import genomics.chart_style as chart_style
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Offline kaleido rendering
+#
+# kaleido 1.x drives an external Chrome over the DevTools protocol to rasterize
+# figures. Two things break in an offline / firewalled environment:
+#   1. No Chrome on PATH — but a Playwright Chromium is present. choreographer
+#      (kaleido's browser driver) honors the BROWSER_PATH env var.
+#   2. kaleido's default HTML page pulls MathJax from a CDN. When the network is
+#      blocked that <script> never loads, the page load event never fires, and
+#      the render hangs forever. Our charts contain no LaTeX, so we point MathJax
+#      at a local no-op file instead of disabling it (plotly's kaleido bridge
+#      coerces an unset/False mathjax back to the CDN default).
+# Idempotent: safe to call before every render; only touches config on first run.
+# ---------------------------------------------------------------------------
+_KALEIDO_OFFLINE_READY = False
+
+
+def _ensure_offline_kaleido() -> None:
+    global _KALEIDO_OFFLINE_READY
+    if _KALEIDO_OFFLINE_READY:
+        return
+
+    import os
+
+    if not os.environ.get("BROWSER_PATH"):
+        browsers_root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+        if browsers_root:
+            candidates = sorted(
+                Path(browsers_root).glob("chromium-*/chrome-linux/chrome")
+            )
+            if candidates:
+                os.environ["BROWSER_PATH"] = str(candidates[-1])
+                logger.info("kaleido: using Chromium at %s", candidates[-1])
+
+    try:
+        import plotly.io as pio
+
+        mj = pio.defaults.mathjax
+        if not mj or "cdnjs.cloudflare.com" in str(mj):
+            stub = Path(__file__).resolve().parent / "assets" / "mathjax_noop.js"
+            stub.parent.mkdir(parents=True, exist_ok=True)
+            if not stub.exists():
+                stub.write_text("/* offline no-op: charts contain no LaTeX */\n")
+            pio.defaults.mathjax = stub.as_uri()
+    except Exception:
+        logger.warning("kaleido: could not configure offline MathJax", exc_info=True)
+
+    _KALEIDO_OFFLINE_READY = True
+
+
 # ---------------------------------------------------------------------------
 # Router — mounted by background_server.py
 # ---------------------------------------------------------------------------
@@ -268,8 +319,11 @@ def enrich_clusters(
     # Attempt Enrichr enrichment per cluster
     cluster_summary = []
     try:
-        from knowledge_base.enrichr_client import enrichr_enrich_genes
+        import time as _time
 
+        from knowledge_base.enrichr_client import API_DELAY, enrichr_enrich_genes
+
+        submitted = 0
         for cid in ranked_clusters:
             gs_list = by_cluster.get(cid, [])
 
@@ -284,6 +338,13 @@ def enrich_clusters(
             if len(cluster_genes) < 3:
                 cluster_summary.append(_internal_summary(cid, gs_list, cluster_genes))
                 continue
+
+            # Space consecutive Enrichr submissions so the batch pipeline
+            # doesn't burst the public rate limit (the client also retries
+            # 429 with backoff as a safety net).
+            if submitted:
+                _time.sleep(API_DELAY)
+            submitted += 1
 
             desc = f"Cluster {label} — {len(cluster_genes)} genes"
             enrichment = enrichr_enrich_genes(
@@ -1096,6 +1157,8 @@ def render_chart_images(
     """
     import base64
 
+    _ensure_offline_kaleido()
+
     # Ensure reference data is loaded
     _load_umap_reference()
 
@@ -1126,8 +1189,9 @@ def render_chart_images(
                 ct.name, organ, sex, bad,
             )
 
-        if ct.has_builder:
-            fig = ct.builder(
+        builder = ct.resolved_builder
+        if builder is not None:
+            fig = builder(
                 gene_sets, organ=organ, sex=sex, dose_unit=dose_unit,
                 style=style, clusters=clusters,
                 umap_ref=_UMAP_REF, umap_lookup=_UMAP_LOOKUP,

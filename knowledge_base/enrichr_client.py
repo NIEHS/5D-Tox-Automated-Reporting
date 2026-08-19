@@ -26,6 +26,7 @@ Usage:
 import json
 import logging
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -48,10 +49,43 @@ DEFAULT_LIBRARY = "GO_Biological_Process_2023"
 # on the public Enrichr service.
 API_DELAY = 0.3
 
+# Retry policy for HTTP 429 (Too Many Requests). The public Enrichr service
+# rate-limits bursts; a single UI click is naturally spaced, but the batch
+# pipeline fires one submit+fetch per cluster per organ/sex section back to
+# back and trips the limit. Retry with exponential backoff, honoring the
+# server's Retry-After header when present.
+MAX_RETRIES = 5
+BACKOFF_BASE = 1.0  # seconds; doubles each retry (1, 2, 4, 8, 16)
+
 
 # ---------------------------------------------------------------------------
 # Low-level API calls
 # ---------------------------------------------------------------------------
+
+
+def _urlopen_with_retry(req, *, timeout: float):
+    """
+    Open ``req`` retrying on HTTP 429, respecting Retry-After.
+
+    Any other HTTPError, or exhausting retries, re-raises so callers keep
+    their existing fallback behavior.
+    """
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == MAX_RETRIES:
+                raise
+            retry_after = e.headers.get("Retry-After") if e.headers else None
+            try:
+                delay = float(retry_after) if retry_after else BACKOFF_BASE * (2 ** attempt)
+            except ValueError:
+                delay = BACKOFF_BASE * (2 ** attempt)
+            logger.info(
+                "Enrichr 429; backing off %.1fs (attempt %d/%d)",
+                delay, attempt + 1, MAX_RETRIES,
+            )
+            time.sleep(delay)
 
 def enrichr_submit(gene_symbols: list[str], description: str) -> int:
     """
@@ -95,7 +129,7 @@ def enrichr_submit(gene_symbols: list[str], description: str) -> int:
         data=payload,
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with _urlopen_with_retry(req, timeout=30) as resp:
         body = json.loads(resp.read().decode("utf-8"))
 
     if "userListId" not in body:
@@ -128,7 +162,7 @@ def enrichr_fetch(user_list_id: int, library: str) -> list[dict]:
         f"&backgroundType={urllib.parse.quote(library)}"
     )
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with _urlopen_with_retry(req, timeout=60) as resp:
         body = json.loads(resp.read().decode("utf-8"))
 
     raw_terms = body.get(library, [])
