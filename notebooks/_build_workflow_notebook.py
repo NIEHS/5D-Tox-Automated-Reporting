@@ -240,18 +240,57 @@ written back into the fingerprints and prepended as `# Provider/# Platform/
 # Data Type` headers on `.txt`/`.csv` files (Java's `ExperimentDescriptionParser`
 reads them at import time).
 
-We pass an empty correction map here (the fingerprints already carry the right
-metadata for this reference pool); the cell shows the step is a no-op when
-there is nothing to correct.
+This mirrors the web UI's **"Confirm & Integrate"** review panel. Note what that
+panel actually lets you edit — and what it doesn't:
+
+- **Editable:** `platform` and `data_type` only (two dropdowns per file).
+- **Read-only:** `sexes` (auto-detected during validation) is *displayed* but not
+  editable. Assay / endpoint names are not in the panel at all — they are column
+  labels carried from the source data and only *filtered* downstream, never
+  renamed here.
+
+So "confirmation" = accepting or overriding the auto-detected
+`(platform, data_type)`. The web UI pre-selects each dropdown to the detected
+value, so a user who just clicks "Confirm & Integrate" without changing anything
+POSTs the values already present — a functional no-op. The notebook is the same:
+review the detected classification below, then set `CORRECTIONS` only for files
+you need to override. For this reference pool the detection is correct, so
+`CORRECTIONS` stays empty and the step is a no-op — identical to clicking through
+the UI panel unchanged.
 """)
 
 code(r"""
 from workflow.steps import confirm_metadata_step
 
-# {file_id: {"platform": ..., "data_type": ...}} — empty ⇒ accept as-is.
-corrections = {}
-result = confirm_metadata_step(DTXSID, corrections, store)
-print("confirm-metadata:", result)
+# --- Review the auto-detected classification (what the UI panel shows) --------
+# Fingerprint entries may be dataclass-like or plain dicts; read either.
+# Coerce an explicit None (present-but-unset) to the default so downstream
+# string formatting is safe.
+def _fp_get(fp, key, default=""):
+    val = getattr(fp, key, default) if hasattr(fp, key) else fp.get(key, default)
+    return default if val is None else val
+
+fps = store.get_fingerprints(DTXSID)
+print(f"{'file':<34} {'type':<5} {'platform':<20} {'data_type':<14} sexes")
+print("-" * 90)
+for fid, fp in fps.items():
+    fname = _fp_get(fp, "filename", fid)
+    ftype = _fp_get(fp, "file_type", "?")
+    platform = _fp_get(fp, "platform", "")
+    data_type = _fp_get(fp, "data_type", "")
+    sexes = ", ".join(_fp_get(fp, "sexes", []) or []) or "—"   # read-only, like the UI
+    print(f"{fname:<34.34} {ftype:<5} {platform:<20.20} {data_type:<14.14} {sexes}")
+
+# --- Overrides (the UI's two editable dropdowns) ------------------------------
+# {file_id: {"platform": ..., "data_type": ...}} — set an entry ONLY for a file
+# whose detected platform/data_type is wrong. Empty ⇒ accept detection as-is
+# (exactly what clicking "Confirm & Integrate" unchanged does).
+CORRECTIONS = {
+    # "Some file.txt": {"platform": "Hematology", "data_type": "tox_study"},
+}
+
+result = confirm_metadata_step(DTXSID, CORRECTIONS, store)
+print("\nconfirm-metadata:", result)
 """)
 
 # ---------------------------------------------------------------------------
