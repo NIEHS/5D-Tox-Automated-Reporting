@@ -116,6 +116,13 @@ We seed a throwaway session by copying **only the input files** (the `.bm2`,
 `.txt`/`.csv`, and `.sidecar.json` files) from the reference session — never its
 derived artifacts (`validation_report.json`, `integrated.json`, …). Deriving
 those from scratch is the whole point.
+
+**Re-running this notebook (warm vs cold):** this cell is *non-destructive* by
+default. If the demo session already exists (from a previous run), it is **left
+intact** — so `Run All` re-uses the cached `integrated.json` + `_cache_*` and the
+integrate/process cells finish in seconds instead of ~10 minutes. To force a
+clean end-to-end run from raw files, set `RESEED = True` below (or just delete
+`sessions/DTXSID_NB_DEMO/`).
 """)
 
 code(r"""
@@ -125,6 +132,7 @@ from workflow.store import DiskPoolStore
 
 DTXSID = "DTXSID_NB_DEMO"          # throwaway demo session
 SOURCE = "DTXSID50469320"          # reference session to copy inputs from
+RESEED = False                     # True = wipe + re-import (forces a full cold run)
 
 store = DiskPoolStore()
 
@@ -136,17 +144,27 @@ def show_state(dtxsid=DTXSID):
     print(f"  artifacts      = {s.artifacts}")
     return s
 
-# --- import the input files into a fresh session ---
 src_files = Path("sessions") / SOURCE / "files"
-dst_files = Path("sessions") / DTXSID / "files"
-if dst_files.parent.exists():
-    shutil.rmtree(dst_files.parent)          # start clean every run (idempotent)
-dst_files.mkdir(parents=True)
-n = 0
-for f in sorted(src_files.iterdir()):
-    shutil.copy2(f, dst_files / f.name)
-    n += 1
-print(f"imported {n} input files into sessions/{DTXSID}/files/\n")
+session   = Path("sessions") / DTXSID
+dst_files = session / "files"
+
+if RESEED and session.exists():
+    shutil.rmtree(session)                   # explicit cold start: drop derived artifacts too
+    print(f"RESEED: wiped sessions/{DTXSID}/\n")
+
+if dst_files.exists() and any(dst_files.iterdir()):
+    # Warm start — session already imported. Leave derived artifacts in place so
+    # downstream cells cache-hit instead of recomputing.
+    n = sum(1 for _ in dst_files.iterdir())
+    print(f"session already present — reusing {n} imported files (set RESEED=True for a clean run)\n")
+else:
+    # Cold start — import only the input files into a fresh session.
+    dst_files.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for f in sorted(src_files.iterdir()):
+        shutil.copy2(f, dst_files / f.name)
+        n += 1
+    print(f"imported {n} input files into sessions/{DTXSID}/files/\n")
 
 print("Derived state after import:")
 show_state()
@@ -247,6 +265,13 @@ report reads. It shells out to the BMDExpress-3 Java library (needs JDK 21 +
 
 The presence of `integrated.json` advances the derived phase
 `VALIDATED → INTEGRATED`, which makes `APPROVE` and `REPROCESS` legal.
+
+**Warm-run skip:** integrating *invalidates every `_cache_*` process result* (a
+new integration means the inputs changed, so cached section/BMDS/genomics blobs
+are stale). To keep `Run All` fast on an already-integrated session, this cell
+**skips** when `integrated.json` already exists — leaving the process caches
+intact so Cell 7 cache-hits in seconds. Set `RESEED = True` in Cell 1 (or the
+per-cell `REINTEGRATE` below) to force a real re-integration.
 """)
 
 code(r"""
@@ -258,16 +283,21 @@ identity = {
     "dtxsid": DTXSID,
 }
 
-print("running Java integration (this takes a minute or two)…\n")
-summary = integrate_step(DTXSID, identity, store)
+REINTEGRATE = RESEED  # force a fresh integrate (wipes process caches). Follows Cell 1's RESEED.
 
-print(f"integrated OK")
-print(f"  experiment_count      = {summary.get('experiment_count')}")
-print(f"  bmd_result_count      = {summary.get('bmd_result_count')}")
-print(f"  category_analysis     = {summary.get('category_analysis_count')}")
-for exp in summary.get("experiments", [])[:8]:
-    print(f"    - {exp['name']}  (probes: {exp['probe_count']})")
-print()
+if store.artifact_exists(DTXSID, "integrated.json") and not REINTEGRATE:
+    print("already integrated — skipping (preserves _cache_* so Cell 7 stays fast)")
+    print("set REINTEGRATE=True (or RESEED=True in Cell 1) to force re-integration.\n")
+else:
+    print("running Java integration (this takes a minute or two)…\n")
+    summary = integrate_step(DTXSID, identity, store)
+    print(f"integrated OK")
+    print(f"  experiment_count      = {summary.get('experiment_count')}")
+    print(f"  bmd_result_count      = {summary.get('bmd_result_count')}")
+    print(f"  category_analysis     = {summary.get('category_analysis_count')}")
+    for exp in summary.get("experiments", [])[:8]:
+        print(f"    - {exp['name']}  (probes: {exp['probe_count']})")
+    print()
 
 print("Derived state after integrate:")
 show_state()
@@ -350,6 +380,51 @@ print(f"  bmd_stats            = {payload.get('bmd_stats')}")
 print(f"  has M&M methods      = {bool(payload.get('methods'))}")
 print(f"  has apical BMD summ. = {bool(payload.get('apical_bmd_summary'))}")
 print(f"  unified narratives   = {_keys(payload.get('unified_narratives'))}")
+""")
+
+# ---------------------------------------------------------------------------
+md(r"""
+## Cell 7b — Genomics charts (rendered inline)
+
+`process_step` renders the UMAP and cluster scatter charts server-side
+(Plotly → PNG via kaleido) and returns them under `payload["chart_images"]` —
+one entry per organ × sex section, each carrying base64 `umap_png` / `cluster_png`
+plus the Enrichr-derived `cluster_summary`. The cells above only printed text;
+here we actually display the images inline.
+""")
+
+code(r"""
+import base64
+from IPython.display import display, Markdown, Image
+
+# process_step returns rendered charts under "chart_images" (one dict per
+# organ × sex). Fall back to the on-disk chart cache if an older payload
+# shape doesn't carry them.
+chart_sections = payload.get("chart_images")
+if not chart_sections:
+    import json, glob
+    hits = glob.glob(str(Path("sessions") / DTXSID / "_cache_charts_*.json"))
+    if hits:
+        chart_sections = json.load(open(hits[0]))
+
+if not chart_sections:
+    print("No chart_images in payload and no chart cache on disk — re-run Cell 7.")
+else:
+    for sec in chart_sections:
+        label = sec.get("label") or f"{sec.get('organ','?')} / {sec.get('sex','?')}"
+        display(Markdown(f"### {label}"))
+        for kind in ("umap", "cluster"):
+            b64 = sec.get(f"{kind}_png")
+            if not b64:
+                continue
+            caption = sec.get(f"{kind}_caption") or f"{kind} scatter"
+            display(Markdown(f"**{kind.upper()}** — {caption}"))
+            display(Image(data=base64.b64decode(b64)))
+        # Enrichr cluster biology summary, if present
+        for row in (sec.get("cluster_summary") or []):
+            terms = ", ".join(row.get("terms", [])[:3])
+            src = row.get("source", "")
+            print(f"    cluster {row.get('cluster'):>7} [{src}] n={row.get('n_genes')}: {terms}")
 """)
 
 # ---------------------------------------------------------------------------

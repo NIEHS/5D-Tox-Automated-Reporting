@@ -74,3 +74,6 @@ sessions/
 
 # generated offline kaleido MathJax stub (see genomics_viz._ensure_offline_kaleido)
 **/assets/mathjax_noop.js
+
+# Jupyter checkpoint scratch dir
+.ipynb_checkpoints/
