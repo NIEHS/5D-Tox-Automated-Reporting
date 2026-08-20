@@ -54,6 +54,7 @@ _SESSIONS_DIR_MODULES = [
     "web_routes.background_server",
     "narrative.style_learning",
     "document_model.document_config",
+    "document_model.version_config",
 ]
 
 # pool_orchestrator imports session_dir (the function), which reads

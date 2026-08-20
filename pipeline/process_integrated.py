@@ -825,6 +825,17 @@ async def _get_sections(ctx):
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives
 
+    # Persist the default-filtered unified narratives alongside the superset
+    # section cards, so the session-reload export path (latex_export.load_session_data,
+    # which has no live payload) can overlay them.  The `sections` list stays the
+    # filter-agnostic superset; only the narrative key is (re)written.  Cheap:
+    # rewrites one small JSON.  (Per-version narrative regeneration at export is a
+    # follow-up; the default version the Overleaf bundle uses is correct.)
+    _superset = _load_cache(dtxsid, "sections", sections_hash)
+    if isinstance(_superset, dict) and "sections" in _superset:
+        _superset["unified_narratives"] = unified_narratives
+        _save_cache(dtxsid, "sections", sections_hash, _superset)
+
 
 async def _get_bmds(ctx):
     """Run pybmds modeling on all endpoints, or return cached."""

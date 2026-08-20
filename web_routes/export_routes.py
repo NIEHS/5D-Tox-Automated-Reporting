@@ -896,6 +896,64 @@ async def api_save_document_config(dtxsid: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Report VERSIONS — multiple structure+filter projections of ONE processed
+# dataset (phase 3).  A version bundles a document structure + data filters;
+# switching or adding one is a render-time change, never a reprocess (the
+# compute caches are the filter-agnostic superset, phase 2).
+# ---------------------------------------------------------------------------
+
+@router.get("/api/versions/{dtxsid}")
+async def api_list_versions(dtxsid: str):
+    """List a session's report versions (always includes the implicit 'default')."""
+    from document_model.version_config import list_versions, DEFAULT_VERSION
+    return JSONResponse({"versions": list_versions(dtxsid), "default": DEFAULT_VERSION})
+
+
+@router.get("/api/versions/{dtxsid}/{name}")
+async def api_get_version(dtxsid: str, name: str):
+    """Return one version's stored mapping (document / filters / charts / methods).
+
+    An absent file (including 'default' with none saved) returns {} — the caller
+    then renders against the global template's structure + filters."""
+    from document_model.version_config import load_version
+    try:
+        return JSONResponse({"version": load_version(dtxsid, name)})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+
+
+@router.post("/api/versions/{dtxsid}/{name}")
+async def api_save_version(dtxsid: str, name: str, request: Request):
+    """Validate + persist a version.  A malformed structure returns 422 and
+    writes nothing (the prior file, if any, stays intact)."""
+    from document_model.version_config import save_version
+    body = await request.json()
+    data = body.get("version", body)
+    if not isinstance(data, dict):
+        return JSONResponse(
+            {"error": "Request must include a 'version' mapping."}, status_code=422)
+    try:
+        save_version(dtxsid, name, data)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save version %s for %s", name, dtxsid)
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})
+
+
+@router.delete("/api/versions/{dtxsid}/{name}")
+async def api_delete_version(dtxsid: str, name: str):
+    """Delete a named version ('default' cannot be deleted)."""
+    from document_model.version_config import delete_version
+    try:
+        removed = delete_version(dtxsid, name)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    return JSONResponse({"deleted": removed})
+
+
+# ---------------------------------------------------------------------------
 # Default (global template) document structure — the structure EVERY report
 # inherits without a per-session override.  Edits the git-tracked template and
 # applies live (no restart).  Distinct from the per-session routes above.

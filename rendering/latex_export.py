@@ -256,6 +256,40 @@ def _cover_subtypes_in_tree(tree) -> "list":
 _SESSIONS_DIR = REPO_ROOT / "sessions"
 
 
+def _resolve_apical_filters(dtxsid: str, version: str | None) -> dict:
+    """
+    Resolve the apical + organ-weight allowlists for a version into the flat
+    args apply_section_filters / apply_apical_filters take.
+
+    Reads the version's canonical filters (version_config.resolve_version_filters,
+    which falls back to the global template for 'default' / no override) and
+    projects them to legacy-shaped allowlists via resolve_report_allowlist.
+    All-None ⇒ no filtering (the full superset renders).
+    """
+    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
+    from document_model.document_template import resolve_report_allowlist
+
+    filters = resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("filters") or {}
+
+    def _area(dim, area):
+        return resolve_report_allowlist(filters, dim, area)
+
+    # assays: rebuild the {area: [tokens] | {sex: [tokens]}} shape the apical
+    # filter expects, from the canonical {area: {sex: [tokens]}}.
+    assays = {}
+    for area, sexmap in (filters.get("assays") or {}).items():
+        if set(sexmap) == {"*"}:
+            assays[area] = sexmap["*"]
+        else:
+            assays[area] = {s: t for s, t in sexmap.items() if s != "*"}
+    return {
+        "sex_apical": _area("sex", "apical"),
+        "sex_ow": _area("sex", "organ-weight"),
+        "organ_ow": _area("organs", "organ-weight"),
+        "assays": assays or None,
+    }
+
+
 def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
     """
     Return the most recently modified file matching the glob, or None.
@@ -471,6 +505,7 @@ def load_session_data(
     dtxsid: str,
     chemical_name: str = "Test Article",
     casrn: str = "000-00-0",
+    version: str | None = None,
 ) -> dict:
     """
     Build a report data dict by overlaying a session's cached state onto
@@ -512,7 +547,11 @@ def load_session_data(
         dtxsid=dtxsid,
     )
 
-    session_dir = _SESSIONS_DIR / dtxsid
+    # Resolve the sessions root at call time from the canonical source
+    # (session_store.SESSIONS_DIR) rather than the import-frozen _SESSIONS_DIR,
+    # so a SESSIONS_DIR env override or a test's patched dir is honored.
+    from pipeline.session_store import SESSIONS_DIR as _sessions_root
+    session_dir = _sessions_root / dtxsid
     if not session_dir.exists():
         # No session on disk — return the scaffold unchanged.  This is
         # the same behavior the scaffold-only CLI invocation produces.
@@ -563,14 +602,35 @@ def load_session_data(
         data["summary"] = {"paragraphs": summary_cache["paragraphs"]}
 
     # ── Apical sections + unified narratives ──────────────────────────
+    # The sections cache is the filter-AGNOSTIC superset (phase 2).  Apply THIS
+    # version's apical + organ-weight filters here — the render-time analog of
+    # what run_process does at presentation — so the bundle shows the version's
+    # selected sexes/assays/organs.  Resolve the version's filters (falling back
+    # to the global template for 'default'); {} ⇒ no filtering (full superset).
+    _vf = _resolve_apical_filters(dtxsid, version)
     sections_path = _latest(session_dir, "_cache_sections_*.json")
     sections_cache = _load_json(sections_path)
     if isinstance(sections_cache, dict):
         raw_sections = sections_cache.get("sections", []) or []
         if raw_sections:
+            from pipeline.processing_helpers import apply_section_filters
+            raw_sections = apply_section_filters(
+                raw_sections,
+                sex_allow=_vf["sex_apical"],
+                assay_filters=_vf["assays"],
+                organ_allowlist=_vf["organ_ow"],
+                ow_sex_allow=_vf["sex_ow"],
+                compound_name=chemical_name,
+            )
             data["apical_sections"] = [
                 _normalize_apical_section(s) for s in raw_sections
             ]
+        # Unified cross-platform narratives are cached in the sections blob under
+        # the `unified_narratives` key (run_process writes the default-filtered
+        # set there for the session-reload export path).  Overlay when present;
+        # absent ⇒ the scaffold placeholders stand.  (Per-version narrative
+        # regeneration is a follow-up — the default version, which the Overleaf
+        # export uses today, is correct.)
         unified = sections_cache.get("unified_narratives")
         if isinstance(unified, dict) and unified:
             data["unified_narratives"] = unified
