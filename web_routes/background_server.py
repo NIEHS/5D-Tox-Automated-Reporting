@@ -185,6 +185,10 @@ app.include_router(export_routes.router)
 import genomics.genomics_viz as genomics_viz
 app.include_router(genomics_viz.router)
 
+# Wizard UI convenience routes: /api/wizard/{dtxsid}/files, /fingerprints
+import web_routes.wizard_routes as wizard_routes
+app.include_router(wizard_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI
@@ -461,6 +465,34 @@ async def no_cache_dev_assets(request: Request, call_next):
     if request.url.path.endswith((".js", ".css")):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+# ---------------------------------------------------------------------------
+# Wizard UI — the from-scratch step-by-step front end (built from wizard-ui/).
+# ---------------------------------------------------------------------------
+# Mounted at /wizard, BEFORE the root catch-all below so it owns its own
+# namespace and never collides with the legacy app under web/. html=True serves
+# web_wizard/index.html at /wizard/ (Vite build with base="/wizard/"). Guarded so
+# the server still starts before the frontend has been built.
+_wizard_dir = Path(__file__).parent.parent / "web_wizard"
+if _wizard_dir.exists():
+    # Bare /wizard (no trailing slash) → /wizard/ so the SPA loads either way.
+    @app.get("/wizard")
+    async def _wizard_redirect():
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url="/wizard/")
+
+    # Report-generation mode is a client-side route of the same SPA. StaticFiles
+    # would 404 it (no such file on disk), so serve index.html and let the app
+    # switch to report mode from the path. Registered before the mount so it wins.
+    @app.get("/wizard/report")
+    async def _wizard_report():
+        return HTMLResponse((_wizard_dir / "index.html").read_text(encoding="utf-8"))
+
+    app.mount("/wizard", StaticFiles(directory=_wizard_dir, html=True), name="wizard")
+else:
+    logger.warning("Wizard UI not built (%s missing) — /wizard disabled. "
+                   "Run: cd wizard-ui && npm install && npm run build", _wizard_dir)
 
 
 # ---------------------------------------------------------------------------

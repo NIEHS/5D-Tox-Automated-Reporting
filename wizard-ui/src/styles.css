@@ -1,0 +1,212 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-fg: #06283d;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --done: #22c55e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.wizard {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.wizard-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.wizard-header h1 { font-size: 1.25rem; margin: 0; }
+.wizard-header .session {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+/* Stepper */
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+.step-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.step-chip.active { border-color: var(--accent); color: var(--text); }
+.step-chip.done { border-color: var(--done); color: var(--done); }
+.step-chip .dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 0.7rem; font-weight: 700;
+  background: var(--panel-2);
+}
+.step-chip.active .dot { background: var(--accent); color: var(--accent-fg); }
+.step-chip.done .dot { background: var(--done); color: #052e16; }
+
+/* Panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+.panel h2 { margin-top: 0; font-size: 1.05rem; }
+.panel p.help { color: var(--muted); line-height: 1.5; }
+
+/* Buttons */
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.danger { border-color: var(--err); color: var(--err); }
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+  gap: 0.5rem;
+}
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; }
+td code { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+select, input[type="text"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+}
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone.over { border-color: var(--accent); background: var(--panel-2); }
+
+.file-list { list-style: none; padding: 0; margin: 1rem 0 0; }
+.file-list li {
+  display: flex; justify-content: space-between;
+  padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.file-list .size { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Status lines */
+.badge { padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.badge.ok { background: rgba(74,222,128,0.15); color: var(--ok); }
+.badge.warn { background: rgba(251,191,36,0.15); color: var(--warn); }
+.badge.err { background: rgba(248,113,113,0.15); color: var(--err); }
+
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--muted); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-box {
+  background: rgba(248,113,113,0.12);
+  border: 1px solid var(--err);
+  color: var(--err);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.8rem;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+.field-row { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.5rem 0; }
+.field-row label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+.field-row input { min-width: 200px; }
+
+.chart-section { margin: 1.5rem 0; }
+.chart-section h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.chart-section img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.chart-caption { color: var(--muted); font-size: 0.78rem; margin: 0.3rem 0 1rem; }
+
+.muted { color: var(--muted); }
+.long-note { font-size: 0.8rem; color: var(--warn); margin-top: 0.5rem; }
+
+/* Integrated data tree */
+.tree, .tree ul { list-style: none; padding-left: 0; margin: 0; }
+.tree-children { padding-left: 1.1rem; border-left: 1px solid var(--border); margin-left: 0.4rem; }
+.tree-node { margin: 0.15rem 0; }
+.tree-row {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  padding: 0.25rem 0.4rem; border-radius: 6px; cursor: pointer;
+}
+.tree-row:hover { background: var(--panel-2); }
+.tree-row.platform { background: var(--panel-2); }
+.tree-caret { color: var(--muted); width: 1rem; }
+.tree-sub { color: var(--accent); font-size: 0.78rem; }
+.tree-count { color: var(--muted); font-size: 0.75rem; margin-left: auto; white-space: nowrap; }
+.tree-endpoints { padding: 0.3rem 0 0.3rem 2rem; }
+.tree-endpoints ul {
+  list-style: none; padding: 0; margin: 0;
+  columns: 3; column-gap: 1.5rem;
+}
+.tree-endpoints li { font-size: 0.76rem; break-inside: avoid; }
+.tree-endpoints code { color: var(--text); }
+
+/* Summary tables */
+.summary-table { margin: 1.25rem 0; }
+.summary-table h3 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+.summary-table .caption { color: var(--muted); font-size: 0.78rem; margin: 0 0 0.4rem; }
+.summary-table table { font-size: 0.78rem; }
+.summary-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.sex-header td {
+  background: var(--panel-2); font-weight: 600; color: var(--accent);
+  font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+tr.emphasize td { font-weight: 700; }

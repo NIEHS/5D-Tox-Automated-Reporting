@@ -77,3 +77,8 @@ sessions/
 
 # Jupyter checkpoint scratch dir
 .ipynb_checkpoints/
+
+# Wizard UI: commit the source (wizard-ui/) and the built output (web_wizard/),
+# but never the installed node deps or the tsc build cache.
+wizard-ui/node_modules/
+wizard-ui/tsconfig.tsbuildinfo
