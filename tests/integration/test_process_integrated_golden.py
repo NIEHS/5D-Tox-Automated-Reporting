@@ -144,6 +144,19 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     _setup_session(sessions_dir)
     mock_bmdx_pipe.build_table_data.return_value = _make_enriched_table_data()
 
+    # Neutralize the GLOBAL report-level filters (the active template's
+    # organs/sex/assays/genes/gene_sets allowlists) so the synthetic fixture's
+    # endpoints (SD5 / ALT / AST) survive.  Otherwise the template's real assay
+    # allowlist (male: [cholesterol]) drops them at the presentation step and the
+    # oracle would freeze an empty apical summary — testing nothing.  The golden
+    # thus pins the UNFILTERED superset payload, which is exactly the phase-2
+    # cache contract.  Imported at run_process call time from document_template.
+    for _fn in ("load_report_organs", "load_report_sex", "load_report_genes",
+                "load_report_gene_sets", "load_report_assays"):
+        monkeypatch.setattr(
+            f"document_model.document_template.{_fn}", lambda name: {}
+        )
+
     # Layer 2 — Materials & Methods LLM.  Bound at module top in
     # process_integrated as `_llm_generate_json_async`.  Empty dict → the
     # methods report is assembled with its (deterministic) extracted context

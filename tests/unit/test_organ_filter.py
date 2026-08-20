@@ -276,24 +276,35 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
 # 5. _hash_sections — organ-weight allowlist sensitivity + backward compat
 # ---------------------------------------------------------------------------
 
-def test_hash_sections_unfiltered_is_backward_compatible():
+def test_hash_sections_is_filter_agnostic():
+    # Phase 2: the sections cache stores the FULL superset; the organ allowlist
+    # is applied AFTER the cache read (apply_section_filters), so it is NOT part
+    # of the key.  _hash_sections no longer accepts filter args.
     from pipeline.cache_plumbing import _hash_sections
-    legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, organ_allowlist=None)
-    empty = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, organ_allowlist=[])
-    assert legacy == none_ == empty
+    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    assert a == b  # deterministic; identical inputs → identical key
 
 
-def test_hash_sections_changes_with_allowlist_and_is_order_independent():
-    from pipeline.cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                          imputed_cells=None, organ_allowlist=["kidney"])
-    assert filt != base
-    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                       imputed_cells=None, organ_allowlist=["liver", "kidney"])
-    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                       imputed_cells=None, organ_allowlist=["kidney", "liver"])
-    assert a == b
+def test_organ_allowlist_applied_after_cache_via_apply_section_filters():
+    # The organ allowlist now filters the Organ Weight card's rows at
+    # presentation time and rebuilds the caption from what survives.
+    from pipeline.processing_helpers import apply_section_filters
+    superset = [{
+        "platform": "Organ Weight",
+        "title": "Organ Weight",
+        "caption": "Summary of Select Organ Weight Data for Male and Female Rats "
+                   "Administered C for Five Days",
+        "tables_json": {
+            "Male": [
+                {"label": "n", "is_n_row": True},
+                {"label": "Liver Absolute (g)"},
+                {"label": "Kidney Absolute (g)"},
+            ],
+        },
+    }]
+    out = apply_section_filters(superset, organ_allowlist=["liver"], compound_name="C")
+    labels = [r["label"] for r in out[0]["tables_json"]["Male"]]
+    assert labels == ["n", "Liver Absolute (g)"]  # kidney dropped, n-row kept
+    # single organ + single sex → the specific caption
+    assert out[0]["caption"] == "Summary of Liver Weights of Male Rats Administered C for Five Days"

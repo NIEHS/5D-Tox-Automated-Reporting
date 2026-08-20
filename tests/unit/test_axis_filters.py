@@ -544,69 +544,55 @@ def test_load_charts_non_string_rejected(template_dir):
 # 5. _hash_sections — apical sex + assay sensitivity + backward compat
 # ---------------------------------------------------------------------------
 
-def test_hash_sections_unfiltered_is_backward_compatible():
+def test_hash_sections_is_filter_agnostic():
+    # Phase 2: the sections cache stores the FULL superset; the apical sex/assay
+    # allowlists are applied AFTER the cache read (apply_section_filters), so they
+    # are NOT part of the key.  _hash_sections no longer accepts filter args, and
+    # the same inputs always hash identically (one cache serves every version).
     from pipeline.cache_plumbing import _hash_sections
-    legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, sex_allowlist=None, assay_filters=None)
-    empty = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, sex_allowlist=[], assay_filters={})
-    empty_inner = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                                 imputed_cells=None,
-                                 assay_filters={"clinical-chemistry": []})
-    assert legacy == none_ == empty == empty_inner
-
-
-def test_hash_sections_changes_with_sex_allowlist():
-    from pipeline.cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                          imputed_cells=None, sex_allowlist=["male"])
-    assert filt != base
-
-
-def test_hash_sections_changes_with_assay_filters_order_independent():
-    from pipeline.cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                          assay_filters={"clinical-chemistry": ["albumin"]})
-    assert filt != base
-    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters={"clinical-chemistry": ["albumin", "alt"]})
-    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters={"clinical-chemistry": ["alt", "albumin"]})
+    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     assert a == b
 
 
-def test_hash_sections_per_sex_assay_filters_stable_and_distinct():
-    # A {area: {sex: [tokens]}} per-sex config hashes order-independently
-    # (area keys, sex keys, and token lists all sorted) and differs from both
-    # the unfiltered key and the flat-list key with the same tokens.
-    from pipeline.cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    per_sex = {"clinical-chemistry": {"male": ["cholesterol"],
-                                      "female": ["ast", "sdh"]}}
-    per_sex_reordered = {"clinical-chemistry": {"female": ["sdh", "ast"],
-                                                "male": ["cholesterol"]}}
-    h = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters=per_sex)
-    h2 = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                        assay_filters=per_sex_reordered)
-    assert h == h2                      # order-independent
-    assert h != base                    # differs from unfiltered
-    # Differs from a flat list carrying the same tokens (shape matters).
-    flat = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                          assay_filters={"clinical-chemistry":
-                                         ["cholesterol", "ast", "sdh"]})
-    assert h != flat
+def test_apply_section_filters_sex_prunes_cards():
+    # sex_allow drops non-allowed sex keys from every card's tables_json.
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Hematology", "tables_json": {
+        "Male": [{"label": "n", "is_n_row": True}, {"label": "Hemoglobin"}],
+        "Female": [{"label": "n", "is_n_row": True}, {"label": "Hemoglobin"}],
+    }}]
+    out = apply_section_filters(cards, sex_allow=["male"])
+    assert list(out[0]["tables_json"]) == ["Male"]
 
 
-def test_hash_sections_per_sex_empty_inner_is_backward_compatible():
-    # A per-sex mapping whose sex lists are all empty ⇒ no effective filter,
-    # so the key matches the unfiltered one (existing caches stay valid).
-    from pipeline.cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    empty_per_sex = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                                   imputed_cells=None,
-                                   assay_filters={"hematology": {"male": []}})
-    assert empty_per_sex == base
+def test_apply_section_filters_assay_per_sex_row_filter_keeps_n_row():
+    # A per-sex assay allowlist drops non-allowed endpoint rows on the assay
+    # platforms, but always keeps the structural n / sample-size row.
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Clinical Chemistry", "tables_json": {
+        "Male": [
+            {"label": "n", "is_n_row": True},
+            {"label": "Cholesterol"},
+            {"label": "Albumin"},
+        ],
+        "Female": [
+            {"label": "n", "is_n_row": True},
+            {"label": "Aspartate Aminotransferase"},
+            {"label": "Sorbitol dehydrogenase"},
+        ],
+    }}]
+    out = apply_section_filters(cards, assay_filters={
+        "clinical-chemistry": {"male": ["cholesterol"],
+                               "female": ["aspartate aminotransferase"]},
+    })
+    tj = out[0]["tables_json"]
+    assert [r["label"] for r in tj["Male"]] == ["n", "Cholesterol"]
+    assert [r["label"] for r in tj["Female"]] == ["n", "Aspartate Aminotransferase"]
+
+
+def test_apply_section_filters_unfiltered_is_noop():
+    # No allowlists ⇒ the cards pass through unchanged (the superset itself).
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Hematology", "tables_json": {"Male": [{"label": "x"}]}}]
+    assert apply_section_filters(cards) is cards

@@ -84,6 +84,7 @@ from pipeline.processing_helpers import (
     _build_apical_bmd_summary,
     _build_bmds_bmd_summary,
     apply_apical_filters,
+    apply_section_filters,
     prune_card_sexes,
 )
 from workflow.errors import StepError
@@ -446,6 +447,9 @@ def _build_bmd_summary(ctx):
         apical_bmd_summary = bmd_summary_cached["apical"]
         apical_bmd_summary_bmds = bmd_summary_cached["bmds"]
     else:
+        # Built from the FULL superset platform_tables and cached filter-agnostic
+        # (the bmd_summary hash is ntp+bmds only — no filters), so the cache
+        # serves every version.
         apical_bmd_summary = _build_apical_bmd_summary(platform_tables)
         apical_bmd_summary_bmds = _build_bmds_bmd_summary(
             platform_tables, bmds_results,
@@ -454,6 +458,24 @@ def _build_bmd_summary(ctx):
             "apical": apical_bmd_summary,
             "bmds": apical_bmd_summary_bmds,
         })
+    # Presentation: rebuild THIS version's summary from an apical-filtered copy
+    # of the superset platform_tables.  Filtering platform_tables (raw endpoint
+    # labels) rather than the flat summary rows (display-relabeled endpoints,
+    # e.g. "Neutrophil Count" → "Neutrophils") is what keeps the row set
+    # byte-identical to the pre-phase-2 build.  A no-filter version reuses the
+    # cached superset directly.
+    # Only the apical SEX + ASSAY filters narrow the summaries, matching the
+    # pre-phase-2 behavior (the summary was built from the sex/assay-filtered
+    # platform_tables).  The organ-weight ORGAN allowlist deliberately does NOT
+    # touch the summaries — pre-phase-2 it filtered only the Organ Weight section
+    # table + narrative, never the BMD summary rows.
+    _sex_allow = (ctx.sex_filters or {}).get("apical")
+    if _sex_allow or ctx.assay_filters:
+        _filt_tables = apply_apical_filters(
+            platform_tables, sex_allow=_sex_allow, assay_filters=ctx.assay_filters,
+        )
+        apical_bmd_summary = _build_apical_bmd_summary(_filt_tables)
+        apical_bmd_summary_bmds = _build_bmds_bmd_summary(_filt_tables, bmds_results)
     ctx.apical_bmd_summary = apical_bmd_summary
     ctx.apical_bmd_summary_bmds = apical_bmd_summary_bmds
 
@@ -628,95 +650,118 @@ async def _get_sections(ctx):
     compound_name = ctx.compound_name
     dose_unit = ctx.dose_unit
     sections_hash = ctx.sections_hash
-    # Organ-weight area allowlist — applied to the Organ Weight table and its
-    # narrative (both cached in the sections blob, so this is folded into
-    # sections_hash upstream — see _hash_sections at the Layer-0 hash step).
+    # Phase 2: the report-level apical + organ-weight filters are applied AFTER
+    # the (filter-agnostic) cache read, in the presentation step at the end of
+    # this function — NOT during the build.  These are the version's filters.
     ow_allow = (ctx.organ_filters or {}).get("organ-weight")
-    # Organ-weight AREA sex allowlist — narrows ONLY the Organ Weight table's
-    # sexes (reference Table 3 = the responsive sex only).  Distinct from the
-    # apical sex allowlist below; also folded into sections_hash upstream.
     ow_sex_allow = (ctx.sex_filters or {}).get("organ-weight")
-    # Apical sex allowlist — the platform-table-derived cards are already
-    # narrowed by apply_apical_filters, but the two sidecar-built cards
-    # (Tissue Concentration, Clinical Observations) bypass platform_tables and
-    # are pruned by sex here.  Also folded into sections_hash upstream.
     apical_sex_allow = (ctx.sex_filters or {}).get("apical")
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
-        ctx.sections = sections_cached["sections"]
-        ctx.unified_narratives = sections_cached.get("unified_narratives", {})
-        return
-    # _build_section_cards is sync (reads sidecar files, generates
-    # narratives from templates) — wrap in executor to avoid
-    # blocking the event loop during parallel execution.
-    loop = asyncio.get_running_loop()
-    # imputed_cells is recorded on _meta by the BMDProject schema's
-    # legacy/truth dedup — see _dedupe_legacy_apical_pre.
-    imputed_cells = integrated.get("_meta", {}).get("imputed_cells")
-    sections = await loop.run_in_executor(
-        None,
-        lambda: _build_section_cards(
-            platform_tables, compound_name, dose_unit,
-            dtxsid=dtxsid, imputed_cells=imputed_cells,
-            organ_allowlist=ow_allow, sex_allow=apical_sex_allow,
-            ow_sex_allow=ow_sex_allow,
-        ),
-    )
-    # Clinical obs tables bypass Java integration (categorical data).
-    # Built separately and appended as an incidence section card.
-    clin_obs = prune_card_sexes(
-        _build_clinical_obs_section(integrated, compound_name, dose_unit),
-        apical_sex_allow,
-    )
-    if clin_obs and clin_obs.get("tables_json"):
-        sections.append(clin_obs)
+        # The cache holds the FULL superset; filter it for this version below.
+        sections = sections_cached["sections"]
+    else:
+        # _build_section_cards is sync (reads sidecar files, generates
+        # narratives from templates) — wrap in executor to avoid
+        # blocking the event loop during parallel execution.  Built as the FULL
+        # superset (no apical/organ filters) so the cache serves every version.
+        loop = asyncio.get_running_loop()
+        # imputed_cells is recorded on _meta by the BMDProject schema's
+        # legacy/truth dedup — see _dedupe_legacy_apical_pre.
+        imputed_cells = integrated.get("_meta", {}).get("imputed_cells")
+        sections = await loop.run_in_executor(
+            None,
+            lambda: _build_section_cards(
+                platform_tables, compound_name, dose_unit,
+                dtxsid=dtxsid, imputed_cells=imputed_cells,
+            ),
+        )
+        # Clinical obs tables bypass Java integration (categorical data).
+        # Built separately and appended as an incidence section card (superset).
+        clin_obs = _build_clinical_obs_section(integrated, compound_name, dose_unit)
+        if clin_obs and clin_obs.get("tables_json"):
+            sections.append(clin_obs)
 
-    # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
-    # Tissue Concentration data only exists for Biosampling Animals
-    # and is NOT processed through NTP stats or BMDExpress.  It has
-    # no entries in platform_tables, so it must be built separately
-    # from sidecar data (similar to Clinical Observations).
-    if dtxsid:
-        from tables.table_builder_common import find_sidecar_paths as _find_sidecar
-        from tables.tissue_concentration_table import build_tissue_concentration_table_from_sidecar
+        # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
+        # Tissue Concentration data only exists for Biosampling Animals
+        # and is NOT processed through NTP stats or BMDExpress.  It has
+        # no entries in platform_tables, so it must be built separately
+        # from sidecar data (similar to Clinical Observations).  Built as the
+        # full superset (no sex prune); pruned in the presentation step below.
+        if dtxsid:
+            from tables.table_builder_common import find_sidecar_paths as _find_sidecar
+            from tables.tissue_concentration_table import build_tissue_concentration_table_from_sidecar
 
-        session_dir = str(_session_dir(dtxsid))
-        tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
-        if tc_sidecar_paths:
-            tc_result = build_tissue_concentration_table_from_sidecar(
-                sidecar_paths=tc_sidecar_paths,
-                compound_name=compound_name,
-                dose_unit=dose_unit,
-            )
-            # Prune by the apical sex allowlist (this card bypasses
-            # platform_tables / apply_apical_filters).
-            if tc_result and apical_sex_allow:
-                from tables.table_builder_common import sex_allowed
-                tc_result["table_data"] = {
-                    sex: rows
-                    for sex, rows in (tc_result.get("table_data") or {}).items()
-                    if sex_allowed(sex, apical_sex_allow)
-                }
-            if tc_result and tc_result.get("table_data"):
-                narrative = (
-                    f"Plasma concentrations of {compound_name} were "
-                    f"measured in biosampling animals."
+            session_dir = str(_session_dir(dtxsid))
+            tc_sidecar_paths = _find_sidecar(session_dir, platform="Tissue Concentration")
+            if tc_sidecar_paths:
+                tc_result = build_tissue_concentration_table_from_sidecar(
+                    sidecar_paths=tc_sidecar_paths,
+                    compound_name=compound_name,
+                    dose_unit=dose_unit,
                 )
-                sections.append({
-                    "platform": "Tissue Concentration",
-                    "title": "Tissue Concentration",
-                    "tables_json": tc_result["table_data"],
-                    "narrative": narrative,
-                    "first_col_header": tc_result.get("first_col_header"),
-                    "caption": tc_result.get("caption"),
-                    "footnotes": tc_result.get("footnotes"),
-                    "table_type": tc_result.get("table_type"),
-                })
-                logger.info(
-                    "Tissue Concentration section built from sidecar (%d sexes)",
-                    len(tc_result["table_data"]),
-                )
+                if tc_result and tc_result.get("table_data"):
+                    narrative = (
+                        f"Plasma concentrations of {compound_name} were "
+                        f"measured in biosampling animals."
+                    )
+                    sections.append({
+                        "platform": "Tissue Concentration",
+                        "title": "Tissue Concentration",
+                        "tables_json": tc_result["table_data"],
+                        "narrative": narrative,
+                        "first_col_header": tc_result.get("first_col_header"),
+                        "caption": tc_result.get("caption"),
+                        "footnotes": tc_result.get("footnotes"),
+                        "table_type": tc_result.get("table_type"),
+                    })
+                    logger.info(
+                        "Tissue Concentration section built from sidecar (%d sexes)",
+                        len(tc_result["table_data"]),
+                    )
+
+        # Persist the FULL superset section cards (filter-agnostic cache).
+        _save_cache(dtxsid, "sections", sections_hash, {"sections": sections})
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Presentation — apply THIS VERSION's apical + organ-weight filters to the
+    # superset cards, and (re)generate the sex-dependent unified narratives.
+    # Runs for BOTH a cache hit and a fresh build, so the cache stays a reusable
+    # superset while the returned payload is the filtered report.
+    # ══════════════════════════════════════════════════════════════════════
+    sections = apply_section_filters(
+        sections,
+        sex_allow=apical_sex_allow,
+        assay_filters=ctx.assay_filters,
+        organ_allowlist=ow_allow,
+        ow_sex_allow=ow_sex_allow,
+        compound_name=compound_name,
+    )
+
+    # The per-card `narrative` is generated (generic path) from the responsive
+    # rows, so it is sex/assay-sensitive: the superset card carries the full
+    # narrative, but this version's card must describe only its filtered
+    # endpoints.  Regenerate it from THIS version's apical-filtered TableRows for
+    # the generic-path platforms (Clinical Chemistry / Hematology / Hormones);
+    # the sidecar builders (Body/Organ Weight) and incidence cards keep theirs.
+    if apical_sex_allow or ctx.assay_filters:
+        from bmdx_pipe import generate_results_narrative as _gen_narr
+        _narr_tables = apply_apical_filters(
+            platform_tables, sex_allow=apical_sex_allow, assay_filters=ctx.assay_filters,
+        )
+        _GENERIC_NARR_PLATFORMS = {"Clinical Chemistry", "Hematology", "Hormones"}
+        for card in sections:
+            plat = card.get("platform")
+            if plat not in _GENERIC_NARR_PLATFORMS:
+                continue
+            sex_rows = _narr_tables.get(plat, {})
+            responsive_rows = {
+                sex: [r for r in rows if r.responsive]
+                for sex, rows in sex_rows.items()
+            }
+            responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
+            card["narrative"] = _gen_narr(responsive_rows, compound_name, dose_unit)
 
     # ── Unified cross-platform narratives ─────────────────────────
     # The NIEHS reference report groups narrative prose into two
@@ -743,16 +788,26 @@ async def _get_sections(ctx):
     if csv_paths:
         clin_obs_incidence = build_clinical_obs_tables(csv_paths)
 
-    # 3. Generate the two unified narratives
+    # 3. Generate the two unified narratives.  These are sex-dependent
+    # (a paragraph per surviving sex) and cheap/deterministic, so they are
+    # (re)generated here per version rather than cached — from a platform_tables
+    # narrowed by THIS version's apical sex + assay filters, so the prose matches
+    # the filtered tables.  (Before phase 2 the pipeline filtered platform_tables
+    # in place, so feeding the filtered copy here is byte-identical.)
+    narr_tables = apply_apical_filters(
+        platform_tables,
+        sex_allow=apical_sex_allow,
+        assay_filters=ctx.assay_filters,
+    )
     apical_narrative = generate_apical_narrative(
-        platform_tables, compound_name, dose_unit,
+        narr_tables, compound_name, dose_unit,
         sidecar_mortality=sidecar_mortality,
         clinical_obs_incidence=clin_obs_incidence,
         organ_allowlist=ow_allow,
         ow_sex_allowlist=ow_sex_allow,
     )
     clin_path_narrative = generate_clinical_pathology_narrative(
-        platform_tables, compound_name, dose_unit,
+        narr_tables, compound_name, dose_unit,
     )
 
     unified_narratives = {}
@@ -767,10 +822,6 @@ async def _get_sections(ctx):
             "paragraphs": clin_path_narrative,
         }
 
-    _save_cache(dtxsid, "sections", sections_hash, {
-        "sections": sections,
-        "unified_narratives": unified_narratives,
-    })
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives
 
@@ -1090,16 +1141,13 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         # ══════════════════════════════════════════════════════════════
         await _build_ntp_stats(ctx)
 
-        # Report-level SEX + ASSAY allowlists — the single apical choke point.
-        # Applied unconditionally right after the NTP layer (even on a cache
-        # hit), so the NTP cache stays sex/assay-agnostic and EVERY downstream
-        # consumer of platform_tables (apical tables, BMD summary, BMDS inputs,
-        # narratives) sees the same filtered set.  No-op when neither is set.
-        ctx.platform_tables = apply_apical_filters(
-            ctx.platform_tables,
-            sex_allow=(ctx.sex_filters or {}).get("apical"),
-            assay_filters=ctx.assay_filters,
-        )
+        # Phase 2: the apical SEX + ASSAY allowlists are NO LONGER applied here.
+        # platform_tables stays the FULL superset so every compute stage
+        # (sections, BMDS, summary, narratives) and its cache is filter-agnostic
+        # and reusable across report versions.  The report-level apical +
+        # organ-weight filters are applied ONCE at the end, in the presentation
+        # step, to build the returned (default-filtered) payload — the same
+        # "compute full, filter at read" model genomics already uses.
 
         # ══════════════════════════════════════════════════════════════
         # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
@@ -1110,9 +1158,10 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         # The preamble below computes each unit's cache key onto ctx; each
         # unit loads its own cache from that key.
 
-        # Collect _bmds_input dicts from all TableRows for BMDS modeling.
-        # Runs AFTER Layer 1 (and the apical filter) so platform_tables is
-        # populated AND already narrowed — dropped sexes/assays aren't modeled.
+        # Collect _bmds_input dicts from ALL TableRows — the full superset, so
+        # BMDS models every endpoint once and the result cache serves every
+        # version regardless of its apical filters (dropped endpoints are pruned
+        # from the summary at presentation time, not skipped in modeling).
         ctx.bmds_inputs = [
             row._bmds_input
             for sex_rows in ctx.platform_tables.values()
@@ -1131,14 +1180,11 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
             str(_session_dir(dtxsid)),
             extra_paths=_meta.get("clinical_obs_files", []),
         )
+        # Phase 2: filter-agnostic sections cache — no allowlists in the key.
         ctx.sections_hash = _hash_sections(
             ctx.ntp_hash, compound_name, dose_unit,
             sidecar_hash=sections_sidecar_hash,
             imputed_cells=_meta.get("imputed_cells"),
-            organ_allowlist=(ctx.organ_filters or {}).get("organ-weight"),
-            sex_allowlist=(ctx.sex_filters or {}).get("apical"),
-            assay_filters=ctx.assay_filters,
-            ow_sex_allowlist=(ctx.sex_filters or {}).get("organ-weight"),
         )
         ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 

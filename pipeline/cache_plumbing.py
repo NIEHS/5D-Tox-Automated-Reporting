@@ -184,7 +184,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 8  # bumped: sidecar + imputed_cells folded into the key (stale-sidecar fix)
+_SECTIONS_CACHE_SCHEMA_VERSION = 9  # bumped: sections cache is now filter-AGNOSTIC (full superset); apical/organ-weight filters applied after the cache read (phase 2)
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -243,39 +243,26 @@ def _hash_sections(
     dose_unit: str,
     sidecar_hash: str = "",
     imputed_cells=None,
-    organ_allowlist=None,
-    sex_allowlist=None,
-    assay_filters=None,
-    ow_sex_allowlist=None,
 ) -> str:
     """
     Hash inputs that affect section card building.
 
-    Depends on NTP stats output (via ntp_hash) plus display parameters
-    that affect narrative text.  dtxsid is implicit (cache directory).
+    FILTER-AGNOSTIC (phase 2): the sections cache now stores the FULL superset
+    (every sex/assay/organ), and the report-level apical + organ-weight filters
+    are applied AFTER the cache read (processing_helpers.apply_section_filters) —
+    the "compute full, filter at read" model genomics already uses.  So the
+    allowlists no longer belong in this key; a version with different filters
+    reuses the same cached superset instead of forcing a rebuild.
 
-    Also folds in:
-      - sidecar_hash: a fingerprint of the sidecar JSONs + clinical-obs CSVs
-        the sections stage reads straight off disk (see _hash_sidecars).
-        Without it, editing a sidecar left the cache key unchanged and a
-        stale report was served.
-      - imputed_cells: the _meta.imputed_cells map, which the
-        clinical-pathology builder uses to footnote imputation-backed BMDs;
-        it is not otherwise reflected in ntp_hash.
-      - organ_allowlist: the "organ-weight" area allowlist (a list of organ
-        tokens) — the Organ Weight table AND its narrative are baked into the
-        sections blob, so editing the allowlist MUST force a fresh build.
-        Unlike the genomics allowlist (post-filtered, no hash), this one is
-        folded here.  None/empty ⇒ no effect on the key (backward compatible).
-      - sex_allowlist: the "apical" area sex allowlist, and assay_filters: the
-        per-platform clinical-chemistry/hematology endpoint allowlists.  Both
-        narrow the apical tables + narratives that live in the sections blob
-        (via apply_apical_filters upstream of the build), so a change MUST force
-        a fresh build.  Same injected-only-when-set rule as organ_allowlist.
+    Depends on NTP stats output (via ntp_hash) plus display parameters that
+    affect narrative text.  dtxsid is implicit (cache directory).  Also folds in:
+      - sidecar_hash: a fingerprint of the sidecar JSONs + clinical-obs CSVs the
+        sections stage reads straight off disk (see _hash_sidecars).
+      - imputed_cells: the _meta.imputed_cells map the clinical-pathology builder
+        uses to footnote imputation-backed BMDs.
 
-    A schema_version is folded in so that adding/renaming row-dict fields
-    (e.g. the `responsive` flag for clinical-pathology bolding) forces a
-    miss even when the upstream inputs haven't changed.
+    A schema_version is folded in so adding/renaming row-dict fields, or the
+    filter-agnostic switch itself, forces a miss even when inputs are unchanged.
     """
     payload = {
         "schema_version": _SECTIONS_CACHE_SCHEMA_VERSION,
@@ -285,41 +272,6 @@ def _hash_sections(
         "sidecars": sidecar_hash,
         "imputed_cells": imputed_cells,
     }
-    # Only inject the organ-weight allowlist when one is set, so an unfiltered
-    # report hashes byte-identically to the pre-feature key (existing on-disk
-    # sections caches stay valid).  When set, a different list → a different key
-    # → a fresh build (the Organ Weight table + narrative live in this blob).
-    if organ_allowlist:
-        payload["organ_allowlist"] = sorted(organ_allowlist)
-    # Same injected-only-when-set rule for the sibling apical allowlists, so an
-    # unfiltered report hashes byte-identically to the pre-feature key.
-    if sex_allowlist:
-        payload["sex_allowlist"] = sorted(sex_allowlist)
-    # The organ-weight AREA sex allowlist narrows the Organ Weight table's sexes
-    # (reference Table 3 = responsive sex only) + drives its dynamic caption, both
-    # baked into this blob.  Injected only when set (backward-compatible key).
-    if ow_sex_allowlist:
-        payload["ow_sex_allowlist"] = sorted(ow_sex_allowlist)
-    if assay_filters:
-        # Order-stable key.  Each area value is EITHER a flat token list (both
-        # sexes) OR a {sex: [tokens]} per-sex mapping — sort area keys, sex keys,
-        # and token lists so an equivalent config always hashes identically.
-        def _norm_assay_value(value):
-            if isinstance(value, dict):
-                return {
-                    sex: sorted(tokens)
-                    for sex, tokens in sorted(value.items())
-                    if tokens
-                } or None
-            return sorted(value) if value else None
-
-        normalized = {
-            area: nv
-            for area, value in sorted(assay_filters.items())
-            if (nv := _norm_assay_value(value)) is not None
-        }
-        if normalized:
-            payload["assay_filters"] = normalized
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

@@ -336,6 +336,115 @@ def apply_apical_filters(
     return out
 
 
+def apply_section_filters(
+    sections: list[dict],
+    *,
+    sex_allow: list[str] | None = None,
+    assay_filters: dict | None = None,
+    organ_allowlist: list[str] | None = None,
+    ow_sex_allow: list[str] | None = None,
+    compound_name: str = "",
+) -> list[dict]:
+    """
+    Apply the report-level apical filters to ALREADY-SERIALIZED section cards.
+
+    Phase 2: the sections cache stores the FULL superset (every sex/assay/organ);
+    the report-level filters are applied HERE, after the cache read, so a version
+    with different filters reuses the same cached superset instead of forcing a
+    rebuild.  Operates purely on the serialized card dicts (label / tables_json),
+    so it needs no TableRows and can run against a cache-loaded blob.
+
+    Filter dimensions (each a no-op when its allowlist is empty/None):
+      - assay_filters {area: [tokens] | {sex: [tokens]}}: drop rows whose label
+        fails the resolved allowlist, on the two assay platforms only (Clinical
+        Chemistry / Hematology; area→platform via _ASSAY_AREA_TO_PLATFORM).
+      - organ_allowlist: drop Organ Weight rows whose organ token fails, and
+        RECOMPUTE that card's caption from the surviving rows (the caption reads
+        "Liver Weights of Male Rats" vs the generic "…for Male and Female Rats",
+        derived from what actually renders — so it must be rebuilt, not kept).
+      - ow_sex_allow: prune the Organ Weight card's sexes only.
+      - sex_allow: prune every card's sexes (the "apical" area).
+
+    Returns a NEW list of NEW card dicts; the input (cached) cards are not mutated
+    so the on-disk superset cache stays intact for the next version.
+    """
+    if not (sex_allow or assay_filters or organ_allowlist or ow_sex_allow):
+        return sections
+
+    from tables.table_builder_common import (
+        sex_allowed, assay_allowed, organ_allowed,
+    )
+    from tables.organ_weight_table import _organ_weight_caption
+
+    assay_filters = assay_filters or {}
+    out: list[dict] = []
+    for card in sections:
+        card = dict(card)  # shallow copy; we rewrite tables_json/caption below
+        platform = card.get("platform", "")
+        tables = card.get("tables_json")
+        if not isinstance(tables, dict):
+            out.append(card)
+            continue
+
+        # Resolve this platform's assay allowlist (flat list or per-sex mapping).
+        platform_assay = None
+        for area, plat_name in _ASSAY_AREA_TO_PLATFORM.items():
+            if platform == plat_name:
+                platform_assay = assay_filters.get(area)
+                break
+
+        is_ow = platform == "Organ Weight"
+        new_tables: dict[str, list] = {}
+        for sex, rows in tables.items():
+            # sex pruning: the apical allowlist prunes every card; the
+            # organ-weight allowlist prunes only the Organ Weight card.
+            if not sex_allowed(sex, sex_allow):
+                continue
+            if is_ow and not sex_allowed(sex, ow_sex_allow):
+                continue
+
+            kept = rows
+            # assay row filter (per-sex mapping resolved inside the sex loop).
+            # The n / sample-size row (label "n", is_n_row) is structural, not an
+            # endpoint — always keep it (apply_apical_filters filtered TableRows
+            # before the n-row was synthesized, so it was never dropped).
+            if isinstance(platform_assay, dict):
+                assay_allow = platform_assay.get(str(sex).strip().lower())
+            else:
+                assay_allow = platform_assay
+            if assay_allow:
+                kept = [
+                    r for r in kept
+                    if not isinstance(r, dict)
+                    or r.get("is_n_row")
+                    or r.get("label") == "n"
+                    or assay_allowed(r.get("label", ""), assay_allow)
+                ]
+            # organ row filter (Organ Weight only): keep n-rows / Terminal Body
+            # Weight context rows; filter organ rows by their leading token.
+            if is_ow and organ_allowlist:
+                filtered = []
+                for r in kept:
+                    if not isinstance(r, dict):
+                        filtered.append(r); continue
+                    label = r.get("label", "")
+                    if r.get("is_n_row") or label.startswith("Terminal Body Weight"):
+                        filtered.append(r); continue
+                    token = label.split(" Absolute")[0].split(" Relative")[0].strip()
+                    if organ_allowed(token, organ_allowlist):
+                        filtered.append(r)
+                kept = filtered
+            new_tables[sex] = kept
+
+        card["tables_json"] = new_tables
+        # The Organ Weight caption is derived from what renders — rebuild it from
+        # the filtered rows so it agrees with the pruned table.
+        if is_ow and (organ_allowlist or ow_sex_allow or sex_allow):
+            card["caption"] = _organ_weight_caption(new_tables, compound_name)
+        out.append(card)
+    return out
+
+
 def prune_card_sexes(card: dict | None, sex_allow: list[str] | None) -> dict | None:
     """
     Drop non-allowed sex keys from a section card's ``tables_json`` in place,
