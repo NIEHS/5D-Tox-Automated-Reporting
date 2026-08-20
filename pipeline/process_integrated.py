@@ -749,6 +749,7 @@ async def _get_sections(ctx):
         sidecar_mortality=sidecar_mortality,
         clinical_obs_incidence=clin_obs_incidence,
         organ_allowlist=ow_allow,
+        ow_sex_allowlist=ow_sex_allow,
     )
     clin_path_narrative = generate_clinical_pathology_narrative(
         platform_tables, compound_name, dose_unit,

@@ -929,6 +929,134 @@ def load_report_charts(name: str) -> list[str] | None:
     return cleaned
 
 
+# ---------------------------------------------------------------------------
+# Canonical filter representation (unification, Phase 1).
+#
+# The six load_report_* loaders above return THREE incompatible shapes: flat
+# `list` (genes/gene_sets), `{area: list}` (organs/sex), and
+# `{area: list | {sex: list}}` (assays).  For per-version report configs and a
+# single render-time filter application, callers want ONE shape.
+#
+# The canonical form is a uniform 3-level nesting:
+#     {dimension: {area: {sex_key: [tokens]}}}
+# where `sex_key` is "*" (both sexes / not sex-scoped) or "male"/"female".
+# Flat dimensions collapse to area "*"; non-per-sex areas collapse to sex "*".
+# `charts` is deliberately kept OUT of this structure and carried alongside as
+# its own field: it is a CLOSED-vocabulary enable-list (absent=all, []=none),
+# semantically unlike the open-token allowlists, and forcing it in would break
+# that empty-semantics distinction (see load_report_charts).
+# ---------------------------------------------------------------------------
+
+# Dimensions carried in the canonical structure (charts handled separately).
+REPORT_FILTER_DIMENSIONS: tuple[str, ...] = (
+    "organs", "sex", "assays", "genes", "gene_sets",
+)
+
+
+def _normalize_dimension(raw) -> dict[str, dict[str, list[str]]]:
+    """
+    Map one loaded dimension's raw result to the canonical
+    ``{area: {sex_key: [tokens]}}`` form.  Accepts all three input shapes:
+
+      - flat ``[tokens]``                    → ``{"*": {"*": [tokens]}}``
+      - ``{area: [tokens]}``                 → ``{area: {"*": [tokens]}}``
+      - ``{area: {sex: [tokens]}}`` (assays) → ``{area: {sex: [tokens]}}``
+
+    Tokens are passed through as-is (the loaders already lower-cased/stripped).
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, list):
+        return {"*": {"*": list(raw)}} if raw else {}
+    if isinstance(raw, dict):
+        out: dict[str, dict[str, list[str]]] = {}
+        for area, value in raw.items():
+            if isinstance(value, dict):
+                out[area] = {str(s).strip().lower(): list(t) for s, t in value.items()}
+            else:
+                out[area] = {"*": list(value or [])}
+        return out
+    return {}
+
+
+def normalize_filters(
+    *,
+    organs=None,
+    sex=None,
+    assays=None,
+    genes=None,
+    gene_sets=None,
+) -> dict[str, dict[str, dict[str, list[str]]]]:
+    """
+    Compose the already-loaded per-dimension results into the canonical
+    ``{dimension: {area: {sex_key: [tokens]}}}`` structure.  Pure — takes the
+    loader outputs, so it is trivially unit-testable against the three shapes.
+    Empty dimensions are omitted.
+    """
+    raw = {
+        "organs": organs, "sex": sex, "assays": assays,
+        "genes": genes, "gene_sets": gene_sets,
+    }
+    out: dict[str, dict[str, dict[str, list[str]]]] = {}
+    for dim, value in raw.items():
+        norm = _normalize_dimension(value)
+        if norm:
+            out[dim] = norm
+    return out
+
+
+def load_report_filters(name: str) -> dict:
+    """
+    Load ALL report-level data filters for a template as one canonical object:
+
+        {
+          "filters": {dimension: {area: {sex_key: [tokens]}}},  # canonical
+          "charts":  [types] | None,                            # closed-vocab
+        }
+
+    Composes the existing load_report_* loaders through normalize_filters so a
+    single caller (the render/marshal path, per-version config) consumes one
+    shape instead of three.  The individual loaders remain for the current
+    compute-time call sites; this is the seam the render path will read.
+    """
+    return {
+        "filters": normalize_filters(
+            organs=load_report_organs(name),
+            sex=load_report_sex(name),
+            assays=load_report_assays(name),
+            genes=load_report_genes(name),
+            gene_sets=load_report_gene_sets(name),
+        ),
+        "charts": load_report_charts(name),
+    }
+
+
+def resolve_report_allowlist(
+    filters: dict, dimension: str, area: str | None = None, sex: str | None = None
+) -> list[str] | None:
+    """
+    Extract the token allowlist for one (dimension, area, sex) from a canonical
+    ``filters`` structure (the ``"filters"`` value of load_report_filters).
+
+    Resolution falls back through the "*" wildcards: an exact ``area``/``sex``
+    key wins; otherwise "*" is used.  Returns None when the dimension/area is
+    absent (⇒ no filtering, the loaders' empty convention).
+    """
+    dim = filters.get(dimension)
+    if not dim:
+        return None
+    area_map = dim.get(area) if area is not None else None
+    if area_map is None:
+        area_map = dim.get("*")
+    if not area_map:
+        return None
+    sex_key = str(sex).strip().lower() if sex else "*"
+    tokens = area_map.get(sex_key)
+    if tokens is None:
+        tokens = area_map.get("*")
+    return tokens
+
+
 def instantiate(template: list[dict]) -> list[DocNode]:
     """
     Instantiate a template into a flat list of DocNode top-level entries.

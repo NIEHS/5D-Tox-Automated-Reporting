@@ -144,65 +144,99 @@ def _component_match(candidate: str, allowlist: list[str] | None) -> bool:
     return any(token in components for token in allowlist)
 
 
+def _exact_match(candidate: str, allowlist: list[str] | None) -> bool:
+    """
+    EXACT case-insensitive allowlist match (see sex_allowed).  EMPTY/None ⇒ True.
+    The allowlist is expected pre-lower-cased; only the candidate is folded.
+    """
+    if not allowlist:
+        return True
+    folded = (candidate or "").strip().lower()
+    if not folded:
+        return False
+    return folded in allowlist
+
+
+def filter_allows(
+    candidate: str,
+    allowlist: list[str] | None,
+    *,
+    mode: str = "component",
+    alt_id: str | None = None,
+) -> bool:
+    """
+    The single report-level allowlist predicate every filter dimension shares.
+
+    ``mode`` selects the matching contract — the three are deliberately distinct
+    and must NOT be collapsed:
+      - "component" (organ, assay, gene): component-wise (:func:`_component_match`)
+        so one token covers inconsistent spellings across the pipeline.
+      - "exact" (sex): exact case-insensitive; a closed binary where a component
+        split would wrongly let a partial token cross between male/female.
+      - "dual" (gene_set): passes when ``alt_id`` (the GO accession) equals a
+        listed token OR ``candidate`` (the human-readable term) component-matches.
+
+    EMPTY/None allowlist ⇒ True (no filtering) in every mode.
+    """
+    if mode == "exact":
+        return _exact_match(candidate, allowlist)
+    if mode == "dual":
+        if not allowlist:
+            return True
+        acc = (alt_id or "").strip().lower()
+        if acc and acc in allowlist:
+            return True
+        return _component_match(candidate, allowlist)
+    return _component_match(candidate, allowlist)
+
+
 def organ_allowed(organ: str, allowlist: list[str] | None) -> bool:
     """
     Whether an organ passes a (per-area) report-level allowlist.
 
-    Component-wise match (see _component_match): one token covers the
-    inconsistent organ spellings — genomics emits a clean ``"kidney"`` while
-    apical row labels split laterality (``"Kidney-Left"``, ``"R. Kidney"``); a
-    non-listed organ (``"Liver"``, ``"Heart"``) shares no component and is
-    dropped.  EMPTY/None ⇒ no filtering.
-
-    This is the SINGLE matcher every organ choke point shares (genomics post-
-    filter, organ-weight table, organ-weight narrative).
+    Component-wise match: one token covers the inconsistent organ spellings —
+    genomics emits a clean ``"kidney"`` while apical row labels split laterality
+    (``"Kidney-Left"``, ``"R. Kidney"``); a non-listed organ shares no component
+    and is dropped.  EMPTY/None ⇒ no filtering.  Thin wrapper over
+    :func:`filter_allows` (mode="component"); the SINGLE matcher every organ
+    choke point shares (genomics post-filter, organ-weight table + narrative).
     """
-    return _component_match(organ, allowlist)
+    return filter_allows(organ, allowlist, mode="component")
 
 
 def sex_allowed(sex: str, allowlist: list[str] | None) -> bool:
     """
     Whether a sex passes a (per-area) report-level allowlist.
 
-    EXACT case-insensitive match — NOT component-wise.  Sex is a closed binary
-    ("male"/"female") with no shared substring trap, and a component split would
-    wrongly let a partial token cross between them.  EMPTY/None ⇒ no filtering.
-
-    Accepts either casing on both sides (apical keys are "Male"/"Female";
-    genomics sections carry "male"/"female"); the allowlist is pre-lower-cased
-    by the loader, so only the candidate is folded.
+    EXACT case-insensitive match — NOT component-wise (a component split would
+    wrongly let a partial token cross the male/female binary).  Accepts either
+    casing; the allowlist is pre-lower-cased by the loader.  EMPTY/None ⇒ no
+    filtering.  Thin wrapper over :func:`filter_allows` (mode="exact").
     """
-    if not allowlist:
-        return True
-    folded = (sex or "").strip().lower()
-    if not folded:
-        return False
-    return folded in allowlist
+    return filter_allows(sex, allowlist, mode="exact")
 
 
 def assay_allowed(label: str, allowlist: list[str] | None) -> bool:
     """
     Whether a clinical-pathology endpoint label passes a report-level allowlist.
 
-    Component-wise match (see _component_match) so one token can cover a family
-    of endpoints: ``"count"`` keeps ``"Basophil count"`` / ``"Leukocyte Count"``,
-    while ``"hemoglobin"`` keeps only ``"Hemoglobin"``.  EMPTY/None ⇒ no
-    filtering.  Scoped by the caller to the Clinical Chemistry and Hematology
-    platforms; Hormones is intentionally never assay-filtered.
+    Component-wise so one token covers a family of endpoints: ``"count"`` keeps
+    ``"Basophil count"`` / ``"Leukocyte Count"``.  EMPTY/None ⇒ no filtering.
+    Scoped by the caller to Clinical Chemistry + Hematology; Hormones is
+    intentionally never assay-filtered.  Wrapper over :func:`filter_allows`.
     """
-    return _component_match(label, allowlist)
+    return filter_allows(label, allowlist, mode="component")
 
 
 def gene_allowed(symbol: str, allowlist: list[str] | None) -> bool:
     """
     Whether a gene symbol passes a report-level allowlist.
 
-    Component-wise match (see _component_match); gene symbols are normally a
-    single token, so this is an exact case-insensitive match in practice, but
-    the shared core keeps the matcher family consistent.  EMPTY/None ⇒ no
-    filtering.
+    Component-wise (gene symbols are normally a single token, so exact in
+    practice, but the shared core keeps the matcher family consistent).
+    EMPTY/None ⇒ no filtering.  Wrapper over :func:`filter_allows`.
     """
-    return _component_match(symbol, allowlist)
+    return filter_allows(symbol, allowlist, mode="component")
 
 
 def gene_set_allowed(
@@ -212,17 +246,11 @@ def gene_set_allowed(
     Whether a gene set / GO term passes a report-level allowlist.
 
     A listed token keeps the row when it either EQUALS the GO accession
-    (``"GO:0051301"``, compared case-insensitively) OR is a component of the
-    human-readable term (``"cell division"`` → ``"division"`` matches).  This is
-    the "either go_id or go_term" rule — precise IDs and readable names both
-    work.  EMPTY/None ⇒ no filtering.
+    (``"GO:0051301"``, case-insensitive) OR is a component of the human-readable
+    term (``"cell division"`` → ``"division"``).  EMPTY/None ⇒ no filtering.
+    Wrapper over :func:`filter_allows` (mode="dual", alt_id=go_id).
     """
-    if not allowlist:
-        return True
-    acc = (go_id or "").strip().lower()
-    if acc and acc in allowlist:
-        return True
-    return _component_match(go_term, allowlist)
+    return filter_allows(go_term, allowlist, mode="dual", alt_id=go_id)
 
 
 def filter_genomics_sections(

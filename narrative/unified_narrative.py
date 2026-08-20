@@ -596,6 +596,7 @@ def _build_organ_weight_paragraphs(
     compound_name: str,
     dose_unit: str,
     organ_allowlist: list[str] | None = None,
+    sex_allowlist: list[str] | None = None,
 ) -> list[str]:
     """
     Build organ weight finding paragraphs from the Organ Weight platform data.
@@ -619,11 +620,17 @@ def _build_organ_weight_paragraphs(
                          Weight table.  Scoped to organ-weight rows ONLY (this
                          builder), so clinical-chemistry endpoints — which
                          _parse_organ_label also names — are untouched.
+        sex_allowlist:   Report-level sex allowlist (lower-cased) for the
+                         "organ-weight" area.  Empty/None ⇒ both sexes.  Keeps
+                         the prose in lock-step with the Organ Weight TABLE,
+                         which already honors sex.organ-weight — before this the
+                         narrative looped a fixed Male/Female and could name a
+                         sex the table had dropped.
 
     Returns:
         List of paragraph strings (one per sex that has data).
     """
-    from tables.table_builder_common import organ_allowed
+    from tables.table_builder_common import organ_allowed, sex_allowed
 
     ow_data = platform_tables.get("Organ Weight", {})
     if not ow_data:
@@ -632,6 +639,8 @@ def _build_organ_weight_paragraphs(
     paragraphs: list[str] = []
 
     for sex in ["Male", "Female"]:
+        if not sex_allowed(sex, sex_allowlist):
+            continue
         rows = ow_data.get(sex, [])
         if not rows:
             continue
@@ -844,6 +853,7 @@ def generate_apical_narrative(
     sidecar_mortality: dict | None = None,
     clinical_obs_incidence: dict[str, list] | None = None,
     organ_allowlist: list[str] | None = None,
+    ow_sex_allowlist: list[str] | None = None,
 ) -> list[str]:
     """
     Unified "Animal Condition, Body Weights, and Organ Weights" narrative.
@@ -872,6 +882,11 @@ def generate_apical_narrative(
                                 the organ-weight findings so the prose matches
                                 the filtered Organ Weight table.  Empty/None ⇒
                                 no filtering.
+        ow_sex_allowlist:       Report-level sex allowlist for the
+                                "organ-weight" area, applied to the organ-weight
+                                findings so the prose shows the same sexes the
+                                Organ Weight table does (which already honors
+                                sex.organ-weight).  Empty/None ⇒ both sexes.
 
     Returns:
         List of paragraph strings, ready for display or export.
@@ -895,7 +910,8 @@ def generate_apical_narrative(
     # 3. Organ weight findings
     paragraphs.extend(
         _build_organ_weight_paragraphs(
-            platform_tables, compound_name, dose_unit, organ_allowlist
+            platform_tables, compound_name, dose_unit, organ_allowlist,
+            ow_sex_allowlist,
         )
     )
 
