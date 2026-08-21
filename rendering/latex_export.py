@@ -290,6 +290,31 @@ def _resolve_apical_filters(dtxsid: str, version: str | None) -> dict:
     }
 
 
+# Pipeline defaults for the GO-category cutoffs (mirror process_integrated's
+# ProcessContext defaults) — used when a version declares no `methods` override.
+_GO_CUTOFF_DEFAULTS = dict(go_pct=5, go_min_genes=20, go_max_genes=500, go_min_bmd=3)
+
+
+def _resolve_go_cutoffs(dtxsid: str, version: str | None) -> dict:
+    """
+    The GO-category cutoffs for a version, as apply_genomics_cutoffs kwargs.
+
+    A version may declare a ``methods`` block with any of go_pct / go_min_genes /
+    go_max_genes / go_min_bmd; unset keys fall back to the pipeline defaults so
+    the 'default' version reproduces today's cutoffs.
+    """
+    cut = dict(_GO_CUTOFF_DEFAULTS)
+    try:
+        from document_model.version_config import load_version, DEFAULT_VERSION
+        methods = (load_version(dtxsid, version or DEFAULT_VERSION) or {}).get("methods") or {}
+        for k in cut:
+            if methods.get(k) is not None:
+                cut[k] = methods[k]
+    except Exception:
+        pass
+    return cut
+
+
 def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
     """
     Return the most recently modified file matching the glob, or None.
@@ -674,6 +699,13 @@ def load_session_data(
             load_report_genes, load_report_gene_sets,
         )
         from tables.table_builder_common import filter_genomics_sections
+        # Phase 4: the genomics cache is the cutoff-AGNOSTIC superset — apply THIS
+        # version's GO cutoffs first (same apply_genomics_cutoffs the pipeline uses
+        # at read), then the organ/sex/gene allowlists.  Cutoffs come from the
+        # version's `methods` block, else the pipeline defaults.
+        from pipeline.processing_helpers import apply_genomics_cutoffs
+        _cut = _resolve_go_cutoffs(dtxsid, version)
+        genomics_cache = apply_genomics_cutoffs(genomics_cache, **_cut)
         genomics_cache = filter_genomics_sections(
             genomics_cache,
             organ=load_report_organs(ACTIVE_TEMPLATE).get("genomics"),

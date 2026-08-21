@@ -309,7 +309,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 3  # bumped: added adversity_signatures
+_GENOMICS_CACHE_SCHEMA_VERSION = 4  # bumped: cutoff-AGNOSTIC superset; GO cutoffs applied after the cache read (phase 4)
 
 # Bump when the chart-rendering algorithm changes (jitter formula,
 # axis configuration, etc.) without changing the underlying gene-set
@@ -321,31 +321,29 @@ _CHARTS_CACHE_SCHEMA_VERSION = 2  # bumped: bounded jitter (no clipped top-clust
 
 def _hash_genomics(
     bmd_stats: list[str],
-    go_pct: float,
-    go_min_genes: int,
-    go_max_genes: int,
-    go_min_bmd: int,
     ge_filename: str,
 ) -> str:
     """
-    Hash inputs that affect genomics extraction.
+    Hash inputs that affect genomics EXTRACTION (the Java export).
 
-    bmd_stats (the full array) matters because each stat gets its own
-    GO table.  GO filter cutoffs and the GE filename determine which
-    categories pass and from which file.
+    CUTOFF-AGNOSTIC (phase 4): the genomics cache now stores every GO term (the
+    extraction runs with cutoffs off), and the GO-category cutoffs (go_pct /
+    go_min_genes / go_max_genes / go_min_bmd) are applied AFTER the cache read
+    (processing_helpers.apply_genomics_cutoffs) — the "extract full, filter at
+    read" model sections/genomics filtering already use.  So the cutoffs no
+    longer belong in this key; a version with different cutoffs reuses the same
+    extracted superset instead of re-running the Java export.
 
-    _GENOMICS_CACHE_SCHEMA_VERSION is included so that schema changes
-    (new fields, renamed fields) force a cache miss even when the input
-    data and filter parameters are unchanged.
+    bmd_stats (the full array) still matters — each stat gets its own GO table
+    inside the extraction — as does the GE filename (which file was extracted).
+
+    _GENOMICS_CACHE_SCHEMA_VERSION is bumped for the cutoff-agnostic switch so
+    old (cutoff-baked) caches miss and re-extract as the superset.
     """
     key = json.dumps({
         "schema_version": _GENOMICS_CACHE_SCHEMA_VERSION,
         "bmd_stats": list(bmd_stats),
         "ge_filename": ge_filename,
-        "go_max_genes": go_max_genes,
-        "go_min_bmd": go_min_bmd,
-        "go_min_genes": go_min_genes,
-        "go_pct": go_pct,
     }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

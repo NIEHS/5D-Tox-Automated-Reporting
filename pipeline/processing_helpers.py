@@ -874,6 +874,65 @@ def _extract_adversity_signatures(
     return result
 
 
+# Cutoff-disabled sentinel values used to extract the FULL GO superset (phase 4):
+# every GO term survives the extraction filter, so the genomics cache is cutoff-
+# agnostic and the real cutoffs are applied at read (apply_genomics_cutoffs).
+_GO_CUTOFFS_OFF = dict(go_pct=0.0, go_min_genes=0, go_max_genes=10**9, go_min_bmd=0)
+
+
+def apply_genomics_cutoffs(
+    genomics_sections: dict,
+    *,
+    go_pct: float,
+    go_min_genes: int,
+    go_max_genes: int,
+    go_min_bmd: int,
+) -> dict:
+    """
+    Apply the GO-category cutoffs to a cutoff-AGNOSTIC genomics superset (phase 4).
+
+    The genomics cache now stores every GO term (extracted with cutoffs off), with
+    each ``gene_sets_chart_by_stat`` row carrying ``n_genes`` / ``n_genes_with_bmd``.
+    This re-applies the version's cutoffs the SAME way _extract_genomics used to at
+    compute time — dropping rows that fail min/max total genes, min BMD-gene count,
+    or the % threshold — then re-slices the top-10 ``gene_sets_by_stat`` with fresh
+    positional ranks.  A version can thus change cutoffs with no Java re-extraction.
+
+    Returns a NEW dict of NEW section dicts; the cached superset is not mutated.
+    Cutoffs that are all at their permissive sentinel (0/0/inf/0) are a no-op.
+    """
+    out: dict = {}
+    for key, sec in (genomics_sections or {}).items():
+        sec = dict(sec)
+        chart_by_stat = sec.get("gene_sets_chart_by_stat") or {}
+        new_chart: dict[str, list] = {}
+        new_top: dict[str, list] = {}
+        for stat, rows in chart_by_stat.items():
+            kept = []
+            for r in rows:
+                n_total = r.get("n_genes", 0) or 0
+                n_passed = r.get("n_genes_with_bmd", 0) or 0
+                if n_total < go_min_genes or n_total > go_max_genes:
+                    continue
+                if n_passed < go_min_bmd:
+                    continue
+                pct = (n_passed / n_total * 100) if n_total > 0 else 0
+                if pct < go_pct:
+                    continue
+                kept.append(r)
+            # Rows arrive already BMD-sorted (extraction sorts before caching);
+            # filtering preserves that order.  Strip any stale rank, re-slice top-10.
+            new_chart[stat] = [{k: v for k, v in r.items() if k != "rank"} for r in kept]
+            new_top[stat] = [
+                {"rank": i + 1, **{k: v for k, v in r.items() if k != "rank"}}
+                for i, r in enumerate(new_chart[stat][:10])
+            ]
+        sec["gene_sets_chart_by_stat"] = new_chart
+        sec["gene_sets_by_stat"] = new_top
+        out[key] = sec
+    return out
+
+
 async def _extract_genomics(
     dtxsid: str,
     integrated: dict,

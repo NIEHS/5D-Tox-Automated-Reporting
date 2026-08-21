@@ -81,6 +81,8 @@ from pipeline.processing_helpers import (
     _partition_by_platform,
     _build_section_cards,
     _extract_genomics,
+    _GO_CUTOFFS_OFF,
+    apply_genomics_cutoffs,
     _build_apical_bmd_summary,
     _build_bmds_bmd_summary,
     apply_apical_filters,
@@ -532,12 +534,18 @@ async def _build_charts(ctx):
         # genomics + LLM narrative pipeline to re-run.  The chart
         # style/type config is folded in too, so editing the template's
         # chart blocks re-renders the charts without touching genomics.
+        # Phase 4: genomics_hash is now cutoff-AGNOSTIC (the GO cutoffs are
+        # applied after the genomics cache read), but the charts render from the
+        # cutoff-FILTERED gene sets — so the GO cutoffs must be folded into the
+        # chart key directly, else changing a cutoff would serve stale charts.
         charts_hash = hashlib.sha256(
             json.dumps({
                 "genomics_hash": genomics_hash,
                 "charts_schema": _CHARTS_CACHE_SCHEMA_VERSION,
                 "chart_style": chart_style_cfg,
                 "chart_types": _chart_types_fingerprint(chart_types_reg),
+                "go_cutoffs": [ctx.go_pct, ctx.go_min_genes,
+                               ctx.go_max_genes, ctx.go_min_bmd],
             }, sort_keys=True, default=str).encode()
         ).hexdigest()[:16]
         charts_cached = _load_cache(dtxsid, "charts", charts_hash)
@@ -867,14 +875,24 @@ async def _get_genomics(ctx):
     if genomics_cached:
         ctx.genomics_sections = genomics_cached
     else:
+        # Extract the FULL GO superset (cutoffs OFF) so the cache is cutoff-
+        # agnostic; the version's GO cutoffs are applied after the read below.
         result = await _extract_genomics(
             dtxsid, ctx.integrated, ctx.bmd_stats,
-            ctx.go_pct, ctx.go_min_genes, ctx.go_max_genes, ctx.go_min_bmd,
+            **_GO_CUTOFFS_OFF,
         )
-        # Cache the FULL (unfiltered) extraction so editing the organ allowlist
-        # re-filters instantly without re-running the costly extraction.
         _save_cache(dtxsid, "genomics", genomics_hash, result)
         ctx.genomics_sections = result
+
+    # GO-category cutoffs (phase 4): applied AFTER the cache read so the cached
+    # superset serves every version — a cutoff change re-filters instantly with
+    # no Java re-extraction.  Runs before the organ/sex/gene post-filter below.
+    if ctx.genomics_sections:
+        ctx.genomics_sections = apply_genomics_cutoffs(
+            ctx.genomics_sections,
+            go_pct=ctx.go_pct, go_min_genes=ctx.go_min_genes,
+            go_max_genes=ctx.go_max_genes, go_min_bmd=ctx.go_min_bmd,
+        )
 
     # Genomics post-filter — the single genomics choke point shared with the
     # Overleaf export (latex_export.load_session_data calls the SAME
@@ -1201,10 +1219,9 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
 
         ge_source = _meta.get("source_files", {}).get("gene_expression")
         ge_filename = ge_source.get("filename", "") if ge_source else ""
-        ctx.genomics_hash = _hash_genomics(
-            bmd_stats, go_pct, go_min_genes, go_max_genes, go_min_bmd,
-            ge_filename,
-        )
+        # Cutoff-agnostic key (phase 4): the GO cutoffs are applied after the
+        # cache read (apply_genomics_cutoffs), so they no longer key the cache.
+        ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename)
 
         # --- Materials and Methods (LLM-generated, cached) ---
         # Uses fingerprints + .bm2 metadata + animal report to extract

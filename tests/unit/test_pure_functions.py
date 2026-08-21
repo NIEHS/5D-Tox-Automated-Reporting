@@ -332,13 +332,17 @@ class TestHashFunctions:
         assert _hash_bmds(inputs) == _hash_bmds(inputs)
 
     def test_hash_genomics_deterministic(self):
-        h1 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene.bm2")
-        h2 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene.bm2")
+        # Phase 4: _hash_genomics is CUTOFF-AGNOSTIC — it takes only
+        # (bmd_stats, ge_filename); the GO cutoffs are applied after the cache
+        # read (apply_genomics_cutoffs), so one extracted superset serves every
+        # version's cutoffs.
+        h1 = _hash_genomics(["median"], "gene.bm2")
+        h2 = _hash_genomics(["median"], "gene.bm2")
         assert h1 == h2
 
     def test_hash_genomics_sensitive_to_file(self):
-        h1 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_a.bm2")
-        h2 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_b.bm2")
+        h1 = _hash_genomics(["median"], "gene_a.bm2")
+        h2 = _hash_genomics(["median"], "gene_b.bm2")
         assert h1 != h2
 
     # ── stale-sidecar cache key (bug #4) ─────────────────────────────────
