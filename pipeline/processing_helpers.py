@@ -300,7 +300,7 @@ def apply_apical_filters(
     if not sex_allow and not assay_filters:
         return platform_tables
 
-    from tables.table_builder_common import sex_allowed, assay_allowed
+    from document_model.filters import sex_allowed, assay_allowed
 
     assay_filters = assay_filters or {}
     out: dict[str, dict[str, list]] = {}
@@ -457,7 +457,7 @@ def prune_card_sexes(card: dict | None, sex_allow: list[str] | None) -> dict | N
     """
     if not sex_allow or not card:
         return card
-    from tables.table_builder_common import sex_allowed
+    from document_model.filters import sex_allowed
 
     tables = card.get("tables_json")
     if isinstance(tables, dict):

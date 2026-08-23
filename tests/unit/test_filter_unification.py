@@ -14,7 +14,7 @@ Unit tests for the Phase-1 filter-unification surface:
 
 import pytest
 
-from tables.table_builder_common import (
+from document_model.filters import (
     filter_allows,
     sex_allowed,
     organ_allowed,

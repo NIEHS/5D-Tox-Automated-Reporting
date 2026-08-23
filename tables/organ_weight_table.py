@@ -257,7 +257,7 @@ def build_organ_weight_table_from_sidecar(
     # full endpoint strings ("Liver Absolute"); _parse_organ_label extracts the
     # organ token ("Liver") that organ_allowed matches component-wise (so
     # "kidney" covers the "Kidney-Left"/"Kidney-Right" laterality labels).
-    from tables.table_builder_common import organ_allowed
+    from document_model.filters import organ_allowed
     from narrative.unified_narrative import _parse_organ_label
 
     all_organs: set[str] = set()
@@ -402,7 +402,7 @@ def build_organ_weight_table_from_sidecar(
     # ── Build the table rows ──────────────────────────────────────────────
     serialized: dict[str, list[dict]] = {}
 
-    from tables.table_builder_common import sex_allowed
+    from document_model.filters import sex_allowed
     for sex in ("Male", "Female"):
         # Report-level sex allowlist for the ORGAN-WEIGHT area only.  The
         # reference's Table 3 shows just the sex that had a responsive organ

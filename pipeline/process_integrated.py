@@ -903,7 +903,7 @@ async def _get_genomics(ctx):
     # the result cascades to charts, narratives, and the gene tables, which all
     # read this dict.
     if ctx.genomics_sections:
-        from tables.table_builder_common import filter_genomics_sections
+        from document_model.filters import filter_genomics_sections
         ctx.genomics_sections = filter_genomics_sections(
             ctx.genomics_sections,
             organ=(ctx.organ_filters or {}).get("genomics"),
