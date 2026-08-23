@@ -54,6 +54,43 @@ class TestVersionStore:
         resolved = vc.resolve_version_filters("DTXSID_V", "custom")
         assert resolved["filters"] == {"sex": {"apical": {"*": ["male"]}}}
 
+    def test_save_normalizes_legacy_filter_shape(self, sessions_dir):
+        # The friendlier per-area shape (sex: {apical: [male]}) is accepted on
+        # save and CANONICALIZED to {apical: {"*": [male]}} — so the render-time
+        # consumer (resolve_report_allowlist) never sees a list where it expects
+        # a mapping (the bug: it would crash calling .get on a list).
+        vc.save_version("DTXSID_V", "legacy",
+                        {"filters": {"sex": {"apical": ["male"]},
+                                     "genes": ["egr1", "ddit4"]}})
+        stored = vc.load_version("DTXSID_V", "legacy")["filters"]
+        assert stored == {
+            "sex": {"apical": {"*": ["male"]}},
+            "genes": {"*": {"*": ["egr1", "ddit4"]}},
+        }
+        # and it resolves cleanly at render time (no crash)
+        from document_model.document_template import resolve_report_allowlist
+        resolved = vc.resolve_version_filters("DTXSID_V", "legacy")["filters"]
+        assert resolve_report_allowlist(resolved, "sex", "apical") == ["male"]
+        assert resolve_report_allowlist(resolved, "genes") == ["egr1", "ddit4"]
+
+    def test_save_rejects_unknown_filter_dimension(self, sessions_dir):
+        with pytest.raises(ValueError):
+            vc.save_version("DTXSID_V", "bad", {"filters": {"bogus": ["x"]}})
+
+    def test_save_rejects_malformed_filter_tokens(self, sessions_dir):
+        # a non-list token leaf is a structural error, caught at save
+        with pytest.raises(ValueError):
+            vc.save_version("DTXSID_V", "bad", {"filters": {"genes": "egr1"}})
+
+    def test_save_rejects_bad_charts_block(self, sessions_dir):
+        with pytest.raises(ValueError):
+            vc.save_version("DTXSID_V", "bad", {"charts": "umap"})
+
+    def test_save_preserves_charts_empty_vs_absent(self, sessions_dir):
+        # [] (render none) must survive save distinct from absent (render all)
+        vc.save_version("DTXSID_V", "no-charts", {"charts": []})
+        assert vc.load_version("DTXSID_V", "no-charts")["charts"] == []
+
 
 @pytest.mark.integration
 class TestVersionRenderIntegration:
@@ -118,3 +155,47 @@ class TestVersionRenderIntegration:
         for sex in td:
             labels = [r["label"] for r in td[sex] if not r.get("is_n_row")]
             assert labels == ["Cholesterol"]  # albumin dropped, n-row kept
+
+
+@pytest.mark.integration
+class TestVersionGenomicsChartResolvers:
+    """The genomics/chart export resolvers must honor the VERSION's overrides,
+    not the global template (the bug: latex_export read ACTIVE_TEMPLATE
+    unconditionally, silently dropping a version's genomics/chart filters)."""
+
+    def test_genomics_filters_use_version_override(self, sessions_dir):
+        from rendering.latex_export import _resolve_genomics_filters
+        vc.save_version("DTXSID_V", "liver-male", {"filters": {
+            "organs": {"genomics": {"*": ["liver"]}},
+            "sex": {"genomics": {"*": ["male"]}},
+            "genes": ["egr1"],
+            "gene_sets": ["GO:0051301"],
+        }})
+        got = _resolve_genomics_filters("DTXSID_V", "liver-male")
+        # tokens are lower-cased on save (predicate expects a pre-lowered
+        # allowlist), so "GO:0051301" is stored/resolved as "go:0051301"
+        assert got == {
+            "organ": ["liver"], "sex": ["male"],
+            "genes": ["egr1"], "gene_sets": ["go:0051301"],
+        }
+
+    def test_charts_use_version_override(self, sessions_dir):
+        from rendering.latex_export import _resolve_charts
+        # explicit empty list (render none) must be honored, not overridden by
+        # the template's default (render all)
+        vc.save_version("DTXSID_V", "no-charts", {"charts": []})
+        assert _resolve_charts("DTXSID_V", "no-charts") == []
+        vc.save_version("DTXSID_V", "umap-only", {"charts": ["umap"]})
+        assert _resolve_charts("DTXSID_V", "umap-only") == ["umap"]
+
+    def test_default_falls_back_to_template(self, sessions_dir):
+        # default (no override) resolves to whatever the global template ships —
+        # the key property is it does NOT raise and returns the template values.
+        from rendering.latex_export import _resolve_genomics_filters, _resolve_charts
+        from document_model.document_tree import ACTIVE_TEMPLATE
+        from document_model.document_template import (
+            load_report_organs, load_report_charts,
+        )
+        got = _resolve_genomics_filters("DTXSID_V", "default")
+        assert got["organ"] == (load_report_organs(ACTIVE_TEMPLATE).get("genomics"))
+        assert _resolve_charts("DTXSID_V", "default") == load_report_charts(ACTIVE_TEMPLATE)

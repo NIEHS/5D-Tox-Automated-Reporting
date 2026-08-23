@@ -101,8 +101,12 @@ def save_version(dtxsid: str, name: str, data: dict) -> None:
 
     Validates the STRUCTURE (if a ``document`` block is present) with the same
     full tree build document_config uses, so an invalid structure never lands.
-    The ``filters`` block is stored as-is (canonical shape produced by
-    document_template.normalize_filters); it is validated lazily at render.
+    The ``filters`` block is normalized to the canonical
+    ``{dimension: {area: {sex_key: [tokens]}}}`` shape and validated on the way
+    in (document_template.normalize_filters_block) — the render-time consumer
+    (resolve_report_allowlist) assumes that shape, so a non-canonical or
+    malformed filters block must be caught here, not crash at render.  A bad
+    ``charts`` block (must be a list of type strings, or null) is rejected too.
     """
     if not isinstance(data, dict):
         raise ValueError("version data must be a mapping")
@@ -113,6 +117,21 @@ def save_version(dtxsid: str, name: str, data: dict) -> None:
         if not isinstance(document, list):
             raise ValueError("version 'document' must be a list of node entries")
         _tree_from_document_list(document)
+
+    # Normalize + validate filters (canonical shape), so render never sees a
+    # legacy/malformed shape.  Rewrite the stored value with the canonical form.
+    data = dict(data)  # don't mutate the caller's mapping
+    if "filters" in data:
+        from document_model.document_template import normalize_filters_block
+        data["filters"] = normalize_filters_block(data.get("filters"))
+
+    # charts is a closed-vocab enable list: a list of type strings, or null
+    # (absent/null ⇒ render all; [] ⇒ render none — presence-sensitive, so we
+    # keep [] distinct from absent and never coerce it away).
+    if "charts" in data and data["charts"] is not None:
+        charts = data["charts"]
+        if not isinstance(charts, list) or not all(isinstance(c, str) for c in charts):
+            raise ValueError("version 'charts' must be a list of type strings, or null")
 
     path = version_path(dtxsid, name)
     path.parent.mkdir(parents=True, exist_ok=True)

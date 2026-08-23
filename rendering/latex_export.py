@@ -315,6 +315,44 @@ def _resolve_go_cutoffs(dtxsid: str, version: str | None) -> dict:
     return cut
 
 
+def _resolve_genomics_filters(dtxsid: str, version: str | None) -> dict:
+    """
+    Resolve the genomics-area allowlists for a version into the kwargs
+    filter_genomics_sections takes (organ / sex / genes / gene_sets).
+
+    Mirrors _resolve_apical_filters: reads the version's canonical filters
+    (falling back to the global template for 'default' / no override) and
+    projects them via resolve_report_allowlist.  Previously this surface read
+    the GLOBAL template unconditionally, so a version's genomics filters were
+    silently dropped at export.  Flat dimensions (genes / gene_sets) resolve via
+    the "*" area; organ/sex are read from the "genomics" area.  All-None ⇒ no
+    genomics filtering.
+    """
+    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
+    from document_model.document_template import resolve_report_allowlist
+
+    filters = resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("filters") or {}
+    return {
+        "organ": resolve_report_allowlist(filters, "organs", "genomics"),
+        "sex": resolve_report_allowlist(filters, "sex", "genomics"),
+        "genes": resolve_report_allowlist(filters, "genes"),
+        "gene_sets": resolve_report_allowlist(filters, "gene_sets"),
+    }
+
+
+def _resolve_charts(dtxsid: str, version: str | None):
+    """
+    The enabled chart-type allowlist for a version (closed-vocab, presence-
+    sensitive: None ⇒ render all types, [] ⇒ render none).
+
+    A version's own ``charts`` wins; otherwise the global template's.  Reads the
+    value resolve_version_filters already resolved rather than re-reading the
+    global template, so a version's chart selection is honored at export.
+    """
+    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
+    return resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("charts")
+
+
 def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
     """
     Return the most recently modified file matching the glob, or None.
@@ -693,25 +731,20 @@ def load_session_data(
     genomics_path = _latest(session_dir, "_cache_genomics_*.json")
     genomics_cache = _load_json(genomics_path)
     if isinstance(genomics_cache, dict) and genomics_cache:
-        from document_model.document_tree import ACTIVE_TEMPLATE
-        from document_model.document_template import (
-            load_report_organs, load_report_sex,
-            load_report_genes, load_report_gene_sets,
-        )
-        from tables.table_builder_common import filter_genomics_sections
+        from document_model.filters import filter_genomics_sections
         # Phase 4: the genomics cache is the cutoff-AGNOSTIC superset — apply THIS
         # version's GO cutoffs first (same apply_genomics_cutoffs the pipeline uses
         # at read), then the organ/sex/gene allowlists.  Cutoffs come from the
-        # version's `methods` block, else the pipeline defaults.
+        # version's `methods` block, else the pipeline defaults; the allowlists
+        # from the version's canonical filters (else the global template) — NOT
+        # the global template unconditionally, which silently dropped a version's
+        # genomics overrides.
         from pipeline.processing_helpers import apply_genomics_cutoffs
         _cut = _resolve_go_cutoffs(dtxsid, version)
         genomics_cache = apply_genomics_cutoffs(genomics_cache, **_cut)
         genomics_cache = filter_genomics_sections(
             genomics_cache,
-            organ=load_report_organs(ACTIVE_TEMPLATE).get("genomics"),
-            sex=load_report_sex(ACTIVE_TEMPLATE).get("genomics"),
-            genes=load_report_genes(ACTIVE_TEMPLATE),
-            gene_sets=load_report_gene_sets(ACTIVE_TEMPLATE),
+            **_resolve_genomics_filters(dtxsid, version),
         )
         # Genomics LLM interpretation: the per-organ×sex biology analysis lives
         # in `_cache_interpretation_<organ>_<sex>_*.json` (top-level
@@ -735,17 +768,15 @@ def load_session_data(
     assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
-    # The active template's `charts:` allowlist decides WHICH chart types render
-    # (None ⇒ all; [] ⇒ none) — honored here so the Overleaf bundle and the HTML
-    # preview show the identical set of figures.
+    # The version's `charts:` allowlist decides WHICH chart types render (None ⇒
+    # all; [] ⇒ none), falling back to the global template — honored here so the
+    # Overleaf bundle and the HTML preview show the identical set of figures.
     charts_path = _latest(session_dir, "_cache_charts_*.json")
     charts_cache = _load_json(charts_path)
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
-        from document_model.document_tree import ACTIVE_TEMPLATE
-        from document_model.document_template import load_report_charts
         _attach_genomics_charts(
             data["genomics_sections"], charts_cache,
-            enabled_types=load_report_charts(ACTIVE_TEMPLATE),
+            enabled_types=_resolve_charts(dtxsid, version),
         )
 
     # ── Appendix B: animal identifier roster ──────────────────────────

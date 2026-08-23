@@ -1005,6 +1005,78 @@ def normalize_filters(
     return out
 
 
+def normalize_filters_block(filters) -> dict:
+    """
+    Coerce a raw ``filters`` mapping — as a version file / UI may author it, in
+    any of the three legacy per-dimension shapes — into the canonical
+    ``{dimension: {area: {sex_key: [tokens]}}}`` structure, validating as it goes.
+
+    This is the save-time guard for per-version filters.  ``resolve_report_allowlist``
+    (the render-time consumer) assumes the canonical nesting, so a version stored
+    with a non-canonical shape (e.g. ``sex: {apical: [male]}`` instead of
+    ``{apical: {"*": [male]}}``) would crash at render (``.get`` on a list).
+    Normalizing on save both accepts the friendlier per-area shape and guarantees
+    what lands on disk is canonical.
+
+    Raises ValueError on structural errors (unknown dimension, non-list leaf
+    tokens, wrong nesting) so a bad version fails loudly at save, not silently at
+    render.  Empty/None ⇒ ``{}`` (no filtering).
+    """
+    if not filters:
+        return {}
+    if not isinstance(filters, dict):
+        raise ValueError(f"'filters' must be a mapping, got {type(filters).__name__}")
+
+    def _tokens(val, where: str) -> list[str]:
+        # Tokens must be lower-cased + stripped to match the predicate contract
+        # (filter_allows expects a pre-lowered allowlist; only the candidate is
+        # folded at match time — see document_model/filters.py).  The load_report_*
+        # loaders do this; a version file authors raw tokens, so we do it here too
+        # or a mixed-case token (e.g. "GO:0051301") would silently never match.
+        if not isinstance(val, list):
+            raise ValueError(f"{where}: token allowlist must be a list, got {type(val).__name__}")
+        cleaned: list[str] = []
+        for t in val:
+            if not isinstance(t, str):
+                raise ValueError(f"{where}: tokens must be strings, got {type(t).__name__}")
+            tok = t.strip().lower()
+            if tok:
+                cleaned.append(tok)
+        return cleaned
+
+    out: dict[str, dict[str, dict[str, list[str]]]] = {}
+    for dim, raw in filters.items():
+        if dim not in REPORT_FILTER_DIMENSIONS:
+            raise ValueError(
+                f"unknown filter dimension {dim!r}; must be one of "
+                f"{list(REPORT_FILTER_DIMENSIONS)}"
+            )
+        if raw is None:
+            continue
+        if isinstance(raw, list):  # flat dimension (genes / gene_sets)
+            toks = _tokens(raw, dim)
+            if toks:
+                out[dim] = {"*": {"*": toks}}
+            continue
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f"filter dimension {dim!r} must be a list or an {{area: ...}} "
+                f"mapping, got {type(raw).__name__}"
+            )
+        areas: dict[str, dict[str, list[str]]] = {}
+        for area, val in raw.items():
+            if isinstance(val, dict):  # per-area-per-sex (assays and canonical)
+                areas[area] = {
+                    str(s).strip().lower(): _tokens(t, f"{dim}.{area}.{s}")
+                    for s, t in val.items()
+                }
+            else:  # per-area flat → sex "*"
+                areas[area] = {"*": _tokens(val, f"{dim}.{area}")}
+        if areas:
+            out[dim] = areas
+    return out
+
+
 def load_report_filters(name: str) -> dict:
     """
     Load ALL report-level data filters for a template as one canonical object:
