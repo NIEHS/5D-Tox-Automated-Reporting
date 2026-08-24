@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -70,9 +70,14 @@ interface Props {
   schema: SchemaTable[];
   onRun: (sql: string) => void;
   running: boolean;
+  // A set of tables to preload onto the canvas (auto-connected by their joins),
+  // e.g. when a report-gallery card is "opened in builder". Changing the token
+  // re-seeds; the tables are the join skeleton, an editable starting point (the
+  // builder can't express the aggregation/window a report query may use).
+  seed?: { tables: string[]; token: number };
 }
 
-function BuilderInner({ schema, onRun, running }: Props) {
+function BuilderInner({ schema, onRun, running, seed }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<TableNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [aliasSeq, setAliasSeq] = useState(0);
@@ -141,6 +146,59 @@ function BuilderInner({ schema, onRun, running }: Props) {
     },
     [nodes, setEdges]
   );
+
+  // Seed the canvas from a report-gallery card: replace the graph with the given
+  // tables laid out in a row and auto-connected wherever a curated join exists.
+  const lastSeed = useRef(-1);
+  useEffect(() => {
+    if (!seed || seed.token === lastSeed.current) return;
+    lastSeed.current = seed.token;
+
+    const seededNodes: Node<TableNodeData>[] = [];
+    const idByTable: Record<string, string> = {};
+    seed.tables.forEach((table, i) => {
+      const t = schemaByName.get(table);
+      if (!t) return;
+      const id = `${table}-seed${seed.token}-${i}`;
+      const alias = `t${i}`;
+      idByTable[table] = id;
+      seededNodes.push({
+        id,
+        type: "table",
+        position: { x: 30 + i * 250, y: 40 },
+        data: {
+          table,
+          alias,
+          columns: t.columns,
+          selected: new Set<string>(),
+          where: "",
+          onToggle: (col: string) => toggleCol(id, col),
+          onWhere: (v: string) => setWhere(id, v),
+        },
+      });
+    });
+
+    const seededEdges: Edge[] = [];
+    for (let i = 1; i < seed.tables.length; i++) {
+      const prev = seed.tables[i - 1];
+      const cur = seed.tables[i];
+      const rel = findRelationship(prev, cur);
+      if (rel && idByTable[prev] && idByTable[cur]) {
+        seededEdges.push({
+          id: `e-${idByTable[prev]}-${idByTable[cur]}`,
+          source: idByTable[prev],
+          target: idByTable[cur],
+          label: rel.map(([a]) => a).join(", "),
+        });
+      }
+    }
+
+    setColState(Object.fromEntries(seededNodes.map((n) => [n.id, new Set<string>()])));
+    setWhereState(Object.fromEntries(seededNodes.map((n) => [n.id, ""])));
+    setAliasSeq(seed.tables.length);
+    setNodes(seededNodes);
+    setEdges(seededEdges);
+  }, [seed, schemaByName, setNodes, setEdges, toggleCol, setWhere]);
 
   // Fold the live UI state (selected cols, where) into the nodes for the build.
   const queryNodes: QueryNode[] = nodes.map((n) => ({

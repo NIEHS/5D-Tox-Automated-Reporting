@@ -58,6 +58,9 @@ export function Query({ dtxsid }: StepProps) {
   const [running, setRunning] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [result, setResult] = useState<QueryResult | null>(null);
+  // Tables to preload into the visual builder (from a report-gallery card). The
+  // token forces a re-seed even if the same table set is opened twice.
+  const [builderSeed, setBuilderSeed] = useState<{ tables: string[]; token: number } | null>(null);
 
   // One-time: spin up duckdb-wasm and load the session's Parquet into native
   // tables. Held in a ref so re-renders don't re-instantiate.
@@ -130,6 +133,15 @@ export function Query({ dtxsid }: StepProps) {
     void runSql(generated);
   }
 
+  // "Open in builder": seed the visual builder with a card's tables (auto-joined)
+  // and switch to builder mode. The join skeleton is an editable starting point —
+  // the builder can't reproduce a report query's aggregation/window, so it lays
+  // out the lineage for the user to build on.
+  function openInBuilder(tables: string[]) {
+    setBuilderSeed({ tables, token: Date.now() });
+    setMode("builder");
+  }
+
   function onEditorKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Cmd/Ctrl+Enter runs the query.
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -197,11 +209,20 @@ export function Query({ dtxsid }: StepProps) {
       )}
 
       {ready && mode === "builder" && (
-        <QueryBuilder schema={schema} onRun={runFromBuilder} running={running} />
+        <QueryBuilder
+          schema={schema}
+          onRun={runFromBuilder}
+          running={running}
+          seed={builderSeed ?? undefined}
+        />
       )}
 
       {ready && mode === "report" && dbRef.current && (
-        <ReportGallery db={dbRef.current} onOpenInConsole={openInConsole} />
+        <ReportGallery
+          db={dbRef.current}
+          onOpenInConsole={openInConsole}
+          onOpenInBuilder={openInBuilder}
+        />
       )}
 
       {ready && mode === "sql" && (

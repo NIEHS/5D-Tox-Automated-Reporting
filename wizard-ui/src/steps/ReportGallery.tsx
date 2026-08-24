@@ -94,10 +94,12 @@ function ReportCard({
   q,
   db,
   onOpenInConsole,
+  onOpenInBuilder,
 }: {
   q: ReportQuery;
   db: AsyncDuckDB;
   onOpenInConsole: (sql: string) => void;
+  onOpenInBuilder: (tables: string[]) => void;
 }) {
   const [result, setResult] = useState<QueryResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -137,6 +139,13 @@ function ReportCard({
         <button className="chip-btn" onClick={() => onOpenInConsole(q.sql)}>
           Open in console
         </button>
+        <button
+          className="chip-btn"
+          onClick={() => onOpenInBuilder(q.tables)}
+          title="Load this query's tables (auto-joined) into the visual builder"
+        >
+          Open in builder
+        </button>
       </div>
 
       {showSql && <pre className="card-sql">{q.sql}</pre>}
@@ -149,9 +158,10 @@ function ReportCard({
 interface Props {
   db: AsyncDuckDB;
   onOpenInConsole: (sql: string) => void;
+  onOpenInBuilder: (tables: string[]) => void;
 }
 
-export function ReportGallery({ db, onOpenInConsole }: Props) {
+export function ReportGallery({ db, onOpenInConsole, onOpenInBuilder }: Props) {
   // group cards by section, preserving REPORT_QUERIES order
   const sections: string[] = [];
   for (const q of REPORT_QUERIES) if (!sections.includes(q.section)) sections.push(q.section);
@@ -172,6 +182,7 @@ export function ReportGallery({ db, onOpenInConsole }: Props) {
                 q={q}
                 db={db}
                 onOpenInConsole={onOpenInConsole}
+                onOpenInBuilder={onOpenInBuilder}
               />
             ))}
           </div>
