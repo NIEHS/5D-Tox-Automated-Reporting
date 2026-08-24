@@ -11,6 +11,7 @@ import { DataTree } from "./steps/DataTree";
 import { Approve } from "./steps/Approve";
 import { Process } from "./steps/Process";
 import { Results } from "./steps/Results";
+import { Query } from "./steps/Query";
 
 // The wizard is split into two modes, chosen by URL path:
 //   /wizard/         → INGEST: prepare the data pool up through approval.
@@ -30,6 +31,7 @@ const INGEST_STEPS = [
 const REPORT_STEPS = [
   { key: "process", label: "Process" },
   { key: "results", label: "Results" },
+  { key: "query", label: "Query" },
 ] as const;
 
 type StepKey =
@@ -118,6 +120,8 @@ export function App() {
         return <Process {...common} />;
       case "results":
         return <Results {...common} />;
+      case "query":
+        return <Query {...common} />;
       default:
         return null;
     }

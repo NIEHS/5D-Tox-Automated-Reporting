@@ -78,7 +78,11 @@ sessions/
 # Jupyter checkpoint scratch dir
 .ipynb_checkpoints/
 
-# Wizard UI: commit the source (wizard-ui/) and the built output (web_wizard/),
-# but never the installed node deps or the tsc build cache.
+# Wizard UI: commit the SOURCE (wizard-ui/) only. The built output (web_wizard/)
+# is a generated artifact — since the DuckDB shell it embeds pulls in a ~36MB
+# duckdb-eh.wasm plus hashed bundles that change every rebuild, tracking it would
+# bloat history permanently. Build it with `npm run build` (outputs web_wizard/)
+# before serving /wizard. Never track node deps or the tsc build cache.
 wizard-ui/node_modules/
 wizard-ui/tsconfig.tsbuildinfo
+web_wizard/
