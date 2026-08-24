@@ -1,158 +1,256 @@
 import { useEffect, useRef, useState } from "react";
-// xterm's stylesheet — the @duckdb/duckdb-wasm-shell package bundles the xterm
-// JS but NOT its CSS. Without this the terminal has no layout: it collapses to a
-// single cell in the corner (with the raw <textarea> resize grip showing). This
-// one import is what actually makes the shell render at full size.
-import "xterm/css/xterm.css";
 import { StepProps, ErrorBox, Spinner } from "./shared";
-import { makeDuckDB, loadSessionParquet, shellModuleUrl } from "../duckdb";
+import {
+  makeDuckDB,
+  loadSessionParquet,
+  runQuery,
+  getSchema,
+  QueryResult,
+  SchemaTable,
+} from "../duckdb";
+import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
 
-// The DuckDB shell (ADR-0016 Phase C): the real duckdb.org/shell xterm terminal,
-// embedded in-app and running ENTIRELY IN THE BROWSER against the session's data.
-// The session's per-table Parquet is fetched once and registered as views, then
-// the shell's embed() takes over — every query after that is local wasm, no
-// server round-trip.
+// The Query console (ADR-0016 Phase C): an ad-hoc SQL tool running ENTIRELY IN
+// THE BROWSER against this session's data. duckdb-wasm loads the session's
+// per-table Parquet into native tables once; every query after that is local
+// wasm — no server round-trip. Results render as a formatted React table.
+const EXAMPLE_QUERIES: { label: string; sql: string }[] = [
+  { label: "All measurements", sql: "SELECT * FROM measurement LIMIT 100;" },
+  {
+    label: "Apical BMDs",
+    sql: "SELECT endpoint, sex, bmd_num, bmd_status\nFROM apical_result\nWHERE bmd_num IS NOT NULL\nORDER BY bmd_num;",
+  },
+  {
+    label: "Gene sets by organ",
+    sql: "SELECT organ, sex, count(*) AS n\nFROM gene_set\nGROUP BY 1, 2\nORDER BY 1, 2;",
+  },
+  {
+    label: "Genes in a GO term",
+    sql: "SELECT gs.go_term, gsg.gene_symbol\nFROM gene_set_gene gsg\nJOIN gene_set gs\n  ON gsg.go_id = gs.go_id AND gsg.organ = gs.organ AND gsg.sex = gs.sex\nWHERE gs.go_term ILIKE '%division%'\nLIMIT 50;",
+  },
+];
+
+const MAX_ROWS = 5000;
+
+function toCsv(result: QueryResult): string {
+  const esc = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const head = result.columns.map(esc).join(",");
+  const body = result.rows.map((r) => r.map(esc).join(",")).join("\n");
+  return `${head}\n${body}`;
+}
+
 export function Query({ dtxsid }: StepProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<string>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [tables, setTables] = useState<string[]>([]);
-  // Guard against double-embed under React 18 StrictMode's dev double-invoke.
+  const dbRef = useRef<AsyncDuckDB | null>(null);
   const startedRef = useRef(false);
+  const [status, setStatus] = useState<string>("idle");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [schema, setSchema] = useState<SchemaTable[]>([]);
 
+  const [sql, setSql] = useState<string>(EXAMPLE_QUERIES[0].sql);
+  const [running, setRunning] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
+  const [result, setResult] = useState<QueryResult | null>(null);
+
+  // One-time: spin up duckdb-wasm and load the session's Parquet into native
+  // tables. Held in a ref so re-renders don't re-instantiate.
   useEffect(() => {
     if (!dtxsid) {
-      setError("No session selected — pick a session in data-prep first.");
+      setLoadError("No session selected — pick a session in data-prep first.");
       return;
     }
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const container = containerRef.current;
-    if (!container) return;
-
     let cancelled = false;
-    let resizeObserver: ResizeObserver | null = null;
-
-    // The shell's xterm FitAddon fits ONCE, at embed(), to the container's size
-    // and never re-fits (it registers no ResizeObserver / resize listener). So
-    // if we embed before the container has laid out, xterm collapses to a single
-    // cell in the corner. Wait until the container reports a real size first.
-    const waitForLayout = () =>
-      new Promise<void>((resolve) => {
-        const check = () => {
-          if (cancelled) return resolve();
-          if (container.clientWidth > 50 && container.clientHeight > 50) {
-            resolve();
-          } else {
-            requestAnimationFrame(check);
-          }
-        };
-        check();
-      });
-
     (async () => {
       try {
-        setStatus("loading shell…");
-        // The shell module is dynamically imported so its (large) bundle only
-        // loads when the user opens this step.
-        const shell = await import("@duckdb/duckdb-wasm-shell");
-
-        await waitForLayout();
-        if (cancelled) return;
-
         setStatus("starting duckdb-wasm…");
-        await shell.embed({
-          shellModule: shellModuleUrl,
-          container,
-          backgroundColor: "#1e1e1e",
-          // resolveDatabase is OUR hook: build the DB offline, load the session's
-          // Parquet, and hand the ready DB to the shell.
-          resolveDatabase: async (progress) => {
-            const db = await makeDuckDB(progress);
-            if (cancelled) return db;
-            setStatus("loading session tables…");
-            const loaded = await loadSessionParquet(db, dtxsid);
-            if (!cancelled) {
-              setTables(loaded);
-              setStatus("ready");
-            }
-            // Debug handle so an automated check can query the same in-browser DB
-            // the shell uses (the xterm display is hard to assert against).
-            (window as unknown as { __wizardDb?: unknown }).__wizardDb = db;
-            return db;
-          },
-        });
-
-        // The shell wires its re-fit to `container.onresize` (see shell.mjs:
-        // `props.container.onresize = runtime.resizeHandler`). But a plain <div>
-        // never fires resize events — only window/body do — so that handler is
-        // effectively dead and the terminal keeps its embed-time (possibly
-        // collapsed) size. Bridge it: observe the container with a ResizeObserver
-        // and invoke its onresize handler ourselves whenever the box changes.
-        // Fire once now too, so the terminal fits to the settled layout.
-        if (!cancelled && "ResizeObserver" in window) {
-          const fire = () => {
-            const h = (container as HTMLDivElement & { onresize?: unknown })
-              .onresize;
-            if (typeof h === "function") {
-              (h as (e?: unknown) => void)(new Event("resize"));
-            }
-          };
-          fire();
-          resizeObserver = new ResizeObserver(fire);
-          resizeObserver.observe(container);
-        }
+        const db = await makeDuckDB();
+        if (cancelled) return;
+        setStatus("loading session tables…");
+        await loadSessionParquet(db, dtxsid);
+        if (cancelled) return;
+        const sch = await getSchema(db);
+        if (cancelled) return;
+        dbRef.current = db;
+        setSchema(sch);
+        setStatus("ready");
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
+          setLoadError(e instanceof Error ? e.message : String(e));
           setStatus("failed");
         }
       }
     })();
-
     return () => {
       cancelled = true;
-      if (resizeObserver) resizeObserver.disconnect();
     };
   }, [dtxsid]);
 
+  async function run() {
+    const db = dbRef.current;
+    if (!db || running) return;
+    setRunning(true);
+    setQueryError(null);
+    try {
+      const r = await runQuery(db, sql, MAX_ROWS);
+      setResult(r);
+    } catch (e) {
+      setQueryError(e instanceof Error ? e.message : String(e));
+      setResult(null);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  function onEditorKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Cmd/Ctrl+Enter runs the query.
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      void run();
+    }
+  }
+
+  function downloadCsv() {
+    if (!result) return;
+    const blob = new Blob([toCsv(result)], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${dtxsid || "query"}-result.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const ready = status === "ready";
+
   return (
-    <div className="step">
+    <div className="panel query-console">
       <h2>Query console</h2>
-      <p className="muted">
-        A DuckDB SQL shell running in your browser against this session's data —{" "}
-        {dtxsid || "no session"}. Try{" "}
-        <code>SELECT * FROM measurement LIMIT 10;</code> or{" "}
-        <code>SELECT organ, sex, count(*) FROM gene_set GROUP BY 1, 2;</code>
+      <p className="help">
+        Ad-hoc SQL over this session's data — {dtxsid || "no session"} — running
+        entirely in your browser (DuckDB-WASM). Cmd/Ctrl+Enter to run.
       </p>
 
-      <ErrorBox error={error} />
+      <ErrorBox error={loadError} />
 
-      {status !== "ready" && !error && (
+      {!ready && !loadError && (
         <p className="muted">
           <Spinner label={status} />
         </p>
       )}
 
-      {tables.length > 0 && (
-        <p className="muted" style={{ fontSize: "0.78rem" }}>
-          Loaded tables: {tables.join(", ")}
-        </p>
-      )}
+      {ready && (
+        <div className="query-layout">
+          <aside className="query-schema">
+            <div className="query-schema-head">Tables</div>
+            {schema.map((t) => (
+              <details key={t.name}>
+                <summary
+                  onClick={(e) => {
+                    // shift-click drops a SELECT for the table into the editor
+                    if (e.shiftKey) {
+                      e.preventDefault();
+                      setSql(`SELECT * FROM ${t.name} LIMIT 100;`);
+                    }
+                  }}
+                  title="Click to expand · Shift-click to query"
+                >
+                  {t.name}
+                </summary>
+                <ul>
+                  {t.columns.map((c) => (
+                    <li key={c.name}>
+                      <span className="col-name">{c.name}</span>
+                      <span className="col-type">{c.type}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </aside>
 
-      <div
-        ref={containerRef}
-        className="duckdb-shell"
-        style={{
-          height: "60vh",
-          minHeight: 360,
-          border: "1px solid var(--line, #333)",
-          borderRadius: 6,
-          overflow: "hidden",
-          marginTop: "0.5rem",
-        }}
-      />
+          <div className="query-main">
+            <div className="query-examples">
+              {EXAMPLE_QUERIES.map((q) => (
+                <button
+                  key={q.label}
+                  className="chip-btn"
+                  onClick={() => setSql(q.sql)}
+                  title={q.sql}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              className="query-editor"
+              value={sql}
+              spellCheck={false}
+              onChange={(e) => setSql(e.target.value)}
+              onKeyDown={onEditorKey}
+              rows={7}
+            />
+
+            <div className="query-actions">
+              <button className="primary" onClick={run} disabled={running}>
+                {running ? <Spinner label="Running…" /> : "Run (⌘/Ctrl+↵)"}
+              </button>
+              {result && (
+                <>
+                  <span className="muted">
+                    {result.rowCount} row{result.rowCount === 1 ? "" : "s"}
+                    {result.rowCount > result.rows.length &&
+                      ` (showing first ${result.rows.length})`}
+                  </span>
+                  <button onClick={downloadCsv}>Export CSV</button>
+                </>
+              )}
+            </div>
+
+            <ErrorBox error={queryError} />
+
+            {result && (
+              <div className="query-results">
+                <table>
+                  <thead>
+                    <tr>
+                      {result.columns.map((c) => (
+                        <th key={c}>{c}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.rows.map((row, i) => (
+                      <tr key={i}>
+                        {row.map((v, j) => (
+                          <td
+                            key={j}
+                            className={typeof v === "number" ? "num" : undefined}
+                          >
+                            {v === null || v === undefined ? (
+                              <span className="null-cell">null</span>
+                            ) : (
+                              String(v)
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {result.rows.length === 0 && (
+                  <p className="muted">No rows.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
