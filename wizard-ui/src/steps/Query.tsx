@@ -9,9 +9,10 @@ import {
   SchemaTable,
 } from "../duckdb";
 import { QueryBuilder } from "./QueryBuilder";
+import { ReportGallery } from "./ReportGallery";
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
 
-type Mode = "sql" | "builder";
+type Mode = "sql" | "builder" | "report";
 
 // The Query console (ADR-0016 Phase C): an ad-hoc SQL tool running ENTIRELY IN
 // THE BROWSER against this session's data. duckdb-wasm loads the session's
@@ -121,6 +122,14 @@ export function Query({ dtxsid }: StepProps) {
     void runSql(generated);
   }
 
+  // A report-gallery card "open in console": load its SQL into the editor, switch
+  // to SQL mode, and run it — so the user can iterate on a report's assembly query.
+  function openInConsole(generated: string) {
+    setSql(generated);
+    setMode("sql");
+    void runSql(generated);
+  }
+
   function onEditorKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Cmd/Ctrl+Enter runs the query.
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -160,6 +169,12 @@ export function Query({ dtxsid }: StepProps) {
             >
               Visual builder
             </button>
+            <button
+              className={mode === "report" ? "active" : ""}
+              onClick={() => setMode("report")}
+            >
+              Report data
+            </button>
           </div>
         )}
       </div>
@@ -168,7 +183,9 @@ export function Query({ dtxsid }: StepProps) {
         entirely in your browser (DuckDB-WASM).{" "}
         {mode === "sql"
           ? "Cmd/Ctrl+Enter to run."
-          : "Add tables, connect their join handles, tick columns, then run."}
+          : mode === "builder"
+          ? "Add tables, connect their join handles, tick columns, then run."
+          : "The data-assembly query behind each report table and chart."}
       </p>
 
       <ErrorBox error={loadError} />
@@ -181,6 +198,10 @@ export function Query({ dtxsid }: StepProps) {
 
       {ready && mode === "builder" && (
         <QueryBuilder schema={schema} onRun={runFromBuilder} running={running} />
+      )}
+
+      {ready && mode === "report" && dbRef.current && (
+        <ReportGallery db={dbRef.current} onOpenInConsole={openInConsole} />
       )}
 
       {ready && mode === "sql" && (
@@ -245,8 +266,9 @@ export function Query({ dtxsid }: StepProps) {
         </div>
       )}
 
-      {/* Shared results — populated by the SQL editor OR the visual builder. */}
-      {ready && (
+      {/* Shared results — populated by the SQL editor OR the visual builder.
+          Report mode's cards carry their own previews, so it's hidden there. */}
+      {ready && mode !== "report" && (
         <>
           <div className="query-actions">
             <ErrorBox error={queryError} />
