@@ -8,7 +8,10 @@ import {
   QueryResult,
   SchemaTable,
 } from "../duckdb";
+import { QueryBuilder } from "./QueryBuilder";
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
+
+type Mode = "sql" | "builder";
 
 // The Query console (ADR-0016 Phase C): an ad-hoc SQL tool running ENTIRELY IN
 // THE BROWSER against this session's data. duckdb-wasm loads the session's
@@ -49,6 +52,7 @@ export function Query({ dtxsid }: StepProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [schema, setSchema] = useState<SchemaTable[]>([]);
 
+  const [mode, setMode] = useState<Mode>("sql");
   const [sql, setSql] = useState<string>(EXAMPLE_QUERIES[0].sql);
   const [running, setRunning] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -90,13 +94,13 @@ export function Query({ dtxsid }: StepProps) {
     };
   }, [dtxsid]);
 
-  async function run() {
+  async function runSql(text: string) {
     const db = dbRef.current;
     if (!db || running) return;
     setRunning(true);
     setQueryError(null);
     try {
-      const r = await runQuery(db, sql, MAX_ROWS);
+      const r = await runQuery(db, text, MAX_ROWS);
       setResult(r);
     } catch (e) {
       setQueryError(e instanceof Error ? e.message : String(e));
@@ -104,6 +108,17 @@ export function Query({ dtxsid }: StepProps) {
     } finally {
       setRunning(false);
     }
+  }
+
+  function run() {
+    void runSql(sql);
+  }
+
+  // The builder generates SQL; run it AND drop it into the editor so the user can
+  // switch to SQL mode and tweak it (the escape hatch).
+  function runFromBuilder(generated: string) {
+    setSql(generated);
+    void runSql(generated);
   }
 
   function onEditorKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -129,10 +144,31 @@ export function Query({ dtxsid }: StepProps) {
 
   return (
     <div className="panel query-console">
-      <h2>Query console</h2>
+      <div className="query-head">
+        <h2>Query console</h2>
+        {ready && (
+          <div className="mode-toggle">
+            <button
+              className={mode === "sql" ? "active" : ""}
+              onClick={() => setMode("sql")}
+            >
+              SQL
+            </button>
+            <button
+              className={mode === "builder" ? "active" : ""}
+              onClick={() => setMode("builder")}
+            >
+              Visual builder
+            </button>
+          </div>
+        )}
+      </div>
       <p className="help">
         Ad-hoc SQL over this session's data — {dtxsid || "no session"} — running
-        entirely in your browser (DuckDB-WASM). Cmd/Ctrl+Enter to run.
+        entirely in your browser (DuckDB-WASM).{" "}
+        {mode === "sql"
+          ? "Cmd/Ctrl+Enter to run."
+          : "Add tables, connect their join handles, tick columns, then run."}
       </p>
 
       <ErrorBox error={loadError} />
@@ -143,7 +179,11 @@ export function Query({ dtxsid }: StepProps) {
         </p>
       )}
 
-      {ready && (
+      {ready && mode === "builder" && (
+        <QueryBuilder schema={schema} onRun={runFromBuilder} running={running} />
+      )}
+
+      {ready && mode === "sql" && (
         <div className="query-layout">
           <aside className="query-schema">
             <div className="query-schema-head">Tables</div>
@@ -200,56 +240,61 @@ export function Query({ dtxsid }: StepProps) {
               <button className="primary" onClick={run} disabled={running}>
                 {running ? <Spinner label="Running…" /> : "Run (⌘/Ctrl+↵)"}
               </button>
-              {result && (
-                <>
-                  <span className="muted">
-                    {result.rowCount} row{result.rowCount === 1 ? "" : "s"}
-                    {result.rowCount > result.rows.length &&
-                      ` (showing first ${result.rows.length})`}
-                  </span>
-                  <button onClick={downloadCsv}>Export CSV</button>
-                </>
-              )}
             </div>
-
-            <ErrorBox error={queryError} />
-
-            {result && (
-              <div className="query-results">
-                <table>
-                  <thead>
-                    <tr>
-                      {result.columns.map((c) => (
-                        <th key={c}>{c}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.rows.map((row, i) => (
-                      <tr key={i}>
-                        {row.map((v, j) => (
-                          <td
-                            key={j}
-                            className={typeof v === "number" ? "num" : undefined}
-                          >
-                            {v === null || v === undefined ? (
-                              <span className="null-cell">null</span>
-                            ) : (
-                              String(v)
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {result.rows.length === 0 && (
-                  <p className="muted">No rows.</p>
-                )}
-              </div>
-            )}
           </div>
         </div>
+      )}
+
+      {/* Shared results — populated by the SQL editor OR the visual builder. */}
+      {ready && (
+        <>
+          <div className="query-actions">
+            <ErrorBox error={queryError} />
+            {result && (
+              <>
+                <span className="muted">
+                  {result.rowCount} row{result.rowCount === 1 ? "" : "s"}
+                  {result.rowCount > result.rows.length &&
+                    ` (showing first ${result.rows.length})`}
+                </span>
+                <button onClick={downloadCsv}>Export CSV</button>
+              </>
+            )}
+          </div>
+
+          {result && (
+            <div className="query-results">
+              <table>
+                <thead>
+                  <tr>
+                    {result.columns.map((c) => (
+                      <th key={c}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.rows.map((row, i) => (
+                    <tr key={i}>
+                      {row.map((v, j) => (
+                        <td
+                          key={j}
+                          className={typeof v === "number" ? "num" : undefined}
+                        >
+                          {v === null || v === undefined ? (
+                            <span className="null-cell">null</span>
+                          ) : (
+                            String(v)
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {result.rows.length === 0 && <p className="muted">No rows.</p>}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

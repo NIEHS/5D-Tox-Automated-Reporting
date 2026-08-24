@@ -263,3 +263,65 @@ tr.emphasize td { font-weight: 700; }
 .query-results td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .query-results tbody tr:hover { background: var(--panel-2); }
 .null-cell { color: var(--muted); font-style: italic; }
+
+/* Query mode toggle */
+.query-head { display: flex; align-items: center; justify-content: space-between; }
+.mode-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mode-toggle button {
+  border: none; border-radius: 0; padding: 0.3rem 0.8rem; font-size: 0.78rem;
+  background: var(--panel-2); color: var(--muted);
+}
+.mode-toggle button.active { background: var(--accent); color: var(--accent-fg); }
+
+/* Visual query builder (React Flow) */
+.qb { display: grid; grid-template-columns: 180px 1fr; grid-template-rows: 420px auto; gap: 0.75rem; }
+.qb-palette {
+  grid-row: 1 / 3; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel-2); padding: 0.5rem; overflow-y: auto; max-height: 640px;
+  display: flex; flex-direction: column; gap: 0.3rem; align-items: stretch;
+}
+.qb-palette-head {
+  font-weight: 600; color: var(--accent); text-transform: uppercase;
+  letter-spacing: 0.04em; font-size: 0.72rem; margin: 0.2rem 0 0.3rem;
+}
+.qb-palette .chip-btn { text-align: left; font-family: ui-monospace, Menlo, monospace; }
+.qb-canvas {
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: #0b1220; height: 420px;
+}
+/* React Flow dark tweaks */
+.qb-canvas .react-flow__background { background: #0b1220; }
+.qb-canvas .react-flow__edge-path { stroke: var(--accent); stroke-width: 1.5; }
+.qb-canvas .react-flow__edge-text { fill: var(--muted); font-size: 9px; }
+.qb-canvas .react-flow__handle { background: var(--accent); border: none; width: 8px; height: 8px; }
+.qb-canvas .react-flow__controls button {
+  background: var(--panel-2); border-bottom: 1px solid var(--border); color: var(--text); fill: var(--text);
+}
+
+.qb-node {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  min-width: 170px; max-width: 220px; font-size: 0.74rem; overflow: hidden;
+}
+.qb-node-title {
+  background: var(--panel-2); padding: 0.35rem 0.5rem; font-weight: 600;
+  color: var(--accent); font-family: ui-monospace, Menlo, monospace;
+  border-bottom: 1px solid var(--border);
+}
+.qb-alias { color: var(--muted); font-weight: 400; }
+.qb-node-cols { max-height: 160px; overflow-y: auto; padding: 0.25rem 0.4rem; }
+.qb-col { display: flex; align-items: center; gap: 0.35rem; padding: 0.08rem 0; cursor: pointer; }
+.qb-col input { margin: 0; }
+.qb-col-name { font-family: ui-monospace, Menlo, monospace; color: var(--text); }
+.qb-col-type { color: var(--muted); font-size: 0.66rem; margin-left: auto; }
+.qb-where {
+  width: calc(100% - 0.8rem); margin: 0.3rem 0.4rem 0.45rem; font-size: 0.7rem;
+  font-family: ui-monospace, Menlo, monospace; padding: 0.25rem 0.4rem;
+  background: #0b1220; border: 1px solid var(--border); border-radius: 5px; color: var(--text);
+}
+.qb-sql { grid-column: 2; display: flex; flex-direction: column; gap: 0.4rem; }
+.qb-sql-pre {
+  margin: 0; padding: 0.6rem 0.7rem; background: #0b1220; border: 1px solid var(--border);
+  border-radius: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+  white-space: pre-wrap; color: var(--text); min-height: 3rem;
+}
+.qb-hint { color: var(--muted); font-size: 0.8rem; padding: 0.5rem; font-style: italic; }
