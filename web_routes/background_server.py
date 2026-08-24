@@ -189,6 +189,11 @@ app.include_router(genomics_viz.router)
 import web_routes.wizard_routes as wizard_routes
 app.include_router(wizard_routes.router)
 
+# Query substrate (ADR-0016 Phase B): read-only SQL over sessions/<dtxsid>/session.duckdb
+# POST /api/query/{dtxsid}, GET /api/query/{dtxsid}/schema
+import web_routes.query_routes as query_routes
+app.include_router(query_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI
