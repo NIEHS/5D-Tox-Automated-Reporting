@@ -57,6 +57,22 @@ async def api_wizard_files(dtxsid: str):
     return JSONResponse({"files": files, "count": len(files)})
 
 
+@router.get("/api/wizard/{dtxsid}/processed")
+async def api_wizard_processed(dtxsid: str):
+    """Whether this session has already been processed (its compute caches exist).
+
+    The wizard uses this to decide if it can REHYDRATE the Results payload from
+    the cache on load (a ~2s cache-hit re-call of process-integrated) rather than
+    forcing the user to re-run the multi-minute processing after a page refresh.
+    Gated on the NTP cache — the first process stage — so we never auto-trigger a
+    real recompute on an unprocessed (or re-integrated, cache-wiped) session.
+    """
+    store = DiskPoolStore()
+    session_dir = store.session_dir(dtxsid)
+    processed = bool(list(session_dir.glob("_cache_ntp_*.json"))) if session_dir.exists() else False
+    return JSONResponse({"processed": processed})
+
+
 @router.get("/api/wizard/{dtxsid}/fingerprints")
 async def api_wizard_fingerprints(dtxsid: str):
     """Detected per-file classification for the confirm-metadata screen.

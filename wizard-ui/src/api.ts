@@ -194,6 +194,11 @@ export const api = {
       jsonOrThrow<{ fingerprints: Fingerprint[]; count: number }>(r)
     ),
 
+  isProcessed: (dtxsid: string) =>
+    fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/processed`).then((r) =>
+      jsonOrThrow<{ processed: boolean }>(r)
+    ),
+
   getIntegratedTree: (dtxsid: string) =>
     fetch(`/api/integrated-tree/${encodeURIComponent(dtxsid)}`).then((r) =>
       jsonOrThrow<IntegratedTree>(r)

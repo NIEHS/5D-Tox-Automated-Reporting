@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { api } from "../api";
-import { ErrorBox, Spinner, StepProps } from "./shared";
+import { ErrorBox, Spinner, StepProps, useMemoState } from "./shared";
 
 export function Process({ dtxsid, next, back, processResult, setProcessResult }: StepProps) {
-  const [compound, setCompound] = useState("");
-  const [doseUnit, setDoseUnit] = useState("mg/kg");
+  // Persist the labels in sessionStorage so a page refresh can rehydrate Results
+  // from the cache with the SAME compound_name/dose_unit (they are part of the
+  // sections cache key — a mismatched value would rebuild narratives).
+  const [compound, setCompound] = useMemoState<string>("wizard.compound", "");
+  const [doseUnit, setDoseUnit] = useMemoState<string>("wizard.doseUnit", "mg/kg");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
