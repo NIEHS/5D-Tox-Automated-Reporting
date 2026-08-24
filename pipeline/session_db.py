@@ -41,7 +41,7 @@ from pathlib import Path
 
 import duckdb
 
-from pipeline.session_schema import SCHEMA_VERSION, schema_statements
+from pipeline.session_schema import SCHEMA_VERSION, schema_statements, table_names
 
 # ---------------------------------------------------------------------------
 # Small helpers
@@ -397,6 +397,8 @@ def build_session_db(dtxsid: str, session_dir: str | Path, integrated: dict) -> 
     tmp_root = os.environ.get("BMDX_SESSION_DB_TMPDIR") or None
     tmp_dir = Path(tempfile.mkdtemp(prefix="session_db_", dir=tmp_root))
     tmp_db = tmp_dir / "session.duckdb"
+    tmp_parquet = tmp_dir / "session_parquet"
+    tmp_parquet.mkdir()
     try:
         con = duckdb.connect(str(tmp_db))
         try:
@@ -423,14 +425,31 @@ def build_session_db(dtxsid: str, session_dir: str | Path, integrated: dict) -> 
             # Fold the WAL into the main file so the copied artifact is a single,
             # self-contained file (no .wal to replay on open).
             con.execute("CHECKPOINT")
+
+            # Per-table Parquet export. This is the browser transport (ADR-0016
+            # Phase C): duckdb-wasm reads Parquet natively, which DECOUPLES the
+            # browser engine version from this writer's — a native .duckdb would
+            # couple them. Parquet is a stable columnar format; each table is a
+            # small, independently-fetchable file the shell loads on demand.
+            for table in table_names():
+                out = (tmp_parquet / f"{table}.parquet").as_posix()
+                con.execute(
+                    f"COPY {table} TO '{out}' (FORMAT PARQUET)"
+                )
         finally:
             con.close()
 
-        # Copy the finished single file into place (plain sequential write — no
+        # Copy the finished single DB file into place (plain sequential write — no
         # DuckDB lock on the destination mount). Replace any prior DB.
         if db_path.exists():
             db_path.unlink()
         shutil.copyfile(str(tmp_db), str(db_path))
+
+        # Replace the Parquet dir wholesale (always fresh — no stale table files).
+        parquet_dir = session_dir / "session_parquet"
+        if parquet_dir.exists():
+            shutil.rmtree(parquet_dir)
+        shutil.copytree(str(tmp_parquet), str(parquet_dir))
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

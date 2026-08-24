@@ -152,3 +152,47 @@ class TestQueryRoutes:
                            json={"sql": "SELECT no_such_col FROM study"})
         assert resp.status_code == 400
         assert "error" in resp.json()
+
+    def test_parquet_list(self, sessions_dir):
+        dtxsid = _build_session_db(sessions_dir)
+        client = self._client()
+        resp = client.get(f"/api/query/{dtxsid}/parquet")
+        assert resp.status_code == 200, resp.text
+        tables = set(resp.json()["tables"])
+        assert {"measurement", "apical_result", "study"} <= tables
+
+    def test_parquet_streams_valid_file(self, sessions_dir):
+        import duckdb
+        dtxsid = _build_session_db(sessions_dir)
+        client = self._client()
+        resp = client.get(f"/api/query/{dtxsid}/parquet/measurement")
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"] == "application/octet-stream"
+        # the bytes are a real Parquet file duckdb can read
+        body = resp.content
+        assert body[:4] == b"PAR1"  # Parquet magic
+        # round-trip through duckdb from a temp file
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            f.write(body)
+            fp = f.name
+        try:
+            n = duckdb.connect(":memory:").execute(
+                f"SELECT count(*) FROM read_parquet('{fp}')"
+            ).fetchone()[0]
+            assert n == 2
+        finally:
+            os.unlink(fp)
+
+    def test_parquet_unknown_table_404(self, sessions_dir):
+        dtxsid = _build_session_db(sessions_dir)
+        client = self._client()
+        # an unknown / traversal-y name is rejected by the allowlist
+        for bad in ["bogus", "../secret", "study;drop"]:
+            resp = client.get(f"/api/query/{dtxsid}/parquet/{bad}")
+            assert resp.status_code == 404, f"{bad}: {resp.status_code}"
+
+    def test_parquet_missing_session_404(self, sessions_dir):
+        client = self._client()
+        resp = client.get("/api/query/DTXSID_NOPE/parquet/measurement")
+        assert resp.status_code == 404

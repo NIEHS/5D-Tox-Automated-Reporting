@@ -144,6 +144,43 @@ def test_build_produces_db_file(tmp_path):
     assert not (db.parent / "session.duckdb.wal").exists()
 
 
+def test_build_emits_parquet_per_table(tmp_path):
+    from pipeline.session_schema import table_names
+
+    db = _build(tmp_path)
+    pq = db.parent / "session_parquet"
+    assert pq.is_dir()
+    # one .parquet per schema table
+    files = {p.stem for p in pq.glob("*.parquet")}
+    assert files == set(table_names())
+    # and each is a valid, readable Parquet (round-trip a known value)
+    con = duckdb.connect(":memory:")
+    n = con.execute(
+        f"SELECT count(*) FROM read_parquet('{pq / 'measurement.parquet'}')"
+    ).fetchone()[0]
+    assert n == 3
+    tt = con.execute(
+        f"SELECT bmd_num FROM read_parquet('{pq / 'apical_result.parquet'}') "
+        "WHERE endpoint='Total Thyroxine'"
+    ).fetchone()[0]
+    con.close()
+    assert tt == 8.54
+
+
+def test_rebuild_replaces_parquet_dir(tmp_path):
+    # a stale file in the parquet dir must not survive a rebuild
+    session = tmp_path / "DTXSID_T"
+    integrated = _write_synthetic_session(session)
+    db = build_session_db("DTXSID_T", session, integrated)
+    pq = db.parent / "session_parquet"
+    (pq / "stale.parquet").write_text("junk")
+
+    # rebuild from the same inputs (no re-mkdir of files/)
+    build_session_db("DTXSID_T", session, integrated)
+    assert not (pq / "stale.parquet").exists()
+    assert (pq / "measurement.parquet").exists()
+
+
 def test_schema_version_recorded(tmp_path):
     db = _build(tmp_path)
     con = duckdb.connect(str(db), read_only=True)

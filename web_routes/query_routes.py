@@ -21,8 +21,10 @@ data, so there is no cross-session exposure.
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
+from pipeline.session_store import session_dir
+from pipeline.session_schema import table_names
 from query.session_query import (
     DEFAULT_MAX_ROWS,
     QueryError,
@@ -32,6 +34,10 @@ from query.session_query import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# The set of tables that may be served as Parquet — the schema's own table list,
+# so a request can never name an arbitrary file (no path traversal).
+_TABLES = frozenset(table_names())
 
 # Hard ceiling on the client-requested max_rows, so a caller can't ask for an
 # unbounded result by passing a huge max_rows.
@@ -84,3 +90,43 @@ async def api_query_schema(dtxsid: str):
     except Exception as e:
         logger.exception("schema fetch failed for %s", dtxsid)
         return JSONResponse({"error": f"schema fetch failed: {e}"}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Parquet transport for the in-browser DuckDB shell (ADR-0016 Phase C).
+# The writer emits sessions/<dtxsid>/session_parquet/<table>.parquet; the browser
+# duckdb-wasm reads them via read_parquet, decoupling its engine version from the
+# Python writer's. Table names are allowlisted against the schema, so a request
+# can never escape the parquet dir.
+# ---------------------------------------------------------------------------
+
+@router.get("/api/query/{dtxsid}/parquet")
+async def api_query_parquet_list(dtxsid: str):
+    """List the Parquet tables available for a session (those actually on disk)."""
+    pq_dir = session_dir(dtxsid) / "session_parquet"
+    available = []
+    if pq_dir.is_dir():
+        for name in sorted(_TABLES):
+            if (pq_dir / f"{name}.parquet").exists():
+                available.append(name)
+    return JSONResponse({"tables": available, "count": len(available)})
+
+
+@router.get("/api/query/{dtxsid}/parquet/{table}")
+async def api_query_parquet(dtxsid: str, table: str):
+    """Stream one table's Parquet file. ``table`` must be a known schema table."""
+    if table not in _TABLES:
+        return JSONResponse(
+            {"error": f"unknown table {table!r}"}, status_code=404
+        )
+    path = session_dir(dtxsid) / "session_parquet" / f"{table}.parquet"
+    if not path.exists():
+        return JSONResponse(
+            {"error": f"no parquet for {table!r} — process the session first"},
+            status_code=404,
+        )
+    return FileResponse(
+        str(path),
+        media_type="application/octet-stream",
+        filename=f"{table}.parquet",
+    )
