@@ -65,6 +65,17 @@ logger = logging.getLogger(__name__)
 # is overlaid separately via _collect_xlsx_rosters().
 _TIER_PREFERENCE = {"bm2": 1, "txt": 2, "csv": 2, "txt_csv": 2, "xlsx": 3}
 
+# Non-endpoint columns in NTP long-format files (xlsx Data tab + tox_study CSV).
+# Everything else in the header is treated as a measured endpoint. Shared by
+# tox_study_csv_to_pivot_txt (sidecar build) and extract_xlsx_value_map (the
+# value cross-check) so the two agree on what counts as an endpoint.
+_META_COLS = {
+    "ntp study number", "concentration", "animal id", "sex",
+    "selection", "observation day", "removal day", "terminal flag",
+    "phase", "day",
+    "observation", "site", "modifier", "severity",
+}
+
 # Java helper directory — centralized in java_bridge.py
 from .java_bridge import JAVA_HELPER_DIR, build_classpath
 
@@ -482,15 +493,8 @@ def tox_study_csv_to_pivot_txt(
     # `if obs_day or terminal` fires for ALL platforms that have any day info,
     # even though has_obs_day only controls endpoint-label splitting in pivots.
 
-    # Endpoint columns: everything not in known metadata columns.
-    # Includes all day-column variants (observation day, removal day,
-    # phase, day) so they're excluded from the endpoint list.
-    _META_COLS = {
-        "ntp study number", "concentration", "animal id", "sex",
-        "selection", "observation day", "removal day", "terminal flag",
-        "phase", "day",
-        "observation", "site", "modifier", "severity",
-    }
+    # Endpoint columns: everything not in known metadata columns (module-level
+    # _META_COLS, shared with extract_xlsx_value_map so both stay in sync).
     endpoint_cols = [
         i for i, h in enumerate(header_lower)
         if h not in _META_COLS and h
@@ -737,6 +741,119 @@ def tox_study_csv_to_pivot_txt(
                          len(sidecar_data["animals"]))
 
     return output_paths
+
+
+def extract_xlsx_value_map(path: str) -> dict[tuple[str, str, str, str], dict]:
+    """
+    Extract per-animal measured VALUES from an original NTP study xlsx, keyed for
+    a value-level cross-check against the derived tox_study CSV sidecar.
+
+    This mirrors the per-row loop of ``tox_study_csv_to_pivot_txt`` (the sidecar
+    builder) so that, for faithful data, the xlsx and the CSV sidecar reduce to
+    byte-identical records.  It reads the long-format "Data" tab and returns:
+
+        {(sex, animal_id, endpoint, day): {
+            "value": str | None,   # raw stripped cell (kept incl. "NA"); None if empty
+            "terminal": bool,      # Terminal Flag
+            "selection": str,      # Core Animals / Biosampling Animals / Unknown
+            "dose": float,         # Concentration
+        }}
+
+    Only observations that carry a day (or a terminal flag) are emitted — the same
+    ``if obs_day or terminal`` guard the sidecar uses — so both sides are symmetric.
+    ``endpoint`` is the RAW stripped column header (NOT the pivot's day-tag
+    relabel), because the sidecar stores the raw header too.  Returns ``{}`` on any
+    structural problem (missing sheet, no endpoint columns).
+    """
+    import openpyxl
+
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True)
+    except Exception:
+        logger.warning("Could not open xlsx for value extraction: %s", path)
+        return {}
+
+    data_sheet = wb["Data"] if "Data" in wb.sheetnames else wb[wb.sheetnames[-1]]
+    rows = list(data_sheet.iter_rows(values_only=True))
+    if len(rows) < 2:
+        return {}
+
+    header = [str(c).strip() if c is not None else "" for c in rows[0]]
+    header_lower = [h.lower() for h in header]
+
+    # Column lookup by header NAME with first-match-wins — prevents an endpoint
+    # like "Mean Cell Hgb Concentration" from stealing the "Concentration" (dose)
+    # column (mirrors animal_report._extract_animals_from_xlsx).
+    def _find(substr: str) -> int | None:
+        for i, h in enumerate(header_lower):
+            if substr in h:
+                return i
+        return None
+
+    animal_col = _find("animal id")
+    dose_col = _find("concentration")
+    if animal_col is None or dose_col is None:
+        return {}
+    sex_col = _find("sex")
+    selection_col = _find("selection")
+    terminal_col = _find("terminal flag")
+    # Day resolution: Observation Day → Removal Day → Phase+Day (exact-name so a
+    # "Removal Day" doesn't also match a bare "Day").
+    def _exact(name: str) -> int | None:
+        return header_lower.index(name) if name in header_lower else None
+    obs_day_col = _exact("observation day")
+    removal_day_col = _exact("removal day")
+    phase_col = _exact("phase")
+    day_col = _exact("day")
+
+    endpoint_cols = [
+        i for i, h in enumerate(header_lower)
+        if h not in _META_COLS and h
+    ]
+    if not endpoint_cols:
+        return {}
+
+    def _cell(row, idx):
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return ""
+        return str(row[idx]).strip()
+
+    out: dict[tuple[str, str, str, str], dict] = {}
+    for row in rows[1:]:
+        aid = _cell(row, animal_col)
+        if not aid:
+            continue
+        try:
+            dose = float(_cell(row, dose_col))
+        except (ValueError, TypeError):
+            continue
+
+        sex = _cell(row, sex_col).title() or "Unknown"
+        selection = _cell(row, selection_col) or "Unknown"
+        terminal_raw = _cell(row, terminal_col)
+        terminal = terminal_raw.lower() in ("yes", "true", "1") if terminal_raw else False
+
+        obs_day = ""
+        if obs_day_col is not None:
+            obs_day = _cell(row, obs_day_col)
+        elif removal_day_col is not None:
+            obs_day = _cell(row, removal_day_col)
+        elif phase_col is not None and day_col is not None:
+            obs_day = f"{_cell(row, phase_col)}{_cell(row, day_col)}"
+
+        if not (obs_day or terminal):
+            continue
+
+        for col_idx in endpoint_cols:
+            endpoint = header[col_idx]
+            val = _cell(row, col_idx)
+            out[(sex, aid, endpoint, obs_day)] = {
+                "value": val or None,
+                "terminal": terminal,
+                "selection": selection,
+                "dose": dose,
+            }
+    return out
 
 
 # ---------------------------------------------------------------------------
