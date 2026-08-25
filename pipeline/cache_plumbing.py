@@ -309,7 +309,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 4  # bumped: cutoff-AGNOSTIC superset; GO cutoffs applied after the cache read (phase 4)
+_GENOMICS_CACHE_SCHEMA_VERSION = 5  # bumped: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
 
 # Bump when the chart-rendering algorithm changes (jitter formula,
 # axis configuration, etc.) without changing the underlying gene-set
@@ -322,28 +322,30 @@ _CHARTS_CACHE_SCHEMA_VERSION = 2  # bumped: bounded jitter (no clipped top-clust
 def _hash_genomics(
     bmd_stats: list[str],
     ge_filename: str,
+    sidecar_sig: str = "",
 ) -> str:
     """
-    Hash inputs that affect genomics EXTRACTION (the Java export).
+    Hash inputs that affect genomics EXTRACTION.
 
-    CUTOFF-AGNOSTIC (phase 4): the genomics cache now stores every GO term (the
-    extraction runs with cutoffs off), and the GO-category cutoffs (go_pct /
-    go_min_genes / go_max_genes / go_min_bmd) are applied AFTER the cache read
-    (processing_helpers.apply_genomics_cutoffs) — the "extract full, filter at
-    read" model sections/genomics filtering already use.  So the cutoffs no
-    longer belong in this key; a version with different cutoffs reuses the same
-    extracted superset instead of re-running the Java export.
+    CUTOFF-AGNOSTIC (phase 4): the genomics cache stores every GO term (extraction
+    runs with cutoffs off); the GO-category cutoffs are applied AFTER the cache
+    read (processing_helpers.apply_genomics_cutoffs), so they don't key the cache.
 
-    bmd_stats (the full array) still matters — each stat gets its own GO table
-    inside the extraction — as does the GE filename (which file was extracted).
+    SIDECAR-SOURCED (ADR-0016 Phase D): extraction now reads the genomics sidecar
+    (raw ExportGenomics JSON persisted at integration) rather than re-running Java
+    on the raw .bm2.  ``sidecar_sig`` is a signature of that sidecar (its mtime) so
+    a re-extracted sidecar invalidates the cache — the old key (filename only) was
+    content-blind and would serve stale data if the .bm2 were swapped in place.
+    Empty when there is no sidecar (legacy .bm2 fallback), in which case the key
+    falls back to the GE filename alone.
 
-    _GENOMICS_CACHE_SCHEMA_VERSION is bumped for the cutoff-agnostic switch so
-    old (cutoff-baked) caches miss and re-extract as the superset.
+    bmd_stats (the full array) still matters — each stat gets its own GO table.
     """
     key = json.dumps({
         "schema_version": _GENOMICS_CACHE_SCHEMA_VERSION,
         "bmd_stats": list(bmd_stats),
         "ge_filename": ge_filename,
+        "sidecar_sig": sidecar_sig,
     }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 

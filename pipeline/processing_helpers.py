@@ -933,6 +933,62 @@ def apply_genomics_cutoffs(
     return out
 
 
+# The genomics sidecar filename (raw ExportGenomics JSON), written at integration
+# by bmdx_pipe.pool_integrator and read here instead of re-running Java on the raw
+# .bm2. Kept as a module constant so the cache key and the cache-wipe sites can
+# reference the one name.
+GENOMICS_SIDECAR_NAME = "genomics.sidecar.json"
+
+
+async def _load_genomics_export(dtxsid: str, integrated: dict) -> dict:
+    """Return the raw ExportGenomics result ({"experiments": [...]}), preferring
+    the integration-time sidecar over re-reading the raw .bm2.
+
+    1. If ``genomics.sidecar.json`` exists (written by integration), load it — no
+       Java, no raw-upload read (CLAUDE.md invariant #1).
+    2. Else fall back to the legacy path: locate the gene-expression .bm2 via
+       ``_meta.source_files["gene_expression"]`` and run ``export_genomics``. This
+       keeps sessions integrated before the sidecar existed working without a
+       re-integration.
+
+    Returns ``{}`` when there is no genomics data (no sidecar and no bm2-tier
+    gene-expression source, or the .bm2 is missing).
+    """
+    sidecar_path = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
+    if sidecar_path.exists():
+        try:
+            with open(sidecar_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            logger.warning(
+                "Genomics sidecar unreadable for %s; falling back to .bm2", dtxsid
+            )
+
+    # --- Fallback: extract from the raw .bm2 (legacy / pre-sidecar sessions) ---
+    meta = integrated.get("_meta", {})
+    ge_source = meta.get("source_files", {}).get("gene_expression")
+    if not ge_source or ge_source.get("tier") != "bm2":
+        return {}
+
+    ge_filename = ge_source.get("filename", "")
+    ge_path = _session_dir(dtxsid) / "files" / ge_filename
+    if not ge_path.exists():
+        return {}
+
+    # Run the Java export in a thread pool (JVM startup ~0.5s)
+    tmp_json = tempfile.NamedTemporaryFile(
+        delete=False, suffix=".json", prefix="genomics_",
+    )
+    tmp_json.close()
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(
+            None, export_genomics, str(ge_path), tmp_json.name,
+        )
+    finally:
+        os.unlink(tmp_json.name)
+
+
 async def _extract_genomics(
     dtxsid: str,
     integrated: dict,
@@ -964,167 +1020,149 @@ async def _extract_genomics(
         Empty dict if no gene expression data exists.
     """
     genomics_sections = {}
-    meta = integrated.get("_meta", {})
-    ge_source = meta.get("source_files", {}).get("gene_expression")
 
-    # Only proceed if gene expression data was included at the bm2 tier
-    if not ge_source or ge_source.get("tier") != "bm2":
+    # Prefer the genomics SIDECAR (ADR-0016 Phase D): integration extracts the raw
+    # ExportGenomics JSON once and persists it, so process-time reads that instead
+    # of re-reading the raw .bm2 upload (CLAUDE.md invariant #1).  Fall back to the
+    # .bm2 + Java path for sessions integrated before the sidecar existed.
+    ge_result = await _load_genomics_export(dtxsid, integrated)
+    if not ge_result:
         return genomics_sections
 
-    ge_filename = ge_source.get("filename", "")
-    ge_path = _session_dir(dtxsid) / "files" / ge_filename
+    # Reshape into the format the UI expects: keyed by organ_sex
+    for exp in ge_result.get("experiments", []):
+        organ = exp.get("organ", "unknown").lower()
+        sex = exp.get("sex", "unknown").lower()
+        key = f"{organ}_{sex}"
 
-    if not ge_path.exists():
-        return genomics_sections
-
-    # Run the Java export in a thread pool (JVM startup ~0.5s)
-    tmp_json = tempfile.NamedTemporaryFile(
-        delete=False, suffix=".json", prefix="genomics_",
-    )
-    tmp_json.close()
-
-    loop = asyncio.get_running_loop()
-    try:
-        ge_result = await loop.run_in_executor(
-            None, export_genomics, str(ge_path), tmp_json.name,
+        # Sort genes by BMD ascending (lowest = most sensitive)
+        genes = sorted(
+            exp.get("genes", []),
+            key=lambda g: _safe_float(g.get("bmd")),
         )
 
-        # Reshape into the format the UI expects: keyed by organ_sex
-        for exp in ge_result.get("experiments", []):
-            organ = exp.get("organ", "unknown").lower()
-            sex = exp.get("sex", "unknown").lower()
-            key = f"{organ}_{sex}"
+        # Filter GO terms by user-configured cutoffs
+        raw_go = exp.get("go_bp", [])
+        filtered_go = []
+        for g in raw_go:
+            n_total = g.get("n_genes", 0) or 0
+            n_passed = g.get("n_passed", 0) or 0
+            if n_total < go_min_genes or n_total > go_max_genes:
+                continue
+            if n_passed < go_min_bmd:
+                continue
+            pct = (n_passed / n_total * 100) if n_total > 0 else 0
+            if pct < go_pct:
+                continue
+            filtered_go.append(g)
 
-            # Sort genes by BMD ascending (lowest = most sensitive)
-            genes = sorted(
-                exp.get("genes", []),
-                key=lambda g: _safe_float(g.get("bmd")),
+        # Build an all-caps direction lookup from the per-gene results.
+        # gene_symbols in GO rows use lowercase (e.g. "cyp2b1"), while
+        # all_genes uses mixed case (e.g. "CYP2B1").  Normalising both to
+        # uppercase avoids silent mismatches when counting n_up/n_down.
+        gene_dir_upper = {
+            g["gene_symbol"].upper(): g.get("direction", "")
+            for g in genes
+        }
+
+        # Build a separate gene_sets table for each requested BMD statistic.
+        # Categories where the stat is null (not computed by BMDExpress) are
+        # excluded from that table entirely rather than falling back.
+        #
+        # Two fields are written per stat:
+        #   gene_sets_by_stat      — top-20 rows with rank, for report tables + LLM
+        #   gene_sets_chart_by_stat — ALL passing rows (no cap), for UMAP + scatter
+        #     charts.  Without the full set, charts only show the 20 table entries
+        #     instead of the complete responsive GO term landscape.
+        gene_sets_by_stat: dict[str, list] = {}
+        gene_sets_chart_by_stat: dict[str, list] = {}
+        for stat in bmd_stats:
+            stat_go = [
+                g for g in filtered_go
+                if _pick_go_stat(g, "bmd", stat) is not None
+            ]
+            stat_go.sort(
+                key=lambda g: _safe_float(_pick_go_stat(g, "bmd", stat)),
             )
 
-            # Filter GO terms by user-configured cutoffs
-            raw_go = exp.get("go_bp", [])
-            filtered_go = []
-            for g in raw_go:
-                n_total = g.get("n_genes", 0) or 0
-                n_passed = g.get("n_passed", 0) or 0
-                if n_total < go_min_genes or n_total > go_max_genes:
-                    continue
-                if n_passed < go_min_bmd:
-                    continue
-                pct = (n_passed / n_total * 100) if n_total > 0 else 0
-                if pct < go_pct:
-                    continue
-                filtered_go.append(g)
-
-            # Build an all-caps direction lookup from the per-gene results.
-            # gene_symbols in GO rows use lowercase (e.g. "cyp2b1"), while
-            # all_genes uses mixed case (e.g. "CYP2B1").  Normalising both to
-            # uppercase avoids silent mismatches when counting n_up/n_down.
-            gene_dir_upper = {
-                g["gene_symbol"].upper(): g.get("direction", "")
-                for g in genes
-            }
-
-            # Build a separate gene_sets table for each requested BMD statistic.
-            # Categories where the stat is null (not computed by BMDExpress) are
-            # excluded from that table entirely rather than falling back.
-            #
-            # Two fields are written per stat:
-            #   gene_sets_by_stat      — top-20 rows with rank, for report tables + LLM
-            #   gene_sets_chart_by_stat — ALL passing rows (no cap), for UMAP + scatter
-            #     charts.  Without the full set, charts only show the 20 table entries
-            #     instead of the complete responsive GO term landscape.
-            gene_sets_by_stat: dict[str, list] = {}
-            gene_sets_chart_by_stat: dict[str, list] = {}
-            for stat in bmd_stats:
-                stat_go = [
-                    g for g in filtered_go
-                    if _pick_go_stat(g, "bmd", stat) is not None
+            # Build full row list first (no cap); slice for tables below.
+            all_rows = []
+            for g in stat_go:
+                # Count up/down among member genes that have a BMD.
+                # gene_symbols is a semicolon-separated string of the genes
+                # that passed all BMDExpress filters — the same population
+                # reflected in n_passed/n_genes_with_bmd.
+                member_syms = [
+                    s.upper() for s in (g.get("gene_symbols") or "").split(";") if s
                 ]
-                stat_go.sort(
-                    key=lambda g: _safe_float(_pick_go_stat(g, "bmd", stat)),
-                )
+                n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
+                n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
 
-                # Build full row list first (no cap); slice for tables below.
-                all_rows = []
-                for g in stat_go:
-                    # Count up/down among member genes that have a BMD.
-                    # gene_symbols is a semicolon-separated string of the genes
-                    # that passed all BMDExpress filters — the same population
-                    # reflected in n_passed/n_genes_with_bmd.
-                    member_syms = [
-                        s.upper() for s in (g.get("gene_symbols") or "").split(";") if s
-                    ]
-                    n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
-                    n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
+                all_rows.append({
+                    "go_id": g["go_id"],
+                    "go_term": g["go_term"],
+                    "bmd": _pick_go_stat(g, "bmd", stat),
+                    "bmdl": _pick_go_stat(g, "bmdl", stat),
+                    # bmdu completes the reference's "Median BMDL–BMDU" range
+                    # column (Table 9/10).  _pick_go_stat is generic over
+                    # bmd/bmdl/bmdu and reads bmdu_stats / bmdu_median.
+                    "bmdu": _pick_go_stat(g, "bmdu", stat),
+                    "n_genes": g.get("n_genes", 0),
+                    "n_genes_with_bmd": g.get("n_passed", 0),
+                    "direction": g.get("direction", ""),
+                    "n_up": n_up,
+                    "n_down": n_down,
+                    "fishers_p": g.get("fishers_two_tail"),
+                    "genes": g.get("gene_symbols", ""),
+                })
 
-                    all_rows.append({
-                        "go_id": g["go_id"],
-                        "go_term": g["go_term"],
-                        "bmd": _pick_go_stat(g, "bmd", stat),
-                        "bmdl": _pick_go_stat(g, "bmdl", stat),
-                        # bmdu completes the reference's "Median BMDL–BMDU" range
-                        # column (Table 9/10).  _pick_go_stat is generic over
-                        # bmd/bmdl/bmdu and reads bmdu_stats / bmdu_median.
-                        "bmdu": _pick_go_stat(g, "bmdu", stat),
-                        "n_genes": g.get("n_genes", 0),
-                        "n_genes_with_bmd": g.get("n_passed", 0),
-                        "direction": g.get("direction", ""),
-                        "n_up": n_up,
-                        "n_down": n_down,
-                        "fishers_p": g.get("fishers_two_tail"),
-                        "genes": g.get("gene_symbols", ""),
-                    })
+            # Full list for charts — no cap, no rank (rank is table-specific).
+            gene_sets_chart_by_stat[stat] = all_rows
 
-                # Full list for charts — no cap, no rank (rank is table-specific).
-                gene_sets_chart_by_stat[stat] = all_rows
+            # Top-10 slice for report tables; rank is positional within this
+            # subset.  The reference (Tables 9/10) shows the top 10 gene sets.
+            gene_sets_by_stat[stat] = [
+                {"rank": i + 1, **r} for i, r in enumerate(all_rows[:10])
+            ]
 
-                # Top-10 slice for report tables; rank is positional within this
-                # subset.  The reference (Tables 9/10) shows the top 10 gene sets.
-                gene_sets_by_stat[stat] = [
-                    {"rank": i + 1, **r} for i, r in enumerate(all_rows[:10])
-                ]
-
-            genomics_sections[key] = {
-                "organ": organ,
-                "sex": sex,
-                "total_probes": exp.get("total_probes", 0),
-                "total_responsive_genes": len(genes),
-                "gene_sets_by_stat": gene_sets_by_stat,
-                "gene_sets_chart_by_stat": gene_sets_chart_by_stat,
-                # top_genes: ranked subset (top 10) shown in the gene table.
-                # The reference (Tables 11/12) shows the top 10 genes and carries
-                # the probe id (e.g. "A2M_7932") as its own column.
-                "top_genes": [
-                    {
-                        "rank": i + 1,
-                        "gene_symbol": g["gene_symbol"],
-                        "probe_id": g.get("probe_id", ""),
-                        "bmd": g.get("bmd"),
-                        "bmdl": g.get("bmdl"),
-                        "bmdu": g.get("bmdu"),
-                        "direction": g.get("direction", ""),
-                        "fold_change": g.get("fold_change"),
-                        "r_squared": g.get("r_squared"),
-                    }
-                    for i, g in enumerate(genes[:10])
-                ],
-                # all_genes: full responsive gene list for pathway/GO enrichment
-                # in build_genomics_interpretation(). Kept lean (no rank/r²/bmdu)
-                # because these are only used for enrichment input, not display.
-                "all_genes": [
-                    {
-                        "gene_symbol": g["gene_symbol"],
-                        "bmd": g.get("bmd"),
-                        "bmdl": g.get("bmdl"),
-                        "direction": g.get("direction", ""),
-                        "fold_change": g.get("fold_change"),
-                    }
-                    for g in genes  # full list, not genes[:20]
-                ],
-            }
-    finally:
-        os.unlink(tmp_json.name)
+        genomics_sections[key] = {
+            "organ": organ,
+            "sex": sex,
+            "total_probes": exp.get("total_probes", 0),
+            "total_responsive_genes": len(genes),
+            "gene_sets_by_stat": gene_sets_by_stat,
+            "gene_sets_chart_by_stat": gene_sets_chart_by_stat,
+            # top_genes: ranked subset (top 10) shown in the gene table.
+            # The reference (Tables 11/12) shows the top 10 genes and carries
+            # the probe id (e.g. "A2M_7932") as its own column.
+            "top_genes": [
+                {
+                    "rank": i + 1,
+                    "gene_symbol": g["gene_symbol"],
+                    "probe_id": g.get("probe_id", ""),
+                    "bmd": g.get("bmd"),
+                    "bmdl": g.get("bmdl"),
+                    "bmdu": g.get("bmdu"),
+                    "direction": g.get("direction", ""),
+                    "fold_change": g.get("fold_change"),
+                    "r_squared": g.get("r_squared"),
+                }
+                for i, g in enumerate(genes[:10])
+            ],
+            # all_genes: full responsive gene list for pathway/GO enrichment
+            # in build_genomics_interpretation(). Kept lean (no rank/r²/bmdu)
+            # because these are only used for enrichment input, not display.
+            "all_genes": [
+                {
+                    "gene_symbol": g["gene_symbol"],
+                    "bmd": g.get("bmd"),
+                    "bmdl": g.get("bmdl"),
+                    "direction": g.get("direction", ""),
+                    "fold_change": g.get("fold_change"),
+                }
+                for g in genes  # full list, not genes[:20]
+            ],
+        }
 
     # Attach adversity signature results to each organ/sex section.
     # This reads from integrated["_category_lookup"] and the

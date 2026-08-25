@@ -1221,7 +1221,13 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         ge_filename = ge_source.get("filename", "") if ge_source else ""
         # Cutoff-agnostic key (phase 4): the GO cutoffs are applied after the
         # cache read (apply_genomics_cutoffs), so they no longer key the cache.
-        ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename)
+        # Phase D: fold in the genomics sidecar's mtime (the actual extraction
+        # source now), so a re-extracted sidecar invalidates the cache — the old
+        # filename-only key was content-blind.
+        from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
+        _sidecar = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
+        _sidecar_sig = str(_sidecar.stat().st_mtime_ns) if _sidecar.exists() else ""
+        ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename, _sidecar_sig)
 
         # --- Materials and Methods (LLM-generated, cached) ---
         # Uses fingerprints + .bm2 metadata + animal report to extract

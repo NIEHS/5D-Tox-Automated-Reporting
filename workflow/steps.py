@@ -284,6 +284,11 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     import shutil
     (session_dir / "session.duckdb").unlink(missing_ok=True)
     shutil.rmtree(session_dir / "session_parquet", ignore_errors=True)
+    # NB: genomics.sidecar.json is NOT wiped here — integrate_pool (above) just
+    # wrote the FRESH one for this integration. Its new mtime changes the genomics
+    # cache key, so the stale _cache_genomics_*.json (wiped by the glob above)
+    # re-extracts from the new sidecar on next process. (invalidate_pool_artifacts
+    # DOES delete the sidecar, because that path tears down integrated.json too.)
 
     # Build the lightweight summary (see the route docstring for why).
     meta = integrated.get("_meta", {})
