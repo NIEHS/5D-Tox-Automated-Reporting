@@ -277,6 +277,14 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             old_cache.unlink(missing_ok=True)
             logger.debug("Invalidated stale cache: %s", old_cache.name)
 
+    # The query substrate (ADR-0016) is derived from those caches + integrated,
+    # so re-integration makes it stale too. Remove it (rebuilt on next process)
+    # so a re-integrated-but-not-yet-reprocessed session can't be queried against
+    # old data.
+    import shutil
+    (session_dir / "session.duckdb").unlink(missing_ok=True)
+    shutil.rmtree(session_dir / "session_parquet", ignore_errors=True)
+
     # Build the lightweight summary (see the route docstring for why).
     meta = integrated.get("_meta", {})
     experiments = integrated.get("doseResponseExperiments", [])

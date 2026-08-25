@@ -87,6 +87,15 @@ class _FakePath:
     def glob(self, pattern):
         return iter(())
 
+    def unlink(self, missing_ok=False):
+        # session.duckdb cleanup on re-integration — nothing real to remove.
+        return None
+
+    def __fspath__(self):
+        # so shutil.rmtree(session_dir / "session_parquet", ignore_errors=True)
+        # gets a path-like and no-ops on the nonexistent dir.
+        return str(self._path)
+
     def __str__(self):
         return str(self._path)
 

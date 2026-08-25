@@ -1313,11 +1313,35 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
             "methods": ctx.methods_result,
         }
 
+        # ══════════════════════════════════════════════════════════════
+        # Query substrate (ADR-0016 Phase A) — materialize the session's
+        # relational DB + per-table Parquet from the artifacts now in hand.
+        # A SIDE EFFECT, not part of result_payload: the golden byte-identical
+        # oracle must be unaffected. FAIL-SOFT: a DB build error (e.g. the
+        # sandbox fcntl hang, or a schema drift) must never fail the report —
+        # the DB just won't be queryable until the next process.
+        # ══════════════════════════════════════════════════════════════
+        _build_query_substrate(dtxsid, ctx.integrated)
+
         return result_payload
 
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)
         raise StepError(f"Processing failed: {e}", status_code=500)
+
+
+def _build_query_substrate(dtxsid: str, integrated: dict) -> None:
+    """Build sessions/<dtxsid>/session.duckdb (+ session_parquet) as a fail-soft
+    side effect of processing. Deferred import so the pipeline doesn't hard-depend
+    on duckdb at module load, and any failure is logged, not raised."""
+    try:
+        from pipeline.session_db import build_session_db
+        db = build_session_db(dtxsid, _session_dir(dtxsid), integrated)
+        logger.info("Built query substrate for %s at %s", dtxsid, db)
+    except Exception:
+        logger.exception(
+            "Query substrate build failed for %s (report unaffected)", dtxsid
+        )
 
 
 @router.post("/api/generate-animal-report/{dtxsid}")

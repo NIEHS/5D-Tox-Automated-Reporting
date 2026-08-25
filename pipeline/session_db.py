@@ -348,12 +348,30 @@ def _rows_genomics(dtxsid: str, genomics: dict | None):
 # The build entry point
 # ---------------------------------------------------------------------------
 
-# (table name, column count) — for the INSERT placeholder strings. Column count
-# is validated against the actual DuckDB table before insert, so a schema/loader
-# mismatch fails loudly rather than silently misaligning columns.
+# Tables that declare a PRIMARY KEY (session_schema). Only these accept
+# INSERT OR IGNORE in DuckDB — it requires a UNIQUE/PK to resolve the conflict —
+# so we dedupe by first column for these and plain-insert the rest.
+_PK_TABLES = frozenset({"study", "experiment", "source_file", "subject"})
+
+
 def _insert(con, table: str, rows: list[tuple]) -> int:
+    """Insert value-tuples into a table. For PK-bearing tables, dedupe on the
+    primary key (the first column) first, so a duplicate key in messy source data
+    — e.g. experiments sharing a blank @ref, or two sidecars naming the same
+    animal id — drops the dupe rather than aborting the whole build (the ADR's
+    idempotent-load intent; DuckDB's INSERT OR IGNORE only applies to PK tables).
+    Column count is positional; a schema/loader arity mismatch still fails loudly."""
     if not rows:
         return 0
+    if table in _PK_TABLES:
+        seen: set = set()
+        deduped = []
+        for r in rows:
+            if r[0] in seen:
+                continue
+            seen.add(r[0])
+            deduped.append(r)
+        rows = deduped
     ncols = len(rows[0])
     placeholders = ", ".join(["?"] * ncols)
     con.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)

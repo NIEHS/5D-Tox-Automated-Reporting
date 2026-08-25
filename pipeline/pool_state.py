@@ -174,6 +174,17 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
         summary["deleted"].append(cache_file.name)
         logger.info("Deleted cache %s for %s", cache_file.name, dtxsid)
 
+    # --- Delete the query substrate (ADR-0016) — derived from the now-deleted
+    # integrated.json + caches, so it is stale; rebuilt on next process. ---
+    import shutil
+    qdb = d / "session.duckdb"
+    if qdb.exists():
+        qdb.unlink()
+        summary["deleted"].append("session.duckdb")
+    if (d / "session_parquet").exists():
+        shutil.rmtree(d / "session_parquet", ignore_errors=True)
+        summary["deleted"].append("session_parquet/")
+
     # --- Clear in-memory integrated pool ---
     if dtxsid in _integrated_pool:
         del _integrated_pool[dtxsid]
