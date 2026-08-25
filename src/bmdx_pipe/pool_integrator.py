@@ -807,6 +807,9 @@ def integrate_pool(
     bm2_paths: list[str] = []
     txt_paths: list[str] = []
     xlsx_paths: list[tuple[str, str, str]] = []  # (path, platform, data_type)
+    # The gene-expression .bm2 path, captured for the genomics sidecar (extracted
+    # once here at integration so process-time never re-reads the raw upload).
+    ge_bm2_path: str | None = None
     # Clinical observation CSVs bypass Java integration entirely —
     # they contain categorical findings (not numeric endpoints) and are
     # processed into incidence tables at report time instead.
@@ -887,6 +890,11 @@ def integrate_pool(
             # Route to the appropriate list for Java integration
             if chosen_tier == "bm2" or actual_file_type == "bm2":
                 bm2_paths.append(file_path)
+                # Remember the gene-expression .bm2 so we can extract the genomics
+                # sidecar below (mirrors how process-time locates it via the
+                # gene_expression source file).
+                if fp_data_type == "gene_expression" or platform_key == "gene_expression":
+                    ge_bm2_path = file_path
             elif actual_file_type in ("txt", "csv") or chosen_tier == "txt_csv":
                 # Gene expression txt/csv are raw matrices, not clinical pivots —
                 # they can't be imported directly.  Skip them; gene expression
@@ -1087,6 +1095,27 @@ def integrate_pool(
     cat_lookup_path = os.path.join(session_dir, "_category_lookup.json")
     with open(cat_lookup_path, "w", encoding="utf-8") as f:
         json.dump(cat_lookup_data, f)
+
+    # --- Extract the genomics sidecar (ADR-0016 Phase D) ---
+    # Gene expression is the one platform whose report data used to be re-extracted
+    # from the raw .bm2 at PROCESS time (violating "read from integrated + sidecars,
+    # never raw uploads").  Extract it ONCE here — Java + the classpath are already
+    # in use for the merge above — and persist the raw ExportGenomics JSON as a
+    # sidecar the process step reads instead of the .bm2.  Fail-soft: a genomics
+    # extraction failure must not break the merge (the report tolerates missing
+    # genomics), so it's logged, not raised.
+    if ge_bm2_path:
+        from .apical_report import export_genomics
+        genomics_sidecar_path = os.path.join(session_dir, "genomics.sidecar.json")
+        try:
+            export_genomics(ge_bm2_path, genomics_sidecar_path)
+            logger.info("Wrote genomics sidecar: %s", genomics_sidecar_path)
+        except Exception as e:
+            logger.warning("Genomics sidecar extraction failed for %s: %s",
+                           ge_bm2_path, e)
+            # Don't leave a partial/stale file behind.
+            if os.path.exists(genomics_sidecar_path):
+                os.remove(genomics_sidecar_path)
 
     # Re-write the JSON with our metadata additions (without _category_lookup)
     with open(out_path, "w", encoding="utf-8") as f:
