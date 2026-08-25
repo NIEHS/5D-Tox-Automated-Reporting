@@ -72,6 +72,20 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
         "coverage_matrix": report.coverage_matrix,
         "is_complete": report.is_complete,
     }
+
+    # Value-level provenance cross-check (xlsx ↔ derived CSV). Lazy import to
+    # avoid the pipeline↔workflow import cycle. Runs here (not in validate_pool)
+    # because it needs the session files dir. Appends blocking errors when a
+    # derived CSV diverges from its source xlsx, or a warning when derived data
+    # has no original to check against.
+    try:
+        from pipeline.value_validation import check_value_provenance
+        report_dict["issues"] = report_dict["issues"] + check_value_provenance(
+            dtxsid, fps, report.coverage_matrix, store.session_dir(dtxsid)
+        )
+    except Exception:
+        logger.exception("Value provenance check failed for %s (skipped)", dtxsid)
+
     store.write_json(dtxsid, "validation_report.json", report_dict)
     return report_dict
 
