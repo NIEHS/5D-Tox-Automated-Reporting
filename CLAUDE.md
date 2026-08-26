@@ -81,3 +81,27 @@ Five canonical triage roles using their default label strings (`needs-triage`, `
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Code Navigation — prefer rlm-code MCP tools
+
+This project is indexed by the **rlm-code** MCP server (tools: `mcp__rlm-code__*`).
+For understanding code structure, **use these tools before falling back to raw
+grep/read** — they answer from a call-graph + symbol index that plain text search
+can't:
+
+- **`symbol_info`** — definition, signature, and callers/callees of a symbol.
+  Use instead of grepping for `def foo`/`class Foo`.
+- **`trace_flow`** — execution/call path between two symbols. Use for "how does X
+  reach Y" / impact analysis.
+- **`find_related`** — symbols structurally related to a given one.
+- **`hot_paths`** — high-importance symbols by PageRank. Use to orient in an
+  unfamiliar area.
+- **`module_summary` / `project_overview` / `detect_patterns_tool`** — architecture
+  overviews before diving in.
+
+Guidance: for **structural questions** (what calls this? what breaks if I change
+it? where is this concept implemented? how is the code organized?) reach for
+rlm-code first. Plain `grep`/`read` remain fine for **literal string lookups**
+(a specific error message, a config key, a TODO). If the index seems stale after
+code changes, run `reindex` in the project root to rebuild it.
+
