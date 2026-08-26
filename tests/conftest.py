@@ -48,12 +48,13 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "golden"
 
 # All modules that import SESSIONS_DIR by name (found via grep).
 _SESSIONS_DIR_MODULES = [
-    "session_store",
-    "session_routes",
-    "llm_routes",
-    "background_server",
-    "style_learning",
-    "document_config",
+    "pipeline.session_store",
+    "web_routes.session_routes",
+    "web_routes.llm_routes",
+    "web_routes.background_server",
+    "narrative.style_learning",
+    "document_model.document_config",
+    "document_model.version_config",
 ]
 
 # pool_orchestrator imports session_dir (the function), which reads
@@ -77,7 +78,7 @@ def _patch_sessions_dir(monkeypatch, sessions_path: Path):
             # Module not yet imported — that's fine, the test doesn't use it
             pass
     # Always patch session_store directly (it's the canonical source)
-    import session_store
+    import pipeline.session_store as session_store
     monkeypatch.setattr(session_store, "SESSIONS_DIR", sessions_path)
 
 
@@ -89,12 +90,12 @@ def _patch_sessions_dir(monkeypatch, sessions_path: Path):
 
 def _clear_server_state():
     """Reset all module-level mutable dicts to empty."""
-    import pool_orchestrator
+    import pipeline.pool_orchestrator as pool_orchestrator
     pool_orchestrator._pool_fingerprints.clear()
     pool_orchestrator._integrated_pool.clear()
     pool_orchestrator._data_uploads.clear()
 
-    import server_state
+    import web_routes.server_state as server_state
     server_state._bm2_uploads.clear()
     server_state._csv_uploads.clear()
 
@@ -126,7 +127,7 @@ def client(sessions_dir):
     all in-memory state is cleared before each test.
     """
     from fastapi.testclient import TestClient
-    from background_server import app
+    from web_routes.background_server import app
     return TestClient(app)
 
 
@@ -181,34 +182,36 @@ def mock_bmdx_pipe():
     (e.g., mock_bmdx_pipe.integrate_pool.return_value = {...}).
     """
     patches = {
-        # IntegrateProject.java — merges files into unified BMDProject
+        # IntegrateProject.java — merges files into unified BMDProject.
+        # Patched at workflow.steps (ADR-0014 step 2 moved the call site there
+        # from web_routes.pool_routes when the handler was unwrapped).
         "integrate_pool": patch(
-            "pool_routes.integrate_pool",
+            "workflow.steps.integrate_pool",
             return_value={"doseResponseExperiments": [], "_meta": {}},
         ),
         # RunPrefilter.java — Williams/Dunnett statistical tests
         "build_table_data": patch(
-            "process_integrated.build_table_data",
+            "pipeline.process_integrated.build_table_data",
             return_value={"Male": [], "Female": []},
         ),
         # ExportGenomics.java — gene expression extraction
         "export_genomics": patch(
-            "processing_helpers.export_genomics",
+            "pipeline.processing_helpers.export_genomics",
             return_value={},
         ),
         # ExportCategories.java — BMD category lookup
         "generate_results_narrative": patch(
-            "processing_helpers.generate_results_narrative",
+            "pipeline.processing_helpers.generate_results_narrative",
             return_value=[],
         ),
         # ExportBm2.java — .bm2 deserialization
         "build_table_data_from_bm2": patch(
-            "upload_routes.build_table_data_from_bm2",
+            "web_routes.upload_routes.build_table_data_from_bm2",
             return_value={},
         ),
         # pybmds — CPU-heavy BMD modeling
         "run_bmds_for_endpoints": patch(
-            "process_integrated.run_bmds_for_endpoints",
+            "pipeline.process_integrated.run_bmds_for_endpoints",
             return_value={},
         ),
         # LMDB cache — mock across all importing modules.  get_json must
@@ -216,13 +219,13 @@ def mock_bmdx_pipe():
         # dict on hit, None on miss); a bare MagicMock leaks into the
         # preview route's orjson.dumps and fails to serialize.
         "bm2_cache_session": patch(
-            "session_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.session_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
         "bm2_cache_upload": patch(
-            "upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.upload_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
         "bm2_cache_llm": patch(
-            "llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
+            "web_routes.llm_routes.bm2_cache", MagicMock(get_json=lambda *a, **k: {}),
         ),
     }
 

@@ -12,9 +12,9 @@ Two concerns:
      (verified more strongly by the byte-identical golden/baseline checks).
 """
 
-from document_node import DocNode
-from genomics_content import genomics_content_plan
-from latex_generator import _render_genomics_section
+from document_model.document_node import DocNode
+from genomics.genomics_content import genomics_content_plan
+from rendering.latex_generator import _render_genomics_section
 
 _GENE_SET_ROW = {
     "rank": 1, "go_id": "GO:0001", "go_term": "apoptosis",

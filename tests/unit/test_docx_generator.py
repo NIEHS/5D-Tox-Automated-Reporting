@@ -28,10 +28,10 @@ import pytest
 from docx import Document
 from docx.shared import Inches, Pt
 
-from docx_generator import _DISPATCH, generate_docx
-from latex_export import load_session_data
-from render_common import RENDERABLE_NODE_TYPES
-from report_data import scaffold_report_data
+from rendering.docx_generator import _DISPATCH, generate_docx
+from rendering.latex_export import load_session_data
+from rendering.render_common import RENDERABLE_NODE_TYPES
+from rendering.report_data import scaffold_report_data
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -990,7 +990,7 @@ def test_body_headings_are_collectable_by_the_field(scaffold):
 def test_no_field_no_dirty_flag():
     """A document with no field must NOT set updateFields (the flag is scoped to
     the field's presence, detected from the body, not always-on)."""
-    from docx_generator import _build_style_skeleton
+    from rendering.docx_generator import _build_style_skeleton
     from docx import Document as _Doc
     # A hand-built doc with a paragraph but no field: _mark_fields_dirty is only
     # called by generate_docx when a fldChar exists, so exercise that guard.

@@ -16,7 +16,7 @@ import types
 
 import pytest
 
-import llm_endpoints as le
+import styling_export.llm_endpoints as le
 
 
 # httpx clients read proxy env vars by default (trust_env=True).  The builder

@@ -13,7 +13,7 @@ import importlib
 
 import pytest
 
-import chart_registry as cr
+import genomics.chart_registry as cr
 
 
 @pytest.fixture
@@ -140,6 +140,39 @@ def test_register_builder_attaches_and_flips_kind(fresh_registry_module):
     assert reg["umap"].kind == "code"
     assert reg["umap"].style_defaults == {"width": 900}
     assert reg["umap"].caption_template == "cap"
+
+
+def test_resolved_builder_survives_pre_binding_snapshot(fresh_registry_module):
+    """
+    Regression: a ChartType captured for a code type BEFORE its builder is
+    registered must still resolve the live builder once it is bound.
+
+    This is the import-order bug that produced blank genomics charts:
+    ``load_chart_types`` calls ``build_registry`` while the template is loaded,
+    which can happen before genomics_viz runs ``register_builder``.  The
+    resulting ChartType captured ``builder=None`` permanently, so the render
+    path fell through to the generic data-driven builder and emitted an empty
+    figure.  ``resolved_builder`` fixes this by looking up the live registry for
+    code-typed names, so binding is independent of construction order.
+    """
+    m = fresh_registry_module
+
+    # Snapshot the umap ChartType while its builder is still unbound.
+    stale = m.build_registry()["umap"]
+    assert stale.builder is None          # captured pre-binding
+    assert stale.resolved_builder is None
+    assert stale.has_builder is False
+
+    # Now bind the builder (what genomics_viz's import does).
+    def real_umap(*a, **k):
+        return "FIG"
+
+    m.register_builder("umap", real_umap)
+
+    # The SAME stale object must now resolve the live builder.
+    assert stale.builder is None          # still None on the frozen instance
+    assert stale.resolved_builder is real_umap
+    assert stale.has_builder is True
 
 
 def test_register_builder_unknown_name_raises(fresh_registry_module):

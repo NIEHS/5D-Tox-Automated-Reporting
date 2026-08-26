@@ -16,7 +16,7 @@ block raises AttributeError, so the two assertions below cannot be reached.
 import duckdb
 import pytest
 
-import interpret
+import narrative.interpret as interpret
 
 
 @pytest.fixture

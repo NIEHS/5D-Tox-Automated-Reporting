@@ -22,9 +22,9 @@ import pathlib
 
 import pytest
 
-import freeform_content as fc
-from document_node import DocNode
-from document_template import instantiate
+import styling_export.freeform_content as fc
+from document_model.document_node import DocNode
+from document_model.document_template import instantiate
 
 TEMPLATES_DIR = pathlib.Path(__file__).resolve().parents[2] / "templates"
 
@@ -231,7 +231,7 @@ def _node(node_type, **kw) -> DocNode:
 
 
 def test_latex_page_forces_clearpage_and_emits_authored_latex():
-    import latex_generator as lg
+    import rendering.latex_generator as lg
 
     node = _node("freeform-page", representation="latex",
                  resolved_content={"latex": r"\textbf{body}", "html": None})
@@ -241,7 +241,7 @@ def test_latex_page_forces_clearpage_and_emits_authored_latex():
 
 
 def test_latex_block_omits_clearpage():
-    import latex_generator as lg
+    import rendering.latex_generator as lg
 
     node = _node("freeform-block", representation="latex",
                  resolved_content={"latex": r"\textbf{body}", "html": None})
@@ -251,7 +251,7 @@ def test_latex_block_omits_clearpage():
 
 
 def test_latex_shows_pending_note_for_html_only_content():
-    import latex_generator as lg
+    import rendering.latex_generator as lg
 
     node = _node("freeform-page", representation="html",
                  resolved_content={"latex": None, "html": "<b>x</b>"})
@@ -265,7 +265,7 @@ def test_latex_shows_pending_note_for_html_only_content():
 # ---------------------------------------------------------------------------
 
 def test_html_page_forces_break_and_emits_authored_html():
-    import html_generator as hg
+    import rendering.html_generator as hg
 
     node = _node("freeform-page", representation="html",
                  resolved_content={"latex": None, "html": "<p>body</p>"})
@@ -275,7 +275,7 @@ def test_html_page_forces_break_and_emits_authored_html():
 
 
 def test_html_block_omits_break():
-    import html_generator as hg
+    import rendering.html_generator as hg
 
     node = _node("freeform-block", representation="html",
                  resolved_content={"latex": None, "html": "<p>body</p>"})
@@ -286,7 +286,7 @@ def test_html_block_omits_break():
 
 
 def test_html_shows_pending_note_for_latex_only_content():
-    import html_generator as hg
+    import rendering.html_generator as hg
 
     node = _node("freeform-page", representation="latex",
                  resolved_content={"latex": r"\textbf{x}", "html": None})
@@ -305,7 +305,7 @@ def test_html_shows_pending_note_for_latex_only_content():
 # ---------------------------------------------------------------------------
 
 def test_latex_page_break_emits_only_clearpage():
-    import latex_generator as lg
+    import rendering.latex_generator as lg
 
     out = lg._render_page_break(_node("page-break"), {})
     assert r"\clearpage" in out
@@ -314,7 +314,7 @@ def test_latex_page_break_emits_only_clearpage():
 
 
 def test_html_page_break_emits_break_before():
-    import html_generator as hg
+    import rendering.html_generator as hg
 
     out = hg._render_page_break(_node("page-break"), {})
     assert "break-before:page" in out

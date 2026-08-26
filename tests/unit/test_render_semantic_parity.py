@@ -28,14 +28,14 @@ import re
 
 import pytest
 
-import html_generator
-import latex_generator
-from latex_export import load_session_data
-from html_generator import generate_html
-from latex_generator import generate_latex
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE, find_node
-from render_common import bmd_summary_plan
+import rendering.html_generator as html_generator
+import rendering.latex_generator as latex_generator
+from rendering.latex_export import load_session_data
+from rendering.html_generator import generate_html
+from rendering.latex_generator import generate_latex
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE, find_node
+from rendering.render_common import bmd_summary_plan
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ def test_table_numbers_agree_across_surfaces(session_data):
     left unwired.  Keys on (type, organ, sex) since the two paths may deliver
     the entries in different list order.
     """
-    from report_data import marshal_export_data
+    from rendering.report_data import marshal_export_data
 
     latex_data = load_session_data(
         dtxsid="DTXSID50469320",
@@ -299,7 +299,7 @@ def test_methods_subsection_matches_by_key_not_title():
     template title vs. SUBSECTION_SKELETON heading_text).  Rewording either one
     alone silently blanked the subsection on BOTH surfaces.
     """
-    from render_common import methods_subsection_content
+    from rendering.render_common import methods_subsection_content
 
     node = DocNode(id="mm-study-design", title="RENAMED IN TEMPLATE",
                    node_type="narrative", level=3, methods_key="study_design")
@@ -328,7 +328,7 @@ def test_methods_subsection_matches_by_key_not_title():
 def test_methods_subsection_legacy_heading_fallback():
     """Legacy section dicts that predate the `key` field still match by
     heading == title, so old cached sessions keep rendering."""
-    from render_common import methods_subsection_content
+    from rendering.render_common import methods_subsection_content
 
     node = DocNode(id="mm-chemistry", title="Chemistry",
                    node_type="narrative", level=3, methods_key="chemistry")

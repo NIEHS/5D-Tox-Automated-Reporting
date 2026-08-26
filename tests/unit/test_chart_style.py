@@ -10,7 +10,7 @@ C1 instance key):
   - inputs are never mutated.
 """
 
-import chart_style as cs
+import genomics.chart_style as cs
 
 
 # ---------------------------------------------------------------------------

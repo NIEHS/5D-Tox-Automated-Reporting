@@ -1,9 +1,20 @@
 # 0010 — A semantic-type vocabulary (design) system
 
-- **Status:** Proposed (2026-07-23). Phase 0 landed this session (`vocabulary.py`,
-  `vocab/base.yaml` + `vocab/ntp-report{,-generated}.yaml`, `docx_style_extract
-  --emit-vocabulary`, the `render_capabilities` `emits` crosswalk, tests); Phases
-  1–2 (render the three surfaces from the vocabulary) not yet wired.
+- **Status:** **Partially implemented — Phase 0 (verified 2026-08-17).** Phase 0
+  landed (`document_model/vocabulary.py`, `vocab/base.yaml` +
+  `vocab/ntp-report{,-generated}.yaml`, `docx_style_extract --emit-vocabulary`, the
+  `render_capabilities` `emits` crosswalk, tests — all present). Phases 1–2 (render
+  the three surfaces FROM the vocabulary) are NOT yet wired. Was Proposed
+  2026-07-23.
+- **★ This semantic-type vocabulary IS the platform-neutral hub (2026-08-17).** Per
+  the platform-neutral source-of-truth principle (memory
+  `project_platform_neutral_source_of_truth.md`), the medium-neutral vocabulary
+  here is THE source of truth for styling roles; the per-surface `bind` names are
+  literally the hub→spoke projection, and no one platform (Word/LaTeX/HTML) is
+  canonical. Wiring Phases 1–2 is building the hub's render side — kept +
+  prioritized, not Word-fidelity polish. (This also settles the ADR-0011 relation:
+  0011 is now the platform-agnostic INGEST GUARD that feeds THIS vocabulary, not a
+  lossless `.dotx`-canonical layer beneath it — 0011 reframed 2026-08-17.)
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0006](0006-unify-html-latex-renderers.md) (the single tree
   walk + shared per-key `layout_style` vocabulary the three surfaces resolve

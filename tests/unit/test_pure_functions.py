@@ -17,7 +17,7 @@ import pytest
 
 # Import the functions under test directly from pool_orchestrator.
 # These are module-private (prefixed _) but Python allows direct access.
-from pool_orchestrator import (
+from pipeline.pool_orchestrator import (
     _js_dose_key,
     _safe_float,
     _safe_float_from_bmdl,
@@ -308,14 +308,41 @@ class TestHashFunctions:
         inputs_b = [{"key": "bw", "doses": [0, 1], "ns": [10, 10], "means": [100, 120], "stdevs": [5, 6]}]
         assert _hash_bmds(inputs_a) != _hash_bmds(inputs_b)
 
+    def test_hash_bmds_sensitive_to_method_version(self, monkeypatch):
+        """Bumping _BMDS_METHOD_VERSION changes the hash for IDENTICAL data.
+
+        This is the BMDS method-version currency fix (ADR-0014 step 6): the raw
+        dose-response data is unchanged, but recomputing BMDs with a new modeling
+        algorithm/settings (a version bump) must invalidate the cache instead of
+        serving stale BMDs.
+        """
+        import pipeline.cache_plumbing as cp
+
+        inputs = [{"key": "bw", "doses": [0, 1], "ns": [10, 10],
+                   "means": [100, 110], "stdevs": [5, 6]}]
+        before = _hash_bmds(inputs)
+        monkeypatch.setattr(cp, "_BMDS_METHOD_VERSION", cp._BMDS_METHOD_VERSION + 1)
+        after = _hash_bmds(inputs)
+        assert before != after
+
+    def test_hash_bmds_stable_for_same_method_version(self):
+        """Identical data + the SAME method version → the SAME hash (stability)."""
+        inputs = [{"key": "bw", "doses": [0, 1], "ns": [10, 10],
+                   "means": [100, 110], "stdevs": [5, 6]}]
+        assert _hash_bmds(inputs) == _hash_bmds(inputs)
+
     def test_hash_genomics_deterministic(self):
-        h1 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene.bm2")
-        h2 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene.bm2")
+        # Phase 4: _hash_genomics is CUTOFF-AGNOSTIC — it takes only
+        # (bmd_stats, ge_filename); the GO cutoffs are applied after the cache
+        # read (apply_genomics_cutoffs), so one extracted superset serves every
+        # version's cutoffs.
+        h1 = _hash_genomics(["median"], "gene.bm2")
+        h2 = _hash_genomics(["median"], "gene.bm2")
         assert h1 == h2
 
     def test_hash_genomics_sensitive_to_file(self):
-        h1 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_a.bm2")
-        h2 = _hash_genomics(["median"], 5.0, 20, 500, 3, "gene_b.bm2")
+        h1 = _hash_genomics(["median"], "gene_a.bm2")
+        h2 = _hash_genomics(["median"], "gene_b.bm2")
         assert h1 != h2
 
     # ── stale-sidecar cache key (bug #4) ─────────────────────────────────

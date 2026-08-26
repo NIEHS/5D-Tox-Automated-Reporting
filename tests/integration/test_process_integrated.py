@@ -163,7 +163,7 @@ class TestProcessIntegrated:
         Process-integrated should return a JSON with 'sections' array.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -186,7 +186,7 @@ class TestProcessIntegrated:
         new domain model values (not old monolithic strings).
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -217,7 +217,7 @@ class TestProcessIntegrated:
     def test_sections_have_tables_json(self, sessions_dir, mock_bmdx_pipe):
         """Each section should have tables_json with sex keys."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -243,7 +243,7 @@ class TestProcessIntegrated:
     def test_has_bmd_summary(self, sessions_dir, mock_bmdx_pipe):
         """Response should include apical_bmd_summary."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -260,7 +260,7 @@ class TestProcessIntegrated:
     def test_has_unified_narratives(self, sessions_dir, mock_bmdx_pipe):
         """Response should include unified_narratives dict."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         dtxsid = "DTXSID_TEST"
         self._setup_session(sessions_dir, dtxsid)
@@ -278,7 +278,7 @@ class TestProcessIntegrated:
     def test_no_integrated_data_returns_400(self, sessions_dir):
         """Processing without integrated data should return 400."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_NODATA"

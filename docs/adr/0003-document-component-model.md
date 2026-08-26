@@ -1,6 +1,61 @@
 # 0003 — Composable document-component model: catalog, data-driven templates, generated ToC
 
-- **Status:** Proposed (2026-05-26)
+- **Status:** Proposed (2026-05-26). **Mostly realized (verified part-by-part
+  2026-08-17):** this ADR records a design ("no code is changed by this ADR"), but
+  most of the model is now live —
+  - **Part A (component catalog)** — DONE: `COMPONENT_CATALOG` + `CONTENT_ITEM_KINDS`
+    in `render_capabilities.py`.
+  - **Part C (data-driven templates)** — DONE: `document_template.instantiate()` /
+    `build_tree()`; `DOCUMENT_TREE` is instantiated from YAML, not hand-written.
+  - **Part D (generated ToC)** — DONE: `report_data_toc._build_toc_entries` walks
+    the tree; distinct from the nav panel.
+  - **Migration step 1 (nav/ToC rename)** — DONE: JS uses `data-nav-id` / `nav-*`;
+    zero `data-toc-id` remain.
+  - **Amendment 1 (declarative layout)** — DONE: the `landscape_requested` resolver
+    + YAML `orientation`/`break_before`/`break_after` + capability-gated validation
+    (this line of work also became ADR-0009).
+  - **Part B (sub-addressable content items)** — **DONE (Feature 1 2026-08-17,
+    stages 1–4 `fd024ef`→`9715e07`; Feature 2 2026-08-18, per-item breaks
+    `150ba8d`).** The
+    `content_items` feature is built and landed:
+    - `document_model/content_item.py` `ContentItem` (leaf) + a
+      `DocNode.content_items` field threaded through serialize/instantiate/validate/
+      collectors as a NO-OP (empty default; frozen-tree golden byte-identical).
+    - `render_common.resolve_content_items(node, data)` — the ONE ordered sequence
+      all four emitters iterate: template-AUTHORED items first, then RENDER-TIME
+      genomics items (the hybrid). The genomics monolith is retired — the four
+      `_render_genomics_section` handlers now share this resolver instead of each
+      duplicating the entry×item loop (proven byte-identical on all 4 surfaces).
+    - JATS genomics NARRATIVE reached parity for free (stage 1): the emitter no
+      longer drops genomics prose.
+    - Authored `text` items render on all four surfaces; table/chart/image authored
+      kinds emit a visible pending marker (no report authors them yet).
+    - Per-content-item ORIENTATION already shipped earlier
+      (`render_capabilities.content_item_landscape_requested`, :506).
+    - **Feature 2 (per-content-item page breaks) DONE (`150ba8d`)** —
+      `content_item_break_requested` composite-key resolver (twin of the
+      orientation one) + a `breakable` plan flag + a `data["breaks"]` overlay
+      (`{"<node>::<item>": {before, after}}`, ingested in `marshal_export_data`,
+      client `getBreaks()`); per-item emit on latex/html/docx (JATS no-op).
+      ★ **SCOPE REVISED at build time (2026-08-18):** the plan's NODE-grain break
+      stack (DocNode break fields + node `break_requested` + node overlay) was
+      DROPPED — NODE breaks are ALREADY fully solved by the
+      `styles.instances.<id>.break_before` channel (`resolve_layout_style` → all
+      surfaces, the canonical pagination spec used in production); building a second
+      node-break mechanism would be redundant + double-emit. So only the missing
+      item grain was built. The dead `breakable` capability stays dead (node grain
+      was its only would-be consumer).
+    STILL PENDING (tiny follow-up): real production authoring of a static genomics
+    intro (the content_items mechanism is wired + dormant; waits on actual prose).
+    Note Part B is authoring/tree tidiness + a real breaks feature — it is NOT a BITS
+    prerequisite: BITS containment is entirely the `jats_generator` emitter's job
+    (the StyleChecker/DTD gate is already green), and tree granularity does not touch it.
+  - **Migration step 6 (transcriptomics greenfield)** — a validation exercise for
+    the model, never a shipped deliverable; author it as a template selection if/when
+    a transcriptomics section is actually needed.
+
+  Kept as **Proposed** because it is a design record, not an implementation ticket;
+  the residual work is Part B (above).
 - **Amended:** 2026-05-29 — Amendment 1 (declarative layout settings + the
   YAML / UI coordination model); see the end of this document.
 - **Deciders:** Dan Svoboda

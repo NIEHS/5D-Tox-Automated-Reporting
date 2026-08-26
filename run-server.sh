@@ -81,6 +81,6 @@ for arg in "$@"; do
 done
 
 if [[ "$host_given" == false ]]; then
-  exec "$PY" background_server.py --host 0.0.0.0 "$@"
+  exec "$PY" -m web_routes.background_server --host 0.0.0.0 "$@"
 fi
-exec "$PY" background_server.py "$@"
+exec "$PY" -m web_routes.background_server "$@"

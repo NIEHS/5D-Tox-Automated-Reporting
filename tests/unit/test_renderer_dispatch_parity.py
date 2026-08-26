@@ -25,11 +25,11 @@ real LaTeX emitters (a branded cover + inner title page), so LATEX_OMITS — onc
 
 import pytest
 
-import docx_generator
-import html_generator
-import latex_generator
-from document_tree import DOCUMENT_TREE
-from render_common import (
+import rendering.docx_generator as docx_generator
+import rendering.html_generator as html_generator
+import rendering.latex_generator as latex_generator
+from document_model.document_tree import DOCUMENT_TREE
+from rendering.render_common import (
     RENDERABLE_NODE_TYPES,
     LATEX_OMITS,
     RenderDispatchError,

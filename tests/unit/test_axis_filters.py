@@ -26,14 +26,14 @@ import textwrap
 import pytest
 
 from bmdx_pipe import TableRow
-from table_builder_common import (
+from tables.table_builder_common import (
     sex_allowed,
     assay_allowed,
     gene_allowed,
     gene_set_allowed,
     filter_genomics_sections,
 )
-from processing_helpers import apply_apical_filters, prune_card_sexes
+from pipeline.processing_helpers import apply_apical_filters, prune_card_sexes
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +289,7 @@ def test_prune_card_sexes_noop_without_allowlist():
 
 @pytest.fixture
 def template_dir(tmp_path, monkeypatch):
-    import document_template as dt
+    import document_model.document_template as dt
     monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
     return tmp_path
 
@@ -301,7 +301,7 @@ def _write(template_dir, body: str) -> str:
 
 
 def test_load_sex_per_area_lowercased(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -312,13 +312,13 @@ def test_load_sex_per_area_lowercased(template_dir):
 
 
 def test_load_sex_missing_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_sex(name) == {}
 
 
 def test_load_sex_unknown_area_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -329,7 +329,7 @@ def test_load_sex_unknown_area_rejected(template_dir):
 
 
 def test_load_sex_flat_list_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex: [male]
@@ -339,7 +339,7 @@ def test_load_sex_flat_list_rejected(template_dir):
 
 
 def test_load_assays_per_area(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -355,7 +355,7 @@ def test_load_assays_per_area(template_dir):
 def test_load_assays_unknown_area_rejected(template_dir):
     # "hormones" is now a VALID assay area (its Select panel is config-driven,
     # like clinical-chemistry/hematology); use a genuinely unknown key here.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -368,7 +368,7 @@ def test_load_assays_unknown_area_rejected(template_dir):
 def test_load_assays_per_sex_mapping(template_dir):
     # An area value may be a {male:/female:} mapping — the reference's "Select"
     # tables show different endpoints per sex.  Tokens lower-cased/stripped.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -390,7 +390,7 @@ def test_load_assays_per_sex_mapping(template_dir):
 def test_load_assays_hormones_area(template_dir):
     # Hormones is now a config-driven "Select" panel (reference Table 6), so it
     # loads through the same assay rail as clin-chem / hematology.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -409,7 +409,7 @@ def test_load_assays_hormones_area(template_dir):
 def test_load_sex_organ_weight_area(template_dir):
     # The "organ-weight" sex area narrows ONLY the Organ Weight table (reference
     # Table 3 shows just the responsive sex).  A valid area alongside apical.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         sex:
@@ -423,7 +423,7 @@ def test_load_sex_organ_weight_area(template_dir):
 
 
 def test_load_assays_unknown_sex_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -435,7 +435,7 @@ def test_load_assays_unknown_sex_rejected(template_dir):
 
 
 def test_load_assays_per_sex_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         assays:
@@ -447,7 +447,7 @@ def test_load_assays_per_sex_non_string_rejected(template_dir):
 
 
 def test_load_genes_flat_list_lowercased(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes: [EGR1, "  Ddit4 "]
@@ -456,13 +456,13 @@ def test_load_genes_flat_list_lowercased(template_dir):
 
 
 def test_load_genes_missing_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_genes(name) == []
 
 
 def test_load_genes_mapping_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes:
@@ -473,7 +473,7 @@ def test_load_genes_mapping_rejected(template_dir):
 
 
 def test_load_gene_sets_flat_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         gene_sets: ["GO:1902893", "cell division"]
@@ -482,7 +482,7 @@ def test_load_gene_sets_flat_list(template_dir):
 
 
 def test_load_genes_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         genes: [42]
@@ -496,14 +496,14 @@ def test_load_genes_non_string_rejected(template_dir):
 def test_load_charts_absent_returns_none(template_dir):
     # Distinct from the token allowlists: absence means "no filtering" (None),
     # so every chart type renders.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, "document: []\n")
     assert dt.load_report_charts(name) is None
 
 
 def test_load_charts_empty_list_is_render_none(template_dir):
     # An explicit empty list is NOT "no filtering" — it renders zero charts.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: []
@@ -512,7 +512,7 @@ def test_load_charts_empty_list_is_render_none(template_dir):
 
 
 def test_load_charts_lowercased_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: [UMAP, "  Cluster  "]
@@ -521,7 +521,7 @@ def test_load_charts_lowercased_list(template_dir):
 
 
 def test_load_charts_mapping_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: { umap: true }
@@ -531,7 +531,7 @@ def test_load_charts_mapping_rejected(template_dir):
 
 
 def test_load_charts_non_string_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         charts: [42]
@@ -544,69 +544,55 @@ def test_load_charts_non_string_rejected(template_dir):
 # 5. _hash_sections — apical sex + assay sensitivity + backward compat
 # ---------------------------------------------------------------------------
 
-def test_hash_sections_unfiltered_is_backward_compatible():
-    from cache_plumbing import _hash_sections
-    legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, sex_allowlist=None, assay_filters=None)
-    empty = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, sex_allowlist=[], assay_filters={})
-    empty_inner = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                                 imputed_cells=None,
-                                 assay_filters={"clinical-chemistry": []})
-    assert legacy == none_ == empty == empty_inner
-
-
-def test_hash_sections_changes_with_sex_allowlist():
-    from cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                          imputed_cells=None, sex_allowlist=["male"])
-    assert filt != base
-
-
-def test_hash_sections_changes_with_assay_filters_order_independent():
-    from cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                          assay_filters={"clinical-chemistry": ["albumin"]})
-    assert filt != base
-    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters={"clinical-chemistry": ["albumin", "alt"]})
-    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters={"clinical-chemistry": ["alt", "albumin"]})
+def test_hash_sections_is_filter_agnostic():
+    # Phase 2: the sections cache stores the FULL superset; the apical sex/assay
+    # allowlists are applied AFTER the cache read (apply_section_filters), so they
+    # are NOT part of the key.  _hash_sections no longer accepts filter args, and
+    # the same inputs always hash identically (one cache serves every version).
+    from pipeline.cache_plumbing import _hash_sections
+    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
     assert a == b
 
 
-def test_hash_sections_per_sex_assay_filters_stable_and_distinct():
-    # A {area: {sex: [tokens]}} per-sex config hashes order-independently
-    # (area keys, sex keys, and token lists all sorted) and differs from both
-    # the unfiltered key and the flat-list key with the same tokens.
-    from cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    per_sex = {"clinical-chemistry": {"male": ["cholesterol"],
-                                      "female": ["ast", "sdh"]}}
-    per_sex_reordered = {"clinical-chemistry": {"female": ["sdh", "ast"],
-                                                "male": ["cholesterol"]}}
-    h = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                       assay_filters=per_sex)
-    h2 = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                        assay_filters=per_sex_reordered)
-    assert h == h2                      # order-independent
-    assert h != base                    # differs from unfiltered
-    # Differs from a flat list carrying the same tokens (shape matters).
-    flat = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None,
-                          assay_filters={"clinical-chemistry":
-                                         ["cholesterol", "ast", "sdh"]})
-    assert h != flat
+def test_apply_section_filters_sex_prunes_cards():
+    # sex_allow drops non-allowed sex keys from every card's tables_json.
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Hematology", "tables_json": {
+        "Male": [{"label": "n", "is_n_row": True}, {"label": "Hemoglobin"}],
+        "Female": [{"label": "n", "is_n_row": True}, {"label": "Hemoglobin"}],
+    }}]
+    out = apply_section_filters(cards, sex_allow=["male"])
+    assert list(out[0]["tables_json"]) == ["Male"]
 
 
-def test_hash_sections_per_sex_empty_inner_is_backward_compatible():
-    # A per-sex mapping whose sex lists are all empty ⇒ no effective filter,
-    # so the key matches the unfiltered one (existing caches stay valid).
-    from cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    empty_per_sex = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                                   imputed_cells=None,
-                                   assay_filters={"hematology": {"male": []}})
-    assert empty_per_sex == base
+def test_apply_section_filters_assay_per_sex_row_filter_keeps_n_row():
+    # A per-sex assay allowlist drops non-allowed endpoint rows on the assay
+    # platforms, but always keeps the structural n / sample-size row.
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Clinical Chemistry", "tables_json": {
+        "Male": [
+            {"label": "n", "is_n_row": True},
+            {"label": "Cholesterol"},
+            {"label": "Albumin"},
+        ],
+        "Female": [
+            {"label": "n", "is_n_row": True},
+            {"label": "Aspartate Aminotransferase"},
+            {"label": "Sorbitol dehydrogenase"},
+        ],
+    }}]
+    out = apply_section_filters(cards, assay_filters={
+        "clinical-chemistry": {"male": ["cholesterol"],
+                               "female": ["aspartate aminotransferase"]},
+    })
+    tj = out[0]["tables_json"]
+    assert [r["label"] for r in tj["Male"]] == ["n", "Cholesterol"]
+    assert [r["label"] for r in tj["Female"]] == ["n", "Aspartate Aminotransferase"]
+
+
+def test_apply_section_filters_unfiltered_is_noop():
+    # No allowlists ⇒ the cards pass through unchanged (the superset itself).
+    from pipeline.processing_helpers import apply_section_filters
+    cards = [{"platform": "Hematology", "tables_json": {"Male": [{"label": "x"}]}}]
+    assert apply_section_filters(cards) is cards

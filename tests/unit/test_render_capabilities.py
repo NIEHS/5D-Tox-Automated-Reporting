@@ -8,7 +8,7 @@ a type without breaking anything), and the tree annotation the frontend
 reads.
 """
 
-from render_capabilities import (
+from document_model.render_capabilities import (
     capabilities_for,
     annotate_capabilities,
     is_allowed_child,

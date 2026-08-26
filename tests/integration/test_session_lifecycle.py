@@ -26,7 +26,7 @@ class TestSessionLoad:
     def test_nonexistent_session(self, sessions_dir):
         """A DTXSID with no session directory returns exists=False."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get("/api/session/DTXSID_NONEXISTENT")
@@ -41,7 +41,7 @@ class TestSessionLoad:
         two approved bm2 sections.  Session load should return them.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -62,7 +62,7 @@ class TestSessionLoad:
     def test_identity_loaded(self, golden_70191136, mock_bmdx_pipe):
         """Session load should include the chemical identity."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -78,7 +78,7 @@ class TestSessionLoad:
         either as approved sections or pending files.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.get(f"/api/session/{DTXSID_70}")
@@ -99,7 +99,7 @@ class TestSessionApproveUnapprove:
     def test_approve_creates_file(self, sessions_dir):
         """Approving a background section writes it to disk."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
@@ -131,7 +131,7 @@ class TestSessionApproveUnapprove:
         separate /api/session/discard-section endpoint.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
@@ -160,7 +160,7 @@ class TestSessionApproveUnapprove:
     def test_approve_methods_section(self, sessions_dir):
         """Approve a methods section — verifies non-background section types work."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
@@ -177,7 +177,7 @@ class TestSessionApproveUnapprove:
     def test_approve_requires_dtxsid(self, sessions_dir):
         """Missing dtxsid returns 400."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/session/approve", json={
@@ -189,7 +189,7 @@ class TestSessionApproveUnapprove:
     def test_approve_invalid_section_type(self, sessions_dir):
         """Invalid section_type returns 400."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/session/approve", json={
@@ -210,7 +210,7 @@ class TestSessionHistory:
         v1 in history/, v2 as current.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
@@ -244,7 +244,7 @@ class TestSessionHistory:
     def test_history_returns_specific_version(self, sessions_dir):
         """Requesting a specific version returns its full content."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         dtxsid = "DTXSID_TEST"
@@ -276,7 +276,7 @@ class TestSessionHistory:
     def test_history_nonexistent_section_returns_404(self, sessions_dir):
         """Requesting history for a section that doesn't exist returns 404."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         # Create the session dir so it exists

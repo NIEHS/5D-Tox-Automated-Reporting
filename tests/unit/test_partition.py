@@ -8,7 +8,7 @@ per-platform section cards.
 
 import pytest
 
-from pool_orchestrator import _filter_gene_expression, _partition_by_platform
+from pipeline.pool_orchestrator import _filter_gene_expression, _partition_by_platform
 from bmdx_pipe import TableRow
 
 
