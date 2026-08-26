@@ -396,7 +396,7 @@ def marshal_export_data(
     # genomics_sample_counts on the web path (no session_dir here, so the
     # fingerprint fallback is a no-op).  None ⇒ node shows its pending stub.
     if methods_data and methods_data.get("context"):
-        from tables.methods_table1 import build_sample_counts_from_context
+        from tables.sample_counts_table import build_sample_counts_from_context
         sample_counts = build_sample_counts_from_context(methods_data["context"])
         if sample_counts:
             data["sample_counts"] = sample_counts

@@ -12,7 +12,7 @@ across the methods_* and abstract_* commits on this branch:
                            extractors that feed it
   methods_prompt.py        build_methods_prompt + build_subsection_skeleton
                            + per-subsection LLM guideline composer
-  methods_table1.py        build_table1_data — the only programmatic
+  sample_counts_table.py        build_sample_counts_table — the only programmatic
                            table in the Methods section
   narrative_helpers.py     cross-cutting formatters used by 4+ narrative
                            sections (_join_oxford, _format_dose_value,
@@ -39,7 +39,7 @@ External importers preserved through this shim:
   - genomics_narratives.py  build_gene_set_body_{intro,findings},
                             build_gene_body_{intro,findings}
   - llm_routes.py           extract_methods_context + build_methods_prompt
-                            + build_subsection_skeleton + build_table1_data
+                            + build_subsection_skeleton + build_sample_counts_table
                             + MethodsReport + MethodsSection
   - process_integrated.py   build_apical_bmd_summary_narrative,
                             same MethodsReport / extract_methods_context
@@ -108,7 +108,7 @@ from narrative.methods_prompt import (
 # ---------------------------------------------------------------------------
 # Re-exports: Table 1 builder
 # ---------------------------------------------------------------------------
-from tables.methods_table1 import build_table1_data
+from tables.sample_counts_table import build_sample_counts_table
 
 # ---------------------------------------------------------------------------
 # Re-exports: narrative builders (apical, genomics, pk, gene bodies, summary)

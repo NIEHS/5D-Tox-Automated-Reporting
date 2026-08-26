@@ -715,7 +715,7 @@ def load_session_data(
     # reconstructs them from this session's _fingerprints.json, so an older
     # session still renders Table 1.  None ⇒ the node shows its pending stub.
     if isinstance(methods_cache, dict) and methods_cache.get("context"):
-        from tables.methods_table1 import build_sample_counts_from_context
+        from tables.sample_counts_table import build_sample_counts_from_context
         sample_counts = build_sample_counts_from_context(
             methods_cache["context"], session_dir,
         )

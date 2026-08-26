@@ -298,7 +298,7 @@ async def api_generate_methods(request: Request):
         MethodsSection,
         build_methods_prompt,
         build_subsection_skeleton,
-        build_table1_data,
+        build_sample_counts_table,
         extract_methods_context,
     )
 
@@ -401,7 +401,7 @@ async def api_generate_methods(request: Request):
             ))
 
         # --- Add Table 1 data to the report context ---
-        table1 = build_table1_data(ctx)
+        table1 = build_sample_counts_table(ctx)
 
         report = MethodsReport(sections=sections, context=ctx)
         report_dict = report.to_dict()
@@ -461,7 +461,7 @@ async def api_methods_context(dtxsid: str):
     from narrative.methods_report import (
         extract_methods_context,
         build_subsection_skeleton,
-        build_table1_data,
+        build_sample_counts_table,
     )
 
     _pool_fingerprints = get_pool_fingerprints()
@@ -527,7 +527,7 @@ async def api_methods_context(dtxsid: str):
     ]
 
     # Add Table 1 data
-    table1 = build_table1_data(ctx)
+    table1 = build_sample_counts_table(ctx)
     if table1:
         result["_table1"] = table1
 

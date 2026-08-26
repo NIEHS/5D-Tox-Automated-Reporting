@@ -13,7 +13,7 @@ imports are package-qualified (`from rendering.render_common import ...`,
 | `pipeline/` | pool lifecycle + processing; `process_integrated`, `session_store`, `bmd_project_schema`, `integrated_io`, `cache_plumbing`, `pool_*` |
 | `document_model/` | `document_tree`/`document_node`/`document_template`/`document_config`, `render_capabilities`, `vocabulary`, `cover_layouts`, `layout_style` |
 | `rendering/` | shared IR `render_common` + the 4 emitters (`html_generator`, `latex_generator`, `docx_generator`, `jats_generator`) + `report_data*`, `latex_export`, `cross_references`, `jats_stylecheck` |
-| `tables/` | `table_builder_common`, `*_table`, `apical_bmds`, `methods_table1` |
+| `tables/` | `table_builder_common`, `*_table`, `apical_bmds`, `sample_counts_table` |
 | `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, `style_learning` |
 | `genomics/` | `genomics_*`, `gene_bodies`, `chart_registry`, `chart_style` |
 | `knowledge_base/` | `build_db`, `toxkb`, `citegraph`, `crawl_*`, `fulltext`, `extract`, `enrichr_*`, `enrichment_stats`, `pathway_enrich`, `go_gene_map` |

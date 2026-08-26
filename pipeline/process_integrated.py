@@ -938,7 +938,7 @@ async def _get_methods(ctx):
         MethodsSection,
         build_methods_prompt,
         build_subsection_skeleton,
-        build_table1_data,
+        build_sample_counts_table,
         extract_methods_context,
     )
     from bmdx_pipe import bm2_cache as _bm2_cache
@@ -1021,7 +1021,7 @@ async def _get_methods(ctx):
             paragraphs=paragraphs,
         ))
 
-    table1 = build_table1_data(methods_ctx)
+    table1 = build_sample_counts_table(methods_ctx)
     report = MethodsReport(sections=sections, context=methods_ctx)
     report_dict = report.to_dict()
 

@@ -727,7 +727,7 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
 
     The built matrix ({caption, headers, rows, footnotes}) comes from the shared
     sample_counts_table EXTRACT; its rows carry two conventions from the DOCX
-    builder that we honor here (build_table1_data / methods_report._add_methods_
+    builder that we honor here (build_sample_counts_table / methods_report._add_methods_
     table): a sex-header row has its first cell wrapped in "**...**" and spans
     the table (a bold separator, like the apical sex blocks); organ rows carry
     two leading spaces on the first cell.  \small keeps the 11 dose columns on

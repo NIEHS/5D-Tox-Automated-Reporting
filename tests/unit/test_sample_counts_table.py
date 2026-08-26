@@ -66,7 +66,7 @@ def test_node_is_table_one_positionally():
 # ---------------------------------------------------------------------------
 
 def test_build_uses_context_counts_when_present():
-    from tables.methods_table1 import build_sample_counts_from_context
+    from tables.sample_counts_table import build_sample_counts_from_context
     ctx = {
         "dose_groups": [0.0, 37.0, 333.0],
         "dose_unit": "mg/kg",
@@ -87,7 +87,7 @@ def test_build_uses_context_counts_when_present():
 def test_build_reconstructs_from_fingerprints_when_context_lacks_counts(tmp_path):
     """A stale cache (genomics_sample_counts absent) still yields Table 1 by
     reconstructing counts from the session's _fingerprints.json."""
-    from tables.methods_table1 import build_sample_counts_from_context
+    from tables.sample_counts_table import build_sample_counts_from_context
     # Minimal gene_expression fingerprint carrying n_animals_by_dose.
     (tmp_path / "_fingerprints.json").write_text(json.dumps({
         "Liver_Male.txt": {
@@ -108,13 +108,13 @@ def test_build_reconstructs_from_fingerprints_when_context_lacks_counts(tmp_path
 
 
 def test_build_returns_none_without_context():
-    from tables.methods_table1 import build_sample_counts_from_context
+    from tables.sample_counts_table import build_sample_counts_from_context
     assert build_sample_counts_from_context(None) is None
     assert build_sample_counts_from_context({}) is None
 
 
 def test_build_returns_none_when_no_counts_and_no_session():
-    from tables.methods_table1 import build_sample_counts_from_context
+    from tables.sample_counts_table import build_sample_counts_from_context
     # No counts and no session_dir → nothing to tabulate.
     assert build_sample_counts_from_context(
         {"dose_groups": [0.0], "dose_unit": "mg/kg"}

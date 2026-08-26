@@ -1,16 +1,20 @@
 """
-Table 1 builder for the Materials & Methods section.
+Sample-counts table builder for the Materials & Methods section.
 
-The Methods section has exactly one programmatic table — Table 1,
-"Final Sample Counts for BMD Analysis of Transcriptomics Data."  It
+The Methods section has exactly one programmatic table — the
+"Final Sample Counts for BMD Analysis of Transcriptomics Data" table.  It
 appears only when gene-expression data is in the pool, and its rows
 are per-(organ, sex, dose) sample counts derived from the
 MethodsContext's genomics_sample_counts dict (which the extractor
 populates from the animal report or gene-expression fingerprints).
 
+The table's position (and thus its report-facing number) is assigned by
+the document-tree walk, never by this builder — so this module is named
+for the content it produces, not a fixed table number.
+
 Single public entry point:
 
-  build_table1_data(ctx) -> dict | None
+  build_sample_counts_table(ctx) -> dict | None
 
 Returns None when there's no genomics data to tabulate, otherwise a
 dict in the shape the report renderers expect:
@@ -21,7 +25,7 @@ dict in the shape the report renderers expect:
     "footnotes": list[str],
   }
 
-methods_report.py re-exports build_table1_data so external callers
+methods_report.py re-exports build_sample_counts_table so external callers
 (llm_routes uses it for the Preview Data path) keep working unchanged.
 """
 
@@ -38,12 +42,12 @@ from narrative.methods_models import MethodsContext
 
 
 # ---------------------------------------------------------------------------
-# Table 1 builder
+# Sample-counts table builder
 # ---------------------------------------------------------------------------
 
-def build_table1_data(ctx: MethodsContext) -> dict | None:
+def build_sample_counts_table(ctx: MethodsContext) -> dict | None:
     """
-    Build Table 1: Final Sample Counts for BMD Analysis of Transcriptomics Data.
+    Build the Final Sample Counts for BMD Analysis of Transcriptomics Data table.
 
     This table shows the number of samples per organ × sex × dose group
     that passed QC and were included in the BMD analysis.
@@ -107,12 +111,12 @@ def build_sample_counts_from_context(
     session_dir: str | Path | None = None,
 ) -> dict | None:
     """
-    Build the Table 1 matrix from a serialized MethodsContext, for the two
+    Build the sample-counts matrix from a serialized MethodsContext, for the two
     tree-driven export paths (LaTeX load_session_data, web marshal_export_data).
 
     The document tree has a `sample-counts-table` node bound to
     data["sample_counts"]; this produces that value in the neutral
-    {caption, headers, rows, footnotes} shape build_table1_data returns.
+    {caption, headers, rows, footnotes} shape build_sample_counts_table returns.
 
     The context's genomics_sample_counts may be absent (a stale cache written
     before the counts were extracted).  When it is AND a session_dir is given,
@@ -131,7 +135,7 @@ def build_sample_counts_from_context(
             ctx.genomics_sample_counts = _build_genomics_sample_counts(
                 fingerprints, ctx.dose_groups,
             )
-    return build_table1_data(ctx)
+    return build_sample_counts_table(ctx)
 
 
 def _load_session_fingerprints(session_dir: str | Path) -> dict:

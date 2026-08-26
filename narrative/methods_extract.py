@@ -8,7 +8,7 @@ fully-populated MethodsContext that downstream steps consume:
 
   - build_methods_prompt    (LLM prompt assembly — methods_prompt.py)
   - build_subsection_skeleton (which subsections to include — methods_prompt.py)
-  - build_table1_data       (sample-count table — methods_table1.py)
+  - build_sample_counts_table       (sample-count table — sample_counts_table.py)
   - build_abstract_methods  (Abstract paragraph 1 — abstract_methods.py)
   - build_abstract_results_* (apical / pk / genomics narratives)
 
