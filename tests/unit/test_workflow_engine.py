@@ -19,12 +19,17 @@ class FakeStore:
     `present` set of artifact names + `files`/`stale` toggles + a `docs` map."""
 
     def __init__(self, *, files=False, stale=False, present=None, docs=None,
-                 section_states=None):
+                 section_states=None, section_dicts=None):
         self._files = files
         self._stale = stale
         self._present = set(present or ())
         self._docs = docs or {}
         self._section_states = section_states or {}
+        # Full section dicts for publish_readiness; defaults to deriving trivial
+        # {approved} dicts from section_states so existing tests need no change.
+        self._section_dicts = section_dicts or {
+            k: {"approved": v} for k, v in self._section_states.items()
+        }
 
     # presence checks used by gather_artifacts
     def has_files(self, dtxsid):
@@ -41,6 +46,9 @@ class FakeStore:
 
     def read_section_states(self, dtxsid):
         return dict(self._section_states)
+
+    def read_section_dicts(self, dtxsid):
+        return dict(self._section_dicts)
 
     # unused-by-engine store surface (present so it satisfies duck typing)
     def write_json(self, dtxsid, name, data):
@@ -179,3 +187,41 @@ def test_section_readiness_is_rederived_not_cached():
     # Approve background out-of-band; the engine must reflect it live.
     store._section_states["background"] = True
     assert eng.derive_section_readiness()["methods"]["enabled"] is True
+
+
+# --- publish readiness (Phase 3a currency BLOCK) ---------------------------
+
+def test_publish_readiness_ok_when_no_stale_llm():
+    store = FakeStore(files=True, section_dicts={
+        "genomics_liver_male": {"approved": True},
+        "bm2_liver": {"approved": True},
+    })
+    r = WorkflowEngine("DTX", store).publish_readiness()
+    assert r["can_publish"] is True
+    assert r["blocking"] == []
+
+
+def test_publish_readiness_blocks_on_stale_llm_with_reason():
+    store = FakeStore(files=True, section_dicts={
+        "genomics_liver_male": {
+            "approved": True, "stale": True,
+            "regenerated": {"reason": "data_changed"},
+        },
+        "bm2_liver": {"approved": True, "stale": True},  # programmatic — must NOT block
+    })
+    r = WorkflowEngine("DTX", store).publish_readiness()
+    assert r["can_publish"] is False
+    assert r["blocking"] == [
+        {"section_key": "genomics_liver_male", "reason": "data_changed"}
+    ]
+
+
+def test_publish_readiness_clears_after_reaccept():
+    store = FakeStore(files=True, section_dicts={
+        "genomics_liver_male": {"approved": True, "stale": True},
+    })
+    eng = WorkflowEngine("DTX", store)
+    assert eng.publish_readiness()["can_publish"] is False
+    # Re-accept clears stale (Phase 1 accept_section_step) — live re-derive.
+    store._section_dicts["genomics_liver_male"] = {"approved": True, "stale": False}
+    assert eng.publish_readiness()["can_publish"] is True

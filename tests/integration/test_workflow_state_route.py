@@ -75,3 +75,27 @@ class TestWorkflowStateRoute:
         resp = client.get("/api/workflow/DTXSID50469320/state")
         assert resp.status_code == 200, resp.text
         assert resp.json()["phase"] == "APPROVED"
+
+    def test_publish_readiness_blocks_on_stale_llm(self, golden_50469320):
+        # A stale LLM genomics section (as a reprocess would leave it) blocks
+        # publishing; a stale programmatic bm2 section does not.
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        (golden_50469320 / "genomics_liver_male.json").write_text(
+            json.dumps({"approved": True, "stale": True,
+                        "regenerated": {"reason": "data_changed"}}),
+            encoding="utf-8",
+        )
+        (golden_50469320 / "bm2_organ.json").write_text(
+            json.dumps({"approved": True, "stale": True}), encoding="utf-8",
+        )
+
+        client = TestClient(app)
+        resp = client.get("/api/workflow/DTXSID50469320/publish-readiness")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["can_publish"] is False
+        assert body["blocking"] == [
+            {"section_key": "genomics_liver_male", "reason": "data_changed"}
+        ]

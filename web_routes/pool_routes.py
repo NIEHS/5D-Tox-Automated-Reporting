@@ -101,6 +101,19 @@ async def api_workflow_section_readiness(dtxsid: str):
     return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).derive_section_readiness())
 
 
+@router.get("/api/workflow/{dtxsid}/publish-readiness")
+async def api_workflow_publish_readiness(dtxsid: str):
+    """Return server-DERIVED publish readiness (Phase 3a currency BLOCK).
+
+    A data reprocess stales the report's LLM sections (workflow.reprocess) and
+    stamps a `regenerated` reason; publishing is BLOCKED until a human re-accepts
+    each. Shape: `{can_publish: bool, blocking: [{section_key, reason}, ...]}`,
+    recomputed every call (never stored). Read-only; surfaces both the publish
+    gate and the per-section rewrite attribution.
+    """
+    return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).publish_readiness())
+
+
 # ---------------------------------------------------------------------------
 # Validation route
 # ---------------------------------------------------------------------------

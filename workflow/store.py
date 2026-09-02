@@ -95,6 +95,15 @@ class PoolStore(Protocol):
         excluded. This is the cheap, DERIVED read `derive_section_readiness`
         consumes — it never loads the integrated project."""
 
+    def read_section_dicts(self, dtxsid: str) -> dict[str, dict]:
+        """Like read_section_states but returns each section's FULL dict.
+
+        The publish gate (workflow.reprocess.can_publish_report) needs more than
+        the `approved` flag — it reads `stale` to know which LLM sections were
+        knocked down by a reprocess and not yet re-blessed. Same key set as
+        read_section_states; small section JSONs only (never the integrated
+        project)."""
+
 
 class DiskPoolStore:
     """Production `PoolStore`: disk is canonical, `pool_globals` is the cache.
@@ -170,30 +179,37 @@ class DiskPoolStore:
     # instance families (bm2_*, genomics_*) are discovered by glob below.
     _BARE_SECTION_STEMS = ("background", "methods", "bmd_summary", "summary")
 
-    def read_section_states(self, dtxsid: str) -> dict[str, bool]:
+    def _iter_section_dicts(self, dtxsid: str):
+        """Yield (stem, dict) for every report-section file on disk. Shared by
+        read_section_states + read_section_dicts so the "which files are sections"
+        rule lives in one place. Unreadable / non-dict files are skipped."""
         d = self.session_dir(dtxsid)
-        states: dict[str, bool] = {}
 
-        def _approved(path: Path) -> bool | None:
+        def _load(path: Path) -> dict | None:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError, ValueError):
                 return None
-            if not isinstance(data, dict):
-                return None
-            return bool(data.get("approved"))
+            return data if isinstance(data, dict) else None
 
         for stem in self._BARE_SECTION_STEMS:
             p = d / f"{stem}.json"
             if p.exists():
-                approved = _approved(p)
-                if approved is not None:
-                    states[stem] = approved
+                data = _load(p)
+                if data is not None:
+                    yield stem, data
 
         for pattern in ("bm2_*.json", "genomics_*.json"):
             for section_file in sorted(d.glob(pattern)):
-                approved = _approved(section_file)
-                if approved is not None:
-                    states[section_file.stem] = approved
+                data = _load(section_file)
+                if data is not None:
+                    yield section_file.stem, data
 
-        return states
+    def read_section_states(self, dtxsid: str) -> dict[str, bool]:
+        return {
+            stem: bool(data.get("approved"))
+            for stem, data in self._iter_section_dicts(dtxsid)
+        }
+
+    def read_section_dicts(self, dtxsid: str) -> dict[str, dict]:
+        return {stem: data for stem, data in self._iter_section_dicts(dtxsid)}

@@ -71,3 +71,18 @@ def test_regenerated_marker_only_on_llm(staged_session):
 
     assert "regenerated" not in _load(d, "bm2_organ-and-body-weights.json")
     assert "regenerated" in _load(d, "genomics_liver_male.json")
+
+
+def test_pool_admin_standalone_path_matches(staged_session):
+    # pool_admin.invalidate_downstream is the standalone-CLI duplicate of the same
+    # logic — it must route by content-origin identically (no divergence).
+    from web_routes.pool_admin import invalidate_downstream
+
+    _dtxsid, d = staged_session
+    invalidate_downstream(d)
+
+    bm2 = _load(d, "bm2_organ-and-body-weights.json")
+    gen = _load(d, "genomics_liver_male.json")
+    assert "stale" not in bm2 and "regenerated" not in bm2
+    assert gen["stale"] is True
+    assert gen["regenerated"]["reason"] == "data_changed"

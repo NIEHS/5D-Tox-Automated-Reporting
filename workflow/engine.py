@@ -134,3 +134,27 @@ class WorkflowEngine:
         """
         section_states = self.store.read_section_states(self.dtxsid)
         return derive_section_readiness(section_states)
+
+    # -- derived publish readiness (currency BLOCK, report grain) ----------
+
+    def publish_readiness(self) -> dict:
+        """Whether the report may be published, DERIVED from section currency.
+
+        Surfaces the Phase 3a report-grain currency BLOCK: a reprocess stales the
+        LLM sections (workflow.reprocess) and stamps their `regenerated` reason;
+        publishing is refused until a human re-accepts each. Returns
+        `{can_publish: bool, blocking: [{section_key, reason}, ...]}`, recomputed
+        every call (never stored). `reason` echoes the section's `regenerated`
+        marker when present, else "stale". Also surfaces the rewrite ATTRIBUTION
+        (the reframed Phase 3a gap): a stale LLM section IS the "regenerated
+        because data changed, re-accept it" signal.
+        """
+        from workflow.reprocess import blocking_llm_sections
+
+        sections = self.store.read_section_dicts(self.dtxsid)
+        blocking = []
+        for key in blocking_llm_sections(sections):
+            regen = sections.get(key, {}).get("regenerated")
+            reason = regen.get("reason") if isinstance(regen, dict) else "stale"
+            blocking.append({"section_key": key, "reason": reason})
+        return {"can_publish": not blocking, "blocking": blocking}

@@ -174,14 +174,23 @@ def invalidate_downstream(session_dir: Path, dry_run: bool = False) -> list[str]
                 cache_file.unlink()
             actions.append(f"{'Would delete' if dry_run else 'Deleted'}: {cache_file.name}")
 
-    # Mark approved sections as stale
+    # Mark sections stale by CONTENT ORIGIN (Phase 3a) — mirrors the rewire in
+    # pool_state.invalidate_pool_artifacts so this standalone CLI path stays
+    # consistent: programmatic (bm2_*) sections refresh their numbers and are NOT
+    # staled; LLM (genomics_*) sections are staled + stamped `regenerated` so the
+    # rewrite is attributed and the publish gate can require a re-accept.
+    from workflow.reprocess import should_stale_on_reprocess
+
     for pattern in ("bm2_*.json", "genomics_*.json"):
         for section_file in sorted(session_dir.glob(pattern)):
             try:
                 data = json.loads(section_file.read_text(encoding="utf-8"))
+                if not should_stale_on_reprocess(section_file.stem, data):
+                    continue  # programmatic (or nothing to act on) — don't stale
                 if not data.get("stale"):
                     if not dry_run:
                         data["stale"] = True
+                        data["regenerated"] = {"reason": "data_changed"}
                         section_file.write_text(
                             json.dumps(data, indent=2, default=str),
                             encoding="utf-8",
