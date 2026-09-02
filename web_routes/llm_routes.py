@@ -972,10 +972,33 @@ async def generate_genomics_narrative_async(
         "total_responsive_genes": total_responsive,
     }
 
+    # Candidate reference pool: a DETERMINISTIC, graph-grounded set of
+    # DOI-anchored papers for this stratum's responsive genes, offered to the LLM
+    # as a numbered [Pn] catalogue so its citations become a real reference list
+    # (assembled report-wide from the persisted pools at surface time — see
+    # narrative.references_builder).  Built once here; empty when there's no DB or
+    # no genes, in which case the prompt carries no catalogue and no [Pn] rules.
+    reference_pool: list[dict] = []
+
     # Only attempt enrichment if we have genes to analyze and the DB exists.
     has_genes = bool(all_genes or top_genes)
     db_path = Path("bmdx.duckdb")
     if has_genes and db_path.exists():
+        # Responsive gene symbols for the pool — prefer the full all_genes list
+        # (same input the enrichment uses), falling back to top_genes.
+        _gene_syms = [
+            g.get("gene_symbol") or g.get("symbol") or g.get("gene")
+            for g in (all_genes or top_genes)
+        ]
+        _gene_syms = [s for s in _gene_syms if s]
+        if _gene_syms:
+            try:
+                from narrative.references_builder import build_reference_pool_for_genes
+                reference_pool = await asyncio.to_thread(
+                    build_reference_pool_for_genes, _gene_syms, str(db_path),
+                )
+            except Exception:
+                logger.warning("Reference pool build failed", exc_info=True)
         # --- Check interpretation cache ---
         #
         # Cache file naming: _cache_interpretation_{organ}_{sex}_{gene_hash}.json.
@@ -1100,6 +1123,12 @@ async def generate_genomics_narrative_async(
                 context_text = interp.get("context_text", "")
                 enrichment_available = bool(context_text)
 
+                # Persist the stratum's candidate pool alongside the enrichment
+                # context so surface-time assembly can reconstruct the report-wide
+                # reference list without re-querying the graph.
+                if reference_pool:
+                    interp["reference_pool"] = reference_pool
+
                 # Persist to cache so regenerations are instant.
                 if cache_path and context_text:
                     try:
@@ -1150,13 +1179,32 @@ async def generate_genomics_narrative_async(
     # available (no DB, no genes, or pipeline failure), fall back to the
     # basic gene/GO table format.
     if enrichment_available:
+        # Offer the candidate reference pool as a numbered [Pn] catalogue and
+        # ask the prose to cite it inline; those tokens become the report's
+        # reference list (assembled report-wide at surface time).  Absent pool ⇒
+        # no catalogue, no citation rules (byte-identical to the pre-feature
+        # prompt), so the enrichment path degrades gracefully.
+        catalogue_block = ""
+        citation_rules = ""
+        if reference_pool:
+            from narrative.references_builder import format_reference_catalogue
+            catalogue_block = "\n\n" + format_reference_catalogue(reference_pool)
+            citation_rules = """
+
+CITATION RULES:
+- Support literature claims by citing candidate references inline as their token \
+in square brackets, e.g. "... consistent with Nrf2 pathway activation [P3]."
+- Cite ONLY papers from the CANDIDATE REFERENCES list above, using their exact \
+[Pn] token. Do NOT invent citations or cite papers not in the list.
+- Cite the papers that genuinely support each claim; you need not cite all of them."""
+
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
 NIEHS/NTP 5-day study technical report on {compound}.
 
 The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
 A total of {total_responsive} genes had significant dose-responsive changes.
 
-{context_text}
+{context_text}{catalogue_block}
 
 Return a JSON object with two keys:
 1. "gene_set_narrative": 2–3 paragraphs covering biological processes, pathway \
@@ -1171,7 +1219,7 @@ When counts are roughly equal (conflict), note the bidirectional response explic
 support (consensus vs single-study genes), and confidence assessment.
 
 Use passive voice, formal scientific register matching NIEHS report style.
-Do NOT include table data in the narrative — the tables are presented separately.
+Do NOT include table data in the narrative — the tables are presented separately.{citation_rules}
 {style_rules}
 
 Return ONLY valid JSON, no markdown formatting."""
@@ -1272,6 +1320,11 @@ Return ONLY valid JSON, no markdown formatting."""
                 existing["gene_set_narrative"] = gs_narr
                 existing["gene_narrative"] = gene_narr
                 existing["model_used"] = chosen_model
+                # Ensure the stratum's reference pool is present even when the
+                # enrichment context was a cache hit (so the pool wasn't written
+                # on this run) — surface-time assembly reads it from here.
+                if reference_pool and not existing.get("reference_pool"):
+                    existing["reference_pool"] = reference_pool
                 cache_path.write_text(json.dumps(existing))
             except Exception:
                 logger.warning(
