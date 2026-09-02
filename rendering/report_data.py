@@ -380,6 +380,21 @@ def marshal_export_data(
     references = body.get("references", [])
     if references:
         data["references"] = _ensure_paragraphs(references)
+    else:
+        # No body-supplied references (the live HTML preview / Overleaf export /
+        # Commit-Local path doesn't round-trip them through the request body).
+        # Fall back to the graph-grounded reference list persisted at process
+        # time — references.json, the SAME artifact the session-export path reads
+        # — so the References section is populated identically on both paths.
+        # Fail-soft: absent/empty ⇒ the scaffold's empty list stands (goldens use
+        # a dtxsid with no session dir, so this is a no-op for them).
+        dtxsid_for_refs = body.get("dtxsid", "")
+        if dtxsid_for_refs:
+            from narrative.references_builder import load_persisted_references
+            from pipeline.session_store import SESSIONS_DIR
+            graph_refs = load_persisted_references(SESSIONS_DIR / dtxsid_for_refs)
+            if graph_refs:
+                data["references"] = _ensure_paragraphs(graph_refs)
 
     # Materials and Methods — overlay structured or flat content onto
     # the scaffold's full H2/H3 heading hierarchy.

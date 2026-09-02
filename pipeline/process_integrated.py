@@ -1359,16 +1359,21 @@ def _persist_references(dtxsid: str, genomics_sections: dict | None) -> None:
         return
     try:
         from narrative.references_builder import build_session_references
-        refs = build_session_references(_session_dir(dtxsid), genomics_sections)
+        refs = build_session_references(
+            _session_dir(dtxsid), genomics_sections, dtxsid=dtxsid,
+        )
         if refs["references"]:
             out = _session_dir(dtxsid) / "references.json"
             out.write_text(json.dumps({
                 "references": refs["references"],
                 "paragraphs": refs["paragraphs"],
+                # Machine-readable hazard flags for a future UI: human-edited
+                # narratives whose citations the pipeline could not reconcile.
+                "warnings": refs["warnings"],
             }))
             logger.info(
-                "Persisted %d graph-grounded references for %s",
-                len(refs["references"]), dtxsid,
+                "Persisted %d graph-grounded references for %s (%d warnings)",
+                len(refs["references"]), dtxsid, len(refs["warnings"]),
             )
     except Exception:
         logger.exception(

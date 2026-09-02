@@ -21,6 +21,7 @@ from narrative.references_builder import (
     build_reference_pool,
     build_reference_pool_for_genes,
     cited_tokens_in_order,
+    detect_override_citation_hazards,
     format_reference_entry,
     references_paragraphs,
 )
@@ -155,6 +156,43 @@ def test_format_and_paragraphs():
     line = format_reference_entry(refs[0])
     assert line == "[1] A Study. Nature. 2024. https://doi.org/10.1/x"
     assert references_paragraphs(refs) == [line]
+
+
+# ---------------------------------------------------------------------------
+# Two-store hazard: detect (don't fix) citations in human-edited narratives
+# ---------------------------------------------------------------------------
+def test_detect_override_citation_hazards_flags_out_of_pool_and_hand_typed():
+    """A human edit (in the override store) that carries an out-of-pool [Pn] AND
+    a hand-typed final-form [12] must be FLAGGED — the assembly reads the cache,
+    not the override, so these would otherwise be silently dropped/collide."""
+    pools_by_organ = {"liver": {"P1", "P2", "P3"}}
+    overrides = {
+        "gene_set": {
+            # [P2] is valid; [P9] is out of pool; [12] is a hand-typed citation.
+            "Liver": ["Human edit citing [P2], invented [P9], and hand-typed [12]."],
+        },
+        "gene_bmd": {},
+    }
+    warnings = detect_override_citation_hazards(overrides, pools_by_organ)
+    issues = {(w["issue"], tuple(w["tokens"])) for w in warnings}
+    assert ("out_of_pool_token", ("P9",)) in issues
+    assert ("hand_typed_citation", ("[12]",)) in issues
+    # The valid in-pool [P2] alone raises nothing.
+    assert all(w["organ"] == "liver" and w["kind"] == "gene_set" for w in warnings)
+
+
+def test_detect_override_citation_hazards_clean_when_no_edits():
+    """No overrides ⇒ no warnings (byte-identical to the no-edit path)."""
+    assert detect_override_citation_hazards({}, {"liver": {"P1"}}) == []
+    assert detect_override_citation_hazards(
+        {"gene_set": {}, "gene_bmd": {}}, {"liver": {"P1"}},
+    ) == []
+
+
+def test_detect_override_in_pool_tokens_do_not_warn():
+    """An override that only re-uses valid in-pool [Pn] tokens is NOT flagged."""
+    overrides = {"gene_set": {"liver": ["Edit cites [P1] and [P2] only."]}, "gene_bmd": {}}
+    assert detect_override_citation_hazards(overrides, {"liver": {"P1", "P2"}}) == []
 
 
 # ---------------------------------------------------------------------------

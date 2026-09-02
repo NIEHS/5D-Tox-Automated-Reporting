@@ -33,6 +33,7 @@ Design notes
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -41,6 +42,12 @@ from typing import Any
 # individual tokens so "[P1]" and "[P10]" never collide.
 _BRACKET_RE = re.compile(r"\[P\d+(?:\s*,\s*P\d+)*\]")
 _TOKEN_RE = re.compile(r"P\d+")
+# A hand-typed bare numeric citation like "[12]" or "[3, 5]" — the shape a human
+# types when they add a citation directly (as opposed to the pipeline's [Pn]
+# tokens).  Used only for the detect-and-warn on human-edited narratives.
+_BARE_NUM_RE = re.compile(r"\[\d+(?:\s*[,\-–]\s*\d+)*\]")
+
+logger = logging.getLogger(__name__)
 
 
 def build_reference_pool_for_genes(
@@ -270,6 +277,67 @@ def assemble_report_references(strata: list[dict]) -> tuple[list[dict], list[dic
     return references, rewritten
 
 
+def detect_override_citation_hazards(
+    overrides: dict,
+    pools_by_organ: dict[str, set[str]],
+) -> list[dict]:
+    """Detect citation hazards in HUMAN-edited genomics narratives (detect-only).
+
+    References are assembled from the interpretation cache, but a human edit lands
+    in a SEPARATE store (genomics_narrative_overrides.json) that overlays at render
+    and wins — so the override text is never seen by the assembly / [Pn] rewrite.
+    Two silent-failure modes result, which this surfaces LOUDLY instead:
+
+      1. an override still carries a [Pn] token that is NOT in that organ's pool
+         (an out-of-pool or invented token) — the rewrite would have dropped it,
+         so it renders as a raw, unresolved [Pn];
+      2. an override carries a hand-typed bare numeric citation like [12] — which
+         collides with (or is unrelated to) the auto-generated report numbering.
+
+    This does NOT reconcile or fix anything (that is the deferred robust solution)
+    — it only reports.  Returns a list of warning dicts:
+    ``{"kind", "organ", "issue", "tokens": [...]}`` — empty when clean (so the
+    caller stays byte-identical when there are no human edits).
+
+    Args:
+        overrides:       the override store, ``{"gene_set": {organ: [paras]},
+                         "gene_bmd": {organ: [paras]}}``.
+        pools_by_organ:  ``{organ_lower: {"P1", "P2", ...}}`` — the union of the
+                         [Pn] tokens each organ's strata pools legitimately define.
+    """
+    warnings: list[dict] = []
+    for kind in ("gene_set", "gene_bmd"):
+        bucket = (overrides or {}).get(kind) or {}
+        if not isinstance(bucket, dict):
+            continue
+        for organ, paras in bucket.items():
+            if not paras:
+                continue
+            organ_l = str(organ).lower()
+            valid = pools_by_organ.get(organ_l, set())
+            text = " ".join(p for p in paras if isinstance(p, str))
+
+            out_of_pool = sorted({
+                tok
+                for bracket in _BRACKET_RE.findall(text)
+                for tok in _TOKEN_RE.findall(bracket)
+                if tok not in valid
+            })
+            if out_of_pool:
+                warnings.append({
+                    "kind": kind, "organ": organ_l,
+                    "issue": "out_of_pool_token", "tokens": out_of_pool,
+                })
+
+            hand_typed = sorted(set(_BARE_NUM_RE.findall(text)))
+            if hand_typed:
+                warnings.append({
+                    "kind": kind, "organ": organ_l,
+                    "issue": "hand_typed_citation", "tokens": hand_typed,
+                })
+    return warnings
+
+
 def format_reference_entry(entry: dict) -> str:
     """Render one report-wide reference as a numbered citation string, e.g.
     ``"[3] Title. Venue. 2024. https://doi.org/10.x/y"``.  Missing venue/year/doi
@@ -362,19 +430,62 @@ def collect_reference_strata(session_dir, genomics_cache: dict) -> list[dict]:
     return strata
 
 
-def build_session_references(session_dir, genomics_cache: dict) -> dict:
+def load_persisted_references(session_dir) -> list[str]:
+    """Read the persisted report-wide reference paragraphs for a session.
+
+    Returns ``references.json``'s ``paragraphs`` (the formatted, numbered citation
+    strings `_persist_references` wrote at process time) — the ONE consumed
+    artifact both render paths read.  Returns [] when the file is absent or
+    unreadable (older / apical-only sessions), so callers fall back cleanly.
+    """
+    import json
+    from pathlib import Path
+
+    path = Path(session_dir) / "references.json"
+    if not path.exists():
+        return []
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    paras = blob.get("paragraphs")
+    return paras if isinstance(paras, list) and paras else []
+
+
+def _load_narrative_overrides(session_dir) -> dict:
+    """Read genomics_narrative_overrides.json (the ADR-0005 human-edit store).
+    Returns ``{"gene_set": {...}, "gene_bmd": {...}}`` — empty buckets when the
+    file is absent/unreadable, so callers need no guards."""
+    import json
+    from pathlib import Path
+
+    path = Path(session_dir) / "genomics_narrative_overrides.json"
+    if not path.exists():
+        return {"gene_set": {}, "gene_bmd": {}}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"gene_set": {}, "gene_bmd": {}}
+    return {
+        "gene_set": raw.get("gene_set", {}) or {},
+        "gene_bmd": raw.get("gene_bmd", {}) or {},
+    }
+
+
+def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = "") -> dict:
     """Assemble a session's report-wide references from its persisted caches.
 
     Returns ``{"references": [...], "paragraphs": [...], "rewritten": {(organ,
-    sex): {gene_set_narrative, gene_narrative}}}`` — the numbered list, its
-    formatted paragraphs (for ``data["references"]``), and the per-stratum
-    narratives with ``[Pn]`` tokens rewritten to report-wide ``[n]`` numbers so
-    the inline citations agree with the References section.  Empty when no
-    stratum carries a reference pool.
+    sex): {gene_set_narrative, gene_narrative}}, "warnings": [...]}`` — the
+    numbered list, its formatted paragraphs (for ``data["references"]``), the
+    per-stratum narratives with ``[Pn]`` tokens rewritten to report-wide ``[n]``
+    numbers so the inline citations agree with the References section, and any
+    human-edit citation hazards (see `detect_override_citation_hazards`).  Empty
+    when no stratum carries a reference pool.
     """
     strata = collect_reference_strata(session_dir, genomics_cache)
     if not strata:
-        return {"references": [], "paragraphs": [], "rewritten": {}}
+        return {"references": [], "paragraphs": [], "rewritten": {}, "warnings": []}
     references, rewritten_list = assemble_report_references(strata)
     rewritten = {
         (r["organ"], r["sex"]): {
@@ -383,8 +494,30 @@ def build_session_references(session_dir, genomics_cache: dict) -> dict:
         }
         for r in rewritten_list
     }
+
+    # Detect-and-warn for the two-store hazard: human narrative edits live in a
+    # SEPARATE override store the assembly never sees, so their citations can't be
+    # reconciled here.  Surface them loudly (log + machine-readable flag) rather
+    # than let the rewrite silently drop/collide them.  No overrides ⇒ [] ⇒
+    # byte-identical to before.
+    pools_by_organ: dict[str, set[str]] = {}
+    for s in strata:
+        pools_by_organ.setdefault(s["organ"], set()).update(
+            p["token"] for p in s["reference_pool"]
+        )
+    warnings = detect_override_citation_hazards(
+        _load_narrative_overrides(session_dir), pools_by_organ,
+    )
+    for w in warnings:
+        logger.warning(
+            "References: human-edited %s narrative for %s/%s carries %s not "
+            "reconciled with the auto-generated References list: %s",
+            w["kind"], dtxsid or "?", w["organ"], w["issue"], w["tokens"],
+        )
+
     return {
         "references": references,
         "paragraphs": references_paragraphs(references),
         "rewritten": rewritten,
+        "warnings": warnings,
     }
