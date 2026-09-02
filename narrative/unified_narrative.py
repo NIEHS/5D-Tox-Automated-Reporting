@@ -35,6 +35,14 @@ from typing import Any
 
 from bmdx_pipe import TableRow
 
+from narrative.section_template import (
+    Literal,
+    Slot,
+    SlotKind,
+    Template,
+    render,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -358,6 +366,83 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+def _animal_condition_survived_template() -> Template:
+    """The all-survived brief statement.  `expected_day` (the terminal study day,
+    e.g. "SD5") is NUMERIC — a day identifier that just refreshes."""
+    return [
+        Literal("All male and female rats survived to study termination ("),
+        Slot("expected_day", SlotKind.NUMERIC),
+        Literal(") without signs of overt toxicity."),
+    ]
+
+
+def _animal_condition_opening_template(
+    compound_name: str, has_death_day: bool, has_signs: bool
+) -> Template:
+    """The mortality/toxicity opening sentence.  `compound_name` is baked into a
+    Literal — the chemical identity is structural, not a reprocess value.  Dose
+    magnitudes/unit/study-day are NUMERIC (silent-refresh-safe); the clinical
+    `signs` list is CATEGORICAL — it is data-DERIVED content (finding words), not
+    a magnitude, so a change there is a wording concern, not a silent refresh.
+    The two clauses are present only when the former `if earliest_death_day` /
+    `if clinical_signs` branches fired."""
+    segs: list = [
+        Literal("Male and female rats administered "),
+        Slot("doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(f" of {compound_name}"),
+    ]
+    if has_death_day:
+        segs += [
+            Literal(" began exhibiting signs of overt toxicity on study day "),
+            Slot("death_day", SlotKind.NUMERIC),
+        ]
+    if has_signs:
+        segs += [
+            Literal(", which included "),
+            Slot("signs", SlotKind.CATEGORICAL),
+        ]
+    segs += [Literal(".")]
+    return segs
+
+
+def _animal_condition_death_detail_template(has_latest_day: bool) -> Template:
+    """One per-dose mortality detail.  Dose/unit/count-phrase/study-day are all
+    NUMERIC — the `counts` phrase ("3 male rats and 1 female rat") is a count
+    aggregation whose refresh just replaces a magnitude.  The trailing study-day
+    clause is present only when the former `latest_day_num > 0` branch fired."""
+    segs: list = [
+        Literal("In the "),
+        Slot("dose", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(" group, "),
+        Slot("counts", SlotKind.NUMERIC),
+        Literal(" were found dead or moribund"),
+    ]
+    if has_latest_day:
+        segs += [
+            Literal(" by study day "),
+            Slot("latest_day", SlotKind.NUMERIC),
+        ]
+    segs += [Literal(".")]
+    return segs
+
+
+def _animal_condition_surviving_template() -> Template:
+    """The surviving-doses closing sentence.  `surv_doses` (the dose list) and
+    `unit` are NUMERIC."""
+    return [
+        Literal("Rats in the "),
+        Slot("surv_doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(" groups did not exhibit signs of overt toxicity, and all "
+                "survived to study termination."),
+    ]
+
+
 def _build_animal_condition_paragraphs(
     compound_name: str,
     dose_unit: str,
@@ -409,10 +494,10 @@ def _build_animal_condition_paragraphs(
             death_doses.append(dose)
 
     if not death_doses:
-        # No mortality — brief statement that all survived
+        # No mortality — brief statement that all survived (template + render;
+        # byte-identical to the former f-string).
         paragraphs.append(
-            f"All male and female rats survived to study termination "
-            f"({expected_day}) without signs of overt toxicity."
+            render(_animal_condition_survived_template(), {"expected_day": expected_day})
         )
         return paragraphs
 
@@ -449,24 +534,19 @@ def _build_animal_condition_paragraphs(
                     seen.add(label)
                     clinical_signs.append(label.lower())
 
-    # Build the opening sentence
-    parts: list[str] = []
-    parts.append(
-        f"Male and female rats administered {dose_list_str} {dose_unit} "
-        f"of {compound_name}"
-    )
+    # Build the opening sentence as a template (author wording Literals + live
+    # data Slots) then render — byte-identical to the former "".join(parts).
+    opening_binding = {"doses": dose_list_str, "unit": dose_unit}
     if earliest_death_day:
-        parts.append(
-            f" began exhibiting signs of overt toxicity on study day "
-            f"{earliest_day_num}"
-        )
+        opening_binding["death_day"] = str(earliest_day_num)
     if clinical_signs:
         # Limit to first 5 signs to keep prose manageable
-        sign_list = _oxford_comma(clinical_signs[:5], conjunction="and")
-        parts.append(f", which included {sign_list}")
-    parts.append(".")
-
-    sentence1 = "".join(parts)
+        opening_binding["signs"] = _oxford_comma(clinical_signs[:5], conjunction="and")
+    sentence1 = render(
+        _animal_condition_opening_template(
+            compound_name, bool(earliest_death_day), bool(clinical_signs)),
+        opening_binding,
+    )
 
     # Per-dose mortality details: "In the 1000 mg/kg group, 5 male rats
     # and 5 female rats were found dead or moribund..."
@@ -489,14 +569,17 @@ def _build_animal_condition_paragraphs(
                             latest_day_num = dnum
         if sex_counts:
             count_str = _oxford_comma(sex_counts, conjunction="and")
-            detail = (
-                f"In the {_fmt_dose(dose)} {dose_unit} group, {count_str} "
-                f"were found dead or moribund"
-            )
+            detail_binding = {
+                "dose": _fmt_dose(dose),
+                "unit": dose_unit,
+                "counts": count_str,
+            }
             if latest_day_num > 0:
-                detail += f" by study day {latest_day_num}"
-            detail += "."
-            death_details.append(detail)
+                detail_binding["latest_day"] = str(latest_day_num)
+            death_details.append(render(
+                _animal_condition_death_detail_template(latest_day_num > 0),
+                detail_binding,
+            ))
 
     # Surviving doses sentence
     surviving_sentence = ""
@@ -504,9 +587,9 @@ def _build_animal_condition_paragraphs(
         surviving_dose_strs = [_fmt_dose(d) for d in all_survived if d > 0]
         if surviving_dose_strs:
             surv_list = _oxford_comma(surviving_dose_strs, conjunction="and")
-            surviving_sentence = (
-                f"Rats in the {surv_list} {dose_unit} groups did not exhibit "
-                f"signs of overt toxicity, and all survived to study termination."
+            surviving_sentence = render(
+                _animal_condition_surviving_template(),
+                {"surv_doses": surv_list, "unit": dose_unit},
             )
 
     # Combine into the paragraph
@@ -517,6 +600,57 @@ def _build_animal_condition_paragraphs(
 
     paragraphs.append(" ".join(para_parts))
     return paragraphs
+
+
+def _body_weight_sentence_template(sex_lower: str, has_loel: bool) -> Template:
+    """The significant-body-weight sentence as author wording + typed data slots.
+
+    `sex_lower` is baked into a Literal — a row's sex is structural and never
+    changes under a data reprocess.  `direction`/`trend` are CATEGORICAL (a
+    reprocess flip means the author's wording may contradict the data → Phase 3
+    review flag); the BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The
+    LOEL clause is present only when a pairwise-significant dose exists, matching
+    the former `if low_dose is not None` branch exactly.
+    """
+    segs: list = [
+        Literal("Terminal body weight was significantly "),
+        Slot("direction", SlotKind.CATEGORICAL),
+        Literal(f" in {sex_lower} rats"),
+    ]
+    if has_loel:
+        segs += [
+            Literal(" at ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+    segs += [
+        Literal(" with a "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trend (Table 2). The BMD and BMDL were "),
+        Slot("bmd", SlotKind.NUMERIC),
+        Literal(" and "),
+        Slot("bmdl", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(", respectively."),
+    ]
+    return segs
+
+
+def _bind_body_weight(bw_row, dose_unit, direction, low_dose) -> dict:
+    """Project a body-weight TableRow into the slot binding the template renders
+    against.  Mirrors the values the former f-string computed inline."""
+    binding = {
+        "direction": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+        "bmd": bw_row.bmd_str,
+        "bmdl": bw_row.bmdl_str,
+    }
+    if low_dose is not None:
+        binding["loel"] = _fmt_dose(low_dose)
+    return binding
 
 
 def _build_body_weight_paragraphs(
@@ -557,24 +691,15 @@ def _build_body_weight_paragraphs(
                 # Not significant — just note the sex for the combined sentence
                 bw_findings.append(f"{sex.lower()} rats (Table 2)")
             else:
-                # Significant — full sentence with direction, LOEL, BMD
+                # Significant — full sentence built as a template (author wording
+                # Literals + live data Slots) then rendered.  Byte-identical to the
+                # former f-string; the template is what lets a wording edit and a
+                # data reprocess stay separable (Phase 2, section_template).
                 direction = _endpoint_direction(bw_row)
                 low_dose = _lowest_sig_dose(bw_row)
-                trend_dir = "positive" if direction == "increase" else "negative"
-
-                parts = [
-                    f"Terminal body weight was significantly "
-                    f"{'increased' if direction == 'increase' else 'decreased'} "
-                    f"in {sex.lower()} rats"
-                ]
-                if low_dose is not None:
-                    parts.append(f" at ≥{_fmt_dose(low_dose)} {dose_unit}")
-                parts.append(
-                    f" with a {trend_dir} trend (Table 2). "
-                    f"The BMD and BMDL were {bw_row.bmd_str} and "
-                    f"{bw_row.bmdl_str} {dose_unit}, respectively."
-                )
-                bw_findings.append("".join(parts))
+                tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None)
+                binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
+                bw_findings.append(render(tpl, binding))
 
     if not bw_findings:
         return []
@@ -589,6 +714,108 @@ def _build_body_weight_paragraphs(
         ]
     else:
         return [" ".join(bw_findings)]
+
+
+def _organ_finding_template(
+    organ_name: str,
+    wt_type_str: str,
+    has_weight_types: bool,
+    has_loel: bool,
+    part_qualifiers: list[str | None],
+) -> Template:
+    """One organ finding as author wording + typed data slots.
+
+    Structural facts are baked into Literals — the organ name, the weight-type
+    words (``wt_type_str`` and each part's ``(absolute weight)`` qualifier), and
+    the singular/plural "BMD (BMDL)" vs "BMDs (BMDLs)" framing all describe WHICH
+    endpoints exist, not a data value that shifts on reprocess.  ``direction``
+    (noun ``increase``/``decrease`` in the weight-type form, adjective
+    ``increased``/``decreased`` otherwise) and ``trend`` are CATEGORICAL — a flip
+    can contradict the author's wording (Phase 3 review flag).  The LOEL and
+    per-part BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The
+    ``part_qualifiers`` list carries one entry per group row (the ``absolute``/
+    ``relative`` word, or None); its length picks singular vs plural framing and
+    reproduces the former ``_oxford_comma`` join exactly.
+    """
+    if has_weight_types:
+        segs: list = [
+            Literal("a significant "),
+            Slot("direction_noun", SlotKind.CATEGORICAL),
+            Literal(f" in {organ_name} {wt_type_str} weight occurred"),
+        ]
+    else:
+        segs = [
+            Literal(f"{organ_name} was significantly "),
+            Slot("direction_adj", SlotKind.CATEGORICAL),
+        ]
+
+    if has_loel:
+        segs += [
+            Literal(" in dose groups ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+
+    segs += [
+        Literal("; these endpoints had "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trends (Table 3)"),
+    ]
+
+    def _part_segs(i: int) -> list:
+        # One BMD/BMDL part: "{bmd} ({bmdl}) {unit}" plus an optional structural
+        # "({qualifier} weight)" — mirrors the former bmd_parts f-string.
+        out: list = [
+            Slot(f"bmd{i}", SlotKind.NUMERIC),
+            Literal(" ("),
+            Slot(f"bmdl{i}", SlotKind.NUMERIC),
+            Literal(") "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+        if part_qualifiers[i] is not None:
+            out.append(Literal(f" ({part_qualifiers[i]} weight)"))
+        return out
+
+    n = len(part_qualifiers)
+    if n == 1:
+        segs += [Literal(". The BMD (BMDL) was ")]
+        segs += _part_segs(0)
+        segs += [Literal(".")]
+    else:
+        segs += [Literal(". The BMDs (BMDLs) were ")]
+        # Reproduce _oxford_comma(bmd_parts, "and"): ", " between all parts
+        # except the final join, which is " and " (n==2) or ", and " (n>=3).
+        for i in range(n):
+            if i > 0:
+                if n == 2:
+                    segs += [Literal(" and ")]
+                elif i == n - 1:
+                    segs += [Literal(", and ")]
+                else:
+                    segs += [Literal(", ")]
+            segs += _part_segs(i)
+        segs += [Literal(", respectively.")]
+
+    return segs
+
+
+def _bind_organ_finding(group_rows, dose_unit, direction, min_low_dose) -> dict:
+    """Project an organ group's rows into the finding slot binding.  Mirrors the
+    magnitudes the former f-strings computed inline; per-part BMD/BMDL are keyed
+    positionally (bmd{i}/bmdl{i}) in group_rows order."""
+    binding = {
+        "direction_noun": direction,
+        "direction_adj": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+    }
+    if min_low_dose is not None:
+        binding["loel"] = _fmt_dose(min_low_dose)
+    for i, r in enumerate(group_rows):
+        binding[f"bmd{i}"] = r.bmd_str
+        binding[f"bmdl{i}"] = r.bmdl_str
+    return binding
 
 
 def _build_organ_weight_paragraphs(
@@ -675,65 +902,42 @@ def _build_organ_weight_paragraphs(
             organ_name, _wtype = _parse_organ_label(r.label)
             organ_groups.setdefault(organ_name, []).append(r)
 
-        # Build per-organ finding descriptions
+        # Build per-organ finding descriptions.  Each finding is a template
+        # (author wording Literals + live data Slots) rendered against the
+        # group's projection; byte-identical to the former f-strings, but the
+        # numbers and the data-derived words are now separable (Phase 2,
+        # section_template).  Structural facts (organ name, weight-type words,
+        # singular/plural framing) are baked into the template's Literals.
         sex_findings: list[str] = []
         for organ_name, group_rows in organ_groups.items():
             direction = _endpoint_direction(group_rows[0])
-            dir_word = "increased" if direction == "increase" else "decreased"
-            trend_dir = "positive" if direction == "increase" else "negative"
 
             # Find lowest pairwise-significant dose across the group
             low_doses = [_lowest_sig_dose(r) for r in group_rows]
             low_doses = [d for d in low_doses if d is not None]
             min_low_dose = min(low_doses) if low_doses else None
 
-            # Determine weight types present
+            # Determine weight types present (per-part qualifier, or None)
             weight_types = [_parse_organ_label(r.label)[1] for r in group_rows]
+            part_qualifiers = [
+                wt if wt in ("absolute", "relative") else None for wt in weight_types
+            ]
 
-            # Collect BMD/BMDL values with weight type qualifiers
-            bmd_parts: list[str] = []
-            for r in group_rows:
-                _, wt = _parse_organ_label(r.label)
-                if wt in ("absolute", "relative"):
-                    bmd_parts.append(
-                        f"{r.bmd_str} ({r.bmdl_str}) {dose_unit} ({wt} weight)"
-                    )
-                else:
-                    bmd_parts.append(f"{r.bmd_str} ({r.bmdl_str}) {dose_unit}")
-
-            # Compose the finding sentence
             has_weight_types = any(
                 wt in ("absolute", "relative") for wt in weight_types
             )
-            if has_weight_types:
-                wt_type_str = _oxford_comma(
-                    sorted(set(wt for wt in weight_types if wt in ("absolute", "relative"))),
-                    conjunction="and",
-                )
-                finding = (
-                    f"a significant {direction} in {organ_name} {wt_type_str} "
-                    f"weight occurred"
-                )
-            else:
-                finding = f"{organ_name} was significantly {dir_word}"
+            wt_type_str = _oxford_comma(
+                sorted(set(wt for wt in weight_types if wt in ("absolute", "relative"))),
+                conjunction="and",
+            ) if has_weight_types else ""
 
-            if min_low_dose is not None:
-                finding += f" in dose groups ≥{_fmt_dose(min_low_dose)} {dose_unit}"
-            finding += f"; these endpoints had {trend_dir} trends (Table 3)"
-
-            # Add BMD/BMDL — use "BMDs (BMDLs)" format from the reference
-            if len(bmd_parts) == 1:
-                finding += (
-                    f". The BMD (BMDL) was {bmd_parts[0]}."
-                )
-            else:
-                finding += (
-                    ". The BMDs (BMDLs) were "
-                    + _oxford_comma(bmd_parts, conjunction="and")
-                    + ", respectively."
-                )
-
-            sex_findings.append(finding)
+            tpl = _organ_finding_template(
+                organ_name, wt_type_str, has_weight_types,
+                min_low_dose is not None, part_qualifiers,
+            )
+            binding = _bind_organ_finding(
+                group_rows, dose_unit, direction, min_low_dose)
+            sex_findings.append(render(tpl, binding))
 
         # Opening line + findings
         sex_para = f"In {sex.lower()} rats at study termination, "
@@ -762,6 +966,57 @@ def _build_organ_weight_paragraphs(
 # ═══════════════════════════════════════════════════════════════════════════
 # Clinical pathology paragraph builders
 # ═══════════════════════════════════════════════════════════════════════════
+
+
+def _sub_platform_finding_template(label: str, has_loel: bool) -> Template:
+    """One clinical-pathology endpoint finding as author wording + typed slots.
+
+    `label` (the endpoint identity, e.g. "Glucose") is baked into a Literal — it
+    names WHICH endpoint and does not change under a data reprocess, same as the
+    organ name in the organ-weight finding.  `direction`/`trend` are CATEGORICAL
+    (a reprocess flip may contradict the author's wording → Phase 3 review flag);
+    the LOEL/BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The LOEL
+    clause is present only when a pairwise-significant dose exists, matching the
+    former `if low_dose is not None` branch exactly.
+    """
+    segs: list = [
+        Literal(f"{label} was significantly "),
+        Slot("direction", SlotKind.CATEGORICAL),
+    ]
+    if has_loel:
+        segs += [
+            Literal(" at ≥"),
+            Slot("loel", SlotKind.NUMERIC),
+            Literal(" "),
+            Slot("unit", SlotKind.NUMERIC),
+        ]
+    segs += [
+        Literal(" with a "),
+        Slot("trend", SlotKind.CATEGORICAL),
+        Literal(" trend. The BMD and BMDL were "),
+        Slot("bmd", SlotKind.NUMERIC),
+        Literal(" and "),
+        Slot("bmdl", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(", respectively."),
+    ]
+    return segs
+
+
+def _bind_sub_platform_finding(row, dose_unit, direction, low_dose) -> dict:
+    """Project a clinical-pathology TableRow into the finding slot binding.
+    Mirrors the values the former f-string computed inline."""
+    binding = {
+        "direction": "increased" if direction == "increase" else "decreased",
+        "trend": "positive" if direction == "increase" else "negative",
+        "unit": dose_unit,
+        "bmd": row.bmd_str,
+        "bmdl": row.bmdl_str,
+    }
+    if low_dose is not None:
+        binding["loel"] = _fmt_dose(low_dose)
+    return binding
 
 
 def _build_sub_platform_paragraphs(
@@ -806,23 +1061,16 @@ def _build_sub_platform_paragraphs(
             )
             continue
 
-        # Build per-endpoint findings
+        # Build per-endpoint findings — each is a template (author wording
+        # Literals + live data Slots) rendered against the row's projection.
+        # Byte-identical to the former f-string (Phase 2, section_template).
         findings: list[str] = []
         for r in sig_rows:
             direction = _endpoint_direction(r)
-            dir_word = "increased" if direction == "increase" else "decreased"
-            trend_dir = "positive" if direction == "increase" else "negative"
             low_dose = _lowest_sig_dose(r)
-
-            finding = f"{r.label} was significantly {dir_word}"
-            if low_dose is not None:
-                finding += f" at ≥{_fmt_dose(low_dose)} {dose_unit}"
-            finding += f" with a {trend_dir} trend"
-            finding += (
-                f". The BMD and BMDL were {r.bmd_str} and "
-                f"{r.bmdl_str} {dose_unit}, respectively."
-            )
-            findings.append(finding)
+            tpl = _sub_platform_finding_template(r.label, low_dose is not None)
+            binding = _bind_sub_platform_finding(r, dose_unit, direction, low_dose)
+            findings.append(render(tpl, binding))
 
         sex_para = f"In {sex.lower()} rats, "
         sex_para += " ".join(findings)
