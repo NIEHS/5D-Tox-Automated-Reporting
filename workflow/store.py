@@ -85,6 +85,16 @@ class PoolStore(Protocol):
         """Persist a report section (versioned, archived-before-overwrite).
         `data` is mutated in place with its `version` (see session_store)."""
 
+    def read_section_states(self, dtxsid: str) -> dict[str, bool]:
+        """Map every report-section file present on disk to its `approved` flag.
+
+        Keys are the on-disk section stems (`background`, `methods`,
+        `bmd_summary`, `summary`, `bm2_<slug>`, `genomics_<organ>_<sex>`); values
+        are the `approved` boolean read from each file. Non-section JSON (meta,
+        identity, validation_report, caches, fingerprints, animal_report) is
+        excluded. This is the cheap, DERIVED read `derive_section_readiness`
+        consumes — it never loads the integrated project."""
+
 
 class DiskPoolStore:
     """Production `PoolStore`: disk is canonical, `pool_globals` is the cache.
@@ -155,3 +165,35 @@ class DiskPoolStore:
     def save_section(self, dtxsid: str, key: str, data: dict, archive: bool = True) -> None:
         from pipeline.session_store import save_section
         save_section(dtxsid, key, data, archive=archive)
+
+    # Bare-stem section files (the singleton report sections). The prefixed
+    # instance families (bm2_*, genomics_*) are discovered by glob below.
+    _BARE_SECTION_STEMS = ("background", "methods", "bmd_summary", "summary")
+
+    def read_section_states(self, dtxsid: str) -> dict[str, bool]:
+        d = self.session_dir(dtxsid)
+        states: dict[str, bool] = {}
+
+        def _approved(path: Path) -> bool | None:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, ValueError):
+                return None
+            if not isinstance(data, dict):
+                return None
+            return bool(data.get("approved"))
+
+        for stem in self._BARE_SECTION_STEMS:
+            p = d / f"{stem}.json"
+            if p.exists():
+                approved = _approved(p)
+                if approved is not None:
+                    states[stem] = approved
+
+        for pattern in ("bm2_*.json", "genomics_*.json"):
+            for section_file in sorted(d.glob(pattern)):
+                approved = _approved(section_file)
+                if approved is not None:
+                    states[section_file.stem] = approved
+
+        return states

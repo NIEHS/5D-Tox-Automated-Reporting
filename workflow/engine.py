@@ -35,6 +35,7 @@ from workflow.phases import (
     compute_section_completeness,
     derive_phase,
 )
+from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
 
 
@@ -118,3 +119,18 @@ class WorkflowEngine:
             artifacts={k: v for k, v in artifacts.items() if k != "validationReport"},
             completeness=completeness,
         )
+
+    # -- derived section readiness ----------------------------------------
+
+    def derive_section_readiness(self) -> dict:
+        """Per-report-section readiness, DERIVED from what is approved on disk.
+
+        Reads the approved-state of every section via the store and applies the
+        declared dependency table (workflow.section_readiness). Returns
+        `{section_key: {enabled, blocked_by, approved}}`. Like phase, this is
+        recomputed every call and never stored (CONTEXT.md invariant 3) — it
+        replaces the imperative `ready.methods` / `ready.summary` flags the JS
+        front-end sets from a dozen call sites.
+        """
+        section_states = self.store.read_section_states(self.dtxsid)
+        return derive_section_readiness(section_states)

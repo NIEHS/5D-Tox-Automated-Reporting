@@ -18,11 +18,13 @@ class FakeStore:
     """In-memory PoolStore double for engine tests. Presence is controlled by the
     `present` set of artifact names + `files`/`stale` toggles + a `docs` map."""
 
-    def __init__(self, *, files=False, stale=False, present=None, docs=None):
+    def __init__(self, *, files=False, stale=False, present=None, docs=None,
+                 section_states=None):
         self._files = files
         self._stale = stale
         self._present = set(present or ())
         self._docs = docs or {}
+        self._section_states = section_states or {}
 
     # presence checks used by gather_artifacts
     def has_files(self, dtxsid):
@@ -36,6 +38,9 @@ class FakeStore:
 
     def read_json(self, dtxsid, name):
         return self._docs.get(name)
+
+    def read_section_states(self, dtxsid):
+        return dict(self._section_states)
 
     # unused-by-engine store surface (present so it satisfies duck typing)
     def write_json(self, dtxsid, name, data):
@@ -142,3 +147,35 @@ def test_state_is_rederived_not_cached():
     # Mutate the world; the engine must reflect it without any explicit refresh.
     store._present.add("integrated.json")
     assert eng.state().phase is Phase.INTEGRATED
+
+
+# --- section readiness (Phase 1) -------------------------------------------
+
+def test_section_readiness_locked_until_background_or_result_approved():
+    store = FakeStore(files=True, section_states={})
+    r = WorkflowEngine("DTX", store).derive_section_readiness()
+    assert r["methods"]["enabled"] is False
+    assert r["summary"]["enabled"] is False
+
+
+def test_section_readiness_unlocks_on_background_approval():
+    store = FakeStore(files=True, section_states={"background": True})
+    r = WorkflowEngine("DTX", store).derive_section_readiness()
+    assert r["methods"]["enabled"] is True
+    assert r["summary"]["enabled"] is True
+
+
+def test_section_readiness_unlocks_on_result_approval():
+    store = FakeStore(files=True, section_states={"bm2_liver": True})
+    r = WorkflowEngine("DTX", store).derive_section_readiness()
+    assert r["methods"]["enabled"] is True
+    assert r["summary"]["enabled"] is True
+
+
+def test_section_readiness_is_rederived_not_cached():
+    store = FakeStore(files=True, section_states={})
+    eng = WorkflowEngine("DTX", store)
+    assert eng.derive_section_readiness()["methods"]["enabled"] is False
+    # Approve background out-of-band; the engine must reflect it live.
+    store._section_states["background"] = True
+    assert eng.derive_section_readiness()["methods"]["enabled"] is True

@@ -87,6 +87,20 @@ async def api_workflow_state(dtxsid: str):
     return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).state().to_dict())
 
 
+@router.get("/api/workflow/{dtxsid}/section-readiness")
+async def api_workflow_section_readiness(dtxsid: str):
+    """Return server-DERIVED per-section readiness (Phase 1).
+
+    Replaces the imperative `ready.methods` / `ready.summary` flags the JS
+    front-end sets by hand: readiness is derived from which sections are
+    approved on disk plus the declared dependency table, recomputed every call
+    (never stored — CONTEXT.md invariant 3). Shape:
+    `{section_key: {enabled, blocked_by, approved}}`. Read-only; the browser
+    cutover to consume this is deliberately NOT wired here.
+    """
+    return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).derive_section_readiness())
+
+
 # ---------------------------------------------------------------------------
 # Validation route
 # ---------------------------------------------------------------------------

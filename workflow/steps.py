@@ -383,3 +383,81 @@ async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
     """
     from pipeline.process_integrated import run_process
     return await run_process(dtxsid, params or {}, store)
+
+
+# ---------------------------------------------------------------------------
+# accept / release a report section (authoring approve-lock state transitions)
+#
+# These lift the STATE TRANSITION half of web_routes/session_routes.py's
+# /api/session/approve and /api/session/unapprove into the UI-agnostic core.
+# Text generation stays in llm_routes (the LLM tier); style learning stays in
+# the route (it needs the original-vs-edited paragraph payloads and fires an
+# executor task — see the seam note below). What moves here is the durable
+# lock/unlock transition on a section that already exists on disk.
+# ---------------------------------------------------------------------------
+
+def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
+    """Approve (lock) an existing report section.
+
+    Mirrors the persistence half of POST /api/session/approve: stamp
+    `approved=True` + `approved_at`, and clear any `stale` flag (set by
+    invalidate_pool_artifacts when the pool mutated after approval — re-approval
+    clears it). Re-saved in place (archive=False) so a lock flip is not a new
+    history version, exactly as /api/session/unapprove already does for the
+    reverse flip; the approve route's own archiving happens when the CONTENT is
+    saved, not on this pure lock transition.
+
+    Style-learning SEAM: /api/session/approve also compares original-vs-edited
+    paragraphs and fires extract_and_merge_style_rules in a background thread.
+    That needs the request payload (original_* + edited text) and an event loop,
+    neither of which belongs in a headless step — it stays in the route. This
+    step lifts ONLY the state change.
+
+    Raises StepError(400) with no dtxsid/section_key, StepError(404) if the
+    section file does not exist (nothing to approve — content is written by the
+    generation/save path first).
+    """
+    if not dtxsid or not section_key:
+        raise StepError("dtxsid and section_key are required", status_code=400)
+
+    data = store.read_json(dtxsid, f"{section_key}.json")
+    if not isinstance(data, dict):
+        raise StepError(
+            f"No '{section_key}' section to approve", status_code=404
+        )
+
+    data["approved"] = True
+    data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
+    data.pop("stale", None)
+
+    # archive=False: a lock flip is not a content change worth a history entry
+    # (matches how unapprove flips the flag). save_section stamps `version`.
+    store.save_section(dtxsid, section_key, data, archive=False)
+
+    return {
+        "ok": True,
+        "section_key": section_key,
+        "approved": True,
+        "version": data.get("version", 1),
+    }
+
+
+def release_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
+    """Unapprove (unlock) a report section, preserving its content.
+
+    Mirrors POST /api/session/unapprove: flip `approved=False` in place
+    (archive=False — a flag flip isn't a content change) so the editor unlocks
+    without discarding the prose. No-op-safe: if the section file is absent it
+    returns ok (the route relies on always-ok so the caller need not pre-check).
+
+    Raises StepError(400) with no dtxsid/section_key.
+    """
+    if not dtxsid or not section_key:
+        raise StepError("dtxsid and section_key are required", status_code=400)
+
+    data = store.read_json(dtxsid, f"{section_key}.json")
+    if isinstance(data, dict):
+        data["approved"] = False
+        store.save_section(dtxsid, section_key, data, archive=False)
+
+    return {"ok": True, "section_key": section_key, "approved": False}
