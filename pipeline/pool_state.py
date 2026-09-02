@@ -190,16 +190,32 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
         del _integrated_pool[dtxsid]
         logger.info("Cleared in-memory integrated pool for %s", dtxsid)
 
-    # --- Mark approved sections as stale ---
-    # Read each bm2_*.json and genomics_*.json, set "stale": true, write back.
-    # This preserves the user's narrative edits while flagging that the
-    # underlying data may have changed.
+    # --- Mark sections stale by CONTENT ORIGIN (Phase 3a) ---
+    # The old behavior staled EVERY bm2_*/genomics_* section uniformly. That is
+    # too blunt: workflow.reprocess routes by how the content was authored —
+    #   * programmatic (bm2_*): a deterministic data projection whose numbers just
+    #     refresh on the next render (Phase 2 templates) — NOT staled, so the user
+    #     is not forced to re-approve numbers that recompute themselves;
+    #   * LLM (genomics_*): model-authored narrative that must be rewritten-with-
+    #     reason and re-blessed — still staled, and stamped with a `regenerated`
+    #     intent so the next genomics pass rewrites visibly + attributed and the
+    #     publish gate can block until a human re-accepts.
+    # should_stale_on_reprocess is the single predicate (fail-safe: unknown -> LLM
+    # -> staled). See docs/plans/phase3-reprocess-currency.md.
+    from workflow.reprocess import should_stale_on_reprocess
+
     for pattern in ("bm2_*.json", "genomics_*.json"):
         for section_file in d.glob(pattern):
             try:
                 section_data = json.loads(section_file.read_text(encoding="utf-8"))
+                if not should_stale_on_reprocess(section_file.stem, section_data):
+                    continue  # programmatic (or nothing to act on) — refresh, don't stale
                 if not section_data.get("stale"):
                     section_data["stale"] = True
+                    # Record WHY it went stale so the LLM rewrite is attributed and
+                    # the publish gate can require a human re-accept (fail-soft:
+                    # absent on programmatic/older sections).
+                    section_data["regenerated"] = {"reason": "data_changed"}
                     section_file.write_text(
                         json.dumps(section_data, indent=2, default=str),
                         encoding="utf-8",
