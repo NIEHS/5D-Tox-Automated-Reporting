@@ -1287,6 +1287,17 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         await _build_apical_bmd_narrative(ctx)
 
         # ══════════════════════════════════════════════════════════════
+        # Layer 3.5d — Graph-grounded references (side effect, persisted)
+        # ══════════════════════════════════════════════════════════════
+        # The genomics narrative pass (3.5a) persisted a per-stratum candidate
+        # reference pool + the [Pn]-citing prose into each interpretation cache.
+        # Assemble the report-wide, globally-numbered reference list from those
+        # and persist it as references.json.  A SIDE EFFECT (not in
+        # result_payload), so the 12-key contract + golden oracle are unaffected;
+        # the References section is surfaced from this at render time.
+        _persist_references(dtxsid, ctx.genomics_sections)
+
+        # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
         # ══════════════════════════════════════════════════════════════
         # Identical structure to the old monolithic response so the
@@ -1334,6 +1345,40 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)
         raise StepError(f"Processing failed: {e}", status_code=500)
+
+
+def _persist_references(dtxsid: str, genomics_sections: dict | None) -> None:
+    """Assemble + persist the report-wide reference list as references.json.
+
+    A fail-soft side effect of processing (like _build_query_substrate): reads
+    the per-stratum reference pools the genomics narrative pass wrote into the
+    interpretation caches and writes the assembled, globally-numbered list. Never
+    raises — a failure just means the References section stays empty until the
+    next process. No-op when there are no genomics sections (apical-only study)."""
+    if not genomics_sections:
+        return
+    try:
+        from narrative.references_builder import build_session_references
+        refs = build_session_references(
+            _session_dir(dtxsid), genomics_sections, dtxsid=dtxsid,
+        )
+        if refs["references"]:
+            out = _session_dir(dtxsid) / "references.json"
+            out.write_text(json.dumps({
+                "references": refs["references"],
+                "paragraphs": refs["paragraphs"],
+                # Machine-readable hazard flags for a future UI: human-edited
+                # narratives whose citations the pipeline could not reconcile.
+                "warnings": refs["warnings"],
+            }))
+            logger.info(
+                "Persisted %d graph-grounded references for %s (%d warnings)",
+                len(refs["references"]), dtxsid, len(refs["warnings"]),
+            )
+    except Exception:
+        logger.exception(
+            "Reference assembly failed for %s (report unaffected)", dtxsid
+        )
 
 
 def _build_query_substrate(dtxsid: str, integrated: dict) -> None:

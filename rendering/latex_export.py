@@ -756,6 +756,34 @@ def load_session_data(
         interpretations = _load_genomics_interpretations(
             session_dir, genomics_cache,
         )
+
+        # ── Graph-grounded references (the References section) ─────────
+        # Assemble ONE report-wide, globally-numbered reference list from the
+        # per-stratum candidate pools the genomics narrative pass persisted, and
+        # rewrite each stratum's inline [Pn] tokens to the report-wide [n]
+        # numbers so the inline citations agree with the References section.
+        # Deterministic (no LLM, no network): same persisted caches → same list.
+        # This path (unlike the marshal path) DOES render the [Pn]-carrying
+        # genomics narratives, so the References list and the inline citations
+        # must come from ONE assembly pass — hence the recompute here rather than
+        # just reading references.json.  Empty when no stratum carries a pool
+        # (older/apical-only sessions) → the background.json references overlaid
+        # above stand unchanged.
+        from narrative.references_builder import (
+            build_session_references, load_persisted_references,
+        )
+        _refs = build_session_references(session_dir, genomics_cache, dtxsid=dtxsid)
+        for (organ_k, sex_k), narrs in _refs["rewritten"].items():
+            if (organ_k, sex_k) in interpretations:
+                interpretations[(organ_k, sex_k)] = narrs
+        # Prefer the persisted references.json (the SAME artifact the marshal path
+        # reads, so the two paths surface identical citation strings); fall back
+        # to the freshly assembled list when the file is absent (older sessions).
+        _persisted = load_persisted_references(session_dir)
+        _ref_paragraphs = _persisted or _refs["paragraphs"]
+        if _ref_paragraphs:
+            data["references"] = {"paragraphs": _ref_paragraphs}
+
         converted = _convert_genomics_cache(genomics_cache, interpretations)
         if converted:
             data["genomics_sections"] = converted

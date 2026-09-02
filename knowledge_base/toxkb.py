@@ -75,6 +75,28 @@ class ToxKBQuerier:
             for r in rows
         ]
 
+    def papers_metadata(self, paper_ids: list[str]) -> dict[str, dict]:
+        """Resolve full bibliographic metadata for a set of paper_ids.
+
+        `gene_papers` returns only id/title/year/citation_count; the reference
+        builder also needs venue + doi from the `papers` table.  Returns a
+        {paper_id: {title, year, venue, doi, citation_count}} map; ids absent
+        from the table are simply omitted.  Empty input ⇒ empty map (no query)."""
+        ids = [pid for pid in paper_ids if pid]
+        if not ids:
+            return {}
+        placeholders = ",".join(["?"] * len(ids))
+        rows = self.con.execute(
+            "SELECT paper_id, title, year, venue, doi, citation_count "
+            f"FROM papers WHERE paper_id IN ({placeholders})",
+            ids,
+        ).fetchall()
+        return {
+            r[0]: {"title": r[1], "year": r[2], "venue": r[3],
+                   "doi": r[4], "citation_count": r[5]}
+            for r in rows
+        }
+
     def gene_claims(self, gene: str) -> list[dict]:
         rows = self.con.execute(
             "SELECT pc.claim, p.title, p.year "
