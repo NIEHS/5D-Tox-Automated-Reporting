@@ -36,27 +36,67 @@ from workflow.labels import Fact
 # The adapter: on-disk section booleans -> the step-4a Fact set.
 # ---------------------------------------------------------------------------
 
+# The on-disk key holding the serialized ASSERTED content facts (final /
+# protected / …). APPROVED is NOT stored here — it is derived from the `approved`
+# bool (data-readiness, widely read elsewhere), so the two representations never
+# disagree. See store_content_facts.
+_FACTS_KEY = "facts"
+
+# The facts that may be serialized to `_FACTS_KEY` — the narrative maturity/lock
+# facts a human asserts. APPROVED is derived (excluded); PUBLISHED is report-grain
+# (not a node fact). Unknown strings on disk are ignored on read (forward-compat).
+_STORABLE_FACTS = frozenset({Fact.FINAL, Fact.PROTECTED, Fact.WORKING_DRAFT, Fact.FIRST_DRAFT})
+
+
 def section_facts(section: "dict | None") -> "frozenset[Fact]":
-    """Map a section JSON's ownership booleans into the Fact set. Pure.
+    """Map a section JSON into its Fact set. Pure.
 
-    The section dict is what save_section persisted (see session_routes approve):
+    Two on-disk representations, unioned:
       approved: bool      — the human blessed this content -> Fact.APPROVED
-      approved_at: str    — timestamp (not a fact; presence tracked via approved)
-      stale: bool         — pool mutated after approval (currency signal; handled
-                            by is_section_stale, NOT folded into the fact set —
-                            staleness is a currency concern, kind #6, not a label)
+                            (data-readiness; the source of truth for the lock).
+      facts: list[str]    — the ASSERTED content facts (final / protected / …)
+                            written by store_content_facts. Deserialized here;
+                            unknown / non-storable strings are ignored so an older
+                            or newer on-disk shape never raises.
+      approved_at: str    — timestamp (not a fact).
+      stale: bool         — currency signal, handled by is_section_stale (kind #6,
+                            NOT a label) — never folded into the fact set.
 
-    Only `approved` maps to a content fact today. `final`/`protected`/`published`
-    are not yet written by the approve path (that is the deferred facts-on-disk
-    follow-up); when they are, add them here — this is the single translation
-    point. A missing/empty section carries no facts.
+    A missing/empty section carries no facts. Back-compat: a section with only the
+    `approved` bool (no `facts` list) yields exactly {APPROVED}, identical to the
+    pre-facts-on-disk behavior.
     """
     if not isinstance(section, dict):
         return frozenset()
     facts: set[Fact] = set()
     if section.get("approved"):
         facts.add(Fact.APPROVED)
+    stored = section.get(_FACTS_KEY)
+    if isinstance(stored, list):
+        by_value = {f.value: f for f in _STORABLE_FACTS}
+        for raw in stored:
+            fact = by_value.get(raw)
+            if fact is not None:
+                facts.add(fact)
     return frozenset(facts)
+
+
+def store_content_facts(section: dict, facts: "frozenset[Fact] | set[Fact]") -> None:
+    """Serialize the ASSERTED content facts of `facts` onto the section dict,
+    IN PLACE, under `_FACTS_KEY`. Pure over the dict (no I/O — the caller saves).
+
+    Only _STORABLE_FACTS are written (APPROVED stays the `approved` bool; PUBLISHED
+    is report-grain). Deterministic order (by value) so re-saving an unchanged fact
+    set is byte-stable. An empty result removes the key entirely, so a section with
+    no maturity facts is byte-identical to a pre-facts-on-disk section.
+    """
+    storable = sorted(
+        (f.value for f in facts if f in _STORABLE_FACTS)
+    )
+    if storable:
+        section[_FACTS_KEY] = storable
+    else:
+        section.pop(_FACTS_KEY, None)
 
 
 def is_section_stale(section: "dict | None") -> bool:

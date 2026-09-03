@@ -73,9 +73,25 @@ def test_accept_sets_approved_and_stamps_time():
     saved = store.saved["background"]
     assert saved["approved"] is True
     assert "approved_at" in saved and saved["approved_at"]
+    # Approve asserts the FINAL content fact (ADR-0015 facts-on-disk), which
+    # auto-sets PROTECTED — serialized to data["facts"].
+    assert saved["facts"] == ["final", "protected"]
     # lock flip does not create a history version (matches unapprove/approve
     # flag-flip convention)
     assert store.save_calls == [("background", False)]
+
+
+def test_accept_restores_final_on_a_demoted_section():
+    # A section demoted by a reprocess (final dropped, protected stands) that the
+    # human re-approves must climb back to final — the up-ratchet.
+    store = FakeSectionStore({"genomics_liver_male": {
+        "gene_set_narrative": ["g"], "approved": True,
+        "stale": True, "facts": ["protected"],
+    }})
+    accept_section_step("DTX", "genomics_liver_male", store)
+    saved = store.saved["genomics_liver_male"]
+    assert saved["facts"] == ["final", "protected"]
+    assert "stale" not in saved
 
 
 def test_accept_clears_stale_flag():

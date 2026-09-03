@@ -30,8 +30,10 @@ def staged_session(tmp_path, monkeypatch):
     (d / "bm2_organ-and-body-weights.json").write_text(
         json.dumps({"approved": True, "paragraphs": ["body weight prose"]})
     )
+    # The LLM section carries the FINAL/PROTECTED facts approve would have written.
     (d / "genomics_liver_male.json").write_text(
-        json.dumps({"approved": True, "gene_set_narrative": ["genomics prose"]})
+        json.dumps({"approved": True, "gene_set_narrative": ["genomics prose"],
+                    "facts": ["final", "protected"]})
     )
     # integrated.json so the delete branch has something to do (not asserted).
     (d / "integrated.json").write_text("{}")
@@ -61,6 +63,8 @@ def test_programmatic_not_staled_llm_staled(staged_session):
     assert gen["regenerated"]["reason"] == "data_changed"
     assert gen["approved"] is True  # content preserved, just flagged
     assert "genomics_liver_male.json" in summary["marked_stale"]
+    # Currency-forced demote (ADR-0015): FINAL withdrawn, PROTECTED stands.
+    assert gen["facts"] == ["protected"]
 
 
 def test_regenerated_marker_only_on_llm(staged_session):
@@ -86,3 +90,24 @@ def test_pool_admin_standalone_path_matches(staged_session):
     assert "stale" not in bm2 and "regenerated" not in bm2
     assert gen["stale"] is True
     assert gen["regenerated"]["reason"] == "data_changed"
+    assert gen["facts"] == ["protected"]  # same demote as pool_state
+
+
+def test_full_ratchet_roundtrip(staged_session):
+    # approve→FINAL, reprocess→demote (FINAL dropped), re-approve→FINAL again.
+    from pipeline.pool_state import invalidate_pool_artifacts
+    from workflow.steps import accept_section_step
+    from workflow.store import DiskPoolStore
+
+    dtxsid, d = staged_session
+    store = DiskPoolStore()
+
+    # reprocess: the up-ratchet was already at final in the fixture → demote.
+    invalidate_pool_artifacts(dtxsid)
+    assert _load(d, "genomics_liver_male.json")["facts"] == ["protected"]
+
+    # human re-accepts → climbs back to final (the up-ratchet).
+    accept_section_step(dtxsid, "genomics_liver_male", store)
+    reblessed = _load(d, "genomics_liver_male.json")
+    assert reblessed["facts"] == ["final", "protected"]
+    assert "stale" not in reblessed

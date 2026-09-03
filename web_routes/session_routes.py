@@ -779,6 +779,12 @@ async def api_session_approve(request: Request):
     data["approved"] = True
     data["approved_at"] = now_iso()
     data.pop("stale", None)
+    # Assert the FINAL content fact (ADR-0015 facts-on-disk): approve = editorial
+    # "done" → FINAL (auto-sets PROTECTED), serialized to data["facts"] so a later
+    # reprocess can demote_for_currency. Shares the lifted step's helper so the
+    # route and workflow.steps.accept_section_step stay in lock-step.
+    from workflow.steps import _promote_to_final
+    _promote_to_final(data)
 
     if section_type == "background":
         save_section(dtxsid, "background", data)

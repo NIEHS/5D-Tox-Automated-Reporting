@@ -396,6 +396,20 @@ async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
 # lock/unlock transition on a section that already exists on disk.
 # ---------------------------------------------------------------------------
 
+def _promote_to_final(data: dict) -> None:
+    """Assert the FINAL content fact on an approved section, in place (ADR-0015).
+
+    Approve = the human's editorial "done", the top maturity rung — so it promotes
+    the section's facts to FINAL (which auto-sets PROTECTED). Serialized to the
+    section's `facts` list so a later reprocess can demote_for_currency (drop FINAL,
+    leave PROTECTED) — the fact-ratchet the on-disk `approved` bool alone could not
+    express. Idempotent: re-approving a demoted section restores FINAL.
+    """
+    from workflow.labels import Fact, promote
+    from workflow.ownership import section_facts, store_content_facts
+
+    store_content_facts(data, promote(section_facts(data), Fact.FINAL))
+
 def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
     """Approve (lock) an existing report section.
 
@@ -429,6 +443,7 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     data["approved"] = True
     data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
     data.pop("stale", None)
+    _promote_to_final(data)
 
     # archive=False: a lock flip is not a content change worth a history entry
     # (matches how unapprove flips the flag). save_section stamps `version`.

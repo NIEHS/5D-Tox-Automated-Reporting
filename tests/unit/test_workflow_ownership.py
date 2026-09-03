@@ -23,6 +23,7 @@ from workflow.ownership import (
     protection_level,
     protection_map,
     section_facts,
+    store_content_facts,
 )
 
 F = frozenset
@@ -37,6 +38,52 @@ def test_section_facts_approved_maps_to_APPROVED():
 @pytest.mark.parametrize("section", [None, {}, {"approved": False}, "nonsense"])
 def test_section_facts_empty_when_not_approved(section):
     assert section_facts(section) == F()
+
+
+# --- facts on disk: serialized content facts (union with approved) ---------
+
+def test_section_facts_reads_stored_facts_list():
+    section = {"approved": True, "facts": ["final", "protected"]}
+    assert section_facts(section) == F({Fact.APPROVED, Fact.FINAL, Fact.PROTECTED})
+
+
+def test_section_facts_ignores_unknown_and_nonstorable_strings():
+    # forward-compat: junk or non-node facts on disk don't raise, just skip.
+    # `published` is report-grain (not storable on a node); `gibberish` is unknown.
+    # Read is LITERAL — only the facts actually in the list are returned (no
+    # final→protected implication on read; store_content_facts always writes the
+    # pair, so an unpaired `final` can't arise through the normal path).
+    section = {"approved": True, "facts": ["final", "published", "gibberish"]}
+    assert section_facts(section) == F({Fact.APPROVED, Fact.FINAL})
+
+
+def test_store_content_facts_round_trips():
+    section = {"approved": True}
+    store_content_facts(section, F({Fact.APPROVED, Fact.FINAL, Fact.PROTECTED}))
+    assert section["facts"] == ["final", "protected"]  # APPROVED excluded, sorted
+    assert section_facts(section) == F({Fact.APPROVED, Fact.FINAL, Fact.PROTECTED})
+
+
+def test_store_content_facts_empty_removes_key_byte_identical():
+    section = {"approved": True, "facts": ["final", "protected"]}
+    store_content_facts(section, F({Fact.APPROVED}))  # only non-storable left
+    assert "facts" not in section  # back to a pre-facts-on-disk shape
+
+
+def test_demote_for_currency_now_meaningful_on_disk():
+    # The point of facts-on-disk: demote drops FINAL, PROTECTED stands.
+    from workflow.currency import demote_for_currency
+    from workflow.labels import promote
+
+    section = {"approved": True}
+    store_content_facts(section, promote(section_facts(section), Fact.FINAL))
+    assert section["facts"] == ["final", "protected"]
+
+    demoted = demote_for_currency(section_facts(section))
+    store_content_facts(section, demoted)
+    assert section["facts"] == ["protected"]
+    assert Fact.FINAL not in section_facts(section)
+    assert Fact.PROTECTED in section_facts(section)
 
 
 def test_is_section_stale():

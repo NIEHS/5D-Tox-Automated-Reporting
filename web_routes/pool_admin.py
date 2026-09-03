@@ -191,6 +191,14 @@ def invalidate_downstream(session_dir: Path, dry_run: bool = False) -> list[str]
                     if not dry_run:
                         data["stale"] = True
                         data["regenerated"] = {"reason": "data_changed"}
+                        # Currency-forced demote (ADR-0015) — mirror pool_state:
+                        # drop FINAL, leave PROTECTED. No-op without a maturity fact.
+                        from workflow.currency import demote_for_currency
+                        from workflow.ownership import (
+                            section_facts, store_content_facts,
+                        )
+                        store_content_facts(
+                            data, demote_for_currency(section_facts(data)))
                         section_file.write_text(
                             json.dumps(data, indent=2, default=str),
                             encoding="utf-8",

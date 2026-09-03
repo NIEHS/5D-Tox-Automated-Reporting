@@ -53,6 +53,21 @@ from pipeline.pool_fingerprints import _save_fingerprints_to_disk
 logger = logging.getLogger(__name__)
 
 
+def _demote_section_facts(section_data: dict) -> None:
+    """Currency-forced down-ratchet of a section's on-disk facts, in place.
+
+    Drops the top maturity rung (FINAL) via workflow.currency.demote_for_currency
+    and re-serializes — the involuntary reversal the fact ratchet permits with
+    DemoteReason.CURRENCY_FORCED. PROTECTED (auto-set by FINAL) stays, so the
+    content stops claiming finality but remains guarded. A no-op when the section
+    holds no maturity fact, so older sections are byte-unaffected. Kept fail-soft
+    by the caller's try/except (a demote failure must not abort invalidation)."""
+    from workflow.currency import demote_for_currency
+    from workflow.ownership import section_facts, store_content_facts
+
+    store_content_facts(section_data, demote_for_currency(section_facts(section_data)))
+
+
 # ---------------------------------------------------------------------------
 # Pool progression check
 # ---------------------------------------------------------------------------
@@ -216,6 +231,12 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
                     # the publish gate can require a human re-accept (fail-soft:
                     # absent on programmatic/older sections).
                     section_data["regenerated"] = {"reason": "data_changed"}
+                    # Involuntary down-ratchet (ADR-0015): the SYSTEM withdraws the
+                    # FINAL maturity claim (currency-forced) while leaving PROTECTED
+                    # standing, so the section stops asserting "editorially done"
+                    # but stays guarded until a human re-accepts. No-op on a section
+                    # holding no maturity fact (older/never-finalized).
+                    _demote_section_facts(section_data)
                     section_file.write_text(
                         json.dumps(section_data, indent=2, default=str),
                         encoding="utf-8",
