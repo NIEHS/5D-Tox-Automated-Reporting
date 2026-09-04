@@ -472,13 +472,24 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     }
 
 
-def release_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
-    """Unapprove (unlock) a report section, preserving its content.
+def release_section_step(
+    dtxsid: str, section_key: str, store: PoolStore, *, reason: str = "",
+) -> dict:
+    """REVISE (reopen) a report section for editing, preserving its content.
 
-    Mirrors POST /api/session/unapprove: flip `approved=False` in place
-    (archive=False — a flag flip isn't a content change) so the editor unlocks
-    without discarding the prose. No-op-safe: if the section file is absent it
-    returns ok (the route relies on always-ok so the caller need not pre-check).
+    This is the VOLUNTARY human down-ratchet — the "Revise" action, renamed from
+    the old bare "Unapprove". It:
+      * flips `approved=False` (unlocks the editor),
+      * runs the HUMAN_RELEASE demote on the section's facts
+        (labels.demote_for_human_release: FINAL withdrawn, PROTECTED stands — the
+        content stops claiming finality but stays guarded until re-accepted), and
+      * records the human's free-text `reason` on a Phase-4 version-trail entry
+        (cause="revise"), so WHY a person reopened a blessed section is auditable
+        alongside the system's cause="reprocess" entries.
+
+    The reason is provenance (the version trail + `revised` marker), NOT a fact —
+    facts are categorical. Content is preserved (archive=False for the flag flip;
+    the trail entry captures the transition). No-op-safe: absent section → ok.
 
     Raises StepError(400) with no dtxsid/section_key.
     """
@@ -488,6 +499,23 @@ def release_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dic
     data = store.read_json(dtxsid, f"{section_key}.json")
     if isinstance(data, dict):
         data["approved"] = False
+        _demote_for_revise(data, reason)
         store.save_section(dtxsid, section_key, data, archive=False)
 
     return {"ok": True, "section_key": section_key, "approved": False}
+
+
+def _demote_for_revise(data: dict, reason: str) -> None:
+    """Apply the HUMAN_RELEASE down-ratchet to a section dict, in place, and stamp
+    the version-trail event. Withdraws FINAL (PROTECTED stands), records the human
+    reason as provenance (`revised` marker + the trail entry's reason). A no-op on
+    a section holding no maturity fact leaves facts untouched but STILL records the
+    reopen on the trail — reopening an un-blessed draft is a real, auditable act."""
+    from workflow.labels import demote_for_human_release
+    from workflow.ownership import section_facts, store_content_facts
+
+    store_content_facts(data, demote_for_human_release(section_facts(data)))
+    data["revised"] = {"reason": reason} if reason else {"reason": ""}
+    data[_VERSION_EVENT_KEY] = {
+        "cause": "revise", "status": "working", "reason": reason,
+    }

@@ -234,11 +234,14 @@ def save_section(
 def _record_version_event(history_dir: Path, version: int, event: dict) -> None:
     """Append one cause-tagged line to the section's version manifest.
 
-    `event` is the caller's {"cause", "status"} intent; the line also carries the
-    version number it describes and a fresh timestamp.  Append-only: the manifest
-    is a timeline, so a re-accept adds a new line for the same version (status
-    changes; the current status is the most-recent line for that version) rather
-    than editing an earlier one.  Fully fail-soft — never raises."""
+    `event` is the caller's {"cause", "status", reason?} intent; the line also
+    carries the version number it describes and a fresh timestamp.  A `reason`
+    (the human's free-text for a "revise", or the auto reason for a currency
+    down-step) is recorded only when non-empty, so entries without one stay
+    byte-identical to pre-reason manifests.  Append-only: the manifest is a
+    timeline, so a re-accept adds a new line for the same version (status changes;
+    the current status is the most-recent line for that version) rather than
+    editing an earlier one.  Fully fail-soft — never raises."""
     try:
         history_dir.mkdir(parents=True, exist_ok=True)
         entry = {
@@ -247,6 +250,9 @@ def _record_version_event(history_dir: Path, version: int, event: dict) -> None:
             "status": event.get("status", "unknown"),
             "ts": now_iso(),
         }
+        reason = event.get("reason")
+        if reason:
+            entry["reason"] = reason
         with (history_dir / _VERSION_INDEX).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
     except Exception as e:  # pragma: no cover — defensive, audit must not abort work

@@ -312,3 +312,49 @@ class TestLiveApproveRoute:
         # And the transient marker never reaches disk.
         current = _load(sessions_dir / dtxsid, "background.json")
         assert _VERSION_EVENT_KEY not in current
+
+
+# ---------------------------------------------------------------------------
+# 6. Revise-with-reason (HUMAN_RELEASE) — the human down-step records its reason.
+# ---------------------------------------------------------------------------
+
+class TestReviseWithReason:
+
+    def test_revise_records_reason_on_trail_and_demotes(self, approved_llm_section):
+        from workflow.steps import accept_section_step, release_section_step
+        from workflow.store import DiskPoolStore
+        dtxsid, d = approved_llm_section
+        store = DiskPoolStore()
+
+        # Reopen the blessed genomics section with a human reason.
+        release_section_step(dtxsid, "genomics_liver_male", store,
+                             reason="rework the interpretation")
+
+        section = _load(d, "genomics_liver_male.json")
+        assert section["approved"] is False
+        assert section["facts"] == ["protected"]            # FINAL withdrawn
+        assert section["revised"] == {"reason": "rework the interpretation"}
+
+        events = read_version_history(dtxsid, "genomics_liver_male")
+        revise = [e for e in events if e["cause"] == "revise"]
+        assert len(revise) == 1
+        assert revise[0]["status"] == "working"
+        assert revise[0]["reason"] == "rework the interpretation"
+
+        # Re-accept climbs back to FINAL.
+        accept_section_step(dtxsid, "genomics_liver_male", store)
+        assert _load(d, "genomics_liver_male.json")["facts"] == ["final", "protected"]
+
+    def test_revise_without_reason_still_records_the_reopen(self, approved_llm_section):
+        from workflow.steps import release_section_step
+        from workflow.store import DiskPoolStore
+        dtxsid, _d = approved_llm_section
+
+        release_section_step(dtxsid, "genomics_liver_male", DiskPoolStore())
+
+        events = read_version_history(dtxsid, "genomics_liver_male")
+        revise = [e for e in events if e["cause"] == "revise"]
+        assert len(revise) == 1
+        # No reason given → the key is simply absent (byte-identical to a
+        # pre-reason manifest), but the reopen is still on the trail.
+        assert "reason" not in revise[0]

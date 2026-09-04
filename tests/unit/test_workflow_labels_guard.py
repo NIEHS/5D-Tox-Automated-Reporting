@@ -31,6 +31,7 @@ from workflow.labels import (
     MATURITY_LADDER,
     VOCABULARIES,
     demote,
+    demote_for_human_release,
     maturity_rung,
     promote,
 )
@@ -119,6 +120,19 @@ def test_demote_free_when_no_consequence_changes():
     facts = promote(promote(F(), Fact.WORKING_DRAFT), Fact.FIRST_DRAFT)
     out = demote(facts, Fact.FIRST_DRAFT)  # no reason needed
     assert out == F({Fact.WORKING_DRAFT})
+
+
+def test_demote_for_human_release_withdraws_final_keeps_protected():
+    # The voluntary Revise down-ratchet — the human twin of demote_for_currency.
+    facts = promote(F(), Fact.FINAL)  # {final, protected}
+    out = demote_for_human_release(facts)
+    assert Fact.FINAL not in out
+    assert Fact.PROTECTED in out  # stays guarded until re-accepted
+
+
+def test_demote_for_human_release_noop_without_maturity():
+    facts = F({Fact.PROTECTED})  # manual lock, no maturity rung
+    assert demote_for_human_release(facts) == facts
 
 
 def test_cannot_clear_an_implied_fact_while_implier_holds():

@@ -148,3 +148,27 @@ def test_accept_then_release_roundtrip():
     assert store.saved["summary"]["approved"] is True
     release_section_step("DTX", "summary", store)
     assert store.saved["summary"]["approved"] is False
+
+
+def test_revise_with_reason_demotes_final_records_reason():
+    # A blessed section reopened via Revise: FINAL withdrawn (HUMAN_RELEASE),
+    # PROTECTED stands, the human's reason recorded on the section.
+    store = FakeSectionStore({"background": {
+        "paragraphs": ["p"], "approved": True, "facts": ["final", "protected"],
+    }})
+    release_section_step("DTX", "background", store, reason="tone needs work")
+    saved = store.saved["background"]
+    assert saved["approved"] is False
+    assert saved["facts"] == ["protected"]          # FINAL withdrawn, PROTECTED stands
+    assert saved["revised"] == {"reason": "tone needs work"}
+
+
+def test_revise_then_reaccept_restores_final():
+    store = FakeSectionStore({"background": {
+        "paragraphs": ["p"], "approved": True, "facts": ["final", "protected"],
+    }})
+    release_section_step("DTX", "background", store, reason="fix numbers wording")
+    assert store.saved["background"]["facts"] == ["protected"]
+    accept_section_step("DTX", "background", store)
+    assert store.saved["background"]["facts"] == ["final", "protected"]
+    assert store.saved["background"]["approved"] is True

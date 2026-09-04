@@ -1053,16 +1053,20 @@ async def api_session_save_section(request: Request):
 @router.post("/api/session/unapprove")
 async def api_session_unapprove(request: Request):
     """
-    Mark a report section as not-approved while preserving its content.
+    REVISE (reopen) a report section for editing, preserving its content.
 
-    Approval is a UI lock state; unapproving simply unlocks the editor
-    so the user can revise.  The on-disk content remains intact — they
-    can re-approve without regenerating.
+    The "Revise" action (renamed from bare "Unapprove"): unlocks the editor AND
+    runs the voluntary HUMAN_RELEASE down-ratchet — withdraws the FINAL maturity
+    claim (PROTECTED stands) and records the human's free-text `reason` on the
+    Phase-4 version trail (cause="revise"), so WHY a person reopened a blessed
+    section is auditable next to the system's cause="reprocess" entries. Content
+    is preserved; they can re-accept without regenerating.
 
     Input JSON:
       {
         "dtxsid": "DTXSID...",
         "section_type": "background" | "bm2" | "methods" | ...,
+        "reason": "why the human is reopening"  // optional free text, recorded
         "bm2_slug": "...",  // required for bm2
         "organ": "...",     // required for genomics
         "sex": "..."        // required for genomics
@@ -1085,11 +1089,15 @@ async def api_session_unapprove(request: Request):
         try:
             data = json.loads(section_path.read_text(encoding="utf-8"))
             data["approved"] = False
-            # Don't archive — flag flip isn't a content change worth
-            # keeping in history.
+            # Down-ratchet + record the reason via the SAME helper the lifted
+            # workflow.steps.release_section_step uses, so route and step stay in
+            # lock-step (facts-on-disk discipline). archive=False for the flag
+            # flip; the version-trail entry captures the transition.
+            from workflow.steps import _demote_for_revise
+            _demote_for_revise(data, str(body.get("reason", "")))
             save_section(dtxsid, section_key, data, archive=False)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to flip approved flag for %s/%s: %s",
+            logger.warning("Failed to revise section %s/%s: %s",
                            dtxsid, section_key, e)
 
     return JSONResponse({"ok": True})

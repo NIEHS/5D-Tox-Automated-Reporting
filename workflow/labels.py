@@ -160,3 +160,20 @@ def maturity_rung(facts: "frozenset[Fact] | set[Fact]") -> "Fact | None":
     """
     held = [rung for rung in MATURITY_LADDER if rung in facts]
     return held[-1] if held else None
+
+
+def demote_for_human_release(facts: "frozenset[Fact]") -> frozenset[Fact]:
+    """The VOLUNTARY down-ratchet: a human deliberately reopens for revision.
+
+    The twin of currency.demote_for_currency, but HUMAN_RELEASE not CURRENCY_FORCED:
+    a person chose to reopen a blessed section to edit it. Drops the top maturity
+    rung (FINAL → withdrawn) while leaving an implied PROTECTED standing — the
+    content stops CLAIMING finality but stays guarded until re-accepted. Idempotent
+    when no maturity rung is held. The RECORDED reason the ratchet requires for a
+    voluntary reversal is supplied here; the human's free-text explanation rides
+    alongside on the version trail, not in the fact set (facts are categorical, the
+    reason string is provenance)."""
+    rung = maturity_rung(facts)
+    if rung is None:
+        return facts
+    return demote(facts, rung, DemoteReason.HUMAN_RELEASE)
