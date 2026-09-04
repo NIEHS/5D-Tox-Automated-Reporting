@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, SectionData, SectionReadinessMap, SessionLoad } from "../api";
 import { useSectionReadiness } from "../useSectionReadiness";
 import { usePublishReadiness } from "../usePublishReadiness";
@@ -222,10 +222,27 @@ export function Author({ dtxsid, back, next }: StepProps) {
   );
 }
 
-// One editable section: shows lock/blocked state from the derived readiness,
-// lets the user edit paragraph text, save (no approve), approve (lock), or
-// unapprove (unlock). Generation is triggered via the existing LLM routes — kept
-// minimal here (the deep per-family editors remain in the legacy app for now).
+// One editable section, rendered as one of four DERIVED states (never guessed):
+//
+//   • LOCKED   (!enabled)                     — blocked by an unmet dependency;
+//                                               no editor, no action.
+//   • DRAFT    (enabled, !approved, !blocked) — editable, auto-saves as you type;
+//                                               the one deliberate act is ACCEPT.
+//   • ACCEPTED (enabled, approved, !blocked)  — blessed/FINAL; editor is locked;
+//                                               the only act is REVISE (reopen,
+//                                               with a recorded free-text reason).
+//   • RE-ACCEPT(enabled, blockedReason set)   — a data reprocess REGENERATED this
+//                                               section (currency-forced); it is
+//                                               editable and shows WHY, and the act
+//                                               is RE-ACCEPT (no reason prompt —
+//                                               the reason is system-supplied).
+//
+// The Accept-vs-Re-accept fork is decided ENTIRELY from the parent-derived
+// `blockedReason` prop (from the server publish gate), not from any client guess.
+// There is deliberately NO "Save" button: DRAFT/RE-ACCEPT persist continuously via
+// a debounced auto-save (api.saveSection); Accept/Re-accept (api.approveSection)
+// and Revise (api.unapproveSection) are the only deliberate, blessing/releasing
+// acts, and each re-derives readiness + preview via onMutated.
 function SectionCard({
   sectionKey,
   title,
@@ -255,29 +272,83 @@ function SectionCard({
   const blockedBy = r?.blocked_by ?? [];
   const stale = content?.stale ?? false;
 
+  // The three enabled states, DERIVED from server truth. blockedReason (currency
+  // BLOCK from the publish gate) wins: a regenerated section is always RE-ACCEPT,
+  // even if a stale `approved` flag lingers.
+  const needsReaccept = enabled && !!blockedReason;
+  const accepted = enabled && approved && !blockedReason;
+  const editable = enabled && !accepted; // DRAFT or RE-ACCEPT: editor is live
+
   const [text, setText] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Continuous auto-save status (DRAFT/RE-ACCEPT only) + the reopen-reason prompt.
+  const [autoSave, setAutoSave] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle"
+  );
+  const [revising, setRevising] = useState(false);
+  const [reason, setReason] = useState("");
+  // Last text known-persisted (via seed or a successful save), so the debounce
+  // never fires for an unchanged seed and never re-saves what's already on disk.
+  const savedTextRef = useRef<string>("");
+
+  // routeArgs is pure on sectionKey; memoize so `extra` is a stable dep for the
+  // auto-save effect (a fresh object each render would retrigger it).
+  const { type, extra } = useMemo(() => routeArgs(sectionKey), [sectionKey]);
+
+  const paragraphs = useCallback(
+    () =>
+      text
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter(Boolean),
+    [text]
+  );
 
   // Seed the editor from loaded content whenever it changes and the user has no
-  // unsaved edits in flight.
+  // unsaved edits in flight (the `dirty` guard is what keeps a save round-trip or
+  // a reprocess re-pull from clobbering text the user is actively typing).
   useEffect(() => {
-    if (!dirty) setText((content?.paragraphs ?? []).join("\n\n"));
+    if (!dirty) {
+      const seeded = (content?.paragraphs ?? []).join("\n\n");
+      setText(seeded);
+      savedTextRef.current = seeded;
+    }
   }, [content, dirty]);
 
-  const { type, extra } = routeArgs(sectionKey);
-  const paragraphs = () =>
-    text
-      .split(/\n{2,}/)
-      .map((p) => p.trim())
-      .filter(Boolean);
+  // Debounced continuous auto-save: ~800ms after typing stops, persist the draft
+  // WITHOUT approving (api.saveSection). Only runs for a live editor with genuine
+  // edits; deliberate acts run() their own save. We never clear `dirty` here — the
+  // textarea stays authoritative for the whole edit session, so no re-pull can
+  // clobber it. saveSection changes only persisted content (not derived readiness
+  // or the publish gate), so there is nothing session-derived to invalidate; the
+  // Preview step re-materializes on entry, and Accept invalidates everything.
+  useEffect(() => {
+    if (!editable || !dirty) return;
+    if (text === savedTextRef.current) return;
+    const handle = setTimeout(() => {
+      const snapshot = text;
+      setAutoSave("saving");
+      api
+        .saveSection(dtxsid, type, { paragraphs: paragraphs() }, extra)
+        .then(() => {
+          savedTextRef.current = snapshot;
+          setAutoSave("saved");
+        })
+        .catch(() => setAutoSave("error"));
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [text, dirty, editable, dtxsid, type, extra, paragraphs]);
 
+  // A deliberate, blessing/releasing act: disables the card, clears the dirty
+  // guard so the fresh server content re-seeds, and re-derives readiness+preview.
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
     try {
       await fn();
       setDirty(false);
+      setAutoSave("idle");
       await onMutated();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -286,20 +357,17 @@ function SectionCard({
     }
   }
 
-  const save = () =>
-    run(() =>
-      api.saveSection(dtxsid, type, { paragraphs: paragraphs() }, extra)
-    );
-  const approve = () =>
-    run(() =>
-      api.approveSection(
-        dtxsid,
-        type,
-        { paragraphs: paragraphs() },
-        extra
-      )
-    );
-  const unapprove = () => run(() => api.unapproveSection(dtxsid, type, extra));
+  // Accept and Re-accept are the SAME bless op (approveSection saves + locks to
+  // FINAL); they differ only in the state that surfaces them.
+  const accept = () =>
+    run(() => api.approveSection(dtxsid, type, { paragraphs: paragraphs() }, extra));
+
+  // Revise = a voluntary HUMAN reopen: send the free-text reason with the release.
+  const confirmRevise = async () => {
+    await run(() => api.unapproveSection(dtxsid, type, reason.trim(), extra));
+    setRevising(false);
+    setReason("");
+  };
 
   const hasContent = (content?.paragraphs?.length ?? 0) > 0 || text.trim() !== "";
 
@@ -311,13 +379,17 @@ function SectionCard({
           {title}
         </strong>
         <span className="section-badges">
-          {approved && <span className="badge ok">approved</span>}
-          {/* A publish-blocking (regenerated) section shows WHY + a re-accept
-              cue; a plain stale flag without a block reason falls back to "stale". */}
-          {blockedReason ? (
-            <span className="badge warn" title={`Regenerated (${blockedReason}) — re-accept to publish`}>
+          {/* Distinct, informative states: regenerated (re-accept) takes priority
+              over a plain approved/stale reading. */}
+          {needsReaccept ? (
+            <span
+              className="badge warn"
+              title={`Regenerated — data changed (${blockedReason}). Re-accept to publish.`}
+            >
               re-accept
             </span>
+          ) : accepted ? (
+            <span className="badge ok">approved</span>
           ) : (
             stale && <span className="badge warn">stale</span>
           )}
@@ -331,10 +403,17 @@ function SectionCard({
         </p>
       ) : (
         <>
+          {needsReaccept && (
+            <p className="reaccept-note">
+              Regenerated because the data changed
+              {blockedReason ? ` (${blockedReason.replace(/_/g, " ")})` : ""}. Review
+              the updated text, then Re-accept.
+            </p>
+          )}
           <textarea
             className="section-editor"
             value={text}
-            disabled={busy || approved}
+            disabled={busy || accepted}
             placeholder="Paragraph text (blank line between paragraphs)…"
             onChange={(e) => {
               setText(e.target.value);
@@ -343,23 +422,65 @@ function SectionCard({
           />
           <div className="section-actions">
             {busy && <Spinner label="Working…" />}
-            {!approved ? (
-              <>
-                <button onClick={save} disabled={busy || !hasContent}>
-                  Save
+
+            {accepted ? (
+              // ACCEPTED → the only act is Revise, which prompts for a reason.
+              revising ? (
+                <div className="revise-prompt">
+                  <label className="revise-label">
+                    Why are you reopening this? (optional, but recorded)
+                  </label>
+                  <textarea
+                    className="revise-reason"
+                    value={reason}
+                    autoFocus
+                    placeholder="e.g. correcting the BMD interpretation"
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                  <div className="revise-actions">
+                    <button
+                      className="primary"
+                      onClick={confirmRevise}
+                      disabled={busy}
+                    >
+                      Confirm revise
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRevising(false);
+                        setReason("");
+                      }}
+                      disabled={busy}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setRevising(true)} disabled={busy}>
+                  Revise
                 </button>
+              )
+            ) : (
+              // DRAFT or RE-ACCEPT → auto-saving editor + one bless button.
+              <>
+                {!busy && autoSave === "saving" && (
+                  <span className="autosave-hint">Saving…</span>
+                )}
+                {!busy && autoSave === "saved" && (
+                  <span className="autosave-hint">Saved</span>
+                )}
+                {!busy && autoSave === "error" && (
+                  <span className="autosave-hint err">Auto-save failed</span>
+                )}
                 <button
                   className="primary"
-                  onClick={approve}
+                  onClick={accept}
                   disabled={busy || !hasContent}
                 >
-                  Approve
+                  {needsReaccept ? "Re-accept" : "Accept"}
                 </button>
               </>
-            ) : (
-              <button onClick={unapprove} disabled={busy}>
-                Unapprove
-              </button>
             )}
           </div>
         </>

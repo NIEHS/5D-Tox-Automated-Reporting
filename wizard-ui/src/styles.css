@@ -407,7 +407,35 @@ tr.emphasize td { font-weight: 700; }
   font-family: ui-monospace, Menlo, monospace;
 }
 .section-editor:disabled { opacity: 0.6; }
-.section-actions { display: flex; gap: 0.5rem; align-items: center; }
+.section-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+/* Currency-forced re-accept cue (regenerated after a data change) */
+.reaccept-note {
+  margin: 0.25rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: 6px;
+  color: var(--warn);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* Continuous auto-save status (DRAFT / RE-ACCEPT editors have no Save button) */
+.autosave-hint { color: var(--muted); font-size: 0.74rem; font-style: italic; }
+.autosave-hint.err { color: var(--err); font-style: normal; }
+
+/* Revise (reopen-with-reason) inline prompt */
+.revise-prompt { display: flex; flex-direction: column; gap: 0.4rem; width: 100%; }
+.revise-label { color: var(--muted); font-size: 0.76rem; }
+.revise-reason {
+  width: 100%; min-height: 56px; resize: vertical;
+  background: #0b1220; color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.8rem; line-height: 1.4;
+  font-family: inherit;
+}
+.revise-reason:focus { outline: none; border-color: var(--accent); }
+.revise-actions { display: flex; gap: 0.5rem; }
 
 /* --- Preview step --- */
 .preview-frame {

@@ -80,6 +80,10 @@ export interface SectionData {
   approved?: boolean;
   version?: number;
   stale?: boolean;
+  // Stamped when a data reprocess regenerated this section (currency-forced).
+  // The per-section publish blocker carries the same reason; the UI decides
+  // "Re-accept" from the parent-derived blockedReason prop, not from this field.
+  regenerated?: { reason?: string } | null;
   [k: string]: unknown;
 }
 
@@ -377,16 +381,19 @@ export const api = {
       body: JSON.stringify({ dtxsid, section_type: sectionType, data, ...extra }),
     }).then((r) => jsonOrThrow<Record<string, unknown>>(r)),
 
-  // Unapprove (unlock) — preserves content.
+  // Revise (release a blessed section back to editable) — preserves content and
+  // runs the human-release down-ratchet. `reason` is the free-text "why are you
+  // reopening this?" recorded on the version trail; empty is accepted server-side.
   unapproveSection: (
     dtxsid: string,
     sectionType: string,
+    reason: string,
     extra: { bm2_slug?: string; organ?: string; sex?: string } = {}
   ) =>
     fetch(`/api/session/unapprove`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dtxsid, section_type: sectionType, ...extra }),
+      body: JSON.stringify({ dtxsid, section_type: sectionType, reason, ...extra }),
     }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
 
   // --- Materialized preview (Phase 5) ---
