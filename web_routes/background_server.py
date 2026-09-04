@@ -194,6 +194,11 @@ app.include_router(wizard_routes.router)
 import web_routes.query_routes as query_routes
 app.include_router(query_routes.router)
 
+# Materialized, versioned, docx-default preview (project_integrated_wizard_versioned_preview
+# Decision 5): POST /api/preview/{dtxsid}/materialize, GET …/view, GET …/download
+import web_routes.preview_routes as preview_routes
+app.include_router(preview_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI

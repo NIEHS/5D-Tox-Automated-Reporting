@@ -48,6 +48,48 @@ export interface SessionSummary {
   section_keys: string[];
 }
 
+// --- Section authoring (Phase 6) ---
+
+// One entry of the server-DERIVED readiness map
+// (GET /api/workflow/{dtxsid}/section-readiness). The UI renders enable/lock/
+// blocked-by from THIS — never a client-side ready.* flag.
+export interface SectionReadiness {
+  enabled: boolean;
+  blocked_by: string[];
+  approved: boolean;
+}
+export type SectionReadinessMap = Record<string, SectionReadiness>;
+
+// A section's editable content as loaded from GET /api/session/{dtxsid}.
+export interface SectionData {
+  paragraphs?: string[];
+  approved?: boolean;
+  version?: number;
+  stale?: boolean;
+  [k: string]: unknown;
+}
+
+export interface SessionLoad {
+  exists: boolean;
+  background?: SectionData | null;
+  methods?: SectionData | null;
+  bmd_summary?: SectionData | null;
+  summary?: SectionData | null;
+  bm2_sections?: Record<string, SectionData>;
+  genomics_sections?: Record<string, SectionData>;
+  meta?: Record<string, unknown> | null;
+  identity?: Record<string, unknown> | null;
+  [k: string]: unknown;
+}
+
+// A materialize response (POST /api/preview/{dtxsid}/materialize).
+export interface PreviewManifest {
+  version: string;
+  ts: string;
+  deliverable: string;
+  files: Record<string, string>;
+}
+
 export interface ChartSection {
   label?: string;
   organ?: string;
@@ -274,4 +316,82 @@ export const api = {
     fetch(`/api/pool/reset/${encodeURIComponent(dtxsid)}`, {
       method: "POST",
     }).then((r) => jsonOrThrow<{ ok: boolean; deleted: string[] }>(r)),
+
+  // --- Section authoring (Phase 6) ---
+
+  // DERIVED per-section readiness — the replacement for the legacy imperative
+  // ready.methods / ready.summary flags.
+  getSectionReadiness: (dtxsid: string) =>
+    fetch(`/api/workflow/${encodeURIComponent(dtxsid)}/section-readiness`).then(
+      (r) => jsonOrThrow<SectionReadinessMap>(r)
+    ),
+
+  loadSession: (dtxsid: string) =>
+    fetch(`/api/session/${encodeURIComponent(dtxsid)}`).then((r) =>
+      jsonOrThrow<SessionLoad>(r)
+    ),
+
+  // Persist section content WITHOUT changing approval (archive=False server-side).
+  saveSection: (
+    dtxsid: string,
+    sectionType: string,
+    data: Record<string, unknown>,
+    extra: { bm2_slug?: string; organ?: string; sex?: string } = {}
+  ) =>
+    fetch(`/api/session/save-section`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, section_type: sectionType, data, ...extra }),
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
+
+  // Approve (lock) a section. The server also runs style-learning on approve.
+  approveSection: (
+    dtxsid: string,
+    sectionType: string,
+    data: Record<string, unknown>,
+    extra: { bm2_slug?: string; organ?: string; sex?: string } = {}
+  ) =>
+    fetch(`/api/session/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, section_type: sectionType, data, ...extra }),
+    }).then((r) => jsonOrThrow<Record<string, unknown>>(r)),
+
+  // Unapprove (unlock) — preserves content.
+  unapproveSection: (
+    dtxsid: string,
+    sectionType: string,
+    extra: { bm2_slug?: string; organ?: string; sex?: string } = {}
+  ) =>
+    fetch(`/api/session/unapprove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, section_type: sectionType, ...extra }),
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
+
+  // --- Materialized preview (Phase 5) ---
+
+  materializePreview: (
+    dtxsid: string,
+    surface = "docx",
+    version?: string
+  ) =>
+    fetch(`/api/preview/${encodeURIComponent(dtxsid)}/materialize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ surface, version }),
+    }).then((r) => jsonOrThrow<PreviewManifest>(r)),
+
+  // URLs (not fetches) — used as iframe src / download href.
+  previewViewUrl: (dtxsid: string, version = "default", surface = "html") =>
+    `/api/preview/${encodeURIComponent(dtxsid)}/view?version=${encodeURIComponent(
+      version
+    )}&surface=${encodeURIComponent(surface)}`,
+
+  previewDownloadUrl: (dtxsid: string, version = "default", surface = "docx") =>
+    `/api/preview/${encodeURIComponent(
+      dtxsid
+    )}/download?version=${encodeURIComponent(version)}&surface=${encodeURIComponent(
+      surface
+    )}`,
 };
