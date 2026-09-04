@@ -37,6 +37,7 @@ from bmdx_pipe import (
 )
 
 from pipeline.integrated_io import _enrich_source_experiment_counts
+from pipeline.session_store import _VERSION_EVENT_KEY
 from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 
 from workflow.errors import StepError
@@ -445,8 +446,22 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     data.pop("stale", None)
     _promote_to_final(data)
 
-    # archive=False: a lock flip is not a content change worth a history entry
-    # (matches how unapprove flips the flag). save_section stamps `version`.
+    # Phase 4: record this acceptance as an "edit"/"blessed" version event. This
+    # is the pure re-bless path — the content already exists on disk and only the
+    # lock flips — so it uses archive=False: save_section PRESERVES the version
+    # number and the manifest line lands against the SAME version. That is exactly
+    # what "re-accept transitions needs-re-bless → blessed WITHOUT minting a new
+    # version" needs: after a reprocess minted (say) v2 born needs-re-bless, the
+    # human re-accept appends a v2/edit/blessed line, so v2's current status flips
+    # to blessed with no duplicate version. The marker is transient (save_section
+    # pops it); stamping it on `data` keeps this step store-mediated — no direct
+    # disk I/O and no new store-method signature (the injected store just persists
+    # `data`).
+    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
+
+    # archive=False: a lock flip is not a content change worth a new history
+    # FILE (matches how unapprove flips the flag). save_section stamps `version`
+    # and appends the manifest line above.
     store.save_section(dtxsid, section_key, data, archive=False)
 
     return {

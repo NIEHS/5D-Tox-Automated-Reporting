@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse
 from bmdx_pipe import bm2_cache
 from pipeline.session_store import (
     SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
-    save_section, delete_section,
+    save_section, delete_section, _VERSION_EVENT_KEY,
 )
 from narrative.style_learning import (
     load_style_profile, extract_and_merge_style_rules,
@@ -785,6 +785,16 @@ async def api_session_approve(request: Request):
     # route and workflow.steps.accept_section_step stay in lock-step.
     from workflow.steps import _promote_to_final
     _promote_to_final(data)
+
+    # Phase 4: this approve saves the (possibly-edited) content the human just
+    # accepted — a retained, blessed version. Stamp the transient cause marker so
+    # save_section (archive=True below) records an "edit"/"blessed" line on the
+    # section's version manifest. save_section pops it, so it never persists in
+    # the section JSON. (The pure re-bless path — accept_section_step, archive=
+    # False — records the SAME cause against the existing version instead of
+    # minting one; the two are separate entry points and never chained, so there
+    # is no double-archive.)
+    data[_VERSION_EVENT_KEY] = {"cause": "edit", "status": "blessed"}
 
     if section_type == "background":
         save_section(dtxsid, "background", data)

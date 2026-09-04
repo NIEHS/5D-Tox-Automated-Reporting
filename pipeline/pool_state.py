@@ -48,6 +48,7 @@ from pipeline.pool_globals import (
     _get_bm2_uploads,
 )
 from pipeline.pool_fingerprints import _save_fingerprints_to_disk
+from pipeline.session_store import _VERSION_EVENT_KEY
 
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,7 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     # should_stale_on_reprocess is the single predicate (fail-safe: unknown -> LLM
     # -> staled). See docs/plans/phase3-reprocess-currency.md.
     from workflow.reprocess import should_stale_on_reprocess
+    from pipeline.session_store import save_section
 
     for pattern in ("bm2_*.json", "genomics_*.json"):
         for section_file in d.glob(pattern):
@@ -237,10 +239,18 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
                     # but stays guarded until a human re-accepts. No-op on a section
                     # holding no maturity fact (older/never-finalized).
                     _demote_section_facts(section_data)
-                    section_file.write_text(
-                        json.dumps(section_data, indent=2, default=str),
-                        encoding="utf-8",
-                    )
+                    # Phase 4: a reprocess that changes what the report says must
+                    # leave an AUDITABLE mark on the timeline before re-acceptance.
+                    # Route the write through save_section (not a bare write_text)
+                    # so the prior blessed version is archived and a cause-tagged
+                    # version is minted, born "needs-re-bless" (publish-blocked
+                    # until a human re-accepts — see accept_section_step). The
+                    # marker is transient: save_section pops it, so it never
+                    # persists in the section JSON.
+                    section_data[_VERSION_EVENT_KEY] = {
+                        "cause": "reprocess", "status": "needs-re-bless",
+                    }
+                    save_section(dtxsid, section_file.stem, section_data)
                     summary["marked_stale"].append(section_file.name)
                     logger.info("Marked %s as stale for %s", section_file.name, dtxsid)
             except Exception as e:

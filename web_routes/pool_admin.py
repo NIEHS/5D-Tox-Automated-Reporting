@@ -199,10 +199,21 @@ def invalidate_downstream(session_dir: Path, dry_run: bool = False) -> list[str]
                         )
                         store_content_facts(
                             data, demote_for_currency(section_facts(data)))
-                        section_file.write_text(
-                            json.dumps(data, indent=2, default=str),
-                            encoding="utf-8",
+                        # Phase 4: mirror pool_state.invalidate_pool_artifacts —
+                        # route the write through save_section so the reprocess
+                        # archives the prior blessed version and mints a cause-
+                        # tagged "needs-re-bless" version (one audit timeline, no
+                        # divergence between the server path and this CLI). The
+                        # session dir name is the DTXSID (find_session_dir builds
+                        # SESSIONS_DIR/{dtxsid}); save_section resolves the same
+                        # path from session_store.SESSIONS_DIR.
+                        from pipeline.session_store import (
+                            save_section, _VERSION_EVENT_KEY,
                         )
+                        data[_VERSION_EVENT_KEY] = {
+                            "cause": "reprocess", "status": "needs-re-bless",
+                        }
+                        save_section(session_dir.name, section_file.stem, data)
                     actions.append(
                         f"{'Would mark' if dry_run else 'Marked'} stale: {section_file.name}"
                     )

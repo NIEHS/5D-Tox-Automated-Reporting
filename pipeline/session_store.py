@@ -26,10 +26,13 @@ because LMDB's mmap()/flock() are incompatible with GCS FUSE mounts.
 """
 
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +44,26 @@ from pathlib import Path
 # variable — used when mounting a GCS bucket locally via gcsfuse or when
 # Cloud Run's GCS FUSE volume is mounted at a non-default path.
 SESSIONS_DIR = Path(os.environ.get("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
+
+# Cause-tagged version-event manifest (Phase 4, dual-cause versioned snapshots).
+# Append-only JSONL log, one file per section, colocated with that section's
+# archived versions under history/{section_key}/.  Each line records WHICH act
+# minted (or re-blessed) a version — `edit` (a human accepted) vs `reprocess`
+# (the system rewrote on new data) — plus the version number, a status, and a
+# timestamp.  Deliberately `.jsonl` (not `.json`): the version-count glob in
+# save_section and the version-list glob in the history route both match
+# `*.json`, and a `.jsonl` file is invisible to them, so the manifest can live
+# beside the archives without inflating version numbers.  Absent on old sessions
+# → read_version_history returns [] (missing cause = unknown, never a crash).
+_VERSION_INDEX = "index.jsonl"
+
+# The transient marker a caller stamps onto `data` to request a cause-tagged
+# version event.  save_section POPS it before writing (so it never persists in
+# the section JSON) and, when present, appends one manifest line for the version
+# it just wrote.  Absent → save_section behaves exactly as before (no manifest
+# side effect), so every existing caller (auto-save, unapprove, restore) stays
+# byte-identical and old goldens are untouched.  Shape: {"cause", "status"}.
+_VERSION_EVENT_KEY = "_version_event"
 
 
 # ---------------------------------------------------------------------------
@@ -125,10 +148,26 @@ def save_section(
     on generation).  In that mode the existing version number is
     preserved and no history file is written.
 
+    Cause-tagged versions (Phase 4): a caller may stamp a transient
+    '_version_event' = {"cause", "status"} onto `data` to record WHY this
+    version came to be — "edit" (a human accepted) born "blessed", or
+    "reprocess" (the system rewrote on new data) born "needs-re-bless".
+    save_section pops that marker (it never persists in the section JSON)
+    and appends one line to the section's version manifest for the version it
+    just wrote.  With archive=False the version number is preserved, so a
+    re-accept records a status flip (needs-re-bless → blessed) against the SAME
+    version rather than minting a new one.  No marker → no manifest write, so
+    unmarked callers (auto-save, unapprove, restore) are byte-unaffected.
+
     Version history layout:
-        sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json
+        sessions/{dtxsid}/history/{section_key}/{safe_timestamp}.json  — versions
+        sessions/{dtxsid}/history/{section_key}/index.jsonl            — cause log
     The current file ({section_key}.json) is always the latest version.
     """
+    # Pull the transient cause marker off `data` before anything is written so
+    # it never lands in the persisted section JSON (or an archived copy).
+    version_event = data.pop(_VERSION_EVENT_KEY, None)
+
     d = session_dir(dtxsid)
     current_path = d / f"{section_key}.json"
     history_dir = d / "history" / section_key
@@ -180,6 +219,89 @@ def save_section(
         meta = {"dtxsid": dtxsid, "created_at": now_iso()}
     meta["updated_at"] = now_iso()
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    # --- Cause-tagged version event (Phase 4) ---
+    # Best-effort: a manifest failure must never undo the content write above
+    # (invalidate_pool_artifacts relies on the stale flip persisting even if the
+    # audit line can't be appended — the caller's try/except is the outer net,
+    # this is the inner one).
+    if version_event:
+        _record_version_event(
+            history_dir, data.get("version", 1), version_event,
+        )
+
+
+def _record_version_event(history_dir: Path, version: int, event: dict) -> None:
+    """Append one cause-tagged line to the section's version manifest.
+
+    `event` is the caller's {"cause", "status"} intent; the line also carries the
+    version number it describes and a fresh timestamp.  Append-only: the manifest
+    is a timeline, so a re-accept adds a new line for the same version (status
+    changes; the current status is the most-recent line for that version) rather
+    than editing an earlier one.  Fully fail-soft — never raises."""
+    try:
+        history_dir.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "version": version,
+            "cause": event.get("cause", "unknown"),
+            "status": event.get("status", "unknown"),
+            "ts": now_iso(),
+        }
+        with (history_dir / _VERSION_INDEX).open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except Exception as e:  # pragma: no cover — defensive, audit must not abort work
+        logger.warning(
+            "Failed to record version event for %s: %s", history_dir, e,
+        )
+
+
+def read_version_history(dtxsid: str, section_key: str) -> list[dict]:
+    """Return the cause-tagged version events for a section, oldest first.
+
+    Parses history/{section_key}/index.jsonl into a list of
+    {version, cause, status, ts} dicts.  Returns [] when no manifest exists
+    (old, pre-Phase-4 sessions, or a section that never minted a tagged version)
+    — a section with only un-tagged archives is not an error.  Corrupt lines are
+    skipped, never raised."""
+    idx = SESSIONS_DIR / dtxsid / "history" / section_key / _VERSION_INDEX
+    if not idx.exists():
+        return []
+    events: list[dict] = []
+    try:
+        lines = idx.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue  # tolerate a partially-written line
+    return events
+
+
+def current_version_status(dtxsid: str, section_key: str) -> str | None:
+    """The status of the section's CURRENT version, from the manifest.
+
+    Reads the current file's version number, then returns the status of the most
+    recent manifest event for that version (last line wins — a reprocess's
+    needs-re-bless is superseded by a later re-accept's blessed against the same
+    version).  None when the section or its manifest is absent, or the current
+    version was never tagged (missing cause = unknown provenance, not a crash)."""
+    current = SESSIONS_DIR / dtxsid / f"{section_key}.json"
+    if not current.exists():
+        return None
+    try:
+        version = json.loads(current.read_text(encoding="utf-8")).get("version", 1)
+    except (json.JSONDecodeError, OSError):
+        return None
+    status = None
+    for event in read_version_history(dtxsid, section_key):
+        if event.get("version") == version:
+            status = event.get("status")  # append order → last match is current
+    return status
 
 
 def delete_section(dtxsid: str, section_key: str) -> None:
