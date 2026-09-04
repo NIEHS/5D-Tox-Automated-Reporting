@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, SectionData, SectionReadinessMap, SessionLoad } from "../api";
 import { useSectionReadiness } from "../useSectionReadiness";
+import { usePublishReadiness } from "../usePublishReadiness";
 import { ErrorBox, Spinner, StepProps } from "./shared";
 
 // Phase 6 — the document-section authoring stage, merged into the React wizard.
@@ -75,9 +76,19 @@ function humanizeKey(key: string): string {
 
 export function Author({ dtxsid, back, next }: StepProps) {
   const { readiness, refresh: refreshReadiness } = useSectionReadiness(dtxsid);
+  const { readiness: publish, refresh: refreshPublish } =
+    usePublishReadiness(dtxsid);
   const [session, setSession] = useState<SessionLoad | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // section_key -> the currency BLOCK reason ("regenerated because …"), for the
+  // per-section "re-accept" cue. Derived from the server publish gate, not guessed.
+  const blockedReason = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const b of publish.blocking) m[b.section_key] = b.reason;
+    return m;
+  }, [publish]);
 
   const loadSession = useCallback(async () => {
     if (!dtxsid) return;
@@ -98,7 +109,9 @@ export function Author({ dtxsid, back, next }: StepProps) {
   // Called after any authoring mutation: re-read content, re-derive readiness,
   // and re-materialize the preview so the docx/html files reflect the change.
   const afterMutation = useCallback(async () => {
-    await Promise.all([loadSession(), refreshReadiness()]);
+    // Re-derive readiness AND the publish gate: a re-accept clears a currency
+    // BLOCK, an unapprove can re-open one — both are server-derived, never guessed.
+    await Promise.all([loadSession(), refreshReadiness(), refreshPublish()]);
     if (dtxsid) {
       try {
         await api.materializePreview(dtxsid);
@@ -106,7 +119,7 @@ export function Author({ dtxsid, back, next }: StepProps) {
         // Preview rebuild is best-effort; the Preview step also rebuilds on entry.
       }
     }
-  }, [dtxsid, loadSession, refreshReadiness]);
+  }, [dtxsid, loadSession, refreshReadiness, refreshPublish]);
 
   // Result sections = every readiness key that is an instance family.
   const resultKeys = useMemo(
@@ -147,6 +160,7 @@ export function Author({ dtxsid, back, next }: StepProps) {
           title={fm.label}
           readiness={readiness}
           content={sectionContent(session, fm.key)}
+          blockedReason={blockedReason[fm.key]}
           dtxsid={dtxsid}
           onMutated={afterMutation}
           setError={setError}
@@ -174,12 +188,31 @@ export function Author({ dtxsid, back, next }: StepProps) {
               title={humanizeKey(key)}
               readiness={readiness}
               content={sectionContent(session, key)}
+              blockedReason={blockedReason[key]}
               dtxsid={dtxsid}
               onMutated={afterMutation}
               setError={setError}
               compact
             />
           ))}
+        </div>
+      )}
+
+      {/* Report-grain publish gate (server-derived currency BLOCK). A data
+          reprocess withdraws FINAL from LLM sections and flags them; publishing
+          is blocked until each is re-accepted. */}
+      {!publish.can_publish && (
+        <div className="publish-blocked" role="status">
+          <strong>Publishing blocked.</strong> {publish.blocking.length} section
+          {publish.blocking.length === 1 ? "" : "s"} were regenerated after a data
+          change and need to be re-accepted:
+          <ul>
+            {publish.blocking.map((b) => (
+              <li key={b.section_key}>
+                {humanizeKey(b.section_key)} — {b.reason.replace(/_/g, " ")}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -203,6 +236,7 @@ function SectionCard({
   index,
   readiness,
   content,
+  blockedReason,
   dtxsid,
   onMutated,
   setError,
@@ -213,6 +247,7 @@ function SectionCard({
   index?: number;
   readiness: SectionReadinessMap;
   content: SectionData | null;
+  blockedReason?: string;
   dtxsid: string;
   onMutated: () => Promise<void>;
   setError: (e: string | null) => void;
@@ -281,7 +316,15 @@ function SectionCard({
         </strong>
         <span className="section-badges">
           {approved && <span className="badge ok">approved</span>}
-          {stale && <span className="badge warn">stale</span>}
+          {/* A publish-blocking (regenerated) section shows WHY + a re-accept
+              cue; a plain stale flag without a block reason falls back to "stale". */}
+          {blockedReason ? (
+            <span className="badge warn" title={`Regenerated (${blockedReason}) — re-accept to publish`}>
+              re-accept
+            </span>
+          ) : (
+            stale && <span className="badge warn">stale</span>
+          )}
           {!enabled && <span className="badge">locked</span>}
         </span>
       </div>

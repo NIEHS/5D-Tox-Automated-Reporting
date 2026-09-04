@@ -108,6 +108,19 @@ button.danger { border-color: var(--err); color: var(--err); }
   gap: 0.5rem;
 }
 
+/* Report-grain publish gate banner (Author step) */
+.publish-blocked {
+  margin-top: 1rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 6px;
+  color: var(--warn);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.publish-blocked ul { margin: 0.35rem 0 0; padding-left: 1.2rem; }
+
 /* Tables */
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
