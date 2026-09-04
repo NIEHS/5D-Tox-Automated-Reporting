@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, SectionData, SectionReadinessMap, SessionLoad } from "../api";
 import { useSectionReadiness } from "../useSectionReadiness";
 import { usePublishReadiness } from "../usePublishReadiness";
+import { useServerResource, invalidate } from "../useServerResource";
 import { ErrorBox, Spinner, StepProps } from "./shared";
 
 // Phase 6 — the document-section authoring stage, merged into the React wizard.
@@ -75,12 +76,24 @@ function humanizeKey(key: string): string {
 }
 
 export function Author({ dtxsid, back, next }: StepProps) {
-  const { readiness, refresh: refreshReadiness } = useSectionReadiness(dtxsid);
-  const { readiness: publish, refresh: refreshPublish } =
-    usePublishReadiness(dtxsid);
-  const [session, setSession] = useState<SessionLoad | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { readiness } = useSectionReadiness(dtxsid);
+  const { readiness: publish } = usePublishReadiness(dtxsid);
+  // Session content is a keyed server resource too, so a single invalidate(dtxsid)
+  // re-pulls it alongside readiness + publish — no per-resource refresh list.
+  const {
+    data: sessionData,
+    loading,
+    error: loadError,
+  } = useServerResource<SessionLoad | null>(
+    dtxsid ? `session:${dtxsid}` : null,
+    () => api.loadSession(dtxsid as string),
+    null
+  );
+  const session = sessionData ?? null;
+  // Errors from a section-level mutation (save/approve) are separate from the
+  // session-load error; show whichever is set.
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const error = mutationError ?? loadError;
 
   // section_key -> the currency BLOCK reason ("regenerated because …"), for the
   // per-section "re-accept" cue. Derived from the server publish gate, not guessed.
@@ -90,36 +103,19 @@ export function Author({ dtxsid, back, next }: StepProps) {
     return m;
   }, [publish]);
 
-  const loadSession = useCallback(async () => {
-    if (!dtxsid) return;
-    setLoading(true);
-    try {
-      setSession(await api.loadSession(dtxsid));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [dtxsid]);
-
-  useEffect(() => {
-    void loadSession();
-  }, [loadSession]);
-
-  // Called after any authoring mutation: re-read content, re-derive readiness,
+  // After any authoring mutation, invalidate everything keyed to this session
+  // (session content + readiness + publish gate all re-pull automatically — the
+  // reactive query cache tracks the dependency, no hand-maintained refresh list)
   // and re-materialize the preview so the docx/html files reflect the change.
   const afterMutation = useCallback(async () => {
-    // Re-derive readiness AND the publish gate: a re-accept clears a currency
-    // BLOCK, an unapprove can re-open one — both are server-derived, never guessed.
-    await Promise.all([loadSession(), refreshReadiness(), refreshPublish()]);
-    if (dtxsid) {
-      try {
-        await api.materializePreview(dtxsid);
-      } catch {
-        // Preview rebuild is best-effort; the Preview step also rebuilds on entry.
-      }
+    if (!dtxsid) return;
+    await invalidate(dtxsid);
+    try {
+      await api.materializePreview(dtxsid);
+    } catch {
+      // Preview rebuild is best-effort; the Preview step also rebuilds on entry.
     }
-  }, [dtxsid, loadSession, refreshReadiness, refreshPublish]);
+  }, [dtxsid]);
 
   // Result sections = every readiness key that is an instance family.
   const resultKeys = useMemo(
@@ -163,7 +159,7 @@ export function Author({ dtxsid, back, next }: StepProps) {
           blockedReason={blockedReason[fm.key]}
           dtxsid={dtxsid}
           onMutated={afterMutation}
-          setError={setError}
+          setError={setMutationError}
         />
       ))}
       {/* bmd_summary is auto-derived; show it read-only when present. */}
@@ -191,7 +187,7 @@ export function Author({ dtxsid, back, next }: StepProps) {
               blockedReason={blockedReason[key]}
               dtxsid={dtxsid}
               onMutated={afterMutation}
-              setError={setError}
+              setError={setMutationError}
               compact
             />
           ))}

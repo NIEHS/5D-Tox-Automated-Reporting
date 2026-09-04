@@ -60,6 +60,20 @@ export interface SectionReadiness {
 }
 export type SectionReadinessMap = Record<string, SectionReadiness>;
 
+// Report-grain publish gate (Phase 3a currency BLOCK). GET
+// /api/workflow/{dtxsid}/publish-readiness. A data reprocess withdraws FINAL
+// from the report's LLM sections and stamps a `regenerated` reason; publishing
+// is blocked until each is re-accepted. Rendered ENTIRELY from this — never
+// guessed.
+export interface PublishBlocker {
+  section_key: string;
+  reason: string;
+}
+export interface PublishReadiness {
+  can_publish: boolean;
+  blocking: PublishBlocker[];
+}
+
 // A section's editable content as loaded from GET /api/session/{dtxsid}.
 export interface SectionData {
   paragraphs?: string[];
@@ -324,6 +338,12 @@ export const api = {
   getSectionReadiness: (dtxsid: string) =>
     fetch(`/api/workflow/${encodeURIComponent(dtxsid)}/section-readiness`).then(
       (r) => jsonOrThrow<SectionReadinessMap>(r)
+    ),
+
+  // DERIVED report-grain publish gate (currency BLOCK).
+  getPublishReadiness: (dtxsid: string) =>
+    fetch(`/api/workflow/${encodeURIComponent(dtxsid)}/publish-readiness`).then(
+      (r) => jsonOrThrow<PublishReadiness>(r)
     ),
 
   loadSession: (dtxsid: string) =>

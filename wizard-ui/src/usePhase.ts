@@ -1,33 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
 import { api, WorkflowState } from "./api";
+import { useServerResource } from "./useServerResource";
 
 // Reads the server-derived workflow state. The wizard never guesses the phase;
-// it calls refresh() after each mutating step and lets the backend tell it where
-// the pool actually is (phase is derived from disk artifacts).
+// the backend derives it from disk artifacts. Now backed by the shared reactive
+// query cache (useServerResource) keyed `phase:<dtxsid>`, so a mutation calling
+// invalidate(dtxsid) re-syncs it automatically — no manual refresh chain.
 export function usePhase(dtxsid: string | null) {
-  const [state, setState] = useState<WorkflowState | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (!dtxsid) {
-      setState(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setState(await api.getState(dtxsid));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [dtxsid]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  return { state, loading, error, refresh };
+  const { data, loading, error, refresh } = useServerResource<WorkflowState | null>(
+    dtxsid ? `phase:${dtxsid}` : null,
+    () => api.getState(dtxsid as string),
+    null
+  );
+  return { state: data ?? null, loading, error, refresh };
 }

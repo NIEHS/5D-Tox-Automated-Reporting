@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMemoState } from "./steps/shared";
 import { usePhase } from "./usePhase";
+import { invalidate } from "./useServerResource";
 import { Phase, ProcessPayload } from "./api";
 import { SessionPicker } from "./steps/SessionPicker";
 import { Upload } from "./steps/Upload";
@@ -87,7 +88,11 @@ export function App() {
   }
 
   async function afterMutation() {
-    await refresh();
+    // Any step's mutation re-syncs every resource keyed to this session
+    // (phase, readiness, publish, session content) via one declarative
+    // invalidate — no step needs to know WHICH resources it affected.
+    if (dtxsid) await invalidate(dtxsid);
+    else await refresh();
   }
 
   const common = {
