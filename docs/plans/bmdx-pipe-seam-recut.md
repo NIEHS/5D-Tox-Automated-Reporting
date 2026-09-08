@@ -181,6 +181,24 @@ never zip). Two different bars travelling in the same refactor; keep them straig
 - The Java `bmdx-core` engine evaluation is a SEPARATE track (different layer) —
   don't entangle it with this Python-seam re-cut.
 
+## ★ INCREMENT A1a DONE (2026-09-08) — director-run agent, verified
+Committed: bmdx-pipe `47fc10c` (delete twin + 6 unused helpers, −428 lines),
+rlm-bmdx `c13f6ab` (new `generate_platform_narrative` entry + 6 callers repointed +
+conftest mock). Presentation (per-platform narrative) has LEFT the library — the
+core seam objective for this increment. VERIFIED (not just agent report): goldens
+byte-UNCHANGED (data determinism held — stash-tested); auto-detect fallback builders
+self-filter with NO cross-leakage on mixed bm2 cards (the one real design risk,
+checked directly); twin+helpers grep-confirmed unused before delete; the 2 full-suite
+failures (latex_export real-session, docx caption interpolation) reproduce on the
+PRISTINE tree → pre-existing, unrelated. 40 targeted + 10 bmdx-pipe tests green.
+Pre-existing bmdx-pipe `java_bridge.py` drift left untouched/unstaged.
+- ★ ACCEPTED behavior change: bm2-card prose now renders NIEHS structure (was the
+  old PFHxSAm-prototype wording). Per the verification bar this is fine (prose,
+  coherence-gated). A human should eyeball the bm2 cards in the browser once.
+- CAVEAT (upload_routes L249/L753): the bm2 preview path has no clean platform
+  string → passes None → row-type auto-detect. Tested, works; noted as the visible
+  content-change surface.
+
 ## Recommended execution order: A → (confirm name) → B → C → D.
 Start with A (retire the duplicated narrative) — highest clarity, removes the
 literal proof of the mis-cut, and unblocks Phase-3b in the same move.
