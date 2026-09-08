@@ -42,10 +42,6 @@ from .apical_report import (
     export_categories,
     annotate_missing_animals,
     backfill_missing_doses,
-    add_apical_tables_to_doc,
-    add_bmd_summary_table_to_doc,
-    add_gene_set_bmd_tables_to_doc,
-    add_gene_bmd_tables_to_doc,
     TableRow,
 )
 
@@ -63,7 +59,6 @@ from .animal_report import (
     DomainAttrition,
     build_animal_report,
     report_to_dict,
-    add_animal_report_to_doc,
 )
 
 # ── LLM-based experiment metadata inference ──────────────────────────────
@@ -80,7 +75,6 @@ from .java_bridge import build_classpath, BMDX_PROJECT, JAVA_HELPER_DIR
 from .clinical_observations import (
     IncidenceRow,
     build_clinical_obs_tables,
-    add_incidence_table_to_doc,
 )
 
 # ── BM2 cache (optional LMDB memoisation of Java exports) ────────────────
