@@ -42,7 +42,6 @@ from .apical_report import (
     export_categories,
     annotate_missing_animals,
     backfill_missing_doses,
-    generate_results_narrative,
     add_apical_tables_to_doc,
     add_bmd_summary_table_to_doc,
     add_gene_set_bmd_tables_to_doc,
