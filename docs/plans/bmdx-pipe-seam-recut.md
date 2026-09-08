@@ -81,6 +81,39 @@ patterns (per-platform card vs unified section). Options:
   the 6 callers, delete the bmdx-pipe twin. Gate: byte-diff each caller's narrative
   old-vs-new (the templated builders were proven byte-identical in Phase 2, so a
   per-platform wrapper should match), + app narrative characterization tests.
+
+★★ A1 EXECUTION FINDING (2026-09-08, verified empirically) — BYTE-IDENTICAL IS
+IMPOSSIBLE. Ran both on the same input: the bmdx-pipe twin and the app's builders
+produce GENUINELY DIFFERENT prose, not the same text reshaped:
+  * Table numbers: twin DYNAMIC (`start_table_num` → Table 1/2); app HARDCODED
+    (Table 2/3).
+  * Organ-weight sentence STRUCTURE differs: twin "In {sex} rats at study
+    termination (Table N), Liver absolute weight was significantly decreased at
+    ≥50... The BMD and BMDL were X and Y (absolute weight)"; app "In {sex} rats at
+    study termination, a significant decrease in Liver absolute weight occurred in
+    dose groups ≥50...; these endpoints had negative trends (Table 3). The BMD
+    (BMDL) was X (Y) (absolute weight)."  Different clause order, different BMD
+    format ("BMD and BMDL were X and Y" vs "BMD (BMDL) was X (Y)").
+The app's unified_narrative was written to the NIEHS REFERENCE-REPORT structure;
+the bmdx-pipe twin follows the older PFHxSAm-prototype structure. They are two
+DIFFERENT generators, not a duplication to dedupe by swap. So retiring the twin
+CHANGES the bm2-card prose — a real, visible content change, not a no-op.
+→ REVISED A1 sub-fork (needs sign-off):
+  (A1a) ACCEPT the prose change: repoint callers to the app builders; the bm2 cards
+        now render the NIEHS-structured prose (the SAME structure the report already
+        uses — arguably MORE consistent). Update golden/characterization expectations
+        to the new text. This is the true dedup: one generator, NIEHS structure
+        everywhere. Table-number handling must be reconciled (cards may need a
+        per-platform table-num param, or accept the hardcoded refs).
+  (A1b) PRESERVE current bm2-card prose: MOVE generate_results_narrative from
+        bmdx-pipe INTO the app (narrative/) unchanged, delete it from bmdx-pipe.
+        Still removes the CROSS-SEAM leak (presentation leaves the lib) WITHOUT
+        changing any output — the safe move. Leaves TWO app-side generators
+        (prototype + NIEHS) to reconcile later. Byte-identical by construction.
+  → DIRECTOR LEAN: A1b — it achieves the seam goal (presentation off the lib) with
+    ZERO behavior change, and defers the harder "which prose structure wins" product
+    decision. A1a is the fuller cleanup but is a genuine content change the user
+    should choose deliberately, not as a refactor side effect.
 - Net: removes THE cross-seam duplication AND unblocks Phase-3b (editable card gets
   typed slots) in one move.
 - ★ NEEDS MAINTAINER SIGN-OFF: A1 vs A2 before executing (A1 touches 6 call sites +
