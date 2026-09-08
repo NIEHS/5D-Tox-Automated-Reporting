@@ -71,8 +71,8 @@ from bmdx_pipe import (
     _BM2_PLATFORM_MAP,
     detect_platform_and_type_from_bm2,
     export_genomics,
-    generate_results_narrative,
 )
+from narrative.unified_narrative import generate_platform_narrative
 
 from pipeline.pool_globals import _session_dir
 from web_routes.section_serializers import serialize_table_rows
@@ -592,8 +592,8 @@ def _build_section_cards(
                 # changes" text — which is correct.  DO NOT fall back to
                 # sex_rows because that includes the old pre-sidecar pivot
                 # rows which may have stale responsive=True flags.
-                narrative = generate_results_narrative(
-                    responsive_rows, compound_name, dose_unit,
+                narrative = generate_platform_narrative(
+                    platform, responsive_rows, compound_name, dose_unit,
                 )
                 sections.append({
                     "platform": platform,
@@ -646,8 +646,8 @@ def _build_section_cards(
                 )
 
                 if cp_result.get("table_data"):
-                    narrative = generate_results_narrative(
-                        responsive_rows, compound_name, dose_unit,
+                    narrative = generate_platform_narrative(
+                        platform, responsive_rows, compound_name, dose_unit,
                     )
                     sections.append({
                         "platform": platform,
@@ -690,8 +690,8 @@ def _build_section_cards(
                 )
 
                 if ow_result and ow_result.get("table_data"):
-                    narrative = generate_results_narrative(
-                        responsive_rows, compound_name, dose_unit,
+                    narrative = generate_platform_narrative(
+                        platform, responsive_rows, compound_name, dose_unit,
                     )
                     sections.append({
                         "platform": platform,
@@ -721,7 +721,8 @@ def _build_section_cards(
             continue
 
         tables_json = serialize_table_rows(sex_rows)
-        narrative = generate_results_narrative(responsive_rows, compound_name, dose_unit)
+        narrative = generate_platform_narrative(
+            platform, responsive_rows, compound_name, dose_unit)
         sections.append({
             "platform": platform,
             "title": platform,

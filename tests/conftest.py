@@ -199,9 +199,9 @@ def mock_bmdx_pipe():
             "pipeline.processing_helpers.export_genomics",
             return_value={},
         ),
-        # ExportCategories.java — BMD category lookup
+        # Per-platform narrative entry (app-side templated builder)
         "generate_results_narrative": patch(
-            "pipeline.processing_helpers.generate_results_narrative",
+            "pipeline.processing_helpers.generate_platform_narrative",
             return_value=[],
         ),
         # ExportBm2.java — .bm2 deserialization

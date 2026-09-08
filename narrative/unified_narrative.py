@@ -1166,6 +1166,68 @@ def generate_apical_narrative(
     return paragraphs
 
 
+def generate_platform_narrative(
+    platform: str | None,
+    sex_rows: dict[str, list],
+    compound_name: str,
+    dose_unit: str,
+) -> list[str]:
+    """
+    Per-platform narrative entry — one platform's {sex -> [TableRow]} at a time.
+
+    This is the templated replacement for bmdx_pipe.generate_results_narrative:
+    the per-card callers (bm2 upload preview, per-platform section cards) hand in
+    a single platform's rows and get back that platform's NIEHS-structured prose.
+    generate_apical_narrative / generate_clinical_pathology_narrative remain the
+    cross-platform unified entries; this composes the same _build_* builders for
+    one platform.
+
+    Dispatch:
+      - "Body Weight"    → _build_body_weight_paragraphs
+      - "Organ Weight"   → _build_organ_weight_paragraphs
+      - Clinical Chemistry / Hematology / Hormones → _build_sub_platform_paragraphs
+      - anything else / None → auto-detect by row type (mirrors the old twin's
+        _parse_organ_label dispatch): the body- and organ-weight builders each
+        self-filter to their row type, so a mixed bm2 card (body + organ weights,
+        no clean platform string) routes cleanly; when neither yields prose, fall
+        back to the generic sub-platform builder.
+
+    Args:
+        platform:      Canonical platform name, or None/unknown to auto-detect.
+        sex_rows:      {sex -> [TableRow]} for this one platform.
+        compound_name: Chemical name for prose.
+        dose_unit:     Dose unit string (e.g., "mg/kg").
+
+    Returns:
+        List of paragraph strings (possibly empty).
+    """
+    if not sex_rows:
+        return []
+
+    if platform == "Body Weight":
+        return _build_body_weight_paragraphs(
+            {"Body Weight": sex_rows}, compound_name, dose_unit)
+    if platform == "Organ Weight":
+        return _build_organ_weight_paragraphs(
+            {"Organ Weight": sex_rows}, compound_name, dose_unit)
+    if platform in CLINICAL_PATH_PLATFORMS:
+        return _build_sub_platform_paragraphs(
+            platform, sex_rows, compound_name, dose_unit)
+
+    # Unknown/None platform → auto-detect by row type.  Each builder self-filters
+    # (_build_body_weight keeps only body_weight rows; _build_organ_weight keeps
+    # only non-body-weight rows), so passing the same mixed sex_rows to both
+    # reproduces the old twin's body-then-organ structure.
+    out = _build_body_weight_paragraphs(
+        {"Body Weight": sex_rows}, compound_name, dose_unit)
+    out += _build_organ_weight_paragraphs(
+        {"Organ Weight": sex_rows}, compound_name, dose_unit)
+    if out:
+        return out
+    return _build_sub_platform_paragraphs(
+        platform or "", sex_rows, compound_name, dose_unit)
+
+
 def generate_clinical_pathology_narrative(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,

@@ -43,8 +43,8 @@ from web_routes.server_state import (
 )
 from bmdx_pipe import (
     build_table_data_from_bm2,
-    generate_results_narrative,
 )
+from narrative.unified_narrative import generate_platform_narrative
 from narrative.interpret import (
     ToxKBQuerier,
     fetch_gene_descriptions,
@@ -245,9 +245,11 @@ async def api_process_bm2(request: Request):
 
         # Generate the NTP-style results narrative from the table data.
         # This produces paragraphs describing body weight and organ weight
-        # findings that the user can edit in the UI before export.
-        narrative = generate_results_narrative(
-            table_data, compound_name, dose_unit,
+        # findings that the user can edit in the UI before export.  The bm2's
+        # table_data mixes body- and organ-weight rows with no clean platform
+        # string, so pass None to let the entry auto-detect by row type.
+        narrative = generate_platform_narrative(
+            None, table_data, compound_name, dose_unit,
         )
         upload["narrative"] = narrative
 
@@ -749,9 +751,10 @@ async def api_preview_file(file_id: str):
 
                     # Generate a default narrative (will be overwritten with
                     # real compound name / dose unit when the user processes
-                    # via the section builder)
-                    narrative = generate_results_narrative(
-                        table_data, "Test Compound", "mg/kg",
+                    # via the section builder).  None platform → auto-detect
+                    # by row type from the mixed bm2 table_data.
+                    narrative = generate_platform_narrative(
+                        None, table_data, "Test Compound", "mg/kg",
                     )
                     bm2_entry["narrative"] = narrative
                 except Exception as e:

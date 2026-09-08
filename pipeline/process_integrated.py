@@ -754,7 +754,7 @@ async def _get_sections(ctx):
     # the generic-path platforms (Clinical Chemistry / Hematology / Hormones);
     # the sidecar builders (Body/Organ Weight) and incidence cards keep theirs.
     if apical_sex_allow or ctx.assay_filters:
-        from bmdx_pipe import generate_results_narrative as _gen_narr
+        from narrative.unified_narrative import generate_platform_narrative
         _narr_tables = apply_apical_filters(
             platform_tables, sex_allow=apical_sex_allow, assay_filters=ctx.assay_filters,
         )
@@ -769,7 +769,8 @@ async def _get_sections(ctx):
                 for sex, rows in sex_rows.items()
             }
             responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
-            card["narrative"] = _gen_narr(responsive_rows, compound_name, dose_unit)
+            card["narrative"] = generate_platform_narrative(
+                plat, responsive_rows, compound_name, dose_unit)
 
     # ── Unified cross-platform narratives ─────────────────────────
     # The NIEHS reference report groups narrative prose into two
