@@ -1,7 +1,13 @@
 # 0017 — Content/provenance-based data classification (the xlsx is the anchor)
 
-- **Status:** Proposed (2026-09-08). Motivates and is scoped alongside the
-  bmdx-pipe seam re-cut (see `project_bmdx_pipe_seam`).
+- **Status:** Accepted (2026-09-08) — **Increment 1 DONE** (bmdx-pipe `7b4e749`):
+  a study-file xlsx classifies `tox_study` from its own Key+Data sheet content
+  (`fingerprint_xlsx` override on `is_study_file`), fixing the 4-error dose-mismatch
+  bug at its root; characterization net updated (10 pass, golden pool 4→0 errors),
+  rlm-bmdx goldens green. **Later increments** (Proposed): derived-file dataType from
+  numerical match to the xlsx anchor; unify classification with cross-validation;
+  the fallback-when-no-anchor path — scoped alongside the bmdx-pipe seam re-cut
+  (see `project_bmdx_pipe_seam`).
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0013](0013-package-layout.md) (the concern-package layout this
   extends into bmdx-pipe); `project_bmdx_pipe_seam` (the "pipe" misnomer + poor
