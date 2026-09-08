@@ -882,6 +882,19 @@ def fingerprint_xlsx(
     has_data_sheet = "Data" in wb.sheetnames
     fp.is_study_file = has_key_sheet and has_data_sheet
 
+    # --- CONTENT/PROVENANCE classification (ADR-0017), increment 1 ---
+    # A study-file xlsx IS the raw study-team source of truth — `tox_study` — by
+    # its OWN content (the Key+Data sheet structure above), not its filename. The
+    # line above (detect_platform_and_type by filename) mislabels NIEHS-native
+    # names like "..._Organ_Weight_Data.xlsx" as `inferred` for lack of a `_truth`
+    # token, which then spuriously fails the dose-group cross-check against the
+    # genuinely-inferred pivoted txt. Override here so the classifier reflects what
+    # the file demonstrably IS. Platform (from filename) is left as detected; only
+    # the data_type provenance is corrected. Non-study xlsx (no Key+Data sheets)
+    # keep the filename-derived data_type.
+    if fp.is_study_file:
+        fp.data_type = "tox_study"
+
     # --- Parse "Key to Column Labels" sheet for study metadata ---
     # Column D of this sheet sometimes has: study type (row 2), study number
     # (row 3), and date (row 4).

@@ -41,8 +41,12 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("filename,ext,expected", [
-    # ★ THE BUG: raw study-team xlsx, no _truth token → mislabeled 'inferred'.
-    # ADR-0017 flips this to ('Organ Weight', 'tox_study') from Key-tab content.
+    # detect_platform_and_type is the PURE FILENAME classifier and is UNCHANGED by
+    # ADR-0017: on the bare name (no content), a study xlsx still reads 'inferred'
+    # for lack of a _truth token. The ADR-0017 fix is an OVERRIDE in fingerprint_xlsx
+    # (when is_study_file, data_type → 'tox_study' from the Key+Data sheets) — see
+    # test_study_xlsx_classifies_tox_study_by_content below. So this pins that the
+    # filename classifier itself did NOT change.
     ("C20022-01_Individual_Animal_Organ_Weight_Data.xlsx", "xlsx",
      ("Organ Weight", "inferred")),
     ("C20022-01_Individual_Animal_Body_Weight_Data.xlsx", "xlsx",
@@ -88,26 +92,36 @@ def _fingerprint_all(files_dir: Path):
     return fps
 
 
-def test_golden_pool_produces_four_dose_mismatch_errors():
-    """The observed live-app behavior: exactly 4 dose_mismatch errors, all
-    xlsx-vs-short-txt within an Organ/Body Weight domain. Post-ADR-0017 this count
-    should drop to 0 (the xlsx becomes tox_study, so the dose check exempts the
-    cross-dataType pair). Pinned so that change is explicit."""
+def test_golden_pool_has_no_dose_mismatch_errors_after_adr0017():
+    """★ ADR-0017 increment 1: the bug is FIXED at its root. Before, the golden
+    pool produced 4 spurious dose_mismatch errors (raw xlsx mislabeled `inferred`,
+    compared against the genuinely-inferred short txt). Now the study xlsx
+    classifies `tox_study` from its Key+Data content, so the dose check's
+    cross-dataType exemption engages and the count is 0. (Was: assert len == 4.)"""
     fps = _fingerprint_all(_GOLDEN)
     report = validate_pool("DTXSID50469320", fps)
 
     errors = [i for i in report.issues if i.get("severity") == "error"]
     dose = [i for i in errors if i.get("issue_type") == "dose_mismatch"]
 
-    assert len(dose) == 4, (
-        f"expected 4 dose_mismatch errors (the bug), got {len(dose)}: "
+    assert len(dose) == 0, (
+        f"expected 0 dose_mismatch errors (ADR-0017 fix), got {len(dose)}: "
         f"{[i.get('message') for i in dose]}"
     )
-    # The `platform` field is the compound Platform|dataType key, and both sides
-    # are `|inferred` — THAT is the bug (the raw xlsx mislabeled inferred, so it
-    # is compared against the genuinely-inferred short txt as if they must match).
-    platforms = sorted({i.get("platform") for i in dose})
-    assert platforms == ["Body Weight|inferred", "Organ Weight|inferred"]
+
+
+def test_study_xlsx_classifies_tox_study_by_content():
+    """★ ADR-0017 increment 1: a study-file xlsx is `tox_study` from its OWN
+    content (Key+Data sheet structure = is_study_file), regardless of its filename
+    lacking a `_truth` token. This is the override in fingerprint_xlsx."""
+    fps = _fingerprint_all(_GOLDEN)
+    xlsx = [fp for fp in fps.values() if fp.file_type == "xlsx" and fp.is_study_file]
+    assert xlsx, "expected study xlsx in the golden pool"
+    for fp in xlsx:
+        assert fp.data_type == "tox_study", (
+            f"{fp.filename} is a study file but data_type={fp.data_type!r} "
+            f"(ADR-0017: study xlsx → tox_study by content)"
+        )
 
 
 def test_dose_check_exempts_cross_datatype_pairs():
