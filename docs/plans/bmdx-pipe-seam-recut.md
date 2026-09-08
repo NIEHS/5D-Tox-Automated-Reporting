@@ -140,6 +140,37 @@ With the seam clean, build the derived-file-dataType-from-anchor model in
 `file_integrator` (now clearly below the seam). Unify classification with
 cross-validation. This is where the "data model" improvement fully lands.
 
+## ★ VERIFICATION BAR — the load-bearing principle (maintainer, 2026-09-08)
+
+Do NOT gate byte-identical on prose (esp. AI-regenerated/templated narrative — a
+byte bar freezes old wording as if it were a contract, which is nonsense). DO gate
+byte-identical on everything DATA-DERIVED. The dividing test:
+
+  **"Could this differ between two correct runs on the SAME input data?"**
+  No → data-derived → DETERMINISTIC, byte-identical required (a change = regression
+       unless input changed).
+  Yes → authored/descriptive → gate COHERENCE (cites right numbers/direction), not
+       the string.
+
+| DETERMINISTIC (byte-gate) | AUTHORED (coherence-gate, NO byte bar) |
+|---|---|
+| table cell values, BMD/BMDL, dose groups, N counts | narrative prose (body-weight/organ findings) |
+| significance markers (*/**), NVM/NR/UREP codes | genomics interpretation |
+| **footnotes** (attrition notes from sidecar terminal | any LLM-regenerated text |
+|  flags; NA/ND legends; the `–` dead-out marker), | |
+|  captions, table/figure NUMBERS, cross-references | |
+
+★ FOOTNOTES ARE DETERMINISTIC — they look like text but are DATA-DERIVED (memory
+`expertise_ntp_statistics.md`: footnote scheme (a)/(b) boilerplate, (c,d,…)
+dynamically generated from sidecar terminal flags; `–`+attrition marker keyed to
+which dose groups died). A footnote changes ONLY if the data changed → byte-gate.
+Same for captions, table numbers, cross-refs.
+
+Consequence for THIS re-cut: Increment A moves PROSE (coherence bar, prose may
+change to NIEHS structure — accepted). Increment C moves the docx TABLE EMITTERS,
+which carry footnotes/captions/numbering → byte-gate those (compare document.xml,
+never zip). Two different bars travelling in the same refactor; keep them straight.
+
 ## Cross-cutting rules
 - Every increment: independently committable, characterization net green before
   AND after, rlm-bmdx goldens green. The import-graph guard
