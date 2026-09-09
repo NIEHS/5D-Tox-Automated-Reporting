@@ -2135,6 +2135,125 @@ def _check_roster_consistency(
     return issues
 
 
+# ---------------------------------------------------------------------------
+# Content-anchored dataType classification (ADR-0017, Increment D)
+# ---------------------------------------------------------------------------
+
+
+def _anchor_dose_set_for_sex(
+    anchor: "FileFingerprint",
+    sex: str | None,
+) -> set[float] | None:
+    """The set of dose GROUPS the study-xlsx anchor covers for ONE sex.
+
+    Prefers the per-sex `core_animals_by_dose_sex` (a dose is present for the sex
+    when it has at least one core animal of that sex). Falls back to the anchor's
+    whole-study `dose_groups` when the per-sex structure is absent (e.g. an xlsx
+    with no Selection column) or the sex is unknown. Returns None only when the
+    anchor carries no dose information at all.
+    """
+    cds = anchor.core_animals_by_dose_sex or {}
+    if cds and sex:
+        doses = {float(d) for d, by_sex in cds.items() if by_sex.get(sex)}
+        if doses:
+            return doses
+    if anchor.dose_groups:
+        return {float(d) for d in anchor.dose_groups}
+    return None
+
+
+def classify_derived_by_anchor(
+    fingerprints: dict[str, FileFingerprint],
+) -> dict[str, tuple[str | None, str]]:
+    """Derive each derived txt/csv file's dataType from its DOSE-GROUP
+    relationship to the study-xlsx ANCHOR — ADR-0017 Increment D.
+
+    The study xlsx self-identifies as the source-of-truth anchor (Increment 1:
+    is_study_file → tox_study). Here every txt/csv in the same platform is
+    compared to that anchor's dose-group set — fingerprint-only, no file
+    re-reads. The comparison is at the DOSE-GROUP level, deliberately NOT the
+    per-dose animal count:
+
+      * a dose group the anchor HAS is ENTIRELY ABSENT from the derived file →
+        PROVABLE LOSS → data_type = "inferred". This is the dead-out-dose drop
+        (all animals at that dose died, so the inferred/modeling file omits the
+        group so BMDExpress can curve-fit). A tox_study file preserves the
+        anchor's dose groups; only a modeling projection drops one.
+      * the derived file has the SAME dose-group set as the anchor → AMBIGUOUS.
+        Content cannot separate a faithful tox_study reshape from a no-gap
+        inferred pivot (e.g. Hormones / Clinical Chemistry, where nothing died).
+        Per the maintainer's decision we DO NOT override — the prior label
+        (filename / Confirm) stands.
+      * the derived file carries a dose the anchor LACKS → UNEXPECTED. Not a
+        provable projection; leave the label and let the structural checks
+        (_check_dose_consistency) surface any real conflict.
+
+    Why dose-GROUP not animal-count: a tox_study measurement file legitimately
+    contains FEWER animals than the anchor's assigned core roster — only animals
+    actually measured for that platform appear (biosampling / unmeasured animals
+    are absent). So "fewer animals than the anchor" does NOT prove inferred and
+    would wrongly relabel truth files. A whole DROPPED dose group is the clean,
+    provable signal.
+
+    Only CHANGES a label when content PROVES loss (a dropped dose group). Never
+    contradicts a human Confirm on ambiguous data. When the pool has no
+    study-xlsx anchor for a platform, that platform is skipped (filename stays
+    the fallback).
+
+    Mutates `fp.data_type` in place for the reclassified files and RETURNS a
+    decision log {file_id: (resulting_data_type, reason)} for every txt/csv
+    considered, so callers can report what happened.
+    """
+    # Index study-xlsx anchors by platform (only files that self-identify).
+    anchors: dict[str, FileFingerprint] = {}
+    for fp in fingerprints.values():
+        if fp.tier == TIER_XLSX and fp.is_study_file and fp.platform:
+            anchors[fp.platform] = fp
+
+    decisions: dict[str, tuple[str | None, str]] = {}
+    if not anchors:
+        return decisions
+
+    for fid, fp in fingerprints.items():
+        if fp.tier != TIER_TXT_CSV:
+            continue
+        # gene_expression txt is not an apical roster projection — never touch it.
+        if fp.data_type == "gene_expression":
+            continue
+        anchor = anchors.get(fp.platform)
+        if anchor is None:
+            continue  # no anchor for this platform → filename fallback stands
+
+        derived_doses = {float(d) for d in (fp.dose_groups or [])}
+        if not derived_doses:
+            decisions[fid] = (fp.data_type, "no_dose_groups")
+            continue
+
+        sex = (fp.sexes or [None])[0]
+        anchor_doses = _anchor_dose_set_for_sex(anchor, sex)
+        if not anchor_doses:
+            decisions[fid] = (fp.data_type, "anchor_no_dose_groups")
+            continue
+
+        # A dose in the derived file the anchor never had → unexpected conflict.
+        if derived_doses - anchor_doses:
+            decisions[fid] = (fp.data_type, "unexpected_dose_not_in_anchor")
+            continue
+
+        dropped_doses = anchor_doses - derived_doses
+        if dropped_doses:
+            # Provable loss vs the source of truth → inferred, from content.
+            if fp.data_type != "inferred":
+                fp.data_type = "inferred"
+            decisions[fid] = ("inferred", "provable_loss")
+            continue
+
+        # Same dose-group set as the anchor → ambiguous; keep the prior label.
+        decisions[fid] = (fp.data_type, "ambiguous_keep_prior")
+
+    return decisions
+
+
 def validate_pool(
     dtxsid: str,
     fingerprints: dict[str, FileFingerprint],
@@ -2164,6 +2283,15 @@ def validate_pool(
         ValidationReport with issues, coverage matrix, and completeness flag.
     """
     now = datetime.now(tz=timezone.utc).isoformat()
+
+    # --- Content-anchored dataType classification (ADR-0017, Increment D) ---
+    # Runs BEFORE the coverage matrix and dose checks so those see the
+    # content-derived label, not the filename guess: a derived txt whose roster
+    # provably lost data vs the study xlsx is relabeled "inferred" here, which is
+    # exactly what lets _check_dose_consistency's cross-datatype exemption fire.
+    # Only provable loss changes a label; ambiguous/anchorless files keep theirs.
+    classify_derived_by_anchor(fingerprints)
+
     matrix = _build_coverage_matrix(fingerprints)
     all_issues: list[ValidationIssue] = []
 

@@ -20,6 +20,7 @@ from .file_integrator import (
     fingerprint_file,
     validate_pool,
     lightweight_validate,
+    classify_derived_by_anchor,
     detect_platform_and_type_from_bm2,
     _BM2_PLATFORM_MAP,
 )

@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from bmdx_pipe.file_integrator import (
+    classify_derived_by_anchor,
     detect_platform_and_type,
     fingerprint_file,
     validate_pool,
@@ -144,3 +145,90 @@ def test_dose_check_exempts_cross_datatype_pairs():
             assert not (dtypes == {"tox_study", "inferred"}), (
                 f"cross-datatype pair wrongly flagged in {domain}: {iss.message}"
             )
+
+
+# ---------------------------------------------------------------------------
+# ADR-0017 Increment D — content-anchored dataType classification
+# ---------------------------------------------------------------------------
+
+
+def _by_name(fps: dict) -> dict:
+    """Re-key fingerprints by filename for readable assertions."""
+    return {fp.filename: fp for fp in fps.values()}
+
+
+def test_D_classifier_is_noop_on_correctly_labeled_golden():
+    """On the golden pool every derived file is already correctly labeled
+    (increment 1 + filename), so the anchor classifier must change NOTHING —
+    it only overrides when content PROVES loss, and here it never contradicts."""
+    fps = _fingerprint_all(_GOLDEN)
+    before = {fid: fp.data_type for fid, fp in fps.items()}
+    classify_derived_by_anchor(fps)
+    after = {fid: fp.data_type for fid, fp in fps.items()}
+    changed = {fid: (before[fid], after[fid]) for fid in before if before[fid] != after[fid]}
+    assert changed == {}, f"classifier changed labels on golden: {changed}"
+
+
+def test_D_detects_dropped_dose_as_inferred():
+    """The dropped-dose platforms (Body/Organ Weight, where 333/1000 mg/kg died
+    out) are content-proven `inferred`; nothing-dropped platforms are ambiguous
+    and keep their prior label."""
+    fps = _fingerprint_all(_GOLDEN)
+    decisions = classify_derived_by_anchor(fps)
+    named = {fps[fid].filename: reason for fid, (dt, reason) in decisions.items()}
+    # Dropped-dose files → provable_loss
+    for f in ("male_body_weight.txt", "female_body_weight.txt",
+              "male_organ_weights.txt", "female_organ_weights.txt"):
+        assert named.get(f) == "provable_loss", f"{f}: {named.get(f)}"
+    # No-death platforms → ambiguous (kept)
+    for f in ("male_hormone_data.txt", "male_clin_chem.txt"):
+        assert named.get(f) == "ambiguous_keep_prior", f"{f}: {named.get(f)}"
+
+
+def test_D_recovers_inferred_from_content_when_filename_lies():
+    """★ The ADR-0017 goal: classification independent of filename. A dropped-dose
+    file mislabeled `tox_study` (as a non-NIEHS filename would) is recovered to
+    `inferred` from its dose-group content."""
+    fps = _fingerprint_all(_GOLDEN)
+    named = _by_name(fps)
+    named["male_organ_weights.txt"].data_type = "tox_study"  # poison the label
+    classify_derived_by_anchor(fps)
+    assert named["male_organ_weights.txt"].data_type == "inferred"
+
+
+def test_D_does_not_override_ambiguous_label():
+    """Restraint: an ambiguous file (same dose-group set as the anchor) keeps
+    whatever label it had — content cannot override what content cannot prove."""
+    fps = _fingerprint_all(_GOLDEN)
+    named = _by_name(fps)
+    # Hormones has no deaths → ambiguous. Poison BOTH directions; both must stand.
+    named["male_hormone_data.txt"].data_type = "tox_study"
+    named["hormones_truth_male.txt"].data_type = "inferred"
+    classify_derived_by_anchor(fps)
+    assert named["male_hormone_data.txt"].data_type == "tox_study"
+    assert named["hormones_truth_male.txt"].data_type == "inferred"
+
+
+def test_D_does_not_touch_gene_expression_or_bm2():
+    """Gene-expression txt and every bm2 are outside the apical-roster model and
+    must never be reclassified by the anchor comparison."""
+    fps = _fingerprint_all(_GOLDEN)
+    before = {fid: fp.data_type for fid, fp in fps.items()
+              if fp.data_type == "gene_expression" or fp.file_type == "bm2"}
+    assert before, "expected gene_expression / bm2 files in the golden pool"
+    classify_derived_by_anchor(fps)
+    for fid, dt in before.items():
+        assert fps[fid].data_type == dt, f"{fps[fid].filename} was reclassified"
+
+
+def test_D_no_anchor_means_no_change():
+    """With no study-xlsx anchor in the pool, the classifier is inert — the
+    filename label remains the fallback."""
+    fps = _fingerprint_all(_GOLDEN)
+    # Drop every study xlsx anchor.
+    fps = {fid: fp for fid, fp in fps.items()
+           if not (fp.file_type == "xlsx" and fp.is_study_file)}
+    before = {fid: fp.data_type for fid, fp in fps.items()}
+    decisions = classify_derived_by_anchor(fps)
+    assert decisions == {}, "classifier acted despite no anchor"
+    assert {fid: fp.data_type for fid, fp in fps.items()} == before
