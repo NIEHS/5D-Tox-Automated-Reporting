@@ -3,11 +3,19 @@
 - **Status:** Accepted (2026-09-08) — **Increment 1 DONE** (bmdx-pipe `7b4e749`):
   a study-file xlsx classifies `tox_study` from its own Key+Data sheet content
   (`fingerprint_xlsx` override on `is_study_file`), fixing the 4-error dose-mismatch
-  bug at its root; characterization net updated (10 pass, golden pool 4→0 errors),
-  rlm-bmdx goldens green. **Later increments** (Proposed): derived-file dataType from
-  numerical match to the xlsx anchor; unify classification with cross-validation;
-  the fallback-when-no-anchor path — scoped alongside the bmdx-pipe seam re-cut
-  (see `project_bmdx_pipe_seam`).
+  bug at its root. **Increment D DONE** (bmdx-pipe `3b6f2cc`, 2026-09-09):
+  `classify_derived_by_anchor()` derives each DERIVED txt/csv's dataType from its
+  dose-group relationship to the anchor, wired into `validate_pool` before the dose
+  check; a dropped dose group (dead-out) → `inferred` from content, same dose-set →
+  ambiguous → keep prior label, no anchor → filename fallback. Fingerprint-only;
+  no-op on the correctly-labeled golden pool; recovers `inferred` from content when
+  a filename lies (16 characterization tests green). **Design refinement vs the
+  original text:** the signal is a dropped DOSE GROUP, not per-cell gap-fill — see
+  the Consequences update below. The classifier AUGMENTS the filename heuristic (it
+  can prove `inferred` and flag conflict, but cannot prove `tox_study` for a
+  no-loss file, which is genuinely ambiguous). Remaining (optional): the value-guard
+  ↔ classifier unification is realized at TWO tiers (txt=roster via this classifier;
+  bm2=cell imputation via the existing `_detect_imputed_cells`) rather than one op.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0013](0013-package-layout.md) (the concern-package layout this
   extends into bmdx-pipe); `project_bmdx_pipe_seam` (the "pipe" misnomer + poor
@@ -90,6 +98,33 @@ the ANCHOR; every other file's dataType is DERIVED from its relationship to it.
   (`project_bmdx_pipe_seam`). Doing it here is the MOTIVATION to perform the broad
   seam re-cut: classification is domain/computation logic that belongs BELOW the
   seam (a real data-model library), cleanly separated from presentation.
+
+## Consequences — refinement from building Increment D (2026-09-09)
+
+The original decision text (point 2) described `inferred` as "missing cells replaced
+by dose-group averages" and proposed a per-cell numerical value-match as the
+classifier. Building D against real data corrected this in two ways:
+
+- **Two distinct inference mechanisms, at two tiers.** (1) DOSE-GROUP DROP: a
+  dead-out dose group (all animals died) is omitted from the modeling file so
+  BMDExpress can curve-fit — visible at the pivot-txt tier as a missing dose group,
+  with surviving cells byte-identical to truth. (2) CELL IMPUTATION: an individual
+  missing cell inside a surviving dose group is filled with the dose-group mean —
+  this lives in the legacy/inferred BMDExpress upload (bm2 tier) and is already
+  detected by `_detect_imputed_cells` and footnoted in the report. The PFHxSAm
+  reference pool is DROP-DOMINANT (its reference PDF has no imputation footnote).
+- **So the txt-tier classifier keys on the ROSTER (dropped dose group), not cell
+  values.** A per-cell "exact match → tox_study" rule is unsound: the dropped-dose
+  inferred file's SURVIVING cells match the anchor exactly, so value-matching would
+  mislabel it. And a tox_study measurement file legitimately has fewer animals than
+  the anchor's assigned core roster (only measured animals appear), so per-dose
+  count-shrink is not a valid signal either — only a wholly-dropped dose group is.
+- **Ambiguity is irreducible for a no-loss file.** When nothing died (Hormones,
+  Clinical Chemistry), the inferred pivot and the tox_study file have identical
+  dose-group sets and matching values — content cannot separate them. The
+  classifier therefore keeps the prior (filename/Confirm) label rather than
+  guessing. This is why the classifier AUGMENTS rather than fully replaces the
+  filename heuristic.
 
 ## Caveats / open questions
 
