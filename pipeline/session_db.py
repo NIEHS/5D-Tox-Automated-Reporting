@@ -354,13 +354,25 @@ def _rows_genomics(dtxsid: str, genomics: dict | None):
 _PK_TABLES = frozenset({"study", "experiment", "source_file", "subject"})
 
 
+# Rows per bulk INSERT statement. One multi-row VALUES statement replaces N
+# single-row executemany round-trips; chunking bounds the SQL text + bind-param
+# count (DuckDB caps bound params per statement, so we never send the whole
+# measurement table — ~thousands of rows — as one statement).
+_BULK_CHUNK = 500
+
+
 def _insert(con, table: str, rows: list[tuple]) -> int:
-    """Insert value-tuples into a table. For PK-bearing tables, dedupe on the
+    """Bulk-insert value-tuples into a table. For PK-bearing tables, dedupe on the
     primary key (the first column) first, so a duplicate key in messy source data
     — e.g. experiments sharing a blank @ref, or two sidecars naming the same
     animal id — drops the dupe rather than aborting the whole build (the ADR's
     idempotent-load intent; DuckDB's INSERT OR IGNORE only applies to PK tables).
-    Column count is positional; a schema/loader arity mismatch still fails loudly."""
+    Column count is positional; a schema/loader arity mismatch still fails loudly.
+
+    Uses ONE multi-row ``INSERT ... VALUES (...),(...),...`` per chunk instead of
+    row-by-row ``executemany`` — the executemany path issued a separate insert per
+    tuple, which dominated the substrate build for the wide tables (measurement is
+    thousands of rows). Batched inserts collapse those round-trips."""
     if not rows:
         return 0
     if table in _PK_TABLES:
@@ -373,8 +385,12 @@ def _insert(con, table: str, rows: list[tuple]) -> int:
             deduped.append(r)
         rows = deduped
     ncols = len(rows[0])
-    placeholders = ", ".join(["?"] * ncols)
-    con.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)
+    row_ph = "(" + ", ".join(["?"] * ncols) + ")"
+    for start in range(0, len(rows), _BULK_CHUNK):
+        chunk = rows[start:start + _BULK_CHUNK]
+        values_sql = ", ".join([row_ph] * len(chunk))
+        flat: list = [v for r in chunk for v in r]
+        con.execute(f"INSERT INTO {table} VALUES {values_sql}", flat)
     return len(rows)
 
 
