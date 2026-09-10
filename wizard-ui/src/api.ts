@@ -254,6 +254,11 @@ export const api = {
       jsonOrThrow<{ fingerprints: Fingerprint[]; count: number }>(r)
     ),
 
+  getIdentity: (dtxsid: string) =>
+    fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/identity`).then((r) =>
+      jsonOrThrow<{ identity: Record<string, string> }>(r)
+    ),
+
   isProcessed: (dtxsid: string) =>
     fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/processed`).then((r) =>
       jsonOrThrow<{ processed: boolean }>(r)

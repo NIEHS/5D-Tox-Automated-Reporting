@@ -99,6 +99,10 @@ class WorkflowEngine:
             # files with distinct lifecycles (see module docstring).
             "hasIntegrated": self.store.artifact_exists(self.dtxsid, "integrated.json"),
             "hasAnimalReport": self.store.artifact_exists(self.dtxsid, "animal_report.json"),
+            # Presence of the query substrate (session.duckdb), built only at the
+            # end of Process — the cheap "has this session been processed" signal
+            # the data-prep DB-view button gates on. Read-only stat, like above.
+            "hasQuerySubstrate": self.store.artifact_exists(self.dtxsid, "session.duckdb"),
         }
 
     # -- derived state -----------------------------------------------------

@@ -81,6 +81,38 @@ body {
 .panel h2 { margin-top: 0; font-size: 1.05rem; }
 .panel p.help { color: var(--muted); line-height: 1.5; }
 
+/* Compound identifiers box (read-only) */
+.identity-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  padding: 0.6rem 0.85rem;
+  margin: 0.5rem 0 1rem;
+}
+.identity-box-head {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+.identity-box dl { margin: 0; }
+.identity-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+}
+.identity-row dt {
+  flex: 0 0 8.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.identity-row dd {
+  margin: 0;
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
 /* Buttons */
 button {
   font: inherit;
@@ -155,10 +187,22 @@ select, input[type="text"] {
 .file-list .size { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Status lines */
-.badge { padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.badge {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
 .badge.ok { background: rgba(74,222,128,0.15); color: var(--ok); }
 .badge.warn { background: rgba(251,191,36,0.15); color: var(--warn); }
 .badge.err { background: rgba(248,113,113,0.15); color: var(--err); }
+/* File-role pills on the upload list — tinted fills so the type reads as a
+   chip, not emboldened text bleeding into the filename. */
+.badge.bm2 { background: rgba(129,140,248,0.18); color: #a5b4fc; }
+.badge.data { background: rgba(56,189,248,0.15); color: var(--accent); }
 
 .spinner {
   display: inline-block; width: 16px; height: 16px;

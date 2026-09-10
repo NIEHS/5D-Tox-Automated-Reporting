@@ -73,6 +73,21 @@ async def api_wizard_processed(dtxsid: str):
     return JSONResponse({"processed": processed})
 
 
+@router.get("/api/wizard/{dtxsid}/identity")
+async def api_wizard_identity(dtxsid: str):
+    """The compound's cross-identifiers from identity.json (name, CASRN, DTXSID,
+    PubChem CID, EC number, IUPAC name — whichever are present).
+
+    A cheap read for the identifiers box shown on the session picker and the
+    Integrate & Approve step. Returns {} when the session has no identity file.
+    """
+    store = DiskPoolStore()
+    identity = store.read_json(dtxsid, "identity.json")
+    if not isinstance(identity, dict):
+        identity = {}
+    return JSONResponse({"identity": identity})
+
+
 @router.get("/api/wizard/{dtxsid}/fingerprints")
 async def api_wizard_fingerprints(dtxsid: str):
     """Detected per-file classification for the confirm-metadata screen.

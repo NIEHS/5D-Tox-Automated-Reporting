@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, SessionSummary } from "../api";
-import { ErrorBox, Spinner, StepProps } from "./shared";
+import { ErrorBox, IdentityBox, Spinner, StepProps } from "./shared";
 
 export function SessionPicker({ dtxsid, setDtxsid, next, refresh }: StepProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -47,6 +47,8 @@ export function SessionPicker({ dtxsid, setDtxsid, next, refresh }: StepProps) {
         continue, or enter a new DTXSID to start fresh — the folder is created
         when you upload the first file.
       </p>
+
+      <IdentityBox dtxsid={dtxsid} />
 
       <div className="field-row">
         <label>

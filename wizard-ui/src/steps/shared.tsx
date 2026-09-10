@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ProcessPayload, WorkflowState } from "../api";
+import { useEffect, useState } from "react";
+import { api, ProcessPayload, WorkflowState } from "../api";
 
 // Props every step receives from the App shell.
 export interface StepProps {
@@ -16,6 +16,8 @@ export interface StepProps {
   // Navigate between the two wizard modes (data-prep ↔ report).
   gotoReport: () => void;
   gotoIngest: () => void;
+  // Jump straight to the report-mode query console (the database view).
+  gotoQuery: () => void;
 }
 
 // useState backed by sessionStorage so a page reload keeps the wizard position
@@ -57,5 +59,65 @@ export function Spinner({ label }: { label?: string }) {
     <span>
       <span className="spinner" /> {label}
     </span>
+  );
+}
+
+// Read-only display of a compound's cross-identifiers (name / CASRN / DTXSID /
+// PubChem CID / EC number / IUPAC name). Renders only the identifiers actually
+// present in identity.json, in a stable order. Shown on the session picker and
+// the Integrate & Approve step so the operator can confirm which compound they
+// are working with. Purely informational — never editable.
+const IDENTITY_FIELDS: { key: string; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "casrn", label: "CASRN" },
+  { key: "dtxsid", label: "DTXSID" },
+  { key: "pubchem_cid", label: "PubChem CID" },
+  { key: "ec_number", label: "EC number" },
+  { key: "iupac_name", label: "IUPAC name" },
+];
+
+export function IdentityBox({ dtxsid }: { dtxsid: string | null }) {
+  const [identity, setIdentity] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!dtxsid) {
+      setIdentity(null);
+      return;
+    }
+    api
+      .getIdentity(dtxsid)
+      .then((r) => {
+        if (!cancelled) setIdentity(r.identity || {});
+      })
+      .catch(() => {
+        if (!cancelled) setIdentity({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dtxsid]);
+
+  if (!dtxsid || !identity) return null;
+
+  const rows = IDENTITY_FIELDS.filter(
+    (f) => identity[f.key] != null && String(identity[f.key]).trim() !== ""
+  );
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="identity-box">
+      <div className="identity-box-head">Compound identifiers</div>
+      <dl>
+        {rows.map((f) => (
+          <div key={f.key} className="identity-row">
+            <dt>{f.label}</dt>
+            <dd>
+              <code>{String(identity[f.key])}</code>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

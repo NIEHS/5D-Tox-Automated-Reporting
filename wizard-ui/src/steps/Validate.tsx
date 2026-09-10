@@ -30,7 +30,7 @@ export function Validate({ dtxsid, next, back, refresh }: StepProps) {
     <div className="panel">
       <h2>Step 3 · Validate</h2>
       <p className="help">
-        Re-fingerprints every file and runs cross-validation (platform coverage,
+        Fingerprints every file and runs cross-validation (platform coverage,
         dose-group consistency, animal counts, sex coverage). Error-severity
         issues block integration; warnings do not.
       </p>

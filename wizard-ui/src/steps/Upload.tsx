@@ -74,9 +74,8 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
       <h2>Step 2 · Upload study files</h2>
       <p className="help">
         Drag in the study's <code>.bm2</code> files and any{" "}
-        <code>.txt</code>/<code>.csv</code> tox-study tables (plus{" "}
-        <code>.sidecar.json</code> files). They land in this session's{" "}
-        <code>files/</code> folder.
+        <code>.txt</code>/<code>.csv</code> tox-study tables. They land in this
+        session's <code>files/</code> folder.
       </p>
 
       <div
@@ -124,7 +123,13 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
                       <li key={f.name}>
                         <span>
                           {f.name}{" "}
-                          <span className="badge">
+                          <span
+                            className={
+                              roleOf(f.name) === "bm2"
+                                ? "badge bm2"
+                                : "badge data"
+                            }
+                          >
                             {roleOf(f.name) === "bm2" ? "BMD result" : "data"}
                           </span>
                         </span>

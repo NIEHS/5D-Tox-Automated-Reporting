@@ -7,9 +7,7 @@ import { SessionPicker } from "./steps/SessionPicker";
 import { Upload } from "./steps/Upload";
 import { Validate } from "./steps/Validate";
 import { ConfirmMetadata } from "./steps/ConfirmMetadata";
-import { Integrate } from "./steps/Integrate";
-import { DataTree } from "./steps/DataTree";
-import { Approve } from "./steps/Approve";
+import { IntegrateApprove } from "./steps/IntegrateApprove";
 import { Process } from "./steps/Process";
 import { Results } from "./steps/Results";
 import { Author } from "./steps/Author";
@@ -26,9 +24,7 @@ const INGEST_STEPS = [
   { key: "upload", label: "Upload" },
   { key: "validate", label: "Validate" },
   { key: "confirm", label: "Confirm" },
-  { key: "integrate", label: "Integrate" },
-  { key: "tree", label: "Data tree" },
-  { key: "approve", label: "Approve" },
+  { key: "integrate-approve", label: "Integrate & Approve" },
 ] as const;
 
 const REPORT_STEPS = [
@@ -38,6 +34,9 @@ const REPORT_STEPS = [
   { key: "preview", label: "Preview" },
   { key: "query", label: "Query" },
 ] as const;
+
+// Index of the query console within REPORT_STEPS — the "database view" target.
+const REPORT_QUERY_INDEX = REPORT_STEPS.findIndex((s) => s.key === "query");
 
 type StepKey =
   | (typeof INGEST_STEPS)[number]["key"]
@@ -60,9 +59,8 @@ function phaseToStepIndex(phase: Phase | null, report: boolean): number {
     case "VALIDATED":
       return 3; // Confirm
     case "INTEGRATED":
-      return 5; // Data tree (view integrated), then Approve
     case "APPROVED":
-      return 6; // Approve (done) — offer the report link
+      return 4; // Integrate & Approve (combined)
     default:
       return 0;
   }
@@ -106,6 +104,20 @@ export function App() {
     setProcessResult,
     gotoReport: () => window.location.assign("/wizard/report"),
     gotoIngest: () => window.location.assign("/wizard/"),
+    // Deep-link to the report-mode query console: pre-seed the report step index
+    // (report mode reads "wizard.report.step" from sessionStorage on load) so the
+    // console opens directly instead of landing on Process.
+    gotoQuery: () => {
+      try {
+        sessionStorage.setItem(
+          "wizard.report.step",
+          JSON.stringify(REPORT_QUERY_INDEX)
+        );
+      } catch {
+        /* sessionStorage unavailable — report mode just starts at Process */
+      }
+      window.location.assign("/wizard/report");
+    },
   };
 
   function renderStep() {
@@ -119,12 +131,8 @@ export function App() {
         return <Validate {...common} />;
       case "confirm":
         return <ConfirmMetadata {...common} />;
-      case "integrate":
-        return <Integrate {...common} />;
-      case "tree":
-        return <DataTree {...common} />;
-      case "approve":
-        return <Approve {...common} />;
+      case "integrate-approve":
+        return <IntegrateApprove {...common} />;
       case "process":
         return <Process {...common} />;
       case "results":
