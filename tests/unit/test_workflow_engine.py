@@ -19,17 +19,30 @@ class FakeStore:
     `present` set of artifact names + `files`/`stale` toggles + a `docs` map."""
 
     def __init__(self, *, files=False, stale=False, present=None, docs=None,
-                 section_states=None, section_dicts=None):
+                 section_states=None, section_dicts=None, processed=False):
         self._files = files
         self._stale = stale
         self._present = set(present or ())
         self._docs = docs or {}
         self._section_states = section_states or {}
+        self._processed = processed
         # Full section dicts for publish_readiness; defaults to deriving trivial
         # {approved} dicts from section_states so existing tests need no change.
         self._section_dicts = section_dicts or {
             k: {"approved": v} for k, v in self._section_states.items()
         }
+
+    # session_dir backs the engine's `processed` resource check (_is_processed
+    # globs `_cache_ntp_*.json`). Return a real temp dir, seeding the NTP cache
+    # marker when this store is flagged processed.
+    def session_dir(self, dtxsid):
+        import tempfile
+        from pathlib import Path
+        if not hasattr(self, "_sdir"):
+            self._sdir = Path(tempfile.mkdtemp(prefix="fakestore_"))
+            if self._processed:
+                (self._sdir / "_cache_ntp_deadbeef.json").write_text("{}")
+        return self._sdir
 
     # presence checks used by gather_artifacts
     def has_files(self, dtxsid):
@@ -159,34 +172,42 @@ def test_state_is_rederived_not_cached():
 
 # --- section readiness (Phase 1) -------------------------------------------
 
-def test_section_readiness_locked_until_background_or_result_approved():
+def test_summary_locked_until_background_or_result_approved():
+    # Summary synthesizes approved content → approval-gated.
     store = FakeStore(files=True, section_states={})
     r = WorkflowEngine("DTX", store).derive_section_readiness()
-    assert r["methods"]["enabled"] is False
     assert r["summary"]["enabled"] is False
 
 
-def test_section_readiness_unlocks_on_background_approval():
+def test_summary_unlocks_on_background_approval():
     store = FakeStore(files=True, section_states={"background": True})
     r = WorkflowEngine("DTX", store).derive_section_readiness()
-    assert r["methods"]["enabled"] is True
     assert r["summary"]["enabled"] is True
 
 
-def test_section_readiness_unlocks_on_result_approval():
+def test_summary_unlocks_on_result_approval():
     store = FakeStore(files=True, section_states={"bm2_liver": True})
     r = WorkflowEngine("DTX", store).derive_section_readiness()
-    assert r["methods"]["enabled"] is True
     assert r["summary"]["enabled"] is True
+
+
+def test_methods_gated_on_processed_not_approval():
+    # ★ M&M unlocks on the `processed` resource (study metadata exists post-Process),
+    # NOT on approval (ADR-0018). Unprocessed → blocked even with background approved.
+    unprocessed = FakeStore(files=True, section_states={"background": True}, processed=False)
+    assert WorkflowEngine("DTX", unprocessed).derive_section_readiness()["methods"]["enabled"] is False
+    # Processed → enabled even with nothing approved.
+    processed = FakeStore(files=True, section_states={}, processed=True)
+    assert WorkflowEngine("DTX", processed).derive_section_readiness()["methods"]["enabled"] is True
 
 
 def test_section_readiness_is_rederived_not_cached():
+    # Summary flips live when background is approved out-of-band.
     store = FakeStore(files=True, section_states={})
     eng = WorkflowEngine("DTX", store)
-    assert eng.derive_section_readiness()["methods"]["enabled"] is False
-    # Approve background out-of-band; the engine must reflect it live.
+    assert eng.derive_section_readiness()["summary"]["enabled"] is False
     store._section_states["background"] = True
-    assert eng.derive_section_readiness()["methods"]["enabled"] is True
+    assert eng.derive_section_readiness()["summary"]["enabled"] is True
 
 
 # --- publish readiness (Phase 3a currency BLOCK) ---------------------------

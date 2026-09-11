@@ -50,6 +50,16 @@ def _has_knowledge_base() -> bool:
     return Path(_KNOWLEDGE_BASE_FILE).exists()
 
 
+def _is_processed(session_dir) -> bool:
+    """Whether the session has been Processed — its section content exists. Gated on
+    the NTP cache (the first Process stage), same signal the wizard `/processed`
+    route uses. Cheap glob; no content load. Gates M&M generation (its study
+    metadata all exists post-Process)."""
+    from pathlib import Path
+    d = Path(session_dir)
+    return d.exists() and bool(list(d.glob("_cache_ntp_*.json")))
+
+
 @dataclass
 class WorkflowState:
     """A medium-agnostic snapshot of the pool workflow. UIs render this; they do
@@ -156,7 +166,10 @@ class WorkflowEngine:
         section_states = self.store.read_section_states(self.dtxsid)
         return derive_section_readiness(
             section_states,
-            resources={"knowledge_base": _has_knowledge_base()},
+            resources={
+                "knowledge_base": _has_knowledge_base(),
+                "processed": _is_processed(self.store.session_dir(self.dtxsid)),
+            },
         )
 
     # -- derived publish readiness (currency BLOCK, report grain) ----------

@@ -34,31 +34,46 @@ from workflow.section_readiness import derive_section_readiness
 # Only Methods and Summary have dependencies; everything else is always enabled.
 # Each row lists the sections that are APPROVED and asserts whether methods /
 # summary are enabled. "results" = any bm2_* or genomics_* approved.
-_CASES = [
-    # (label, approved_keys, methods_enabled, summary_enabled)
-    ("nothing approved",                     set(),                                 False, False),
-    ("only background approved",             {"background"},                        True,  True),
-    ("one apical result approved",           {"bm2_organ-and-body-weights"},        True,  True),
-    ("one genomics result approved",         {"genomics_liver_male"},               True,  True),
-    ("bmd_summary approved (not a result)",  {"bmd_summary"},                       False, False),
-    ("methods approved but nothing else",    {"methods"},                           False, False),
-    ("background + result approved",         {"background", "bm2_clinical-path"},   True,  True),
-    ("result present but NOT approved",      set(),                                 False, False),
+# ★ SUMMARY is approval-gated (it synthesizes APPROVED sections): unlocks on
+# `background approved OR ≥1 result approved`. METHODS is NO LONGER approval-gated —
+# it unlocks on the `processed` resource (see the separate methods tests below), so
+# these cases pass resources={} (unprocessed) to isolate the SUMMARY approval rule.
+_SUMMARY_CASES = [
+    # (label, approved_keys, summary_enabled)
+    ("nothing approved",                     set(),                                 False),
+    ("only background approved",             {"background"},                        True),
+    ("one apical result approved",           {"bm2_organ-and-body-weights"},        True),
+    ("one genomics result approved",         {"genomics_liver_male"},               True),
+    ("bmd_summary approved (not a result)",  {"bmd_summary"},                       False),
+    ("summary approved but nothing else",    {"summary"},                           False),
+    ("background + result approved",         {"background", "bm2_clinical-path"},   True),
+    ("result present but NOT approved",      set(),                                 False),
 ]
 
 
 @pytest.mark.parametrize(
-    "label,approved,methods_enabled,summary_enabled",
-    [(c[0], c[1], c[2], c[3]) for c in _CASES],
+    "label,approved,summary_enabled",
+    [(c[0], c[1], c[2]) for c in _SUMMARY_CASES],
 )
-def test_methods_summary_readiness_matches_js(label, approved, methods_enabled, summary_enabled):
-    # section_states maps key → approved bool. Include the approved keys as
-    # True; that is all derive_section_readiness needs.
+def test_summary_readiness_approval_gated(label, approved, summary_enabled):
+    # section_states maps key → approved bool. Summary synthesizes approved content,
+    # so it stays approval-gated.
     section_states = {k: True for k in approved}
     readiness = derive_section_readiness(section_states)
-
-    assert readiness["methods"]["enabled"] is methods_enabled, f"methods, case: {label}"
     assert readiness["summary"]["enabled"] is summary_enabled, f"summary, case: {label}"
+
+
+def test_methods_gated_on_processed_not_approval():
+    # ★ M&M unlocks on the `processed` resource (study metadata exists post-Process),
+    # NOT on any approval. Corrected from the ambiguous JS port (ADR-0018).
+    # Unprocessed → blocked regardless of approvals:
+    r = derive_section_readiness({"background": True}, resources={"processed": False})
+    assert r["methods"]["enabled"] is False
+    assert r["methods"]["blocked_by"] == ["processed"]
+    # Processed → enabled even with nothing approved:
+    r2 = derive_section_readiness({}, resources={"processed": True})
+    assert r2["methods"]["enabled"] is True
+    assert r2["methods"]["blocked_by"] == []
 
 
 def test_unconditional_sections_always_enabled():
@@ -74,13 +89,15 @@ def test_unconditional_sections_always_enabled():
     assert r2["bm2_liver"]["approved"] is False
 
 
-def test_blocked_by_lists_both_unlock_groups():
-    # When Methods/Summary are blocked, either group would unblock them (OR).
+def test_blocked_by_lists_unlock_groups():
+    # When Summary is blocked, either approval group would unblock it (OR).
     r = derive_section_readiness({})
-    assert r["methods"]["blocked_by"] == ["background", "results"]
     assert r["summary"]["blocked_by"] == ["background", "results"]
+    # Methods is blocked by the processed resource when unprocessed.
+    assert r["methods"]["blocked_by"] == ["processed"]
     # Enabled → empty blocked_by.
-    r2 = derive_section_readiness({"background": True})
+    r2 = derive_section_readiness({"background": True}, resources={"processed": True})
+    assert r2["summary"]["blocked_by"] == []
     assert r2["methods"]["blocked_by"] == []
 
 
@@ -110,12 +127,12 @@ def test_instance_sections_surface_when_on_disk():
     assert "bm2_liver" in r and "genomics_kidney_female" in r
 
 
-def test_readiness_is_pure_function_of_approved_set():
+def test_summary_is_pure_function_of_approved_set():
     # Two different section_states with the same APPROVED subset yield the same
-    # methods/summary verdict — readiness derives from approvals, nothing else.
+    # SUMMARY verdict — the approval-gated rule derives from approvals, nothing else.
     a = derive_section_readiness({"background": True, "methods": False})
     b = derive_section_readiness({"background": True, "summary": False})
-    assert a["methods"]["enabled"] == b["methods"]["enabled"] is True
+    assert a["summary"]["enabled"] == b["summary"]["enabled"] is True
 
 
 # --- KB resource gate: genomics interpretation is grounded in the knowledge graph

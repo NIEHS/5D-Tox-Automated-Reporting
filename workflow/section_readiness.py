@@ -55,20 +55,30 @@ _SINGLETON_KEYS: tuple[str, ...] = ("background", "methods", "bmd_summary", "sum
 # one group is satisfied (OR semantics — mirrors the JS `||`). An empty tuple
 # means "no approval dependency" (available as soon as its data exists).
 _UNLOCK_RULES: dict[str, tuple[str, ...]] = {
-    "background": (),      # front matter — always available
+    "background": (),      # front matter — always available (deps = identity only)
     "bm2": (),             # apical result — gated by data, not by another approval
     "genomics": ("knowledge_base",),  # genomics interpretation is grounded in the
                                        # knowledge graph (bmdx.duckdb → graph-grounded
                                        # references); gated on the KB being present
     "bmd_summary": (),     # auto-derived apical BMD summary — always available
-    "methods": ("background", "results"),   # background approved OR ≥1 result approved
-    "summary": ("background", "results"),   # background approved OR ≥1 result approved
+    # M&M is GENERATED from study metadata that all exists AFTER Process (fingerprints,
+    # .bm2 caches, animal report). It does NOT depend on any human approval — so it
+    # unlocks on DATA PRESENCE ("processed"), a resource group. (Corrected from the
+    # ambiguous JS port that gated it on background/result APPROVAL — see ADR-0018 /
+    # the authoring-lifecycle model.)
+    "methods": ("processed",),
+    # Summary genuinely SYNTHESIZES approved sections (/api/generate-summary reads the
+    # approved set, errors "No approved sections found"). So it correctly stays
+    # APPROVAL-gated: unlock on background approved OR ≥1 result approved.
+    "summary": ("background", "results"),
 }
 
-# Unlock groups that are satisfied by an EXTERNAL resource (not the approved-set).
-# Passed into derive_section_readiness as flags rather than read from section
-# approvals. Today only the knowledge base (bmdx.duckdb).
-_RESOURCE_GROUPS: frozenset[str] = frozenset({"knowledge_base"})
+# Unlock groups satisfied by an EXTERNAL resource / data-presence flag (NOT the
+# approved-set). Passed into derive_section_readiness as flags rather than read from
+# section approvals:
+#   knowledge_base — bmdx.duckdb present (gates genomics interpretation)
+#   processed      — the session has been Processed (section content exists); gates M&M
+_RESOURCE_GROUPS: frozenset[str] = frozenset({"knowledge_base", "processed"})
 
 
 def _section_type_for_key(section_key: str) -> str:
