@@ -650,6 +650,15 @@ def load_session_data(
             if not replaced:
                 sections.insert(0, {"label": "Background", "text": abs_bg})
 
+    # ── Front matter: authors / contributors / publication overrides ──
+    # Human-set metadata the pipeline can't derive, persisted by the Configure UI.
+    # Overlaid identically here and in marshal_export_data (report_data) so preview
+    # and export agree.
+    front_matter = _load_json(session_dir / "front_matter.json")
+    if isinstance(front_matter, dict) and front_matter:
+        from rendering.front_matter import overlay_front_matter
+        overlay_front_matter(data, front_matter)
+
     # ── BMD summary endpoints ─────────────────────────────────────────
     bmd_path = _latest(session_dir, "_cache_bmd_summary_*.json")
     bmd_cache = _load_json(bmd_path)

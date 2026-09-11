@@ -13,6 +13,7 @@ export function Landing({
   refresh,
   gotoIngest,
   gotoReport,
+  gotoConfigure,
 }: StepProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -189,6 +190,17 @@ export function Landing({
                   ) : (
                     <span className="badge warn">needs approved data</span>
                   )}
+                </div>
+              </button>
+
+              <button
+                className="pillar"
+                onClick={gotoConfigure}
+                title="Set authors, publication details, and document structure"
+              >
+                <div className="pillar-title">Configure the report</div>
+                <div className="pillar-sub">
+                  Authors, publication details, and document structure.
                 </div>
               </button>
 

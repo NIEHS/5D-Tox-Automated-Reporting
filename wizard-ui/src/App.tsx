@@ -4,6 +4,7 @@ import { usePhase } from "./usePhase";
 import { invalidate } from "./useServerResource";
 import { Phase, ProcessPayload } from "./api";
 import { Landing } from "./steps/Landing";
+import { Configure } from "./steps/Configure";
 import { Upload } from "./steps/Upload";
 import { Validate } from "./steps/Validate";
 import { ConfirmMetadata } from "./steps/ConfirmMetadata";
@@ -18,9 +19,10 @@ import { Query } from "./steps/Query";
 //   /              → LANDING: pick a test article, then a workstream (dispatch).
 //   /workflow/     → DATA prep: prepare the data pool up through approval.
 //   /workflow/report → DOCUMENT: process, review sections, preview, hand off.
+//   /workflow/configure → CONFIGURE: authors/publication + document structure.
 // The chooser is step 0 conceptually, but it lives on the landing (NOT part of a
-// workflow). The two workflows share the selected session via sessionStorage.
-type Mode = "landing" | "data" | "document";
+// workflow). The workflows share the selected session via sessionStorage.
+type Mode = "landing" | "data" | "document" | "configure";
 
 const DATA_STEPS = [
   { key: "upload", label: "Upload" },
@@ -46,6 +48,7 @@ type StepKey =
 
 function currentMode(): Mode {
   const path = window.location.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/workflow/configure") || path.endsWith("/configure")) return "configure";
   if (path.endsWith("/workflow/report") || path.endsWith("/report")) return "document";
   if (path.endsWith("/workflow")) return "data";
   return "landing";
@@ -110,6 +113,7 @@ export function App() {
     gotoReport: () => window.location.assign("/workflow/report"),
     gotoIngest: () => window.location.assign("/workflow/"),
     gotoLanding: () => window.location.assign("/"),
+    gotoConfigure: () => window.location.assign("/workflow/configure"),
     // Deep-link to the document-mode query console: pre-seed the document step
     // index (document mode reads it from sessionStorage on load) so the console
     // opens directly instead of landing on Process.
@@ -130,6 +134,24 @@ export function App() {
   // chooser + workstream pillars and navigates into the two workflows.
   if (mode === "landing") {
     return <Landing {...common} />;
+  }
+
+  // Configure is also standalone (its own tabs, not a stepper). Back returns home.
+  if (mode === "configure") {
+    return (
+      <div className="wizard">
+        <div className="wizard-header">
+          <h1>5D-Tox Configure</h1>
+          <span className="session">
+            <a href="/" style={{ marginRight: 12, color: "var(--accent)" }}>
+              ← home
+            </a>
+            {dtxsid || "no session"}
+          </span>
+        </div>
+        <Configure {...common} back={() => window.location.assign("/")} />
+      </div>
+    );
   }
 
   function renderStep() {

@@ -462,6 +462,12 @@ if _wizard_dir.exists():
     async def _workflow_report():
         return _index_response()
 
+    # Configure mode — another client-side SPA route (authors/publication +
+    # document structure). Same reason it needs an explicit index route.
+    @app.get("/workflow/configure")
+    async def _workflow_configure():
+        return _index_response()
+
     app.mount("/workflow", StaticFiles(directory=_wizard_dir, html=True), name="workflow")
 else:
     logger.warning("Front end not built (%s missing) — / and /workflow disabled. "

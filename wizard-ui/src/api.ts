@@ -75,6 +75,26 @@ export interface PublishReadiness {
 }
 
 // A section's editable content as loaded from GET /api/session/{dtxsid}.
+// Configurator: human-set report front-matter.
+export interface FrontMatterAuthor {
+  name: string;
+  affiliation?: string;
+  role?: string;
+}
+export interface FrontMatterContributor {
+  name: string;
+  role?: string;
+}
+export interface FrontMatter {
+  authors?: FrontMatterAuthor[];
+  contributors?: FrontMatterContributor[];
+  publication?: {
+    report_number?: string;
+    doi?: string;
+    report_date?: string;
+  };
+}
+
 export interface SectionData {
   paragraphs?: string[];
   // Materialized apical result sections carry their prose as `narrative` (a
@@ -261,6 +281,37 @@ export const api = {
     fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/identity`).then((r) =>
       jsonOrThrow<{ identity: Record<string, string> }>(r)
     ),
+
+  // --- Configurator: front-matter metadata (authors/contributors/publication) ---
+  getFrontMatter: (dtxsid: string) =>
+    fetch(`/api/document/${encodeURIComponent(dtxsid)}/front-matter`).then((r) =>
+      jsonOrThrow<{ front_matter: FrontMatter }>(r)
+    ),
+  saveFrontMatter: (dtxsid: string, front_matter: FrontMatter) =>
+    fetch(`/api/document/${encodeURIComponent(dtxsid)}/front-matter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ front_matter }),
+    }).then((r) => jsonOrThrow<{ ok: boolean; front_matter: FrontMatter }>(r)),
+
+  // --- Configurator: document structure (session YAML, over the existing route) ---
+  getDocumentConfig: (dtxsid: string, loadDefault = false) =>
+    fetch(
+      `/api/document-config/${encodeURIComponent(dtxsid)}${loadDefault ? "?default=1" : ""}`
+    ).then((r) => jsonOrThrow<{ yaml: string; is_default: boolean }>(r)),
+  saveDocumentConfig: async (dtxsid: string, yaml: string) => {
+    const r = await fetch(`/api/document-config/${encodeURIComponent(dtxsid)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ yaml }),
+    });
+    // 422 carries the validation message — surface it as the error text.
+    if (r.status === 422) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.detail || "Invalid document structure");
+    }
+    return jsonOrThrow<{ ok: boolean }>(r);
+  },
 
   // Generate + persist Materials & Methods. /api/generate-methods extracts study
   // metadata (fingerprints/.bm2/animal report) + calls the LLM, returns the

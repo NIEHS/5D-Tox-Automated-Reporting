@@ -342,6 +342,22 @@ def marshal_export_data(
     about = body.get("about_report")
     if about:
         data["about_report"] = about
+    else:
+        # No about_report in the body → overlay the session's persisted front-matter
+        # (authors/contributors + publication overrides) from disk, so the export
+        # paths (Overleaf bundle, compile-pdf) fill the same About/Publication
+        # sections the preview does. Keyed by the body's dtxsid.
+        _dtxsid = body.get("dtxsid")
+        if _dtxsid:
+            from rendering.front_matter import overlay_front_matter
+            from pipeline.session_store import session_dir as _sdir
+            import json as _json
+            fm_path = _sdir(_dtxsid) / "front_matter.json"
+            try:
+                fm = _json.loads(fm_path.read_text(encoding="utf-8")) if fm_path.exists() else {}
+            except (OSError, ValueError):
+                fm = {}
+            overlay_front_matter(data, fm)
 
     peer_review = body.get("peer_review")
     if peer_review:

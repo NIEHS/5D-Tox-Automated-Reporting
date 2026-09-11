@@ -24,7 +24,7 @@ already a single clean call:
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from workflow.store import DiskPoolStore
@@ -86,6 +86,55 @@ async def api_wizard_identity(dtxsid: str):
     if not isinstance(identity, dict):
         identity = {}
     return JSONResponse({"identity": identity})
+
+
+@router.get("/api/document/{dtxsid}/front-matter")
+async def api_get_front_matter(dtxsid: str):
+    """Read the session's human-set front-matter (authors, contributors, publication
+    overrides) for the Configure surface. Returns {} when none is saved yet.
+
+    Shape: {authors:[{name,affiliation,role}], contributors:[{name,role}],
+    publication:{report_number,doi,report_date}}.
+    """
+    store = DiskPoolStore()
+    fm = store.read_json(dtxsid, "front_matter.json")
+    if not isinstance(fm, dict):
+        fm = {}
+    return JSONResponse({"front_matter": fm})
+
+
+@router.post("/api/document/{dtxsid}/front-matter")
+async def api_save_front_matter(dtxsid: str, request: Request):
+    """Persist the session's front-matter. Validates the top-level shape (authors /
+    contributors lists, publication object), drops junk, writes front_matter.json.
+    The About This Report + Publication Details sections fill from this on next
+    render."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    fm = body.get("front_matter") if isinstance(body, dict) else None
+    if not isinstance(fm, dict):
+        return JSONResponse({"error": "front_matter object required"}, status_code=400)
+
+    def _people(rows, keys):
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            if isinstance(r, dict):
+                out.append({k: str(r.get(k, "")).strip() for k in keys})
+        return out
+
+    clean = {
+        "authors": _people(fm.get("authors"), ("name", "affiliation", "role")),
+        "contributors": _people(fm.get("contributors"), ("name", "role")),
+        "publication": {
+            k: str(v).strip()
+            for k, v in (fm.get("publication") or {}).items()
+            if k in ("report_number", "doi", "report_date") and str(v).strip()
+        },
+    }
+    DiskPoolStore().write_json(dtxsid, "front_matter.json", clean)
+    return JSONResponse({"ok": True, "front_matter": clean})
 
 
 @router.get("/api/wizard/{dtxsid}/fingerprints")

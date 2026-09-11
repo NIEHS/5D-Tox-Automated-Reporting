@@ -17,6 +17,7 @@ export interface StepProps {
   gotoReport: () => void;
   gotoIngest: () => void;
   gotoLanding: () => void;
+  gotoConfigure: () => void;
   // Jump straight to the document-mode query console (the database view).
   gotoQuery: () => void;
 }
