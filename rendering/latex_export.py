@@ -694,9 +694,23 @@ def load_session_data(
         # absent ⇒ the scaffold placeholders stand.  (Per-version narrative
         # regeneration is a follow-up — the default version, which the Overleaf
         # export uses today, is correct.)
+        # Translate the cached process/JS keys (apical, clinical_pathology) to the
+        # tree's narrative_keys (animal_condition, …) — the SAME map the export path
+        # uses. Without this the narrative is stored under "apical" while the render
+        # looks it up under "animal_condition", so the preview showed
+        # "Narrative pending" for a narrative that DID exist (and rendered fine in
+        # the export). Normalize each value to a paragraph list (cache entries are
+        # already lists, but be tolerant of a {paragraphs} dict).
         unified = sections_cache.get("unified_narratives")
         if isinstance(unified, dict) and unified:
-            data["unified_narratives"] = unified
+            from rendering.report_data_overlays import UNIFIED_NARRATIVE_KEY_MAP
+            mapped: dict = {}
+            for key, val in unified.items():
+                paras = val.get("paragraphs", []) if isinstance(val, dict) else val
+                if paras:
+                    mapped[UNIFIED_NARRATIVE_KEY_MAP.get(key, key)] = paras
+            if mapped:
+                data["unified_narratives"] = mapped
 
     # ── Materials & Methods prose ─────────────────────────────────────
     # The LLM Methods pass writes a bare dict with a `sections` list whose

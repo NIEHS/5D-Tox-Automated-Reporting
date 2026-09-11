@@ -23,6 +23,19 @@ from pathlib import Path
 from tables.table_builder_common import lettered_footnote, finalize_footnotes
 
 
+# Unified cross-platform narratives are cached under process/JS keys
+# ("apical", "clinical_pathology") but the DocNode tree resolves them by
+# narrative_key ("animal_condition", "clinical_pathology"). This map bridges the
+# two. Shared so BOTH population paths translate identically — the marshal/export
+# path (_overlay_unified_and_bmd) and the session-reload/preview path
+# (latex_export.load_session_data). Keeping it in one place is what prevents the
+# preview showing "Narrative pending" while the export renders the same narrative.
+UNIFIED_NARRATIVE_KEY_MAP: dict[str, str] = {
+    "apical": "animal_condition",
+    "clinical_pathology": "clinical_pathology",
+}
+
+
 # ---------------------------------------------------------------------------
 # Session cache lookup
 # ---------------------------------------------------------------------------
@@ -327,14 +340,9 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
     # The NIEHS reference has one narrative for "Animal Condition, Body Weights,
     # and Organ Weights" and one for "Clinical Pathology", rendered before their
     # respective table groups.
-    # Unified narratives — map from JS keys (apical, clinical_pathology)
-    # to Typst template group keys (animal_condition, clinical_pathology).
-    # The JS uses "apical" for the Animal Condition group because that was
-    # the original key before the TOC restructure.
-    _UNIFIED_KEY_MAP = {
-        "apical": "animal_condition",
-        "clinical_pathology": "clinical_pathology",
-    }
+    # Unified narratives — map process/JS keys (apical, clinical_pathology) to the
+    # tree's narrative_keys (animal_condition, clinical_pathology). "apical" is the
+    # original Animal Condition key from before the TOC restructure.
     unified_narr = body.get("unified_narratives", {})
     if unified_narr:
         data["unified_narratives"] = {}
@@ -343,7 +351,7 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
             if isinstance(narr_data, list):
                 paras = narr_data
             if paras:
-                typst_key = _UNIFIED_KEY_MAP.get(key, key)
+                typst_key = UNIFIED_NARRATIVE_KEY_MAP.get(key, key)
                 data["unified_narratives"][typst_key] = paras
 
     # Internal Dose Assessment
