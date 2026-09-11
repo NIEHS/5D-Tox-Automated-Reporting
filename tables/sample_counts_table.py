@@ -45,6 +45,31 @@ from narrative.methods_models import MethodsContext
 # Sample-counts table builder
 # ---------------------------------------------------------------------------
 
+def _lookup_dose_count(sex_data: dict, dose: float) -> int:
+    """Read the sample count for a dose, tolerating key-type drift.
+
+    `ctx.dose_groups` are floats, but genomics_sample_counts arrives from a JSON
+    cache (_cache_methods_*.json) with its dose keys coerced to STRINGS. A plain
+    `sex_data.get(dose)` then misses every cell and the whole table renders as
+    dashes even though the counts are present. Try the float key, the str key, and
+    a numeric-equality match (so "4.0"/"4"/4.0 all resolve)."""
+    if not sex_data:
+        return 0
+    if dose in sex_data:
+        return sex_data[dose] or 0
+    for key in (str(dose), str(int(dose)) if float(dose).is_integer() else None):
+        if key is not None and key in sex_data:
+            return sex_data[key] or 0
+    # Last resort: numeric-equality scan (handles "4.00" etc.).
+    for k, v in sex_data.items():
+        try:
+            if float(k) == float(dose):
+                return v or 0
+        except (ValueError, TypeError):
+            continue
+    return 0
+
+
 def build_sample_counts_table(ctx: MethodsContext) -> dict | None:
     """
     Build the Final Sample Counts for BMD Analysis of Transcriptomics Data table.
@@ -90,7 +115,7 @@ def build_sample_counts_table(ctx: MethodsContext) -> dict | None:
             sex_data = ctx.genomics_sample_counts.get(organ, {}).get(sex, {})
             row = [f"  {organ}"]
             for dose in ctx.dose_groups:
-                count = sex_data.get(dose, 0)
+                count = _lookup_dose_count(sex_data, dose)
                 if count > 0:
                     row.append(str(count))
                 else:

@@ -84,6 +84,23 @@ def test_build_uses_context_counts_when_present():
     assert liver[1:] == ["10", "5", "–"]   # 333 → dash
 
 
+def test_build_handles_string_dose_keys_from_json_cache():
+    """★ Regression: genomics_sample_counts loaded from a JSON cache has its dose
+    keys coerced to STRINGS, while dose_groups stay float. A naive float-keyed
+    lookup missed every cell and the whole table rendered as dashes. The lookup
+    must resolve "0.0"/"37.0" against the 0.0/37.0 dose_groups."""
+    from tables.sample_counts_table import build_sample_counts_from_context
+    ctx = {
+        "dose_groups": [0.0, 37.0, 333.0],
+        "dose_unit": "mg/kg",
+        # String keys — exactly what json.load produces.
+        "genomics_sample_counts": {"Liver": {"Male": {"0.0": 10, "37.0": 5, "333.0": 0}}},
+    }
+    built = build_sample_counts_from_context(ctx)
+    liver = next(r for r in built["rows"] if r[0].strip() == "Liver")
+    assert liver[1:] == ["10", "5", "–"], "string dose keys must resolve, not dash out"
+
+
 def test_build_reconstructs_from_fingerprints_when_context_lacks_counts(tmp_path):
     """A stale cache (genomics_sample_counts absent) still yields Table 1 by
     reconstructing counts from the session's _fingerprints.json."""
