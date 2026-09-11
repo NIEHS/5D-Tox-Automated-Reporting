@@ -57,11 +57,18 @@ _SINGLETON_KEYS: tuple[str, ...] = ("background", "methods", "bmd_summary", "sum
 _UNLOCK_RULES: dict[str, tuple[str, ...]] = {
     "background": (),      # front matter — always available
     "bm2": (),             # apical result — gated by data, not by another approval
-    "genomics": (),        # genomics result — same
+    "genomics": ("knowledge_base",),  # genomics interpretation is grounded in the
+                                       # knowledge graph (bmdx.duckdb → graph-grounded
+                                       # references); gated on the KB being present
     "bmd_summary": (),     # auto-derived apical BMD summary — always available
     "methods": ("background", "results"),   # background approved OR ≥1 result approved
     "summary": ("background", "results"),   # background approved OR ≥1 result approved
 }
+
+# Unlock groups that are satisfied by an EXTERNAL resource (not the approved-set).
+# Passed into derive_section_readiness as flags rather than read from section
+# approvals. Today only the knowledge base (bmdx.duckdb).
+_RESOURCE_GROUPS: frozenset[str] = frozenset({"knowledge_base"})
 
 
 def _section_type_for_key(section_key: str) -> str:
@@ -80,8 +87,16 @@ def _section_type_for_key(section_key: str) -> str:
     return section_key  # unknown → no rule → treated as always-enabled
 
 
-def _group_satisfied(group: str, approved_keys: set[str]) -> bool:
-    """Whether an unlock group is satisfied by the approved-set."""
+def _group_satisfied(
+    group: str,
+    approved_keys: set[str],
+    resources: dict[str, bool],
+) -> bool:
+    """Whether an unlock group is satisfied.
+
+    Approval groups are satisfied by the approved-set; RESOURCE groups (e.g.
+    knowledge_base) are satisfied by an external presence flag in `resources`.
+    """
     if group == "background":
         return "background" in approved_keys
     if group == "results":
@@ -89,21 +104,32 @@ def _group_satisfied(group: str, approved_keys: set[str]) -> bool:
             k.startswith("bm2_") or k.startswith("genomics_")
             for k in approved_keys
         )
+    if group in _RESOURCE_GROUPS:
+        return bool(resources.get(group))
     return False
 
 
-def derive_section_readiness(section_states: dict[str, bool]) -> dict[str, dict]:
+def derive_section_readiness(
+    section_states: dict[str, bool],
+    resources: dict[str, bool] | None = None,
+) -> dict[str, dict]:
     """Derive per-section readiness from the approved-state of every section.
 
     `section_states` maps on-disk section_key → its `approved` boolean (what
-    `PoolStore.read_section_states` returns). This is the ONLY input: readiness
-    is a pure function of the approved-set + the declared `_UNLOCK_RULES`.
+    `PoolStore.read_section_states` returns). `resources` carries external
+    unlock signals that are NOT part of the approved-set — currently just
+    `{"knowledge_base": bool}` (whether bmdx.duckdb is present), which gates the
+    genomics-interpretation sections that ground their references in the graph.
+
+    Readiness is a pure function of these two inputs + the declared
+    `_UNLOCK_RULES`.
 
     Returns `{section_key: {"enabled": bool, "blocked_by": [group, ...],
     "approved": bool}}` for every singleton section plus every instance section
     present on disk. `blocked_by` lists the unlock groups (any one of which would
     enable the section); it is empty when the section is enabled.
     """
+    resources = resources or {}
     approved_keys = {k for k, approved in section_states.items() if approved}
 
     # Universe of keys to report on: the fixed singletons + any instance
@@ -117,7 +143,9 @@ def derive_section_readiness(section_states: dict[str, bool]) -> dict[str, dict]
             enabled = True
             blocked_by: list[str] = []
         else:
-            enabled = any(_group_satisfied(g, approved_keys) for g in groups)
+            enabled = any(
+                _group_satisfied(g, approved_keys, resources) for g in groups
+            )
             # OR semantics: when blocked, ANY of the groups would unblock it.
             blocked_by = [] if enabled else list(groups)
         readiness[key] = {

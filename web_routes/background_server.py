@@ -204,59 +204,9 @@ app.include_router(preview_routes.router)
 # GET / — serve the web UI
 # ---------------------------------------------------------------------------
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_ui():
-    """
-    Serve the main web UI (web/index.html).
-
-    The HTML file contains the full single-page application with chemical
-    ID form, .bm2 upload area, output panels, and copy/export buttons.
-
-    The document tree JSON is injected as a global variable so it's
-    available synchronously before Alpine processes the DOM.  This
-    avoids the async fetch + Alpine.initTree race condition where
-    dynamically added elements with Alpine directives don't get
-    processed by Alpine's initial DOM walk.
-    """
-    import json
-
-    html_path = Path(__file__).parent.parent / "web" / "index.html"
-    if not html_path.exists():
-        return HTMLResponse(
-            "<h1>Error</h1><p>web/index.html not found</p>",
-            status_code=404,
-        )
-    html = html_path.read_text(encoding="utf-8")
-
-    # Inject the document tree as a global variable before any other
-    # scripts run.  The tree is static (computed at module load), so
-    # this adds no per-request cost beyond string interpolation.
-    # Placed right before </head> so it's available when state.js and
-    # layout.js execute.
-    # Inject the document tree plus the chart styling config and chart-type
-    # registry as globals before any other scripts run.  All three are static
-    # (computed at module load), so this adds no per-request cost beyond string
-    # interpolation.  The JS chart surfaces read __CHART_STYLE__/__CHART_REGISTRY__
-    # to resolve the IDENTICAL effective style the Python export path uses (so the
-    # interactive browser view and the PDF can't drift); when absent (stale page)
-    # the JS falls back to its literals.
-    tree_json = json.dumps(_SERIALIZED_TREE)
-    chart_style_json = json.dumps(_CHART_STYLE_CFG)
-    chart_registry_json = json.dumps(_CHART_REGISTRY_PAYLOAD)
-    layout_schema_json = json.dumps(_LAYOUT_SCHEMA_PAYLOAD)
-    content_types_json = json.dumps(_CONTENT_TYPES_PAYLOAD)
-    tree_script = (
-        f'<script>window.__DOCUMENT_TREE__ = {tree_json};'
-        f'window.__CHART_STYLE__ = {chart_style_json};'
-        f'window.__CHART_REGISTRY__ = {chart_registry_json};'
-        f'window.__LAYOUT_SCHEMA__ = {layout_schema_json};'
-        f'window.__CONTENT_TYPES__ = {content_types_json};</script>\n'
-    )
-    html = html.replace('</head>', tree_script + '</head>')
-
-    return HTMLResponse(html)
-
-
+# The root route (GET /) is registered further down, after the frontend-dir guard:
+# it serves the new SPA landing (web_wizard/index.html). The retired Alpine root
+# handler that served web/index.html was removed when the Alpine UI was retired.
 # ---------------------------------------------------------------------------
 # GET /api/document-tree — serialized document structure tree
 # ---------------------------------------------------------------------------
@@ -478,41 +428,44 @@ async def no_cache_dev_assets(request: Request, call_next):
 
 
 # ---------------------------------------------------------------------------
-# Wizard UI — the from-scratch step-by-step front end (built from wizard-ui/).
+# The single-page front end (built from wizard-ui/). Three client-side surfaces:
 # ---------------------------------------------------------------------------
-# Mounted at /wizard, BEFORE the root catch-all below so it owns its own
-# namespace and never collides with the legacy app under web/. html=True serves
-# web_wizard/index.html at /wizard/ (Vite build with base="/wizard/"). Guarded so
-# the server still starts before the frontend has been built.
+#   /                 → LANDING (chooser + workstream pillars)
+#   /workflow/        → DATA prep
+#   /workflow/report  → DOCUMENT generation & review
+# The Vite build (base="/workflow/") lands in web_wizard/. The static mount at
+# /workflow serves its hashed assets; the landing at / and the client-side routes
+# (/workflow/report) are served the SPA index directly. The legacy Alpine app
+# under web/ is retired — the SPA now owns the root. Guarded so the server still
+# starts before the frontend has been built.
 _wizard_dir = Path(__file__).parent.parent / "web_wizard"
 if _wizard_dir.exists():
-    # Bare /wizard (no trailing slash) → /wizard/ so the SPA loads either way.
-    @app.get("/wizard")
-    async def _wizard_redirect():
-        from starlette.responses import RedirectResponse
-        return RedirectResponse(url="/wizard/")
-
-    # Report-generation mode is a client-side route of the same SPA. StaticFiles
-    # would 404 it (no such file on disk), so serve index.html and let the app
-    # switch to report mode from the path. Registered before the mount so it wins.
-    @app.get("/wizard/report")
-    async def _wizard_report():
+    def _index_response() -> HTMLResponse:
+        # Re-read each call so a rebuilt bundle is picked up without a restart.
         return HTMLResponse((_wizard_dir / "index.html").read_text(encoding="utf-8"))
 
-    app.mount("/wizard", StaticFiles(directory=_wizard_dir, html=True), name="wizard")
+    # Landing surface at the root.
+    @app.get("/")
+    async def _spa_root():
+        return _index_response()
+
+    # Bare /workflow (no trailing slash) → /workflow/ so the SPA loads either way.
+    @app.get("/workflow")
+    async def _workflow_redirect():
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url="/workflow/")
+
+    # Document mode is a client-side route of the same SPA. StaticFiles would 404
+    # it (no such file on disk), so serve index.html and let the app switch modes
+    # from the path. Registered before the mount so it wins.
+    @app.get("/workflow/report")
+    async def _workflow_report():
+        return _index_response()
+
+    app.mount("/workflow", StaticFiles(directory=_wizard_dir, html=True), name="workflow")
 else:
-    logger.warning("Wizard UI not built (%s missing) — /wizard disabled. "
+    logger.warning("Front end not built (%s missing) — / and /workflow disabled. "
                    "Run: cd wizard-ui && npm install && npm run build", _wizard_dir)
-
-
-# ---------------------------------------------------------------------------
-# Static file serving — CSS, JS, and other assets under web/
-# ---------------------------------------------------------------------------
-# Mounted AFTER all explicit @app routes so that named endpoints (like GET /)
-# take priority.  The StaticFiles handler is a catch-all that serves anything
-# inside the web/ directory (style.css, js/state.js, js/utils.js, js/main.js,
-# images, etc.) with correct MIME types and caching headers.
-app.mount("/", StaticFiles(directory=Path(__file__).parent.parent / "web"), name="static")
 
 
 # ---------------------------------------------------------------------------

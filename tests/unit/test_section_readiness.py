@@ -116,3 +116,41 @@ def test_readiness_is_pure_function_of_approved_set():
     a = derive_section_readiness({"background": True, "methods": False})
     b = derive_section_readiness({"background": True, "summary": False})
     assert a["methods"]["enabled"] == b["methods"]["enabled"] is True
+
+
+# --- KB resource gate: genomics interpretation is grounded in the knowledge graph
+#     (bmdx.duckdb), so genomics sections are gated on the knowledge_base resource.
+
+
+def test_genomics_gated_on_knowledge_base_present():
+    # With the KB present, a genomics instance is enabled.
+    r = derive_section_readiness(
+        {"genomics_liver_male": False}, resources={"knowledge_base": True}
+    )
+    assert r["genomics_liver_male"]["enabled"] is True
+    assert r["genomics_liver_male"]["blocked_by"] == []
+
+
+def test_genomics_blocked_when_knowledge_base_absent():
+    # With the KB absent, genomics sections are blocked — the per-section KB gate.
+    r = derive_section_readiness(
+        {"genomics_liver_male": False}, resources={"knowledge_base": False}
+    )
+    assert r["genomics_liver_male"]["enabled"] is False
+    assert r["genomics_liver_male"]["blocked_by"] == ["knowledge_base"]
+
+
+def test_apical_result_not_kb_gated():
+    # Only genomics (interpretation-bearing) sections need the KB; apical bm2
+    # results do not — they carry no graph-grounded references.
+    r = derive_section_readiness(
+        {"bm2_liver": False}, resources={"knowledge_base": False}
+    )
+    assert r["bm2_liver"]["enabled"] is True
+
+
+def test_resources_default_absent_gates_genomics():
+    # Omitting resources means no external groups are satisfied → genomics blocked.
+    # (Callers that care about genomics MUST pass resources; the engine does.)
+    r = derive_section_readiness({"genomics_liver_male": False})
+    assert r["genomics_liver_male"]["enabled"] is False

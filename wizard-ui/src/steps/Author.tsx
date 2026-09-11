@@ -126,6 +126,47 @@ export function Author({ dtxsid, back, next }: StepProps) {
     [readiness]
   );
 
+  // Auto-generate a generable-but-empty section once its dependencies are
+  // satisfied. Background depends solely on the test-article identity, so as soon
+  // as a session exists it is generable — but the Author surface only ever EDITS
+  // existing content, so an ungenerated Background shows empty. Fire generation
+  // once: enabled (deps met) + not approved + no content on disk. Guarded by a ref
+  // so a re-pull mid-generation doesn't retrigger it.
+  const [autoGen, setAutoGen] = useState<Record<string, boolean>>({});
+  const autoGenFired = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!dtxsid || loading) return;
+    const bgReady = readiness["background"];
+    const bgContent = sectionContent(session, "background");
+    const bgEmpty = (bgContent?.paragraphs?.length ?? 0) === 0;
+    const generable =
+      bgReady?.enabled && !bgReady?.approved && bgEmpty;
+    if (!generable || autoGenFired.current.has("background")) return;
+
+    autoGenFired.current.add("background");
+    setAutoGen((m) => ({ ...m, background: true }));
+    (async () => {
+      try {
+        const { identity } = await api.getIdentity(dtxsid);
+        const result = await api.generateBackground(identity);
+        const paragraphs = (result.paragraphs as string[]) ?? [];
+        if (paragraphs.length) {
+          await api.saveSection(dtxsid, "background", {
+            paragraphs,
+            references: result.references ?? [],
+          });
+          await afterMutation(); // re-pull so the card seeds from disk
+        }
+      } catch (e) {
+        setMutationError(e instanceof Error ? e.message : String(e));
+        // Allow a manual retry path later; clear the fired guard on failure.
+        autoGenFired.current.delete("background");
+      } finally {
+        setAutoGen((m) => ({ ...m, background: false }));
+      }
+    })();
+  }, [dtxsid, loading, readiness, session, afterMutation]);
+
   if (!dtxsid) {
     return (
       <div className="panel">
@@ -160,6 +201,7 @@ export function Author({ dtxsid, back, next }: StepProps) {
           dtxsid={dtxsid}
           onMutated={afterMutation}
           setError={setMutationError}
+          generating={autoGen[fm.key]}
         />
       ))}
       {/* bmd_summary is auto-derived; show it read-only when present. */}
@@ -254,6 +296,7 @@ function SectionCard({
   onMutated,
   setError,
   compact,
+  generating,
 }: {
   sectionKey: string;
   title: string;
@@ -265,6 +308,7 @@ function SectionCard({
   onMutated: () => Promise<void>;
   setError: (e: string | null) => void;
   compact?: boolean;
+  generating?: boolean;
 }) {
   const r = readiness[sectionKey];
   const enabled = r?.enabled ?? true;
@@ -400,6 +444,10 @@ function SectionCard({
       {!enabled ? (
         <p className="muted">
           Blocked — unlock by satisfying: {blockedBy.join(" or ") || "a dependency"}.
+        </p>
+      ) : generating ? (
+        <p className="muted">
+          <Spinner label="Generating from the test-article identity…" />
         </p>
       ) : (
         <>

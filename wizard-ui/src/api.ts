@@ -259,6 +259,61 @@ export const api = {
       jsonOrThrow<{ identity: Record<string, string> }>(r)
     ),
 
+  // Generate the Background section from the compound identity alone (ATSDR/IRIS/
+  // PubChem lookups + LLM). /api/generate streams SSE progress then a `complete`
+  // event carrying the result; we consume the stream and resolve with the final
+  // payload. Does NOT persist — the caller saves via saveSection.
+  generateBackground: async (
+    identity: Record<string, unknown>
+  ): Promise<{ paragraphs?: string[]; references?: unknown[] } & Record<string, unknown>> => {
+    const resp = await fetch(`/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity }),
+    });
+    if (!resp.ok || !resp.body) {
+      throw new Error(`Background generation failed (${resp.status})`);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result: Record<string, unknown> | null = null;
+    let errored: string | null = null;
+    // Parse the SSE stream: events separated by a blank line, each with an
+    // `event:` and a `data:` line. We only act on `complete` / `error`.
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() ?? ""; // keep the trailing partial event
+      for (const chunk of chunks) {
+        let ev = "message";
+        let data = "";
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (ev === "complete" && data) {
+          try {
+            result = JSON.parse(data);
+          } catch {
+            /* ignore malformed */
+          }
+        } else if (ev === "error" && data) {
+          try {
+            errored = (JSON.parse(data) as { error?: string }).error ?? data;
+          } catch {
+            errored = data;
+          }
+        }
+      }
+    }
+    if (errored) throw new Error(errored);
+    if (!result) throw new Error("Background generation produced no result");
+    return result;
+  },
+
   isProcessed: (dtxsid: string) =>
     fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/processed`).then((r) =>
       jsonOrThrow<{ processed: boolean }>(r)

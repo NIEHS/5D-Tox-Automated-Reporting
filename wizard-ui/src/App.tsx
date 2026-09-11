@@ -3,7 +3,7 @@ import { useMemoState } from "./steps/shared";
 import { usePhase } from "./usePhase";
 import { invalidate } from "./useServerResource";
 import { Phase, ProcessPayload } from "./api";
-import { SessionPicker } from "./steps/SessionPicker";
+import { Landing } from "./steps/Landing";
 import { Upload } from "./steps/Upload";
 import { Validate } from "./steps/Validate";
 import { ConfirmMetadata } from "./steps/ConfirmMetadata";
@@ -14,20 +14,22 @@ import { Author } from "./steps/Author";
 import { Preview } from "./steps/Preview";
 import { Query } from "./steps/Query";
 
-// The wizard is split into two modes, chosen by URL path:
-//   /wizard/         → INGEST: prepare the data pool up through approval.
-//   /wizard/report   → REPORT: run the (long) processing + view results.
-// Both share the selected session via sessionStorage, so approving in ingest
-// mode and following the "Generate report" link lands on the same session.
-const INGEST_STEPS = [
-  { key: "session", label: "Session" },
+// The app has three top-level surfaces, chosen by URL path:
+//   /              → LANDING: pick a test article, then a workstream (dispatch).
+//   /workflow/     → DATA prep: prepare the data pool up through approval.
+//   /workflow/report → DOCUMENT: run the (long) processing + review + author.
+// The chooser is step 0 conceptually, but it lives on the landing (NOT part of a
+// workflow). The two workflows share the selected session via sessionStorage.
+type Mode = "landing" | "data" | "document";
+
+const DATA_STEPS = [
   { key: "upload", label: "Upload" },
   { key: "validate", label: "Validate" },
   { key: "confirm", label: "Confirm" },
   { key: "integrate-approve", label: "Integrate & Approve" },
 ] as const;
 
-const REPORT_STEPS = [
+const DOCUMENT_STEPS = [
   { key: "process", label: "Process" },
   { key: "results", label: "Results" },
   { key: "author", label: "Author" },
@@ -35,51 +37,54 @@ const REPORT_STEPS = [
   { key: "query", label: "Query" },
 ] as const;
 
-// Index of the query console within REPORT_STEPS — the "database view" target.
-const REPORT_QUERY_INDEX = REPORT_STEPS.findIndex((s) => s.key === "query");
+// Index of the query console within DOCUMENT_STEPS — the "database view" target.
+const DOCUMENT_QUERY_INDEX = DOCUMENT_STEPS.findIndex((s) => s.key === "query");
 
 type StepKey =
-  | (typeof INGEST_STEPS)[number]["key"]
-  | (typeof REPORT_STEPS)[number]["key"];
+  | (typeof DATA_STEPS)[number]["key"]
+  | (typeof DOCUMENT_STEPS)[number]["key"];
 
-function isReportMode(): boolean {
-  return window.location.pathname.replace(/\/+$/, "").endsWith("/report");
+function currentMode(): Mode {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/workflow/report") || path.endsWith("/report")) return "document";
+  if (path.endsWith("/workflow")) return "data";
+  return "landing";
 }
 
-// Phase → active step index, per mode. A hint for the stepper; the user can
-// still click any chip.
-function phaseToStepIndex(phase: Phase | null, report: boolean): number {
-  if (report) return 0; // report mode always starts at Process
+// Phase → active step index within the DATA workflow. A hint for the stepper; the
+// user can still click any chip. (DATA_STEPS no longer includes the chooser, so
+// indices shift down by one from the old INGEST_STEPS.)
+function phaseToDataStep(phase: Phase | null): number {
   switch (phase) {
     case "EMPTY":
-      return 1; // Upload
+      return 0; // Upload
     case "UPLOADED":
     case "VALIDATION_ERRORS":
-      return 2; // Validate
+      return 1; // Validate
     case "VALIDATED":
-      return 3; // Confirm
+      return 2; // Confirm
     case "INTEGRATED":
     case "APPROVED":
-      return 4; // Integrate & Approve (combined)
+      return 3; // Integrate & Approve (combined)
     default:
       return 0;
   }
 }
 
 export function App() {
-  const report = isReportMode();
-  const STEPS = report ? REPORT_STEPS : INGEST_STEPS;
+  const mode = currentMode();
+  const STEPS = mode === "document" ? DOCUMENT_STEPS : DATA_STEPS;
 
   const [dtxsid, setDtxsid] = useMemoState<string | null>("wizard.dtxsid", null);
   const [stepIndex, setStepIndex] = useMemoState<number>(
-    report ? "wizard.report.step" : "wizard.step",
+    mode === "document" ? "wizard.document.step" : "wizard.data.step",
     0
   );
   const [processResult, setProcessResult] = useState<ProcessPayload | null>(null);
   const { state, refresh } = usePhase(dtxsid);
 
   const phase = state?.phase ?? null;
-  const suggested = phaseToStepIndex(phase, report);
+  const suggested = mode === "document" ? 0 : phaseToDataStep(phase);
 
   function goto(i: number) {
     setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
@@ -102,29 +107,34 @@ export function App() {
     back: () => goto(stepIndex - 1),
     processResult,
     setProcessResult,
-    gotoReport: () => window.location.assign("/wizard/report"),
-    gotoIngest: () => window.location.assign("/wizard/"),
-    // Deep-link to the report-mode query console: pre-seed the report step index
-    // (report mode reads "wizard.report.step" from sessionStorage on load) so the
-    // console opens directly instead of landing on Process.
+    gotoReport: () => window.location.assign("/workflow/report"),
+    gotoIngest: () => window.location.assign("/workflow/"),
+    gotoLanding: () => window.location.assign("/"),
+    // Deep-link to the document-mode query console: pre-seed the document step
+    // index (document mode reads it from sessionStorage on load) so the console
+    // opens directly instead of landing on Process.
     gotoQuery: () => {
       try {
         sessionStorage.setItem(
-          "wizard.report.step",
-          JSON.stringify(REPORT_QUERY_INDEX)
+          "wizard.document.step",
+          JSON.stringify(DOCUMENT_QUERY_INDEX)
         );
       } catch {
-        /* sessionStorage unavailable — report mode just starts at Process */
+        /* sessionStorage unavailable — document mode just starts at Process */
       }
-      window.location.assign("/wizard/report");
+      window.location.assign("/workflow/report");
     },
   };
+
+  // Landing is a standalone surface — no stepper, no per-step chrome. It owns the
+  // chooser + workstream pillars and navigates into the two workflows.
+  if (mode === "landing") {
+    return <Landing {...common} />;
+  }
 
   function renderStep() {
     const key = STEPS[stepIndex].key as StepKey;
     switch (key) {
-      case "session":
-        return <SessionPicker {...common} />;
       case "upload":
         return <Upload {...common} />;
       case "validate":
@@ -151,10 +161,16 @@ export function App() {
   return (
     <div className="wizard">
       <div className="wizard-header">
-        <h1>5D-Tox {report ? "Report" : "Data Prep"} Wizard</h1>
+        <h1>5D-Tox {mode === "document" ? "Document" : "Data Prep"}</h1>
         <span className="session">
-          {report && (
-            <a href="/wizard/" style={{ marginRight: 12, color: "var(--accent)" }}>
+          <a href="/" style={{ marginRight: 12, color: "var(--accent)" }}>
+            ← home
+          </a>
+          {mode === "document" && (
+            <a
+              href="/workflow/"
+              style={{ marginRight: 12, color: "var(--accent)" }}
+            >
               ← data prep
             </a>
           )}

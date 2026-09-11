@@ -38,6 +38,17 @@ from workflow.phases import (
 from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
 
+# The shared knowledge base (bmdx.duckdb) is a repo-level static artifact, resolved
+# cwd-relative — the same default ToxKBQuerier(db_path="bmdx.duckdb") uses, and the
+# server runs from the repo root. Not per-session.
+_KNOWLEDGE_BASE_FILE = "bmdx.duckdb"
+
+
+def _has_knowledge_base() -> bool:
+    """Whether the shared knowledge base (bmdx.duckdb) is present."""
+    from pathlib import Path
+    return Path(_KNOWLEDGE_BASE_FILE).exists()
+
 
 @dataclass
 class WorkflowState:
@@ -103,6 +114,12 @@ class WorkflowEngine:
             # end of Process — the cheap "has this session been processed" signal
             # the data-prep DB-view button gates on. Read-only stat, like above.
             "hasQuerySubstrate": self.store.artifact_exists(self.dtxsid, "session.duckdb"),
+            # Presence of the shared knowledge base (bmdx.duckdb, repo-level). Gates
+            # the KB-dependent document sections (genomics interpretation → graph-
+            # grounded references). Not per-session; resolved cwd-relative to match
+            # ToxKBQuerier's default. Always present today — infrastructure for when
+            # the KB becomes buildable/absent (the deferred K-graph GUI).
+            "hasKnowledgeBase": _has_knowledge_base(),
         }
 
     # -- derived state -----------------------------------------------------
@@ -137,7 +154,10 @@ class WorkflowEngine:
         front-end sets from a dozen call sites.
         """
         section_states = self.store.read_section_states(self.dtxsid)
-        return derive_section_readiness(section_states)
+        return derive_section_readiness(
+            section_states,
+            resources={"knowledge_base": _has_knowledge_base()},
+        )
 
     # -- derived publish readiness (currency BLOCK, report grain) ----------
 

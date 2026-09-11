@@ -13,10 +13,11 @@ export interface StepProps {
   // rather than serialized to storage, and passed between Process and Results.
   processResult: ProcessPayload | null;
   setProcessResult: (p: ProcessPayload | null) => void;
-  // Navigate between the two wizard modes (data-prep ↔ report).
+  // Navigate between the surfaces (landing ↔ data-prep ↔ document).
   gotoReport: () => void;
   gotoIngest: () => void;
-  // Jump straight to the report-mode query console (the database view).
+  gotoLanding: () => void;
+  // Jump straight to the document-mode query console (the database view).
   gotoQuery: () => void;
 }
 
