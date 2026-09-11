@@ -10,14 +10,14 @@ import { ConfirmMetadata } from "./steps/ConfirmMetadata";
 import { IntegrateApprove } from "./steps/IntegrateApprove";
 import { Process } from "./steps/Process";
 import { Results } from "./steps/Results";
-import { Author } from "./steps/Author";
+import { Sections } from "./steps/Sections";
 import { Preview } from "./steps/Preview";
 import { Query } from "./steps/Query";
 
 // The app has three top-level surfaces, chosen by URL path:
 //   /              → LANDING: pick a test article, then a workstream (dispatch).
 //   /workflow/     → DATA prep: prepare the data pool up through approval.
-//   /workflow/report → DOCUMENT: run the (long) processing + review + author.
+//   /workflow/report → DOCUMENT: process, review sections, preview, hand off.
 // The chooser is step 0 conceptually, but it lives on the landing (NOT part of a
 // workflow). The two workflows share the selected session via sessionStorage.
 type Mode = "landing" | "data" | "document";
@@ -32,7 +32,7 @@ const DATA_STEPS = [
 const DOCUMENT_STEPS = [
   { key: "process", label: "Process" },
   { key: "results", label: "Results" },
-  { key: "author", label: "Author" },
+  { key: "sections", label: "Sections" },
   { key: "preview", label: "Preview" },
   { key: "query", label: "Query" },
 ] as const;
@@ -147,8 +147,8 @@ export function App() {
         return <Process {...common} />;
       case "results":
         return <Results {...common} />;
-      case "author":
-        return <Author {...common} />;
+      case "sections":
+        return <Sections {...common} />;
       case "preview":
         return <Preview {...common} />;
       case "query":

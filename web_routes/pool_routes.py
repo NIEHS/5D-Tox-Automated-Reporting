@@ -53,6 +53,7 @@ from workflow.store import DiskPoolStore
 from workflow.steps import (
     confirm_metadata_step,
     integrate_step,
+    materialize_result_sections,
     resolve_step,
     validate_step,
 )
@@ -189,3 +190,17 @@ async def api_pool_integrate(dtxsid: str, request: Request):
     except StepError as e:
         return _step_error_response(e)
     return JSONResponse(summary)
+
+
+@router.post("/api/pool/materialize-sections/{dtxsid}")
+async def api_pool_materialize_sections(dtxsid: str):
+    """Materialize the apical result sections from the Process cache to disk as
+    provisional (unapproved) section files, so the document surface shows them and
+    the deliverable renders complete. Idempotent; genomics is not materialized
+    (deterministic/read-only). See workflow.steps.materialize_result_sections."""
+    store = DiskPoolStore()
+    try:
+        result = materialize_result_sections(dtxsid, store)
+    except StepError as e:
+        return _step_error_response(e)
+    return JSONResponse(result)

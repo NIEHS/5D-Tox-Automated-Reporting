@@ -209,3 +209,46 @@ def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
     assert result == {"ok": True, "updated": 0}
     assert fps["f1"]["platform"] == "Body Weight"
     assert "_fingerprints.json" in store._docs
+
+
+# --- materialize result sections (ADR-0018 Phase 1) ------------------------
+# These use a REAL tmp session (the sessions_dir fixture) because the transform
+# reads the _cache_sections file and writes bm2_*.json via save_section, both of
+# which resolve through the patched SESSIONS_DIR.
+
+def test_materialize_result_sections_writes_bm2_files(sessions_dir):
+    import json
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTX"
+    d.mkdir(parents=True)
+    # Seed a sections cache the way Process would (two apical sections; one has a
+    # narrative, one is table-only — both legitimate).
+    (d / "_cache_sections_abc123.json").write_text(json.dumps({"sections": [
+        {"platform": "Body Weight", "title": "Body Weight", "tables_json": {"rows": []},
+         "narrative": [], "first_col_header": "Study Day", "caption": "BW", "footnotes": []},
+        {"platform": "Organ Weight", "title": "Organ Weight", "tables_json": {"rows": []},
+         "narrative": ["Liver weight increased."], "caption": "OW", "footnotes": ["(a)"]},
+    ]}))
+
+    result = materialize_result_sections("DTX", DiskPoolStore())
+    assert result["ok"] is True
+    assert set(result["materialized"]) == {"bm2_body-weight", "bm2_organ-weight"}
+
+    # Files written, provisional (unapproved), narrative preserved verbatim.
+    bw = json.loads((d / "bm2_body-weight.json").read_text())
+    ow = json.loads((d / "bm2_organ-weight.json").read_text())
+    assert bw["approved"] is False and bw["source"] == "generated"
+    assert bw["narrative"] == []            # table-only section stays empty
+    assert bw["tables_json"] == {"rows": []}
+    assert ow["narrative"] == ["Liver weight increased."]
+    assert ow["footnotes"] == ["(a)"]
+
+
+def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+    (sessions_dir / "DTX").mkdir(parents=True)
+    result = materialize_result_sections("DTX", DiskPoolStore())
+    assert result == {"ok": True, "materialized": []}

@@ -77,6 +77,9 @@ export interface PublishReadiness {
 // A section's editable content as loaded from GET /api/session/{dtxsid}.
 export interface SectionData {
   paragraphs?: string[];
+  // Materialized apical result sections carry their prose as `narrative` (a
+  // paragraph list) alongside `tables_json`; report_data reads it directly.
+  narrative?: string[];
   approved?: boolean;
   version?: number;
   stale?: boolean;
@@ -259,6 +262,29 @@ export const api = {
       jsonOrThrow<{ identity: Record<string, string> }>(r)
     ),
 
+  // Generate + persist Materials & Methods. /api/generate-methods extracts study
+  // metadata (fingerprints/.bm2/animal report) + calls the LLM, returns the
+  // structured methods; we save it as the `methods` section. Returns the result,
+  // or null if generation produced nothing.
+  generateMethods: async (
+    dtxsid: string,
+    identity: Record<string, unknown>
+  ): Promise<Record<string, unknown> | null> => {
+    const resp = await fetch(`/api/generate-methods`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity: { ...identity, dtxsid } }),
+    });
+    const result = await jsonOrThrow<Record<string, unknown>>(resp);
+    if (!result || !result.sections) return null;
+    await fetch(`/api/session/save-section`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, section_type: "methods", data: result }),
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+    return result;
+  },
+
   // Generate the Background section from the compound identity alone (ATSDR/IRIS/
   // PubChem lookups + LLM). /api/generate streams SSE progress then a `complete`
   // event carrying the result; we consume the stream and resolve with the final
@@ -382,6 +408,14 @@ export const api = {
     fetch(`/api/generate-animal-report/${encodeURIComponent(dtxsid)}`, {
       method: "POST",
     }).then((r) => jsonOrThrow<Record<string, unknown>>(r)),
+
+  // Materialize apical result sections from the Process cache to disk as
+  // provisional (unapproved) drafts, so they show in the document surface and the
+  // deliverable renders complete. Idempotent; genomics is not materialized.
+  materializeSections: (dtxsid: string) =>
+    fetch(`/api/pool/materialize-sections/${encodeURIComponent(dtxsid)}`, {
+      method: "POST",
+    }).then((r) => jsonOrThrow<{ ok: boolean; materialized: string[] }>(r)),
 
   process: (dtxsid: string, params: Record<string, unknown>) =>
     fetch(`/api/process-integrated/${encodeURIComponent(dtxsid)}`, {

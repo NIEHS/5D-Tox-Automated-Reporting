@@ -47,6 +47,63 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# materialize result sections (ADR-0018 Phase 1)
+# ---------------------------------------------------------------------------
+
+def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
+    """Write the apical result sections from the Process cache to disk as section
+    files, so the document surface shows them and the deliverable renders complete.
+
+    Process produces apical section content in `_cache_sections_*.json` (a list of
+    `{platform, title, tables_json, narrative, first_col_header, caption, footnotes}`)
+    but never writes the `bm2_<slug>.json` FILES the render + readiness paths read.
+    This closes that gap: for each cached apical section, write `bm2_<slug>.json`
+    (`slug = bm2_slug(title)`) carrying the SAME fields plus `approved=False` — a
+    provisional, generated draft. The narrative is already a paragraph list (kept as
+    `narrative`, which report_data reads directly); no transform needed beyond the
+    key + approval stamp.
+
+    Idempotent: re-materializing overwrites with archive=False (a regenerate, not a
+    new blessed version). Genomics is deterministic and is NOT materialized here (it
+    is read-only, not an authorable/approvable section — ADR-0018). Returns
+    `{ok, materialized: [section_key, ...]}`.
+    """
+    from pipeline.session_db import _latest_cache
+    from pipeline.session_store import bm2_slug, save_section
+
+    sdir = store.session_dir(dtxsid)
+    cache = _latest_cache(sdir, "sections")
+    sections = cache.get("sections") if isinstance(cache, dict) else None
+    if not sections:
+        return {"ok": True, "materialized": []}
+
+    materialized: list[str] = []
+    for sec in sections:
+        title = sec.get("title") or sec.get("platform") or ""
+        slug = bm2_slug(title)
+        if not slug:
+            continue
+        section_key = f"bm2_{slug}"
+        # Carry the render-relevant fields verbatim; stamp provisional (unapproved).
+        data = {
+            "platform": sec.get("platform"),
+            "title": title,
+            "tables_json": sec.get("tables_json"),
+            "narrative": sec.get("narrative", []) or [],
+            "first_col_header": sec.get("first_col_header"),
+            "caption": sec.get("caption"),
+            "footnotes": sec.get("footnotes"),
+            "approved": False,
+            "source": "generated",
+        }
+        # archive=False: a regenerate/materialize is not a new blessed version.
+        save_section(dtxsid, section_key, data, archive=False)
+        materialized.append(section_key)
+
+    return {"ok": True, "materialized": materialized}
+
+
+# ---------------------------------------------------------------------------
 # validate
 # ---------------------------------------------------------------------------
 
