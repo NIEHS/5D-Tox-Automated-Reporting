@@ -831,6 +831,30 @@ async def _get_sections(ctx):
             "paragraphs": clin_path_narrative,
         }
 
+    # Internal Dose Assessment — screening-level plasma toxicokinetics (half-life,
+    # dose proportionality) computed deterministically from the plasma-concentration
+    # sidecars, with a reference-faithful narrative grounded in those numbers. Feeds
+    # the dedicated Internal Dose Assessment Results node (narrative_key
+    # internal_dose); the table renders from the tissue-conc apical section.
+    if dtxsid:
+        try:
+            from tables.table_builder_common import find_sidecar_paths as _find_sc
+            from tables.toxicokinetics import (
+                compute_toxicokinetics,
+                build_internal_dose_narrative,
+            )
+            _id_paths = _find_sc(str(_session_dir(dtxsid)), platform="Tissue Concentration")
+            if _id_paths:
+                _tk = compute_toxicokinetics(_id_paths)
+                _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit)
+                if _id_paras:
+                    unified_narratives["internal_dose"] = {
+                        "title": "Internal Dose Assessment",
+                        "paragraphs": _id_paras,
+                    }
+        except Exception:
+            logger.exception("Internal-dose narrative failed for %s (skipped)", dtxsid)
+
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives
 

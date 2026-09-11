@@ -242,6 +242,7 @@ document:
     - id: internal-dose
       type: narrative+tables
       title: Internal Dose Assessment
+      narrative_key: internal_dose
       ready_key: internalDose
       children:
       - id: table-tissue-conc
