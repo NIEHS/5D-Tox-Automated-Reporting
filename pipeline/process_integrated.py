@@ -1096,6 +1096,43 @@ async def api_process_integrated(dtxsid: str, request: Request):
     return JSONResponse(result_payload)
 
 
+async def prepare_content(ctx) -> None:
+    """Concern [2] — content preparation (ADR-0021), Layers 3.5a–d.
+
+    Reduces the processed data on ``ctx`` (genomics extraction, BMD summary,
+    apical tables) into document CONTENT: the genomics prose narratives, the
+    apical BMD narrative, and the report-wide reference list. Runs strictly
+    AFTER every data layer ([1]) has populated ``ctx``; mutates ``ctx`` in
+    place (``genomics_sections`` narratives, ``gene_set_narrative``,
+    ``gene_narrative``, ``apical_bmd_narrative``) and persists ``references.json``
+    as a side effect.
+
+    Behavior-preserving carve-out: this is exactly the block that used to run
+    inline in ``run_process`` after ``_build_bmd_summary``. It takes no
+    declarations argument today (they already live on ``ctx``); the split makes
+    the data→content seam a real function boundary so content can later be
+    skip-guarded (Phase C) and, eventually, regenerated without recomputing
+    data. See ADR-0021.
+    """
+    # ── Layer 3.5a — LLM-generated per-{organ,sex} genomics narratives ──
+    await _build_genomics_llm_narratives(ctx)
+
+    # ── Layer 3.5b — Deterministic body narratives ──
+    _build_genomics_body_narratives(ctx)
+
+    # ── Layer 3.5c — Apical BMD Summary narratives ──
+    await _build_apical_bmd_narrative(ctx)
+
+    # ── Layer 3.5d — Graph-grounded references (side effect, persisted) ──
+    # The genomics narrative pass (3.5a) persisted a per-stratum candidate
+    # reference pool + the [Pn]-citing prose into each interpretation cache.
+    # Assemble the report-wide, globally-numbered reference list from those
+    # and persist it as references.json.  A SIDE EFFECT (not in result_payload),
+    # so the 12-key contract + golden oracle are unaffected; the References
+    # section is surfaced from this at render time.
+    _persist_references(ctx.dtxsid, ctx.genomics_sections)
+
+
 async def run_process(dtxsid: str, params: dict, store) -> dict:
     """
     HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
@@ -1297,30 +1334,14 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         _build_bmd_summary(ctx)
 
         # ══════════════════════════════════════════════════════════════
-        # Layer 3.5a — LLM-generated per-{organ,sex} narratives
+        # Content preparation (concern [2], ADR-0021) — Layers 3.5a–d
         # ══════════════════════════════════════════════════════════════
-        await _build_genomics_llm_narratives(ctx)
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 3.5b — Deterministic body narratives
-        # ══════════════════════════════════════════════════════════════
-        _build_genomics_body_narratives(ctx)
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 3.5c — Apical BMD Summary narratives
-        # ══════════════════════════════════════════════════════════════
-        await _build_apical_bmd_narrative(ctx)
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 3.5d — Graph-grounded references (side effect, persisted)
-        # ══════════════════════════════════════════════════════════════
-        # The genomics narrative pass (3.5a) persisted a per-stratum candidate
-        # reference pool + the [Pn]-citing prose into each interpretation cache.
-        # Assemble the report-wide, globally-numbered reference list from those
-        # and persist it as references.json.  A SIDE EFFECT (not in
-        # result_payload), so the 12-key contract + golden oracle are unaffected;
-        # the References section is surfaced from this at render time.
-        _persist_references(dtxsid, ctx.genomics_sections)
+        # Everything strictly-after-all-data: the prose reductions (genomics
+        # narratives, apical BMD narrative) and the references side effect.
+        # Carved into prepare_content() so the data/content seam is a real
+        # function boundary; behavior- and perf-preserving (these layers
+        # already ran serially after the data layers).
+        await prepare_content(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
