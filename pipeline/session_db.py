@@ -33,6 +33,7 @@ DTXSID50469320, 2026-08-23) — see the notes at each loader. In particular:
 from __future__ import annotations
 
 import glob
+import hashlib
 import json
 import os
 import shutil
@@ -394,6 +395,48 @@ def _insert(con, table: str, rows: list[tuple]) -> int:
     return len(rows)
 
 
+# ---------------------------------------------------------------------------
+# Skip-guard — the substrate is a pure function of its on-disk inputs, so an
+# unchanged session need not pay the rebuild (the DuckDB write + per-table
+# Parquet export is the process step's long pole once the LLM/BMDS caches are
+# warm). We fingerprint exactly what build_session_db reads — the schema
+# version, the integrated identity, and the (name, size, mtime) of every
+# sidecar + the bmd_summary/genomics caches — and skip when it matches AND both
+# outputs already exist.
+# ---------------------------------------------------------------------------
+
+_FINGERPRINT_NAME = ".session_db.fingerprint"
+
+
+def _substrate_fingerprint(session_dir: Path, integrated: dict) -> str:
+    """A content signature of every input build_session_db consumes.
+
+    Cheap (one stat() per file, no read) and order-independent. Folds in
+    SCHEMA_VERSION so a schema bump forces a rebuild even when the data is
+    unchanged, and the integration timestamp so a re-integration (which rewrites
+    integrated.json) invalidates it. Sidecars + the two caches are fingerprinted
+    by (name, size, mtime_ns) — the same technique the process cache keys use."""
+    files: list[list] = []
+    files_dir = session_dir / "files"
+    globs = [str(files_dir / "*.sidecar.json"),
+             str(session_dir / "_cache_bmd_summary_*.json"),
+             str(session_dir / "_cache_genomics_*.json")]
+    for pattern in globs:
+        for path in glob.glob(pattern):
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            files.append([os.path.basename(path), st.st_size, st.st_mtime_ns])
+    files.sort()
+    payload = json.dumps({
+        "schema_version": SCHEMA_VERSION,
+        "integrated_at": _iso_now_from(integrated),
+        "files": files,
+    }, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
 def build_session_db(dtxsid: str, session_dir: str | Path, integrated: dict) -> Path:
     """Materialize ``sessions/<dtxsid>/session.duckdb`` from the session artifacts.
 
@@ -488,3 +531,37 @@ def build_session_db(dtxsid: str, session_dir: str | Path, integrated: dict) -> 
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     return db_path
+
+
+def build_session_db_if_changed(
+    dtxsid: str, session_dir: str | Path, integrated: dict
+) -> Path | None:
+    """Build the substrate only when its inputs changed since the last build.
+
+    The substrate is a pure projection of on-disk artifacts, so an unchanged
+    session need not pay the rebuild. Compares the current input fingerprint
+    against the one recorded beside the DB; on a match with both outputs present,
+    skips and returns None. Otherwise rebuilds via ``build_session_db``, records
+    the new fingerprint, and returns the DB path (matching that function).
+
+    A stale/missing fingerprint file, or a missing DB/parquet, forces a rebuild —
+    the guard only ever skips work that is provably redundant."""
+    session_dir = Path(session_dir)
+    db_path = session_dir / "session.duckdb"
+    parquet_dir = session_dir / "session_parquet"
+    fp_path = session_dir / _FINGERPRINT_NAME
+
+    fingerprint = _substrate_fingerprint(session_dir, integrated)
+    if db_path.exists() and parquet_dir.is_dir() and fp_path.exists():
+        try:
+            if fp_path.read_text(encoding="utf-8").strip() == fingerprint:
+                return None
+        except OSError:
+            pass  # unreadable fingerprint → rebuild
+
+    db = build_session_db(dtxsid, session_dir, integrated)
+    try:
+        fp_path.write_text(fingerprint, encoding="utf-8")
+    except OSError:
+        pass  # fingerprint is an optimization; a write failure just re-builds next time
+    return db

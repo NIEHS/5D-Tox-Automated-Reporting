@@ -200,6 +200,12 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     if (d / "session_parquet").exists():
         shutil.rmtree(d / "session_parquet", ignore_errors=True)
         summary["deleted"].append("session_parquet/")
+    # The skip-guard fingerprint is derived from the now-deleted inputs — drop it
+    # so it can't survive to falsely skip the next rebuild.
+    fp = d / ".session_db.fingerprint"
+    if fp.exists():
+        fp.unlink()
+        summary["deleted"].append(".session_db.fingerprint")
 
     # --- Clear in-memory integrated pool ---
     if dtxsid in _integrated_pool:

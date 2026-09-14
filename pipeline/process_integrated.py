@@ -1411,9 +1411,12 @@ def _build_query_substrate(dtxsid: str, integrated: dict) -> None:
     side effect of processing. Deferred import so the pipeline doesn't hard-depend
     on duckdb at module load, and any failure is logged, not raised."""
     try:
-        from pipeline.session_db import build_session_db
-        db = build_session_db(dtxsid, _session_dir(dtxsid), integrated)
-        logger.info("Built query substrate for %s at %s", dtxsid, db)
+        from pipeline.session_db import build_session_db_if_changed
+        db = build_session_db_if_changed(dtxsid, _session_dir(dtxsid), integrated)
+        if db is None:
+            logger.info("Query substrate for %s unchanged — skipped rebuild", dtxsid)
+        else:
+            logger.info("Built query substrate for %s at %s", dtxsid, db)
     except Exception:
         logger.exception(
             "Query substrate build failed for %s (report unaffected)", dtxsid

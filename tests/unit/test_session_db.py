@@ -19,7 +19,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from pipeline.session_db import build_session_db
+from pipeline.session_db import build_session_db, build_session_db_if_changed
 from pipeline.session_schema import SCHEMA_VERSION
 
 
@@ -287,3 +287,65 @@ def test_rebuild_is_idempotent(tmp_path):
     assert con.execute("SELECT count(*) FROM measurement").fetchone()[0] == 3
     con.close()
     assert abs(db.stat().st_size - first) < 4096  # essentially unchanged
+
+
+# ---------------------------------------------------------------------------
+# Skip-guard — build_session_db_if_changed
+# ---------------------------------------------------------------------------
+
+def test_if_changed_builds_first_time_then_skips(tmp_path):
+    session = tmp_path / "DTXSID_T"
+    integrated = _write_synthetic_session(session)
+
+    # First call: no prior DB → builds and returns the path, records fingerprint.
+    db = build_session_db_if_changed("DTXSID_T", session, integrated)
+    assert db is not None and db.exists()
+    assert (session / ".session_db.fingerprint").exists()
+
+    # Second call with identical inputs: skips (returns None), DB untouched.
+    mtime_before = db.stat().st_mtime_ns
+    assert build_session_db_if_changed("DTXSID_T", session, integrated) is None
+    assert db.stat().st_mtime_ns == mtime_before  # not rewritten
+
+
+def test_if_changed_rebuilds_when_a_sidecar_changes(tmp_path):
+    session = tmp_path / "DTXSID_T"
+    integrated = _write_synthetic_session(session)
+    build_session_db_if_changed("DTXSID_T", session, integrated)
+
+    # Add an animal to the sidecar → the fingerprint moves → rebuild.
+    sc_path = session / "files" / "body_weight_male.sidecar.json"
+    sc = json.loads(sc_path.read_text())
+    sc["animals"]["103"] = {"dose": 200.0, "selection": "Core Animals",
+                            "observations": [{"day": "SD0", "endpoint": "Body Weight",
+                                              "value": "300.0", "terminal": False}]}
+    sc_path.write_text(json.dumps(sc))
+
+    db = build_session_db_if_changed("DTXSID_T", session, integrated)
+    assert db is not None  # rebuilt, not skipped
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("SELECT count(*) FROM subject").fetchone()[0] == 3
+    con.close()
+
+
+def test_if_changed_rebuilds_when_db_missing(tmp_path):
+    # A stale fingerprint must not skip when the DB itself is gone.
+    session = tmp_path / "DTXSID_T"
+    integrated = _write_synthetic_session(session)
+    db = build_session_db_if_changed("DTXSID_T", session, integrated)
+    assert db is not None
+    db.unlink()  # DB deleted but fingerprint remains
+
+    rebuilt = build_session_db_if_changed("DTXSID_T", session, integrated)
+    assert rebuilt is not None and rebuilt.exists()
+
+
+def test_if_changed_rebuilds_on_reintegration(tmp_path):
+    # A new integration timestamp (re-integrate rewrites integrated.json) moves
+    # the fingerprint even when the sidecars/caches are byte-identical.
+    session = tmp_path / "DTXSID_T"
+    integrated = _write_synthetic_session(session)
+    build_session_db_if_changed("DTXSID_T", session, integrated)
+
+    integrated["_meta"]["integrated_at"] = "2026-09-14T12:00:00+00:00"
+    assert build_session_db_if_changed("DTXSID_T", session, integrated) is not None
