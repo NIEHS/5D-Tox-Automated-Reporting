@@ -1096,6 +1096,141 @@ async def api_process_integrated(dtxsid: str, request: Request):
     return JSONResponse(result_payload)
 
 
+async def run_data(ctx) -> None:
+    """Concern [1] — processing (ADR-0021), Layers 1 → 3.
+
+    Input → processed data: NTP stats, BMDS modeling, genomics extraction,
+    charts, and the BMD summary. A pure function of the imported data (no
+    declarations) — reproducible and hash-keyed; the golden-oracle domain.
+    Mutates ``ctx`` in place (platform_tables, per-unit hashes, bmds/genomics
+    results, charts, apical BMD summaries).
+
+    Behavior- and perf-preserving carve-out of the block that used to run inline
+    in ``run_process`` from ``_build_ntp_stats`` through ``_build_bmd_summary``.
+    The Layer-2 ``asyncio.gather`` is kept intact — ``_get_sections`` and
+    ``_get_methods`` (content producers) stay co-scheduled with the BMDS
+    bottleneck ON PURPOSE, since serializing them behind ~8min BMDS would be a
+    cold-run regression the oracle can't see. Relocating those two into content
+    preparation is deferred (Phase D/E). See ADR-0021.
+    """
+    dtxsid = ctx.dtxsid
+    integrated = ctx.integrated
+    compound_name = ctx.compound_name
+    dose_unit = ctx.dose_unit
+    bmd_stats = ctx.bmd_stats
+
+    # ══════════════════════════════════════════════════════════════
+    # Layer 1 — NTP stats (depends only on integrated data + bmd_stat)
+    # ══════════════════════════════════════════════════════════════
+    await _build_ntp_stats(ctx)
+
+    # Phase 2: the apical SEX + ASSAY allowlists are NO LONGER applied here.
+    # platform_tables stays the FULL superset so every compute stage
+    # (sections, BMDS, summary, narratives) and its cache is filter-agnostic
+    # and reusable across report versions.  The report-level apical +
+    # organ-weight filters are applied ONCE at the end, in the presentation
+    # step, to build the returned (default-filtered) payload — the same
+    # "compute full, filter at read" model genomics already uses.
+
+    # ══════════════════════════════════════════════════════════════
+    # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
+    # ══════════════════════════════════════════════════════════════
+    # These three units depend on Layer 1 output but NOT on each other,
+    # so they can run concurrently.  BMDS (~8min) is the bottleneck;
+    # sections (<1s) and genomics (~10s) finish quickly alongside it.
+    # The preamble below computes each unit's cache key onto ctx; each
+    # unit loads its own cache from that key.
+
+    # Collect _bmds_input dicts from ALL TableRows — the full superset, so
+    # BMDS models every endpoint once and the result cache serves every
+    # version regardless of its apical filters (dropped endpoints are pruned
+    # from the summary at presentation time, not skipped in modeling).
+    ctx.bmds_inputs = [
+        row._bmds_input
+        for sex_rows in ctx.platform_tables.values()
+        for rows in sex_rows.values()
+        for row in rows
+        if hasattr(row, "_bmds_input") and row._bmds_input
+    ]
+
+    # Compute per-unit hashes.  The sections stage reads sidecar JSONs
+    # and the clinical-obs CSVs straight off disk and uses
+    # _meta.imputed_cells — none of which flow through ntp_hash — so fold
+    # a fingerprint of those inputs into the sections key, otherwise
+    # editing a sidecar would silently serve a stale report.
+    _meta = integrated.get("_meta", {})
+    sections_sidecar_hash = _hash_sidecars(
+        str(_session_dir(dtxsid)),
+        extra_paths=_meta.get("clinical_obs_files", []),
+    )
+    # Phase 2: filter-agnostic sections cache — no allowlists in the key.
+    ctx.sections_hash = _hash_sections(
+        ctx.ntp_hash, compound_name, dose_unit,
+        sidecar_hash=sections_sidecar_hash,
+        imputed_cells=_meta.get("imputed_cells"),
+    )
+    ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
+
+    ge_source = _meta.get("source_files", {}).get("gene_expression")
+    ge_filename = ge_source.get("filename", "") if ge_source else ""
+    # Cutoff-agnostic key (phase 4): the GO cutoffs are applied after the
+    # cache read (apply_genomics_cutoffs), so they no longer key the cache.
+    # Phase D: fold in the genomics sidecar's mtime (the actual extraction
+    # source now), so a re-extracted sidecar invalidates the cache — the old
+    # filename-only key was content-blind.
+    from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
+    _sidecar = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
+    _sidecar_sig = str(_sidecar.stat().st_mtime_ns) if _sidecar.exists() else ""
+    ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename, _sidecar_sig)
+
+    # --- Materials and Methods (LLM-generated, cached) ---
+    # Uses fingerprints + .bm2 metadata + animal report to extract
+    # study context, then calls the LLM to produce structured prose
+    # for each M&M subsection.  Runs in parallel with the other
+    # Layer 2 tasks since it has no dependency on NTP stats output.
+
+    # Collect fingerprints as plain dicts for the methods context extractor
+    _fps_for_methods = {}
+    session_fps = _pool_fingerprints.get(dtxsid, {})
+    for fid, fp in session_fps.items():
+        if hasattr(fp, "__dataclass_fields__"):
+            _fps_for_methods[fid] = {
+                k: getattr(fp, k) for k in fp.__dataclass_fields__
+            }
+        else:
+            _fps_for_methods[fid] = fp
+    ctx.fps_for_methods = _fps_for_methods
+    ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods)
+
+    # Launch all four concurrently — cached units return instantly,
+    # uncached units run in parallel (BMDS in thread pool, genomics
+    # in thread pool via _extract_genomics, sections in thread pool,
+    # methods via async LLM call).  Each writes its output onto ctx;
+    # they touch disjoint fields so the shared object is safe under
+    # asyncio's single-threaded cooperative scheduling.
+    #
+    # NOTE (ADR-0021): _get_sections and _get_methods are concern-[2] content
+    # producers, but they stay in this data-concern gather ON PURPOSE — they
+    # overlap the ~8min BMDS bottleneck at zero marginal cost. Splitting them
+    # out cleanly is Phase D/E, not this behavior-preserving carve-out.
+    await asyncio.gather(
+        _get_sections(ctx),
+        _get_bmds(ctx),
+        _get_genomics(ctx),
+        _get_methods(ctx),
+    )
+
+    # ══════════════════════════════════════════════════════════════
+    # Layer 2.5 — Charts + Enrichr (depends on genomics output)
+    # ══════════════════════════════════════════════════════════════
+    await _build_charts(ctx)
+
+    # ══════════════════════════════════════════════════════════════
+    # Layer 3 — BMD summary (depends on NTP + BMDS)
+    # ══════════════════════════════════════════════════════════════
+    _build_bmd_summary(ctx)
+
+
 async def prepare_content(ctx) -> None:
     """Concern [2] — content preparation (ADR-0021), Layers 3.5a–d.
 
@@ -1228,110 +1363,12 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
 
     try:
         # ══════════════════════════════════════════════════════════════
-        # Layer 1 — NTP stats (depends only on integrated data + bmd_stat)
+        # Processing (concern [1], ADR-0021) — Layers 1 → 3
         # ══════════════════════════════════════════════════════════════
-        await _build_ntp_stats(ctx)
-
-        # Phase 2: the apical SEX + ASSAY allowlists are NO LONGER applied here.
-        # platform_tables stays the FULL superset so every compute stage
-        # (sections, BMDS, summary, narratives) and its cache is filter-agnostic
-        # and reusable across report versions.  The report-level apical +
-        # organ-weight filters are applied ONCE at the end, in the presentation
-        # step, to build the returned (default-filtered) payload — the same
-        # "compute full, filter at read" model genomics already uses.
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 2 — Sections + BMDS + Genomics (independent, parallel)
-        # ══════════════════════════════════════════════════════════════
-        # These three units depend on Layer 1 output but NOT on each other,
-        # so they can run concurrently.  BMDS (~8min) is the bottleneck;
-        # sections (<1s) and genomics (~10s) finish quickly alongside it.
-        # The preamble below computes each unit's cache key onto ctx; each
-        # unit loads its own cache from that key.
-
-        # Collect _bmds_input dicts from ALL TableRows — the full superset, so
-        # BMDS models every endpoint once and the result cache serves every
-        # version regardless of its apical filters (dropped endpoints are pruned
-        # from the summary at presentation time, not skipped in modeling).
-        ctx.bmds_inputs = [
-            row._bmds_input
-            for sex_rows in ctx.platform_tables.values()
-            for rows in sex_rows.values()
-            for row in rows
-            if hasattr(row, "_bmds_input") and row._bmds_input
-        ]
-
-        # Compute per-unit hashes.  The sections stage reads sidecar JSONs
-        # and the clinical-obs CSVs straight off disk and uses
-        # _meta.imputed_cells — none of which flow through ntp_hash — so fold
-        # a fingerprint of those inputs into the sections key, otherwise
-        # editing a sidecar would silently serve a stale report.
-        _meta = integrated.get("_meta", {})
-        sections_sidecar_hash = _hash_sidecars(
-            str(_session_dir(dtxsid)),
-            extra_paths=_meta.get("clinical_obs_files", []),
-        )
-        # Phase 2: filter-agnostic sections cache — no allowlists in the key.
-        ctx.sections_hash = _hash_sections(
-            ctx.ntp_hash, compound_name, dose_unit,
-            sidecar_hash=sections_sidecar_hash,
-            imputed_cells=_meta.get("imputed_cells"),
-        )
-        ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
-
-        ge_source = _meta.get("source_files", {}).get("gene_expression")
-        ge_filename = ge_source.get("filename", "") if ge_source else ""
-        # Cutoff-agnostic key (phase 4): the GO cutoffs are applied after the
-        # cache read (apply_genomics_cutoffs), so they no longer key the cache.
-        # Phase D: fold in the genomics sidecar's mtime (the actual extraction
-        # source now), so a re-extracted sidecar invalidates the cache — the old
-        # filename-only key was content-blind.
-        from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
-        _sidecar = _session_dir(dtxsid) / GENOMICS_SIDECAR_NAME
-        _sidecar_sig = str(_sidecar.stat().st_mtime_ns) if _sidecar.exists() else ""
-        ctx.genomics_hash = _hash_genomics(bmd_stats, ge_filename, _sidecar_sig)
-
-        # --- Materials and Methods (LLM-generated, cached) ---
-        # Uses fingerprints + .bm2 metadata + animal report to extract
-        # study context, then calls the LLM to produce structured prose
-        # for each M&M subsection.  Runs in parallel with the other
-        # Layer 2 tasks since it has no dependency on NTP stats output.
-
-        # Collect fingerprints as plain dicts for the methods context extractor
-        _fps_for_methods = {}
-        session_fps = _pool_fingerprints.get(dtxsid, {})
-        for fid, fp in session_fps.items():
-            if hasattr(fp, "__dataclass_fields__"):
-                _fps_for_methods[fid] = {
-                    k: getattr(fp, k) for k in fp.__dataclass_fields__
-                }
-            else:
-                _fps_for_methods[fid] = fp
-        ctx.fps_for_methods = _fps_for_methods
-        ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods)
-
-        # Launch all four concurrently — cached units return instantly,
-        # uncached units run in parallel (BMDS in thread pool, genomics
-        # in thread pool via _extract_genomics, sections in thread pool,
-        # methods via async LLM call).  Each writes its output onto ctx;
-        # they touch disjoint fields so the shared object is safe under
-        # asyncio's single-threaded cooperative scheduling.
-        await asyncio.gather(
-            _get_sections(ctx),
-            _get_bmds(ctx),
-            _get_genomics(ctx),
-            _get_methods(ctx),
-        )
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 2.5 — Charts + Enrichr (depends on genomics output)
-        # ══════════════════════════════════════════════════════════════
-        await _build_charts(ctx)
-
-        # ══════════════════════════════════════════════════════════════
-        # Layer 3 — BMD summary (depends on NTP + BMDS)
-        # ══════════════════════════════════════════════════════════════
-        _build_bmd_summary(ctx)
+        # Input → processed data: NTP stats, BMDS, genomics extraction, charts,
+        # BMD summary. Carved into run_data(ctx); raises plainly so the
+        # StepError wrapping below stays byte-identical.
+        await run_data(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Content preparation (concern [2], ADR-0021) — Layers 3.5a–d
