@@ -221,7 +221,27 @@ each side (metadata vocabulary; the reduction + structure) is specified as polic
   over `run_document`. Not wired to a new HTTP route (process_step isn't either —
   the route calls the core directly); it is the notebook/TUI/test entrypoint and
   the home for a future lazy path.
+- **Open the content-kind registry → DONE (F).** `prepare_content` no longer runs
+  a hardcoded builder sequence; it drives an OPEN registry
+  (`pipeline/content_registry.py`) of content KINDS — each declares a `name`, a
+  prep `method` `(ctx)→None|await`, and its `after` dependencies, and a stable
+  topological driver runs them. The prep-side twin of the node-type→render
+  dispatch (`render_capabilities.COMPONENT_CATALOG`) and the chart-type registry
+  (`genomics.chart_registry`), which it mirrors (frozen dataclass, keyed by name,
+  imports nothing from its consumers; built-ins registered from
+  `process_integrated` at import time — the same late-binding that avoids a
+  cycle). The four built-ins (`genomics-llm` → `genomics-body`/`references`;
+  `apical-bmd` independent) register in today's execution order with their real
+  `after` edges, so the plan reproduces the exact 3.5a→3.5b→3.5c→3.5d sequence →
+  payload byte-identical (golden + warm-skip + document-step anti-drift all green).
+  A new content kind — a future figure/chart kind "yet to be defined", an extra
+  narrative — registers without editing `prepare_content`. Makes
+  [[project_data_workflow_abstraction]]'s "open registries, not closed switches"
+  real on the content side, symmetric with the data side.
 
 ## Open questions
 
-- **Should the IR become a true content→surface interface?** Left open (above).
+- **Should the IR become a true content→surface interface?** Left open (above) —
+  the one remaining stretch item; the registry (F) is the content-kind seam, but
+  the render IR is still welded to `data`'s shape (see "The IR is NOT document
+  content" in the model note). Not started.

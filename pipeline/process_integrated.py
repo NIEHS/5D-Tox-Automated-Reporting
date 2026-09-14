@@ -61,6 +61,7 @@ from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_
 from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
 from web_routes.section_serializers import _build_clinical_obs_section
 from pipeline.integrated_io import _load_integrated, load_integrated, save_integrated
+from pipeline.content_registry import register_content_kind, run_content_plan
 from pipeline.cache_plumbing import (
     _load_cache,
     _save_cache,
@@ -1231,6 +1232,39 @@ async def run_data(ctx) -> None:
     _build_bmd_summary(ctx)
 
 
+def _prepare_references(ctx) -> None:
+    """Content-kind adapter (ADR-0021 F): drive _persist_references off ctx so the
+    references kind has the uniform ``(ctx) -> None`` prep-method signature the
+    registry expects. The genomics narrative pass persisted a per-stratum
+    reference pool + [Pn]-citing prose into each interpretation cache; this
+    assembles the report-wide, globally-numbered references.json. A SIDE EFFECT
+    (not in result_payload) — the 12-key contract + golden oracle are unaffected;
+    the References section is surfaced from this at render time."""
+    _persist_references(ctx.dtxsid, ctx.genomics_sections)
+
+
+# ── Content-kind registry (ADR-0021 F) ───────────────────────────────────────
+# Register the built-in content kinds with their prep methods and dependency
+# edges, so prepare_content drives an OPEN registry (content_registry) instead of
+# a hardcoded call sequence. Registration ORDER == today's execution order, and
+# the `after` edges encode the real data flow, so the stable topological plan
+# reproduces the exact 3.5a→3.5b→3.5c→3.5d sequence → byte-identical payload.
+# A new content kind (a future figure/chart kind, an extra narrative) registers
+# here (or from an extension) without editing prepare_content.
+#
+#   genomics-llm  →  genomics-body   (body merges the LLM narratives 3.5a wrote)
+#                 →  references       (references reads the pool 3.5a persisted)
+#   apical-bmd    (independent)
+register_content_kind("genomics-llm", _build_genomics_llm_narratives)
+register_content_kind(
+    "genomics-body", _build_genomics_body_narratives, after=("genomics-llm",)
+)
+register_content_kind("apical-bmd", _build_apical_bmd_narrative)
+register_content_kind(
+    "references", _prepare_references, after=("genomics-llm",)
+)
+
+
 async def prepare_content(ctx) -> None:
     """Concern [2] — content preparation (ADR-0021), Layers 3.5a–d.
 
@@ -1242,30 +1276,13 @@ async def prepare_content(ctx) -> None:
     ``gene_narrative``, ``apical_bmd_narrative``) and persists ``references.json``
     as a side effect.
 
-    Behavior-preserving carve-out: this is exactly the block that used to run
-    inline in ``run_process`` after ``_build_bmd_summary``. It takes no
-    declarations argument today (they already live on ``ctx``); the split makes
-    the data→content seam a real function boundary so content can later be
-    skip-guarded (Phase C) and, eventually, regenerated without recomputing
-    data. See ADR-0021.
+    ADR-0021 F: the content kinds are an OPEN registry (content_registry), not a
+    hardcoded sequence — this drives the registry's stable dependency-ordered
+    plan. The built-ins (registered above) reproduce the exact prior order, so
+    the payload stays byte-identical; a new content kind registers without
+    editing this function.
     """
-    # ── Layer 3.5a — LLM-generated per-{organ,sex} genomics narratives ──
-    await _build_genomics_llm_narratives(ctx)
-
-    # ── Layer 3.5b — Deterministic body narratives ──
-    _build_genomics_body_narratives(ctx)
-
-    # ── Layer 3.5c — Apical BMD Summary narratives ──
-    await _build_apical_bmd_narrative(ctx)
-
-    # ── Layer 3.5d — Graph-grounded references (side effect, persisted) ──
-    # The genomics narrative pass (3.5a) persisted a per-stratum candidate
-    # reference pool + the [Pn]-citing prose into each interpretation cache.
-    # Assemble the report-wide, globally-numbered reference list from those
-    # and persist it as references.json.  A SIDE EFFECT (not in result_payload),
-    # so the 12-key contract + golden oracle are unaffected; the References
-    # section is surfaced from this at render time.
-    _persist_references(ctx.dtxsid, ctx.genomics_sections)
+    await run_content_plan(ctx)
 
 
 # ── Content skip-guard (ADR-0021 Phase C) ────────────────────────────────────
