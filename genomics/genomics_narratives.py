@@ -58,36 +58,49 @@ from narrative.methods_report import (
 
 
 # ---------------------------------------------------------------------------
-# Helper: resolve table numbers from the document tree
+# Helper: semantic cross-reference tokens for the data-driven genomics tables
 # ---------------------------------------------------------------------------
-# The intro paragraphs reference "Table 9 and Table 10" etc. — the actual
-# numbers come from the tree walk (positional, auto-assigned).  The walk
-# is done lazily because importing document_tree at module-load time
-# creates a circular dependency during app startup.
+# The intro paragraphs reference "Table 9 and Table 10" etc.  Those numbers are
+# POSITIONAL and only exist at render time (assign_genomics_table_numbers), so
+# baking them into content here would be a structure-into-content leak (ADR-0021
+# D2).  Instead we emit a semantic [[xref:<component>::<organ>-<sex>-table]]
+# token per table; the renderer's cross_references resolver looks each id up in
+# its render-scoped genomics-table index and substitutes the current number.
+# The id scheme mirrors genomics_content._entry_base_id + the owning component
+# node id ("gene-sets" for gene_set entries, "gene-bmd" for gene entries).
 
-def _collect_table_numbers(parent_id: str) -> list[int]:
+def _entry_table_xref(component_id: str, key: str, entry: dict) -> str:
+    """Build the xref token for one genomics entry's table.
+
+    `key` is the organ_sex cache key (e.g. "liver_male"); `entry` is its value.
+    Prefer the entry's own organ/sex fields (authoritative, matches
+    genomics_content._entry_base_id); fall back to parsing the cache key when an
+    older entry lacks them.
     """
-    Walk the subtree rooted at `parent_id` (e.g., "gene-sets" or
-    "gene-bmd") and return the table numbers of every table-bearing
-    descendant.  Returns an empty list if the node doesn't exist yet or
-    no tables have been assigned numbers — the intro builders fall back
-    to a generic "the tables below" phrasing in that case.
-    """
-    from document_model.document_tree import find_node, compute_table_numbers
-    compute_table_numbers()
-    node = find_node(parent_id)
-    if not node:
+    organ = (entry.get("organ") or "").strip().lower().replace(" ", "-")
+    sex = (entry.get("sex") or "").strip().lower().replace(" ", "-")
+    if not organ:
+        # Fall back to the cache key ("liver_male" → organ "liver", sex "male").
+        parts = str(key).split("_", 1)
+        organ = parts[0].strip().lower().replace(" ", "-")
+        sex = parts[1].strip().lower().replace(" ", "-") if len(parts) > 1 else ""
+    base = f"{organ}-{sex}" if sex else organ
+    return f"[[xref:{component_id}::{base}-table]]"
+
+
+def _collect_table_refs(genomics_sections: dict | None, component_id: str) -> list[str]:
+    """Ordered xref tokens for every table under `component_id` (gene-sets /
+    gene-bmd).  One token per genomics entry, in the dict's iteration order —
+    the same order assign_genomics_table_numbers walks, so the tokens read in
+    ascending table-number order.  Empty when there are no sections (the intro
+    builders then fall back to a generic "the tables below" phrasing)."""
+    if not genomics_sections:
         return []
-    nums: list[int] = []
-
-    def _walk_table_numbers(n):
-        if n.table_number is not None:
-            nums.append(n.table_number)
-        for c in n.children:
-            _walk_table_numbers(c)
-
-    _walk_table_numbers(node)
-    return nums
+    return [
+        _entry_table_xref(component_id, key, entry)
+        for key, entry in genomics_sections.items()
+        if isinstance(entry, dict)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -149,11 +162,11 @@ def build_genomics_body_narratives(
     out: dict[str, dict[str, Any]] = {}
 
     # --- Gene Set BMD side (intro + per-organ findings) ---
-    gs_table_numbers = _collect_table_numbers("gene-sets")
+    gs_table_refs = _collect_table_refs(genomics_sections, "gene-sets")
     gs_intros = build_gene_set_body_intro(
         chemical_name=chem_name,
         ge_organs=ge_organs,
-        table_numbers=gs_table_numbers,
+        table_refs=gs_table_refs,
     )
     gs_by_organ = build_gene_set_body_findings(
         genomics_sections=genomics_sections,
@@ -172,10 +185,10 @@ def build_genomics_body_narratives(
     }
 
     # --- Gene BMD side (symmetric structure) ---
-    gn_table_numbers = _collect_table_numbers("gene-bmd")
+    gn_table_refs = _collect_table_refs(genomics_sections, "gene-bmd")
     gn_intros = build_gene_body_intro(
         ge_organs=ge_organs,
-        table_numbers=gn_table_numbers,
+        table_refs=gn_table_refs,
         fold_change_filter=fold_change_filter,
     )
     gn_by_organ = build_gene_body_findings(

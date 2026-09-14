@@ -119,7 +119,12 @@ from styling_export.freeform_content import pending_note as _freeform_pending_no
 from document_model.cover_layouts import get_cover_layout
 from roundtrip.overrides import region_hash
 from roundtrip.anchors import wrap as _anchor
-from rendering.cross_references import resolve_xrefs_latex, latex_label_key
+from rendering.cross_references import (
+    resolve_xrefs_latex,
+    latex_label_key,
+    build_genomics_table_index,
+    set_genomics_table_index,
+)
 # Shared display-precision knob: rounds the raw modeling-step BMD/BMDL/fold-
 # change floats to a configurable number of decimals at render time (see
 # table_builder_common.DISPLAY_DECIMALS).
@@ -1809,6 +1814,23 @@ def generate_latex(
         A self-contained .tex source string.  The caller is responsible
         for placing latex/niehs.cls alongside it before invoking pdflatex.
     """
+    # Install the render-scoped genomics-table xref index (ADR-0021 D2) so
+    # [[xref:<component>::<organ>-<sex>-table]] tokens in narrative prose resolve
+    # to the data-driven tables' positional numbers.  Cleared in the finally so
+    # it never leaks into a later render pass.
+    set_genomics_table_index(build_genomics_table_index(data.get("genomics_sections")))
+    try:
+        return _generate_latex_body(data, section_filter, tree)
+    finally:
+        set_genomics_table_index(None)
+
+
+def _generate_latex_body(
+    data: dict,
+    section_filter: str | None,
+    tree: "list | None",
+) -> str:
+    """The render body of generate_latex, run inside the genomics-index scope."""
     # ── Fragment-compile path (decision #10) ─────────────────────────
     # When section_filter is set, return a stand-alone .tex containing
     # only the subtree at that node id.  This is what the web app's

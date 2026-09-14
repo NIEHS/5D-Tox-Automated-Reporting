@@ -66,7 +66,7 @@ from narrative.narrative_helpers import (
 def build_gene_set_body_intro(
     chemical_name: str,
     ge_organs: list[str],
-    table_numbers: list[int] | None = None,
+    table_refs: list[str] | None = None,
 ) -> list[str]:
     """
     Build the two boilerplate intro paragraphs for the Gene Set BMD
@@ -91,9 +91,11 @@ def build_gene_set_body_intro(
     Args:
         chemical_name:  Test article name, used in paragraph 1.
         ge_organs:      Organ list from MethodsContext.ge_organs.
-        table_numbers:  Auto-assigned table numbers for the per-organ
-                        gene set tables (e.g., [9, 10] for Tables 9 & 10).
-                        When omitted or short, uses generic "the tables".
+        table_refs:     Semantic cross-reference tokens for the per-organ gene
+                        set tables — e.g. ["[[xref:gene-sets::liver-male-table]]",
+                        ...] — each resolved to "Table N" by the renderer at
+                        render time (ADR-0021 D2).  When omitted or empty, uses
+                        the generic "the tables below" phrasing.
 
     Returns:
         Two-paragraph list ready to inject into data.gene_set_narrative.
@@ -112,10 +114,10 @@ def build_gene_set_body_intro(
         f"score of gene set potency (median transcript BMD) and enrichment."
     )
 
-    # Interpretation caveat — table refs use the auto-assigned numbers
-    # when available, else a generic "the tables below" fallback.
-    if table_numbers and len(table_numbers) >= 1:
-        table_refs = [f"Table {n}" for n in table_numbers]
+    # Interpretation caveat — table refs are semantic [[xref:...]] tokens
+    # (resolved to "Table N" at render), else a generic "the tables below"
+    # fallback (ADR-0021 D2).
+    if table_refs and len(table_refs) >= 1:
         if len(table_refs) == 1:
             tables_str = table_refs[0]
             tables_str_repeat = table_refs[0]
@@ -288,7 +290,7 @@ def build_gene_set_body_findings(
 
 def build_gene_body_intro(
     ge_organs: list[str],
-    table_numbers: list[int] | None = None,
+    table_refs: list[str] | None = None,
     fold_change_filter: float | None = None,
     bmdu_bmdl_ratio: float | None = 40.0,
     fit_pvalue_threshold: float | None = 0.1,
@@ -311,6 +313,10 @@ def build_gene_body_intro(
 
     Filter values default to the NIEHS Report 10 reference settings
     (|2|, p > 0.1, BMDU/BMDL ≤ 40) when not provided by MethodsContext.
+
+    table_refs are semantic [[xref:...]] tokens (one per per-organ gene table),
+    each resolved to "Table N" by the renderer (ADR-0021 D2); empty ⇒ the
+    generic "the tables below" phrasing.
     """
     organs_phrase = _format_organ_phrase(ge_organs) or "the assayed tissues"
 
@@ -324,8 +330,9 @@ def build_gene_body_intro(
             return str(int(v))
         return f"{v:g}"
 
-    if table_numbers and len(table_numbers) >= 1:
-        table_refs = [f"Table {n}" for n in table_numbers]
+    # Semantic [[xref:...]] tokens (resolved to "Table N" at render), else the
+    # generic fallback (ADR-0021 D2).
+    if table_refs and len(table_refs) >= 1:
         tables_str = _join_oxford(table_refs)
     else:
         tables_str = "the tables below"

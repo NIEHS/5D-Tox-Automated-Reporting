@@ -222,6 +222,23 @@ def test_figure_numbers_agree_across_surfaces(session_data):
     )
 
 
+def test_genomics_narrative_table_xrefs_resolve_on_both_surfaces(session_data):
+    """ADR-0021 D2: genomics-narrative "Table N" references are emitted as
+    semantic [[xref:...]] tokens at content-prep and resolved to the data-driven
+    tables' positional numbers at render.  The end-to-end invariant is that after
+    a full render NO raw token and NO broken-ref marker survives on either
+    surface — i.e. every id the narrative emits matches an id the render index
+    built.  (A mismatch between the two id schemes would surface here as a
+    leaked [[xref:...]] or [[xref:??...]].)"""
+    html = generate_html(session_data)
+    tex = generate_latex(session_data)
+    for surface, out in (("HTML", html), ("LaTeX", tex)):
+        assert "[[xref:" not in out, (
+            f"unresolved genomics-table xref token/marker leaked into {surface}: "
+            + ", ".join(re.findall(r"\[\[xref:[^\]]+\]\]", out))
+        )
+
+
 # ---------------------------------------------------------------------------
 # Parity: BMD-summary endpoints — IR is the oracle, both surfaces checked
 # ---------------------------------------------------------------------------

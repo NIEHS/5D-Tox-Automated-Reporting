@@ -98,7 +98,11 @@ from rendering.render_common import (
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from document_model.cover_layouts import get_cover_layout
-from rendering.cross_references import resolve_xrefs_html
+from rendering.cross_references import (
+    resolve_xrefs_html,
+    build_genomics_table_index,
+    set_genomics_table_index,
+)
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
 from tables.table_builder_common import format_display_number, format_mean_se_display
@@ -1660,6 +1664,23 @@ def generate_html(
     Returns:
         A self-contained HTML string suitable for iframe srcdoc.
     """
+    # Install the render-scoped genomics-table xref index (ADR-0021 D2) so
+    # [[xref:<component>::<organ>-<sex>-table]] tokens resolve to the data-driven
+    # tables' positional numbers.  Cleared in the finally so it never leaks into
+    # a later render pass.  The twin latex_generator does the identical setup.
+    set_genomics_table_index(build_genomics_table_index(data.get("genomics_sections")))
+    try:
+        return _generate_html_body(data, section_filter, tree)
+    finally:
+        set_genomics_table_index(None)
+
+
+def _generate_html_body(
+    data: dict,
+    section_filter: Optional[str],
+    tree: "list | None",
+) -> str:
+    """The render body of generate_html, run inside the genomics-index scope."""
     nodes = tree if tree is not None else DOCUMENT_TREE
     # Fragment path — only emit the requested subtree.  The running header
     # for a fragment is the section's own title.

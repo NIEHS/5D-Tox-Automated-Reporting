@@ -82,6 +82,71 @@ assert _TABLE_TYPES == frozenset(
 
 
 # ---------------------------------------------------------------------------
+# Render-scoped genomics-table index (ADR-0021 D2)
+# ---------------------------------------------------------------------------
+# Genomics per-organ tables are DATA-DRIVEN, not tree nodes: they carry their
+# positional table_number on the data entry (assigned at render by
+# assign_genomics_table_numbers), and they render as a "Table N." caption block,
+# NOT through niehstable — so they have no \label to \ref.  A narrative that
+# wants to reference one therefore can't use the node path (find_node misses)
+# and can't use \ref.  Instead the narrative emits a semantic token whose id is
+# the genomics table's stable content-item id — "<component>::<base>-table"
+# (e.g. "gene-sets::liver-male-table") — and the renderer resolves it to the
+# literal number through this index.
+#
+# The index is RENDER-SCOPED: generate_latex / generate_html rebuild it from
+# data["genomics_sections"] at the top of each render pass (after numbering) and
+# clear it at the end.  Render is single-pass and non-reentrant per surface, so
+# a module-level map is safe — the same shape as the numbering pass, which also
+# mutates shared render-time state.
+_GENOMICS_TABLE_INDEX: dict[str, int] = {}
+
+
+def genomics_table_xref_id(component_id: str, entry: dict) -> str:
+    """The stable xref id for one data-driven genomics table.
+
+    Mirrors genomics_content._entry_base_id exactly (organ[-sex]) and prefixes
+    the owning component id, so the token an author writes
+    ("[[xref:gene-sets::liver-male-table]]") matches the id the render index is
+    keyed by.  Kept here (not imported from genomics_content) to avoid a
+    rendering→genomics import edge; the base formula is asserted equal by a test.
+    """
+    organ = (entry.get("organ") or "").strip().lower().replace(" ", "-")
+    sex = (entry.get("sex") or "").strip().lower().replace(" ", "-")
+    base = f"{organ}-{sex}" if sex else organ
+    return f"{component_id}::{base}-table"
+
+
+def build_genomics_table_index(genomics_sections) -> dict[str, int]:
+    """Map each genomics table's xref id → its positional table_number.
+
+    genomics_sections is the render-time list of entries; each gene_set entry
+    owns a table under the "gene-sets" component and each gene entry under
+    "gene-bmd" (the two genomics-section node ids).  Only entries that already
+    carry a table_number (set by assign_genomics_table_numbers) are indexed."""
+    index: dict[str, int] = {}
+    if not genomics_sections:
+        return index
+    _role_to_component = {"gene_set": "gene-sets", "gene": "gene-bmd"}
+    for entry in genomics_sections:
+        num = entry.get("table_number")
+        if num is None:
+            continue
+        component = _role_to_component.get(entry.get("type"))
+        if not component:
+            continue
+        index[genomics_table_xref_id(component, entry)] = num
+    return index
+
+
+def set_genomics_table_index(index: dict[str, int] | None) -> None:
+    """Install (or clear) the render-scoped genomics-table index.  Called by each
+    generator at the start of a render pass and cleared (index=None) at the end."""
+    global _GENOMICS_TABLE_INDEX
+    _GENOMICS_TABLE_INDEX = index or {}
+
+
+# ---------------------------------------------------------------------------
 # Helper (private)
 # ---------------------------------------------------------------------------
 
@@ -144,6 +209,13 @@ def resolve_xrefs_latex(text: str) -> str:
     """
     def render(node: DocNode | None, target_id: str) -> str:
         if node is None:
+            # Data-driven genomics table (ADR-0021 D2): not a tree node, and it
+            # renders as a "Table N." caption block with no \label, so we emit the
+            # literal positional number from the render-scoped index.  ~ keeps
+            # "Table" and the number on one line.
+            num = _GENOMICS_TABLE_INDEX.get(target_id)
+            if num is not None:
+                return f"Table~{num}"
             return _broken(target_id)
         if node.node_type in _TABLE_TYPES:
             # niehstable emits \label{tab:<id>}; \ref{tab:<id>} resolves to the
@@ -165,6 +237,11 @@ def resolve_xrefs_html(text: str) -> str:
     """
     def render(node: DocNode | None, target_id: str) -> str:
         if node is None:
+            # Data-driven genomics table (ADR-0021 D2): resolve to the literal
+            # number from the render-scoped index (no tree node, no anchor id).
+            num = _GENOMICS_TABLE_INDEX.get(target_id)
+            if num is not None:
+                return f"Table {num}"
             return _broken(target_id)
         if node.node_type in _TABLE_TYPES:
             num = node.table_number if node.table_number is not None else "?"
