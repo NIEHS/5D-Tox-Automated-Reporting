@@ -444,6 +444,37 @@ async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# document (content preparation) — concern [2], ADR-0021
+# ---------------------------------------------------------------------------
+
+async def document_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
+    """Prepare the document CONTENT from processed data + declarations (ADR-0021).
+
+    The content-preparation concern as its own UI-agnostic step, sibling to
+    `process_step`: it (re)builds the prose reductions — genomics narratives,
+    apical BMD narrative, unified/section narratives, Materials & Methods — and
+    returns the CONTENT subset of the process payload (`_CONTENT_PAYLOAD_KEYS`:
+    unified_narratives, genomics_sections, gene_set_narrative, gene_narrative,
+    apical_bmd_narrative, methods, sections). `params` is the same settings dict
+    process_step takes; raises StepError(400) if not integrated, StepError(500)
+    on failure.
+
+    EAGER model (ADR-0021 E, maintainer's decision): today process_step already
+    runs content preparation as part of the full pass, so after a process the
+    content is present. This step exposes that SAME work (via the shared run_data
+    + prepare_content building blocks in the core — NOT the standalone regenerate
+    endpoints, which can drift) as a separately-invocable phase, so a driver can
+    re-prepare content without re-posting the whole process, and content prep has
+    a named home for a future lazy/on-demand path. It reuses the concern-[2]
+    skip-guard, so an unchanged session returns instantly.
+
+    Lazy import for the same reason process_step uses one (module import cycle).
+    """
+    from pipeline.process_integrated import run_document
+    return await run_document(dtxsid, params or {}, store)
+
+
+# ---------------------------------------------------------------------------
 # accept / release a report section (authoring approve-lock state transitions)
 #
 # These lift the STATE TRANSITION half of web_routes/session_routes.py's

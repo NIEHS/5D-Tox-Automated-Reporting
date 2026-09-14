@@ -202,15 +202,26 @@ each side (metadata vocabulary; the reduction + structure) is specified as polic
 | serialized `DOCUMENT_TREE`, `toc_entries`, `table_entries` | `serialize_tree` at read | [3] structure | correctly derived at render time |
 | render_common plan structs | emitters at walk time | [3] render | internal IR, transient, per-node |
 
+## Decided
+
+- **Eager vs. lazy content preparation → EAGER-but-separated** (maintainer,
+  2026-09-14). Concern [2] stays part of the process pass (today's "process fills
+  everything" behavior, compatible with the intended blocking Process UI), but is
+  now a distinct, separately-invocable phase. `run_process` is the eager
+  composition `run_data → prepare_content_if_changed → assemble`; `run_document`
+  runs [2] on its own and returns the content subset. Both go through the SAME
+  `run_data` + `prepare_content` building blocks (never the standalone regenerate
+  endpoints, which diverge on model/cache), so the separated step can't drift from
+  the eager pass — pinned by a byte-equality test
+  (`test_document_step_matches_process_step_for_content_keys`). Lazy/on-demand
+  remains possible later but is deferred: it needs the endpoints' cache-write paths
+  unified first (methods drifts on model; summary/apical have cache/endpoint gaps).
+- **Elevate [2] to a workflow step → DONE.** `document_step` sits beside
+  `process_step` in `workflow/steps.py` ([ADR-0014](0014-ui-agnostic-workflow-engine.md)),
+  over `run_document`. Not wired to a new HTTP route (process_step isn't either —
+  the route calls the core directly); it is the notebook/TUI/test entrypoint and
+  the home for a future lazy path.
+
 ## Open questions
 
-- **Eager vs. lazy content preparation.** Does [2] run automatically right after
-  processing (preserving today's "process fills everything," lowest-risk, oracle-
-  preserving) or become on-demand like the existing regenerate endpoints? Deferred to
-  the maintainer. Note: eager-but-separated is compatible with the intended blocking
-  Process UI; the frontend already tolerates blank prose, so lazy is *possible* but
-  needs the cache-write paths unified first (methods drifts on model; summary/apical
-  have cache/endpoint gaps).
 - **Should the IR become a true content→surface interface?** Left open (above).
-- **Elevate [2] to a workflow step?** A `document_step` beside `process_step`
-  ([ADR-0014](0014-ui-agnostic-workflow-engine.md)) — depends on the eager/lazy call.

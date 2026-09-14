@@ -1380,30 +1380,15 @@ async def prepare_content_if_changed(ctx) -> bool:
     return True
 
 
-async def run_process(dtxsid: str, params: dict, store) -> dict:
-    """
-    HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
+def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext":
+    """Parse request params + template filters, load the integrated project, and
+    build the ProcessContext threaded through every layer.
 
-    Turns the integrated BMDProject into section cards with tables and narratives
-    for each apical endpoint platform. Callers pass already-parsed `params` (the
-    request-body dict) and an injected `PoolStore`; the function returns the plain
-    `result_payload` dict and raises `StepError` on failure (the route translates
-    it to a status code; a notebook/TUI shows a message). Behavior is preserved
-    byte-for-byte against the pre-unwrap route handler.
-
-    Orchestrates the processing pipeline:
-      1. Load integrated data (via the store)
-      2. Check disk cache (return instantly on hit)
-      3. Restore category lookup from serialized keys
-      4. Filter gene expression experiments
-      5. Run NTP stats (Williams trend + Dunnett's pairwise + Jonckheere)
-      6. Partition results by platform
-      7. Build section cards with narratives
-      8. Run BMDS modeling (pybmds)
-      9. Extract genomics from gene expression .bm2
-      10. Build BMD summaries (BMDExpress 3 + BMDS)
-      11. Cache and return
-    """
+    Extracted from run_process (ADR-0021 E) so both the data+content pass
+    (run_process) and the standalone document pass (run_document) build the ctx
+    identically — a single source of the parse/filters/load preamble. Raises
+    StepError(400) when the session is not integrated. Also migrates any leftover
+    monolithic _processed_cache_* files (a cheap idempotent cleanup)."""
     body = params or {}
     compound_name = body.get("compound_name", "Test Compound")
     dose_unit = body.get("dose_unit", "mg/kg")
@@ -1473,6 +1458,79 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         old_cache.unlink(missing_ok=True)
         logger.info("Migrated old monolithic cache: %s", old_cache.name)
 
+    return ctx
+
+
+def _assemble_payload(ctx) -> dict:
+    """Assemble the 12-key result_payload from a fully-populated ctx.
+
+    Extracted from run_process (ADR-0021 E) — the SINGLE definition of the
+    payload contract (golden byte-oracle domain). run_process returns this whole
+    dict; run_document returns its content subset. Structure is identical to the
+    old monolithic response so the frontend needs no change."""
+    stat_labels = {
+        s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
+        for s in ctx.bmd_stats
+    }
+    return {
+        "sections": ctx.sections,
+        "unified_narratives": ctx.unified_narratives,
+        "genomics_sections": ctx.genomics_sections,
+        # Per-organ body narratives for Gene Set / Gene BMD — HTML
+        # renders `by_organ[organ]` above each organ's table; PDF
+        # export consumes the same dict via marshal_export_data.
+        "gene_set_narrative": ctx.gene_set_narrative,
+        "gene_narrative": ctx.gene_narrative,
+        "chart_images": ctx.chart_images if ctx.chart_images else None,
+        "apical_bmd_summary": ctx.apical_bmd_summary,
+        "apical_bmd_summary_bmds": ctx.apical_bmd_summary_bmds,
+        # Apical BMD Summary section narratives (descriptive +
+        # analytical).  The flat "paragraphs" list is consumed by
+        # report_data.py and the frontend BMD summary card.
+        "apical_bmd_narrative": ctx.apical_bmd_narrative,
+        "bmd_stats": list(ctx.bmd_stats),
+        "bmd_stat_labels": stat_labels,
+        # Materials and Methods — LLM-generated structured sections.
+        # Included so the frontend can auto-populate the M&M section
+        # without requiring a separate generate button click.
+        "methods": ctx.methods_result,
+    }
+
+
+# The payload keys produced by concern [2] (content preparation). run_document
+# returns exactly these; run_process returns the full 12-key superset. Kept
+# explicit so the data/content payload seam is legible and testable.
+_CONTENT_PAYLOAD_KEYS = (
+    "unified_narratives",
+    "genomics_sections",
+    "gene_set_narrative",
+    "gene_narrative",
+    "apical_bmd_narrative",
+    "methods",
+    "sections",  # carries per-card `narrative` prose (content) with its table content
+)
+
+
+async def run_process(dtxsid: str, params: dict, store) -> dict:
+    """
+    HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
+
+    Turns the integrated BMDProject into section cards with tables and narratives
+    for each apical endpoint platform. Callers pass already-parsed `params` (the
+    request-body dict) and an injected `PoolStore`; the function returns the plain
+    `result_payload` dict and raises `StepError` on failure (the route translates
+    it to a status code; a notebook/TUI shows a message). Behavior is preserved
+    byte-for-byte against the pre-unwrap route handler.
+
+    ADR-0021: run_process is the EAGER composition of the two concern phases —
+    run_data (concern [1]) then prepare_content_if_changed (concern [2]) — plus
+    payload assembly and the substrate side effect. The two phases are also
+    exposed as separate workflow steps (process_step / document_step) over
+    run_data + run_document; this function stays the single eager pass the route
+    and the golden oracle drive, so the 12-key payload is unchanged.
+    """
+    ctx = _build_process_context(dtxsid, params, store)
+
     try:
         # ══════════════════════════════════════════════════════════════
         # Processing (concern [1], ADR-0021) — Layers 1 → 3
@@ -1497,35 +1555,7 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload
         # ══════════════════════════════════════════════════════════════
-        # Identical structure to the old monolithic response so the
-        # frontend doesn't need any changes.
-        stat_labels = {
-            s: _BMD_STAT_LABELS.get(s, s.replace("_", " ").title())
-            for s in bmd_stats
-        }
-        result_payload = {
-            "sections": ctx.sections,
-            "unified_narratives": ctx.unified_narratives,
-            "genomics_sections": ctx.genomics_sections,
-            # Per-organ body narratives for Gene Set / Gene BMD — HTML
-            # renders `by_organ[organ]` above each organ's table; PDF
-            # export consumes the same dict via marshal_export_data.
-            "gene_set_narrative": ctx.gene_set_narrative,
-            "gene_narrative": ctx.gene_narrative,
-            "chart_images": ctx.chart_images if ctx.chart_images else None,
-            "apical_bmd_summary": ctx.apical_bmd_summary,
-            "apical_bmd_summary_bmds": ctx.apical_bmd_summary_bmds,
-            # Apical BMD Summary section narratives (descriptive +
-            # analytical).  The flat "paragraphs" list is consumed by
-            # report_data.py and the frontend BMD summary card.
-            "apical_bmd_narrative": ctx.apical_bmd_narrative,
-            "bmd_stats": list(bmd_stats),
-            "bmd_stat_labels": stat_labels,
-            # Materials and Methods — LLM-generated structured sections.
-            # Included so the frontend can auto-populate the M&M section
-            # without requiring a separate generate button click.
-            "methods": ctx.methods_result,
-        }
+        result_payload = _assemble_payload(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Query substrate (ADR-0016 Phase A) — materialize the session's
@@ -1542,6 +1572,32 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
     except Exception as e:
         logger.exception("Processing integrated data failed for %s", dtxsid)
         raise StepError(f"Processing failed: {e}", status_code=500)
+
+
+async def run_document(dtxsid: str, params: dict, store) -> dict:
+    """Concern [2] as a standalone, HTTP-free pass (ADR-0021 E).
+
+    The content-preparation phase run on its own: build the ctx, ensure the
+    concern-[1] data is in hand (run_data — cache-warm and fast after a prior
+    process, since every data layer is cache-keyed), then prepare_content_if_changed
+    (which itself skips when nothing changed). Returns ONLY the content subset of
+    the payload (`_CONTENT_PAYLOAD_KEYS`).
+
+    This reuses the SAME run_data + prepare_content building blocks as run_process
+    — NOT the standalone regenerate endpoints — so its output can never drift from
+    the eager pass (the endpoints diverge on model/cache; see ADR-0021 R4). It is
+    the seam the eager document_step is built on, and the future home of a lazy /
+    on-demand content regeneration path.
+    """
+    ctx = _build_process_context(dtxsid, params, store)
+    try:
+        await run_data(ctx)
+        await prepare_content_if_changed(ctx)
+        full = _assemble_payload(ctx)
+        return {k: full[k] for k in _CONTENT_PAYLOAD_KEYS}
+    except Exception as e:
+        logger.exception("Content preparation failed for %s", dtxsid)
+        raise StepError(f"Content preparation failed: {e}", status_code=500)
 
 
 def _persist_references(dtxsid: str, genomics_sections: dict | None) -> None:
