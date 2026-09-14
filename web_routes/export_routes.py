@@ -896,58 +896,61 @@ async def api_save_document_config(dtxsid: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Report VERSIONS — multiple structure+filter projections of ONE processed
-# dataset (phase 3).  A version bundles a document structure + data filters;
-# switching or adding one is a render-time change, never a reprocess (the
-# compute caches are the filter-agnostic superset, phase 2).
+# Report VIEWS — multiple structure+filter projections of ONE processed
+# dataset (phase 3).  A view is a saved LENS bundling a document structure +
+# data filters; switching or adding one is a render-time change, never a
+# reprocess (the compute caches are the filter-agnostic superset, phase 2).
+# A view is NOT a coexisting version — the one report evolves with history
+# behind it (ADR-0020); content history lives on the /api/session/.../history
+# routes, not here.
 # ---------------------------------------------------------------------------
 
-@router.get("/api/versions/{dtxsid}")
-async def api_list_versions(dtxsid: str):
-    """List a session's report versions (always includes the implicit 'default')."""
-    from document_model.version_config import list_versions, DEFAULT_VERSION
-    return JSONResponse({"versions": list_versions(dtxsid), "default": DEFAULT_VERSION})
+@router.get("/api/views/{dtxsid}")
+async def api_list_views(dtxsid: str):
+    """List a session's report views (always includes the implicit 'default')."""
+    from document_model.view_config import list_views, DEFAULT_VIEW
+    return JSONResponse({"views": list_views(dtxsid), "default": DEFAULT_VIEW})
 
 
-@router.get("/api/versions/{dtxsid}/{name}")
-async def api_get_version(dtxsid: str, name: str):
-    """Return one version's stored mapping (document / filters / charts / methods).
+@router.get("/api/views/{dtxsid}/{name}")
+async def api_get_view(dtxsid: str, name: str):
+    """Return one view's stored mapping (document / filters / charts / methods).
 
     An absent file (including 'default' with none saved) returns {} — the caller
     then renders against the global template's structure + filters."""
-    from document_model.version_config import load_version
+    from document_model.view_config import load_view
     try:
-        return JSONResponse({"version": load_version(dtxsid, name)})
+        return JSONResponse({"view": load_view(dtxsid, name)})
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=422)
 
 
-@router.post("/api/versions/{dtxsid}/{name}")
-async def api_save_version(dtxsid: str, name: str, request: Request):
-    """Validate + persist a version.  A malformed structure returns 422 and
+@router.post("/api/views/{dtxsid}/{name}")
+async def api_save_view(dtxsid: str, name: str, request: Request):
+    """Validate + persist a view.  A malformed structure returns 422 and
     writes nothing (the prior file, if any, stays intact)."""
-    from document_model.version_config import save_version
+    from document_model.view_config import save_view
     body = await request.json()
-    data = body.get("version", body)
+    data = body.get("view", body)
     if not isinstance(data, dict):
         return JSONResponse(
-            {"error": "Request must include a 'version' mapping."}, status_code=422)
+            {"error": "Request must include a 'view' mapping."}, status_code=422)
     try:
-        save_version(dtxsid, name, data)
+        save_view(dtxsid, name, data)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=422)
     except Exception as e:
-        logger.exception("Failed to save version %s for %s", name, dtxsid)
+        logger.exception("Failed to save view %s for %s", name, dtxsid)
         return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
     return JSONResponse({"saved": True})
 
 
-@router.delete("/api/versions/{dtxsid}/{name}")
-async def api_delete_version(dtxsid: str, name: str):
-    """Delete a named version ('default' cannot be deleted)."""
-    from document_model.version_config import delete_version
+@router.delete("/api/views/{dtxsid}/{name}")
+async def api_delete_view(dtxsid: str, name: str):
+    """Delete a named view ('default' cannot be deleted)."""
+    from document_model.view_config import delete_view
     try:
-        removed = delete_version(dtxsid, name)
+        removed = delete_view(dtxsid, name)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=422)
     return JSONResponse({"deleted": removed})

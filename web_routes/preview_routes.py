@@ -1,11 +1,11 @@
 """
-web_routes.preview_routes — the materialized, versioned, docx-default preview.
+web_routes.preview_routes — the materialized, history-retaining, docx-default preview.
 
 Replaces the pull-based ephemeral srcdoc preview (POST /api/preview-latex-html, kept
 for the legacy app) with a persisted ARTIFACT
 (project_integrated_wizard_versioned_preview Decision 5): on a report-update event the
 client POSTs …/materialize, which renders the report to disk under
-`sessions/<dtxsid>/preview/<version>/`; the frame then points at …/view (the
+`sessions/<dtxsid>/preview/<view>/`; the frame then points at …/view (the
 materialized HTML file) and the deliverable downloads from …/download.
 
 docx is the default deliverable surface; the HTML view is always materialized as the
@@ -51,9 +51,9 @@ def _reject_bad_dtxsid(dtxsid: str) -> JSONResponse | None:
 async def api_preview_materialize(dtxsid: str, request: Request):
     """Render + persist the preview artifact set for a session.
 
-    Body (all optional): {surface?: str = "docx", version?: str = "default"}. Writes
+    Body (all optional): {surface?: str = "docx", view?: str = "default"}. Writes
     the deliverable surface + the always-emitted HTML view under the session dir,
-    archiving the prior set. Returns the manifest {version, ts, deliverable, files}.
+    archiving the prior set. Returns the manifest {view, ts, deliverable, files}.
     Fired on report-update events (accepted edit, reprocess, restyle).
     """
     if (bad := _reject_bad_dtxsid(dtxsid)) is not None:
@@ -63,13 +63,13 @@ async def api_preview_materialize(dtxsid: str, request: Request):
     except Exception:
         body = {}
     surface = (body or {}).get("surface") or DEFAULT_SURFACE
-    version = (body or {}).get("version")
+    view = (body or {}).get("view")
 
     if surface not in KNOWN_SURFACES:
         return JSONResponse({"error": f"Unknown surface: {surface!r}"}, status_code=400)
 
     try:
-        manifest = materialize_preview(dtxsid, surface=surface, version=version)
+        manifest = materialize_preview(dtxsid, surface=surface, view=view)
     except NotImplementedError as e:
         return JSONResponse({"error": str(e)}, status_code=501)
     except Exception as e:
@@ -80,7 +80,7 @@ async def api_preview_materialize(dtxsid: str, request: Request):
 
 
 @router.get("/api/preview/{dtxsid}/view")
-async def api_preview_view(dtxsid: str, version: str | None = None, surface: str = "html"):
+async def api_preview_view(dtxsid: str, view: str | None = None, surface: str = "html"):
     """Serve a materialized preview file inline for the iframe.
 
     Defaults to the HTML view (the always-viewable proxy). Returns 404 if the file
@@ -88,7 +88,7 @@ async def api_preview_view(dtxsid: str, version: str | None = None, surface: str
     """
     if (bad := _reject_bad_dtxsid(dtxsid)) is not None:
         return bad
-    path = preview_file_path(dtxsid, surface, version)
+    path = preview_file_path(dtxsid, surface, view)
     if not path.exists():
         return JSONResponse(
             {"error": "No preview materialized yet — POST …/materialize first"},
@@ -100,11 +100,11 @@ async def api_preview_view(dtxsid: str, version: str | None = None, surface: str
 
 
 @router.get("/api/preview/{dtxsid}/download")
-async def api_preview_download(dtxsid: str, version: str | None = None, surface: str = DEFAULT_SURFACE):
+async def api_preview_download(dtxsid: str, view: str | None = None, surface: str = DEFAULT_SURFACE):
     """Download a materialized deliverable (default docx) as an attachment."""
     if (bad := _reject_bad_dtxsid(dtxsid)) is not None:
         return bad
-    path = preview_file_path(dtxsid, surface, version)
+    path = preview_file_path(dtxsid, surface, view)
     if not path.exists():
         return JSONResponse(
             {"error": "No preview materialized yet — POST …/materialize first"},

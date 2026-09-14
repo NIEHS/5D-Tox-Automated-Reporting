@@ -1,4 +1,4 @@
-"""Tests for rendering.preview_surface — the materialized, versioned, docx-default
+"""Tests for rendering.preview_surface — the materialized, history-retaining, docx-default
 preview (Phase 5). Uses the conftest `sessions_dir` fixture so SESSIONS_DIR points at
 a tmp dir; an empty session exercises load_session_data's scaffold fallback."""
 
@@ -46,14 +46,14 @@ def test_render_surface_unknown_raises_value_error():
 
 
 # ---------------------------------------------------------------------------
-# materialize_preview — file materialization + versioning
+# materialize_preview — file materialization + history retention
 # ---------------------------------------------------------------------------
 
 def test_materialize_docx_writes_deliverable_and_html_view(sessions_dir):
     manifest = materialize_preview(DTXSID, surface="docx")
 
     assert manifest["deliverable"] == "docx"
-    assert manifest["version"] == "default"
+    assert manifest["view"] == "default"
     assert set(manifest["files"]) == {"docx", "html"}
 
     docx_path = preview_file_path(DTXSID, "docx")

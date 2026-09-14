@@ -1,5 +1,5 @@
 """
-rendering.preview_surface — surface dispatch + a materialized, versioned preview.
+rendering.preview_surface — surface dispatch + a materialized, history-retaining preview.
 
 The four report emitters (`generate_html`, `generate_latex`, `generate_docx`,
 `generate_bits`/`generate_jats`) all project the SAME marshalled data dict + DocNode
@@ -18,11 +18,12 @@ but docx cannot render in an iframe and docx→pdf is host-fix-pending
 (feedback_onlyoffice_not_libreoffice), so `preview.html` is ALWAYS written as the
 on-screen view regardless of the chosen deliverable surface.
 
-Preview files are VERSIONED: each rebuild archives the prior set into
-`preview/<version>/history/<ts>/` before overwriting, mirroring
+Each preview belongs to a report VIEW (a saved structure+filters lens, view_config).
+Preview files retain HISTORY: each rebuild archives the prior set into
+`preview/<view>/history/<ts>/` before overwriting, mirroring
 session_store.save_section's archive-before-overwrite. A restyle re-materializes the
-SAME version (archive + rewrite, no new content version) — styling is a pure
-re-projection and never bumps a content version (Decision 1).
+SAME view (archive + rewrite, no new content revision) — styling is a pure
+re-projection and never bumps a content revision (Decision 1).
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from document_model.version_config import DEFAULT_VERSION, build_version_tree
+from document_model.view_config import DEFAULT_VIEW, build_view_tree
 from pipeline.session_store import now_iso, session_dir
 from rendering.latex_export import load_session_data
 
@@ -76,8 +77,8 @@ def render_surface(
     raise ValueError(f"Unknown preview surface: {surface!r}")
 
 
-def _preview_dir(dtxsid: str, version: str) -> Path:
-    return session_dir(dtxsid) / "preview" / version
+def _preview_dir(dtxsid: str, view: str) -> Path:
+    return session_dir(dtxsid) / "preview" / view
 
 
 def _identity(dtxsid: str) -> tuple[str, str]:
@@ -100,7 +101,7 @@ def _archive_prior(preview_dir: Path, ts: str) -> None:
     """Move the current preview files into history/<ts>/ before a rebuild.
 
     Mirrors session_store.save_section's archive-before-overwrite: prior renders are
-    retained (versioned preview) rather than clobbered. Only the deliverable files
+    retained (preview history) rather than clobbered. Only the deliverable files
     are archived — the history/ subtree itself is skipped.
     """
     existing = [
@@ -118,33 +119,33 @@ def _archive_prior(preview_dir: Path, ts: str) -> None:
 def materialize_preview(
     dtxsid: str,
     surface: str = DEFAULT_SURFACE,
-    version: str | None = None,
+    view: str | None = None,
 ) -> dict:
     """Render and persist the preview artifact set for a session.
 
     Builds the report data from disk (`load_session_data` — scaffold-only when the
-    session has no content), resolves the DocNode tree for the version, then writes:
+    session has no content), resolves the DocNode tree for the view, then writes:
 
       * `preview.<ext>` for the chosen deliverable `surface` (default docx), AND
       * `preview.html` — always, as the guaranteed on-screen view (docx can't render
         in an iframe). When surface == "html" the two coincide.
 
-    Files land under `sessions/<dtxsid>/preview/<version>/`; the prior set is archived
+    Files land under `sessions/<dtxsid>/preview/<view>/`; the prior set is archived
     into `history/<ts>/` first so every rebuild is retained. Returns a manifest
-    `{version, ts, deliverable, files: {surface: rel_path}}` (also written as
+    `{view, ts, deliverable, files: {surface: rel_path}}` (also written as
     manifest.json alongside the files).
     """
     if surface not in KNOWN_SURFACES:
         raise ValueError(f"Unknown preview surface: {surface!r}")
 
-    version = version or DEFAULT_VERSION
+    view = view or DEFAULT_VIEW
     ts = now_iso()
 
     chemical_name, casrn = _identity(dtxsid)
-    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, version=version)
-    tree = build_version_tree(dtxsid, version)
+    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, view=view)
+    tree = build_view_tree(dtxsid, view)
 
-    preview_dir = _preview_dir(dtxsid, version)
+    preview_dir = _preview_dir(dtxsid, view)
     preview_dir.mkdir(parents=True, exist_ok=True)
     _archive_prior(preview_dir, ts)
 
@@ -158,17 +159,17 @@ def materialize_preview(
         deliverable_path.write_bytes(deliverable_out)
     else:
         deliverable_path.write_text(deliverable_out, encoding="utf-8")
-    files[surface] = f"preview/{version}/{deliverable_name}"
+    files[surface] = f"preview/{view}/{deliverable_name}"
 
     # HTML view — always, unless the deliverable already IS html.
     if surface != "html":
         html_out = render_surface(data, tree, surface="html")
         assert isinstance(html_out, str)  # generate_html always returns str
         (preview_dir / "preview.html").write_text(html_out, encoding="utf-8")
-        files["html"] = f"preview/{version}/preview.html"
+        files["html"] = f"preview/{view}/preview.html"
 
     manifest = {
-        "version": version,
+        "view": view,
         "ts": ts,
         "deliverable": surface,
         "files": files,
@@ -181,11 +182,11 @@ def materialize_preview(
 
 
 def preview_file_path(
-    dtxsid: str, surface: str, version: str | None = None
+    dtxsid: str, surface: str, view: str | None = None
 ) -> Path:
     """Absolute path to a materialized preview file for a surface, or the html view
     when surface == 'html'. Does not check existence — callers (the download/view
     routes) 404 on a missing file."""
-    version = version or DEFAULT_VERSION
+    view = view or DEFAULT_VIEW
     name = _SURFACE_FILENAME.get(surface, "preview.html")
-    return _preview_dir(dtxsid, version) / name
+    return _preview_dir(dtxsid, view) / name

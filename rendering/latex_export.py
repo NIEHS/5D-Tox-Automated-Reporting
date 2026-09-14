@@ -256,20 +256,20 @@ def _cover_subtypes_in_tree(tree) -> "list":
 _SESSIONS_DIR = REPO_ROOT / "sessions"
 
 
-def _resolve_apical_filters(dtxsid: str, version: str | None) -> dict:
+def _resolve_apical_filters(dtxsid: str, view: str | None) -> dict:
     """
-    Resolve the apical + organ-weight allowlists for a version into the flat
+    Resolve the apical + organ-weight allowlists for a view into the flat
     args apply_section_filters / apply_apical_filters take.
 
-    Reads the version's canonical filters (version_config.resolve_version_filters,
+    Reads the view's canonical filters (view_config.resolve_view_filters,
     which falls back to the global template for 'default' / no override) and
     projects them to legacy-shaped allowlists via resolve_report_allowlist.
     All-None ⇒ no filtering (the full superset renders).
     """
-    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
+    from document_model.view_config import resolve_view_filters, DEFAULT_VIEW
     from document_model.document_template import resolve_report_allowlist
 
-    filters = resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("filters") or {}
+    filters = resolve_view_filters(dtxsid, view or DEFAULT_VIEW).get("filters") or {}
 
     def _area(dim, area):
         return resolve_report_allowlist(filters, dim, area)
@@ -291,22 +291,22 @@ def _resolve_apical_filters(dtxsid: str, version: str | None) -> dict:
 
 
 # Pipeline defaults for the GO-category cutoffs (mirror process_integrated's
-# ProcessContext defaults) — used when a version declares no `methods` override.
+# ProcessContext defaults) — used when a view declares no `methods` override.
 _GO_CUTOFF_DEFAULTS = dict(go_pct=5, go_min_genes=20, go_max_genes=500, go_min_bmd=3)
 
 
-def _resolve_go_cutoffs(dtxsid: str, version: str | None) -> dict:
+def _resolve_go_cutoffs(dtxsid: str, view: str | None) -> dict:
     """
-    The GO-category cutoffs for a version, as apply_genomics_cutoffs kwargs.
+    The GO-category cutoffs for a view, as apply_genomics_cutoffs kwargs.
 
-    A version may declare a ``methods`` block with any of go_pct / go_min_genes /
+    A view may declare a ``methods`` block with any of go_pct / go_min_genes /
     go_max_genes / go_min_bmd; unset keys fall back to the pipeline defaults so
-    the 'default' version reproduces today's cutoffs.
+    the 'default' view reproduces today's cutoffs.
     """
     cut = dict(_GO_CUTOFF_DEFAULTS)
     try:
-        from document_model.version_config import load_version, DEFAULT_VERSION
-        methods = (load_version(dtxsid, version or DEFAULT_VERSION) or {}).get("methods") or {}
+        from document_model.view_config import load_view, DEFAULT_VIEW
+        methods = (load_view(dtxsid, view or DEFAULT_VIEW) or {}).get("methods") or {}
         for k in cut:
             if methods.get(k) is not None:
                 cut[k] = methods[k]
@@ -315,23 +315,23 @@ def _resolve_go_cutoffs(dtxsid: str, version: str | None) -> dict:
     return cut
 
 
-def _resolve_genomics_filters(dtxsid: str, version: str | None) -> dict:
+def _resolve_genomics_filters(dtxsid: str, view: str | None) -> dict:
     """
-    Resolve the genomics-area allowlists for a version into the kwargs
+    Resolve the genomics-area allowlists for a view into the kwargs
     filter_genomics_sections takes (organ / sex / genes / gene_sets).
 
-    Mirrors _resolve_apical_filters: reads the version's canonical filters
+    Mirrors _resolve_apical_filters: reads the view's canonical filters
     (falling back to the global template for 'default' / no override) and
     projects them via resolve_report_allowlist.  Previously this surface read
-    the GLOBAL template unconditionally, so a version's genomics filters were
+    the GLOBAL template unconditionally, so a view's genomics filters were
     silently dropped at export.  Flat dimensions (genes / gene_sets) resolve via
     the "*" area; organ/sex are read from the "genomics" area.  All-None ⇒ no
     genomics filtering.
     """
-    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
+    from document_model.view_config import resolve_view_filters, DEFAULT_VIEW
     from document_model.document_template import resolve_report_allowlist
 
-    filters = resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("filters") or {}
+    filters = resolve_view_filters(dtxsid, view or DEFAULT_VIEW).get("filters") or {}
     return {
         "organ": resolve_report_allowlist(filters, "organs", "genomics"),
         "sex": resolve_report_allowlist(filters, "sex", "genomics"),
@@ -340,17 +340,17 @@ def _resolve_genomics_filters(dtxsid: str, version: str | None) -> dict:
     }
 
 
-def _resolve_charts(dtxsid: str, version: str | None):
+def _resolve_charts(dtxsid: str, view: str | None):
     """
-    The enabled chart-type allowlist for a version (closed-vocab, presence-
+    The enabled chart-type allowlist for a view (closed-vocab, presence-
     sensitive: None ⇒ render all types, [] ⇒ render none).
 
-    A version's own ``charts`` wins; otherwise the global template's.  Reads the
-    value resolve_version_filters already resolved rather than re-reading the
-    global template, so a version's chart selection is honored at export.
+    A view's own ``charts`` wins; otherwise the global template's.  Reads the
+    value resolve_view_filters already resolved rather than re-reading the
+    global template, so a view's chart selection is honored at export.
     """
-    from document_model.version_config import resolve_version_filters, DEFAULT_VERSION
-    return resolve_version_filters(dtxsid, version or DEFAULT_VERSION).get("charts")
+    from document_model.view_config import resolve_view_filters, DEFAULT_VIEW
+    return resolve_view_filters(dtxsid, view or DEFAULT_VIEW).get("charts")
 
 
 def _latest(session_dir: Path, glob_pattern: str) -> Path | None:
@@ -568,7 +568,7 @@ def load_session_data(
     dtxsid: str,
     chemical_name: str = "Test Article",
     casrn: str = "000-00-0",
-    version: str | None = None,
+    view: str | None = None,
 ) -> dict:
     """
     Build a report data dict by overlaying a session's cached state onto
@@ -675,11 +675,11 @@ def load_session_data(
 
     # ── Apical sections + unified narratives ──────────────────────────
     # The sections cache is the filter-AGNOSTIC superset (phase 2).  Apply THIS
-    # version's apical + organ-weight filters here — the render-time analog of
-    # what run_process does at presentation — so the bundle shows the version's
-    # selected sexes/assays/organs.  Resolve the version's filters (falling back
+    # view's apical + organ-weight filters here — the render-time analog of
+    # what run_process does at presentation — so the bundle shows the view's
+    # selected sexes/assays/organs.  Resolve the view's filters (falling back
     # to the global template for 'default'); {} ⇒ no filtering (full superset).
-    _vf = _resolve_apical_filters(dtxsid, version)
+    _vf = _resolve_apical_filters(dtxsid, view)
     sections_path = _latest(session_dir, "_cache_sections_*.json")
     sections_cache = _load_json(sections_path)
     if isinstance(sections_cache, dict):
@@ -700,8 +700,8 @@ def load_session_data(
         # Unified cross-platform narratives are cached in the sections blob under
         # the `unified_narratives` key (run_process writes the default-filtered
         # set there for the session-reload export path).  Overlay when present;
-        # absent ⇒ the scaffold placeholders stand.  (Per-version narrative
-        # regeneration is a follow-up — the default version, which the Overleaf
+        # absent ⇒ the scaffold placeholders stand.  (Per-view narrative
+        # regeneration is a follow-up — the default view, which the Overleaf
         # export uses today, is correct.)
         # Translate the cached process/JS keys (apical, clinical_pathology) to the
         # tree's narrative_keys (animal_condition, …) — the SAME map the export path
@@ -756,18 +756,18 @@ def load_session_data(
     if isinstance(genomics_cache, dict) and genomics_cache:
         from document_model.filters import filter_genomics_sections
         # Phase 4: the genomics cache is the cutoff-AGNOSTIC superset — apply THIS
-        # version's GO cutoffs first (same apply_genomics_cutoffs the pipeline uses
+        # view's GO cutoffs first (same apply_genomics_cutoffs the pipeline uses
         # at read), then the organ/sex/gene allowlists.  Cutoffs come from the
-        # version's `methods` block, else the pipeline defaults; the allowlists
-        # from the version's canonical filters (else the global template) — NOT
-        # the global template unconditionally, which silently dropped a version's
+        # view's `methods` block, else the pipeline defaults; the allowlists
+        # from the view's canonical filters (else the global template) — NOT
+        # the global template unconditionally, which silently dropped a view's
         # genomics overrides.
         from pipeline.processing_helpers import apply_genomics_cutoffs
-        _cut = _resolve_go_cutoffs(dtxsid, version)
+        _cut = _resolve_go_cutoffs(dtxsid, view)
         genomics_cache = apply_genomics_cutoffs(genomics_cache, **_cut)
         genomics_cache = filter_genomics_sections(
             genomics_cache,
-            **_resolve_genomics_filters(dtxsid, version),
+            **_resolve_genomics_filters(dtxsid, view),
         )
         # Genomics LLM interpretation: the per-organ×sex biology analysis lives
         # in `_cache_interpretation_<organ>_<sex>_*.json` (top-level
@@ -819,7 +819,7 @@ def load_session_data(
     assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
-    # The version's `charts:` allowlist decides WHICH chart types render (None ⇒
+    # The view's `charts:` allowlist decides WHICH chart types render (None ⇒
     # all; [] ⇒ none), falling back to the global template — honored here so the
     # Overleaf bundle and the HTML preview show the identical set of figures.
     charts_path = _latest(session_dir, "_cache_charts_*.json")
@@ -827,7 +827,7 @@ def load_session_data(
     if isinstance(charts_cache, list) and data.get("genomics_sections"):
         _attach_genomics_charts(
             data["genomics_sections"], charts_cache,
-            enabled_types=_resolve_charts(dtxsid, version),
+            enabled_types=_resolve_charts(dtxsid, view),
         )
 
     # ── Appendix B: animal identifier roster ──────────────────────────

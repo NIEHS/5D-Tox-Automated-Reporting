@@ -1,13 +1,19 @@
 """
-version_config.py — per-DTXSID report VERSIONS (structure + filters).
+view_config.py — per-DTXSID report VIEWS (structure + filters).
 
-A single processed dataset can back multiple report versions, each with its own
-document STRUCTURE and its own data FILTERS (which sexes/assays/organs/genes
+A single processed dataset can be projected into multiple report views, each with
+its own document STRUCTURE and its own data FILTERS (which sexes/assays/organs/genes
 appear) — and, later, its own computational METHODS.  Phase 2 made the compute
-caches filter-agnostic (the full superset), so a version is purely a render-time
+caches filter-agnostic (the full superset), so a view is purely a render-time
 projection: no reprocessing when you switch or add one.
 
-Storage: ``sessions/<dtxsid>/versions/<name>.yaml``.  Each file is a mapping:
+A "view" is a saved LENS over the one evolving report, NOT a coexisting version in
+a branch/tag tree (ADR-0020: one report that evolves, with history behind it).
+Content history/undo lives elsewhere (session_store save_section version numbers +
+the /api/session/.../history routes) — that is the "history behind it" and is
+distinct from a view.
+
+Storage: ``sessions/<dtxsid>/views/<name>.yaml``.  Each file is a mapping:
 
     document:   [ ...node entries... ]     # optional — falls back to the global tree
     filters:                               # optional — canonical filter shape
@@ -19,14 +25,14 @@ Storage: ``sessions/<dtxsid>/versions/<name>.yaml``.  Each file is a mapping:
     charts:     [types] | null             # optional — closed-vocab enable list
     methods:    { ... }                    # optional — reserved for phase 4
 
-The ``default`` version reproduces today's behavior: absent ⇒ the global
+The ``default`` view reproduces today's behavior: absent ⇒ the global
 template's structure + filters.  Back-compat: a legacy single
 ``sessions/<dtxsid>/document.yaml`` (document_config) is surfaced as the
-``default`` version's structure when no versions/ dir exists.
+``default`` view's structure when no views/ dir exists.
 
 Only structure + filters are handled here; the heavy compute never sees a
-version.  History/archive mirrors document_config (each save archives the prior
-file under history/_versions/<name>/).
+view.  History/archive mirrors document_config (each save archives the prior
+file under history/_views/<name>/).
 """
 
 from __future__ import annotations
@@ -37,52 +43,52 @@ import yaml
 
 from pipeline.session_store import SESSIONS_DIR
 
-_VERSIONS_DIR = "versions"
-_VERSIONS_HISTORY = "_versions"
-DEFAULT_VERSION = "default"
+_VIEWS_DIR = "views"
+_VIEWS_HISTORY = "_views"
+DEFAULT_VIEW = "default"
 
 
-def versions_dir(dtxsid: str) -> Path:
-    """Directory holding a session's version files (may not exist)."""
-    return SESSIONS_DIR / dtxsid / _VERSIONS_DIR
+def views_dir(dtxsid: str) -> Path:
+    """Directory holding a session's view files (may not exist)."""
+    return SESSIONS_DIR / dtxsid / _VIEWS_DIR
 
 
-def version_path(dtxsid: str, name: str) -> Path:
-    """Path to one version file (may not exist).  ``name`` is a bare slug."""
-    return versions_dir(dtxsid) / f"{_safe_name(name)}.yaml"
+def view_path(dtxsid: str, name: str) -> Path:
+    """Path to one view file (may not exist).  ``name`` is a bare slug."""
+    return views_dir(dtxsid) / f"{_safe_name(name)}.yaml"
 
 
 def _safe_name(name: str) -> str:
-    """A filesystem-safe version slug.  Rejects path separators / traversal so a
-    version name can never escape the versions/ dir."""
+    """A filesystem-safe view slug.  Rejects path separators / traversal so a
+    view name can never escape the views/ dir."""
     slug = (name or "").strip()
     if not slug or "/" in slug or "\\" in slug or slug in (".", ".."):
-        raise ValueError(f"invalid version name {name!r}")
+        raise ValueError(f"invalid view name {name!r}")
     return slug
 
 
-def list_versions(dtxsid: str) -> list[str]:
-    """Names of a session's saved versions, sorted; always includes 'default'.
+def list_views(dtxsid: str) -> list[str]:
+    """Names of a session's saved views, sorted; always includes 'default'.
 
     'default' is implicit — it exists conceptually even with no file (it means
     "the global template's structure + filters"), so callers can always render
-    it.  Any *.yaml under versions/ is a named version."""
-    names = {DEFAULT_VERSION}
-    d = versions_dir(dtxsid)
+    it.  Any *.yaml under views/ is a named view."""
+    names = {DEFAULT_VIEW}
+    d = views_dir(dtxsid)
     if d.exists():
         names.update(p.stem for p in d.glob("*.yaml") if p.is_file())
     return sorted(names)
 
 
-def load_version(dtxsid: str, name: str) -> dict:
+def load_view(dtxsid: str, name: str) -> dict:
     """
-    Load a version's raw mapping (``{document?, filters?, charts?, methods?}``).
+    Load a view's raw mapping (``{document?, filters?, charts?, methods?}``).
 
-    Returns ``{}`` for a version with no file — including ``default`` when no
+    Returns ``{}`` for a view with no file — including ``default`` when no
     file exists (the caller then falls back to the global template).  Raises
     ValueError if the stored YAML is not a mapping.
     """
-    path = version_path(dtxsid, name)
+    path = view_path(dtxsid, name)
     if not path.exists():
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -90,14 +96,14 @@ def load_version(dtxsid: str, name: str) -> dict:
         return {}
     if not isinstance(data, dict):
         raise ValueError(
-            f"version {name!r} must be a YAML mapping, got {type(data).__name__}"
+            f"view {name!r} must be a YAML mapping, got {type(data).__name__}"
         )
     return data
 
 
-def save_version(dtxsid: str, name: str, data: dict) -> None:
+def save_view(dtxsid: str, name: str, data: dict) -> None:
     """
-    Validate then persist a version mapping, archiving any prior file.
+    Validate then persist a view mapping, archiving any prior file.
 
     Validates the STRUCTURE (if a ``document`` block is present) with the same
     full tree build document_config uses, so an invalid structure never lands.
@@ -109,13 +115,13 @@ def save_version(dtxsid: str, name: str, data: dict) -> None:
     ``charts`` block (must be a list of type strings, or null) is rejected too.
     """
     if not isinstance(data, dict):
-        raise ValueError("version data must be a mapping")
+        raise ValueError("view data must be a mapping")
     document = data.get("document")
     if document is not None:
         # Reuse document_config's validating tree build (raises on bad structure).
         from document_model.document_config import _tree_from_document_list
         if not isinstance(document, list):
-            raise ValueError("version 'document' must be a list of node entries")
+            raise ValueError("view 'document' must be a list of node entries")
         _tree_from_document_list(document)
 
     # Normalize + validate filters (canonical shape), so render never sees a
@@ -131,9 +137,9 @@ def save_version(dtxsid: str, name: str, data: dict) -> None:
     if "charts" in data and data["charts"] is not None:
         charts = data["charts"]
         if not isinstance(charts, list) or not all(isinstance(c, str) for c in charts):
-            raise ValueError("version 'charts' must be a list of type strings, or null")
+            raise ValueError("view 'charts' must be a list of type strings, or null")
 
-    path = version_path(dtxsid, name)
+    path = view_path(dtxsid, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     _archive_before_overwrite(path, _history_dir(dtxsid, name))
     path.write_text(
@@ -141,12 +147,12 @@ def save_version(dtxsid: str, name: str, data: dict) -> None:
     )
 
 
-def delete_version(dtxsid: str, name: str) -> bool:
-    """Delete a named version file (archiving it first).  'default' cannot be
+def delete_view(dtxsid: str, name: str) -> bool:
+    """Delete a named view file (archiving it first).  'default' cannot be
     deleted (it is implicit).  Returns True if a file was removed."""
-    if _safe_name(name) == DEFAULT_VERSION:
-        raise ValueError("the 'default' version cannot be deleted")
-    path = version_path(dtxsid, name)
+    if _safe_name(name) == DEFAULT_VIEW:
+        raise ValueError("the 'default' view cannot be deleted")
+    path = view_path(dtxsid, name)
     if not path.exists():
         return False
     _archive_before_overwrite(path, _history_dir(dtxsid, name))
@@ -154,37 +160,37 @@ def delete_version(dtxsid: str, name: str) -> bool:
     return True
 
 
-def resolve_version_filters(dtxsid: str, name: str) -> dict:
+def resolve_view_filters(dtxsid: str, name: str) -> dict:
     """
     The canonical ``{dimension: {area: {sex: [tokens]}}}`` filters + ``charts``
-    for a version, ready for the render path.
+    for a view, ready for the render path.
 
-    Resolution: a version's own ``filters``/``charts`` win; otherwise fall back
+    Resolution: a view's own ``filters``/``charts`` win; otherwise fall back
     to the GLOBAL template's filters (document_template.load_report_filters) —
-    so ``default`` (and any version that doesn't override filters) reproduces
+    so ``default`` (and any view that doesn't override filters) reproduces
     today's output.
     """
     from document_model.document_tree import ACTIVE_TEMPLATE
     from document_model.document_template import load_report_filters
 
-    version = load_version(dtxsid, name) if name else {}
-    if "filters" in version or "charts" in version:
+    view = load_view(dtxsid, name) if name else {}
+    if "filters" in view or "charts" in view:
         return {
-            "filters": version.get("filters") or {},
-            "charts": version.get("charts"),
+            "filters": view.get("filters") or {},
+            "charts": view.get("charts"),
         }
-    # No version-level filter override → the global template's filters.
+    # No view-level filter override → the global template's filters.
     return load_report_filters(ACTIVE_TEMPLATE)
 
 
-def build_version_tree(dtxsid: str, name: str):
+def build_view_tree(dtxsid: str, name: str):
     """
-    The DocNode tree for a version: its own ``document`` structure if present,
+    The DocNode tree for a view: its own ``document`` structure if present,
     else the session's legacy document.yaml (document_config), else None so the
     caller uses the global DOCUMENT_TREE.
     """
-    version = load_version(dtxsid, name) if name else {}
-    document = version.get("document")
+    view = load_view(dtxsid, name) if name else {}
+    document = view.get("document")
     if document is not None:
         from document_model.document_config import _tree_from_document_list
         return _tree_from_document_list(document)
@@ -198,7 +204,7 @@ def build_version_tree(dtxsid: str, name: str):
 # ---------------------------------------------------------------------------
 
 def _history_dir(dtxsid: str, name: str) -> Path:
-    return SESSIONS_DIR / dtxsid / "history" / _VERSIONS_HISTORY / _safe_name(name)
+    return SESSIONS_DIR / dtxsid / "history" / _VIEWS_HISTORY / _safe_name(name)
 
 
 def _archive_before_overwrite(path: Path, history_dir: Path) -> None:
