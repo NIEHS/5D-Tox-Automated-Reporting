@@ -206,6 +206,14 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     if fp.exists():
         fp.unlink()
         summary["deleted"].append(".session_db.fingerprint")
+    # Same for the content skip-guard (ADR-0021 Phase C): its fingerprint +
+    # cached outputs are derived from the now-deleted caches, so drop both or a
+    # stale fingerprint could falsely skip content preparation next process.
+    for name in (".prepare_content.fingerprint", ".prepare_content.outputs.json"):
+        cf = d / name
+        if cf.exists():
+            cf.unlink()
+            summary["deleted"].append(name)
 
     # --- Clear in-memory integrated pool ---
     if dtxsid in _integrated_pool:

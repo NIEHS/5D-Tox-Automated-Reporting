@@ -1268,6 +1268,118 @@ async def prepare_content(ctx) -> None:
     _persist_references(ctx.dtxsid, ctx.genomics_sections)
 
 
+# ── Content skip-guard (ADR-0021 Phase C) ────────────────────────────────────
+# prepare_content is the seam-level twin of build_session_db_if_changed: when the
+# concern-[1] outputs AND the content declarations AND the user-authored override
+# files are all unchanged, re-running it reproduces byte-identical output, so we
+# skip the reassembly and restore the cached payload fields instead. The guard is
+# FAIL-SAFE by construction — the fingerprint folds in EVERY input that can change
+# a content output, so a stale fingerprint can only ever force a re-run, never
+# serve stale prose.
+_CONTENT_FP_NAME = ".prepare_content.fingerprint"
+_CONTENT_CACHE_NAME = ".prepare_content.outputs.json"
+
+# The ctx fields prepare_content writes — the complete output surface it must
+# restore on a skip. Three are payload-bearing (gene_set_narrative,
+# gene_narrative, apical_bmd_narrative); the two llm_* fields feed the
+# session-reload/regenerate paths. references.json is a prior-run side effect
+# already on disk and is left untouched on a skip.
+_CONTENT_OUTPUT_FIELDS = (
+    "llm_gs_by_organ",
+    "llm_gene_by_organ",
+    "gene_set_narrative",
+    "gene_narrative",
+    "apical_bmd_narrative",
+)
+
+
+def _content_fingerprint(ctx) -> str:
+    """Content signature: every input that can change a prepare_content output.
+
+    Folds in (a) the concern-[1] output hashes already on ctx — ntp/bmds/genomics/
+    methods — which capture the processed data the reductions consume; (b) the
+    content DECLARATIONS that transform data into prose (compound_name, dose_unit,
+    bmd_stat, and the GO cutoffs — the cutoffs matter because genomics_sections is
+    filtered AFTER the genomics cache read, so a cutoff change alters the narrative
+    inputs without touching genomics_hash); and (c) the (size, mtime) of the two
+    user-authored files that WIN OVER generated prose — identity.json and
+    genomics_narrative_overrides.json — so an override edit re-runs content."""
+    session = _session_dir(ctx.dtxsid)
+    user_files: list[list] = []
+    for name in ("identity.json", "genomics_narrative_overrides.json"):
+        p = session / name
+        try:
+            st = p.stat()
+            user_files.append([name, st.st_size, st.st_mtime_ns])
+        except OSError:
+            user_files.append([name, None, None])
+    payload = {
+        "data_hashes": {
+            "ntp": ctx.ntp_hash,
+            "bmds": ctx.bmds_hash,
+            "genomics": ctx.genomics_hash,
+            "methods": ctx.methods_hash,
+        },
+        "declarations": {
+            "compound_name": ctx.compound_name,
+            "dose_unit": ctx.dose_unit,
+            "bmd_stat": ctx.bmd_stat,
+            "go_pct": ctx.go_pct,
+            "go_min_genes": ctx.go_min_genes,
+            "go_max_genes": ctx.go_max_genes,
+            "go_min_bmd": ctx.go_min_bmd,
+        },
+        "user_files": user_files,
+    }
+    blob = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+async def prepare_content_if_changed(ctx) -> bool:
+    """Run prepare_content, or skip + restore its outputs when nothing changed.
+
+    Returns True if content was (re)prepared, False if the skip-guard restored a
+    cached result. Mirrors build_session_db_if_changed: skip only when the
+    fingerprint matches AND the cached outputs are present and loadable; any doubt
+    re-runs. Fail-safe — the cache is written only after a real run, and a corrupt
+    or partial cache falls through to a full re-run.
+    """
+    session = _session_dir(ctx.dtxsid)
+    fp_path = session / _CONTENT_FP_NAME
+    cache_path = session / _CONTENT_CACHE_NAME
+    fingerprint = _content_fingerprint(ctx)
+
+    if fp_path.exists() and cache_path.exists():
+        try:
+            if fp_path.read_text().strip() == fingerprint:
+                cached = orjson.loads(cache_path.read_bytes())
+                # Restore every output field. A missing key ⇒ cache is stale/
+                # partial ⇒ fall through to a full re-run rather than restore junk.
+                if all(k in cached for k in _CONTENT_OUTPUT_FIELDS):
+                    for k in _CONTENT_OUTPUT_FIELDS:
+                        setattr(ctx, k, cached[k])
+                    logger.info(
+                        "Content for %s unchanged — skipped preparation", ctx.dtxsid
+                    )
+                    return False
+        except Exception:
+            logger.warning(
+                "Content cache unreadable for %s, re-preparing", ctx.dtxsid
+            )
+
+    await prepare_content(ctx)
+
+    # Persist the outputs + fingerprint AFTER a successful run. Fail-soft: a cache
+    # write error just means the next run won't skip (never a correctness issue).
+    try:
+        outputs = {k: getattr(ctx, k) for k in _CONTENT_OUTPUT_FIELDS}
+        cache_path.write_bytes(orjson.dumps(outputs, option=orjson.OPT_NON_STR_KEYS))
+        fp_path.write_text(fingerprint)
+    except Exception:
+        logger.warning("Failed to persist content cache for %s", ctx.dtxsid)
+    return True
+
+
 async def run_process(dtxsid: str, params: dict, store) -> dict:
     """
     HTTP-free core of the processing pipeline (ADR-0014, lifted from the route).
@@ -1375,10 +1487,12 @@ async def run_process(dtxsid: str, params: dict, store) -> dict:
         # ══════════════════════════════════════════════════════════════
         # Everything strictly-after-all-data: the prose reductions (genomics
         # narratives, apical BMD narrative) and the references side effect.
-        # Carved into prepare_content() so the data/content seam is a real
-        # function boundary; behavior- and perf-preserving (these layers
-        # already ran serially after the data layers).
-        await prepare_content(ctx)
+        # Skip-guarded (Phase C): when the concern-[1] outputs + content
+        # declarations + user override files are all unchanged, the cached
+        # outputs are restored and the reassembly is skipped — "regenerate
+        # content only when the data or declarations change." Fail-safe: any
+        # input change re-runs; the payload is byte-identical either way.
+        await prepare_content_if_changed(ctx)
 
         # ══════════════════════════════════════════════════════════════
         # Assembly — combine all results into response payload

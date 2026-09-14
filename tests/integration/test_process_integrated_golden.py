@@ -254,6 +254,52 @@ class TestProcessIntegratedGolden:
             "methods",
         }
 
+    def test_content_skip_guard_warm_rerun_is_byte_identical(
+        self, sessions_dir, mock_bmdx_pipe, monkeypatch
+    ):
+        """ADR-0021 Phase C: re-processing an unchanged session must skip content
+        preparation (prepare_content) AND return a byte-identical payload.
+
+        The golden oracle only exercises a COLD run, so it cannot catch a
+        skip-guard that either fails to fire (no perf win) or fires but restores
+        stale/partial outputs (a correctness regression). This test drives the
+        pipeline twice against the same session and asserts both properties:
+        the second run restores from cache (prepare_content NOT re-invoked) yet
+        the payload is identical to the first."""
+        import pipeline.process_integrated as pi
+
+        # Wrap prepare_content with a call counter so we can prove the guard
+        # skipped it on the warm run. Patch the name the guard actually calls.
+        calls = {"n": 0}
+        real_prepare = pi.prepare_content
+
+        async def _counting_prepare(ctx):
+            calls["n"] += 1
+            return await real_prepare(ctx)
+
+        monkeypatch.setattr(pi, "prepare_content", _counting_prepare)
+
+        first = _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch)
+        assert calls["n"] == 1, "cold run must prepare content once"
+
+        # Second run: same session, same inputs — the guard should restore the
+        # cached outputs and NOT call prepare_content again.
+        second = _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch)
+        assert calls["n"] == 1, (
+            "warm re-run re-prepared content — skip-guard did not fire "
+            f"(prepare_content called {calls['n']}x, expected 1)"
+        )
+
+        # The restored payload must be byte-identical to the cold one.
+        assert _canonical(second) == _canonical(first), (
+            "content skip-guard restored a payload that differs from the cold run"
+        )
+
+        # The guard's on-disk artifacts must exist after the first run.
+        session = sessions_dir / DTXSID
+        assert (session / ".prepare_content.fingerprint").exists()
+        assert (session / ".prepare_content.outputs.json").exists()
+
     def test_process_builds_query_substrate(
         self, sessions_dir, mock_bmdx_pipe, monkeypatch, tmp_path
     ):
