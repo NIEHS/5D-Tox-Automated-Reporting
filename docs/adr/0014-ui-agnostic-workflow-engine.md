@@ -8,6 +8,19 @@
   six-kind caveat below) BEFORE building. It is no longer "do not implement" — the
   widened model was implemented directly.
 - **Deciders:** Dan Svoboda
+- **Framing amended-by:** [ADR-0018](0018-app-is-not-an-editor.md) (2026-09-11).
+  This ADR's approval-governance hooks assume **in-app authoring** (e.g.
+  `regenerate_section`, "an approved section is not silently clobbered"). ADR-0018
+  reframes the app as generate / preview / provisionally-approve / round-trip —
+  **not an editor**; human authoring is external (Word/Overleaf). The UI-agnostic
+  **engine, phase derivation, and label/guard model all stand**; what changes is that
+  the governed actions are *generate/ingest-reconcile/approve*, not *edit*. Hook (b)
+  `reconcile_word_edits` is exactly the ADR-0018 Word round-trip. Read the engine's
+  authoring semantics through ADR-0018.
+- **Version model ratified-by:** [ADR-0020](0020-one-evolving-report-not-a-version-tree.md)
+  (2026-09-14). This ADR's caveat #3 ("one living bundle, MUTABLE FOREVER … one
+  snapshot, no version tree") was in tension with ADR-0016's version framing; ADR-0020
+  settles it in FAVOR of this ADR — one evolving report with history, no version tree.
 
 > **Implementation status (2026-08-16).** The engine was BUILT to the widened
 > six-kind model below, in the order set by

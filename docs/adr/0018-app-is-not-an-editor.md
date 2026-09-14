@@ -83,8 +83,18 @@ heading/section.
   Re-scope the document workstream to generate / preview / hand-off / ingest-and-
   reconcile / provisionally-approve — not edit. The section-dependency model still
   matters (what to generate when: Background←identity, M&M←post-Process data,
-  Summary←approved sections, genomics=deterministic/read-only), because it decides
-  what is generated and what is even editable-externally vs frozen.
+  Summary←approved sections, genomics narrative←LLM-generated + user-ownable),
+  because it decides what is generated and what is even editable-externally vs frozen.
+
+  > **Correction (2026-09-14).** The original text of this bullet said
+  > "genomics=deterministic/read-only." That is **factually wrong** and is corrected
+  > above. The genomics *tables/charts* are data-derived, but the genomics
+  > *narrative* is LLM-generated (`generate_genomics_narrative_async`) and
+  > user-ownable (`genomics_narrative_overrides.json`, `/regenerate-genomics-narrative`).
+  > It is in fact the **archetype** [ADR-0005](0005-overleaf-round-trip-content-sync.md)
+  > generalizes from ("override wins, never silently recomputed") and the store
+  > [ADR-0015](0015-label-and-guard-model.md) defers converging. Do not treat genomics
+  > prose as frozen/read-only.
 - **The live bug's real fix** is generate + materialize + preview those sections, with
   external editing as the round-trip — not building editors.
 - **Word round-trip is a first-class, sizeable new capability**, parallel to the

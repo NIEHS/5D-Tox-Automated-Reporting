@@ -1,6 +1,14 @@
 # 0016 — A canonical per-session query substrate + rendering domains (materialized DuckDB)
 
 - **Status:** **Proposed (2026-08-21)** — design for review; no code yet.
+  **Version framing narrowed-by** [ADR-0020](0020-one-evolving-report-not-a-version-tree.md)
+  (2026-09-14): the "a version *is* a rendering domain" equation and the
+  multiple-coexisting-versions model are REJECTED — the app holds ONE evolving report
+  with history, not a version tree. This ADR's **substrate** (`session.duckdb`, the
+  read-only query layer) and its **rendering-domain binding seam** (Phase E) SURVIVE
+  unchanged; only their coupling to *versions* is removed — bind rendering domains to
+  the single report, not to a version tree. Read every "version" here as "saved
+  preset/view of the one report."
 - **Deciders:** Dan Svoboda
 - **Related:** ADR-0013 (package layout), ADR-0014 (UI-agnostic workflow engine),
   ADR-0003 (document-component model — the `data_key` binding seam this

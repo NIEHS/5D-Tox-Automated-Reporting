@@ -72,6 +72,15 @@ anchoring + a constrained editability contract**, not on a clever parser.
 
 ## Decision
 
+> **⚠ TRANSPORT SUPERSEDED — read Amendments 2 & 3 first.** The body below
+> (§1 "Transport — Overleaf git-bridge", and Amendment 1/1a) decides
+> **git-bridge = live surface, GitHub = passive archive**. **Amendment 2
+> (2026-06-09) REVERSES this**: the live transport is **GitHub-as-hub**, the app
+> speaks only `git`, git-bridge is a dormant fallback; **Amendment 3 (2026-06-11)**
+> completes the vocabulary/render-source cutover. The reconciliation MECHANISM
+> (anchors, reconcile, override store, turn flag) is unchanged by the reversal —
+> only the transport topology moved. When §1 and Am.2/Am.3 disagree, **Am.3 wins.**
+
 **Add a bidirectional Overleaf sync layer that promotes the `.tex` from a
 one-way export to a round-trip interchange format, with per-node edit
 provenance.** The `DocNode` tree remains the single source of truth for

@@ -10,6 +10,12 @@
   preview is redundant. Do NOT build the PDF-view / reference-compare half. What
   this ADR leaves live is exactly the shipped HTML preview. Was Proposed
   2026-07-07.
+- **Framing amended-by:** [ADR-0018](0018-app-is-not-an-editor.md) (2026-09-11).
+  This ADR's language calls the HTML pane the "editing content pane" / "the work
+  surface." Per ADR-0018 the app is **not** an editor — there is no in-app authoring
+  of prose. The HTML view **survives, but as a PREVIEW surface, not an editing
+  surface.** Read every "edit"/"editing pane" phrase below as "preview." The live
+  preview mechanics are unchanged; only the framing is corrected.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0005](0005-overleaf-round-trip-content-sync.md) (Overleaf is
   the committee-review surface; this ADR reduces the number of round trips to
