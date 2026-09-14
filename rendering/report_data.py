@@ -457,8 +457,15 @@ def marshal_export_data(
     # finalized.  Same helper the LaTeX session path calls, so both surfaces
     # number identically; runs before _build_toc_entries so the Tables list
     # picks the numbers up.  A no-op when there are no genomics sections.
-    from document_model.document_tree import assign_genomics_table_numbers
+    from document_model.document_tree import (
+        assign_genomics_table_numbers,
+        assign_genomics_figure_numbers,
+    )
     assign_genomics_table_numbers(active_tree, data.get("genomics_sections"))
+    # Positional figure numbers for the charts attached in _overlay_genomics —
+    # continues the tree's figure sequence (ADR-0021 D1).  Same helper the LaTeX
+    # session path calls, so both surfaces number identically.
+    assign_genomics_figure_numbers(active_tree, data.get("genomics_sections"))
 
     # Summary
     summary_paragraphs = body.get("summary_paragraphs", [])

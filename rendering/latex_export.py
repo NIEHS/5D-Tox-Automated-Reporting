@@ -829,6 +829,11 @@ def load_session_data(
             data["genomics_sections"], charts_cache,
             enabled_types=_resolve_charts(dtxsid, view),
         )
+        # Positional figure numbers for the attached charts — continues the
+        # tree's figure sequence (ADR-0021 D1).  Same helper the web/marshal
+        # path calls, so both surfaces number identically.
+        from document_model.document_tree import assign_genomics_figure_numbers
+        assign_genomics_figure_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
 
     # ── Appendix B: animal identifier roster ──────────────────────────
     animals = _load_animal_identifiers(session_dir)

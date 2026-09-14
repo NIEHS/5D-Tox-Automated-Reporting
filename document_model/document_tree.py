@@ -173,10 +173,13 @@ def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
 
 
 # Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
-# from tables: a `figure` node is Figure 1, 2, ... in document order.  (Genomics
-# CHART figure numbers are still assigned data-side on chart payloads by
-# genomics_charts.attach_genomics_charts until those charts migrate to figure
-# nodes — the two counters must be reconciled when that decomposition lands.)
+# from tables: a `figure` node is Figure 1, 2, ... in document order.  Genomics
+# CHART figures are DATA-DRIVEN (not tree nodes), so they are numbered by
+# assign_genomics_figure_numbers below — the figure sibling of
+# assign_genomics_table_numbers — which CONTINUES this positional sequence rather
+# than restarting a second counter at 1 (ADR-0021 D1: the render-time fix for the
+# old two-counter leak, where attach_genomics_charts stamped figure_number 1..N
+# on its own).
 NUMBERED_FIGURE_TYPES = frozenset({"figure"})
 
 
@@ -286,6 +289,55 @@ def assign_genomics_table_numbers(
             if entry.get("type") == role:
                 entry["table_number"] = counter
                 counter += 1
+
+
+def assign_genomics_figure_numbers(
+    tree: list[DocNode] | None,
+    genomics_sections: list[dict] | None,
+) -> None:
+    """
+    Assign positional ``figure_number`` to each attached genomics CHART,
+    continuing the sequence the tree's numbered figures established (Figure 1,
+    2, ...).  The figure sibling of ``assign_genomics_table_numbers``.
+
+    Genomics charts are DATA-DRIVEN, not tree nodes: they hang on each gene_set
+    entry as ``entry["charts"]`` (attached by
+    ``genomics_charts.attach_genomics_charts`` at render time).  So
+    ``compute_figure_numbers()`` — a pure tree walk over ``figure`` nodes — can't
+    see them; this is the data-side companion that numbers them, called by BOTH
+    render paths AFTER charts are attached (single source of truth: same
+    function, same inputs → identical numbers on both surfaces).
+
+    Ordering is load-bearing and matches the printed order: entries iterate in
+    ``genomics_sections`` order, and each entry's charts iterate in attach order
+    (umap → cluster → any data-driven types).  The number CONTINUES from the
+    highest ``figure_number`` any tree ``figure`` node already holds — so a chart
+    can never collide with a tree figure (ADR-0021 D1: this replaces the old
+    independent counter in ``attach_genomics_charts`` that restarted at 1).
+
+    Mutates each chart dict in place (sets ``chart["figure_number"]``).
+    Idempotent.  A no-op when there are no genomics sections / charts.
+    """
+    if tree is None:
+        tree = DOCUMENT_TREE
+    if not genomics_sections:
+        return
+
+    # Continue from the highest figure number the tree already assigned (0 when
+    # the active template has no `figure` nodes — the NIEHS reference case — so
+    # the first chart becomes Figure 1).
+    tree_max = 0
+    def _max(node: DocNode) -> None:
+        nonlocal tree_max
+        if node.figure_number is not None:
+            tree_max = max(tree_max, node.figure_number)
+    walk_tree(tree, _max)
+
+    counter = tree_max + 1
+    for entry in genomics_sections:
+        for chart in entry.get("charts") or []:
+            chart["figure_number"] = counter
+            counter += 1
 
 
 def build_node_index(tree: list[DocNode]) -> dict[str, DocNode]:

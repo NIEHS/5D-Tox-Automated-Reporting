@@ -445,14 +445,19 @@ def test_attach_genomics_charts_attaches_valid_with_filename():
     charts = sections[0].get("charts", [])
     assert len(charts) == 1
     assert charts[0]["filename"] == "genomics-liver-male-umap.png"
-    assert charts[0]["figure_number"] == 1  # ADR-0004 amendment (e)
+    # ADR-0021 D1: attach no longer stamps figure_number — that is a render-time,
+    # positional concern owned by assign_genomics_figure_numbers.
+    assert "figure_number" not in charts[0]
 
 
-def test_attach_genomics_charts_numbers_figures_sequentially_across_entries():
+def test_assign_genomics_figure_numbers_sequential_across_entries():
     """Figure numbers are positional across ALL attached charts — sequential in
     render order (entries iterate in genomics_sections order, charts within an
-    entry iterate umap → cluster).  ADR-0004 amendment (e)."""
+    entry iterate umap → cluster).  ADR-0021 D1: numbering is done by the
+    render-time tree pass, continuing the tree's figure sequence — NOT by attach.
+    With no `figure` tree nodes (a bare list), the first chart is Figure 1."""
     from rendering.latex_export import _attach_genomics_charts
+    from document_model.document_tree import assign_genomics_figure_numbers
     sections = [
         {"type": "gene_set", "organ": "kidney", "sex": "female"},
         {"type": "gene_set", "organ": "liver",  "sex": "male"},
@@ -464,6 +469,10 @@ def test_attach_genomics_charts_numbers_figures_sequentially_across_entries():
          "umap_png": _TINY_PNG, "cluster_png": _TINY_PNG},
     ]
     _attach_genomics_charts(sections, cache)
+    # No numbers until the render-time pass runs.
+    assert all("figure_number" not in c
+               for s in sections for c in s.get("charts", []))
+    assign_genomics_figure_numbers([], sections)
     nums = [(c["key"], c["figure_number"])
             for s in sections for c in s.get("charts", [])]
     assert nums == [("umap", 1), ("cluster", 2), ("umap", 3), ("cluster", 4)]

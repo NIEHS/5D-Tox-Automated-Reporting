@@ -127,12 +127,12 @@ def attach_genomics_charts(
         ((c.get("organ") or "").lower(), (c.get("sex") or "").lower()): c
         for c in charts_cache if isinstance(c, dict)
     }
-    # Sequential figure number across ALL attached charts (positional in render
-    # order: entries iterate in genomics_sections order, charts within an entry
-    # iterate umap -> cluster).  Each chart's figure_number becomes the renderer's
-    # "Figure N." caption prefix and the BITS <label>Figure N</label> later
-    # (ADR-0004 amendment e).
-    next_figure = 1
+    # Figure NUMBERS are NOT assigned here (ADR-0021 D1): numbering is a
+    # render-time, POSITIONAL concern owned by the tree walk.  This attach step
+    # only builds each chart payload (image, filename, caption) in render order;
+    # document_tree.assign_genomics_figure_numbers then stamps figure_number so
+    # the charts CONTINUE the tree's figure sequence instead of a second counter
+    # restarting at 1.  Both render paths call that pass right after this one.
     for entry in genomics_sections:
         # Only gene_set entries carry charts; gene (top-genes) entries don't.
         if entry.get("type") != "gene_set":
@@ -168,8 +168,9 @@ def attach_genomics_charts(
                 "filename": f"genomics-{slug}-{key}.png",
                 "png_b64": png,
                 "caption": cache_entry.get(f"{key}_caption", ""),
-                "figure_number": next_figure,
+                # figure_number is assigned later by
+                # document_tree.assign_genomics_figure_numbers (render-time,
+                # positional — continues the tree's figure sequence).
             })
-            next_figure += 1
         if charts:
             entry["charts"] = charts
