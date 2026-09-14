@@ -164,8 +164,20 @@ each side (metadata vocabulary; the reduction + structure) is specified as polic
 - **Cache families already reveal the split** (verified): `_cache_bmds_*`,
   `_cache_bmd_summary_*`, `_cache_genomics_*`, the substrate = concern [1];
   `_cache_methods_*`, `_cache_interpretation_*`, `references.json`,
-  `_cache_summary_generated.json`, `background.json` = concern [2]; `_cache_sections_*`
-  is the one **mixed** file (table content + `unified_narratives` prose in one).
+  `_cache_summary_generated.json`, `background.json`, and `_cache_sections_*` =
+  concern [2]. `_cache_sections_*` carries **table content** (`tables_json`,
+  `caption`, `first_col_header`, `footnotes`, `table_type`) alongside **prose**
+  (each card's `narrative`, plus a top-level `unified_narratives`). Under this
+  ADR that co-location is **content next to content, NOT a data/content blend**:
+  `tables_json` is the presentation-ready display rows `_build_section_cards`
+  serializes FROM the concern-[1] `platform_tables` (which stays on `ctx`, never
+  in this cache), so it is concern [2], the same kind of thing as the prose.
+  Splitting prose from table-content here would be the original "prose=document,
+  tables=data" conflation relocated — explicitly rejected (see "What this
+  rejects"). Verified against a real cache: keys are exactly
+  `{sections, unified_narratives}`, and each card is
+  `{caption, first_col_header, footnotes, narrative, platform, tables_json,
+  title}` — no raw processed data present.
 - **Consistent with the version model** ([ADR-0020](0020-one-evolving-report-not-a-version-tree.md)):
   all three concerns act on the one evolving report; concern boundaries are not
   version boundaries.
@@ -186,7 +198,7 @@ each side (metadata vocabulary; the reduction + structure) is specified as polic
 | `references.json` | `_persist_references` | [2] content | reference assembly (depends on genomics narrative pass) |
 | `background.json` | (written elsewhere) | [2] content | read as content by the reader |
 | `summary.json` / `_cache_summary_generated.json` | `/api/generate-summary` (standalone-only) | [2] content | **cache-write mismatch**: writer emits `summary.json`, reader looks for `_cache_summary_generated.json` |
-| `_cache_sections_*` | `_get_sections` | **[1]+[2] MIXED** | `sections` table content **and** `unified_narratives` prose in one file; each section card also embeds `narrative` — the split target |
+| `_cache_sections_*` | `_get_sections` | [2] content | Table CONTENT (`tables_json`/caption/headers/footnotes, serialized from `platform_tables`) + prose (`narrative`, `unified_narratives`). Content-next-to-content, NOT a data blend — assessed and deliberately NOT split (D3) |
 | serialized `DOCUMENT_TREE`, `toc_entries`, `table_entries` | `serialize_tree` at read | [3] structure | correctly derived at render time |
 | render_common plan structs | emitters at walk time | [3] render | internal IR, transient, per-node |
 
