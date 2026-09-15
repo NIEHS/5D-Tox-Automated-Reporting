@@ -239,9 +239,23 @@ each side (metadata vocabulary; the reduction + structure) is specified as polic
   [[project_data_workflow_abstraction]]'s "open registries, not closed switches"
   real on the content side, symmetric with the data side.
 
-## Open questions
+## Deliberately NOT pursued
 
-- **Should the IR become a true content→surface interface?** Left open (above) —
-  the one remaining stretch item; the registry (F) is the content-kind seam, but
-  the render IR is still welded to `data`'s shape (see "The IR is NOT document
-  content" in the model note). Not started.
+- **Promoting the render IR to a true `content→surface` interface — declined
+  (maintainer, 2026-09-14), YAGNI.** The idea: have concern [2] materialize an
+  explicit `DocumentContent` object that emitters render *from* (`render(content,
+  tree, styling)`), instead of today's model where each emitter pulls per-node
+  plan structs out of the `data` dict at walk time (the `*_plan` EXTRACT fns,
+  welded to `data`'s shape — see "The IR is NOT document content" above).
+
+  Not done, and not planned, because there is **no use case**: the payoff is
+  rendering content that came from a source *other* than `run_process` (a
+  different pipeline, a query, a hand-authored bundle — the generic doc-gen
+  daydream + ADR-0016's rendering-domain seam), and no such second source exists.
+  The welded version works; the plan structs are already format-agnostic and
+  centralized (ADR-0006), so the only remaining coupling is "rebuilt per-walk from
+  `data`" rather than "handed over as an object" — cheap to live with. Building
+  the formal interface now would be architecture-for-its-own-sake with real
+  fidelity risk (a new `DocumentContent` schema + moving EXTRACT logic into [2] +
+  re-pointing all four emitters). **Trigger to revisit:** a concrete second
+  content source materializes. Until then, leave it welded.
