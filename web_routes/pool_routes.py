@@ -43,10 +43,12 @@ import asyncio
 import logging
 
 import orjson
-from fastapi import Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from pipeline.pool_globals import router
+# This module owns its router (moved here from pipeline.pool_globals on
+# 2026-09-18 so pipeline/ no longer imports FastAPI); background_server mounts it.
+router = APIRouter()
 from workflow.engine import WorkflowEngine
 from workflow.errors import StepError
 from workflow.store import DiskPoolStore

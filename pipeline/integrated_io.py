@@ -52,14 +52,13 @@ keeps working via the pool_orchestrator re-export shim.
 import json
 import logging
 
-from fastapi.responses import FileResponse, JSONResponse
 
 from pipeline.bmd_project_schema import (
     BMDProjectValidationError,
     load_and_validate as _load_and_validate_bmd_project,
 )
 
-from pipeline.pool_globals import router, _session_dir, _integrated_pool
+from pipeline.pool_globals import _session_dir, _integrated_pool
 
 
 logger = logging.getLogger(__name__)
@@ -356,135 +355,3 @@ def save_integrated(dtxsid: str, data: dict) -> dict:
     # but they should see the just-written content immediately.
     _integrated_pool[dtxsid] = validated
     return validated
-
-
-# ---------------------------------------------------------------------------
-# Read-side route handlers
-# ---------------------------------------------------------------------------
-# Two GETs that surface integrated.json to the browser.  The "full" form
-# streams the file straight from disk (FileResponse), letting Oboe.js
-# parse it progressively without loading the whole thing into memory on
-# the server side.  The "summary" form goes through _load_integrated so
-# it also passes the schema barrier, then collapses the heavy bits down
-# to counts.
-
-@router.get("/api/integrated/{dtxsid}")
-async def api_integrated_full(dtxsid: str):
-    """
-    Stream the full integrated BMDProject JSON from disk.
-
-    Returns the cached integrated.json via FileResponse (chunked streaming)
-    so the browser can parse it progressively with Oboe.js.  If no cached
-    file exists, returns 404 -- the caller should trigger integration first.
-    """
-    integrated_path = _session_dir(dtxsid) / "integrated.json"
-    if not integrated_path.exists():
-        return JSONResponse(
-            {"error": "No integrated data found -- run integration first"},
-            status_code=404,
-        )
-    return FileResponse(
-        path=str(integrated_path),
-        media_type="application/json",
-        filename="integrated.json",
-    )
-
-
-@router.get("/api/integrated-summary/{dtxsid}")
-async def api_integrated_summary(dtxsid: str):
-    """
-    Return a lightweight summary of the integrated BMDProject.
-
-    Uses _load_integrated() which handles both the main integrated.json
-    and the _category_lookup.json sidecar.  Only summary fields are
-    returned — the full response arrays and category lookup stay server-side.
-    """
-    integrated = _load_integrated(dtxsid)
-
-    if not integrated:
-        return JSONResponse(
-            {"error": "No integrated data found"},
-            status_code=404,
-        )
-
-    meta = integrated.get("_meta", {})
-    experiments = integrated.get("doseResponseExperiments", [])
-    bmd_results = integrated.get("bMDResult", [])
-    cat_results = integrated.get("categoryAnalysisResults", [])
-
-    # --- Backfill experiment_count per platform if missing ---
-    # Sessions saved before the enrichment was added to integrate_pool()
-    # won't have experiment_count in source_files.  Compute it on the fly
-    # using the same name-matching heuristic so the preview table shows
-    # correct values instead of 0.
-    source_files = meta.get("source_files", {})
-    needs_backfill = source_files and any(
-        "experiment_count" not in info for info in source_files.values()
-    )
-    if needs_backfill and experiments:
-        _enrich_source_experiment_counts(source_files, experiments)
-
-    # Build experiment summaries (name + probe count only -- no response data)
-    exp_summaries = []
-    for exp in experiments:
-        exp_summaries.append({
-            "name": exp.get("name", ""),
-            "probe_count": len(exp.get("probeResponses", [])),
-        })
-
-    return JSONResponse({
-        "_meta": meta,
-        "experiment_count": len(experiments),
-        "experiments": exp_summaries,
-        "bmd_result_count": len(bmd_results),
-        "category_analysis_count": len(cat_results),
-    })
-
-
-@router.get("/api/integrated-tree/{dtxsid}")
-async def api_integrated_tree(dtxsid: str):
-    """
-    Return a slim, browser-safe structural tree of the integrated BMDProject.
-
-    The full integrated.json is 60 MB+ (the per-animal `responses` float arrays
-    dominate), so it must never be shipped to a UI. This endpoint deserializes
-    server-side but emits only classification + endpoint NAMES per experiment —
-    a few hundred KB even for large sessions — enough for a
-    platform → sex/organ → experiment → endpoints tree viewer.
-    """
-    integrated = _load_integrated(dtxsid)
-    if not integrated:
-        return JSONResponse({"error": "No integrated data found"}, status_code=404)
-
-    experiments = integrated.get("doseResponseExperiments", [])
-    nodes = []
-    for exp in experiments:
-        desc = exp.get("experimentDescription") or {}
-        probe_responses = exp.get("probeResponses", []) or []
-        endpoints = []
-        for pr in probe_responses:
-            probe = (pr or {}).get("probe") or {}
-            pid = probe.get("id")
-            if pid:
-                endpoints.append(pid)
-        treatments = exp.get("treatments", []) or []
-        # De-dup dose levels (treatments list is one entry per animal).
-        doses = sorted({t.get("dose") for t in treatments if t.get("dose") is not None})
-        nodes.append({
-            "name": exp.get("name", ""),
-            "platform": desc.get("platform"),
-            "sex": desc.get("sex"),
-            "organ": desc.get("organ"),
-            "provider": desc.get("provider"),
-            "probe_count": len(probe_responses),
-            "endpoints": endpoints,
-            "doses": doses,
-        })
-
-    return JSONResponse({
-        "dtxsid": dtxsid,
-        "experiment_count": len(experiments),
-        "bmd_result_count": len(integrated.get("bMDResult", [])),
-        "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
-        "experiments": nodes,
-    })

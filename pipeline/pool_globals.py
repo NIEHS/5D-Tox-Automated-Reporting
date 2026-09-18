@@ -35,7 +35,6 @@ nobody in the split — breaks that cycle by construction.
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter
 
 # FileFingerprint is the value type stored in _pool_fingerprints; importing
 # it here keeps the type annotation honest without forcing every consumer
@@ -51,14 +50,13 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# FastAPI router
+# (No FastAPI router here any more.)
 # ---------------------------------------------------------------------------
-# Every pool/integrated/process route handler across the split modules
-# attaches to this single router object via @router.post / @router.get.
-# background_server.py mounts it via `pool_orchestrator.router` (the shim
-# re-exports it).
-
-router = APIRouter()
+# Until 2026-09-18 this module owned the APIRouter that pool/integrated/
+# process handlers attached to, which made the processing package depend on
+# FastAPI. The HTTP handlers now live in web_routes/pool_routes.py and
+# web_routes/integrated_routes.py, each with its own router, mounted by
+# web_routes/background_server.py.
 
 
 # ---------------------------------------------------------------------------

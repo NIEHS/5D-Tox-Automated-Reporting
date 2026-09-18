@@ -46,8 +46,6 @@ import logging
 from dataclasses import dataclass, field
 
 import orjson
-from fastapi import Request
-from fastapi.responses import JSONResponse, Response
 
 from bmdx_pipe import (
     annotate_missing_animals,
@@ -58,8 +56,8 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
-from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
-from web_routes.section_serializers import _build_clinical_obs_section
+from pipeline.pool_globals import _session_dir, _pool_fingerprints
+from pipeline.section_serializers import _build_clinical_obs_section
 from pipeline.content_registry import register_content_kind, run_content_plan
 from pipeline.cache_plumbing import (
     _load_cache,
@@ -89,8 +87,6 @@ from pipeline.processing_helpers import (
     apply_section_filters,
 )
 from workflow.errors import StepError
-from workflow.store import DiskPoolStore
-from workflow.steps import generate_animal_report_step
 
 
 logger = logging.getLogger(__name__)
@@ -252,7 +248,7 @@ async def _build_apical_bmd_narrative(ctx):
             # LLM analytical paragraph (async, cached per summary hash).
             llm_paras: list[str] = []
             try:
-                from web_routes.llm_routes import generate_apical_bmd_narrative_async
+                from narrative.apical_bmd_llm import generate_apical_bmd_narrative_async
                 llm_result = await generate_apical_bmd_narrative_async(
                     dtxsid=dtxsid,
                     compound_name=_chem_name,
@@ -360,7 +356,7 @@ async def _build_genomics_llm_narratives(ctx):
     llm_gene_by_organ: dict[str, list[str]] = {}
     if genomics_sections:
         try:
-            from web_routes.llm_routes import generate_genomics_narrative_async
+            from narrative.genomics_llm import generate_genomics_narrative_async
 
             # Load identity from session for chemical name — used in
             # the LLM prompt's "{compound} exposure" phrasing.  Falls
@@ -1083,42 +1079,6 @@ async def _get_methods(ctx):
     ctx.methods_result = report_dict
 
 
-# ---------------------------------------------------------------------------
-# Route handlers
-# ---------------------------------------------------------------------------
-
-@router.post("/api/process-integrated/{dtxsid}")
-async def api_process_integrated(dtxsid: str, request: Request):
-    """
-    HTTP transport for the processing pipeline. Parses the request body and
-    delegates to the HTTP-free core `run_process` (ADR-0014). A StepError from
-    the core becomes the {'error': msg} JSONResponse the UI expects.
-
-    Input JSON:
-      {
-        "compound_name": "PFHxSAm",
-        "dose_unit": "mg/kg",
-        "bmd_stats": ["median"],  // optional: mean, median, minimum, etc.
-        "go_pct": 5,              // optional: GO category filter cutoffs
-        "go_min_genes": 20,
-        "go_max_genes": 500,
-        "go_min_bmd": 3
-      }
-    """
-    # Tolerate empty or missing request bodies — the UI sometimes sends
-    # POST with no content (e.g., from a simple fetch without JSON body).
-    try:
-        params = await request.json()
-    except Exception:
-        params = {}
-
-    try:
-        result_payload = await run_process(dtxsid, params, DiskPoolStore())
-    except StepError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
-    return JSONResponse(result_payload)
-
-
 async def run_data(ctx) -> None:
     """Concern [1] — processing (ADR-0021), Layers 1 → 3.
 
@@ -1702,37 +1662,3 @@ def _build_query_substrate(dtxsid: str, integrated: dict) -> None:
         logger.exception(
             "Query substrate build failed for %s (report unaffected)", dtxsid
         )
-
-
-@router.post("/api/generate-animal-report/{dtxsid}")
-async def api_generate_animal_report(dtxsid: str):
-    """
-    Generate a per-animal traceability report for a session's file pool.
-
-    Reads all fingerprinted files from disk, extracts per-animal data
-    (animal_id -> dose, sex, selection), and cross-references across
-    tiers and platforms.  Persists the result to
-    sessions/{dtxsid}/animal_report.json.
-
-    Requires fingerprints to exist (from prior /api/pool/validate call).
-    If no fingerprints are cached, re-fingerprints all files first.
-
-    Returns the full AnimalReport as JSON.
-
-    ADR-0014 (step 2): logic lives in workflow.steps.generate_animal_report_step;
-    this handler is the thin transport layer. The step is blocking (xlsx/bm2
-    parsing), so it runs in a thread executor to keep the event loop free.
-    """
-    store = DiskPoolStore()
-    loop = asyncio.get_running_loop()
-    try:
-        report_dict = await loop.run_in_executor(
-            None, lambda: generate_animal_report_step(dtxsid, store)
-        )
-    except StepError as e:
-        return JSONResponse({"error": e.message}, status_code=e.status_code)
-
-    return Response(
-        content=orjson.dumps(report_dict),
-        media_type="application/json",
-    )

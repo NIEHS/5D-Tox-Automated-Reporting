@@ -48,7 +48,15 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "golden"
 
 # All modules that import SESSIONS_DIR by name (found via grep).
 _SESSIONS_DIR_MODULES = [
+    # The leaf that DEFINES it (common/paths.py) — patched so any late
+    # `from common.paths import SESSIONS_DIR` inside a function sees the
+    # test directory too.
+    "common.paths",
     "pipeline.session_store",
+    # The LLM narrative generators bind SESSIONS_DIR at import for their
+    # per-session cache files (moved out of web_routes.llm_routes 2026-09-18).
+    "narrative.apical_bmd_llm",
+    "narrative.genomics_llm",
     "web_routes.session_routes",
     "web_routes.llm_routes",
     "web_routes.background_server",

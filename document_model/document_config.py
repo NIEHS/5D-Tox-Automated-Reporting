@@ -40,7 +40,7 @@ from document_model.document_tree import (
     build_node_index,
     compute_table_numbers,
 )
-from pipeline.session_store import SESSIONS_DIR
+from common.paths import SESSIONS_DIR
 
 _SESSION_DOCUMENT_FILE = "document.yaml"
 _SESSION_STYLES_FILE = "styles.yaml"
@@ -90,7 +90,7 @@ def _archive_before_overwrite(path: Path, history_dir: Path) -> None:
     """
     if not path.exists():
         return
-    from pipeline.session_store import now_iso
+    from common.clock import now_iso
     safe_ts = now_iso().replace(":", "-")
     history_dir.mkdir(parents=True, exist_ok=True)
     (history_dir / f"{safe_ts}{path.suffix}").write_text(

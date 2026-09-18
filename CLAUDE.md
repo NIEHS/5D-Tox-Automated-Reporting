@@ -9,12 +9,13 @@ imports are package-qualified (`from rendering.render_common import ...`,
 
 | package | concern |
 |---------|---------|
-| `web_routes/` | FastAPI app + HTTP routes (entrypoint: `python -m web_routes.background_server`) |
-| `pipeline/` | pool lifecycle + processing; `process_integrated`, `session_store`, `bmd_project_schema`, `integrated_io`, `cache_plumbing`, `pool_*` |
+| `common/` | dependency-free leaf: `paths` (SESSIONS_DIR) + `clock` (now_iso); imports NO other first-party package |
+| `web_routes/` | FastAPI app + HTTP routes (entrypoint: `python -m web_routes.background_server`); `pool_routes`, `integrated_routes`, `genomics_routes` own the routers formerly defined in `pipeline/`/`genomics/` |
+| `pipeline/` | pool lifecycle + processing; `process_integrated`, `session_store`, `bmd_project_schema`, `integrated_io`, `cache_plumbing`, `pool_*`, `section_serializers`; HTTP-free (no FastAPI) since 2026-09-18 |
 | `document_model/` | `document_tree`/`document_node`/`document_template`/`document_config`, `render_capabilities`, `vocabulary`, `cover_layouts`, `layout_style` |
 | `rendering/` | shared IR `render_common` + the 4 emitters (`html_generator`, `latex_generator`, `docx_generator`, `jats_generator`) + `report_data*`, `latex_export`, `cross_references`, `jats_stylecheck` |
 | `tables/` | `table_builder_common`, `*_table`, `apical_bmds`, `sample_counts_table` |
-| `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, `style_learning` |
+| `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, `style_learning`, LLM generators `apical_bmd_llm` + `genomics_llm` |
 | `genomics/` | `genomics_*`, `gene_bodies`, `chart_registry`, `chart_style` |
 | `knowledge_base/` | `build_db`, `toxkb`, `citegraph`, `crawl_*`, `fulltext`, `extract`, `enrichr_*`, `enrichment_stats`, `pathway_enrich`, `go_gene_map` |
 | `styling_export/` | `docx_style_extract`, `freeform_content`, `export_sessions`, `*_provision`, `llm_endpoints`, `llm_helpers` |

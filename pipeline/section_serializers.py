@@ -1,4 +1,10 @@
 """
+MOVED 2026-09-18: this module lived in web_routes/ after the ADR-0013 split,
+but it contains no HTTP code — it is the row→JSON serializer layer that
+pipeline/ (process_integrated, processing_helpers) consumes, and having
+pipeline import from web_routes inverted the layering. It now lives with its
+consumers.
+
 JSON-row serialization helpers for the section-card pipeline.
 
 The pool orchestrator builds Python TableRow / IncidenceRow objects from

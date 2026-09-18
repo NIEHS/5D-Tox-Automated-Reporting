@@ -27,7 +27,7 @@ from pathlib import Path
 import duckdb
 
 from knowledge_base.genefunc_crawl import ORGAN_NORMALIZE, ORGAN_SEARCH_TERMS
-from pipeline.session_store import now_iso
+from common.clock import now_iso
 from workflow.store import DiskPoolStore
 
 # The frozen, read-only baseline corpus at the repo root.

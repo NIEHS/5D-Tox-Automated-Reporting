@@ -157,10 +157,14 @@ async def user_gate_middleware(request: Request, call_next):
 # Router mounts — each module defines an APIRouter with its endpoints
 # ---------------------------------------------------------------------------
 
-# File pool lifecycle: /api/pool/*, /api/integrated/*, /api/process-integrated/*,
+# File pool lifecycle: /api/pool/* (validate, resolve, confirm-metadata, integrate)
+import web_routes.pool_routes as pool_routes
+app.include_router(pool_routes.router)
+
+# Integrated dataset + processing: /api/integrated*, /api/process-integrated/*,
 # /api/generate-animal-report/*
-import pipeline.pool_orchestrator as pool_orchestrator
-app.include_router(pool_orchestrator.router)
+import web_routes.integrated_routes as integrated_routes
+app.include_router(integrated_routes.router)
 
 # Session persistence: load, approve, unapprove, history, restore, BMD summary
 import web_routes.session_routes as session_routes
@@ -181,9 +185,9 @@ app.include_router(llm_routes.router)
 import web_routes.export_routes as export_routes
 app.include_router(export_routes.router)
 
-# Genomics visualization: clustering endpoint and server-side chart rendering
-import genomics.genomics_viz as genomics_viz
-app.include_router(genomics_viz.router)
+# Genomics visualization: clustering endpoints and server-side chart rendering
+import web_routes.genomics_routes as genomics_routes
+app.include_router(genomics_routes.router)
 
 # Wizard UI convenience routes: /api/wizard/{dtxsid}/files, /fingerprints
 import web_routes.wizard_routes as wizard_routes

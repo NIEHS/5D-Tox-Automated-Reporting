@@ -33,7 +33,8 @@ This file's only remaining job is to re-export the public surface so
 the many consumers that already import via `from pool_orchestrator
 import …` keep working without churn.  Concretely the consumers are:
 
-  - background_server.py   (mounts pool_orchestrator.router)
+  - background_server.py   (mounts web_routes.pool_routes.router and
+                            web_routes.integrated_routes.router — NOT this module)
   - export_routes.py       (load_integrated)
   - llm_routes.py          (load_integrated)
   - server_state.py        (get_data_uploads / get_pool_fingerprints /
@@ -63,7 +64,6 @@ mount every endpoint without any other change.
 # Re-exports: shared state, router, path helpers
 # ---------------------------------------------------------------------------
 from pipeline.pool_globals import (
-    router,
     _pool_fingerprints,
     _integrated_pool,
     _data_uploads,
@@ -86,7 +86,7 @@ from pipeline.pool_state import (
 # ---------------------------------------------------------------------------
 # Re-exports: section-card serialization helpers
 # ---------------------------------------------------------------------------
-from web_routes.section_serializers import (
+from pipeline.section_serializers import (
     _js_dose_key,
     serialize_table_rows,
     serialize_incidence_rows,
@@ -106,19 +106,11 @@ from pipeline.pool_fingerprints import (
 )
 
 # ---------------------------------------------------------------------------
-# Side-effect import: pool lifecycle POST handlers
+# HTTP handlers are NOT re-exported here (since 2026-09-18)
 # ---------------------------------------------------------------------------
-# Importing pool_routes runs its @router.post decorators against the
-# shared pool_globals.router, so the four /api/pool/* endpoints register
-# at module load time.  The named re-exports preserve callers that import
-# the handlers by name (background_server / session_routes for testing).
-from web_routes.pool_routes import (
-    api_pool_validate,
-    api_pool_resolve,
-    api_pool_confirm_metadata,
-    api_pool_integrate,
-    _write_metadata_headers,
-)
+# The pool/integrated/process route handlers moved to web_routes/pool_routes.py
+# and web_routes/integrated_routes.py, which own their routers. This facade
+# therefore no longer imports from web_routes at all — pipeline/ is HTTP-free.
 
 # ---------------------------------------------------------------------------
 # Re-exports: BMDProject load/save barrier + GET routes
@@ -134,8 +126,6 @@ from pipeline.integrated_io import (
     _load_integrated,
     load_integrated,
     save_integrated,
-    api_integrated_full,
-    api_integrated_summary,
 )
 
 # ---------------------------------------------------------------------------
@@ -180,7 +170,5 @@ from pipeline.processing_helpers import (
 # the shared pool_globals.router, so /api/process-integrated/{dtxsid} and
 # /api/generate-animal-report/{dtxsid} register at module load time.
 from pipeline.process_integrated import (
-    api_process_integrated,
-    api_generate_animal_report,
     _BMD_STAT_LABELS,
 )

@@ -27,9 +27,7 @@ because LMDB's mmap()/flock() are incompatible with GCS FUSE mounts.
 
 import json
 import logging
-import os
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -39,11 +37,13 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# Root directory for all session data.  Defaults to ./sessions/ (relative to
-# this source file), but can be overridden via the SESSIONS_DIR environment
-# variable — used when mounting a GCS bucket locally via gcsfuse or when
-# Cloud Run's GCS FUSE volume is mounted at a non-default path.
-SESSIONS_DIR = Path(os.environ.get("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
+# Root directory for all session data and the UTC clock now live in the
+# dependency-free `common` package (so document_model/ and knowledge_base/ can
+# use them without importing pipeline/). They are re-exported here because
+# many modules — and tests/conftest.py's SESSIONS_DIR monkeypatch list — still
+# reach them through session_store.
+from common.paths import SESSIONS_DIR  # noqa: F401  (re-export)
+from common.clock import now_iso  # noqa: F401  (re-export)
 
 # Cause-tagged version-event manifest (Phase 4, dual-cause versioned snapshots).
 # Append-only JSONL log, one file per section, colocated with that section's
@@ -69,11 +69,6 @@ _VERSION_EVENT_KEY = "_version_event"
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
-
-def now_iso() -> str:
-    """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
-
 
 def session_dir(dtxsid: str) -> Path:
     """

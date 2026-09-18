@@ -42,7 +42,7 @@ def _pin_llm(monkeypatch):
         AsyncMock(return_value={}),
     )
     monkeypatch.setattr(
-        "web_routes.llm_routes.generate_apical_bmd_narrative_async",
+        "narrative.apical_bmd_llm.generate_apical_bmd_narrative_async",
         AsyncMock(return_value={
             "paragraphs": ["MOCK analytical paragraph for the BMD summary."],
             "model_used": "mock-model",

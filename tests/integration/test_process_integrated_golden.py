@@ -171,7 +171,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     # the handler as `from llm_routes import generate_apical_bmd_narrative_async`,
     # so patch it on the llm_routes module.
     monkeypatch.setattr(
-        "web_routes.llm_routes.generate_apical_bmd_narrative_async",
+        "narrative.apical_bmd_llm.generate_apical_bmd_narrative_async",
         AsyncMock(return_value={
             "paragraphs": ["MOCK analytical paragraph for the BMD summary."],
             "model_used": "mock-model",
