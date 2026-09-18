@@ -43,7 +43,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import orjson
 from fastapi import Request
@@ -60,7 +60,6 @@ from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_
 
 from pipeline.pool_globals import router, _session_dir, _pool_fingerprints
 from web_routes.section_serializers import _build_clinical_obs_section
-from pipeline.integrated_io import _load_integrated, load_integrated, save_integrated
 from pipeline.content_registry import register_content_kind, run_content_plan
 from pipeline.cache_plumbing import (
     _load_cache,
@@ -88,7 +87,6 @@ from pipeline.processing_helpers import (
     _build_bmds_bmd_summary,
     apply_apical_filters,
     apply_section_filters,
-    prune_card_sexes,
 )
 from workflow.errors import StepError
 from workflow.store import DiskPoolStore
@@ -192,6 +190,14 @@ class ProcessContext:
     gene_set_narrative: dict | None = None
     gene_narrative: dict | None = None
     apical_bmd_narrative: dict | None = None
+    # Content-prep degradation log. The LLM narrative builders are fail-soft
+    # (a failed call yields an empty narrative rather than aborting the whole
+    # process), but the content skip-guard (prepare_content_if_changed) must
+    # NOT persist such a run: with an unchanged fingerprint the empty
+    # narrative would be restored on every later process until the data
+    # changed. Builders append a short reason here; a non-empty list means
+    # "outputs are usable but incomplete — do not cache".
+    content_errors: list = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -256,8 +262,15 @@ async def _build_apical_bmd_narrative(ctx):
                     dose_groups=_dose_groups,
                 )
                 llm_paras = llm_result.get("paragraphs", [])
+                if "error" in llm_result:
+                    # The generator is itself fail-soft and returns {"error"}
+                    # instead of raising — treat that exactly like an exception.
+                    ctx.content_errors.append(
+                        f"apical_bmd_narrative: {llm_result['error']}"
+                    )
             except Exception as _llm_e:
                 logger.warning("Apical BMD LLM narrative failed: %s", _llm_e)
+                ctx.content_errors.append(f"apical_bmd_narrative: {_llm_e}")
 
             apical_bmd_narrative = {
                 "descriptive": desc_paras,
@@ -268,6 +281,7 @@ async def _build_apical_bmd_narrative(ctx):
             }
         except Exception as _apical_narr_e:
             logger.warning("Apical BMD narrative build failed: %s", _apical_narr_e)
+            ctx.content_errors.append(f"apical_bmd_narrative: {_apical_narr_e}")
     ctx.apical_bmd_narrative = apical_bmd_narrative
 
 
@@ -411,6 +425,13 @@ async def _build_genomics_llm_narratives(ctx):
             per_organ_bundles: dict[str, dict[str, dict[str, list[str]]]] = {}
             for key, llm_out in llm_results:
                 if not llm_out or "error" in llm_out:
+                    # Per-organ×sex failure (raised in _one, or returned as
+                    # {"error"} by the generator): the organ renders with an
+                    # empty narrative this run — flag so it is not cached.
+                    ctx.content_errors.append(
+                        f"genomics_narrative[{key}]: "
+                        f"{(llm_out or {}).get('error', 'no output')}"
+                    )
                     continue
                 organ = (genomics_sections[key].get("organ") or "").lower()
                 sex = (genomics_sections[key].get("sex") or "").lower()
@@ -427,6 +448,7 @@ async def _build_genomics_llm_narratives(ctx):
             logger.warning(
                 "LLM narrative pipeline failed: %s", e,
             )
+            ctx.content_errors.append(f"genomics_narrative: {e}")
     ctx.llm_gs_by_organ = llm_gs_by_organ
     ctx.llm_gene_by_organ = llm_gene_by_organ
 
@@ -1384,7 +1406,21 @@ async def prepare_content_if_changed(ctx) -> bool:
                 "Content cache unreadable for %s, re-preparing", ctx.dtxsid
             )
 
+    ctx.content_errors = []
     await prepare_content(ctx)
+
+    # A degraded run (some fail-soft builder dropped its output — see
+    # ProcessContext.content_errors) is served to the user this once but NOT
+    # cached: caching it would pin the missing narrative to this fingerprint
+    # and every later process would "skip" straight back to the hole. Leaving
+    # the stale cache/fingerprint in place is fine — its fingerprint no longer
+    # matches (or it never existed), so the next run re-prepares.
+    if ctx.content_errors:
+        logger.warning(
+            "Content for %s prepared with %d degraded output(s); not caching: %s",
+            ctx.dtxsid, len(ctx.content_errors), "; ".join(ctx.content_errors),
+        )
+        return True
 
     # Persist the outputs + fingerprint AFTER a successful run. Fail-soft: a cache
     # write error just means the next run won't skip (never a correctness issue).

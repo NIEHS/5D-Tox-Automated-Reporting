@@ -418,8 +418,12 @@ async def api_generate_methods(request: Request):
     except json.JSONDecodeError as e:
         # If the LLM didn't return valid JSON, try to salvage as flat paragraphs
         logger.warning("Methods LLM response was not valid JSON: %s", e)
-        # Fall back: treat the entire response as a single paragraph per line
-        paragraphs = [p.strip() for p in response.split("\n\n") if p.strip()]
+        # Fall back: treat the entire response as a single paragraph per line.
+        # The raw text is only reachable through the exception itself
+        # (json.JSONDecodeError.doc) — there is no local `response` variable
+        # here, which made this branch a NameError until 2026-09-18.
+        raw_text = e.doc or ""
+        paragraphs = [p.strip() for p in raw_text.split("\n\n") if p.strip()]
         sections = [MethodsSection(
             heading="Materials and Methods",
             level=3,
@@ -885,14 +889,18 @@ async def generate_apical_bmd_narrative_async(
     )
 
     try:
-        from anthropic import AsyncAnthropic
-        from narrative.interpret import resolve_anthropic_api_key, resolve_model_name
-        # Route the model id through the shared remap (hyphen → dot version) so
-        # the proxy accepts it.  This call uses AsyncAnthropic directly rather
-        # than AnthropicEndpoint, so without the remap the proxy rejected
-        # "claude-sonnet-4-6" with a 400 and the analytical paragraph silently
-        # dropped on every run.
-        client = AsyncAnthropic(api_key=resolve_anthropic_api_key())
+        from styling_export.llm_endpoints import (
+            build_async_anthropic_client,
+            resolve_model_name,
+        )
+        # Build the client through the shared chokepoint rather than a bare
+        # AsyncAnthropic(): that is the only place that installs the NIH CA
+        # bundle (the SDK ignores REQUESTS_CA_BUNDLE) and resolves the key. A
+        # bare client worked locally but failed TLS behind the NIEHS proxy, and
+        # the except below turned that into a silently missing paragraph —
+        # the same failure shape as the earlier model-name remap bug (see
+        # resolve_model_name: hyphen → dot version so the proxy accepts it).
+        client = build_async_anthropic_client()
         proxy_model = resolve_model_name(DEFAULT_CLAUDE_MODEL)
         response = await client.messages.create(
             model=proxy_model,
