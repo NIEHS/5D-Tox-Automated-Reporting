@@ -40,6 +40,15 @@ the result is exported for publication.
 
 ---
 
+> **Module paths (2026-08-12, ADR-0013):** the code is organized into concern
+> packages (`web_routes/`, `pipeline/`, `document_model/`, `rendering/`, `tables/`,
+> `narrative/`, `genomics/`, `knowledge_base/`, `styling_export/`, `tooling/`).
+> Bare module names below (e.g. `render_common.py`, `document_template.py`,
+> `html_generator.py`) are package-qualified in code — see the package table in
+> `CLAUDE.md` for which package each lives in. Imports are
+> `from <package>.<module> import ...`; the app entrypoint is
+> `python -m web_routes.background_server`.
+
 ## Domain glossary
 
 Use these terms (and only these) when naming concepts in code, issues, tests,
@@ -210,6 +219,14 @@ contradicts one, surface it explicitly rather than silently overriding.
 | [0010](docs/adr/0010-semantic-type-vocabulary-system.md) | A descriptive semantic-type vocabulary reconciling the component catalog with Word named-styles/`basedOn`. *(Proposed; Phase 0 landed.)* |
 | [0011](docs/adr/0011-lossless-canonical-dotx-layer.md) | A lossless canonical `.dotx` styling layer — a conservation law with hard-fail, so styling round-trips without silent loss. *(Proposed.)* |
 | [0012](docs/adr/0012-semantic-figure-content-type.md) | A first-class semantic `figure` content type. *(Proposed; implemented alongside the vocabulary work.)* |
+| [0013](docs/adr/0013-package-layout.md) | Restructure the flat module root into 10 concern packages. *(Accepted; implemented 2026-08-12.)* |
+| [0014](docs/adr/0014-ui-agnostic-workflow-engine.md) | Extract a UI-agnostic `workflow/` engine (derived phase, legal actions, steps) so every front-end is a thin driver. *(Implemented 2026-08-16; authoring-stance framing amended by ADR-0018; version model ratified by ADR-0020.)* |
+| [0015](docs/adr/0015-label-and-guard-model.md) | Label + guard model: facts humans assert, consequences the system derives (open label set, protection guard, currency). *(Accepted 2026-08-16; content-store convergence deferred.)* |
+| [0016](docs/adr/0016-canonical-query-substrate.md) | A canonical per-session `session.duckdb` query substrate + read-only SQL, with rendering domains as the north star. *(Proposed; version framing narrowed by ADR-0020 — substrate + domain seam kept, coexisting-versions dropped.)* |
+| [0017](docs/adr/0017-content-provenance-data-classification.md) | Classify a file's dataType by content + provenance (the xlsx is the anchor), not by filename. *(Accepted; increments 1 + D done in bmdx-pipe.)* |
+| [0018](docs/adr/0018-app-is-not-an-editor.md) | The app is not an editor: generate, preview, provisionally approve, round-trip; human authoring is external (Word/Overleaf). *(Accepted 2026-09-11; governing model.)* |
+| [0019](docs/adr/0019-metadata-vocabulary-policy.md) | Metadata is the classifier of data: an explicit vocabulary + per-field provenance→authority policy, read from the data where present, inference as declared fallback. *(Proposed.)* |
+| [0020](docs/adr/0020-one-evolving-report-not-a-version-tree.md) | One evolving report with history, not a tree of coexisting versions — settles ADR-0014 vs ADR-0016; keeps 0016's substrate + rendering-domain seam, drops "a version is a rendering domain." *(Accepted.)* |
 
 > **Note (2026-05):** the report's output pivoted from Typst/PDF to
 > **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface. A

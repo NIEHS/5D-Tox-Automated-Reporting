@@ -291,7 +291,7 @@ def verify(original_data: bytes, manifest: dict) -> bool:
     original_hash = _sha256(original_data)
     reconstructed_hash = _sha256(reconstructed)
     if original_hash != reconstructed_hash:
-        print(f"FAIL: hash mismatch", file=sys.stderr)
+        print("FAIL: hash mismatch", file=sys.stderr)
         print(f"  original:      {original_hash}", file=sys.stderr)
         print(f"  reconstructed: {reconstructed_hash}", file=sys.stderr)
         # Find first differing byte for debugging.
@@ -306,7 +306,7 @@ def verify(original_data: bytes, manifest: dict) -> bool:
 
     # Also verify against the stored hash in the manifest.
     if manifest.get('sha256') and manifest['sha256'] != original_hash:
-        print(f"FAIL: manifest hash doesn't match original", file=sys.stderr)
+        print("FAIL: manifest hash doesn't match original", file=sys.stderr)
         return False
 
     return True

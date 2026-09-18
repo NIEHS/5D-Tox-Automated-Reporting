@@ -18,12 +18,11 @@ The dtxsid has no session directory, so the disk-backed genomics-cache reads
 are deterministic no-ops (same rationale as test_marshal_golden.py).
 """
 
-import copy
 
 import pytest
 
-from report_data import marshal_export_data
-from document_tree import DOCUMENT_TREE, walk_tree
+from rendering.report_data import marshal_export_data
+from document_model.document_tree import DOCUMENT_TREE, walk_tree
 
 
 # Positional numbers assigned by compute_table_numbers() on the canonical

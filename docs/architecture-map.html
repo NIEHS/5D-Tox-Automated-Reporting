@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture Map: rlm-bmdx (package layout)</title>
+<style>
+:root {
+    --bg: #ffffff; --fg: #1a1a2e; --muted: #6c6c80; --border: #e0e0e8;
+    --accent: #4361ee; --accent-light: #eef0ff; --code-bg: #f5f5fa; --row-hover: #f8f8fc;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1a1a2e; --fg: #e0e0e8; --muted: #9090a0; --border: #2e2e42;
+        --accent: #6b8aff; --accent-light: #252540; --code-bg: #22223a; --row-hover: #22223a;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.6;
+    max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem;
+}
+h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+h2 { font-size: 1.35rem; margin-top: 2.5rem; margin-bottom: 0.8rem;
+     padding-bottom: 0.3rem; border-bottom: 2px solid var(--accent); scroll-margin-top: 1rem; }
+h3 { font-size: 1.1rem; margin-top: 1.6rem; margin-bottom: 0.4rem; }
+p, li { margin-bottom: 0.5rem; }
+ul, ol { padding-left: 1.5rem; margin-bottom: 0.6rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 650; }
+code, .mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 3px;
+}
+table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+tr:hover { background: var(--row-hover); }
+blockquote {
+    padding: 0.7rem 1rem; border-radius: 5px; margin: 0.9rem 0; font-size: 0.93rem;
+    border-left: 3px solid var(--accent); background: var(--accent-light);
+}
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.docnav { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.5rem; }
+.docnav a { margin-right: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="docnav">Docs: <a href="CONTEXT.html">Context</a> · <a href="architecture-map.html">Architecture Map</a> · <a href="code-walkthrough.html">Code Walkthrough</a></div>
+<h1 id="architecture-map">Architecture Map</h1>
+<blockquote><p>Package-by-package map of rlm-bmdx on the <strong>package-layout</strong> branch (ADR-0013). Unlike <code>main</code>&#x27;s flat root, the modules here physically live in concern packages and imports are package-qualified (<code>from rendering.render_common import ...</code>). Generated 2026-08-26 from an <code>rlm-code</code> index of the branch (262 files, 2,841 symbols, 15,702 edges).</p>
+<p>Companion docs: <a href="../CONTEXT.md"><code>CONTEXT.md</code></a> (<em>why</em> the architecture is shaped this way) and <a href="code-walkthrough.md"><code>code-walkthrough.md</code></a> (<em>how</em> control flows across these packages at runtime).</p></blockquote>
+<p><strong>14 Python packages</strong> + a TypeScript/React <code>wizard-ui/</code> frontend. LOC is line count; the one-liner is the module&#x27;s own docstring.</p>
+<h2 id="web_routes">web_routes</h2>
+<p>FastAPI app + HTTP route modules — the server surface the web UI calls. Entry point: <code>python -m web_routes.background_server</code>.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>background_server.py</code></td><td>544</td><td>FastAPI application shell for 5dToxReport.</td></tr>
+<tr><td><code>export_routes.py</code></td><td>1114</td><td>Export and style-profile routes.</td></tr>
+<tr><td><code>llm_routes.py</code></td><td>1500</td><td>LLM-powered generation API endpoints.</td></tr>
+<tr><td><code>pool_admin.py</code></td><td>388</td><td>Superuser tool for managing the file pool.</td></tr>
+<tr><td><code>pool_routes.py</code></td><td>164</td><td>File-pool lifecycle route handlers (thin transport layer).</td></tr>
+<tr><td><code>query_routes.py</code></td><td>132</td><td>Read-only SQL API over a session&#x27;s DuckDB (ADR-0016 Phase B).</td></tr>
+<tr><td><code>section_serializers.py</code></td><td>186</td><td>JSON-row serialization for the section-card pipeline.</td></tr>
+<tr><td><code>server_state.py</code></td><td>60</td><td>Central in-memory stores shared across route modules.</td></tr>
+<tr><td><code>session_routes.py</code></td><td>1617</td><td>Session persistence and history API endpoints.</td></tr>
+<tr><td><code>upload_routes.py</code></td><td>900</td><td>File upload and processing API endpoints.</td></tr>
+<tr><td><code>wizard_routes.py</code></td><td>96</td><td>Wizard UI convenience routes (thin transport layer).</td></tr>
+</tbody>
+</table>
+<h2 id="pipeline">pipeline</h2>
+<p>The pool lifecycle: fingerprint → validate → integrate → process. Turns uploads into integrated.json + section caches + the per-session query substrate.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>bmd_project_schema.py</code></td><td>996</td><td>Pydantic models that validate <code>integrated.json</code> (ADR-0001 load barrier).</td></tr>
+<tr><td><code>cache_plumbing.py</code></td><td>566</td><td>Per-section disk cache + hash inputs + platform-table (de)serializers.</td></tr>
+<tr><td><code>integrated_io.py</code></td><td>490</td><td>Read/write barrier for integrated.json — the BMDProject seam.</td></tr>
+<tr><td><code>pool_fingerprints.py</code></td><td>368</td><td>File-pool fingerprinting and lightweight validation.</td></tr>
+<tr><td><code>pool_globals.py</code></td><td>142</td><td>Shared mutable state, router, and path helpers for the pool.</td></tr>
+<tr><td><code>pool_orchestrator.py</code></td><td>186</td><td>Pool orchestrator — facade over the split modules.</td></tr>
+<tr><td><code>pool_state.py</code></td><td>212</td><td>Pool-state mutation: progression, file replacement, artifacts.</td></tr>
+<tr><td><code>process_integrated.py</code></td><td>1384</td><td><code>run_process</code> orchestrator + the process/traceability endpoints.</td></tr>
+<tr><td><code>processing_helpers.py</code></td><td>1413</td><td>Process-integrated pipeline phase functions.</td></tr>
+<tr><td><code>session_db.py</code></td><td>474</td><td>Writer that materializes a session&#x27;s DuckDB (ADR-0016 Phase A).</td></tr>
+<tr><td><code>session_schema.py</code></td><td>323</td><td>Canonical per-session DuckDB schema (ADR-0016 Phase A).</td></tr>
+<tr><td><code>session_store.py</code></td><td>195</td><td>Session persistence and version history per chemical.</td></tr>
+<tr><td><code>value_validation.py</code></td><td>212</td><td>Value-level provenance cross-check (xlsx ↔ derived CSV).</td></tr>
+</tbody>
+</table>
+<h2 id="document_model">document_model</h2>
+<p>The DocNode tree, template instantiation, the component catalog, the semantic type/style vocabulary, plus report-level filters and versions — the single source of report structure.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>content_item.py</code></td><td>70</td><td>An addressable content item within a document component.</td></tr>
+<tr><td><code>cover_layouts.py</code></td><td>318</td><td>The cover / title-page layout catalog.</td></tr>
+<tr><td><code>document_config.py</code></td><td>511</td><td>Per-session document STRUCTURE overrides (ADR-0007 follow-on).</td></tr>
+<tr><td><code>document_node.py</code></td><td>134</td><td>The <code>DocNode</code> dataclass — one node in the report tree.</td></tr>
+<tr><td><code>document_template.py</code></td><td>1163</td><td>Load a data-driven template and instantiate the tree.</td></tr>
+<tr><td><code>document_tree.py</code></td><td>534</td><td>Declarative NIEHS report document structure.</td></tr>
+<tr><td><code>filters.py</code></td><td>256</td><td>Report-level data-selection predicates.</td></tr>
+<tr><td><code>layout_style.py</code></td><td>320</td><td>Per-content-type font &amp; flow specification.</td></tr>
+<tr><td><code>render_capabilities.py</code></td><td>567</td><td>The component-type catalog.</td></tr>
+<tr><td><code>version_config.py</code></td><td>212</td><td>Per-DTXSID report VERSIONS (structure + filters).</td></tr>
+<tr><td><code>vocabulary.py</code></td><td>332</td><td>The semantic-type vocabulary (design) system.</td></tr>
+</tbody>
+</table>
+<h2 id="rendering">rendering</h2>
+<p>The shared <code>render_common</code> IR + the four emitters (HTML, LaTeX, docx, JATS/BITS) that project the DocNode tree to output surfaces.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>render_common.py</code></td><td>1520</td><td>Format-agnostic EXTRACT step shared by all surfaces (ADR-0006).</td></tr>
+<tr><td><code>html_generator.py</code></td><td>1712</td><td>HTML rendering of the report.</td></tr>
+<tr><td><code>latex_generator.py</code></td><td>1914</td><td>LaTeX rendering of the report.</td></tr>
+<tr><td><code>docx_generator.py</code></td><td>2544</td><td>Microsoft Word (.docx) rendering (ADR-0008).</td></tr>
+<tr><td><code>jats_generator.py</code></td><td>868</td><td>JATS/BITS XML projection (ADR-0004).</td></tr>
+<tr><td><code>jats_stylecheck.py</code></td><td>173</td><td>Offline PMC/NLM StyleChecker gate for the JATS surface.</td></tr>
+<tr><td><code>latex_export.py</code></td><td>1305</td><td>Overleaf bundle exporter (<code>load_session_data</code> assembly path).</td></tr>
+<tr><td><code>report_data.py</code></td><td>1013</td><td>Data-assembly (<code>marshal_export_data</code> — the web/preview path).</td></tr>
+<tr><td><code>report_data_overlays.py</code></td><td>630</td><td>Overlay layer for report data assembly.</td></tr>
+<tr><td><code>report_data_toc.py</code></td><td>458</td><td>Table-of-Contents and section-filter layer.</td></tr>
+<tr><td><code>cross_references.py</code></td><td>173</td><td>In-text cross-reference resolver (ADR-0004 amendment c).</td></tr>
+</tbody>
+</table>
+<h2 id="tables">tables</h2>
+<p>Per-platform NTP table builders + shared table formatting. Consume integrated.json, emit structured table rows.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>table_builder_common.py</code></td><td>883</td><td>Shared utilities for NIEHS table builders.</td></tr>
+<tr><td><code>apical_bmds.py</code></td><td>328</td><td>BMDS-based benchmark dose modeling for apical endpoints.</td></tr>
+<tr><td><code>body_weight_table.py</code></td><td>697</td><td>Build NIEHS Table 2 (Body Weights).</td></tr>
+<tr><td><code>organ_weight_table.py</code></td><td>635</td><td>Build NIEHS Table 3 (Organ Weights) from sidecar data.</td></tr>
+<tr><td><code>clinical_pathology_table.py</code></td><td>398</td><td>Build NIEHS Tables 4/5/6 from sidecar data.</td></tr>
+<tr><td><code>tissue_concentration_table.py</code></td><td>321</td><td>Build NIEHS Table 7 (Tissue Concentration).</td></tr>
+<tr><td><code>sample_counts_table.py</code></td><td>152</td><td>Sample-counts table builder for the Methods section.</td></tr>
+</tbody>
+</table>
+<h2 id="narrative">narrative</h2>
+<p>Section prose — LLM (background, methods, genomics interpretation, summary) and programmatic (apical). Plus the interpretation engine.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>unified_narrative.py</code></td><td>963</td><td>Unified apical narrative — cross-platform NTP-style results prose.</td></tr>
+<tr><td><code>interpret_analysis.py</code></td><td>958</td><td>Dose-response analysis layer for the interpretation engine.</td></tr>
+<tr><td><code>data_gatherer.py</code></td><td>1117</td><td>Regulatory/toxicological data gatherer for background generation.</td></tr>
+<tr><td><code>background_writer.py</code></td><td>729</td><td>LLM-based background section writer.</td></tr>
+<tr><td><code>methods_extract.py</code></td><td>648</td><td>Methods context extractor from the file pool.</td></tr>
+<tr><td><code>chem_resolver.py</code></td><td>496</td><td>Chemical identity resolver for the background generator.</td></tr>
+<tr><td><code>interpret_narrative.py</code></td><td>483</td><td>LLM narrative generation and concordance analysis.</td></tr>
+<tr><td><code>abstract_apical.py</code></td><td>474</td><td>Apical BMD summary + Abstract→Results apical paragraph.</td></tr>
+<tr><td><code>narrative_helpers.py</code></td><td>382</td><td>Cross-cutting formatters + BMD-quality predicates.</td></tr>
+<tr><td><code>methods_prompt.py</code></td><td>331</td><td>LLM prompt assembly for Materials &amp; Methods.</td></tr>
+<tr><td><code>abstract_summary.py</code></td><td>314</td><td>Abstract → Summary + Results aggregator.</td></tr>
+<tr><td><code>interpret.py</code></td><td>312</td><td>Dose-response interpretation engine for bmdx.</td></tr>
+<tr><td><code>abstract_genomics.py</code></td><td>274</td><td>Abstract → Results genomics paragraph.</td></tr>
+<tr><td><code>methods_models.py</code></td><td>269</td><td>Dataclasses + heading skeleton for Methods.</td></tr>
+<tr><td><code>style_learning.py</code></td><td>247</td><td>Writing-style profile persistence + LLM extraction.</td></tr>
+<tr><td><code>abstract_methods.py</code></td><td>155</td><td>Abstract → Methods paragraph builder.</td></tr>
+<tr><td><code>abstract_pk.py</code></td><td>154</td><td>Abstract → Results pharmacokinetics paragraph.</td></tr>
+<tr><td><code>methods_report.py</code></td><td>139</td><td>Backward-compatible facade over the methods_* modules.</td></tr>
+</tbody>
+</table>
+<h2 id="genomics">genomics</h2>
+<p>Genomics interpretation, charts/visualization, gene bodies, and enrichment.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>genomics_viz.py</code></td><td>1430</td><td>Genomics visualization endpoints.</td></tr>
+<tr><td><code>gene_bodies.py</code></td><td>474</td><td>Body Results: Gene Set BMD + Gene BMD analysis prose.</td></tr>
+<tr><td><code>genomics_narratives.py</code></td><td>306</td><td>Shared assembler for Gene Set / Gene BMD body narratives.</td></tr>
+<tr><td><code>chart_registry.py</code></td><td>263</td><td>The chart-type catalog (configurable charts WP-2).</td></tr>
+<tr><td><code>chart_style.py</code></td><td>193</td><td>The three-layer chart-style merge (configurable charts WP-1).</td></tr>
+<tr><td><code>genomics_charts.py</code></td><td>175</td><td>Shared assembly of genomics chart images.</td></tr>
+<tr><td><code>genomics_content.py</code></td><td>100</td><td>The ordered, sub-addressable content items in a genomics component.</td></tr>
+</tbody>
+</table>
+<h2 id="knowledge_base">knowledge_base</h2>
+<p>bmdx.duckdb build + query (ToxKBQuerier) and the crawl pipeline that populates it.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>extract.py</code></td><td>1184</td><td>LLM-based extraction from paper abstracts (local Ollama).</td></tr>
+<tr><td><code>citegraph.py</code></td><td>916</td><td>Citation graph crawler with governor system.</td></tr>
+<tr><td><code>genefunc_crawl.py</code></td><td>611</td><td>Gene-function second-pass crawl.</td></tr>
+<tr><td><code>fulltext.py</code></td><td>608</td><td>Full-text retrieval for the extraction pipeline.</td></tr>
+<tr><td><code>crawl_phase2.py</code></td><td>478</td><td>Phase 2 crawl: interpretation-driven literature expansion.</td></tr>
+<tr><td><code>build_db.py</code></td><td>407</td><td>Build bmdx.duckdb (papers, genes, GO, pathways, claims).</td></tr>
+<tr><td><code>pathway_enrich.py</code></td><td>355</td><td>Pathway enrichment over consensus/moderate genes.</td></tr>
+<tr><td><code>go_gene_map.py</code></td><td>313</td><td>GO term → gene member mapping.</td></tr>
+<tr><td><code>enrichr_client.py</code></td><td>247</td><td>Minimal client for the Enrichr REST API.</td></tr>
+<tr><td><code>enrichr_analysis.py</code></td><td>216</td><td>CLI for running Enrichr enrichment analysis.</td></tr>
+<tr><td><code>enrichment_stats.py</code></td><td>195</td><td>Pure statistical core for over-representation analysis.</td></tr>
+<tr><td><code>toxkb.py</code></td><td>163</td><td>ToxKBQuerier — read-only typed queries over bmdx.duckdb.</td></tr>
+<tr><td><code>extract_phase2_runner.py</code></td><td>27</td><td>Run Phase 2 extraction across the crawl dirs.</td></tr>
+</tbody>
+</table>
+<h2 id="workflow">workflow</h2>
+<p><strong>(ADR-0014 / ADR-0015)</strong> A UI-agnostic pool workflow engine lifted out of the browser: HTTP-free steps, a phase machine, and the label/guard ownership model.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>phases.py</code></td><td>322</td><td>UI-agnostic port of the pool phase machine (ADR-0014 step 1).</td></tr>
+<tr><td><code>steps.py</code></td><td>385</td><td>HTTP-free pool workflow steps (ADR-0014 step 2).</td></tr>
+<tr><td><code>ownership.py</code></td><td>186</td><td>The one guard predicate over content ownership (ADR-0015).</td></tr>
+<tr><td><code>labels.py</code></td><td>162</td><td>The FACT layer: what humans assert about content (ADR-0015).</td></tr>
+<tr><td><code>store.py</code></td><td>157</td><td>The injectable state seam for the engine (ADR-0014 Q2).</td></tr>
+<tr><td><code>currency.py</code></td><td>133</td><td>The currency / staleness layer (ADR-0014 step 6).</td></tr>
+<tr><td><code>engine.py</code></td><td>120</td><td>The UI-agnostic pool workflow engine (ADR-0014 step 3).</td></tr>
+<tr><td><code>guard.py</code></td><td>119</td><td>The DERIVED edit-hardness layer (ADR-0015).</td></tr>
+<tr><td><code>errors.py</code></td><td>39</td><td>HTTP-free failure signalling for workflow steps.</td></tr>
+</tbody>
+</table>
+<h2 id="query">query</h2>
+<p><strong>(ADR-0016 Phase B)</strong> Read-only SQL access to the per-session materialized DuckDB.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>session_query.py</code></td><td>175</td><td><code>SessionQuerier</code> — read-only, validated SQL over a session&#x27;s DuckDB.</td></tr>
+</tbody>
+</table>
+<h2 id="styling_export">styling_export</h2>
+<p>docx style extraction, freeform authored content, Overleaf/GitHub provisioning, session export, LLM adapters.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>docx_style_extract.py</code></td><td>834</td><td>Bootstrap the styling vocabulary FROM a Word template.</td></tr>
+<tr><td><code>freeform_content.py</code></td><td>426</td><td>Authored (&quot;freeform&quot;) document content.</td></tr>
+<tr><td><code>export_sessions.py</code></td><td>235</td><td>Export Claude Code session transcripts to Markdown.</td></tr>
+<tr><td><code>llm_endpoints.py</code></td><td>161</td><td>LLM endpoint adapters + credential/model-name resolution.</td></tr>
+<tr><td><code>llm_helpers.py</code></td><td>120</td><td>Shared LLM generation utilities.</td></tr>
+<tr><td><code>overleaf_provision.py</code></td><td>98</td><td>Overleaf addressing helpers (ADR-0005 Am.1a).</td></tr>
+<tr><td><code>github_provision.py</code></td><td>81</td><td>Originate/adopt a report&#x27;s GitHub repo (ADR-0005 Am.1a).</td></tr>
+</tbody>
+</table>
+<h2 id="roundtrip">roundtrip</h2>
+<p><strong>(ADR-0005)</strong> Domain-agnostic round-trip sync between machine-generated LaTeX and human edits in a git-backed editor (Overleaf).</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>transport.py</code></td><td>584</td><td>Transport between the app and an Overleaf project.</td></tr>
+<tr><td><code>reconcile.py</code></td><td>246</td><td>Attribute edited report.tex regions back to nodes.</td></tr>
+<tr><td><code>overrides.py</code></td><td>231</td><td>Per-node user-owned content overrides (edits win at render).</td></tr>
+<tr><td><code>latex_to_html.py</code></td><td>150</td><td>Conservative LaTeX → HTML for round-trip preview.</td></tr>
+<tr><td><code>lock.py</code></td><td>129</td><td>Single-writer checkout lock per report.</td></tr>
+<tr><td><code>anchors.py</code></td><td>55</td><td>The sentinel convention for anchored regions.</td></tr>
+<tr><td><code>_io.py</code></td><td>43</td><td>Atomic file writes for round-trip state files.</td></tr>
+</tbody>
+</table>
+<h2 id="pdf_text">pdf_text</h2>
+<p>Dependency-free (zlib-only) PDF library: semantic text extraction + a lossless codec.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>parse_pdf.py</code></td><td>2186</td><td>From-scratch PDF parser with classified text extraction.</td></tr>
+<tr><td><code>pdf_codec.py</code></td><td>429</td><td>Lossless PDF decomposer and assembler (SHA-256 verified).</td></tr>
+</tbody>
+</table>
+<h2 id="tooling">tooling</h2>
+<p>Build/scaffold/one-off scripts and dev utilities — not part of the request-serving app.</p>
+<table>
+<thead><tr><th>module</th><th>loc</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>_build_divergence_doc.py</code></td><td>459</td><td>Build the customer-facing style-divergence Word document.</td></tr>
+<tr><td><code>datasets_pipeline.py</code></td><td>407</td><td>Bulk-corpus pipeline via the Semantic Scholar Datasets API.</td></tr>
+<tr><td><code>browser_fetch.py</code></td><td>202</td><td>Headed-browser recovery fetcher for walled papers.</td></tr>
+<tr><td><code>build_catalog.py</code></td><td>199</td><td>Build a consolidated corpus catalog.</td></tr>
+<tr><td><code>build_manifest.py</code></td><td>141</td><td>Build a navigable manifest of the retrieved corpus.</td></tr>
+<tr><td><code>_rebuild_sections.py</code></td><td>105</td><td>Dev helper: rebuild the cheap deterministic caches.</td></tr>
+<tr><td><code>_content_only_docx.py</code> / <code>_content_only_ntp_docx.py</code></td><td>77 / 66</td><td>Content/style separation tests.</td></tr>
+<tr><td><code>_build_docx_base.py</code> / <code>_derive_dotx.py</code></td><td>65 / 60</td><td>docx template-base dev helpers.</td></tr>
+<tr><td><code>_rebuild_genomics.py</code> / <code>_regen_docx.py</code></td><td>55 / 20</td><td>Cache/report regeneration helpers.</td></tr>
+</tbody>
+</table>
+<h2 id="wizard-ui-typescript-react">wizard-ui (TypeScript / React)</h2>
+<p><strong>(ADR-0016)</strong> The from-scratch step-by-step report wizard: a visual query builder, an in-browser DuckDB console, and a report data-lineage gallery. Built to <code>web_wizard/</code> and served at <code>/wizard</code>.</p>
+<table>
+<thead><tr><th>module</th><th>purpose</th></tr></thead>
+<tbody>
+<tr><td><code>src/api.ts</code></td><td>Client for the session-query + wizard routes.</td></tr>
+<tr><td><code>src/duckdb.ts</code></td><td>In-browser DuckDB-WASM bindings.</td></tr>
+<tr><td><code>src/steps/Query.tsx</code> / <code>QueryBuilder.tsx</code> / <code>buildSql.ts</code></td><td>Visual query builder — tables as nodes, joins as edges.</td></tr>
+<tr><td><code>src/steps/ReportGallery.tsx</code></td><td>Report data-lineage gallery — a card per table/chart.</td></tr>
+<tr><td><code>src/steps/SummaryTables.tsx</code> / <code>DataTree.tsx</code> / <code>SessionPicker.tsx</code></td><td>Data-prep step surfaces.</td></tr>
+</tbody>
+</table>
+</body>
+</html>

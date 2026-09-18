@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from bmd_project_schema import BMDProjectValidationError
+from pipeline.bmd_project_schema import BMDProjectValidationError
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ class TestSaveIntegratedHappyPath:
     """A valid dict is persisted and the in-memory cache is updated."""
 
     def test_writes_file_to_disk(self, sessions_dir):
-        from pool_orchestrator import save_integrated
+        from pipeline.pool_orchestrator import save_integrated
 
         result = save_integrated("DTXSID12345", copy.deepcopy(MINIMAL_VALID))
 
@@ -83,7 +83,7 @@ class TestSaveIntegratedHappyPath:
         assert result["_meta"]["dtxsid"] == "DTXSID12345"
 
     def test_updates_in_memory_cache(self, sessions_dir):
-        from pool_orchestrator import save_integrated, _integrated_pool
+        from pipeline.pool_orchestrator import save_integrated, _integrated_pool
 
         save_integrated("DTXSID12345", copy.deepcopy(MINIMAL_VALID))
 
@@ -95,7 +95,7 @@ class TestSaveIntegratedHappyPath:
 
     def test_round_trip_via_load_integrated(self, sessions_dir):
         # Symmetry: save then load returns equivalent content.
-        from pool_orchestrator import save_integrated, load_integrated
+        from pipeline.pool_orchestrator import save_integrated, load_integrated
 
         saved = save_integrated("DTXSID12345", copy.deepcopy(MINIMAL_VALID))
         loaded = load_integrated("DTXSID12345")
@@ -112,7 +112,7 @@ class TestSaveIntegratedRejectsInvalid:
     """Invalid data raises before any disk write happens."""
 
     def test_invalid_sex_raises_validation_error(self, sessions_dir):
-        from pool_orchestrator import save_integrated
+        from pipeline.pool_orchestrator import save_integrated
 
         bad = copy.deepcopy(MINIMAL_VALID)
         bad["doseResponseExperiments"][0]["experimentDescription"]["sex"] = "other"
@@ -121,7 +121,7 @@ class TestSaveIntegratedRejectsInvalid:
             save_integrated("DTXSID12345", bad)
 
     def test_invalid_data_does_not_create_file(self, sessions_dir):
-        from pool_orchestrator import save_integrated
+        from pipeline.pool_orchestrator import save_integrated
 
         bad = copy.deepcopy(MINIMAL_VALID)
         del bad["_meta"]["dtxsid"]  # required field
@@ -134,7 +134,7 @@ class TestSaveIntegratedRejectsInvalid:
 
     def test_invalid_data_does_not_clobber_existing_file(self, sessions_dir):
         # Setup: persist a valid file first.
-        from pool_orchestrator import save_integrated
+        from pipeline.pool_orchestrator import save_integrated
 
         save_integrated("DTXSID12345", copy.deepcopy(MINIMAL_VALID))
         json_path = sessions_dir / "DTXSID12345" / "integrated.json"

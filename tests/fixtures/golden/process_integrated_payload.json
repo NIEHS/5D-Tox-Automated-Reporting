@@ -4,37 +4,37 @@
       "MOCK analytical paragraph for the BMD summary."
     ],
     "descriptive": [
-      "Exposure to the test chemical resulted in dose-related changes in body weight measurements. Reliable BMD values were calculated for 2 endpoints.",
-      "In male rats, the most sensitive endpoint was SD5 (body weight; BMD = 42.0 mg/kg, BMDL = 28.0 mg/kg). In female rats, the most sensitive endpoint was SD5 (body weight; BMD = 63.0 mg/kg, BMDL = 48.0 mg/kg)."
+      "Exposure to the test chemical resulted in dose-related changes in clinical chemistry measurements. Reliable BMD values were calculated for 2 endpoints.",
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, no apical endpoints showed dose-related changes."
     ],
     "paragraphs": [
-      "Exposure to the test chemical resulted in dose-related changes in body weight measurements. Reliable BMD values were calculated for 2 endpoints.",
-      "In male rats, the most sensitive endpoint was SD5 (body weight; BMD = 42.0 mg/kg, BMDL = 28.0 mg/kg). In female rats, the most sensitive endpoint was SD5 (body weight; BMD = 63.0 mg/kg, BMDL = 48.0 mg/kg).",
+      "Exposure to the test chemical resulted in dose-related changes in clinical chemistry measurements. Reliable BMD values were calculated for 2 endpoints.",
+      "In male rats, the most sensitive endpoint was ALT (clinical chemistry; BMD = 18.5 mg/kg, BMDL = 12.0 mg/kg); with 2 reliable BMD estimates overall (BMDs ranged from 18.5 to 55.0 mg/kg). In female rats, no apical endpoints showed dose-related changes.",
       "MOCK analytical paragraph for the BMD summary."
     ]
   },
   "apical_bmd_summary": [
     {
-      "bmd": "42.0",
+      "bmd": "18.5",
       "bmd_status": "viable",
-      "bmdl": "28.0",
+      "bmdl": "12.0",
       "direction": "↑",
-      "endpoint": "SD5",
+      "endpoint": "ALT",
       "loel": 100.0,
       "noel": 10.0,
-      "platform": "Body Weight",
+      "platform": "Clinical Chemistry",
       "sex": "Male"
     },
     {
-      "bmd": "63.0",
+      "bmd": "55.0",
       "bmd_status": "viable",
-      "bmdl": "48.0",
+      "bmdl": "40.0",
       "direction": "↑",
-      "endpoint": "SD5",
+      "endpoint": "AST",
       "loel": 100.0,
       "noel": 10.0,
-      "platform": "Body Weight",
-      "sex": "Female"
+      "platform": "Clinical Chemistry",
+      "sex": "Male"
     }
   ],
   "apical_bmd_summary_bmds": [],
@@ -157,7 +157,52 @@
       "narrative": [],
       "platform": "Clinical Chemistry",
       "tables_json": {
-        "Male": []
+        "Male": [
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "ALT",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "**",
+            "values": {
+              "0": "30.0 ± 2.0",
+              "1": "35.0 ± 3.0",
+              "10": "40.0 ± 4.0",
+              "100": "50.0 ± 5.0**"
+            }
+          },
+          {
+            "doses": [
+              0.0,
+              1.0,
+              10.0,
+              100.0
+            ],
+            "label": "AST",
+            "n": {
+              "0": 10,
+              "1": 10,
+              "10": 10,
+              "100": 10
+            },
+            "trend_marker": "**",
+            "values": {
+              "0": "20.0 ± 1.0",
+              "1": "22.0 ± 1.5",
+              "10": "25.0 ± 2.0",
+              "100": "30.0 ± 2.5"
+            }
+          }
+        ]
       },
       "title": "Clinical Chemistry"
     }
@@ -168,6 +213,12 @@
         "Terminal body weight was significantly increased in male rats with a positive trend (Table 2). The BMD and BMDL were 42.0 and 28.0 mg/kg, respectively. Terminal body weight was significantly increased in female rats with a positive trend (Table 2). The BMD and BMDL were 63.0 and 48.0 mg/kg, respectively."
       ],
       "title": "Animal Condition, Body Weights, and Organ Weights"
+    },
+    "clinical_pathology": {
+      "paragraphs": [
+        "In male rats, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
+      ],
+      "title": "Clinical Pathology"
     }
   }
 }

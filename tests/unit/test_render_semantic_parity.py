@@ -28,14 +28,15 @@ import re
 
 import pytest
 
-import html_generator
-import latex_generator
-from latex_export import load_session_data
-from html_generator import generate_html
-from latex_generator import generate_latex
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE, find_node
-from render_common import bmd_summary_plan
+import rendering.html_generator as html_generator
+import rendering.latex_generator as latex_generator
+from rendering.latex_export import load_session_data
+from rendering.html_generator import generate_html
+from rendering.latex_generator import generate_latex
+from rendering.jats_generator import generate_bits
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE, find_node
+from rendering.render_common import bmd_summary_plan
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,9 @@ _HTML_TABLE_NUM = re.compile(r"<caption>\s*(?:<strong>\s*)?Table (\d+)\.")
 _LATEX_TABLE_NUM = re.compile(
     r"\\begin\{niehstable\}\{[^}]*\}\{\s*Table (\d+)\.|\\textbf\{Table (\d+)\."
 )
+# BITS models the positional number as <table-wrap><label>Table N</label>
+# (jats_generator._split_label strips the trailing period into the caption).
+_BITS_TABLE_NUM = re.compile(r"<label>Table (\d+)</label>")
 
 # HTML "<figcaption>Figure 3. ..." and LaTeX "{\small\itshape Figure 3. ...}".
 _HTML_FIGURE_NUM = re.compile(r"<figcaption>\s*Figure (\d+)\.")
@@ -117,7 +121,7 @@ def _latex_bmd_rows(tex: str) -> list[tuple[str, str]]:
 # Parity: positional numbering agrees across surfaces (and the tree)
 # ---------------------------------------------------------------------------
 
-def test_table_numbers_agree_across_surfaces(session_data):
+def test_table_numbers_agree_across_surfaces(session_data, real_session_50469320):
     """
     The set of numbered tables rendered in HTML equals the set in LaTeX, and
     both equal the table_numbers the document tree assigned — so neither
@@ -125,9 +129,11 @@ def test_table_numbers_agree_across_surfaces(session_data):
     """
     html = generate_html(session_data)
     tex = generate_latex(session_data)
+    bits = generate_bits(session_data)
 
     html_nums = _nums(_HTML_TABLE_NUM, html)
     latex_nums = _nums(_LATEX_TABLE_NUM, tex)
+    bits_nums = _nums(_BITS_TABLE_NUM, bits)
 
     # Oracle: tree-assigned numbers (apical + BMD) PLUS the data-driven genomics
     # table numbers (genomics tables are not tree nodes — assign_genomics_table_
@@ -153,6 +159,13 @@ def test_table_numbers_agree_across_surfaces(session_data):
     assert html_nums == expected, (
         f"rendered table numbers {html_nums} != expected {expected}"
     )
+    # Fourth surface: the BITS book must carry exactly the same numbered
+    # tables (it has no pending-stub captions, so only real data tables count —
+    # which is why this runs on the real session, not the scaffold).
+    assert bits_nums == html_nums, (
+        f"table-number drift on BITS: BITS-only={bits_nums - html_nums}, "
+        f"missing-from-BITS={html_nums - bits_nums}"
+    )
 
     # Table 1 specifically is the Methods sample-counts-table node — a data-
     # driven table that only renders when data["sample_counts"] is present.
@@ -168,7 +181,7 @@ def test_table_numbers_agree_across_surfaces(session_data):
     left unwired.  Keys on (type, organ, sex) since the two paths may deliver
     the entries in different list order.
     """
-    from report_data import marshal_export_data
+    from rendering.report_data import marshal_export_data
 
     latex_data = load_session_data(
         dtxsid="DTXSID50469320",
@@ -199,7 +212,7 @@ def test_table_numbers_agree_across_surfaces(session_data):
     assert nums and nums[0] == 9 and nums == list(range(9, 9 + len(nums)))
 
 
-def test_figure_numbers_agree_across_surfaces(session_data):
+def test_figure_numbers_agree_across_surfaces(session_data, real_session_50469320):
     """
     The set of numbered figures rendered in HTML equals the set in LaTeX.
 
@@ -220,6 +233,23 @@ def test_figure_numbers_agree_across_surfaces(session_data):
         f"figure-number drift between surfaces: HTML-only={html_figs - latex_figs}, "
         f"LaTeX-only={latex_figs - html_figs}"
     )
+
+
+def test_genomics_narrative_table_xrefs_resolve_on_both_surfaces(session_data):
+    """ADR-0021 D2: genomics-narrative "Table N" references are emitted as
+    semantic [[xref:...]] tokens at content-prep and resolved to the data-driven
+    tables' positional numbers at render.  The end-to-end invariant is that after
+    a full render NO raw token and NO broken-ref marker survives on either
+    surface — i.e. every id the narrative emits matches an id the render index
+    built.  (A mismatch between the two id schemes would surface here as a
+    leaked [[xref:...]] or [[xref:??...]].)"""
+    html = generate_html(session_data)
+    tex = generate_latex(session_data)
+    for surface, out in (("HTML", html), ("LaTeX", tex)):
+        assert "[[xref:" not in out, (
+            f"unresolved genomics-table xref token/marker leaked into {surface}: "
+            + ", ".join(re.findall(r"\[\[xref:[^\]]+\]\]", out))
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +329,7 @@ def test_methods_subsection_matches_by_key_not_title():
     template title vs. SUBSECTION_SKELETON heading_text).  Rewording either one
     alone silently blanked the subsection on BOTH surfaces.
     """
-    from render_common import methods_subsection_content
+    from rendering.render_common import methods_subsection_content
 
     node = DocNode(id="mm-study-design", title="RENAMED IN TEMPLATE",
                    node_type="narrative", level=3, methods_key="study_design")
@@ -328,7 +358,7 @@ def test_methods_subsection_matches_by_key_not_title():
 def test_methods_subsection_legacy_heading_fallback():
     """Legacy section dicts that predate the `key` field still match by
     heading == title, so old cached sessions keep rendering."""
-    from render_common import methods_subsection_content
+    from rendering.render_common import methods_subsection_content
 
     node = DocNode(id="mm-chemistry", title="Chemistry",
                    node_type="narrative", level=3, methods_key="chemistry")

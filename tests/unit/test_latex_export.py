@@ -26,13 +26,13 @@ from pathlib import Path
 
 import pytest
 
-from latex_export import (
+from rendering.latex_export import (
     CLASS_FILE,
     build_overleaf_bundle,
 )
-from cover_layouts import asset_path
-from latex_generator import generate_main_tex, generate_report_body
-from report_data import scaffold_report_data
+from document_model.cover_layouts import asset_path
+from rendering.latex_generator import generate_main_tex, generate_report_body
+from rendering.report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def test_bundle_without_readme(scaffold, tmp_path):
 # Tests — load_session_data and its conversion helpers
 # ---------------------------------------------------------------------------
 
-from latex_export import (
+from rendering.latex_export import (
     _convert_genomics_cache,
     _normalize_apical_section,
     load_session_data,
@@ -309,7 +309,7 @@ def test_convert_genomics_cache_attaches_interpretation_narrative():
 def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkeypatch):
     """An unknown dtxsid yields the scaffold unchanged — no crash."""
     # Point _SESSIONS_DIR at an empty tmp directory so the lookup misses.
-    import latex_export
+    import rendering.latex_export as latex_export
     monkeypatch.setattr(latex_export, "_SESSIONS_DIR", tmp_path)
     data = load_session_data(
         dtxsid="DTXSID00000000",
@@ -322,7 +322,7 @@ def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkey
     assert "abstract" in data
 
 
-def test_load_session_data_overlays_real_session_when_present():
+def test_load_session_data_overlays_real_session_when_present(real_session_50469320):
     """
     DTXSID50469320 is the golden session shipped in this repo.  Loading
     it must overlay real content — verify a few high-signal markers.
@@ -415,7 +415,7 @@ def test_every_includegraphics_resolves_to_a_written_figure(scaffold, tmp_path):
 
 
 def test_decode_png_rejects_garbage_accepts_valid():
-    from latex_export import _decode_png
+    from rendering.latex_export import _decode_png
     assert _decode_png(None) is None
     assert _decode_png("") is None
     assert _decode_png("AAAAA") is None        # invalid base64 length
@@ -425,7 +425,7 @@ def test_decode_png_rejects_garbage_accepts_valid():
 def test_attach_genomics_charts_drops_undecodable():
     """A chart whose base64 won't decode is dropped at attach time, so it can
     never reach the renderer as a figure with no backing file."""
-    from latex_export import _attach_genomics_charts
+    from rendering.latex_export import _attach_genomics_charts
     sections = [{"type": "gene_set", "organ": "liver", "sex": "male"}]
     _attach_genomics_charts(sections, [{
         "organ": "liver", "sex": "male",
@@ -437,7 +437,7 @@ def test_attach_genomics_charts_drops_undecodable():
 
 
 def test_attach_genomics_charts_attaches_valid_with_filename():
-    from latex_export import _attach_genomics_charts
+    from rendering.latex_export import _attach_genomics_charts
     sections = [{"type": "gene_set", "organ": "Liver", "sex": "Male"}]
     _attach_genomics_charts(sections, [{
         "organ": "liver", "sex": "male", "umap_png": _TINY_PNG, "umap_caption": "U",
@@ -445,14 +445,19 @@ def test_attach_genomics_charts_attaches_valid_with_filename():
     charts = sections[0].get("charts", [])
     assert len(charts) == 1
     assert charts[0]["filename"] == "genomics-liver-male-umap.png"
-    assert charts[0]["figure_number"] == 1  # ADR-0004 amendment (e)
+    # ADR-0021 D1: attach no longer stamps figure_number — that is a render-time,
+    # positional concern owned by assign_genomics_figure_numbers.
+    assert "figure_number" not in charts[0]
 
 
-def test_attach_genomics_charts_numbers_figures_sequentially_across_entries():
+def test_assign_genomics_figure_numbers_sequential_across_entries():
     """Figure numbers are positional across ALL attached charts — sequential in
     render order (entries iterate in genomics_sections order, charts within an
-    entry iterate umap → cluster).  ADR-0004 amendment (e)."""
-    from latex_export import _attach_genomics_charts
+    entry iterate umap → cluster).  ADR-0021 D1: numbering is done by the
+    render-time tree pass, continuing the tree's figure sequence — NOT by attach.
+    With no `figure` tree nodes (a bare list), the first chart is Figure 1."""
+    from rendering.latex_export import _attach_genomics_charts
+    from document_model.document_tree import assign_genomics_figure_numbers
     sections = [
         {"type": "gene_set", "organ": "kidney", "sex": "female"},
         {"type": "gene_set", "organ": "liver",  "sex": "male"},
@@ -464,6 +469,10 @@ def test_attach_genomics_charts_numbers_figures_sequentially_across_entries():
          "umap_png": _TINY_PNG, "cluster_png": _TINY_PNG},
     ]
     _attach_genomics_charts(sections, cache)
+    # No numbers until the render-time pass runs.
+    assert all("figure_number" not in c
+               for s in sections for c in s.get("charts", []))
+    assign_genomics_figure_numbers([], sections)
     nums = [(c["key"], c["figure_number"])
             for s in sections for c in s.get("charts", [])]
     assert nums == [("umap", 1), ("cluster", 2), ("umap", 3), ("cluster", 4)]

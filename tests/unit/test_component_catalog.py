@@ -19,9 +19,9 @@ decoupling contract).
 
 from dataclasses import fields
 
-from document_node import DocNode
-from document_tree import DOCUMENT_TREE
-from render_capabilities import (
+from document_model.document_node import DocNode
+from document_model.document_tree import DOCUMENT_TREE
+from document_model.render_capabilities import (
     COMPONENT_CATALOG,
     CONTENT_KINDS,
     is_allowed_child,
@@ -102,7 +102,7 @@ def test_emits_roles_resolve_in_the_shipped_vocabulary():
     """Every vocabulary role a catalog type `emits` must exist in the shipped
     ntp-report vocabulary — the crosswalk from node_type to paragraph-granular
     semantic roles must not name a role the vocabulary can't resolve (ADR-0010)."""
-    import vocabulary as V
+    import document_model.vocabulary as V
 
     vocab = V.load_vocabulary("ntp-report")
     for node_type, spec in COMPONENT_CATALOG.items():
@@ -116,8 +116,8 @@ def test_front_matter_data_key_roles_resolve_in_the_vocabulary():
     """Every (heading, body) role a front-matter data_key derives must resolve in
     the shipped vocabulary — so an Abstract/Foreword/Peer-Review/... section styles
     its head+body by its own NTP role, not the generic pair (ADR-0010)."""
-    import vocabulary as V
-    import render_capabilities as rc
+    import document_model.vocabulary as V
+    import document_model.render_capabilities as rc
 
     vocab = V.load_vocabulary("ntp-report")
     for data_key, (head, body) in rc.FRONT_MATTER_ROLES_BY_DATA_KEY.items():
@@ -126,7 +126,7 @@ def test_front_matter_data_key_roles_resolve_in_the_vocabulary():
 
 
 def test_front_matter_roles_for_falls_back_to_generic():
-    import render_capabilities as rc
+    import document_model.render_capabilities as rc
     assert rc.front_matter_roles_for("abstract") == ("abstract_head", "abstract")
     assert rc.front_matter_roles_for("unmapped") == ("section_heading", "body_para")
     assert rc.front_matter_roles_for(None) == ("section_heading", "body_para")
@@ -146,7 +146,7 @@ def test_landscape_requested_merges_default_and_override():
     Effective orientation = override if present, else template default, gated
     on the type capability (ADR-0003 Amendment 1).
     """
-    from render_capabilities import landscape_requested
+    from document_model.render_capabilities import landscape_requested
     # override wins over the template default, both directions
     assert landscape_requested("table", "n", {"n": "landscape"}, default="portrait") is True
     assert landscape_requested("table", "n", {"n": "portrait"}, default="landscape") is False

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Data to Publication — Platform Pitch</title>
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #57606a;
+    --line: #e4e2dd;
+    --accent: #2c5282;
+    --accent-soft: #ebf2fb;
+    --code-bg: #f5f4f1;
+    --code-ink: #24292f;
+    --red: #dc2626;
+    --green: #15803d;
+    --amber: #b45309;
+    --sidebar-w: 270px;
+    --maxw: 820px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+    background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 24px 18px 40px; }
+  .sidebar h1 { font-size: 15px; line-height: 1.4; margin: 0 0 4px; color: var(--ink); }
+  .sidebar .sub { font-size: 12px; color: var(--muted); margin: 0 0 18px; }
+  .toc { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+  .toc li { margin: 2px 0; }
+  .toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-radius: 6px; }
+  .toc a:hover { background: var(--accent-soft); color: var(--accent); }
+  main { margin-left: var(--sidebar-w); padding: 40px 48px 120px; }
+  .wrap { max-width: var(--maxw); }
+  h2 { font-size: 22px; margin: 48px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--line); scroll-margin-top: 20px; }
+  h3 { font-size: 17px; margin: 28px 0 8px; color: var(--accent); }
+  p { margin: 12px 0; }
+  ul, ol { margin: 12px 0; padding-left: 24px; }
+  li { margin: 6px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--line); }
+  tbody tr:hover { background: var(--accent-soft); }
+  code { background: var(--code-bg); color: var(--code-ink); padding: 1px 5px; border-radius: 4px;
+    font: 13.5px/1.5 "SF Mono", "Menlo", "Consolas", monospace; }
+  .note { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 15px; }
+  .note strong { color: var(--accent); }
+  .warn { background: #fffaf0; border-left: 3px solid var(--amber); border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin: 18px 0; font-size: 15px; }
+  .warn strong { color: var(--amber); }
+  .lead { color: var(--muted); font-size: 17px; margin: 4px 0 8px; }
+  .tagline { font-size: 26px; font-weight: 700; line-height: 1.25; margin: 0 0 6px; color: var(--ink); }
+  .kicker { font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin: 0 0 8px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .card h4 { margin: 0 0 6px; font-size: 15px; color: var(--accent); }
+  .card p { margin: 4px 0; font-size: 14px; color: var(--muted); }
+  .metric { font-size: 30px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+  .metric small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .pill-live { background: #e8f5ee; color: var(--green); }
+  .pill-soon { background: #fff2df; color: var(--amber); }
+  .pill-idea { background: #eef1f6; color: var(--muted); }
+  .stagebar { display: flex; gap: 6px; margin: 18px 0; flex-wrap: wrap; }
+  .stagebar div { flex: 1; min-width: 120px; border-radius: 8px; padding: 10px 12px; font-size: 13px; border: 1px solid var(--line); }
+  .stagebar .s1 { background: #e8f5ee; }
+  .stagebar .s2 { background: #f2f8f4; }
+  .stagebar .s3 { background: #fff8ef; }
+  .stagebar .s4 { background: #f6f7fa; }
+  .stagebar b { display: block; font-size: 13.5px; margin-bottom: 3px; color: var(--ink); }
+  hr { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+  .footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+  blockquote { margin: 18px 0; padding: 8px 18px; border-left: 3px solid var(--accent); color: var(--muted); font-style: italic; }
+  @media print {
+    body { background: #fff; }
+    .sidebar { display: none; }
+    main { margin-left: 0; padding: 0; }
+    .wrap { max-width: 100%; }
+    h2 { margin-top: 30px; break-after: avoid; }
+    h3 { break-after: avoid; }
+    .cards { break-inside: avoid; }
+    .card, .note, .warn, table, .stagebar { break-inside: avoid; }
+    a { color: var(--ink); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <h1>From Data to Publication</h1>
+  <p class="sub">Platform pitch · internal draft for discussion</p>
+  <ul class="toc">
+    <li><a href="#tldr">The one-liner</a></li>
+    <li><a href="#problem">1 · The problem we solved</a></li>
+    <li><a href="#today">2 · What exists today</a></li>
+    <li><a href="#insight">3 · The generalizing insight</a></li>
+    <li><a href="#internal">4 · The internal case</a></li>
+    <li><a href="#service">5 · The service case</a></li>
+    <li><a href="#market">6 · Who would buy this</a></li>
+    <li><a href="#moat">7 · Why it's defensible</a></li>
+    <li><a href="#honest">8 · What's real vs. roadmap</a></li>
+    <li><a href="#ask">9 · The ask</a></li>
+  </ul>
+</nav>
+
+<main>
+<div class="wrap">
+
+<p class="kicker">Platform Pitch</p>
+<p class="tagline">Turn a finished analysis into a submission-ready publication —
+automatically, and in every format the journal wants.</p>
+<p class="lead">We built this to stop hand-writing NIEHS toxicology reports. Along
+the way it turned into something more general: a system that takes structured
+scientific data and emits a complete, correctly-formatted paper. This is a
+discussion draft on whether that's worth (a) leaning into internally and
+(b) offering as a service.</p>
+
+<!-- ================================================================ -->
+<h2 id="tldr">The one-liner</h2>
+
+<div class="note">
+<strong>Scientists spend enormous effort turning correct results into a correctly
+<em>formatted</em> document.</strong> We have automated that last mile for one
+demanding report type — data in, a publication-grade document out, in Word, PDF,
+LaTeX/Overleaf, and the XML a government publisher requires. The pitch: the last
+mile is nearly the same for <em>any</em> data-driven paper, and almost nobody has
+automated it well.
+</div>
+
+<!-- ================================================================ -->
+<h2 id="problem">1 · The problem we solved</h2>
+
+<p>The U.S. National Toxicology Program runs a fast, data-rich chemical-safety
+study. For every chemical, a scientist must turn the results into a
+<strong>biological potency report</strong>: a long, rigidly conventional document
+&mdash; dozens of statistical tables that must follow an exact house style,
+narrative sections, a genomic interpretation tying gene-level signals to the
+classic toxicology findings, and a reference layout (<em>NIEHS Report 10</em>)
+every report is measured against.</p>
+
+<p>Writing one by hand is slow, repetitive, and error-prone. The <em>science</em>
+is finished when the analysis is done; what remains is weeks of formatting, table
+construction, cross-checking numbers, and fighting the document until it matches
+the template. That "last mile" is pure cost &mdash; and it is exactly the kind of
+work that punishes humans and rewards automation.</p>
+
+<!-- ================================================================ -->
+<h2 id="today">2 · What exists today (not a mock-up)</h2>
+
+<p>This is a working system, in daily development, that has produced real reports.
+Concretely, it already does the following:</p>
+
+<div class="cards">
+  <div class="card">
+    <h4>Ingests the raw study</h4>
+    <p>Loads the analytical outputs, cross-validates the files, and merges them
+    into one canonical dataset &mdash; catching conflicts a human would miss.</p>
+  </div>
+  <div class="card">
+    <h4>Computes the report content</h4>
+    <p>Runs the required statistics and dose-response modeling, builds every
+    table to the house style, and generates the narrative &mdash; grounded in the
+    data, not free-text guesses.</p>
+  </div>
+  <div class="card">
+    <h4>Emits four formats from one source</h4>
+    <p>Word (<code>.docx</code>), print-ready PDF, LaTeX/Overleaf, and the
+    Bookshelf <strong>JATS/BITS XML</strong> a publisher ingests &mdash; all from a
+    single structural definition, so they never drift apart.</p>
+  </div>
+  <div class="card">
+    <h4>Matches a gold-standard layout</h4>
+    <p>Output is measured page-by-page against the reference report, down to table
+    numbering, footnotes, and section ordering.</p>
+  </div>
+</div>
+
+<div class="stagebar">
+  <div class="s1"><b>Import</b>raw study files, validated &amp; merged</div>
+  <div class="s2"><b>Process</b>stats, modeling, tables, narrative</div>
+  <div class="s3"><b>Assemble</b>one document structure, many sections</div>
+  <div class="s4"><b>Publish</b>Word · PDF · LaTeX · publisher XML</div>
+</div>
+
+<p>Two architectural choices matter for the pitch, because they are what make the
+thing <em>generalize</em> rather than being a one-off script:</p>
+
+<ul>
+  <li><strong>One structure drives every format.</strong> The document is defined
+  once, as a structure; each output format is a projection of that one definition.
+  Add a section once, get it in all four formats.</li>
+  <li><strong>Content is bound, not baked.</strong> Each section of the document
+  declares <em>what data it needs</em> and <em>what shape</em> that data takes; the
+  system fills it in. The document is a set of slots with a contract, not a
+  hard-coded template.</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="insight">3 · The generalizing insight</h2>
+
+<p>Here is the step from "a tool for one report" to "a platform." The hard,
+report-specific part is the toxicology math. But the <strong>last mile &mdash;
+structured results &rarr; formatted, multi-format, submission-ready document
+&mdash; is almost identical for every data-driven paper.</strong> A clinical
+study, a materials-science characterization, an economics working paper, a
+recurring internal technical report: all of them are "run the numbers, then spend
+weeks making the document."</p>
+
+<p>Because our document is a set of <em>slots with a declared data shape</em>, the
+path to a new kind of paper is: describe the new document's structure and the
+shape of data each section expects, then point it at a data source that produces
+that shape. The formatting, the multi-format output, the layout fidelity &mdash;
+all of that is already built and is <em>shared</em>.</p>
+
+<blockquote>The vision, stated plainly: <strong>start from any data-processing
+pipeline and generate a paper.</strong></blockquote>
+
+<div class="warn">
+<strong>The disciplined version of that vision.</strong> We are deliberately
+<em>not</em> promising "we'll integrate any pipeline anyone brings us" &mdash;
+that's an endless custom-integration treadmill and a bad business. Instead: the
+<strong>document declares the shape it needs, and data conforms to that shape.</strong>
+The upstream pipeline stays a black box we don't maintain. That distinction is the
+difference between a product and a consultancy. One-off, bespoke integrations are
+explicitly not worth it; a clean shape contract that many pipelines can target
+is.
+</div>
+
+<!-- ================================================================ -->
+<h2 id="internal">4 · The internal case (streamline our own pipeline)</h2>
+
+<p>Independent of any commercial question, this pays for itself internally:</p>
+
+<table>
+  <thead><tr><th>Where the time goes today</th><th>What the platform changes</th></tr></thead>
+  <tbody>
+    <tr><td>Hand-building statistical tables to an exact house style</td>
+        <td>Generated to the reference layout, every time, with correct numbering</td></tr>
+    <tr><td>Re-formatting the same content for Word, PDF, and the publisher's XML</td>
+        <td>One structure, all formats emitted together &mdash; no re-keying, no drift</td></tr>
+    <tr><td>Manually cross-checking numbers between analysis and document</td>
+        <td>Numbers flow from the data; the document can't disagree with the source</td></tr>
+    <tr><td>A specialist bottleneck who "knows how to make the document"</td>
+        <td>Institutional knowledge encoded once; the next author inherits it</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+<strong>Succession value.</strong> The formatting expertise for these reports
+currently lives in a small number of heads. Encoding it in the platform is
+insurance: it survives staff turnover and onboards the next scientist without
+re-learning a decade of conventions.
+</div>
+
+<p><strong>The near-term internal win</strong> is a self-service power-user
+capability we're already building the foundation for: a scientist can ask
+questions of a study's data directly, and &mdash; further out &mdash; define a new
+report section by pointing it at a query, without waiting on an engineer. That
+shortens the loop from "we need a new kind of table" to a same-day change.</p>
+
+<!-- ================================================================ -->
+<h2 id="service">5 · The service case (offer it externally)</h2>
+
+<p>The same capability, pointed outward, is a service. Three plausible shapes,
+from lightest to heaviest lift:</p>
+
+<div class="cards">
+  <div class="card">
+    <h4>1 · Formatting-as-a-service <span class="pill pill-soon">closest</span></h4>
+    <p>Customer brings structured results in an agreed shape; we return a
+    submission-ready document in every format the target venue needs. We own the
+    last mile; they own their science.</p>
+  </div>
+  <div class="card">
+    <h4>2 · Template packs <span class="pill pill-idea">adjacent</span></h4>
+    <p>Pre-built document definitions for common report types (a study type, a
+    journal family, a regulatory filing). The customer's data drops into a proven
+    structure.</p>
+  </div>
+  <div class="card">
+    <h4>3 · Hosted platform <span class="pill pill-idea">largest</span></h4>
+    <p>A self-serve product: upload data, choose or define a document, publish.
+    The internal power-user tools become the customer-facing product.</p>
+  </div>
+</div>
+
+<p>All three ride on the same engine. The service question is really about
+<em>packaging and support</em>, not about building something new &mdash; which is
+the healthiest possible position to pitch from.</p>
+
+<!-- ================================================================ -->
+<h2 id="market">6 · Who would buy this</h2>
+
+<ul>
+  <li><strong>Government &amp; regulatory science programs</strong> &mdash; anyone
+  who must publish to a fixed house style or a mandated XML format (Bookshelf,
+  regulatory submissions). This is exactly the pain we already solve, and the
+  format requirements are non-negotiable, which is precisely where automation
+  wins.</li>
+  <li><strong>Contract research organizations (CROs)</strong> &mdash; they produce
+  the same report shape over and over for many clients. Per-report margin
+  improvement scales directly with volume.</li>
+  <li><strong>Core facilities &amp; large labs</strong> &mdash; recurring internal
+  technical reports with a standard structure and a standard analysis.</li>
+  <li><strong>Scientific publishers / platforms</strong> &mdash; a partner that can
+  take authors from data to a spec-conformant submission reduces their editorial
+  and correction burden.</li>
+</ul>
+
+<div class="note">
+<strong>The wedge is format compliance.</strong> Our sharpest, most defensible
+edge is producing the <em>exact</em> structured output a publisher or regulator
+demands &mdash; the part authors hate most and general-purpose tools handle
+worst. Lead with that, not with "we write papers."
+</div>
+
+<!-- ================================================================ -->
+<h2 id="moat">7 · Why it's defensible</h2>
+
+<ul>
+  <li><strong>Multi-format from one source is hard to fake.</strong> Keeping Word,
+  PDF, LaTeX, and publisher-XML byte-faithful to one definition is real
+  engineering most teams underestimate; we've already paid that cost.</li>
+  <li><strong>Layout fidelity is a specification, not a vibe.</strong> We measure
+  output against a gold-standard reference. "Close enough" is what free tools do;
+  "passes the publisher's validator" is what customers pay for.</li>
+  <li><strong>Data-grounded content.</strong> Tables and narrative derive from the
+  data, so the document can't silently disagree with the analysis &mdash; a
+  correctness property that matters enormously in regulated science and that pure
+  LLM "write my paper" tools cannot guarantee.</li>
+  <li><strong>Domain credibility.</strong> Born inside a demanding real-world
+  reporting program, validated against its gold standard &mdash; not a generic
+  demo.</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="honest">8 · What's real vs. what's roadmap</h2>
+
+<p>So the conversation stays grounded &mdash; a clear line between shipped and
+proposed:</p>
+
+<table>
+  <thead><tr><th>Capability</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>End-to-end report generation for our study type (import &rarr; four formats)</td><td><span class="pill pill-live">Working today</span></td></tr>
+    <tr><td>Multi-format output from one document structure</td><td><span class="pill pill-live">Working today</span></td></tr>
+    <tr><td>Layout measured against the gold-standard reference</td><td><span class="pill pill-live">Working today</span></td></tr>
+    <tr><td>Multiple report versions from one processed dataset</td><td><span class="pill pill-live">Working today</span></td></tr>
+    <tr><td>Self-service data query for power users</td><td><span class="pill pill-soon">Designed, building</span></td></tr>
+    <tr><td>Define a new section by pointing it at a query ("rendering domains")</td><td><span class="pill pill-soon">Designed</span></td></tr>
+    <tr><td>Ingesting an external pipeline's output via a shape contract</td><td><span class="pill pill-idea">Proposed</span></td></tr>
+    <tr><td>New non-toxicology paper types</td><td><span class="pill pill-idea">Vision</span></td></tr>
+  </tbody>
+</table>
+
+<div class="warn">
+<strong>Honest risks to name in the room.</strong> (1) Generalizing beyond our own
+report type is real work, not a config change &mdash; the first new paper type is
+the expensive one. (2) A service means support, SLAs, and customer data handling
+we don't do today. (3) The market wedge is format <em>compliance</em>; if we drift
+into "AI writes your paper," we're in a crowded, less-defensible fight. The
+strategy is to stay narrow and deep where we're strong.
+</div>
+
+<!-- ================================================================ -->
+<h2 id="ask">9 · The ask</h2>
+
+<p>Nothing here needs a big bet to explore. What would help:</p>
+
+<ol>
+  <li><strong>A read on the market.</strong> Is "submission-ready formatting +
+  mandated-format compliance, from structured data" a pain people pay to remove?
+  Which of the buyer segments in §6 is worth a first conversation?</li>
+  <li><strong>One reference customer to shape against.</strong> A single external
+  (or internal-adjacent) report type to prove the generalization on &mdash; the
+  fastest way to learn whether the shape-contract approach holds outside our own
+  walls.</li>
+  <li><strong>Positioning help.</strong> If we pursue this, the framing ("the last
+  mile of publication," "format compliance as a service") matters as much as the
+  technology. That's your expertise, not ours.</li>
+</ol>
+
+<p>The engine exists and works. The question this document puts on the table is
+strategic, not technical: <strong>how far do we push it, and outward to whom?</strong></p>
+
+<hr>
+<p class="footer">Internal discussion draft. Capability claims reflect the working
+system as of August 2026; items marked <em>Designed</em>, <em>Proposed</em>, or
+<em>Vision</em> are roadmap, not shipped. Technical backing: ADR-0016 (query
+substrate &amp; rendering domains), the data-integration and filtering-system
+docs, and the four live render surfaces.</p>
+
+</div>
+</main>
+</body>
+</html>

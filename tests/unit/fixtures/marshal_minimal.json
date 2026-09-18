@@ -70,6 +70,7 @@
     ],
     "paragraphs": []
   },
+  "breaks": {},
   "casrn": "1-1-1",
   "chemical_name": "Test Article",
   "document_tree": [
@@ -430,6 +431,7 @@
           ],
           "id": "internal-dose",
           "level": 2,
+          "narrative_key": "internal_dose",
           "ready_key": "internalDose",
           "region": "body",
           "title": "Internal Dose Assessment",

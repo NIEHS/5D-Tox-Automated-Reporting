@@ -1,7 +1,43 @@
-# 0011 — Lossless canonical `.dotx` layer with conservation-checked extraction
+# 0011 — Conservation-checked template ingest guard (no silent styling loss)
 
-- **Status:** Proposed (2026-07-23).
+- **Status:** **Proposed — NARROWED + REFRAMED (2026-08-17).** The original title
+  ("Lossless canonical `.dotx` layer") and its core premise — that the `.dotx` is
+  THE lossless canonical representation, with `dotx → yaml → dotx` guaranteed
+  reconstructable — are **RETIRED**. They conflict with the platform-neutral
+  source-of-truth principle (see the reframing note directly below): making the
+  `.dotx` canonical privileges Word, and a platform-neutral hub is *necessarily*
+  lossy w.r.t. any one platform's idiosyncrasies. What survives is the still-useful,
+  **platform-agnostic INGEST GUARD**: when a client hands us a styled template
+  (`.dotx` *or* `.tex` or other), don't SILENTLY drop styling we didn't model —
+  account for every atom and hard-fail on the unknown, so the gap is triaged not
+  lost. Zero code exists (verified 2026-08-17); build only the narrowed scope.
 - **Deciders:** Dan Svoboda
+
+> **⚠ Reframing note (2026-08-17) — read before the original text below.** This
+> ADR was written when a styled Word `.dotx` was assumed to be the styling source
+> of truth. That assumption is now explicitly rejected: the source of truth is
+> **platform-neutral** — Word/`.dotx`, LaTeX/Overleaf, and HTML are all
+> *projections* (spokes) of a neutral hub (the ADR-0009/0010 vocabulary), and which
+> platform is "primary" is a contingent client choice. See memory
+> `project_platform_neutral_source_of_truth.md`. Consequence for this ADR:
+> - **DROPPED:** the "canonical lossless `.dotx` layer", the
+>   `dotx → yaml → dotx` information-lossless round-trip, and treating the `.dotx`
+>   as the reconstructable canonical artifact (Decision §1's "canonical lossless
+>   layer", §2, §6's normalized round-trip). A neutral hub cannot be lossless to
+>   one platform; neutrality *is* the decision to drop what doesn't project.
+> - **KEPT (the narrowed scope):** the **conservation law + hard-fail-on-unknown**
+>   (Decision §3, §4) and the **three-part locator** (§5), reframed as a
+>   *platform-agnostic ingest guard* — applied to ANY styled template a client
+>   supplies, not a Word-specific canonical layer. Its job: surface unmodeled
+>   styling for triage into the neutral vocabulary (signal) or an explicit noise
+>   allowlist (noise), never silently drop it. Optionally, a hub may carry
+>   unmodeled platform-specific properties as **opaque per-spoke passthrough**
+>   (re-emitted only to the originating spoke) — the pragmatic middle between
+>   "drop everything non-portable" and "privilege one platform".
+> - **Everything below is the ORIGINAL text**, kept for the rationale
+>   (the empirical facts about ZIP/XML non-canonicity, the conservation law's
+>   mechanics). Read "canonical `.dotx` layer" as "the neutral vocabulary
+>   (ADR-0009/0010)" and "lossless round-trip" as "no silent loss at ingest".
 - **Related:** [ADR-0006](0006-unify-html-latex-renderers.md) (the shared
   `layout_style` vocabulary the three surfaces resolve identically — this ADR
   makes that vocabulary a *lossy projection* off a new lossless layer, not the
