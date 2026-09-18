@@ -48,9 +48,11 @@ COPY *.py ./
 COPY report.typ cover-bg.jpg ./
 
 # ---------------------------------------------------------------------------
-# Frontend assets — static HTML/CSS/JS served by FastAPI StaticFiles.
+# Frontend assets. The Alpine/vanilla UI under web/ was retired (deleted
+# 2026-09-18); the live SPA is wizard-ui/, built into web_wizard/ with
+# `npm run build`. NOTE: this Dockerfile predates the ADR-0013 package layout
+# and does not build/copy web_wizard/ yet — the deploy path needs a rewrite.
 # ---------------------------------------------------------------------------
-COPY web/ ./web/
 
 # ---------------------------------------------------------------------------
 # Pre-compiled Java helper classes (ExportBm2, ExportGenomics, etc.).

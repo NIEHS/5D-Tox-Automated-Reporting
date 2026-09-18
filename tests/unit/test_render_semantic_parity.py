@@ -33,6 +33,7 @@ import rendering.latex_generator as latex_generator
 from rendering.latex_export import load_session_data
 from rendering.html_generator import generate_html
 from rendering.latex_generator import generate_latex
+from rendering.jats_generator import generate_bits
 from document_model.document_node import DocNode
 from document_model.document_tree import DOCUMENT_TREE, find_node
 from rendering.render_common import bmd_summary_plan
@@ -64,6 +65,9 @@ _HTML_TABLE_NUM = re.compile(r"<caption>\s*(?:<strong>\s*)?Table (\d+)\.")
 _LATEX_TABLE_NUM = re.compile(
     r"\\begin\{niehstable\}\{[^}]*\}\{\s*Table (\d+)\.|\\textbf\{Table (\d+)\."
 )
+# BITS models the positional number as <table-wrap><label>Table N</label>
+# (jats_generator._split_label strips the trailing period into the caption).
+_BITS_TABLE_NUM = re.compile(r"<label>Table (\d+)</label>")
 
 # HTML "<figcaption>Figure 3. ..." and LaTeX "{\small\itshape Figure 3. ...}".
 _HTML_FIGURE_NUM = re.compile(r"<figcaption>\s*Figure (\d+)\.")
@@ -125,9 +129,11 @@ def test_table_numbers_agree_across_surfaces(session_data, real_session_50469320
     """
     html = generate_html(session_data)
     tex = generate_latex(session_data)
+    bits = generate_bits(session_data)
 
     html_nums = _nums(_HTML_TABLE_NUM, html)
     latex_nums = _nums(_LATEX_TABLE_NUM, tex)
+    bits_nums = _nums(_BITS_TABLE_NUM, bits)
 
     # Oracle: tree-assigned numbers (apical + BMD) PLUS the data-driven genomics
     # table numbers (genomics tables are not tree nodes — assign_genomics_table_
@@ -152,6 +158,13 @@ def test_table_numbers_agree_across_surfaces(session_data, real_session_50469320
     )
     assert html_nums == expected, (
         f"rendered table numbers {html_nums} != expected {expected}"
+    )
+    # Fourth surface: the BITS book must carry exactly the same numbered
+    # tables (it has no pending-stub captions, so only real data tables count —
+    # which is why this runs on the real session, not the scaffold).
+    assert bits_nums == html_nums, (
+        f"table-number drift on BITS: BITS-only={bits_nums - html_nums}, "
+        f"missing-from-BITS={html_nums - bits_nums}"
     )
 
     # Table 1 specifically is the Methods sample-counts-table node — a data-

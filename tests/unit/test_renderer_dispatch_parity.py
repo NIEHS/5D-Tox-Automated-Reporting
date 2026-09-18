@@ -27,6 +27,7 @@ import pytest
 
 import rendering.docx_generator as docx_generator
 import rendering.html_generator as html_generator
+import rendering.jats_generator as jats_generator
 import rendering.latex_generator as latex_generator
 from document_model.document_tree import DOCUMENT_TREE
 from rendering.render_common import (
@@ -74,6 +75,9 @@ def test_all_renderer_dispatch_tables_satisfy_the_registry():
     """
     assert_dispatch_covers(html_generator._DISPATCH, renderer="HTML")
     assert_dispatch_covers(docx_generator._DISPATCH, renderer="Word/OOXML")
+    # Fourth surface (ADR-0004): BITS/JATS decides every registered type
+    # explicitly (real emitter, book-shell no-op, or visible TODO) — no omissions.
+    assert_dispatch_covers(jats_generator._DISPATCH, renderer="BITS/JATS")
     # LATEX_OMITS is empty now (cover / title-page have real emitters); passing
     # it keeps the call shape and documents that nothing is omitted any more.
     assert_dispatch_covers(

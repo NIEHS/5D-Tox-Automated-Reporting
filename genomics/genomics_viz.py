@@ -93,7 +93,10 @@ def _ensure_offline_kaleido() -> None:
 # min_samples=500).  Extracted from BMDExpress-Web-Edition.
 # ---------------------------------------------------------------------------
 
-_UMAP_REF_PATH = Path(__file__).parent.parent / "web" / "data" / "umap_reference.json"
+# Lives under assets/data/ (moved 2026-09-18 from web/data/ when the retired
+# Alpine UI directory was deleted — this is model data consumed by the Python
+# chart code, not a frontend asset).
+_UMAP_REF_PATH = Path(__file__).parent.parent / "assets" / "data" / "umap_reference.json"
 _UMAP_REF: list[dict] = []
 # Lookup: go_id → {x, y, cluster}
 _UMAP_LOOKUP: dict[str, dict] = {}

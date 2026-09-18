@@ -291,7 +291,9 @@ def resolve_layout_style(
 def style_schema_payload() -> dict:
     """
     Project LAYOUT_KEY_SCHEMA into a JSON-serializable description the visual
-    style builder (web/js/layout_builder.js) renders its controls from.
+    style builder renders its controls from. (The original consumer,
+    web/js/layout_builder.js, was retired with the Alpine UI on 2026-09-18;
+    the payload shape is kept for the SPA's configurator.)
 
     Shape — one entry per key, in schema (author-facing) order:
 

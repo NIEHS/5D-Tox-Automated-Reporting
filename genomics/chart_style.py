@@ -20,10 +20,11 @@ the rest from below.  The merge is RECURSIVE (``deep_merge``) so an instance may
 override a single nested leaf — e.g. ``marker.size`` — without restating the
 sibling keys.
 
-This module is the SINGLE source of truth for the merge.  Its JS mirror
-(``web/js/chart_style.js``) implements the identical algorithm so the two render
-surfaces (Python export + interactive browser) resolve the same effective style
-from the same raw config and cannot drift.
+This module is the SINGLE source of truth for the merge.  A JS mirror
+(``web/js/chart_style.js``) used to implement the identical algorithm for the
+interactive browser surface; it was retired with the Alpine UI on 2026-09-18.
+Any future browser-side re-implementation must reproduce this merge exactly
+(contract C2) — or, better, fetch the resolved style from the server.
 
 Owns contract **C2** (the resolved-style dict shape) and **C1** (the instance
 key).  Pure data — imports nothing from the render pipeline; fully unit-testable
