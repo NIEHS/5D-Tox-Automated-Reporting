@@ -45,6 +45,7 @@ import logging
 import orjson
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
+from web_routes.dtxsid_param import Dtxsid
 
 # This module owns its router (moved here from pipeline.pool_globals on
 # 2026-09-18 so pipeline/ no longer imports FastAPI); background_server mounts it.
@@ -78,7 +79,7 @@ def _step_error_response(exc: StepError) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 @router.get("/api/workflow/{dtxsid}/state")
-async def api_workflow_state(dtxsid: str):
+async def api_workflow_state(dtxsid: Dtxsid):
     """Return the server-derived pool workflow state.
 
     This is the seam that lets a UI stop deriving phase itself: it reports the
@@ -91,7 +92,7 @@ async def api_workflow_state(dtxsid: str):
 
 
 @router.get("/api/workflow/{dtxsid}/section-readiness")
-async def api_workflow_section_readiness(dtxsid: str):
+async def api_workflow_section_readiness(dtxsid: Dtxsid):
     """Return server-DERIVED per-section readiness (Phase 1).
 
     Replaces the imperative `ready.methods` / `ready.summary` flags the JS
@@ -105,7 +106,7 @@ async def api_workflow_section_readiness(dtxsid: str):
 
 
 @router.get("/api/workflow/{dtxsid}/publish-readiness")
-async def api_workflow_publish_readiness(dtxsid: str):
+async def api_workflow_publish_readiness(dtxsid: Dtxsid):
     """Return server-DERIVED publish readiness (Phase 3a currency BLOCK).
 
     A data reprocess stales the report's LLM sections (workflow.reprocess) and
@@ -122,7 +123,7 @@ async def api_workflow_publish_readiness(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/pool/validate/{dtxsid}")
-async def api_pool_validate(dtxsid: str):
+async def api_pool_validate(dtxsid: Dtxsid):
     """Run full cross-validation on a session's file pool."""
     try:
         report_dict = validate_step(dtxsid, DiskPoolStore())
@@ -156,7 +157,7 @@ async def api_pool_resolve(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/pool/confirm-metadata/{dtxsid}")
-async def api_pool_confirm_metadata(dtxsid: str, request: Request):
+async def api_pool_confirm_metadata(dtxsid: Dtxsid, request: Request):
     """Confirm file metadata and write headers into txt/csv file copies."""
     body = await request.json()
     try:
@@ -171,7 +172,7 @@ async def api_pool_confirm_metadata(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/pool/integrate/{dtxsid}")
-async def api_pool_integrate(dtxsid: str, request: Request):
+async def api_pool_integrate(dtxsid: Dtxsid, request: Request):
     """Merge all pool files into a unified BMDProject JSON.
 
     integrate_step is CPU/IO-heavy (xlsx parsing via openpyxl is blocking), so it
@@ -195,7 +196,7 @@ async def api_pool_integrate(dtxsid: str, request: Request):
 
 
 @router.post("/api/pool/materialize-sections/{dtxsid}")
-async def api_pool_materialize_sections(dtxsid: str):
+async def api_pool_materialize_sections(dtxsid: Dtxsid):
     """Materialize the apical result sections from the Process cache to disk as
     provisional (unapproved) section files, so the document surface shows them and
     the deliverable renders complete. Idempotent; genomics is not materialized

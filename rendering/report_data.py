@@ -57,6 +57,10 @@ Usage:
     #   "report_series"
 """
 
+# Session-id validator (the traversal gate) — the only top-level import here;
+# everything else in this module is imported lazily inside functions.
+from common.dtxsid import validate_dtxsid
+
 
 # ---------------------------------------------------------------------------
 # Apical section normalizer — canonical input shape for the renderers
@@ -408,7 +412,7 @@ def marshal_export_data(
         if dtxsid_for_refs:
             from narrative.references_builder import load_persisted_references
             from pipeline.session_store import SESSIONS_DIR
-            graph_refs = load_persisted_references(SESSIONS_DIR / dtxsid_for_refs)
+            graph_refs = load_persisted_references(SESSIONS_DIR / validate_dtxsid(dtxsid_for_refs))
             if graph_refs:
                 data["references"] = _ensure_paragraphs(graph_refs)
 

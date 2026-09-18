@@ -24,12 +24,14 @@ Endpoints:
 import asyncio
 import json
 import logging
+from common.dtxsid import validate_dtxsid
 import os
 import shutil
 import uuid
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 # Imported for its NAME, not for use here: tests/conftest.py's mock_bmdx_pipe
 # patches `web_routes.session_routes.bm2_cache` at this import site (the Java
@@ -68,7 +70,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 @router.get("/api/session/{dtxsid}/bmd-summary")
-async def api_bmd_summary(dtxsid: str):
+async def api_bmd_summary(dtxsid: Dtxsid):
     """
     Auto-derive an Apical Endpoint BMD Summary from all approved .bm2 sections.
 
@@ -95,7 +97,7 @@ async def api_bmd_summary(dtxsid: str):
         "sorted_by": "bmd_asc"
       }
     """
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse(
             {"error": f"No session found for {dtxsid}"},
@@ -221,7 +223,7 @@ async def api_bmd_summary(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/session/{dtxsid}")
-async def api_session_load(dtxsid: str):
+async def api_session_load(dtxsid: Dtxsid):
     """
     Load a previously-saved session for a given DTXSID.
 
@@ -245,7 +247,7 @@ async def api_session_load(dtxsid: str):
     _bm2_uploads = get_bm2_uploads()
     _data_uploads = get_data_uploads()
 
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse({"exists": False})
 
@@ -637,7 +639,7 @@ async def api_session_load(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/session/{dtxsid}/genomics-narrative-override")
-async def api_genomics_narrative_override(dtxsid: str, request: Request):
+async def api_genomics_narrative_override(dtxsid: Dtxsid, request: Request):
     """
     Save (or clear) a user's edit to a genomics LLM narrative block.
 
@@ -665,7 +667,7 @@ async def api_genomics_narrative_override(dtxsid: str, request: Request):
             {"error": "organ is required"}, status_code=400,
         )
 
-    session_dir = SESSIONS_DIR / dtxsid
+    session_dir = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not session_dir.exists():
         return JSONResponse(
             {"error": f"Session {dtxsid} not found"}, status_code=404,
@@ -965,7 +967,7 @@ _MODEL_CONCERNS = ("background", "methods_summary", "analysis")
 
 
 @router.post("/api/session/{dtxsid}/models")
-async def api_session_models(dtxsid: str, request: Request):
+async def api_session_models(dtxsid: Dtxsid, request: Request):
     """
     Persist the user's per-concern model selections into meta.json.
 
@@ -1137,7 +1139,7 @@ async def api_session_discard_section(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/session/{dtxsid}/history/{section_key}")
-async def api_session_history(dtxsid: str, section_key: str, version: int = 0):
+async def api_session_history(dtxsid: Dtxsid, section_key: str, version: int = 0):
     """
     Return version history for an approved section.
 
@@ -1163,7 +1165,7 @@ async def api_session_history(dtxsid: str, section_key: str, version: int = 0):
       ]
     }
     """
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     current_path = d / f"{section_key}.json"
     history_dir = d / "history" / section_key
 
@@ -1230,7 +1232,7 @@ async def api_session_history(dtxsid: str, section_key: str, version: int = 0):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/session/{dtxsid}/restore")
-async def api_session_restore(dtxsid: str, request: Request):
+async def api_session_restore(dtxsid: Dtxsid, request: Request):
     """
     Restore a past version of a section by re-saving it as the new current.
 
@@ -1256,7 +1258,7 @@ async def api_session_restore(dtxsid: str, request: Request):
             {"error": "section_key and version are required"}, status_code=400,
         )
 
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     current_path = d / f"{section_key}.json"
     history_dir = d / "history" / section_key
 
@@ -1311,7 +1313,7 @@ async def api_session_restore(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/experiment-metadata/{dtxsid}")
-async def api_get_experiment_metadata(dtxsid: str):
+async def api_get_experiment_metadata(dtxsid: Dtxsid):
     """
     Return experiment metadata for all experiments in the integrated data.
 
@@ -1391,7 +1393,7 @@ async def api_get_experiment_metadata(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/experiment-metadata/{dtxsid}")
-async def api_save_experiment_metadata(dtxsid: str, request: Request):
+async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     """
     Save user-edited experiment metadata back to integrated.json.
 
@@ -1491,7 +1493,7 @@ async def api_save_experiment_metadata(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/pool/reset/{dtxsid}")
-async def api_pool_reset(dtxsid: str):
+async def api_pool_reset(dtxsid: Dtxsid):
     """
     Completely reset the data pool for a given DTXSID.
 
@@ -1527,7 +1529,7 @@ async def api_pool_reset(dtxsid: str):
     _data_uploads = get_data_uploads()
     _integrated_pool = get_integrated_pool()
 
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse(
             {"error": f"No session found for {dtxsid}"},
@@ -1597,7 +1599,7 @@ async def api_pool_reset(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/session/reset/{dtxsid}")
-async def api_session_reset(dtxsid: str):
+async def api_session_reset(dtxsid: Dtxsid):
     """
     Completely delete the entire session for a given DTXSID.
 
@@ -1617,7 +1619,7 @@ async def api_session_reset(dtxsid: str):
     _data_uploads = get_data_uploads()
     _integrated_pool = get_integrated_pool()
 
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not d.exists():
         return JSONResponse({"ok": True, "message": "No session to reset"})
 

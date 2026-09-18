@@ -27,6 +27,7 @@ import json
 import logging
 
 from common.paths import SESSIONS_DIR
+from common.dtxsid import validate_dtxsid
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL
 
 logger = logging.getLogger(__name__)
@@ -112,7 +113,7 @@ async def generate_apical_bmd_narrative_async(
     cache_key = hashlib.md5(
         orjson.dumps(apical_bmd_summary, option=orjson.OPT_SORT_KEYS)
     ).hexdigest()[:16]
-    cache_path = SESSIONS_DIR / dtxsid / f"_cache_apical_narrative_{cache_key}.json"
+    cache_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"_cache_apical_narrative_{cache_key}.json"
 
     if cache_path.exists():
         try:

@@ -24,6 +24,7 @@ import asyncio
 import orjson
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
+from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.integrated_io import _enrich_source_experiment_counts, _load_integrated
 from pipeline.pool_globals import _session_dir
@@ -46,7 +47,7 @@ router = APIRouter()
 # to counts.
 
 @router.get("/api/integrated/{dtxsid}")
-async def api_integrated_full(dtxsid: str):
+async def api_integrated_full(dtxsid: Dtxsid):
     """
     Stream the full integrated BMDProject JSON from disk.
 
@@ -68,7 +69,7 @@ async def api_integrated_full(dtxsid: str):
 
 
 @router.get("/api/integrated-summary/{dtxsid}")
-async def api_integrated_summary(dtxsid: str):
+async def api_integrated_summary(dtxsid: Dtxsid):
     """
     Return a lightweight summary of the integrated BMDProject.
 
@@ -119,7 +120,7 @@ async def api_integrated_summary(dtxsid: str):
 
 
 @router.get("/api/integrated-tree/{dtxsid}")
-async def api_integrated_tree(dtxsid: str):
+async def api_integrated_tree(dtxsid: Dtxsid):
     """
     Return a slim, browser-safe structural tree of the integrated BMDProject.
 
@@ -172,7 +173,7 @@ async def api_integrated_tree(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/process-integrated/{dtxsid}")
-async def api_process_integrated(dtxsid: str, request: Request):
+async def api_process_integrated(dtxsid: Dtxsid, request: Request):
     """
     HTTP transport for the processing pipeline. Parses the request body and
     delegates to the HTTP-free core `run_process` (ADR-0014). A StepError from
@@ -204,7 +205,7 @@ async def api_process_integrated(dtxsid: str, request: Request):
 
 
 @router.post("/api/generate-animal-report/{dtxsid}")
-async def api_generate_animal_report(dtxsid: str):
+async def api_generate_animal_report(dtxsid: Dtxsid):
     """
     Generate a per-animal traceability report for a session's file pool.
 

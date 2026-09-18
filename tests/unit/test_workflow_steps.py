@@ -105,13 +105,13 @@ class _FakePath:
 def test_validate_step_no_files_raises_404():
     store = FakeStore(files_exist=False)
     with pytest.raises(StepError) as ei:
-        validate_step("DTX", store)
+        validate_step("DTXSID_VC", store)
     assert ei.value.status_code == 404
 
 
 def test_validate_step_persists_and_returns_report():
     class _Report:
-        dtxsid = "DTX"
+        dtxsid = "DTXSID_VC"
         run_at = "now"
         file_count = 1
         fingerprints = {"f1": {}}
@@ -121,10 +121,10 @@ def test_validate_step_persists_and_returns_report():
 
     store = FakeStore()
     with patch("workflow.steps.validate_pool", return_value=_Report()):
-        report = validate_step("DTX", store)
+        report = validate_step("DTXSID_VC", store)
     assert report["coverage_matrix"] == {"Body Weight|tox_study": {"bm2": "f2"}}
     # Persisted through the store, not to disk.
-    assert store.read_json("DTX", "validation_report.json") == report
+    assert store.read_json("DTXSID_VC", "validation_report.json") == report
 
 
 # --- resolve ---------------------------------------------------------------
@@ -132,23 +132,23 @@ def test_validate_step_persists_and_returns_report():
 def test_resolve_step_requires_all_three_inputs():
     store = FakeStore()
     with pytest.raises(StepError) as ei:
-        resolve_step("DTX", None, "fid", store)
+        resolve_step("DTXSID_VC", None, "fid", store)
     assert ei.value.status_code == 400
 
 
 def test_resolve_step_appends_to_precedence():
     store = FakeStore(docs={"precedence.json": [{"issue_index": 0, "chosen_file_id": "old"}]})
-    result = resolve_step("DTX", 1, "new-fid", store)
+    result = resolve_step("DTXSID_VC", 1, "new-fid", store)
     assert result == {"ok": True}
-    prec = store.read_json("DTX", "precedence.json")
+    prec = store.read_json("DTXSID_VC", "precedence.json")
     assert len(prec) == 2
     assert prec[-1]["chosen_file_id"] == "new-fid"
 
 
 def test_resolve_step_starts_fresh_when_no_precedence_file():
     store = FakeStore()
-    resolve_step("DTX", 0, "fid", store)
-    assert len(store.read_json("DTX", "precedence.json")) == 1
+    resolve_step("DTXSID_VC", 0, "fid", store)
+    assert len(store.read_json("DTXSID_VC", "precedence.json")) == 1
 
 
 # --- integrate -------------------------------------------------------------
@@ -156,7 +156,7 @@ def test_resolve_step_starts_fresh_when_no_precedence_file():
 def test_integrate_step_no_fingerprints_raises_400():
     store = FakeStore(fingerprints={})  # no cache, no validation_report.json
     with pytest.raises(StepError) as ei:
-        integrate_step("DTX", None, store)
+        integrate_step("DTXSID_VC", None, store)
     assert ei.value.status_code == 400
 
 
@@ -167,7 +167,7 @@ def test_integrate_step_no_coverage_matrix_raises_400():
         docs={"validation_report.json": {"fingerprints": {"f1": {}}}},
     )
     with pytest.raises(StepError) as ei:
-        integrate_step("DTX", None, store)
+        integrate_step("DTXSID_VC", None, store)
     assert ei.value.status_code == 400
 
 
@@ -185,15 +185,15 @@ def test_integrate_step_success_caches_and_summarizes():
         "categoryAnalysisResults": [],
     }
     with patch("workflow.steps.integrate_pool", return_value=integrated):
-        summary = integrate_step("DTX", {"name": "PFHxSAm"}, store)
+        summary = integrate_step("DTXSID_VC", {"name": "PFHxSAm"}, store)
 
     assert summary["ok"] is True
     assert summary["experiment_count"] == 1
     assert summary["experiments"][0] == {"name": "BW_Male", "probe_count": 2}
     # cached via the store, not a global
-    assert store.get_integrated("DTX") is integrated
+    assert store.get_integrated("DTXSID_VC") is integrated
     # identity persisted for LLM metadata inference
-    assert store.read_json("DTX", "identity.json") == {"name": "PFHxSAm"}
+    assert store.read_json("DTXSID_VC", "identity.json") == {"name": "PFHxSAm"}
 
 
 # --- confirm-metadata ------------------------------------------------------
@@ -204,7 +204,7 @@ def test_confirm_metadata_step_updates_dict_fingerprint_and_persists():
     fps = {"f1": {"filename": "gene.bm2", "file_type": "bm2", "platform": "?"}}
     store = FakeStore(fingerprints=fps)
     result = confirm_metadata_step(
-        "DTX", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
+        "DTXSID_VC", {"f1": {"platform": "Body Weight", "data_type": "tox_study"}}, store
     )
     assert result == {"ok": True, "updated": 0}
     assert fps["f1"]["platform"] == "Body Weight"
@@ -221,7 +221,7 @@ def test_materialize_result_sections_writes_bm2_files(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
 
-    d = sessions_dir / "DTX"
+    d = sessions_dir / "DTXSID_VC"
     d.mkdir(parents=True)
     # Seed a sections cache the way Process would (two apical sections; one has a
     # narrative, one is table-only — both legitimate).
@@ -232,7 +232,7 @@ def test_materialize_result_sections_writes_bm2_files(sessions_dir):
          "narrative": ["Liver weight increased."], "caption": "OW", "footnotes": ["(a)"]},
     ]}))
 
-    result = materialize_result_sections("DTX", DiskPoolStore())
+    result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
     assert result["ok"] is True
     assert set(result["materialized"]) == {"bm2_body-weight", "bm2_organ-weight"}
 
@@ -249,6 +249,6 @@ def test_materialize_result_sections_writes_bm2_files(sessions_dir):
 def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
     from workflow.steps import materialize_result_sections
     from workflow.store import DiskPoolStore
-    (sessions_dir / "DTX").mkdir(parents=True)
-    result = materialize_result_sections("DTX", DiskPoolStore())
+    (sessions_dir / "DTXSID_VC").mkdir(parents=True)
+    result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
     assert result == {"ok": True, "materialized": []}

@@ -41,6 +41,7 @@ from document_model.document_tree import (
     compute_table_numbers,
 )
 from common.paths import SESSIONS_DIR
+from common.dtxsid import validate_dtxsid
 
 _SESSION_DOCUMENT_FILE = "document.yaml"
 _SESSION_STYLES_FILE = "styles.yaml"
@@ -48,12 +49,12 @@ _SESSION_STYLES_FILE = "styles.yaml"
 
 def session_document_path(dtxsid: str) -> Path:
     """Path to a session's per-session document-structure YAML (may not exist)."""
-    return SESSIONS_DIR / dtxsid / _SESSION_DOCUMENT_FILE
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / _SESSION_DOCUMENT_FILE
 
 
 def session_styles_path(dtxsid: str) -> Path:
     """Path to a session's per-session layout-styles YAML (may not exist)."""
-    return SESSIONS_DIR / dtxsid / _SESSION_STYLES_FILE
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / _SESSION_STYLES_FILE
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ def _history_dir(dtxsid: str, kind: str) -> Path:
     """The history directory for a config kind (mirrors session_store's layout:
     sessions/<dtxsid>/history/<kind>/). Underscore-prefixed kind names keep these
     from colliding with per-section history dirs (which are named by section key)."""
-    return SESSIONS_DIR / dtxsid / "history" / kind
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / "history" / kind
 
 
 def _archive_before_overwrite(path: Path, history_dir: Path) -> None:

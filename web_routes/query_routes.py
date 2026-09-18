@@ -22,6 +22,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.session_store import session_dir
 from pipeline.session_schema import table_names
@@ -45,7 +46,7 @@ _MAX_ROWS_CEILING = 50_000
 
 
 @router.post("/api/query/{dtxsid}")
-async def api_query(dtxsid: str, request: Request):
+async def api_query(dtxsid: Dtxsid, request: Request):
     """Run one read-only SELECT/WITH against the session DB."""
     try:
         body = await request.json()
@@ -80,7 +81,7 @@ async def api_query(dtxsid: str, request: Request):
 
 
 @router.get("/api/query/{dtxsid}/schema")
-async def api_query_schema(dtxsid: str):
+async def api_query_schema(dtxsid: Dtxsid):
     """The table/column catalog for the session DB (schema sidebar)."""
     try:
         with SessionQuerier(dtxsid) as q:
@@ -101,7 +102,7 @@ async def api_query_schema(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/query/{dtxsid}/parquet")
-async def api_query_parquet_list(dtxsid: str):
+async def api_query_parquet_list(dtxsid: Dtxsid):
     """List the Parquet tables available for a session (those actually on disk)."""
     pq_dir = session_dir(dtxsid) / "session_parquet"
     available = []
@@ -113,7 +114,7 @@ async def api_query_parquet_list(dtxsid: str):
 
 
 @router.get("/api/query/{dtxsid}/parquet/{table}")
-async def api_query_parquet(dtxsid: str, table: str):
+async def api_query_parquet(dtxsid: Dtxsid, table: str):
     """Stream one table's Parquet file. ``table`` must be a known schema table."""
     if table not in _TABLES:
         return JSONResponse(

@@ -67,6 +67,19 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 from pipeline.bmd_project_schema import BMDProjectValidationError
+from common.dtxsid import InvalidDtxsid
+
+
+@app.exception_handler(InvalidDtxsid)
+async def invalid_dtxsid_handler(request: Request, exc: InvalidDtxsid):
+    """
+    A malformed session id — from the `{dtxsid}` path dependency
+    (web_routes/dtxsid_param) or from the sink-level check when an id arrives
+    in a JSON body — is client error, not a crash: 400 with the app's usual
+    {"error": ...} shape. This is what stops "../.." from ever reaching
+    session_dir() / shutil.rmtree.
+    """
+    return JSONResponse({"error": str(exc)}, status_code=400)
 
 
 @app.exception_handler(BMDProjectValidationError)

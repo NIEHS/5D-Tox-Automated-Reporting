@@ -23,9 +23,11 @@ import os
 import requests
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from bmdx_pipe import bm2_cache
 from pipeline.session_store import SESSIONS_DIR
+from common.dtxsid import validate_dtxsid
 from styling_export.llm_helpers import llm_generate_json_async
 from narrative.style_learning import load_style_profile
 from narrative.chem_resolver import ChemicalIdentity
@@ -334,7 +336,7 @@ async def api_generate_methods(request: Request):
     # BMDS version, models fit, BMR type, etc.
     bm2_jsons = {}
     if dtxsid:
-        session_files_dir = SESSIONS_DIR / dtxsid / "files"
+        session_files_dir = SESSIONS_DIR / validate_dtxsid(dtxsid) / "files"
         if session_files_dir.exists():
             for bm2_path in session_files_dir.glob("*.bm2"):
                 try:
@@ -346,7 +348,7 @@ async def api_generate_methods(request: Request):
 
     # --- Load animal report from session if not provided in request ---
     if not animal_report_data and dtxsid:
-        ar_path = SESSIONS_DIR / dtxsid / "animal_report.json"
+        ar_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "animal_report.json"
         if ar_path.exists():
             try:
                 animal_report_data = json.loads(ar_path.read_text())
@@ -369,7 +371,7 @@ async def api_generate_methods(request: Request):
         animal_report=animal_report_data,
         study_params=study_params,
         bm2_jsons=bm2_jsons,
-        session_dir=str(SESSIONS_DIR / dtxsid) if dtxsid else None,
+        session_dir=str(SESSIONS_DIR / validate_dtxsid(dtxsid)) if dtxsid else None,
         integrated=integrated_data,
     )
 
@@ -449,7 +451,7 @@ async def api_generate_methods(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/methods-context/{dtxsid}")
-async def api_methods_context(dtxsid: str):
+async def api_methods_context(dtxsid: Dtxsid):
     """
     Return the extracted MethodsContext for a DTXSID without running the LLM.
 
@@ -482,7 +484,7 @@ async def api_methods_context(dtxsid: str):
 
     # --- Collect .bm2 JSON caches ---
     bm2_jsons = {}
-    session_files_dir = SESSIONS_DIR / dtxsid / "files"
+    session_files_dir = SESSIONS_DIR / validate_dtxsid(dtxsid) / "files"
     if session_files_dir.exists():
         for bm2_path in session_files_dir.glob("*.bm2"):
             try:
@@ -494,7 +496,7 @@ async def api_methods_context(dtxsid: str):
 
     # --- Load animal report ---
     animal_report_data = None
-    ar_path = SESSIONS_DIR / dtxsid / "animal_report.json"
+    ar_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "animal_report.json"
     if ar_path.exists():
         try:
             animal_report_data = json.loads(ar_path.read_text())
@@ -503,7 +505,7 @@ async def api_methods_context(dtxsid: str):
 
     # --- Load identity ---
     identity = {}
-    id_path = SESSIONS_DIR / dtxsid / "identity.json"
+    id_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / "identity.json"
     if id_path.exists():
         try:
             identity = json.loads(id_path.read_text())
@@ -595,7 +597,7 @@ async def api_generate_summary(request: Request):
     compound_name = identity.get("name", "the test chemical")
 
     # Gather context from all approved sections in the session
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     context_parts = []
 
     # Background — extract a brief summary
@@ -777,7 +779,7 @@ async def api_generate_genomics_narrative(request: Request):
 
 
 @router.post("/api/session/{dtxsid}/regenerate-genomics-narrative")
-async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
+async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
     """
     Force-regenerate the LLM genomics narrative for ONE organ.
 
@@ -815,7 +817,7 @@ async def api_regenerate_genomics_narrative(dtxsid: str, request: Request):
         return JSONResponse({"error": "organ is required"}, status_code=400)
     model = body.get("model", "")
 
-    session_dir = SESSIONS_DIR / dtxsid
+    session_dir = SESSIONS_DIR / validate_dtxsid(dtxsid)
     if not session_dir.exists():
         return JSONResponse(
             {"error": f"Session {dtxsid} not found"}, status_code=404,

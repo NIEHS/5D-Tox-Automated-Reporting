@@ -79,7 +79,7 @@ def _load(d, name):
 class TestSaveSectionCauseMarker:
 
     def test_edit_marker_records_blessed_event(self, sessions_dir):
-        dtxsid = "DTX"
+        dtxsid = "DTXSID_VC"
         save_section(dtxsid, "background", {
             "paragraphs": ["hi"],
             _VERSION_EVENT_KEY: {"cause": "edit", "status": "blessed"},
@@ -92,7 +92,7 @@ class TestSaveSectionCauseMarker:
         assert "ts" in events[0]
 
     def test_marker_not_persisted_in_section_json(self, sessions_dir):
-        dtxsid = "DTX"
+        dtxsid = "DTXSID_VC"
         save_section(dtxsid, "background", {
             "paragraphs": ["hi"],
             _VERSION_EVENT_KEY: {"cause": "edit", "status": "blessed"},
@@ -103,13 +103,13 @@ class TestSaveSectionCauseMarker:
     def test_no_marker_writes_no_manifest(self, sessions_dir):
         # An unmarked save (auto-save / unapprove / restore) is byte-unaffected:
         # no manifest is written at all.
-        dtxsid = "DTX"
+        dtxsid = "DTXSID_VC"
         save_section(dtxsid, "background", {"paragraphs": ["hi"]}, archive=False)
         assert read_version_history(dtxsid, "background") == []
 
     def test_manifest_is_jsonl_invisible_to_version_glob(self, sessions_dir):
         # The manifest must not inflate the version counter (which globs *.json).
-        dtxsid = "DTX"
+        dtxsid = "DTXSID_VC"
         save_section(dtxsid, "s", {"x": 1,
                                    _VERSION_EVENT_KEY: {"cause": "edit", "status": "blessed"}})
         save_section(dtxsid, "s", {"x": 2,
@@ -254,7 +254,7 @@ class TestProgrammaticNoEvent:
 class TestBackCompat:
 
     def test_untagged_history_reads_empty(self, sessions_dir):
-        dtxsid = "DTX_OLD"
+        dtxsid = "DTXSID_OLD"
         d = sessions_dir / dtxsid
         hist = d / "history" / "background"
         hist.mkdir(parents=True)
@@ -273,7 +273,7 @@ class TestBackCompat:
     def test_untagged_section_then_edit_starts_a_manifest(self, sessions_dir):
         # An old un-tagged section that later gets an accepted edit begins tagging
         # from that point forward — no migration, no crash on the gap.
-        dtxsid = "DTX_OLD"
+        dtxsid = "DTXSID_OLD"
         d = sessions_dir / dtxsid
         d.mkdir(parents=True)
         (d / "background.json").write_text(

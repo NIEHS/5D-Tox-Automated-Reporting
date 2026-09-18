@@ -13,6 +13,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from knowledge_base.crawl_config import (
     ORIGINAL_CRAWL_CONFIG,
@@ -53,7 +54,7 @@ def _current_config(dtxsid: str, store: DiskPoolStore, *, force_default: bool) -
 
 
 @router.get("/api/crawl-config/{dtxsid}")
-async def api_get_crawl_config(dtxsid: str, default: int = 0):
+async def api_get_crawl_config(dtxsid: Dtxsid, default: int = 0):
     """Load the session's crawl config (or the frozen original if unedited).
 
     Returns the config, whether it's the default, the immutable original (so the
@@ -70,7 +71,7 @@ async def api_get_crawl_config(dtxsid: str, default: int = 0):
 
 
 @router.post("/api/crawl-config/{dtxsid}")
-async def api_save_crawl_config(dtxsid: str, request: Request):
+async def api_save_crawl_config(dtxsid: Dtxsid, request: Request):
     """Validate and persist a tweaked crawl config. 422 on invalid, nothing written."""
     try:
         body = await request.json()
@@ -93,7 +94,7 @@ async def api_save_crawl_config(dtxsid: str, request: Request):
 
 
 @router.post("/api/crawl-config/{dtxsid}/reset")
-async def api_reset_crawl_config(dtxsid: str):
+async def api_reset_crawl_config(dtxsid: Dtxsid):
     """Revert to the frozen original by removing the session config (archived first)."""
     store = DiskPoolStore()
     _archive_prior(dtxsid, store)

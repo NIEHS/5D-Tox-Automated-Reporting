@@ -30,6 +30,7 @@ import logging
 from pathlib import Path
 
 from common.paths import SESSIONS_DIR
+from common.dtxsid import validate_dtxsid
 from narrative.background_writer import DEFAULT_CLAUDE_MODEL
 from narrative.interpret import build_genomics_interpretation
 from narrative.style_learning import load_style_profile
@@ -160,7 +161,7 @@ async def generate_genomics_narrative_async(
             # naming convention lives in one place (genomics_narratives).
             from genomics.genomics_narratives import interpretation_cache_prefix
             prefix = interpretation_cache_prefix(organ, sex)
-            session_dir = SESSIONS_DIR / dtxsid
+            session_dir = SESSIONS_DIR / validate_dtxsid(dtxsid)
             cache_path = session_dir / f"{prefix}{gene_hash}.json"
             # Look for ANY existing narrative file for this (organ, sex),
             # not just the hash-keyed one.  Prefer the exact-hash match if

@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 # many modules — and tests/conftest.py's SESSIONS_DIR monkeypatch list — still
 # reach them through session_store.
 from common.paths import SESSIONS_DIR  # noqa: F401  (re-export)
+from common.dtxsid import validate_dtxsid
 from common.clock import now_iso  # noqa: F401  (re-export)
 
 # Cause-tagged version-event manifest (Phase 4, dual-cause versioned snapshots).
@@ -77,7 +78,9 @@ def session_dir(dtxsid: str) -> Path:
     Each chemical gets its own directory under sessions/ (e.g.,
     sessions/DTXSID6020430/).  The directory is created on first approve.
     """
-    d = SESSIONS_DIR / dtxsid
+    # validate_dtxsid is the traversal gate: ".." / "../x" / "a/b" never reach
+    # the filesystem (InvalidDtxsid → 400 at the HTTP layer).
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -264,7 +267,7 @@ def read_version_history(dtxsid: str, section_key: str) -> list[dict]:
     (old, pre-Phase-4 sessions, or a section that never minted a tagged version)
     — a section with only un-tagged archives is not an error.  Corrupt lines are
     skipped, never raised."""
-    idx = SESSIONS_DIR / dtxsid / "history" / section_key / _VERSION_INDEX
+    idx = SESSIONS_DIR / validate_dtxsid(dtxsid) / "history" / section_key / _VERSION_INDEX
     if not idx.exists():
         return []
     events: list[dict] = []
@@ -291,7 +294,7 @@ def current_version_status(dtxsid: str, section_key: str) -> str | None:
     needs-re-bless is superseded by a later re-accept's blessed against the same
     version).  None when the section or its manifest is absent, or the current
     version was never tagged (missing cause = unknown provenance, not a crash)."""
-    current = SESSIONS_DIR / dtxsid / f"{section_key}.json"
+    current = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"{section_key}.json"
     if not current.exists():
         return None
     try:
@@ -312,7 +315,7 @@ def delete_section(dtxsid: str, section_key: str) -> None:
     Called when the user clicks "Try Again" to unapprove a section.
     The .bm2 file in files/ is kept — it's still useful for reprocessing.
     """
-    d = SESSIONS_DIR / dtxsid
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
     section_path = d / f"{section_key}.json"
     if section_path.exists():
         section_path.unlink()

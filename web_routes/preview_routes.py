@@ -19,6 +19,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.session_store import safe_filename
 from rendering.preview_surface import (
@@ -48,7 +49,7 @@ def _reject_bad_dtxsid(dtxsid: str) -> JSONResponse | None:
 
 
 @router.post("/api/preview/{dtxsid}/materialize")
-async def api_preview_materialize(dtxsid: str, request: Request):
+async def api_preview_materialize(dtxsid: Dtxsid, request: Request):
     """Render + persist the preview artifact set for a session.
 
     Body (all optional): {surface?: str = "docx", view?: str = "default"}. Writes
@@ -80,7 +81,7 @@ async def api_preview_materialize(dtxsid: str, request: Request):
 
 
 @router.get("/api/preview/{dtxsid}/view")
-async def api_preview_view(dtxsid: str, view: str | None = None, surface: str = "html"):
+async def api_preview_view(dtxsid: Dtxsid, view: str | None = None, surface: str = "html"):
     """Serve a materialized preview file inline for the iframe.
 
     Defaults to the HTML view (the always-viewable proxy). Returns 404 if the file
@@ -100,7 +101,7 @@ async def api_preview_view(dtxsid: str, view: str | None = None, surface: str = 
 
 
 @router.get("/api/preview/{dtxsid}/download")
-async def api_preview_download(dtxsid: str, view: str | None = None, surface: str = DEFAULT_SURFACE):
+async def api_preview_download(dtxsid: Dtxsid, view: str | None = None, surface: str = DEFAULT_SURFACE):
     """Download a materialized deliverable (default docx) as an attachment."""
     if (bad := _reject_bad_dtxsid(dtxsid)) is not None:
         return bad

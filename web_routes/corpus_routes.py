@@ -13,6 +13,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from knowledge_base import corpus_curation as cc
 
@@ -22,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/api/corpus/{dtxsid}/organs")
-async def api_corpus_organs(dtxsid: str):
+async def api_corpus_organs(dtxsid: Dtxsid):
     """The organ inventory (term, frequencies, current mapping) + curated flag."""
     return JSONResponse({
         "inventory": cc.organ_inventory(dtxsid),
@@ -32,13 +33,13 @@ async def api_corpus_organs(dtxsid: str):
 
 
 @router.get("/api/corpus/{dtxsid}/history")
-async def api_corpus_history(dtxsid: str):
+async def api_corpus_history(dtxsid: Dtxsid):
     """The live append-only tweak-log (oldest → newest)."""
     return JSONResponse({"tweaks": cc.read_tweaks(dtxsid)})
 
 
 @router.post("/api/corpus/{dtxsid}/organs/map")
-async def api_corpus_map_organ(dtxsid: str, request: Request):
+async def api_corpus_map_organ(dtxsid: Dtxsid, request: Request):
     """Append a map/drop tweak. 422 on invalid, nothing written. No materialize."""
     try:
         body = await request.json()
@@ -64,7 +65,7 @@ async def api_corpus_map_organ(dtxsid: str, request: Request):
 
 
 @router.post("/api/corpus/{dtxsid}/materialize")
-async def api_corpus_materialize(dtxsid: str):
+async def api_corpus_materialize(dtxsid: Dtxsid):
     """Build corpus.duckdb by projecting the tweak-log onto the frozen original."""
     try:
         result = cc.materialize(dtxsid)
@@ -75,6 +76,6 @@ async def api_corpus_materialize(dtxsid: str):
 
 
 @router.post("/api/corpus/{dtxsid}/reset")
-async def api_corpus_reset(dtxsid: str):
+async def api_corpus_reset(dtxsid: Dtxsid):
     """Revert to the frozen original (remove log, corpus, fingerprint)."""
     return JSONResponse({"ok": True, **cc.reset(dtxsid)})

@@ -42,6 +42,7 @@ from pathlib import Path
 import yaml
 
 from common.paths import SESSIONS_DIR
+from common.dtxsid import validate_dtxsid
 
 _VIEWS_DIR = "views"
 _VIEWS_HISTORY = "_views"
@@ -50,7 +51,7 @@ DEFAULT_VIEW = "default"
 
 def views_dir(dtxsid: str) -> Path:
     """Directory holding a session's view files (may not exist)."""
-    return SESSIONS_DIR / dtxsid / _VIEWS_DIR
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / _VIEWS_DIR
 
 
 def view_path(dtxsid: str, name: str) -> Path:
@@ -204,7 +205,7 @@ def build_view_tree(dtxsid: str, name: str):
 # ---------------------------------------------------------------------------
 
 def _history_dir(dtxsid: str, name: str) -> Path:
-    return SESSIONS_DIR / dtxsid / "history" / _VIEWS_HISTORY / _safe_name(name)
+    return SESSIONS_DIR / validate_dtxsid(dtxsid) / "history" / _VIEWS_HISTORY / _safe_name(name)
 
 
 def _archive_before_overwrite(path: Path, history_dir: Path) -> None:

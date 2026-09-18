@@ -26,6 +26,7 @@ import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from web_routes.dtxsid_param import Dtxsid
 
 from workflow.store import DiskPoolStore
 
@@ -45,7 +46,7 @@ def _fp_get(fp, key, default=""):
 
 
 @router.get("/api/wizard/{dtxsid}/files")
-async def api_wizard_files(dtxsid: str):
+async def api_wizard_files(dtxsid: Dtxsid):
     """List uploaded study files in the session's files/ directory."""
     store = DiskPoolStore()
     files_dir = store.session_dir(dtxsid) / "files"
@@ -58,7 +59,7 @@ async def api_wizard_files(dtxsid: str):
 
 
 @router.get("/api/wizard/{dtxsid}/processed")
-async def api_wizard_processed(dtxsid: str):
+async def api_wizard_processed(dtxsid: Dtxsid):
     """Whether this session has already been processed (its compute caches exist).
 
     The wizard uses this to decide if it can REHYDRATE the Results payload from
@@ -74,7 +75,7 @@ async def api_wizard_processed(dtxsid: str):
 
 
 @router.get("/api/wizard/{dtxsid}/identity")
-async def api_wizard_identity(dtxsid: str):
+async def api_wizard_identity(dtxsid: Dtxsid):
     """The compound's cross-identifiers from identity.json (name, CASRN, DTXSID,
     PubChem CID, EC number, IUPAC name — whichever are present).
 
@@ -89,7 +90,7 @@ async def api_wizard_identity(dtxsid: str):
 
 
 @router.get("/api/document/{dtxsid}/front-matter")
-async def api_get_front_matter(dtxsid: str):
+async def api_get_front_matter(dtxsid: Dtxsid):
     """Read the session's human-set front-matter (authors, contributors, publication
     overrides) for the Configure surface. Returns {} when none is saved yet.
 
@@ -104,7 +105,7 @@ async def api_get_front_matter(dtxsid: str):
 
 
 @router.post("/api/document/{dtxsid}/front-matter")
-async def api_save_front_matter(dtxsid: str, request: Request):
+async def api_save_front_matter(dtxsid: Dtxsid, request: Request):
     """Persist the session's front-matter. Validates the top-level shape (authors /
     contributors lists, publication object), drops junk, writes front_matter.json.
     The About This Report + Publication Details sections fill from this on next
@@ -138,7 +139,7 @@ async def api_save_front_matter(dtxsid: str, request: Request):
 
 
 @router.get("/api/wizard/{dtxsid}/fingerprints")
-async def api_wizard_fingerprints(dtxsid: str):
+async def api_wizard_fingerprints(dtxsid: Dtxsid):
     """Detected per-file classification for the confirm-metadata screen.
 
     Uses ensure_fingerprints (disk-safe): re-derives from files/ when the

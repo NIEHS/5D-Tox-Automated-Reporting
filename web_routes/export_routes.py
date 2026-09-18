@@ -28,6 +28,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
+from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.session_store import safe_filename
 from narrative.style_learning import (
@@ -334,7 +335,7 @@ async def api_compile_pdf(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/sync-document/{dtxsid}")
-async def api_sync_document(dtxsid: str, request: Request):
+async def api_sync_document(dtxsid: Dtxsid, request: Request):
     """
     Materialize/refresh the dev document directory documents/<dtxsid>/ from the
     session cache (the ADR-0005 git-bridge working tree), on demand.
@@ -392,7 +393,7 @@ async def api_sync_document(dtxsid: str, request: Request):
 # Overleaf, so there is no project_url any more.
 
 @router.get("/api/repo-binding/{dtxsid}")
-async def api_get_repo_binding(dtxsid: str):
+async def api_get_repo_binding(dtxsid: Dtxsid):
     """Return the report's repo binding {git_remote?, baseline_commit?} ({} if unset)."""
     from roundtrip.transport import get_binding
     if safe_filename(dtxsid) != dtxsid:
@@ -401,7 +402,7 @@ async def api_get_repo_binding(dtxsid: str):
 
 
 @router.post("/api/repo-binding/{dtxsid}")
-async def api_set_repo_binding(dtxsid: str, request: Request):
+async def api_set_repo_binding(dtxsid: Dtxsid, request: Request):
     """
     Set the report's repo binding.  Body: {git_remote} — the GitHub repo the app
     commits/pushes to and pulls committee edits from.
@@ -422,7 +423,7 @@ async def api_set_repo_binding(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/repo-status/{dtxsid}")
-async def api_repo_status(dtxsid: str):
+async def api_repo_status(dtxsid: Dtxsid):
     """
     Report the clone's git state so the UI can *derive* which controls to offer
     (ADR-0005 Am.3 §F) — never imperatively set.  Returns:
@@ -473,7 +474,7 @@ async def api_repo_status(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/commit-local/{dtxsid}")
-async def api_commit_local(dtxsid: str, request: Request):
+async def api_commit_local(dtxsid: Dtxsid, request: Request):
     """
     "Commit Local" (ADR-0005 Am.3 §B/§C): render the report from the **posted
     working copy** — the exact same body the HTML view renders from — and commit
@@ -527,7 +528,7 @@ async def api_commit_local(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/push-to-github/{dtxsid}")
-async def api_push_to_github(dtxsid: str):
+async def api_push_to_github(dtxsid: Dtxsid):
     """
     "Push to GitHub" (ADR-0005 Am.3 §C): push the working clone's local commits
     to the bound remote and record the pushed sha as the new baseline.
@@ -581,7 +582,7 @@ async def api_push_to_github(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/pull-from-github/{dtxsid}")
-async def api_pull_from_github(dtxsid: str):
+async def api_pull_from_github(dtxsid: Dtxsid):
     """
     "Pull from GitHub" (ADR-0005 Am.3 §A): pull the bound remote into the working
     clone and reconcile the committee's edits (made in Overleaf, pushed up via
@@ -629,7 +630,7 @@ async def api_pull_from_github(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/provision-report/{dtxsid}")
-async def api_provision_report(dtxsid: str, request: Request):
+async def api_provision_report(dtxsid: Dtxsid, request: Request):
     """
     Provision the report's GitHub repo, app-driven — **init only** (ADR-0005
     Am.3 §E).
@@ -751,7 +752,7 @@ async def api_preview_latex_html(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/export-bm2/{dtxsid}")
-async def api_export_bm2(dtxsid: str):
+async def api_export_bm2(dtxsid: Dtxsid):
     """
     Download the metadata-enriched .bm2 file for a session.
 
@@ -839,7 +840,7 @@ async def api_export_bm2(dtxsid: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/document-config/{dtxsid}")
-async def api_get_document_config(dtxsid: str, default: int = 0):
+async def api_get_document_config(dtxsid: Dtxsid, default: int = 0):
     """
     Return the session's document-structure YAML for the config editor.
 
@@ -863,7 +864,7 @@ async def api_get_document_config(dtxsid: str, default: int = 0):
 
 
 @router.post("/api/document-config/{dtxsid}")
-async def api_save_document_config(dtxsid: str, request: Request):
+async def api_save_document_config(dtxsid: Dtxsid, request: Request):
     """
     Validate + persist the session's document-structure YAML.
 
@@ -905,14 +906,14 @@ async def api_save_document_config(dtxsid: str, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/views/{dtxsid}")
-async def api_list_views(dtxsid: str):
+async def api_list_views(dtxsid: Dtxsid):
     """List a session's report views (always includes the implicit 'default')."""
     from document_model.view_config import list_views, DEFAULT_VIEW
     return JSONResponse({"views": list_views(dtxsid), "default": DEFAULT_VIEW})
 
 
 @router.get("/api/views/{dtxsid}/{name}")
-async def api_get_view(dtxsid: str, name: str):
+async def api_get_view(dtxsid: Dtxsid, name: str):
     """Return one view's stored mapping (document / filters / charts / methods).
 
     An absent file (including 'default' with none saved) returns {} — the caller
@@ -925,7 +926,7 @@ async def api_get_view(dtxsid: str, name: str):
 
 
 @router.post("/api/views/{dtxsid}/{name}")
-async def api_save_view(dtxsid: str, name: str, request: Request):
+async def api_save_view(dtxsid: Dtxsid, name: str, request: Request):
     """Validate + persist a view.  A malformed structure returns 422 and
     writes nothing (the prior file, if any, stays intact)."""
     from document_model.view_config import save_view
@@ -945,7 +946,7 @@ async def api_save_view(dtxsid: str, name: str, request: Request):
 
 
 @router.delete("/api/views/{dtxsid}/{name}")
-async def api_delete_view(dtxsid: str, name: str):
+async def api_delete_view(dtxsid: Dtxsid, name: str):
     """Delete a named view ('default' cannot be deleted)."""
     from document_model.view_config import delete_view
     try:
@@ -1007,7 +1008,7 @@ async def api_save_document_config_default(request: Request):
 # ---------------------------------------------------------------------------
 
 @router.get("/api/layout-style/{dtxsid}")
-async def api_get_layout_style(dtxsid: str, default: int = 0):
+async def api_get_layout_style(dtxsid: Dtxsid, default: int = 0):
     """
     Return the session's layout-styles config for the styles editor, as BOTH the
     raw ``yaml`` text (the CodeMirror tab) and the parsed ``config`` mapping (the
@@ -1044,7 +1045,7 @@ async def api_get_layout_style(dtxsid: str, default: int = 0):
 
 
 @router.post("/api/layout-style/{dtxsid}")
-async def api_save_layout_style(dtxsid: str, request: Request):
+async def api_save_layout_style(dtxsid: Dtxsid, request: Request):
     """
     Validate + persist the session's layout-styles config.
 
