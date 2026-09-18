@@ -12,7 +12,6 @@ Unit tests for the Phase-1 filter-unification surface:
      it previously looped a fixed Male/Female and could name a sex the table dropped).
 """
 
-import pytest
 
 from document_model.filters import (
     filter_allows,

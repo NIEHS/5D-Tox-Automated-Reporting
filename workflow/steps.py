@@ -246,7 +246,7 @@ def _write_metadata_headers(file_path, platform: str, data_type: str) -> None:
     lines = content.splitlines(keepends=True)
 
     headers = []
-    headers.append(f"# Provider: Apical\n")
+    headers.append("# Provider: Apical\n")
     if platform:
         headers.append(f"# Platform: {platform}\n")
     if data_type:

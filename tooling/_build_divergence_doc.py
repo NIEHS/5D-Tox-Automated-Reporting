@@ -11,7 +11,6 @@ Not shipped -- a one-off deliverable builder.
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.shared import Pt, RGBColor, Inches
 
@@ -34,7 +33,6 @@ def _shade(cell, hex_fill):
 
 
 def _keep_with_next(p):
-    from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
     pPr = p._p.get_or_add_pPr()
     kwn = OxmlElement("w:keepNext")

@@ -24,13 +24,11 @@ Usage:
     python background_writer.py "95-50-1"
 """
 
-import json
-import os
+import logging
 import re
 import sys
-from dataclasses import dataclass, field
 
-from narrative.chem_resolver import ChemicalIdentity, resolve_chemical
+from narrative.chem_resolver import resolve_chemical
 from narrative.data_gatherer import BackgroundData, gather_all
 
 
@@ -42,6 +40,11 @@ from narrative.data_gatherer import BackgroundData, gather_all
 # ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL from env).  Every model — Claude,
 # Gemini, Llama, ollama-* — is served through it, so there is one code path.
 from narrative.interpret import AnthropicEndpoint
+
+# Module logger. The abstract-distillation fallback below logged through a
+# `logger` name that was never defined (NameError on the failure path);
+# defined here so that path degrades to a warning as intended.
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

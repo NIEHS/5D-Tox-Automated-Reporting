@@ -17,7 +17,6 @@ Endpoints:
 """
 
 import asyncio
-import json
 import logging
 import os
 import shutil
@@ -49,7 +48,6 @@ from narrative.interpret import (
     ToxKBQuerier,
     fetch_gene_descriptions,
     fetch_go_descriptions,
-    load_dose_response,
     rank_go_sets_by_bmd,
     rank_genes_by_bmd,
 )

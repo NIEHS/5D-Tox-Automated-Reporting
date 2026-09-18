@@ -13,7 +13,6 @@ Usage:
 
 import json
 import re
-import time
 from pathlib import Path
 
 import networkx as nx
@@ -418,7 +417,7 @@ class GeneFuncCrawler:
         print(f"\nSaved to {outdir}/")
         print(f"  papers.json          ({len(papers_out)} papers)")
         print(f"  edges.json           ({len(edges)} edges)")
-        print(f"  citation_graph.gml")
+        print("  citation_graph.gml")
 
 
 def build_tox_search_queries(gene: str, organs: list[str], focus: str) -> list[str]:
@@ -499,7 +498,7 @@ def run_genetox_crawl(
 
     # Report
     print(f"\n{'='*60}")
-    print(f"GENE-TOX CRAWL COMPLETE")
+    print("GENE-TOX CRAWL COMPLETE")
     print(f"{'='*60}")
     print(f"Total papers: {len(crawler.papers)}")
     print(f"Total edges:  {crawler.graph.number_of_edges()}")
@@ -557,7 +556,7 @@ def run_genefunc_crawl(
 
     # Report
     print(f"\n{'='*60}")
-    print(f"GENE-FUNCTION CRAWL COMPLETE")
+    print("GENE-FUNCTION CRAWL COMPLETE")
     print(f"{'='*60}")
     print(f"Total papers: {len(crawler.papers)}")
     print(f"Total edges:  {crawler.graph.number_of_edges()}")
@@ -574,7 +573,7 @@ def run_genefunc_crawl(
     for p in crawler.papers.values():
         for organ in p.organs_tagged:
             organ_dist[organ] = organ_dist.get(organ, 0) + 1
-    print(f"\nOrgan distribution:")
+    print("\nOrgan distribution:")
     for organ, count in sorted(organ_dist.items(), key=lambda x: x[1], reverse=True):
         print(f"  {organ}: {count}")
 

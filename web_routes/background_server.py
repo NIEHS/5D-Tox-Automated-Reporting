@@ -221,7 +221,7 @@ app.include_router(corpus_routes.router)
 # from the single source of truth (document_tree.py) instead of
 # hardcoding them in HTML/JS.
 
-from document_model.document_tree import serialize_tree, compute_table_numbers, DOCUMENT_TREE
+from document_model.document_tree import serialize_tree, compute_table_numbers
 from document_model.render_capabilities import annotate_capabilities
 
 # Ensure table numbers are computed before serializing

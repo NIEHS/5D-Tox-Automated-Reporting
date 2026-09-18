@@ -27,7 +27,6 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field, asdict
-from typing import Optional
 
 import requests
 
@@ -609,13 +608,13 @@ def gather_osha_niosh(data: BackgroundData, session: requests.Session) -> None:
     # Add OSHA/NIOSH references if we found data
     if data.osha_pel:
         data.references.append({
-            "url": f"https://www.osha.gov/chemicaldata/",
+            "url": "https://www.osha.gov/chemicaldata/",
             "title": "OSHA Chemical Data",
             "source_type": "regulation",
         })
     if data.niosh_rel:
         data.references.append({
-            "url": f"https://www.cdc.gov/niosh/npg/",
+            "url": "https://www.cdc.gov/niosh/npg/",
             "title": "NIOSH Pocket Guide to Chemical Hazards",
             "source_type": "regulation",
         })

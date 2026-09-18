@@ -9,7 +9,6 @@ re-extraction — the same "extract full, filter at read" model sections/genomic
 allowlists already use.
 """
 
-import pytest
 
 from pipeline.processing_helpers import apply_genomics_cutoffs
 from pipeline.cache_plumbing import _hash_genomics

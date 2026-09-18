@@ -79,7 +79,6 @@ from rendering.render_common import (
     gene_table_rows,
     genomics_chart_caption,
     genomics_description_items,
-    genomics_entries,
     genomics_intro_paragraphs,
     resolve_content_items,
     authored_item_paragraphs,
@@ -103,7 +102,6 @@ from document_model.render_capabilities import (
 )
 
 _REL_HYPERLINK = _REL.HYPERLINK
-from tables.table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------

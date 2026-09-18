@@ -18,7 +18,6 @@ The dtxsid has no session directory, so the disk-backed genomics-cache reads
 are deterministic no-ops (same rationale as test_marshal_golden.py).
 """
 
-import copy
 
 import pytest
 

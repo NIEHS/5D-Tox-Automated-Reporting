@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import pytest
 
-from rendering import preview_surface
 from rendering.preview_surface import (
     materialize_preview,
     preview_file_path,

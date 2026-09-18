@@ -12,7 +12,6 @@ Walks through the complete pipeline using golden DTXSID50469320 session data:
 This covers the 9-point checklist for validating the domain model refactor.
 """
 
-import json
 
 import pytest
 

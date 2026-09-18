@@ -443,7 +443,7 @@ class FullTextFetcher:
     def print_stats(self):
         """Print fetching statistics."""
         total = sum(v for k, v in self.stats.items() if k != "failed")
-        print(f"\nFull text fetch stats:")
+        print("\nFull text fetch stats:")
         print(f"  Total fetched: {total}")
         for source in ["cache_hits", "pmc", "arxiv", "s2_oa", "unpaywall", "doi"]:
             count = self.stats[source]

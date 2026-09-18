@@ -8,7 +8,6 @@ day) grain with the raw/parsed value split the sidecar reconstruction needs.
 """
 
 import duckdb
-import pytest
 
 from pipeline.session_schema import (
     SCHEMA_VERSION,

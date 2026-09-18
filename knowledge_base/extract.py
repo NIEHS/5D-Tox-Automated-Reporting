@@ -13,7 +13,7 @@ Uses local Ollama instances in parallel across multiple GPUs.
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from threading import Lock
@@ -607,20 +607,20 @@ class ParallelExtractionEngine:
                 all_methods[m_lower] = all_methods.get(m_lower, 0) + 1
 
         print(f"\n{'='*60}")
-        print(f"EXTRACTION SUMMARY")
+        print("EXTRACTION SUMMARY")
         print(f"{'='*60}")
         print(f"Time: {elapsed:.1f}s ({elapsed/60:.1f} min)")
         print(f"Papers/sec: {len(extractions)/elapsed:.2f}")
         print(f"Stats: {self.stats}")
-        print(f"\nTop 30 genes (by frequency across papers):")
+        print("\nTop 30 genes (by frequency across papers):")
         for gene, count in sorted(all_genes.items(),
                                    key=lambda x: x[1], reverse=True)[:30]:
             print(f"  {gene}: {count} papers")
-        print(f"\nOrgan coverage:")
+        print("\nOrgan coverage:")
         for organ, count in sorted(all_organs.items(),
                                     key=lambda x: x[1], reverse=True)[:20]:
             print(f"  {organ}: {count} papers")
-        print(f"\nMethods used:")
+        print("\nMethods used:")
         for method, count in sorted(all_methods.items(),
                                      key=lambda x: x[1], reverse=True)[:15]:
             print(f"  {method}: {count} papers")
@@ -919,19 +919,19 @@ def analyze_gene_consensus(extractions_file: str = "citegraph_output/extractions
 
     # Print report
     print(f"\n{'='*60}")
-    print(f"GENE CONSENSUS ANALYSIS")
+    print("GENE CONSENSUS ANALYSIS")
     print(f"{'='*60}")
     print(f"Total unique genes: {result['total_unique_genes']}")
     print(f"Consensus (3+ papers): {len(consensus)}")
     print(f"Moderate (2 papers): {len(moderate)}")
     print(f"Single mention: {len(single_mention)}")
 
-    print(f"\nConsensus hallmark genes:")
+    print("\nConsensus hallmark genes:")
     for gene, info in list(result["consensus_genes"].items())[:30]:
         organs_str = ", ".join(info["organs"]) if info["organs"] else "unspecified"
         print(f"  {gene}: {info['count']} papers | organs: {organs_str}")
 
-    print(f"\nOrgan-specific top genes:")
+    print("\nOrgan-specific top genes:")
     for organ, genes in result["organ_specific_genes"].items():
         top = list(genes.items())[:10]
         if top:
@@ -1062,14 +1062,14 @@ def merge_gene_consensus(
 
     # Print report
     print(f"\n{'='*60}")
-    print(f"MERGED GENE CONSENSUS")
+    print("MERGED GENE CONSENSUS")
     print(f"{'='*60}")
     print(f"Total unique genes: {result['total_unique_genes']}")
     print(f"Consensus (3+ papers): {len(consensus)}")
     print(f"Moderate (2 papers): {len(moderate)}")
     print(f"Single mention: {len(single_mention)}")
 
-    print(f"\nConsensus hallmark genes:")
+    print("\nConsensus hallmark genes:")
     for gene, info in list(result["consensus_genes"].items())[:30]:
         organs_str = ", ".join(info["organs"]) if info["organs"] else "unspecified"
         print(f"  {gene}: {info['count']} papers | organs: {organs_str}")

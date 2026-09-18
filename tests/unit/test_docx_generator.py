@@ -61,8 +61,10 @@ def rich() -> dict:
     a valid render INPUT (unlike the marshal_rich fixture, which is a marshal
     OUTPUT and not shaped for the renderers).
     """
-    if not SESSION_DIR.exists():
-        pytest.skip(f"session {SESSION_DTXSID} not present")
+    # The directory can exist but be empty (unmounted GCS); require the
+    # processed session's integrated.json, not just the folder.
+    if not (SESSION_DIR / "integrated.json").exists():
+        pytest.skip(f"processed session {SESSION_DTXSID} not present")
     return load_session_data(
         SESSION_DTXSID,
         chemical_name="Perfluorohexanesulfonamide",
@@ -560,7 +562,6 @@ def test_break_before_and_after_apply_once_at_node_boundary(scaffold):
     """break_before sets pageBreakBefore on the node's FIRST paragraph; break_after
     appends a page-break run on its LAST — once each, not per paragraph (parity
     with HTML's one wrapping div and LaTeX's one \\clearpage)."""
-    from docx.enum.text import WD_BREAK
     from docx.oxml.ns import qn
 
     data = dict(scaffold)

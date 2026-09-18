@@ -322,7 +322,7 @@ def run_mechanism_crawl(
     if topic_keywords is not None:
         print(f"Custom topic keywords: {len(topic_keywords)}")
     else:
-        print(f"Topic keywords: default (tox vocabulary)")
+        print("Topic keywords: default (tox vocabulary)")
     print(f"{'='*60}\n")
 
     # Add search-derived seeds
@@ -397,7 +397,7 @@ def run_all_phase2(
     # Tier 3: gene-tox crawls
     if 3 in tiers:
         print(f"\n{'#'*60}")
-        print(f"# TIER 3: GENE-TOX DEEP DIVES (8 genes)")
+        print("# TIER 3: GENE-TOX DEEP DIVES (8 genes)")
         print(f"{'#'*60}")
         t0 = time.time()
         crawler = run_genetox_crawl(api_key=api_key)
@@ -417,12 +417,12 @@ def run_all_phase2(
     total_api = sum(r["api_calls"] for r in results.values())
 
     print(f"\n{'='*60}")
-    print(f"PHASE 2 CRAWL COMPLETE")
+    print("PHASE 2 CRAWL COMPLETE")
     print(f"{'='*60}")
     print(f"Total time:    {total_elapsed:.0f}s ({total_elapsed/3600:.1f}h)")
     print(f"Total papers:  {total_papers}")
     print(f"Total API calls: {total_api}")
-    print(f"\nPer-crawl summary:")
+    print("\nPer-crawl summary:")
     for name, r in results.items():
         print(f"  [{r['tier']}] {name:20s}  {r['papers']:4d} papers  "
               f"{r['api_calls']:4d} calls  {r['time_s']:.0f}s")

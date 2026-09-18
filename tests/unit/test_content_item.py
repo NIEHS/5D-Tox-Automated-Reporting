@@ -8,7 +8,6 @@ Stage 2 wires ONLY the genomics branch (a behavior-preserving refactor); the
 template-authored branch is a later stage and resolves to [] here.
 """
 
-import pytest
 
 from document_model.content_item import ContentItem
 from document_model.document_node import DocNode
@@ -95,7 +94,6 @@ def test_resolved_content_item_overlay_key():
 
 # --- Stage 4: hybrid authored + data-derived; authored rendering per surface --
 
-from document_model.content_item import ContentItem  # noqa: E402
 
 
 def _hybrid_node():

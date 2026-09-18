@@ -26,7 +26,6 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field, asdict
-from typing import Optional
 
 import requests
 

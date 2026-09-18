@@ -11,7 +11,6 @@ import argparse
 import csv
 import json
 import re
-import sys
 from glob import glob
 from pathlib import Path
 

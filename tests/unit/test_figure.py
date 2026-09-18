@@ -6,12 +6,8 @@ positional figure_number pass; and that all three renderers embed the artifact
 and render a "Figure N." caption from one shared node + payload shape.
 """
 
-import base64
-from io import BytesIO
 
-import pytest
 from docx import Document
-from docx.oxml.ns import qn
 
 import document_model.render_capabilities as rc
 import rendering.docx_generator as dg

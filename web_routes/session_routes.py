@@ -31,16 +31,18 @@ import uuid
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from bmdx_pipe import bm2_cache
+# Imported for its NAME, not for use here: tests/conftest.py's mock_bmdx_pipe
+# patches `web_routes.session_routes.bm2_cache` at this import site (the Java
+# .bm2 reader seam). Removing it breaks the whole TestClient suite.
+from bmdx_pipe import bm2_cache  # noqa: F401
 from pipeline.session_store import (
-    SESSIONS_DIR, now_iso, session_dir, bm2_slug, safe_filename,
-    save_section, delete_section, _VERSION_EVENT_KEY,
+    SESSIONS_DIR, now_iso, session_dir, bm2_slug, save_section, delete_section, _VERSION_EVENT_KEY,
 )
 from narrative.style_learning import (
-    load_style_profile, extract_and_merge_style_rules,
+    extract_and_merge_style_rules,
 )
 from pipeline.pool_orchestrator import (
-    fingerprint_and_store, run_lightweight_validation, _js_dose_key,
+    fingerprint_and_store, _js_dose_key,
     load_cached_fingerprint, restore_fingerprint,
     load_integrated, save_integrated,
 )

@@ -278,3 +278,34 @@ def mock_anthropic(monkeypatch):
         "llm_helpers.AnthropicEndpoint.generate",
         lambda *a, **kw: '{"result": "mocked"}',
     )
+
+
+# ---------------------------------------------------------------------------
+# Real-session gate
+# ---------------------------------------------------------------------------
+# A handful of renderer/export tests read the PROCESSED DTXSID50469320 session
+# (sections, narratives, caches) from the live sessions/ directory — which is a
+# gitignored GCS mount that exists only on the author's machines. The raw
+# input pool is checked in under tests/fixtures/golden/, but the processed
+# outputs are not (they need Java + ~8 min of BMDS), so on a fresh clone or in
+# CI those tests can only fail for lack of data. This fixture turns that into an
+# explicit skip: request it from any test that asserts on real-session content.
+REAL_SESSION_DTXSID = "DTXSID50469320"
+
+
+def processed_session_present(dtxsid: str = REAL_SESSION_DTXSID) -> bool:
+    """True when the processed session (integrated.json) exists under the
+    CURRENT session_store.SESSIONS_DIR (env override / monkeypatch honored)."""
+    from pipeline import session_store  # local: conftest keeps app imports lazy
+    return (session_store.SESSIONS_DIR / dtxsid / "integrated.json").exists()
+
+
+@pytest.fixture
+def real_session_50469320():
+    """Skip the requesting test unless the processed golden session is present."""
+    from pipeline import session_store  # local: conftest keeps app imports lazy
+    if not processed_session_present():
+        pytest.skip(
+            f"processed session {REAL_SESSION_DTXSID} not present under "
+            f"{session_store.SESSIONS_DIR} (GCS mount / author machine only)"
+        )

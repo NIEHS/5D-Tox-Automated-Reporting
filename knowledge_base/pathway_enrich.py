@@ -328,7 +328,7 @@ def build_pathway_tsv(
                 rows_written += 1
 
     print(f"\n{'='*60}")
-    print(f"PATHWAY ENRICHMENT COMPLETE")
+    print("PATHWAY ENRICHMENT COMPLETE")
     print(f"{'='*60}")
     print(f"Genes queried:        {len(genes)}")
     print(f"Genes with pathways:  {genes_with_pathways}")

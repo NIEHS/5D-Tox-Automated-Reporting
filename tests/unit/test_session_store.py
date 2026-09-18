@@ -10,7 +10,6 @@ Tests pure functions and disk I/O in session_store.py:
 
 import json
 
-import pytest
 
 from pipeline.session_store import bm2_slug, safe_filename, save_section, delete_section
 

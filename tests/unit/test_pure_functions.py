@@ -10,7 +10,6 @@ Tests pure functions that have no I/O or external dependencies:
 """
 
 import os
-from dataclasses import dataclass, field
 from math import inf
 
 import pytest

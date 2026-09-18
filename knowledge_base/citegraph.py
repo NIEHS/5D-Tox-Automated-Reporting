@@ -8,7 +8,6 @@ scoring relevance and stopping when the graph saturates or budget is exhausted.
 import os
 import time
 import json
-import hashlib
 import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -588,7 +587,7 @@ class CitationGraphCrawler:
 
         if not self.stats["stop_reason"]:
             self.stats["stop_reason"] = "queue exhausted"
-            print(f"\n>>> Queue exhausted")
+            print("\n>>> Queue exhausted")
 
         return self._report()
 
@@ -631,7 +630,7 @@ class CitationGraphCrawler:
         }
 
         print(f"\n{'='*60}")
-        print(f"CRAWL COMPLETE")
+        print("CRAWL COMPLETE")
         print(f"{'='*60}")
         print(f"Papers: {report['total_papers']}")
         print(f"Edges:  {report['total_edges']}")
@@ -640,10 +639,10 @@ class CitationGraphCrawler:
         print(f"Skipped (low relevance): {self.stats['papers_skipped_relevance']}")
         print(f"Skipped (max depth): {self.stats['papers_skipped_depth']}")
         print(f"Reviews found: {report['reviews_found']}")
-        print(f"\nOrgan distribution:")
+        print("\nOrgan distribution:")
         for organ, count in report['organ_distribution'].items():
             print(f"  {organ}: {count}")
-        print(f"\nTop 10 most relevant papers:")
+        print("\nTop 10 most relevant papers:")
         for i, p in enumerate(report['top_relevant'][:10], 1):
             print(f"  {i}. [{p['relevance']:.2f}] {p['title'][:70]} "
                   f"({p['year']}) [{p['citations']} cites] {p['organs']}")
@@ -688,7 +687,7 @@ class CitationGraphCrawler:
         print(f"\nSaved to {outdir}/")
         print(f"  papers.json     ({len(papers_out)} papers)")
         print(f"  edges.json      ({len(edges)} edges)")
-        print(f"  citation_graph.gml (for Gephi/networkx)")
+        print("  citation_graph.gml (for Gephi/networkx)")
 
 
 # ---------------------------------------------------------------------------

@@ -29,7 +29,6 @@ Record schemas (S2 Datasets, join key = corpusid):
 
 import gzip
 import json
-import os
 import sys
 import time
 from dataclasses import asdict

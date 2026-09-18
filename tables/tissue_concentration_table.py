@@ -39,7 +39,6 @@ from tables.table_builder_common import (
     format_mean_se,
     adaptive_decimals,
     load_sidecar,
-    find_sidecar_paths,
 )
 
 

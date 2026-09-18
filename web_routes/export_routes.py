@@ -22,13 +22,12 @@ Endpoints:
 """
 
 import asyncio
-import io
 import logging
 import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from pipeline.session_store import safe_filename
 from narrative.style_learning import (

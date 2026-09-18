@@ -60,4 +60,38 @@ dev = [
     "jupyterlab>=4.2",
     "nbformat>=5.10",
     "nbconvert>=7.16",
+    "ruff>=0.16",
 ]
+
+# ---------------------------------------------------------------------------
+# Lint gate (CI). Deliberately narrow baseline: pyflakes (real bugs: undefined
+# names, unused imports) + the syntax/import/statement subset of pycodestyle.
+# Style rules (line length, naming, docstrings) are NOT enforced. Widen this
+# incrementally; every rule added should be fixed across the tree in the same
+# commit so the gate stays green.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["notebooks", "web_wizard", "wizard-ui", "citegraph_output*", "java", "latex"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# E402: several modules deliberately import after side-effectful setup
+#       (FastAPI app construction, sys.path/env handling).
+# E702: semicolon-joined statements are used as a compact style in the docx
+#       emitter's OOXML plumbing; cosmetic, not a bug class.
+# E741: ambiguous single-letter names — cosmetic.
+# F841: unused local variables — real but low-value; tighten later.
+ignore = ["E402", "E702", "E741", "F841"]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-export facades: imports ARE the public API (ADR-0013 backward-compat).
+"__init__.py" = ["F401"]
+"pipeline/pool_orchestrator.py" = ["F401"]
+"narrative/methods_report.py" = ["F401"]
+"narrative/interpret.py" = ["F401"]
+# Accessor facade: other modules import these names FROM server_state.
+"web_routes/server_state.py" = ["F401"]
+# `find_sidecar_paths` is imported from here by sibling table builders.
+"tables/body_weight_table.py" = ["F401"]

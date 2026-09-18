@@ -25,7 +25,6 @@ What this does NOT prove
     The contract is "same data, same structure, same node types".
 """
 
-from pathlib import Path
 
 import pytest
 
@@ -336,7 +335,7 @@ def test_apical_table_uses_niehstable_class(session_data):
     assert 'class="niehstable"' in html
 
 
-def test_apical_table_marks_sex_separator_and_n_rows(session_data):
+def test_apical_table_marks_sex_separator_and_n_rows(session_data, real_session_50469320):
     """
     Sex-separator rows and n-rows get specific CSS class hooks so
     the stylesheet can render them distinctly without inline styles.
@@ -346,7 +345,7 @@ def test_apical_table_marks_sex_separator_and_n_rows(session_data):
     assert 'class="n-row"' in html
 
 
-def test_genomics_section_stacks_sexes_no_h4(session_data):
+def test_genomics_section_stacks_sexes_no_h4(session_data, real_session_50469320):
     """Genomics tables are PER-ORGAN with both sexes stacked (reference Tables
     9–12): no per-(organ, sex) H4 subsection, and the sexes are delineated by
     full-width sex-separator rows inside the table instead."""

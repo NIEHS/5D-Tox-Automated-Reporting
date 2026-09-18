@@ -36,7 +36,6 @@ Footnotes:
 
 from __future__ import annotations
 
-import math
 
 from tables.table_builder_common import (
     BMD_DEFINITION,
@@ -47,9 +46,7 @@ from tables.table_builder_common import (
     format_mean_se,
     adaptive_decimals,
     load_sidecar,
-    find_sidecar_paths,
     build_n_row,
-    format_dose_label,
     legend_footnote,
     definition_footnote,
     lettered_footnote,

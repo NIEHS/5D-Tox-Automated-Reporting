@@ -14,7 +14,6 @@ DELIVERABLE build is allowed to contain them.
 """
 
 import zipfile
-from pathlib import Path
 
 import pytest
 

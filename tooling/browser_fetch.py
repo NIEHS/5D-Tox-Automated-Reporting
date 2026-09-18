@@ -15,7 +15,9 @@ interstitial is ~28 KB, real articles are >60 KB — and a served PDF is detecte
 by the %PDF magic bytes on a direct download.
 """
 from __future__ import annotations
-import json, re, sys, time, urllib.parse
+import json
+import re
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright

@@ -8,9 +8,8 @@ derive_phase always supported this; the engine feeds the two flags separately
 because on disk they are separate files.
 """
 
-import pytest
 
-from workflow.engine import WorkflowEngine, WorkflowState
+from workflow.engine import WorkflowEngine
 from workflow.phases import Action, Phase
 
 

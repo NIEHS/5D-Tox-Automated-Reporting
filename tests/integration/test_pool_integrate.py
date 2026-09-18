@@ -8,7 +8,6 @@ The actual integration (Java-backed) is mocked; we test the endpoint wiring:
   - Caches result in _integrated_pool and writes integrated.json
 """
 
-import json
 
 import pytest
 

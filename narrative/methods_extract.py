@@ -465,7 +465,6 @@ def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
     import os
     import json
     import math
-    import re
 
     files_dir = os.path.join(session_dir, "files")
     if not os.path.isdir(files_dir):

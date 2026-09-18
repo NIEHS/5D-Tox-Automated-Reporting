@@ -172,7 +172,8 @@ class TestQueryRoutes:
         body = resp.content
         assert body[:4] == b"PAR1"  # Parquet magic
         # round-trip through duckdb from a temp file
-        import tempfile, os
+        import tempfile
+        import os
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
             f.write(body)
             fp = f.name

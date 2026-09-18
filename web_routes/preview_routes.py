@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 
 from pipeline.session_store import safe_filename
 from rendering.preview_surface import (

@@ -47,7 +47,6 @@ from document_model.document_tree import (
     NUMBERED_TABLE_TYPES,
     compute_table_numbers,
     find_node,
-    walk_tree,
 )
 from rendering.render_common import (
     front_matter_plan,
@@ -108,7 +107,6 @@ def _resolve_xrefs_jats(text: str, parent: etree._Element) -> None:
     targets fall through to a visible broken-ref marker in the text, matching
     the other surfaces' _broken() behavior.
     """
-    import re
     from rendering.cross_references import _XREF_RE  # reuse the one token pattern
 
     pos = 0

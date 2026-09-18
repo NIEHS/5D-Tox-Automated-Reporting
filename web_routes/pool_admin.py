@@ -44,7 +44,6 @@ The script:
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -342,9 +341,9 @@ def cmd_delete(
         print(f"  {action}")
 
     if not dry_run:
-        print(f"\nDone.  Tell the user to click Validate to reconcile the pool state.")
+        print("\nDone.  Tell the user to click Validate to reconcile the pool state.")
     else:
-        print(f"\nDry run complete.  No files were changed.")
+        print("\nDry run complete.  No files were changed.")
 
 
 def cmd_invalidate(session_dir: Path, dry_run: bool = False) -> None:
@@ -363,7 +362,7 @@ def cmd_invalidate(session_dir: Path, dry_run: bool = False) -> None:
         print("  Nothing to invalidate.")
 
     if not dry_run:
-        print(f"\nDone.  Tell the user to click Validate to reconcile the pool state.")
+        print("\nDone.  Tell the user to click Validate to reconcile the pool state.")
 
 
 # ---------------------------------------------------------------------------

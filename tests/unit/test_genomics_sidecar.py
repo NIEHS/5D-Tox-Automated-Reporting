@@ -18,7 +18,6 @@ from unittest.mock import patch
 
 import pytest
 
-from pipeline import processing_helpers as ph
 from pipeline.processing_helpers import (
     _load_genomics_export,
     _extract_genomics,

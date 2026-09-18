@@ -82,7 +82,6 @@ from rendering.render_common import (
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
-    genomics_entries,
     resolve_content_items,
     authored_item_paragraphs,
     gene_set_table_rows,
@@ -92,7 +91,6 @@ from rendering.render_common import (
     genomics_table_caption,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
-    find_apical_section as _find_apical_section,
     table_caption as _table_caption,
 )
 from document_model.layout_style import resolve_layout_style
@@ -105,7 +103,6 @@ from rendering.cross_references import (
 )
 # Shared display-precision knob (same one the LaTeX path uses), so both
 # surfaces round the raw BMD/BMDL/fold-change floats identically.
-from tables.table_builder_common import format_display_number, format_mean_se_display
 
 
 # ---------------------------------------------------------------------------

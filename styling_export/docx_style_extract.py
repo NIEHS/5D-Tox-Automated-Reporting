@@ -42,9 +42,7 @@ import sys
 import zipfile
 
 from docx import Document
-from docx.enum.text import WD_LINE_SPACING
 from docx.oxml.ns import qn
-from docx.shared import Emu
 
 # python-docx opens .docx (document.main) but rejects .dotx (template.main).
 # A template is the same OPC package with one content-type string changed, so we

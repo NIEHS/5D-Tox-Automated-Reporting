@@ -38,7 +38,6 @@ shim when assembling the Abstract block.
 
 from __future__ import annotations
 
-from narrative.methods_models import MethodsContext
 from narrative.narrative_helpers import (
     _format_dose_value,
     _stat_display_name,

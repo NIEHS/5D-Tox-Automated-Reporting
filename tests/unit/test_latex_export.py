@@ -322,7 +322,7 @@ def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkey
     assert "abstract" in data
 
 
-def test_load_session_data_overlays_real_session_when_present():
+def test_load_session_data_overlays_real_session_when_present(real_session_50469320):
     """
     DTXSID50469320 is the golden session shipped in this repo.  Loading
     it must overlay real content — verify a few high-signal markers.

@@ -117,7 +117,7 @@ def _latex_bmd_rows(tex: str) -> list[tuple[str, str]]:
 # Parity: positional numbering agrees across surfaces (and the tree)
 # ---------------------------------------------------------------------------
 
-def test_table_numbers_agree_across_surfaces(session_data):
+def test_table_numbers_agree_across_surfaces(session_data, real_session_50469320):
     """
     The set of numbered tables rendered in HTML equals the set in LaTeX, and
     both equal the table_numbers the document tree assigned — so neither
@@ -199,7 +199,7 @@ def test_table_numbers_agree_across_surfaces(session_data):
     assert nums and nums[0] == 9 and nums == list(range(9, 9 + len(nums)))
 
 
-def test_figure_numbers_agree_across_surfaces(session_data):
+def test_figure_numbers_agree_across_surfaces(session_data, real_session_50469320):
     """
     The set of numbered figures rendered in HTML equals the set in LaTeX.
 
