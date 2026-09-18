@@ -64,6 +64,19 @@ def build_classpath() -> str:
     """
     jars = [str(BMDX_CORE_JAR)]
 
+    # Add any OTHER top-level jars in target/ (e.g. the full
+    # bmdexpress3-<ver>.jar).  Which artifact carries the BMDProject / probe /
+    # category model classes depends on the build: on a bmdx-core build they
+    # live in bmdx-core.jar; on a full-app build they live in the shaded
+    # bmdexpress3 jar and bmdx-core.jar may be a thin/empty artifact.  Globbing
+    # target/*.jar makes the classpath correct in BOTH layouts (extra jars on
+    # the classpath are harmless).  De-duplicated against BMDX_CORE_JAR.
+    target_dir = BMDX_CORE_JAR.parent
+    if target_dir.exists():
+        for jar in sorted(target_dir.glob("*.jar")):
+            if str(jar) not in jars:
+                jars.append(str(jar))
+
     # Add all dependency JARs from target/deps/
     if BMDX_DEPS_DIR.exists():
         for jar in BMDX_DEPS_DIR.glob("*.jar"):

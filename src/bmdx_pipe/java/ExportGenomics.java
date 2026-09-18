@@ -57,6 +57,7 @@ import com.sciome.bmdexpress2.mvp.model.BMDProject;
 import com.sciome.bmdexpress2.mvp.model.DoseResponseExperiment;
 import com.sciome.bmdexpress2.mvp.model.stat.BMDResult;
 import com.sciome.bmdexpress2.mvp.model.stat.ProbeStatResult;
+import com.sciome.bmdexpress2.mvp.model.probe.ProbeResponse;
 import com.sciome.bmdexpress2.mvp.model.stat.StatResult;
 import com.sciome.bmdexpress2.mvp.model.category.CategoryAnalysisResult;
 import com.sciome.bmdexpress2.mvp.model.category.CategoryAnalysisResults;
@@ -136,8 +137,14 @@ public class ExportGenomics {
                 for (ProbeStatResult psr : probes) {
                     ObjectNode gene = mapper.createObjectNode();
 
-                    // Probe ID is like "ACAA1A_7954" (symbol_entrezId)
-                    String probeId = psr.getProbeResponse().getProbe().getId();
+                    // Probe ID is like "ACAA1A_7954" (symbol_entrezId).  Some
+                    // ProbeStatResults carry no ProbeResponse/Probe (data edge
+                    // case seen in some .bm2 files) — skip those rather than NPE.
+                    ProbeResponse pr = psr.getProbeResponse();
+                    if (pr == null || pr.getProbe() == null) {
+                        continue;
+                    }
+                    String probeId = pr.getProbe().getId();
                     gene.put("probe_id", probeId);
 
                     // Extract gene symbol: everything before the last underscore+digits
