@@ -19,9 +19,12 @@
 # ---------------------------------------------------------------------------
 name: CI
 
+# Trigger is MANUAL for now (Actions tab → CI → Run workflow). The private
+# bmdx-pipe checkout needs the BMDX_PIPE_TOKEN secret, which is not yet set;
+# until it is, an automatic run on every push would only ever go red. Restore
+# `push:` / `pull_request:` triggers once the secret exists.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
