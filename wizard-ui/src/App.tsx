@@ -5,6 +5,8 @@ import { invalidate } from "./useServerResource";
 import { Phase, ProcessPayload } from "./api";
 import { Landing } from "./steps/Landing";
 import { Configure } from "./steps/Configure";
+import { KnowledgeGraph } from "./steps/KnowledgeGraph";
+import { Corpus } from "./steps/Corpus";
 import { Upload } from "./steps/Upload";
 import { Validate } from "./steps/Validate";
 import { ConfirmMetadata } from "./steps/ConfirmMetadata";
@@ -20,9 +22,10 @@ import { Query } from "./steps/Query";
 //   /workflow/     → DATA prep: prepare the data pool up through approval.
 //   /workflow/report → DOCUMENT: process, review sections, preview, hand off.
 //   /workflow/configure → CONFIGURE: authors/publication + document structure.
+//   /workflow/knowledge-graph → KNOWLEDGE GRAPH: literature-crawl config editor.
 // The chooser is step 0 conceptually, but it lives on the landing (NOT part of a
 // workflow). The workflows share the selected session via sessionStorage.
-type Mode = "landing" | "data" | "document" | "configure";
+type Mode = "landing" | "data" | "document" | "configure" | "knowledgegraph" | "corpus";
 
 const DATA_STEPS = [
   { key: "upload", label: "Upload" },
@@ -48,6 +51,9 @@ type StepKey =
 
 function currentMode(): Mode {
   const path = window.location.pathname.replace(/\/+$/, "");
+  if (path.endsWith("/workflow/corpus") || path.endsWith("/corpus")) return "corpus";
+  if (path.endsWith("/workflow/knowledge-graph") || path.endsWith("/knowledge-graph"))
+    return "knowledgegraph";
   if (path.endsWith("/workflow/configure") || path.endsWith("/configure")) return "configure";
   if (path.endsWith("/workflow/report") || path.endsWith("/report")) return "document";
   if (path.endsWith("/workflow")) return "data";
@@ -114,6 +120,8 @@ export function App() {
     gotoIngest: () => window.location.assign("/workflow/"),
     gotoLanding: () => window.location.assign("/"),
     gotoConfigure: () => window.location.assign("/workflow/configure"),
+    gotoKnowledgeGraph: () => window.location.assign("/workflow/knowledge-graph"),
+    gotoCorpus: () => window.location.assign("/workflow/corpus"),
     // Deep-link to the document-mode query console: pre-seed the document step
     // index (document mode reads it from sessionStorage on load) so the console
     // opens directly instead of landing on Process.
@@ -150,6 +158,42 @@ export function App() {
           </span>
         </div>
         <Configure {...common} back={() => window.location.assign("/")} />
+      </div>
+    );
+  }
+
+  // Knowledge-graph config editor — standalone, like Configure. Back returns home.
+  if (mode === "knowledgegraph") {
+    return (
+      <div className="wizard">
+        <div className="wizard-header">
+          <h1>5D-Tox Knowledge Graph</h1>
+          <span className="session">
+            <a href="/" style={{ marginRight: 12, color: "var(--accent)" }}>
+              ← home
+            </a>
+            {dtxsid || "no session"}
+          </span>
+        </div>
+        <KnowledgeGraph {...common} back={() => window.location.assign("/")} />
+      </div>
+    );
+  }
+
+  // Corpus curation editor — standalone, like Configure. Back returns home.
+  if (mode === "corpus") {
+    return (
+      <div className="wizard">
+        <div className="wizard-header">
+          <h1>5D-Tox Corpus</h1>
+          <span className="session">
+            <a href="/" style={{ marginRight: 12, color: "var(--accent)" }}>
+              ← home
+            </a>
+            {dtxsid || "no session"}
+          </span>
+        </div>
+        <Corpus {...common} back={() => window.location.assign("/")} />
       </div>
     );
   }

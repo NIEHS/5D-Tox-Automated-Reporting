@@ -95,6 +95,18 @@ export interface FrontMatter {
   };
 }
 
+// Configurator: a saved report VIEW — a render-time lens (structure + data
+// filters + chart allowlist) over the one report. The server normalizes the
+// `filters` block to its canonical nested shape on save; the UI edits the
+// friendlier per-area form and lets the server validate. `charts` is presence-
+// sensitive: absent/null ⇒ render all, [] ⇒ render none.
+export interface ReportView {
+  document?: unknown;
+  filters?: Record<string, unknown>;
+  charts?: string[] | null;
+  methods?: unknown;
+}
+
 export interface SectionData {
   paragraphs?: string[];
   // Materialized apical result sections carry their prose as `narrative` (a
@@ -240,6 +252,56 @@ export interface IntegratedTree {
   experiments: TreeExperiment[];
 }
 
+// --- Knowledge-graph crawl config (the literature-crawl spec editor) ---
+export interface CrawlConfig {
+  max_depth: number;
+  max_papers: number;
+  max_api_calls: number;
+  relevance_threshold: number;
+  saturation_window: number;
+  saturation_threshold: number;
+  max_refs_per_paper: number;
+  max_cites_per_paper: number;
+  rate_limit_delay: number;
+  topic_keywords: string[];
+  organ_keywords: Record<string, string[]>;
+}
+
+// --- Corpus curation (organ vocabulary of the literature knowledge base) ---
+export interface CorpusOrgan {
+  organ: string;
+  genes_count: number;
+  papers_count: number;
+  total: number;
+  sources: string[];
+  mapped_to: string | null; // canonical target; null present in net map ⇒ drop
+}
+export interface CorpusTweak {
+  op: string;
+  from: string;
+  to: string | null;
+  ts: string;
+}
+
+// The server-computed change-list vs the frozen original. Empty ⇒ unchanged.
+export interface CrawlConfigDiff {
+  [scalar: string]:
+    | { original: number; current: number }
+    | { added: string[]; removed: string[] }
+    | {
+        added?: Record<string, string[]>;
+        removed?: Record<string, string[]>;
+        changed?: Record<string, { added: string[]; removed: string[] }>;
+      };
+}
+
+export interface CrawlConfigResponse {
+  config: CrawlConfig;
+  is_default: boolean;
+  original: CrawlConfig;
+  diff: CrawlConfigDiff;
+}
+
 async function jsonOrThrow<T>(resp: Response): Promise<T> {
   const text = await resp.text();
   let data: any = null;
@@ -311,6 +373,58 @@ export const api = {
       throw new Error(body.error || body.detail || "Invalid document structure");
     }
     return jsonOrThrow<{ ok: boolean }>(r);
+  },
+
+  // --- Configurator: report VIEWS (per-session data filters + chart allowlist) ---
+  // A view is a saved lens over the one report; `default` is implicit and always
+  // listed. Filters are a render-time projection (no reprocess).
+  listViews: (dtxsid: string) =>
+    fetch(`/api/views/${encodeURIComponent(dtxsid)}`).then((r) =>
+      jsonOrThrow<{ views: string[]; default: string }>(r)
+    ),
+  getView: (dtxsid: string, name: string) =>
+    fetch(
+      `/api/views/${encodeURIComponent(dtxsid)}/${encodeURIComponent(name)}`
+    ).then((r) => jsonOrThrow<{ view: ReportView }>(r)),
+  saveView: async (dtxsid: string, name: string, view: ReportView) => {
+    const r = await fetch(
+      `/api/views/${encodeURIComponent(dtxsid)}/${encodeURIComponent(name)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ view }),
+      }
+    );
+    if (r.status === 422) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.detail || "Invalid view");
+    }
+    return jsonOrThrow<{ saved: boolean }>(r);
+  },
+  deleteView: (dtxsid: string, name: string) =>
+    fetch(
+      `/api/views/${encodeURIComponent(dtxsid)}/${encodeURIComponent(name)}`,
+      { method: "DELETE" }
+    ).then((r) => jsonOrThrow<{ deleted: boolean }>(r)),
+
+  // --- Configurator: DEFAULT (template) data-filter blocks, as YAML ---
+  // The global counterpart to per-session views; edits the git-tracked template's
+  // organs/sex/assays/genes/gene_sets/charts blocks (comments stripped on save).
+  getReportFiltersDefault: () =>
+    fetch(`/api/report-filters-default`).then((r) =>
+      jsonOrThrow<{ yaml: string }>(r)
+    ),
+  saveReportFiltersDefault: async (yaml: string) => {
+    const r = await fetch(`/api/report-filters-default`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ yaml }),
+    });
+    if (r.status === 422) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.detail || "Invalid filters");
+    }
+    return jsonOrThrow<{ saved: boolean }>(r);
   },
 
   // Generate + persist Materials & Methods. /api/generate-methods extracts study
@@ -546,12 +660,14 @@ export const api = {
   materializePreview: (
     dtxsid: string,
     surface = "docx",
-    version?: string
+    view?: string
   ) =>
     fetch(`/api/preview/${encodeURIComponent(dtxsid)}/materialize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ surface, version }),
+      // The endpoint reads `view` (the render lens); a view's filters/charts are
+      // applied at materialize time. Omitted ⇒ the default view.
+      body: JSON.stringify({ surface, view }),
     }).then((r) => jsonOrThrow<PreviewManifest>(r)),
 
   // URLs (not fetches) — used as iframe src / download href.
@@ -566,4 +682,63 @@ export const api = {
     )}/download?version=${encodeURIComponent(version)}&surface=${encodeURIComponent(
       surface
     )}`,
+
+  // --- Knowledge-graph crawl config (view / tweak / reset the crawl spec) ---
+  getCrawlConfig: (dtxsid: string, loadDefault = false) =>
+    fetch(
+      `/api/crawl-config/${encodeURIComponent(dtxsid)}${loadDefault ? "?default=1" : ""}`
+    ).then((r) => jsonOrThrow<CrawlConfigResponse>(r)),
+  saveCrawlConfig: async (dtxsid: string, config: CrawlConfig) => {
+    const r = await fetch(`/api/crawl-config/${encodeURIComponent(dtxsid)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config }),
+    });
+    // 422 carries the validation message — surface it as the error text.
+    if (r.status === 422) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.detail || "Invalid crawl configuration");
+    }
+    return jsonOrThrow<{ ok: boolean; diff: CrawlConfigDiff }>(r);
+  },
+  resetCrawlConfig: (dtxsid: string) =>
+    fetch(`/api/crawl-config/${encodeURIComponent(dtxsid)}/reset`, {
+      method: "POST",
+    }).then((r) => jsonOrThrow<CrawlConfigResponse & { ok: boolean; reset: boolean }>(r)),
+
+  // --- Corpus curation (organ vocabulary) ---
+  getCorpusOrgans: (dtxsid: string) =>
+    fetch(`/api/corpus/${encodeURIComponent(dtxsid)}/organs`).then((r) =>
+      jsonOrThrow<{ inventory: CorpusOrgan[]; canonical: string[]; is_curated: boolean }>(r)
+    ),
+  getCorpusHistory: (dtxsid: string) =>
+    fetch(`/api/corpus/${encodeURIComponent(dtxsid)}/history`).then((r) =>
+      jsonOrThrow<{ tweaks: CorpusTweak[] }>(r)
+    ),
+  mapCorpusOrgan: async (dtxsid: string, from: string, to: string | null) => {
+    const r = await fetch(`/api/corpus/${encodeURIComponent(dtxsid)}/organs/map`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+    if (r.status === 422) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || body.detail || "Invalid organ mapping");
+    }
+    return jsonOrThrow<{
+      ok: boolean;
+      tweak: CorpusTweak;
+      net_map: Record<string, string | null>;
+    }>(r);
+  },
+  materializeCorpus: (dtxsid: string) =>
+    fetch(`/api/corpus/${encodeURIComponent(dtxsid)}/materialize`, {
+      method: "POST",
+    }).then((r) =>
+      jsonOrThrow<{ ok: boolean; path: string; counts: Record<string, number>; applied_mappings: number }>(r)
+    ),
+  resetCorpus: (dtxsid: string) =>
+    fetch(`/api/corpus/${encodeURIComponent(dtxsid)}/reset`, { method: "POST" }).then(
+      (r) => jsonOrThrow<{ ok: boolean; removed: string[] }>(r)
+    ),
 };

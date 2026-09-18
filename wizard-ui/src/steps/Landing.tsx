@@ -14,6 +14,8 @@ export function Landing({
   gotoIngest,
   gotoReport,
   gotoConfigure,
+  gotoKnowledgeGraph,
+  gotoCorpus,
 }: StepProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -206,15 +208,23 @@ export function Landing({
 
               <button
                 className="pillar"
-                disabled
-                title="Knowledge graph construction — coming soon"
+                onClick={gotoKnowledgeGraph}
+                title="Configure the literature knowledge-graph crawl"
               >
                 <div className="pillar-title">Knowledge graph construction</div>
                 <div className="pillar-sub">
-                  Build and curate the literature knowledge graph.
+                  Configure the literature crawl that builds the knowledge graph.
                 </div>
-                <div className="pillar-status">
-                  <span className="badge">coming soon</span>
+              </button>
+
+              <button
+                className="pillar"
+                onClick={gotoCorpus}
+                title="Curate the literature corpus vocabulary"
+              >
+                <div className="pillar-title">Corpus curation</div>
+                <div className="pillar-sub">
+                  Canonicalize the corpus organ vocabulary, with live history.
                 </div>
               </button>
             </div>

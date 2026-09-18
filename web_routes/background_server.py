@@ -199,6 +199,12 @@ app.include_router(query_routes.router)
 import web_routes.preview_routes as preview_routes
 app.include_router(preview_routes.router)
 
+import web_routes.knowledge_graph_routes as knowledge_graph_routes
+app.include_router(knowledge_graph_routes.router)
+
+import web_routes.corpus_routes as corpus_routes
+app.include_router(corpus_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI
@@ -466,6 +472,16 @@ if _wizard_dir.exists():
     # document structure). Same reason it needs an explicit index route.
     @app.get("/workflow/configure")
     async def _workflow_configure():
+        return _index_response()
+
+    # Knowledge-graph mode — client-side SPA route (literature-crawl config editor).
+    @app.get("/workflow/knowledge-graph")
+    async def _workflow_knowledge_graph():
+        return _index_response()
+
+    # Corpus mode — client-side SPA route (corpus curation editor).
+    @app.get("/workflow/corpus")
+    async def _workflow_corpus():
         return _index_response()
 
     app.mount("/workflow", StaticFiles(directory=_wizard_dir, html=True), name="workflow")
