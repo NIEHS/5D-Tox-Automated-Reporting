@@ -7,10 +7,16 @@ module lets a single report (keyed by DTXSID) carry its OWN ``document:``
 structure — sections, ordering, titles, orientation, freeform content — without
 touching the global default template or re-integrating the study data.
 
-Scope is deliberately STRUCTURE ONLY: the per-session file holds just the
-``document:`` block.  The data-filter / chart blocks (organs, sex, assays,
-genes, charts) stay global, because those feed the integration pipeline and
-editing them would require a reprocess — the opposite of this feature's promise.
+Scope of the PER-SESSION file here is STRUCTURE ONLY: it holds just the
+``document:`` block.  Per-session data-FILTER / chart overrides live in a sibling
+module (``view_config.py``) as saved views, because Phase 2 made the compute
+caches filter-agnostic — so filters are a pure render-time projection (no
+reprocess).  (An earlier version of this note claimed filter edits require a
+reprocess; that predates ``view_config`` and is no longer true for the
+render/preview path.)  What this module DOES own on the filter side is the
+DEFAULT-TEMPLATE editor for those blocks (``load_default_report_filters`` /
+``save_default_report_filters`` below) — the global counterpart to the per-session
+views, mirroring the default document/styles editors.
 
 Storage: ``sessions/<dtxsid>/document.yaml``.  Absent ⇒ the caller falls back to
 the global DOCUMENT_TREE (build_session_tree returns None), so an untouched
@@ -506,6 +512,138 @@ def save_default_layout_style(text: str) -> None:
         raw["styles"] = cfg
     else:
         raw.pop("styles", None)  # empty edit clears the block rather than storing {}
+    path.write_text(
+        yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) data-FILTER editor — edits the template's
+# ``organs``/``sex``/``assays``/``genes``/``gene_sets``/``charts`` sibling blocks,
+# the report-level allowlists EVERY report inherits without a per-session view
+# override (view_config.py).  The global counterpart to per-session views:
+# filters are a render-time projection (Phase 2 filter-agnostic caches), so like
+# the default styles editor there is no tree rebuild and no golden fixture — the
+# loaders re-read the blocks per request.
+# ---------------------------------------------------------------------------
+
+# The six report-level filter/chart blocks this editor owns.  `charts` is a flat
+# list (or null); the other five are per-area/flat allowlists.  Every other
+# top-level template key (document, styles, chart_style, chart_types) is a
+# sibling this editor must PRESERVE untouched.
+_FILTER_BLOCK_KEYS = ("organs", "sex", "assays", "genes", "gene_sets", "charts")
+
+
+def _validate_filter_blocks(blocks: dict) -> None:
+    """
+    Loud shape/area validation for the filter blocks, reusing the exact loader
+    rules (document_template.load_report_*) rather than re-deriving them.
+
+    Validation writes the candidate blocks to a throwaway template file under
+    TEMPLATES_DIR and runs every loader against it — so an unknown area, a bad
+    nesting, or a non-list leaf raises the SAME ValueError the loaders raise at
+    read time, and nothing about the real template is touched.  The temp file is
+    always removed.
+    """
+    from document_model.document_template import (
+        TEMPLATES_DIR,
+        load_report_organs,
+        load_report_sex,
+        load_report_assays,
+        load_report_genes,
+        load_report_gene_sets,
+        load_report_charts,
+    )
+
+    # A document block is required for a valid template file; use a minimal stub
+    # (the filter loaders ignore it, but load_template/_load_raw expect a mapping).
+    candidate = {"document": [], **{k: v for k, v in blocks.items() if v is not None or k == "charts"}}
+    tmp_name = "_configurator_validate_filters_tmp"
+    tmp_path = TEMPLATES_DIR / f"{tmp_name}.yaml"
+    try:
+        tmp_path.write_text(
+            yaml.safe_dump(candidate, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        # Each loader raises ValueError on a malformed block for its key.
+        load_report_organs(tmp_name)
+        load_report_sex(tmp_name)
+        load_report_assays(tmp_name)
+        load_report_genes(tmp_name)
+        load_report_gene_sets(tmp_name)
+        load_report_charts(tmp_name)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _parse_filter_blocks_yaml(text: str) -> dict:
+    """
+    Parse + validate a filters YAML string into a ``{block_key: value}`` mapping
+    holding only the six filter/chart blocks.
+
+    Accepts either the bare blocks at the top level (``organs:``/``sex:``/… ) or a
+    mapping that also carries unrelated siblings (``document:``/``styles:``/…),
+    from which only the filter keys are taken — so a user can paste the whole
+    template or just the filter blocks.  Runs the loader validation before
+    returning; raises ValueError on any bad value.
+    """
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise ValueError(f"invalid YAML: {e}") from e
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"filters config must be a YAML mapping, got {type(data).__name__}"
+        )
+    blocks = {k: data[k] for k in _FILTER_BLOCK_KEYS if k in data}
+    _validate_filter_blocks(blocks)
+    return blocks
+
+
+def load_default_report_filters_yaml() -> str:
+    """
+    The global default filter/chart blocks as YAML text — the default filters
+    editor's initial content.  Only the six filter keys are shown (document /
+    styles / chart_* siblings are omitted), each as it appears in the template;
+    an absent block is simply not present.  ``{}`` (an empty mapping) when the
+    template declares none.
+    """
+    from document_model.document_template import _load_raw
+    raw = _load_raw(ACTIVE_TEMPLATE)
+    blocks = (
+        {k: raw[k] for k in _FILTER_BLOCK_KEYS if k in raw}
+        if isinstance(raw, dict) else {}
+    )
+    return yaml.safe_dump(blocks or {}, sort_keys=False, allow_unicode=True)
+
+
+def save_default_report_filters(text: str) -> None:
+    """
+    Validate + persist an edit to the DEFAULT (template) filter/chart blocks.
+
+    Validate-before-write (same discipline as the structure/styles defaults): the
+    parse runs the loud loader validation and raises ValueError on any bad value
+    BEFORE touching disk.  On success ONLY the six filter blocks are rewritten;
+    every other sibling (document/styles/chart_style/chart_types) is preserved.
+    A filter key ABSENT from the submitted YAML is CLEARED from the template
+    (edit-clears-block, matching the default styles editor); ``charts`` is the one
+    presence-sensitive block, so an explicit ``charts: []`` is kept as-is (renders
+    no charts) while an omitted ``charts`` clears the key (renders all).  No tree
+    rebuild — the loaders re-read the blocks on the next render.
+    """
+    blocks = _parse_filter_blocks_yaml(text)  # validate; raises on failure
+
+    path = _template_path()
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raw = {"document": raw if isinstance(raw, list) else []}
+    for key in _FILTER_BLOCK_KEYS:
+        if key in blocks:
+            raw[key] = blocks[key]
+        else:
+            raw.pop(key, None)  # omitted ⇒ cleared (no filtering for that block)
     path.write_text(
         yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )

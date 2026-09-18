@@ -1115,3 +1115,50 @@ async def api_save_layout_style_default(request: Request):
         logger.exception("Failed to save default layout style")
         return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
     return JSONResponse({"saved": True})
+
+
+# ---------------------------------------------------------------------------
+# Default (global template) data-FILTER blocks — the report-level allowlists
+# (organs/sex/assays/genes/gene_sets/charts) EVERY report inherits without a
+# per-session view override.  The global counterpart to the per-session /api/views
+# routes above; filters are a render-time projection (Phase 2 filter-agnostic
+# caches), so no re-integration.  Saving rewrites only these six sibling blocks
+# and strips YAML comments (safe_dump) — the author reviews the git diff before
+# committing, exactly like the default document/styles editors.
+# ---------------------------------------------------------------------------
+
+@router.get("/api/report-filters-default")
+async def api_get_report_filters_default():
+    """Return the default (template) filter/chart blocks as YAML for the editor."""
+    from document_model.document_config import load_default_report_filters_yaml
+    return JSONResponse({"yaml": load_default_report_filters_yaml()})
+
+
+@router.post("/api/report-filters-default")
+async def api_save_report_filters_default(request: Request):
+    """
+    Validate + persist an edit to the DEFAULT (template) filter/chart blocks.
+
+    Same validate-before-write gate as the per-session view save (422 on an
+    invalid area/shape, writing nothing).  On success only the six filter blocks
+    are rewritten; document/styles/chart_* siblings are preserved.  No tree
+    rebuild — the loaders re-read the blocks live per render.
+    """
+    from document_model.document_config import save_default_report_filters
+
+    body = await request.json()
+    text = body.get("yaml")
+    # An empty string is legitimate here — it means "clear every filter block"
+    # (no filtering anywhere), unlike the structure editor which requires content.
+    if not isinstance(text, str):
+        return JSONResponse(
+            {"error": "Request must include a 'yaml' string."}, status_code=422,
+        )
+    try:
+        save_default_report_filters(text)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except Exception as e:
+        logger.exception("Failed to save default report filters")
+        return JSONResponse({"error": f"Save failed: {e}"}, status_code=500)
+    return JSONResponse({"saved": True})
