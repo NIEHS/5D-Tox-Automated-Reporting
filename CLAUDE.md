@@ -15,7 +15,7 @@ imports are package-qualified (`from rendering.render_common import ...`,
 | `document_model/` | `document_tree`/`document_node`/`document_template`/`document_config`, `render_capabilities`, `vocabulary`, `cover_layouts`, `layout_style` |
 | `rendering/` | shared IR `render_common` + the 4 emitters (`html_generator`, `latex_generator`, `docx_generator`, `jats_generator`) + `report_data*`, `latex_export`, `cross_references`, `jats_stylecheck` |
 | `tables/` | `table_builder_common`, `*_table`, `apical_bmds`, `sample_counts_table` |
-| `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, `style_learning`, LLM generators `apical_bmd_llm` + `genomics_llm` |
+| `narrative/` | `interpret*`, `methods_*`, `abstract_*`, `background_writer`, `data_gatherer`, `unified_narrative`, `style_learning`, LLM generators `apical_bmd_llm` + `genomics_llm`, `citation_check`, session chat `chat_tools` + `chat_agent` (ADR-0022) |
 | `genomics/` | `genomics_*`, `gene_bodies`, `chart_registry`, `chart_style` |
 | `knowledge_base/` | `build_db`, `toxkb`, `citegraph`, `crawl_*`, `fulltext`, `extract`, `enrichr_*`, `enrichment_stats`, `pathway_enrich`, `go_gene_map` |
 | `styling_export/` | `docx_style_extract`, `freeform_content`, `export_sessions`, `*_provision`, `llm_endpoints`, `llm_helpers` |

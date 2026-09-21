@@ -16,6 +16,7 @@ import { Results } from "./steps/Results";
 import { Sections } from "./steps/Sections";
 import { Preview } from "./steps/Preview";
 import { Query } from "./steps/Query";
+import { Chat } from "./steps/Chat";
 
 // The app has three top-level surfaces, chosen by URL path:
 //   /              → LANDING: pick a test article, then a workstream (dispatch).
@@ -40,6 +41,7 @@ const DOCUMENT_STEPS = [
   { key: "sections", label: "Sections" },
   { key: "preview", label: "Preview" },
   { key: "query", label: "Query" },
+  { key: "chat", label: "Chat" },
 ] as const;
 
 // Index of the query console within DOCUMENT_STEPS — the "database view" target.
@@ -219,6 +221,8 @@ export function App() {
         return <Preview {...common} />;
       case "query":
         return <Query {...common} />;
+      case "chat":
+        return <Chat {...common} />;
       default:
         return null;
     }

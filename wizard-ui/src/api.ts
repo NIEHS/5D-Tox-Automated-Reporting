@@ -107,6 +107,32 @@ export interface ReportView {
   methods?: unknown;
 }
 
+// --- Session interpretation chat (ADR-0022) ---
+export interface ChatReference { token: string; title: string; year?: number | null; venue?: string; doi?: string }
+export interface ChatUnresolved { where: string; token: string; issue: string; sentence: string }
+export interface ChatToolCall { tool: string; input?: unknown; output_chars?: number }
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  at?: string;
+  references?: ChatReference[];
+  unresolved_citations?: ChatUnresolved[];
+  tool_trace?: ChatToolCall[];
+  model_used?: string;
+}
+export interface ChatThreadSummary { id: string; title: string; created_at: string; updated_at: string; message_count: number }
+export interface ChatThread extends ChatThreadSummary { messages: ChatMessage[]; sources: unknown[] }
+export interface ChatTurnResult {
+  answer: string;
+  references: ChatReference[];
+  unresolved_citations: ChatUnresolved[];
+  tool_trace: ChatToolCall[];
+  model_used: string;
+  rounds: number;
+  thread_id: string;
+}
+export interface ChatEvent { event: string; data: Record<string, any> }
+
 export interface SectionData {
   paragraphs?: string[];
   // Materialized apical result sections carry their prose as `narrative` (a
@@ -350,6 +376,82 @@ export const api = {
         genomics: { kind: string; organ: string; sex?: string; issue: string; tokens: string[]; sentences?: string[] }[];
       }>(r)
     ),
+
+  // --- Session interpretation chat (ADR-0022) ---
+  listChatThreads: (dtxsid: string) =>
+    fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads`).then((r) =>
+      jsonOrThrow<{ threads: ChatThreadSummary[] }>(r)
+    ),
+  createChatThread: (dtxsid: string, title = "") =>
+    fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }).then((r) => jsonOrThrow<ChatThread>(r)),
+  getChatThread: (dtxsid: string, threadId: string) =>
+    fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads/${encodeURIComponent(threadId)}`).then((r) =>
+      jsonOrThrow<ChatThread>(r)
+    ),
+  deleteChatThread: (dtxsid: string, threadId: string) =>
+    fetch(`/api/chat/${encodeURIComponent(dtxsid)}/threads/${encodeURIComponent(threadId)}`, {
+      method: "DELETE",
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
+  // Ask one question; progress events (thinking / tool_call / tool_result) are
+  // delivered to onEvent as they stream, and the promise resolves with the
+  // `complete` payload (the persisted answer + its grounding) or rejects on `error`.
+  sendChatMessage: async (
+    dtxsid: string,
+    threadId: string,
+    message: string,
+    onEvent?: (ev: ChatEvent) => void
+  ): Promise<ChatTurnResult> => {
+    const resp = await fetch(
+      `/api/chat/${encodeURIComponent(dtxsid)}/threads/${encodeURIComponent(threadId)}/messages`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) }
+    );
+    if (!resp.ok || !resp.body) {
+      let detail = `chat request failed (${resp.status})`;
+      try {
+        const j = await resp.json();
+        detail = j.error ?? j.detail ?? detail;
+      } catch {
+        /* keep default */
+      }
+      throw new Error(detail);
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let result: ChatTurnResult | null = null;
+    let errored: string | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        let ev = "message";
+        let data = "";
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        let parsed: Record<string, any> = {};
+        try {
+          parsed = data ? JSON.parse(data) : {};
+        } catch {
+          parsed = {};
+        }
+        if (ev === "complete") result = parsed as ChatTurnResult;
+        else if (ev === "error") errored = parsed.error ?? data;
+        else onEvent?.({ event: ev, data: parsed });
+      }
+    }
+    if (errored) throw new Error(errored);
+    if (!result) throw new Error("chat produced no answer");
+    return result;
+  },
 
   getIdentity: (dtxsid: string) =>
     fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/identity`).then((r) =>

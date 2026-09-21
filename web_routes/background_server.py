@@ -202,6 +202,11 @@ app.include_router(export_routes.router)
 import web_routes.genomics_routes as genomics_routes
 app.include_router(genomics_routes.router)
 
+# Session interpretation chat (ADR-0022): tool-using, knowledge-graph-grounded
+# Q&A over one session's data and generated report; exploratory only.
+import web_routes.chat_routes as chat_routes
+app.include_router(chat_routes.router)
+
 # Wizard UI convenience routes: /api/wizard/{dtxsid}/files, /fingerprints
 import web_routes.wizard_routes as wizard_routes
 app.include_router(wizard_routes.router)
