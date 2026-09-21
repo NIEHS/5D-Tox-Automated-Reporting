@@ -141,6 +141,8 @@ export interface SectionData {
   // Materials & Methods stores its prose per subsection (methods.json: sections[]
   // each with its own paragraphs) rather than as one top-level list.
   sections?: { key?: string; heading?: string; paragraphs?: string[] }[];
+  // Apical BMD Summary: a derived endpoint table, not prose.
+  endpoints?: unknown[];
   approved?: boolean;
   version?: number;
   stale?: boolean;
@@ -548,6 +550,28 @@ export const api = {
   // metadata (fingerprints/.bm2/animal report) + calls the LLM, returns the
   // structured methods; we save it as the `methods` section. Returns the result,
   // or null if generation produced nothing.
+  // Generate the Summary section (LLM synthesis of the APPROVED sections). Does
+  // NOT persist — the caller saves via saveSection so the row can be approved.
+  generateSummary: async (
+    dtxsid: string,
+    identity: Record<string, unknown>
+  ): Promise<{ paragraphs: string[]; model_used?: string }> => {
+    const resp = await fetch(`/api/generate-summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtxsid, identity }),
+    });
+    return jsonOrThrow<{ paragraphs: string[]; model_used?: string }>(resp);
+  },
+
+  // The Apical Endpoint BMD Summary, DERIVED on demand from the session's
+  // bm2_* result sections (deterministic). Approving it persists the table as
+  // bmd_summary.json via saveSection/approveSection.
+  getBmdSummary: (dtxsid: string) =>
+    fetch(`/api/session/${encodeURIComponent(dtxsid)}/bmd-summary`).then((r) =>
+      jsonOrThrow<{ endpoints: unknown[]; sorted_by?: string }>(r)
+    ),
+
   generateMethods: async (
     dtxsid: string,
     identity: Record<string, unknown>

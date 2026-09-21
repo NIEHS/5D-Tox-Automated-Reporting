@@ -34,6 +34,7 @@ function paragraphCount(content: SectionData | null): number {
   if (content.sections?.length) {
     return content.sections.reduce((n, s) => n + (s.paragraphs?.length ?? 0), 0);
   }
+  if (content.endpoints?.length) return content.endpoints.length;
   return 0;
 }
 
@@ -56,6 +57,7 @@ function SectionRow({
   onApprove,
   onRevise,
   acting,
+  unit = "paragraph",
 }: {
   label: string;
   note?: string;
@@ -71,6 +73,9 @@ function SectionRow({
   onApprove?: () => void;
   onRevise?: () => void;
   acting?: boolean;
+  // Noun for the content count ("paragraph" by default; "endpoint" for the
+  // derived BMD summary table).
+  unit?: string;
 }) {
   const paras = paragraphCount(content);
   const hasContent = paras > 0 || !!content;
@@ -91,7 +96,7 @@ function SectionRow({
         {busy && <Spinner />}
         <span className={`badge ${state.cls}`}>{state.text}</span>
         {enabled && hasContent && (
-          <span className="muted">{paras} paragraph{paras === 1 ? "" : "s"}</span>
+          <span className="muted">{paras} {unit}{paras === 1 ? "" : "s"}</span>
         )}
         {!enabled && blockedBy.length > 0 && (
           <span className="muted">needs {blockedBy.join(" or ")}</span>
@@ -180,6 +185,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     if (!dtxsid || loading) return;
     void maybeGenerate("background");
     void maybeGenerate("methods");
+    void maybeGenerate("summary"); // no-op until readiness unlocks it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dtxsid, loading, readiness, session]);
 
@@ -210,6 +216,15 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
         const { identity } = await api.getIdentity(dtxsid);
         const res = await api.generateMethods(dtxsid, identity);
         if (res) await afterMutation();
+      } else if (key === "summary") {
+        // Synthesizes the APPROVED sections; readiness gates this on an approved
+        // Background or result, so it never runs on an empty session.
+        const { identity } = await api.getIdentity(dtxsid);
+        const res = await api.generateSummary(dtxsid, identity);
+        if (res.paragraphs?.length) {
+          await api.saveSection(dtxsid, "summary", { paragraphs: res.paragraphs, model_used: res.model_used ?? "" });
+          await afterMutation();
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -230,10 +245,34 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
 
   const [actingKey, setActingKey] = useState<string | null>(null);
 
+  // Apical BMD Summary is DERIVED from the bm2_* results until it is approved
+  // (which persists it as bmd_summary.json). Fetch the derivation so the row
+  // shows its endpoint count and can be approved; once persisted, the session
+  // payload wins.
+  const [bmdDerived, setBmdDerived] = useState<SectionData | null>(null);
+  useEffect(() => {
+    if (!dtxsid || !readiness["bmd_summary"] || session?.bmd_summary) {
+      setBmdDerived(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getBmdSummary(dtxsid)
+      .then((d) => {
+        if (!cancelled) setBmdDerived(d.endpoints?.length ? { endpoints: d.endpoints, ...(d.sorted_by ? { sorted_by: d.sorted_by } : {}) } as SectionData : null);
+      })
+      .catch(() => {
+        if (!cancelled) setBmdDerived(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dtxsid, readiness, session]);
+
   async function approve(key: string) {
     if (!dtxsid) return;
     const target = approvalTarget(key);
-    const content = sectionContent(session, key);
+    const content = key === "bmd_summary" ? sectionContent(session, key) ?? bmdDerived : sectionContent(session, key);
     if (!target || !content) return;
     setActingKey(key);
     setError(null);
@@ -337,7 +376,8 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
           enabled
           approved={readiness["bmd_summary"]?.approved ?? false}
           blockedBy={[]}
-          content={sectionContent(session, "bmd_summary")}
+          content={sectionContent(session, "bmd_summary") ?? bmdDerived}
+          unit="endpoint"
           onApprove={() => void approve("bmd_summary")}
           onRevise={() => void revise("bmd_summary")}
           acting={actingKey === "bmd_summary"}
