@@ -53,6 +53,9 @@ function SectionRow({
   blockedBy,
   content,
   busy,
+  onApprove,
+  onRevise,
+  acting,
 }: {
   label: string;
   note?: string;
@@ -61,6 +64,13 @@ function SectionRow({
   blockedBy: string[];
   content: SectionData | null;
   busy?: boolean;
+  // Provisional-approval controls (ADR-0018 / ADR-0015): "Approve" blesses the
+  // generated state as known-good (unlocking sections gated on it, e.g. Summary);
+  // "Revise" releases it again. Omitted for rows that are not approvable
+  // (deterministic genomics results have no authored content to bless).
+  onApprove?: () => void;
+  onRevise?: () => void;
+  acting?: boolean;
 }) {
   const paras = paragraphCount(content);
   const hasContent = paras > 0 || !!content;
@@ -85,6 +95,16 @@ function SectionRow({
         )}
         {!enabled && blockedBy.length > 0 && (
           <span className="muted">needs {blockedBy.join(" or ")}</span>
+        )}
+        {enabled && !approved && hasContent && onApprove && (
+          <button className="small" onClick={onApprove} disabled={acting || busy} title="Provisionally approve this generated section">
+            {acting ? "…" : "Approve"}
+          </button>
+        )}
+        {approved && onRevise && (
+          <button className="small" onClick={onRevise} disabled={acting} title="Release the approval so the section can be regenerated">
+            {acting ? "…" : "Revise"}
+          </button>
         )}
       </div>
     </div>
@@ -199,6 +219,52 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     }
   }
 
+  // Map a readiness key to the approve/unapprove API's (section_type, extra).
+  // Singletons map to themselves; apical results are `bm2_<slug>`; genomics
+  // instances are deterministic and not offered for approval here.
+  function approvalTarget(key: string): { sectionType: string; extra: { bm2_slug?: string } } | null {
+    if (key.startsWith("bm2_")) return { sectionType: "bm2", extra: { bm2_slug: key.slice("bm2_".length) } };
+    if (["background", "methods", "bmd_summary", "summary"].includes(key)) return { sectionType: key, extra: {} };
+    return null;
+  }
+
+  const [actingKey, setActingKey] = useState<string | null>(null);
+
+  async function approve(key: string) {
+    if (!dtxsid) return;
+    const target = approvalTarget(key);
+    const content = sectionContent(session, key);
+    if (!target || !content) return;
+    setActingKey(key);
+    setError(null);
+    try {
+      // The approve route re-saves the section's CURRENT content with the
+      // blessed marker; we send exactly what the session holds today.
+      await api.approveSection(dtxsid, target.sectionType, content as Record<string, unknown>, target.extra);
+      await afterMutation();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActingKey(null);
+    }
+  }
+
+  async function revise(key: string) {
+    if (!dtxsid) return;
+    const target = approvalTarget(key);
+    if (!target) return;
+    setActingKey(key);
+    setError(null);
+    try {
+      await api.unapproveSection(dtxsid, target.sectionType, "", target.extra);
+      await afterMutation();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActingKey(null);
+    }
+  }
+
   async function materializeResults() {
     if (!dtxsid) return;
     setBusyKey("results");
@@ -257,6 +323,9 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
             approved={r?.approved ?? false}
             blockedBy={r?.blocked_by ?? []}
             content={sectionContent(session, fm.key)}
+            onApprove={() => void approve(fm.key)}
+            onRevise={() => void revise(fm.key)}
+            acting={actingKey === fm.key}
             busy={busyKey === fm.key}
           />
         );
@@ -266,9 +335,12 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
           label="Apical BMD Summary"
           note="Auto-derived from results (deterministic)."
           enabled
-          approved={false}
+          approved={readiness["bmd_summary"]?.approved ?? false}
           blockedBy={[]}
           content={sectionContent(session, "bmd_summary")}
+          onApprove={() => void approve("bmd_summary")}
+          onRevise={() => void revise("bmd_summary")}
+          acting={actingKey === "bmd_summary"}
         />
       )}
 
@@ -295,6 +367,9 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
               approved={r?.approved ?? false}
               blockedBy={r?.blocked_by ?? []}
               content={sectionContent(session, key)}
+              onApprove={() => void approve(key)}
+              onRevise={() => void revise(key)}
+              acting={actingKey === key}
             />
           );
         })

@@ -66,7 +66,7 @@ export function Preview({ dtxsid, back }: StepProps) {
         HTML view; the deliverable downloads as {surface.toUpperCase()}.
       </p>
 
-      <div className="field-row">
+      <div className="field-row preview-toolbar">
         <label>
           Deliverable surface
           <select value={surface} onChange={(e) => setSurface(e.target.value)}>
@@ -88,6 +88,9 @@ export function Preview({ dtxsid, back }: StepProps) {
             : { onClick: (e) => e.preventDefault() })}
         >
           ⭳ Download {surface}
+        </a>
+        <a className="download-link" href={viewUrl} target="_blank" rel="noreferrer" title="Open the paginated HTML view in its own tab">
+          ↗ Open in new tab
         </a>
       </div>
 
