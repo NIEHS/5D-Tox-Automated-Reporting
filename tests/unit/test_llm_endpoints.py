@@ -120,6 +120,10 @@ def test_async_builder_attaches_http_client_with_bundle(monkeypatch, fake_anthro
 def test_generate_routes_through_builder(monkeypatch):
     """AnthropicEndpoint.generate must use build_anthropic_client (the seam that
     carries the CA fix), not construct a bare client."""
+    # This test asserts the PROXY naming (dotted version), so point the SDK at
+    # a proxy base URL — off-proxy the canonical hyphenated id is kept as-is.
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://litellm.example.test")
+    monkeypatch.delenv("ANTHROPIC_MODEL_MAP", raising=False)
     captured = {}
 
     class _FakeMessages:
@@ -181,3 +185,28 @@ def test_generate_does_not_swallow_unrelated_errors(monkeypatch):
     ep = le.AnthropicEndpoint(name="t", model="claude-sonnet-4-6", max_tokens=16)
     with pytest.raises(RuntimeError, match="invalid model name"):
         ep.generate("hi")
+
+
+# ---------------------------------------------------------------------------
+# Model-name remap is endpoint-aware (2026-09-21)
+# ---------------------------------------------------------------------------
+
+def test_remap_applies_only_when_a_proxy_base_url_is_configured(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_MODEL_MAP", raising=False)
+    # Direct Anthropic API: the hyphenated canonical id is the ONLY valid form.
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    assert le.resolve_model_name("claude-sonnet-4-6") == "claude-sonnet-4-6"
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "")          # empty == unset
+    assert le.resolve_model_name("claude-sonnet-4-6") == "claude-sonnet-4-6"
+    # Behind the LiteLLM proxy: dotted version notation.
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://litellm.example.test")
+    assert le.resolve_model_name("claude-sonnet-4-6") == "claude-sonnet-4.6"
+    assert le.resolve_model_name("claude-haiku-4-5-20251001") == "claude-haiku-4-5-20251001"  # not the 3-part shape
+
+
+def test_explicit_model_map_wins_in_either_mode(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_MODEL_MAP", "claude-sonnet-4-6=my-alias")
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    assert le.resolve_model_name("claude-sonnet-4-6") == "my-alias"
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://litellm.example.test")
+    assert le.resolve_model_name("claude-sonnet-4-6") == "my-alias"

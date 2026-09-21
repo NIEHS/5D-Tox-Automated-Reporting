@@ -93,17 +93,30 @@ def build_async_anthropic_client():
     return anthropic.AsyncAnthropic(api_key=resolve_anthropic_api_key())
 
 
-def resolve_model_name(model: str) -> str:
-    """Map a canonical model id to the proxy's expected name.
+def using_proxy() -> bool:
+    """True when the SDK is pointed at a gateway (ANTHROPIC_BASE_URL set and
+    non-empty) rather than api.anthropic.com. The NIEHS LiteLLM proxy is the
+    only such gateway we know; its model-name convention differs from
+    Anthropic's, which is what `resolve_model_name` compensates for."""
+    return bool((os.environ.get("ANTHROPIC_BASE_URL") or "").strip())
 
-    The LiteLLM proxy uses dot version notation (``claude-sonnet-4.6``) while
-    the app passes hyphenated canonical ids (``claude-sonnet-4-6``); sending the
-    hyphenated form gets a 400 "Invalid model name" from the proxy.  An explicit
-    ANTHROPIC_MODEL_MAP env (``src=dst,src2=dst2``) overrides the auto-remap.
+
+def resolve_model_name(model: str) -> str:
+    """Map a canonical model id to the name the configured endpoint expects.
+
+    The NIEHS LiteLLM proxy uses dot version notation (``claude-sonnet-4.6``)
+    while the app passes hyphenated canonical ids (``claude-sonnet-4-6``);
+    sending the hyphenated form gets a 400 "Invalid model name" from the proxy.
+    Anthropic's own API is the opposite: it accepts ONLY the hyphenated id and
+    answers the dotted one with 404 "model: claude-sonnet-4.6 was not found"
+    (seen 2026-09-21 running off-network against api.anthropic.com). So the
+    automatic remap applies only when a proxy base URL is configured
+    (`using_proxy`). An explicit ANTHROPIC_MODEL_MAP env (``src=dst,src2=dst2``)
+    is honoured in either mode — it is a deliberate operator override.
 
     This is the single chokepoint for the remap — every Anthropic call site must
     route its model through here (directly or via AnthropicEndpoint) so the
-    proxy never sees an un-remapped id.
+    endpoint never sees an id in the wrong convention.
     """
     import re
     map_str = os.environ.get("ANTHROPIC_MODEL_MAP", "")
@@ -113,7 +126,9 @@ def resolve_model_name(model: str) -> str:
                 src, dst = entry.strip().split("=", 1)
                 if model == src.strip():
                     return dst.strip()
-    # Auto-remap: claude-{tier}-{major}-{minor} → claude-{tier}-{major}.{minor}
+    if not using_proxy():
+        return model
+    # Proxy auto-remap: claude-{tier}-{major}-{minor} → claude-{tier}-{major}.{minor}
     m = re.match(r"^(claude-\w+)-(\d+)-(\d+)$", model)
     if m:
         return f"{m.group(1)}-{m.group(2)}.{m.group(3)}"
