@@ -40,6 +40,7 @@ from narrative.data_gatherer import BackgroundData, gather_all
 # ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL from env).  Every model — Claude,
 # Gemini, Llama, ollama-* — is served through it, so there is one code path.
 from narrative.interpret import AnthropicEndpoint
+from narrative.citation_check import sentence_containing, summarize_issues
 
 # Module logger. The abstract-distillation fallback below logged through a
 # `logger` name that was never defined (NameError on the failure path);
@@ -134,7 +135,9 @@ def build_prompt(data: BackgroundData,
     raw_sections = _format_raw_text_sections(data)
 
     # Build the mechanism papers section
-    papers_section = _format_mechanism_papers(data)
+    # Papers continue the inventory numbering so EVERY citable source has one
+    # [N] number the model must use (and that we can verify afterwards).
+    papers_section = _format_mechanism_papers(data, start=len(data.references) + 1)
 
     prompt = f"""You are a senior toxicologist writing a background/introduction section for a
 "5 Day Genomic Dose Response in Sprague-Dawley Rats" study report. Write formal
@@ -246,8 +249,11 @@ PARAGRAPH 7 — Study Purpose
 
 {_format_style_rules(style_rules)}=== FORMAT REQUIREMENTS ===
 
-- Use inline numbered references: [1], [2], [3], etc.
-- After the 7 paragraphs, include a "References" section listing all citations
+- Use inline numbered references: [1], [2], [3], etc. The numbers MUST be the
+  [N] numbers of the REFERENCE SOURCES / PEER-REVIEWED PAPERS listed above.
+  Never renumber them, and never cite a source that is not listed above.
+- After the 7 paragraphs, include a "References" section listing every source
+  you cited, one per line, each starting with its [N] number from the lists above
 - Each reference should include: [N] Author/Organization. "Title." Source/URL. Year.
 - Write in third person, past tense for completed studies, present tense for
   established facts
@@ -432,19 +438,24 @@ def _format_raw_text_sections(data: BackgroundData) -> str:
     return "\n".join(parts) if parts else ""
 
 
-def _format_mechanism_papers(data: BackgroundData) -> str:
-    """Format Semantic Scholar papers into a citable list."""
+def _format_mechanism_papers(data: BackgroundData, start: int = 1) -> str:
+    """Format Semantic Scholar papers into a citable, NUMBERED list.
+
+    `start` is the first [N] number to use — the caller passes
+    len(data.references) + 1 so the papers continue the inventory numbering
+    rather than forming a second, unnumbered list the model would cite by
+    author-year (which cannot be verified back to a source)."""
     if not data.mechanism_papers:
         return ""
 
     lines = ["=== PEER-REVIEWED PAPERS ON MECHANISM/TOXICITY ==="]
-    lines.append("(Cite relevant papers using author-year format in the References)")
-    for p in data.mechanism_papers:
+    lines.append("(Cite these by their [N] number exactly like the sources above)")
+    for n, p in enumerate(data.mechanism_papers, start):
         authors = ", ".join(p.get("authors", []))
         year = p.get("year", "")
         title = p.get("title", "")
         venue = p.get("venue", "")
-        lines.append(f"  - {authors} ({year}). {title}. {venue}.")
+        lines.append(f"  [{n}] {authors} ({year}). {title}. {venue}.")
 
     return "\n".join(lines)
 
@@ -539,8 +550,20 @@ def generate_background(data: BackgroundData,
     if not response:
         raise RuntimeError(f"LLM ({model_used}) returned empty response")
 
-    # Parse the response into paragraphs and references.
-    paragraphs, references = _parse_response(response)
+    # Parse the response into paragraphs and the model's own reference lines,
+    # then RECONCILE against the inventory we gave it: the reference list the
+    # report carries is rebuilt from our source data (never the model's text),
+    # and every inline [N] or reference line that does not map to a source is
+    # recorded in `citation_report` for the author to see.
+    paragraphs, llm_reference_lines = _parse_response(response)
+    references, citation_report = verify_background_citations(
+        paragraphs, llm_reference_lines, build_citation_inventory(data),
+    )
+    if citation_report["issues"]:
+        logger.warning(
+            "Background citations: %s",
+            summarize_issues(citation_report["issues"]),
+        )
 
     # Second pass: distill the body into a 2-sentence Abstract Background.
     # This is a separate focused LLM call rather than a tail block in the
@@ -559,6 +582,9 @@ def generate_background(data: BackgroundData,
         "text": response,
         "paragraphs": paragraphs,
         "references": references,
+        # Verification record: which inventory sources were cited and every
+        # citation that could not be resolved (see verify_background_citations).
+        "citation_report": citation_report,
         "abstract_background": abstract_background,
         "model_used": model_used,
         "prompt_tokens_approx": prompt_tokens_approx,
@@ -592,6 +618,183 @@ def _parse_response(text: str) -> tuple[list[str], list[str]]:
                 references.append(line)
 
     return paragraphs, references
+
+
+# ---------------------------------------------------------------------------
+# Citation verification (2026-09-21)
+# ---------------------------------------------------------------------------
+# The prompt hands the model a numbered inventory (regulatory sources first,
+# then peer-reviewed papers, one [N] each). Everything the model cites must map
+# back to that inventory. These helpers rebuild the report's reference list
+# FROM THE INVENTORY for the numbers actually cited — the model's own reference
+# lines are only used to detect renumbering/mismatch — and record anything
+# that does not resolve so the author can decide.
+
+# An inline citation bracket: "[3]", "[1, 4]", "[2-5]" / "[2–5]".
+_INLINE_CITE_RE = re.compile(r"\[(\d+(?:\s*[,\-–]\s*\d+)*)\]")
+# A single number inside a bracket (ranges are expanded separately).
+_INLINE_NUM_RE = re.compile(r"\d+")
+# A model-written reference line: optional "[", the number, optional "]"/"."/")".
+_REF_LINE_RE = re.compile(r"^\[?(\d+)\]?[.):]?\s*(.*)$")
+_WORD_RE = re.compile(r"[A-Za-z0-9]{4,}")
+
+
+def build_citation_inventory(data: BackgroundData) -> list[dict]:
+    """The numbered source list the prompt shows, as dicts with an `n` key —
+    regulatory `data.references` first (as _format_reference_inventory numbers
+    them), then `data.mechanism_papers` continuing the sequence (as
+    _format_mechanism_papers numbers them). The two formatters and this
+    function MUST agree on numbering; that is the whole basis of verification."""
+    inventory: list[dict] = []
+    for i, ref in enumerate(data.references, 1):
+        inventory.append({
+            "n": i,
+            "kind": "source",
+            "title": ref.get("title", "") or "",
+            "url": ref.get("url", "") or "",
+            "source_type": ref.get("source_type", "") or "",
+        })
+    for j, p in enumerate(data.mechanism_papers, len(data.references) + 1):
+        inventory.append({
+            "n": j,
+            "kind": "paper",
+            "title": p.get("title", "") or "",
+            "authors": ", ".join(p.get("authors", []) or []),
+            "year": p.get("year", "") or "",
+            "venue": p.get("venue", "") or "",
+            "url": p.get("url", "") or "",
+        })
+    return inventory
+
+
+def format_inventory_entry(entry: dict) -> str:
+    """Canonical reference text for an inventory entry — built from OUR data so
+    the References section never carries model-invented bibliographic detail."""
+    n = entry["n"]
+    if entry.get("kind") == "paper":
+        head = f"{entry.get('authors') or 'Unknown authors'} ({entry.get('year') or 'n.d.'})"
+        tail = f" {entry.get('venue')}." if entry.get("venue") else ""
+        return f"[{n}] {head}. {entry.get('title')}.{tail}".strip()
+    src = entry.get("source_type", "").replace("_", " ")
+    src_txt = f" ({src})" if src else ""
+    url = f" {entry['url']}" if entry.get("url") else ""
+    return f"[{n}] {entry.get('title')}{src_txt}.{url}".strip()
+
+
+def _expand_bracket(bracket: str) -> list[int]:
+    """"1, 4" -> [1, 4]; "2-5" -> [2, 3, 4, 5]; mixed forms handled left to right."""
+    out: list[int] = []
+    for part in re.split(r"\s*,\s*", bracket.strip()):
+        m = re.fullmatch(r"(\d+)\s*[\-–]\s*(\d+)", part)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            if a <= b and b - a <= 50:
+                out.extend(range(a, b + 1))
+            else:
+                out.extend([a, b])
+        else:
+            out.extend(int(x) for x in _INLINE_NUM_RE.findall(part))
+    return out
+
+
+def _line_matches_entry(line_text: str, entry: dict) -> bool:
+    """Does the model's reference line plausibly describe inventory entry `n`?
+    True when the line carries the source's URL, or shares at least half of the
+    distinctive words of its title. Used only to detect renumbering: a model
+    that lists "[2] ATSDR profile" when our [2] is the IRIS assessment has
+    silently shifted every citation."""
+    text = line_text.lower()
+    url = (entry.get("url") or "").lower()
+    if url:
+        # Compare on host+path so "https://" vs "http://" or a trailing slash
+        # never counts as a mismatch.
+        core = re.sub(r"^https?://", "", url).rstrip("/")
+        if core and core in text:
+            return True
+    title_words = {w.lower() for w in _WORD_RE.findall(entry.get("title") or "")}
+    if not title_words:
+        return True  # nothing to compare against — don't flag
+    line_words = {w.lower() for w in _WORD_RE.findall(line_text)}
+    return len(title_words & line_words) / len(title_words) >= 0.5
+
+
+def verify_background_citations(
+    paragraphs: list[str],
+    llm_reference_lines: list[str],
+    inventory: list[dict],
+) -> tuple[list[str], dict]:
+    """Reconcile the model's citations against the inventory it was given.
+
+    Returns ``(references, report)``:
+      * ``references`` — canonical reference strings (see format_inventory_entry)
+        for every inventory number cited inline OR listed by the model, in
+        numeric order. Numbers keep their inventory values so the inline [N]
+        markers in the prose still point at the right entry.
+      * ``report`` — ``{"inventory_size", "cited": [n, ...], "issues": [...],
+        "unresolved_count"}`` where each issue is a citation_check issue dict:
+          - "unresolved_citation": an inline [N] outside the inventory;
+          - "unresolved_reference_line": a model reference line with no number
+            or a number outside the inventory (an invented source);
+          - "reference_line_mismatch": the model's line for [N] does not
+            describe our [N] (renumbering — the prose citations are suspect).
+    The prose itself is NOT modified; the author sees the issues and decides.
+    """
+    by_n = {e["n"]: e for e in inventory}
+    valid = {str(n) for n in by_n}
+    issues: list[dict] = []
+
+    # Inline citations: expand every bracket, flag numbers outside the inventory.
+    cited: list[int] = []
+    for para in paragraphs:
+        if not isinstance(para, str):
+            continue
+        for m in _INLINE_CITE_RE.finditer(para):
+            for n in _expand_bracket(m.group(1)):
+                if str(n) in valid:
+                    if n not in cited:
+                        cited.append(n)
+                else:
+                    issues.append({
+                        "where": "background",
+                        "token": f"[{n}]",
+                        "issue": "unresolved_citation",
+                        "sentence": sentence_containing(para, m.group(0)),
+                    })
+
+    # The model's own reference lines: only a cross-check, never the source of
+    # the list. In-range numbers are matched against the inventory entry; a
+    # missing/out-of-range number is an invented source.
+    listed: list[int] = []
+    for line in llm_reference_lines:
+        m = _REF_LINE_RE.match(line.strip())
+        n = int(m.group(1)) if m else None
+        if n is None or n not in by_n:
+            issues.append({
+                "where": "background",
+                "token": f"[{n}]" if n is not None else "[?]",
+                "issue": "unresolved_reference_line",
+                "sentence": line.strip(),
+            })
+            continue
+        if n not in listed:
+            listed.append(n)
+        if not _line_matches_entry(m.group(2), by_n[n]):
+            issues.append({
+                "where": "background",
+                "token": f"[{n}]",
+                "issue": "reference_line_mismatch",
+                "sentence": line.strip(),
+            })
+
+    use = sorted(set(cited) | set(listed))
+    references = [format_inventory_entry(by_n[n]) for n in use]
+    report = {
+        "inventory_size": len(inventory),
+        "cited": cited,
+        "issues": issues,
+        "unresolved_count": len(issues),
+    }
+    return references, report
 
 
 def distill_abstract_background(

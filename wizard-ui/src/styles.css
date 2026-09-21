@@ -319,6 +319,16 @@ select, input[type="text"] {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.warning-box {
+  background: rgba(251,191,36,0.12);
+  border: 1px solid #d97706;
+  color: #b45309;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.8rem;
+  white-space: pre-line;
+}
+
 .error-box {
   background: rgba(248,113,113,0.12);
   border: 1px solid var(--err);

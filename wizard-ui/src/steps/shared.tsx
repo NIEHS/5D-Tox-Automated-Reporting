@@ -58,6 +58,13 @@ export function ErrorBox({ error }: { error: string | null }) {
   return <div className="error-box">{error}</div>;
 }
 
+// Non-blocking notice (amber): something the author must look at but that does
+// not stop the step — e.g. citations the verification layer could not resolve.
+export function WarningBox({ warning }: { warning: string | null }) {
+  if (!warning) return null;
+  return <div className="warning-box">{warning}</div>;
+}
+
 export function Spinner({ label }: { label?: string }) {
   return (
     <span>

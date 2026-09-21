@@ -747,6 +747,47 @@ Return ONLY a JSON array of paragraph strings: ["paragraph1", "paragraph2", ...]
 # ---------------------------------------------------------------------------
 # The generators themselves live in narrative/genomics_llm.py and
 # narrative/apical_bmd_llm.py (moved 2026-09-18; see those headers).
+@router.get("/api/session/{dtxsid}/citation-warnings")
+async def api_citation_warnings(dtxsid: Dtxsid):
+    """
+    Every citation the verification layers could not resolve for a session, in
+    one payload for the UI:
+
+      {"count": N,
+       "background": [<citation_check issue dict>, ...],   # from background.json
+       "genomics":   [<references_builder warning dict>, ...]}  # from references.json
+
+    Background issues are the `citation_report.issues` the generator attached
+    and the UI persisted with the section. Genomics warnings are the
+    `warnings` the processing pass persisted (unresolved [Pn] tokens the
+    assembly dropped from the prose, plus human-edit hazards). Both files are
+    optional — an apical-only or not-yet-generated session simply has none.
+    """
+    d = SESSIONS_DIR / validate_dtxsid(dtxsid)
+    background: list[dict] = []
+    genomics: list[dict] = []
+    try:
+        bg_path = d / "background.json"
+        if bg_path.exists():
+            bg = json.loads(bg_path.read_text())
+            report = (bg.get("citation_report") or {}) if isinstance(bg, dict) else {}
+            background = list(report.get("issues") or [])
+    except Exception:
+        logger.warning("citation-warnings: unreadable background.json for %s", dtxsid)
+    try:
+        refs_path = d / "references.json"
+        if refs_path.exists():
+            refs = json.loads(refs_path.read_text())
+            genomics = list((refs.get("warnings") or []) if isinstance(refs, dict) else [])
+    except Exception:
+        logger.warning("citation-warnings: unreadable references.json for %s", dtxsid)
+    return JSONResponse({
+        "count": len(background) + len(genomics),
+        "background": background,
+        "genomics": genomics,
+    })
+
+
 @router.post("/api/generate-genomics-narrative")
 async def api_generate_genomics_narrative(request: Request):
     """

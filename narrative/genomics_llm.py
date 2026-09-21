@@ -220,6 +220,7 @@ async def generate_genomics_narrative_async(
                 "gene_narrative": cached.get("gene_narrative") or [],
                 "model_used": cached.get("model_used", "claude-sonnet-4-6"),
                 "enrichment_available": bool(cached.get("context_text")),
+                "unresolved_citations": cached.get("unresolved_citations") or [],
             }
 
         # Reuse cached enrichment context only when the matched file is
@@ -432,6 +433,25 @@ Return ONLY valid JSON, no markdown formatting."""
         if isinstance(gene_narr, str):
             gene_narr = [gene_narr]
 
+        # Verify the citations against the catalogue the model was given.
+        # Anything outside the pool is an invented/mis-typed token: the
+        # report-wide assembly will drop it from the prose, so record it HERE
+        # (earliest point, persisted with the narrative) and warn — never let
+        # an unsupported claim lose its citation silently.
+        unresolved_citations: list[dict] = []
+        if reference_pool:
+            from narrative.references_builder import find_unresolved_citations
+            unresolved_citations = find_unresolved_citations([{
+                "organ": organ, "sex": sex, "reference_pool": reference_pool,
+                "gene_set_narrative": gs_narr, "gene_narrative": gene_narr,
+            }])
+            if unresolved_citations:
+                logger.warning(
+                    "Genomics narrative %s/%s cites tokens outside its reference "
+                    "pool: %s",
+                    organ, sex,
+                    [w["tokens"] for w in unresolved_citations],
+                )
         # Persist the LLM output back into the interpretation cache so
         # session reloads and process-integrated re-runs find it
         # without triggering another LLM call.  Cache file already
@@ -444,6 +464,7 @@ Return ONLY valid JSON, no markdown formatting."""
                 existing["gene_set_narrative"] = gs_narr
                 existing["gene_narrative"] = gene_narr
                 existing["model_used"] = chosen_model
+                existing["unresolved_citations"] = unresolved_citations
                 # Ensure the stratum's reference pool is present even when the
                 # enrichment context was a cache hit (so the pool wasn't written
                 # on this run) — surface-time assembly reads it from here.
@@ -460,6 +481,7 @@ Return ONLY valid JSON, no markdown formatting."""
             "gene_narrative": gene_narr,
             "model_used": chosen_model,
             "enrichment_available": enrichment_available,
+            "unresolved_citations": unresolved_citations,
         }
 
     except Exception as e:

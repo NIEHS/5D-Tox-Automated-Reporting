@@ -1628,7 +1628,9 @@ def _persist_references(dtxsid: str, genomics_sections: dict | None) -> None:
         refs = build_session_references(
             _session_dir(dtxsid), genomics_sections, dtxsid=dtxsid,
         )
-        if refs["references"]:
+        # Write when there is ANYTHING to say: resolved references, or
+        # warnings (an all-unresolved run must still surface its warnings).
+        if refs["references"] or refs["warnings"]:
             out = _session_dir(dtxsid) / "references.json"
             out.write_text(json.dumps({
                 "references": refs["references"],

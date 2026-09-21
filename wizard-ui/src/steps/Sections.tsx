@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, SectionData, SessionLoad } from "../api";
 import { useSectionReadiness } from "../useSectionReadiness";
 import { useServerResource, invalidate } from "../useServerResource";
-import { ErrorBox, Spinner, StepProps } from "./shared";
+import { ErrorBox, Spinner, StepProps, WarningBox } from "./shared";
 
 // The document workstream's SECTIONS surface (ADR-0018). The app is NOT an editor:
 // this is a READ-ONLY status view that GENERATES authored sections (Background,
@@ -90,6 +90,39 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   const session = sessionData ?? null;
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  // Citation verification notice: unresolved Background / genomics citations
+  // the author should look at (non-blocking). Refreshed whenever the session
+  // reloads, i.e. after every generate/approve mutation.
+  const [citationWarning, setCitationWarning] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dtxsid) return;
+    let cancelled = false;
+    api
+      .getCitationWarnings(dtxsid)
+      .then((w) => {
+        if (cancelled) return;
+        if (!w.count) {
+          setCitationWarning(null);
+          return;
+        }
+        const lines: string[] = [];
+        for (const b of w.background) {
+          lines.push(`Background ${b.token} (${b.issue.replace(/_/g, " ")}): ${b.sentence}`);
+        }
+        for (const g of w.genomics) {
+          const who = `${g.organ}${g.sex ? "/" + g.sex : ""} ${g.kind}`;
+          const first = g.sentences && g.sentences.length ? " — " + g.sentences[0] : "";
+          lines.push(`Genomics ${who} (${g.issue.replace(/_/g, " ")}): [${g.tokens.join(", ")}]${first}`);
+        }
+        setCitationWarning(`${w.count} unresolved citation(s) need review:\n` + lines.join("\n"));
+      })
+      .catch(() => {
+        if (!cancelled) setCitationWarning(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dtxsid, session]);
 
   const processed = state?.artifacts?.hasProcessed !== false; // best-effort; readiness is authority
 
@@ -129,7 +162,13 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
         const res = await api.generateBackground(identity);
         const paragraphs = (res.paragraphs as string[]) ?? [];
         if (paragraphs.length) {
-          await api.saveSection(dtxsid, "background", { paragraphs, references: res.references ?? [] });
+          await api.saveSection(dtxsid, "background", {
+            paragraphs,
+            references: res.references ?? [],
+            // Persist the verification record so the citation-warnings route
+            // (and the notice below) can show unresolved citations after reload.
+            citation_report: res.citation_report ?? null,
+          });
           await afterMutation();
         }
       } else if (key === "methods") {
@@ -188,6 +227,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
       </p>
 
       <ErrorBox error={error ?? loadError} />
+      <WarningBox warning={citationWarning} />
       {loading && <Spinner label="Loading sections…" />}
 
       <h3 className="group-heading">Front matter</h3>

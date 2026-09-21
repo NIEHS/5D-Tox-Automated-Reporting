@@ -49,6 +49,8 @@ _BARE_NUM_RE = re.compile(r"\[\d+(?:\s*[,\-–]\s*\d+)*\]")
 
 logger = logging.getLogger(__name__)
 
+from narrative.citation_check import find_unresolved_tokens  # noqa: E402
+
 
 def build_reference_pool_for_genes(
     genes: list[str],
@@ -275,6 +277,37 @@ def assemble_report_references(strata: list[dict]) -> tuple[list[dict], list[dic
         )
 
     return references, rewritten
+
+
+def find_unresolved_citations(strata: list[dict]) -> list[dict]:
+    """Every `[Pn]` token in a stratum's narratives that is NOT in that stratum's
+    reference pool — i.e. a citation the model invented or mis-typed.
+
+    `assemble_report_references` drops such tokens from the rendered prose (a
+    raw [P9] must not ship). Before 2026-09-21 that drop was silent: the claim
+    survived uncited and nobody was told. This reports it. Same shape as the
+    human-edit hazards so one warnings list carries both:
+    ``{"kind": "gene_set"|"gene", "organ", "sex", "issue": "unresolved_citation",
+       "tokens": ["P9", ...], "sentences": [...]}``. Pure; empty when clean.
+    """
+    warnings: list[dict] = []
+    for s in strata:
+        valid = {p.get("token") for p in (s.get("reference_pool") or [])}
+        where = f"{s.get('organ', '?')}/{s.get('sex', '?')}"
+        for kind, key in (("gene_set", "gene_set_narrative"), ("gene", "gene_narrative")):
+            issues = find_unresolved_tokens(
+                _iter_paragraphs(s.get(key)), valid, _BRACKET_RE, _TOKEN_RE, where,
+            )
+            if issues:
+                warnings.append({
+                    "kind": kind,
+                    "organ": s.get("organ", ""),
+                    "sex": s.get("sex", ""),
+                    "issue": "unresolved_citation",
+                    "tokens": sorted({i["token"].strip("[]") for i in issues}),
+                    "sentences": [i["sentence"] for i in issues],
+                })
+    return warnings
 
 
 def detect_override_citation_hazards(
@@ -505,15 +538,27 @@ def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = ""
         pools_by_organ.setdefault(s["organ"], set()).update(
             p["token"] for p in s["reference_pool"]
         )
-    warnings = detect_override_citation_hazards(
+    # Model-written citations that missed the pool (dropped from the prose by
+    # the rewrite above — reported here so the drop is never silent) ...
+    warnings = find_unresolved_citations(strata)
+    for w in warnings:
+        logger.warning(
+            "References: %s narrative for %s/%s %s cites %s not in its "
+            "reference pool — dropped from the prose, claim left uncited: %s",
+            w["kind"], dtxsid or "?", w["organ"], w["sex"], w["tokens"],
+            w["sentences"][:1],
+        )
+    # ... plus human-edit hazards (override store) as before.
+    hazards = detect_override_citation_hazards(
         _load_narrative_overrides(session_dir), pools_by_organ,
     )
-    for w in warnings:
+    for w in hazards:
         logger.warning(
             "References: human-edited %s narrative for %s/%s carries %s not "
             "reconciled with the auto-generated References list: %s",
             w["kind"], dtxsid or "?", w["organ"], w["issue"], w["tokens"],
         )
+    warnings = warnings + hazards
 
     return {
         "references": references,

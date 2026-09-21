@@ -339,6 +339,18 @@ export const api = {
       jsonOrThrow<{ fingerprints: Fingerprint[]; count: number }>(r)
     ),
 
+  // Citations the verification layers could not resolve (Background inline/
+  // reference-line issues persisted with the section; genomics [Pn] tokens the
+  // assembly dropped, plus human-edit hazards). Empty for apical-only sessions.
+  getCitationWarnings: (dtxsid: string) =>
+    fetch(`/api/session/${encodeURIComponent(dtxsid)}/citation-warnings`).then((r) =>
+      jsonOrThrow<{
+        count: number;
+        background: { where: string; token: string; issue: string; sentence: string }[];
+        genomics: { kind: string; organ: string; sex?: string; issue: string; tokens: string[]; sentences?: string[] }[];
+      }>(r)
+    ),
+
   getIdentity: (dtxsid: string) =>
     fetch(`/api/wizard/${encodeURIComponent(dtxsid)}/identity`).then((r) =>
       jsonOrThrow<{ identity: Record<string, string> }>(r)
