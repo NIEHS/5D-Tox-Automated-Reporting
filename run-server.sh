@@ -61,15 +61,22 @@ PY
 # Env already set in the shell wins over settings.json (lets you override for a
 # one-off run without editing the file).
 export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$SETTINGS_KEY}"
-export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-$SETTINGS_BASE_URL}"
+# Only export the base URL / CA bundle when there is a VALUE. An exported empty
+# string is not "unset" to the Anthropic SDK: ANTHROPIC_BASE_URL="" makes every
+# request target a blank URL and fail with a bare "Connection error", and an
+# empty SSL_CERT_FILE can disable default certificate loading. (Bit us on
+# 2026-09-21 on a machine with no proxy configured.)
+_base_url="${ANTHROPIC_BASE_URL:-$SETTINGS_BASE_URL}"
+if [[ -n "$_base_url" ]]; then export ANTHROPIC_BASE_URL="$_base_url"; else unset ANTHROPIC_BASE_URL; fi
+_ca="${SSL_CERT_FILE:-$SETTINGS_CA}"
+if [[ -n "$_ca" ]]; then export SSL_CERT_FILE="$_ca"; else unset SSL_CERT_FILE; fi
 # The Python SDK honors SSL_CERT_FILE (httpx), not NODE_EXTRA_CA_CERTS.
-export SSL_CERT_FILE="${SSL_CERT_FILE:-$SETTINGS_CA}"
 
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
   echo "run-server.sh: no ANTHROPIC_API_KEY (checked \$ANTHROPIC_API_KEY and $SETTINGS) — LLM layers will fail." >&2
 fi
-if [[ -n "$SSL_CERT_FILE" && ! -f "$SSL_CERT_FILE" ]]; then
-  echo "run-server.sh: SSL_CERT_FILE=$SSL_CERT_FILE does not exist — TLS to the proxy may fail." >&2
+if [[ -n "${SSL_CERT_FILE:-}" && ! -f "${SSL_CERT_FILE:-}" ]]; then
+  echo "run-server.sh: SSL_CERT_FILE=${SSL_CERT_FILE:-} does not exist — TLS to the proxy may fail." >&2
 fi
 
 # Default to binding all interfaces so the host port-forward reaches us (see the
