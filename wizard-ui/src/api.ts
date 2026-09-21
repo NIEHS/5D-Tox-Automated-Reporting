@@ -138,6 +138,9 @@ export interface SectionData {
   // Materialized apical result sections carry their prose as `narrative` (a
   // paragraph list) alongside `tables_json`; report_data reads it directly.
   narrative?: string[];
+  // Materials & Methods stores its prose per subsection (methods.json: sections[]
+  // each with its own paragraphs) rather than as one top-level list.
+  sections?: { key?: string; heading?: string; paragraphs?: string[] }[];
   approved?: boolean;
   version?: number;
   stale?: boolean;

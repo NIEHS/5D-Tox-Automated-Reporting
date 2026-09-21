@@ -22,6 +22,21 @@ function sectionContent(session: SessionLoad | null, key: string): SectionData |
   return (session[key] as SectionData | null) ?? null;
 }
 
+// How much prose a section holds, whatever shape it uses: a flat paragraph list
+// (background, summary), a `narrative` list (materialized apical results), or
+// per-subsection paragraphs (Materials & Methods). Counting only the flat list
+// made Methods read as "0 paragraphs" — and, since the auto-generate check used
+// the same test, re-called the model on every visit until it was approved.
+function paragraphCount(content: SectionData | null): number {
+  if (!content) return 0;
+  if (content.paragraphs?.length) return content.paragraphs.length;
+  if (content.narrative?.length) return content.narrative.length;
+  if (content.sections?.length) {
+    return content.sections.reduce((n, s) => n + (s.paragraphs?.length ?? 0), 0);
+  }
+  return 0;
+}
+
 function humanizeKey(key: string): string {
   if (key.startsWith("bm2_")) {
     return key.slice("bm2_".length).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -47,7 +62,7 @@ function SectionRow({
   content: SectionData | null;
   busy?: boolean;
 }) {
-  const paras = content?.paragraphs?.length ?? content?.narrative?.length ?? 0;
+  const paras = paragraphCount(content);
   const hasContent = paras > 0 || !!content;
   let state: { cls: string; text: string };
   if (busy) state = { cls: "", text: "generating…" };
@@ -152,7 +167,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     if (!dtxsid) return;
     const r = readiness[key];
     const content = sectionContent(session, key);
-    const empty = (content?.paragraphs?.length ?? 0) === 0;
+    const empty = paragraphCount(content) === 0;
     if (!r?.enabled || r?.approved || !empty || fired.current.has(key)) return;
     fired.current.add(key);
     setBusyKey(key);
