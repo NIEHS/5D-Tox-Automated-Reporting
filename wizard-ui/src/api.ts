@@ -60,6 +60,24 @@ export interface SectionReadiness {
 }
 export type SectionReadinessMap = Record<string, SectionReadiness>;
 
+// One entry of the tree-DERIVED section catalog merged with live readiness
+// (GET /api/workflow/{dtxsid}/sections). The Sections screen renders its rows
+// from THIS — the section identity (kind/approvable/instance_of) is derived from
+// the document tree, not hardcoded in the client. `kind` is the producer class
+// ("llm" | "programmatic" | "derived" | "authored"); `instance_of` is the family
+// ("bm2" | "genomics") for concrete instances, null for singletons/group
+// narratives; `present` is whether the section has content on disk.
+export interface SectionInfo {
+  key: string;
+  kind: string;
+  approvable: boolean;
+  instance_of: string | null;
+  enabled: boolean;
+  approved: boolean;
+  blocked_by: string[];
+  present: boolean;
+}
+
 // Report-grain publish gate (Phase 3a currency BLOCK). GET
 // /api/workflow/{dtxsid}/publish-readiness. A data reprocess withdraws FINAL
 // from the report's LLM sections and stamps a `regenerated` reason; publishing
@@ -742,6 +760,14 @@ export const api = {
   getSectionReadiness: (dtxsid: string) =>
     fetch(`/api/workflow/${encodeURIComponent(dtxsid)}/section-readiness`).then(
       (r) => jsonOrThrow<SectionReadinessMap>(r)
+    ),
+
+  // Tree-DERIVED section catalog merged with readiness — the row set the
+  // Sections screen renders, replacing its hardcoded FRONT_MATTER + approvable
+  // allowlist. Adding a section to the template adds it here.
+  getSections: (dtxsid: string) =>
+    fetch(`/api/workflow/${encodeURIComponent(dtxsid)}/sections`).then((r) =>
+      jsonOrThrow<{ sections: SectionInfo[] }>(r)
     ),
 
   // DERIVED report-grain publish gate (currency BLOCK).

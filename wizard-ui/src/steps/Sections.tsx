@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, SectionData, SessionLoad } from "../api";
-import { useSectionReadiness } from "../useSectionReadiness";
+import { api, SectionData, SectionInfo, SessionLoad } from "../api";
+import { useSections } from "../useSections";
 import { useServerResource, invalidate } from "../useServerResource";
 import { ErrorBox, Spinner, StepProps, WarningBox } from "./shared";
 
@@ -9,12 +9,34 @@ import { ErrorBox, Spinner, StepProps, WarningBox } from "./shared";
 // M&M) once their dependencies are satisfied and MATERIALIZES the apical result
 // sections from the Process cache. Human editing happens EXTERNALLY (Word/Overleaf)
 // after handoff — there are no editors, no accept/revise here. It feeds Preview.
+//
+// The row set is DERIVED from the tree-driven section catalog
+// (GET /api/workflow/{id}/sections via useSections), NOT a hardcoded list: a
+// section added to the template surfaces here automatically. Grouping and controls
+// come from each entry's catalog metadata — `instance_of` (bm2/genomics family),
+// `kind` (llm/programmatic/derived/authored), and `approvable`.
 
-const FRONT_MATTER: { key: string; label: string; note: string }[] = [
-  { key: "background", label: "Background", note: "Generated from the test-article identity." },
-  { key: "methods", label: "Materials & Methods", note: "Generated from study metadata after Process." },
-  { key: "summary", label: "Summary", note: "Synthesizes approved sections." },
-];
+// Fixed display copy for the singleton content sections. Keyed by catalog key;
+// a section the catalog reports but that is missing here still renders with a
+// humanized fallback label, so this is copy-only, not an identity registry.
+const SECTION_COPY: Record<string, { label: string; note: string }> = {
+  background: { label: "Background", note: "Generated from the test-article identity." },
+  methods: { label: "Materials & Methods", note: "Generated from study metadata after Process." },
+  summary: { label: "Summary", note: "Synthesizes approved sections." },
+  bmd_summary: { label: "Apical BMD Summary", note: "Auto-derived from results (deterministic)." },
+  animal_condition: { label: "Animal Condition, Body & Organ Weights", note: "Deterministic narrative from the processed data." },
+  clinical_pathology: { label: "Clinical Pathology", note: "Deterministic narrative from the processed data." },
+  internal_dose: { label: "Internal Dose Assessment", note: "Deterministic narrative from the processed data." },
+};
+
+// The authored singletons that auto-generate on visit (each has a distinct
+// generator API call in maybeGenerate). The effect only fires for catalog keys
+// present here, so a new llm section without a wired generator is a no-op row.
+const GENERATORS: Record<string, true> = {
+  background: true,
+  methods: true,
+  summary: true,
+};
 
 function sectionContent(session: SessionLoad | null, key: string): SectionData | null {
   if (!session) return null;
@@ -39,10 +61,17 @@ function paragraphCount(content: SectionData | null): number {
 }
 
 function humanizeKey(key: string): string {
-  if (key.startsWith("bm2_")) {
-    return key.slice("bm2_".length).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  return key.replace(/\b\w/g, (c) => c.toUpperCase());
+  const stripped = key
+    .replace(/^bm2_/, "")
+    .replace(/^genomics_/, "")
+    .replace(/[-_]/g, " ");
+  return stripped.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Display label for a catalog key: fixed copy for the singletons, humanized
+// fallback for instance keys (bm2_<slug>, genomics_<organ>_<sex>).
+function sectionLabel(key: string): string {
+  return SECTION_COPY[key]?.label ?? humanizeKey(key);
 }
 
 // One read-only section row: shows its derived state as a badge + a paragraph count.
@@ -117,7 +146,13 @@ function SectionRow({
 }
 
 export function Sections({ dtxsid, state, next, back }: StepProps) {
-  const { readiness } = useSectionReadiness(dtxsid);
+  const { sections } = useSections(dtxsid);
+  // Index the catalog by key for O(1) per-row lookup (replaces the readiness map).
+  const byKey = useMemo(() => {
+    const m: Record<string, SectionInfo> = {};
+    for (const s of sections) m[s.key] = s;
+    return m;
+  }, [sections]);
   const {
     data: sessionData,
     loading,
@@ -183,15 +218,20 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   const fired = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!dtxsid || loading) return;
-    void maybeGenerate("background");
-    void maybeGenerate("methods");
-    void maybeGenerate("summary"); // no-op until readiness unlocks it
+    // Auto-generate the authored (LLM) singleton sections once unlocked. Driven
+    // by the catalog's `kind`, not a hardcoded list — background/methods/summary
+    // are the llm singletons; each is a no-op until its readiness unlocks it.
+    for (const s of sections) {
+      if (s.kind === "llm" && s.instance_of === null && GENERATORS[s.key]) {
+        void maybeGenerate(s.key);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dtxsid, loading, readiness, session]);
+  }, [dtxsid, loading, sections, session]);
 
   async function maybeGenerate(key: string) {
     if (!dtxsid) return;
-    const r = readiness[key];
+    const r = byKey[key];
     const content = sectionContent(session, key);
     const empty = paragraphCount(content) === 0;
     if (!r?.enabled || r?.approved || !empty || fired.current.has(key)) return;
@@ -251,7 +291,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   // payload wins.
   const [bmdDerived, setBmdDerived] = useState<SectionData | null>(null);
   useEffect(() => {
-    if (!dtxsid || !readiness["bmd_summary"] || session?.bmd_summary) {
+    if (!dtxsid || !byKey["bmd_summary"] || session?.bmd_summary) {
       setBmdDerived(null);
       return;
     }
@@ -267,7 +307,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     return () => {
       cancelled = true;
     };
-  }, [dtxsid, readiness, session]);
+  }, [dtxsid, byKey, session]);
 
   async function approve(key: string) {
     if (!dtxsid) return;
@@ -318,13 +358,31 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     }
   }
 
-  const resultKeys = useMemo(
-    () => Object.keys(readiness).filter((k) => k.startsWith("bm2_")).sort(),
-    [readiness]
+  // Row groups, all DERIVED from the catalog (document order preserved):
+  //   front matter   — approvable singletons that are generated (background/methods/summary)
+  //   narratives     — programmatic group narratives, display-only (animal_condition, …)
+  //   bmdSummary     — the single derived Apical BMD Summary entry, if present
+  //   results        — the apical bm2_* instances
+  //   genomics       — the genomics_* instances (deterministic, read-only)
+  const frontMatter = useMemo(
+    () => sections.filter((s) => s.instance_of === null && GENERATORS[s.key]),
+    [sections]
   );
-  const genomicsKeys = useMemo(
-    () => Object.keys(readiness).filter((k) => k.startsWith("genomics_")).sort(),
-    [readiness]
+  const narratives = useMemo(
+    () => sections.filter((s) => s.instance_of === null && s.kind === "programmatic"),
+    [sections]
+  );
+  const bmdSummary = useMemo(
+    () => sections.find((s) => s.key === "bmd_summary") ?? null,
+    [sections]
+  );
+  const results = useMemo(
+    () => sections.filter((s) => s.instance_of === "bm2").sort((a, b) => a.key.localeCompare(b.key)),
+    [sections]
+  );
+  const genomics = useMemo(
+    () => sections.filter((s) => s.instance_of === "genomics").sort((a, b) => a.key.localeCompare(b.key)),
+    [sections]
   );
 
   if (!dtxsid) {
@@ -351,31 +409,28 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
       {loading && <Spinner label="Loading sections…" />}
 
       <h3 className="group-heading">Front matter</h3>
-      {FRONT_MATTER.map((fm) => {
-        const r = readiness[fm.key];
-        return (
-          <SectionRow
-            key={fm.key}
-            label={fm.label}
-            note={fm.note}
-            enabled={r?.enabled ?? false}
-            approved={r?.approved ?? false}
-            blockedBy={r?.blocked_by ?? []}
-            content={sectionContent(session, fm.key)}
-            onApprove={() => void approve(fm.key)}
-            onRevise={() => void revise(fm.key)}
-            acting={actingKey === fm.key}
-            busy={busyKey === fm.key}
-          />
-        );
-      })}
-      {readiness["bmd_summary"] && (
+      {frontMatter.map((s) => (
         <SectionRow
-          label="Apical BMD Summary"
-          note="Auto-derived from results (deterministic)."
-          enabled
-          approved={readiness["bmd_summary"]?.approved ?? false}
-          blockedBy={[]}
+          key={s.key}
+          label={sectionLabel(s.key)}
+          note={SECTION_COPY[s.key]?.note}
+          enabled={s.enabled}
+          approved={s.approved}
+          blockedBy={s.blocked_by}
+          content={sectionContent(session, s.key)}
+          onApprove={() => void approve(s.key)}
+          onRevise={() => void revise(s.key)}
+          acting={actingKey === s.key}
+          busy={busyKey === s.key}
+        />
+      ))}
+      {bmdSummary && (
+        <SectionRow
+          label={sectionLabel("bmd_summary")}
+          note={SECTION_COPY["bmd_summary"]?.note}
+          enabled={bmdSummary.enabled}
+          approved={bmdSummary.approved}
+          blockedBy={bmdSummary.blocked_by}
           content={sectionContent(session, "bmd_summary") ?? bmdDerived}
           unit="endpoint"
           onApprove={() => void approve("bmd_summary")}
@@ -384,54 +439,65 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
         />
       )}
 
+      {narratives.length > 0 && (
+        <>
+          <h3 className="group-heading">Result narratives (deterministic)</h3>
+          {narratives.map((s) => (
+            <SectionRow
+              key={s.key}
+              label={sectionLabel(s.key)}
+              note={SECTION_COPY[s.key]?.note ?? "Deterministic narrative from the processed data."}
+              enabled={s.enabled}
+              approved={s.approved}
+              blockedBy={s.blocked_by}
+              content={sectionContent(session, s.key)}
+            />
+          ))}
+        </>
+      )}
+
       <div className="group-heading-row">
         <h3 className="group-heading">Apical results</h3>
         <button onClick={materializeResults} disabled={busyKey === "results"}>
           {busyKey === "results" ? <Spinner label="Materializing…" /> : "Materialize results"}
         </button>
       </div>
-      {resultKeys.length === 0 ? (
+      {results.length === 0 ? (
         <p className="muted">
           {processed
             ? "No result sections materialized yet — click Materialize results."
             : "Process the pool first to produce result data."}
         </p>
       ) : (
-        resultKeys.map((key) => {
-          const r = readiness[key];
-          return (
-            <SectionRow
-              key={key}
-              label={humanizeKey(key)}
-              enabled={r?.enabled ?? true}
-              approved={r?.approved ?? false}
-              blockedBy={r?.blocked_by ?? []}
-              content={sectionContent(session, key)}
-              onApprove={() => void approve(key)}
-              onRevise={() => void revise(key)}
-              acting={actingKey === key}
-            />
-          );
-        })
+        results.map((s) => (
+          <SectionRow
+            key={s.key}
+            label={sectionLabel(s.key)}
+            enabled={s.enabled}
+            approved={s.approved}
+            blockedBy={s.blocked_by}
+            content={sectionContent(session, s.key)}
+            onApprove={() => void approve(s.key)}
+            onRevise={() => void revise(s.key)}
+            acting={actingKey === s.key}
+          />
+        ))
       )}
 
-      {genomicsKeys.length > 0 && (
+      {genomics.length > 0 && (
         <>
           <h3 className="group-heading">Genomics (deterministic, read-only)</h3>
-          {genomicsKeys.map((key) => {
-            const r = readiness[key];
-            return (
-              <SectionRow
-                key={key}
-                label={humanizeKey(key)}
-                note="Deterministic result — not authored."
-                enabled={r?.enabled ?? true}
-                approved={false}
-                blockedBy={r?.blocked_by ?? []}
-                content={null}
-              />
-            );
-          })}
+          {genomics.map((s) => (
+            <SectionRow
+              key={s.key}
+              label={sectionLabel(s.key)}
+              note="Deterministic result — not authored."
+              enabled={s.enabled}
+              approved={false}
+              blockedBy={s.blocked_by}
+              content={null}
+            />
+          ))}
         </>
       )}
 

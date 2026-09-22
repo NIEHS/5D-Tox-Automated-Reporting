@@ -35,6 +35,7 @@ from workflow.phases import (
     compute_section_completeness,
     derive_phase,
 )
+from workflow.section_catalog import catalog_for_session
 from workflow.section_readiness import derive_section_readiness
 from workflow.store import DiskPoolStore, PoolStore
 
@@ -170,6 +171,7 @@ class WorkflowEngine:
                 "knowledge_base": _has_knowledge_base(),
                 "processed": _is_processed(self.store.session_dir(self.dtxsid)),
             },
+            catalog=catalog_for_session(self.dtxsid),
         )
 
     # -- derived publish readiness (currency BLOCK, report grain) ----------

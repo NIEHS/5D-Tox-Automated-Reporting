@@ -44,34 +44,25 @@ reading would be a behavior change, not a port.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from workflow.section_catalog import KIND_UNLOCK as _UNLOCK_RULES
+
+if TYPE_CHECKING:
+    from workflow.section_catalog import SectionSpec
+
 # The singleton report sections that always appear in the readiness map, even
 # before anything is on disk (a UI wants to show them as present-but-locked).
 # Instance families (bm2_*, genomics_*) only appear once they exist on disk.
 _SINGLETON_KEYS: tuple[str, ...] = ("background", "methods", "bmd_summary", "summary")
 
 
-# Declared dependency table (DATA, not code). Maps a section TYPE to the unlock
-# groups it requires. A section is enabled iff it declares no groups OR at least
-# one group is satisfied (OR semantics — mirrors the JS `||`). An empty tuple
-# means "no approval dependency" (available as soon as its data exists).
-_UNLOCK_RULES: dict[str, tuple[str, ...]] = {
-    "background": (),      # front matter — always available (deps = identity only)
-    "bm2": (),             # apical result — gated by data, not by another approval
-    "genomics": ("knowledge_base",),  # genomics interpretation is grounded in the
-                                       # knowledge graph (bmdx.duckdb → graph-grounded
-                                       # references); gated on the KB being present
-    "bmd_summary": (),     # auto-derived apical BMD summary — always available
-    # M&M is GENERATED from study metadata that all exists AFTER Process (fingerprints,
-    # .bm2 caches, animal report). It does NOT depend on any human approval — so it
-    # unlocks on DATA PRESENCE ("processed"), a resource group. (Corrected from the
-    # ambiguous JS port that gated it on background/result APPROVAL — see ADR-0018 /
-    # the authoring-lifecycle model.)
-    "methods": ("processed",),
-    # Summary genuinely SYNTHESIZES approved sections (/api/generate-summary reads the
-    # approved set, errors "No approved sections found"). So it correctly stays
-    # APPROVAL-gated: unlock on background approved OR ≥1 result approved.
-    "summary": ("background", "results"),
-}
+# Declared dependency table (DATA, not code): section TYPE / family → the unlock
+# groups it requires (OR semantics; empty = no approval dependency). This now lives in
+# workflow.section_catalog.KIND_UNLOCK (imported above as _UNLOCK_RULES) so the catalog
+# and this engine read ONE table and cannot drift — see the section-catalog dependency
+# map. The rationale for each rule (M&M on `processed`, Summary approval-gated on
+# background/results, genomics on `knowledge_base`) is documented there.
 
 # Unlock groups satisfied by an EXTERNAL resource / data-presence flag (NOT the
 # approved-set). Passed into derive_section_readiness as flags rather than read from
@@ -122,20 +113,30 @@ def _group_satisfied(
 def derive_section_readiness(
     section_states: dict[str, bool],
     resources: dict[str, bool] | None = None,
+    catalog: list[SectionSpec] | None = None,
 ) -> dict[str, dict]:
     """Derive per-section readiness from the approved-state of every section.
 
     `section_states` maps on-disk section_key → its `approved` boolean (what
     `PoolStore.read_section_states` returns). `resources` carries external
-    unlock signals that are NOT part of the approved-set — currently just
-    `{"knowledge_base": bool}` (whether bmdx.duckdb is present), which gates the
-    genomics-interpretation sections that ground their references in the graph.
+    unlock signals that are NOT part of the approved-set — currently
+    `{"knowledge_base": bool, "processed": bool}` — which gate the
+    genomics-interpretation and Materials & Methods sections respectively.
 
-    Readiness is a pure function of these two inputs + the declared
-    `_UNLOCK_RULES`.
+    `catalog` (optional) is the tree-derived section catalog
+    (`workflow.section_catalog.catalog_for_session`). When passed, every
+    NON-family catalog key (the singletons plus the programmatic group
+    narratives like `internal_dose`) joins the readiness universe so a section
+    present in the template surfaces even before anything is on disk — the seam
+    that finally gives group narratives a workflow row. Family specs (`bm2`,
+    `genomics`) are skipped here: their concrete instances stay disk-discovered.
+    When omitted, behaviour is exactly as before (fixed singletons only) — the
+    default path the characterization tests pin.
+
+    Readiness is a pure function of these inputs + the declared `_UNLOCK_RULES`.
 
     Returns `{section_key: {"enabled": bool, "blocked_by": [group, ...],
-    "approved": bool}}` for every singleton section plus every instance section
+    "approved": bool}}` for every seeded section plus every instance section
     present on disk. `blocked_by` lists the unlock groups (any one of which would
     enable the section); it is empty when the section is enabled.
     """
@@ -143,8 +144,10 @@ def derive_section_readiness(
     approved_keys = {k for k, approved in section_states.items() if approved}
 
     # Universe of keys to report on: the fixed singletons + any instance
-    # sections that exist on disk (approved or not).
+    # sections that exist on disk (approved or not) + any non-family catalog keys.
     keys = set(_SINGLETON_KEYS) | set(section_states.keys())
+    if catalog is not None:
+        keys |= {spec.key for spec in catalog if spec.instance_of is None}
 
     readiness: dict[str, dict] = {}
     for key in sorted(keys):

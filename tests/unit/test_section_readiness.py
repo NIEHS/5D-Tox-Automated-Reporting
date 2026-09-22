@@ -171,3 +171,53 @@ def test_resources_default_absent_gates_genomics():
     # (Callers that care about genomics MUST pass resources; the engine does.)
     r = derive_section_readiness({"genomics_liver_male": False})
     assert r["genomics_liver_male"]["enabled"] is False
+
+
+# --- Catalog-seeded universe (section-catalog seam) --------------------------
+#
+# When the engine passes the tree-derived catalog, its NON-family keys (the
+# singletons + the programmatic group narratives that had no row before) join the
+# readiness universe even with nothing on disk. The default (no-catalog) path above
+# is unchanged — these cases pin the seeded path.
+
+
+def test_catalog_seeds_group_narratives_into_the_universe():
+    from workflow.section_catalog import catalog_for_tree
+    from document_model.document_tree import DOCUMENT_TREE
+
+    catalog = catalog_for_tree(DOCUMENT_TREE)
+    r = derive_section_readiness(
+        {}, resources={"processed": False}, catalog=catalog
+    )
+    # internal_dose (and its siblings) now appear — the headline seam.
+    for key in ("internal_dose", "animal_condition", "clinical_pathology"):
+        assert key in r
+        assert r[key]["enabled"] is True
+        assert r[key]["blocked_by"] == []
+
+
+def test_catalog_does_not_change_existing_singleton_rules():
+    from workflow.section_catalog import catalog_for_tree
+    from document_model.document_tree import DOCUMENT_TREE
+
+    catalog = catalog_for_tree(DOCUMENT_TREE)
+    r = derive_section_readiness(
+        {}, resources={"processed": False}, catalog=catalog
+    )
+    # The 12-key contract's singletons keep their prior verdicts.
+    assert r["background"]["enabled"] is True
+    assert r["bmd_summary"]["enabled"] is True
+    assert r["methods"]["enabled"] is False and r["methods"]["blocked_by"] == ["processed"]
+    assert r["summary"]["enabled"] is False
+
+
+def test_catalog_families_are_not_seeded_as_bare_keys():
+    # Family specs (bm2, genomics) must NOT leak into readiness as bare keys —
+    # only their concrete on-disk instances do (still via section_states).
+    from workflow.section_catalog import catalog_for_tree
+    from document_model.document_tree import DOCUMENT_TREE
+
+    catalog = catalog_for_tree(DOCUMENT_TREE)
+    r = derive_section_readiness({}, catalog=catalog)
+    assert "bm2" not in r
+    assert "genomics" not in r

@@ -105,6 +105,73 @@ async def api_workflow_section_readiness(dtxsid: Dtxsid):
     return JSONResponse(WorkflowEngine(dtxsid, DiskPoolStore()).derive_section_readiness())
 
 
+@router.get("/api/workflow/{dtxsid}/sections")
+async def api_workflow_sections(dtxsid: Dtxsid):
+    """Return the tree-DERIVED section catalog merged with live readiness.
+
+    The single seam the Sections screen consumes instead of its hardcoded row
+    lists (the FRONT_MATTER constant + the approvable-type allowlist). Each entry
+    carries the catalog's declared identity (`kind`, `approvable`, `instance_of`)
+    plus the per-key readiness (`enabled`, `approved`, `blocked_by`) and a light
+    `present` flag so the UI can render every section the *template* contains —
+    including programmatic group narratives (`internal_dose`) that had no row.
+
+    Instance families (`bm2`, `genomics`) are returned as their concrete on-disk
+    instances (`bm2_<slug>`, `genomics_<organ>_<sex>`), inheriting the family's
+    catalog metadata — the instances stay disk-discovered. Read-only; derived on
+    every call (CONTEXT.md invariant 3), never stored.
+    """
+    from workflow.section_catalog import catalog_for_session
+
+    store = DiskPoolStore()
+    engine = WorkflowEngine(dtxsid, store)
+    readiness = engine.derive_section_readiness()
+    catalog = catalog_for_session(dtxsid)
+    on_disk = store.read_section_dicts(dtxsid)
+
+    def _family_for(key: str) -> str:
+        if key.startswith("bm2_"):
+            return "bm2"
+        if key.startswith("genomics_"):
+            return "genomics"
+        return key
+
+    by_family = {spec.key: spec for spec in catalog}
+
+    entries: list[dict] = []
+    seen: set[str] = set()
+
+    def _emit(key: str, spec) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        r = readiness.get(key, {})
+        entries.append({
+            "key": key,
+            "kind": spec.kind,
+            "approvable": spec.approvable,
+            "instance_of": spec.instance_of,
+            "enabled": r.get("enabled", True),
+            "approved": r.get("approved", False),
+            "blocked_by": r.get("blocked_by", []),
+            "present": key in on_disk,
+        })
+
+    # Singletons and group narratives, in catalog (document) order.
+    for spec in catalog:
+        if spec.instance_of is None:
+            _emit(spec.key, spec)
+
+    # Concrete instances discovered on disk, inheriting their family's spec.
+    for key in sorted(on_disk):
+        fam = _family_for(key)
+        spec = by_family.get(fam)
+        if spec is not None and spec.instance_of is not None:
+            _emit(key, spec)
+
+    return JSONResponse({"sections": entries})
+
+
 @router.get("/api/workflow/{dtxsid}/publish-readiness")
 async def api_workflow_publish_readiness(dtxsid: Dtxsid):
     """Return server-DERIVED publish readiness (Phase 3a currency BLOCK).
