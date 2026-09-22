@@ -127,3 +127,47 @@ def test_catalog_preserves_document_order():
     keys = [s.key for s in catalog_for_tree(DOCUMENT_TREE)]
     # background precedes methods precedes summary (front-to-back document order).
     assert keys.index("background") < keys.index("methods") < keys.index("summary")
+
+
+# --- Write-side helpers (Phase 2, R2–R5) -------------------------------------
+#
+# These pin the catalog-derived write vocabulary against the literals the write
+# routes used to hardcode, so the R2–R5 rewire is provably behavior-preserving.
+
+
+def test_approvable_section_types_match_historical_literal():
+    from workflow.section_catalog import approvable_section_types
+
+    # The exact set web_routes.session_routes.api_session_approve hardcoded.
+    assert approvable_section_types() == frozenset(
+        {"background", "bm2", "methods", "bmd_summary", "genomics", "summary"}
+    )
+
+
+def test_singleton_section_files_match_historical_reads():
+    from workflow.section_catalog import singleton_section_files
+
+    # The four singleton files the session payload (R4) read by name.
+    assert set(singleton_section_files()) == {
+        "background.json",
+        "methods.json",
+        "bmd_summary.json",
+        "summary.json",
+    }
+
+
+def test_resolve_section_key_matches_historical_branches():
+    from workflow.section_catalog import resolve_section_key
+
+    assert resolve_section_key({"section_type": "background"}) == ("background", None)
+    assert resolve_section_key({"section_type": "methods"}) == ("methods", None)
+    assert resolve_section_key({"section_type": "bmd_summary"}) == ("bmd_summary", None)
+    assert resolve_section_key({"section_type": "summary"}) == ("summary", None)
+    # bm2 needs a slug; genomics needs organ+sex (with the same normalization).
+    assert resolve_section_key({"section_type": "bm2", "bm2_slug": "liver"}) == ("bm2_liver", None)
+    assert resolve_section_key({"section_type": "bm2"})[0] is None
+    assert resolve_section_key(
+        {"section_type": "genomics", "organ": "Liver", "sex": "Male"}
+    ) == ("genomics_liver_male", None)
+    assert resolve_section_key({"section_type": "genomics", "organ": "liver"})[0] is None
+    assert resolve_section_key({"section_type": "nope"})[0] is None

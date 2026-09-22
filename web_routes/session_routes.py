@@ -589,16 +589,26 @@ async def api_session_load(dtxsid: Dtxsid):
     validation_report = _read_json("validation_report.json")
     precedence = _read_json("precedence.json")
 
+    # Singleton report-section reads, DERIVED from the section catalog: each
+    # singleton spec's store file (e.g. background.json) becomes a payload field
+    # keyed by its section_key (background, methods, bmd_summary, summary). Adding
+    # a singleton section to the template adds its payload field here — no literal
+    # to keep in step. Instance families (bm2_/genomics_) are assembled separately
+    # into their keyed maps above.
+    from workflow.section_catalog import singleton_section_files
+    singleton_sections = {
+        store[:-len(".json")]: _read_json(store)
+        for store in singleton_section_files()
+    }
+
     return JSONResponse({
         "exists": True,
         "meta": _read_json("meta.json"),
         "identity": _read_json("identity.json"),
-        "background": _read_json("background.json"),
-        "methods": _read_json("methods.json"),
+        **singleton_sections,
         "bm2_sections": bm2_sections,
         "pending_files": pending_files,
         "animal_report": _read_json("animal_report.json"),
-        "bmd_summary": _read_json("bmd_summary.json"),
         "genomics_sections": genomics_sections,
         # Unapproved fallback: when no `genomics_*.json` approved files
         # exist but `_cache_genomics_*.json` does, surface the raw
@@ -615,7 +625,8 @@ async def api_session_load(dtxsid: Dtxsid):
         "gene_set_narrative": gene_set_narrative,
         "gene_narrative": gene_narrative,
         "chart_images": chart_images,
-        "summary": _read_json("summary.json"),
+        # background/methods/bmd_summary/summary are spread in above from
+        # singleton_sections (catalog-derived) — not repeated here.
         "validation_report": validation_report,
         "precedence": precedence,
     })
@@ -735,10 +746,11 @@ async def api_session_approve(request: Request):
     _bm2_uploads = get_bm2_uploads()
     _csv_uploads = get_csv_uploads()
 
-    # Valid section types — the original two plus the new NIEHS sections
-    VALID_SECTION_TYPES = {
-        "background", "bm2", "methods", "bmd_summary", "genomics", "summary",
-    }
+    # Valid section types — DERIVED from the tree-driven section catalog (the
+    # writable types = catalog specs that declare a store file). Replaces the
+    # hand-maintained literal set so the approve allowlist tracks the template.
+    from workflow.section_catalog import approvable_section_types
+    VALID_SECTION_TYPES = approvable_section_types()
 
     body = await request.json()
     dtxsid = body.get("dtxsid", "")
@@ -933,28 +945,13 @@ def _resolve_section_key(body: dict) -> tuple[str | None, str | None]:
 
     Returns (section_key, error_message).  Exactly one of the two will be
     None: the caller dispatches accordingly.
+
+    Delegates to the tree-driven section catalog so the section vocabulary
+    (which types are valid, how bm2/genomics keys are built) lives in ONE place
+    (workflow.section_catalog) instead of being re-implemented here.
     """
-    section_type = body.get("section_type", "")
-    if section_type == "background":
-        return ("background", None)
-    if section_type == "methods":
-        return ("methods", None)
-    if section_type == "bmd_summary":
-        return ("bmd_summary", None)
-    if section_type == "summary":
-        return ("summary", None)
-    if section_type == "bm2":
-        slug = body.get("bm2_slug", "")
-        if not slug:
-            return (None, "bm2_slug is required for bm2 sections")
-        return (f"bm2_{slug}", None)
-    if section_type == "genomics":
-        organ = body.get("organ", "").lower().replace(" ", "_")
-        sex = body.get("sex", "").lower().replace(" ", "_")
-        if not organ or not sex:
-            return (None, "organ and sex are required for genomics sections")
-        return (f"genomics_{organ}_{sex}", None)
-    return (None, f"Unknown section_type: {section_type}")
+    from workflow.section_catalog import resolve_section_key
+    return resolve_section_key(body)
 
 
 # ---------------------------------------------------------------------------
@@ -1559,7 +1556,15 @@ async def api_pool_reset(dtxsid: Dtxsid):
             f.unlink()
             deleted_items.append(f.name)
 
-    for section_file in ("methods.json", "bmd_summary.json", "summary.json"):
+    # Singleton report sections derived from the DATA pool. Enumerated from the
+    # section catalog (rather than a hand-kept literal) but with background.json
+    # EXCLUDED on purpose: Background is generated from the chemical IDENTITY,
+    # which survives a pool reset (identity.json/meta.json are preserved below),
+    # so wiping it here would discard authored work a reset must not touch.
+    from workflow.section_catalog import singleton_section_files
+    for section_file in singleton_section_files():
+        if section_file == "background.json":
+            continue
         p = d / section_file
         if p.exists():
             p.unlink()

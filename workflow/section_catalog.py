@@ -214,6 +214,62 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
     return specs
 
 
+def approvable_section_types(tree: list[DocNode] | None = None) -> frozenset[str]:
+    """The section TYPES a write route may accept (R2 `VALID_SECTION_TYPES`).
+
+    A type is writable iff its catalog spec declares a `store` file — the four
+    singletons plus the two instance families (as their bare family name). Group
+    narratives (no store) and front-matter are excluded. Derived from the tree so
+    the approve route's allowlist tracks the template.
+    """
+    from document_model.document_tree import DOCUMENT_TREE
+
+    catalog = catalog_for_tree(tree if tree is not None else DOCUMENT_TREE)
+    return frozenset(
+        (s.instance_of or s.key) for s in catalog if s.store
+    )
+
+
+def singleton_section_files(tree: list[DocNode] | None = None) -> tuple[str, ...]:
+    """The concrete section files for the SINGLETON sections (R4 payload / R5 reset).
+
+    Only the singletons have a fixed filename (`{key}.json`); instance families use
+    a `{...}` pattern and are handled by glob at the call sites. Document order.
+    """
+    from document_model.document_tree import DOCUMENT_TREE
+
+    catalog = catalog_for_tree(tree if tree is not None else DOCUMENT_TREE)
+    return tuple(
+        s.store for s in catalog if s.instance_of is None and s.store
+    )
+
+
+def resolve_section_key(body: dict) -> tuple[str | None, str | None]:
+    """Map a request body's section_type (+ extras) onto the on-disk section_key.
+
+    The catalog-owned twin of session_routes._resolve_section_key (R3): singletons
+    map to themselves; `bm2` needs `bm2_slug`; `genomics` needs `organ`/`sex`.
+    Returns (section_key, error); exactly one is non-None.
+    """
+    section_type = body.get("section_type", "")
+    approvable = approvable_section_types()
+    if section_type not in approvable:
+        return (None, f"Unknown section_type: {section_type}")
+    if section_type == "bm2":
+        slug = body.get("bm2_slug", "")
+        if not slug:
+            return (None, "bm2_slug is required for bm2 sections")
+        return (f"bm2_{slug}", None)
+    if section_type == "genomics":
+        organ = body.get("organ", "").lower().replace(" ", "_")
+        sex = body.get("sex", "").lower().replace(" ", "_")
+        if not organ or not sex:
+            return (None, "organ and sex are required for genomics sections")
+        return (f"genomics_{organ}_{sex}", None)
+    # A singleton type: its key IS the section_key.
+    return (section_type, None)
+
+
 def catalog_for_session(dtxsid: str | None = None) -> list[SectionSpec]:
     """Catalog for a session, resolving the per-session tree then the global one.
 
