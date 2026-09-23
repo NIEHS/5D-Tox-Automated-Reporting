@@ -230,6 +230,7 @@ contradicts one, surface it explicitly rather than silently overriding.
 | [0021](docs/adr/0021-three-concerns-data-content-rendering.md) | Three concerns — processing, content preparation, rendering — with content prep as an eager, separated step; the content→surface IR interface declined (YAGNI). *(Accepted.)* |
 | [0022](docs/adr/0022-session-interpretation-chat.md) | Session interpretation chat: a tool-using, knowledge-graph-grounded assistant over one session's data and report; citations verified post-answer; exploratory only (ADR-0018). *(Accepted 2026-09-21.)* |
 | [0023](docs/adr/0023-figure-provenance-boundary.md) | Figure provenance boundary: data-figures MUST be constructed from study data (no upload path), authored-figures (diagram/artwork) are supplied via the freeform channel; enforced by disjoint source channels, not inspection; a future AI-artwork tool stays on the authored side. *(Proposed 2026-09-23.)* |
+| [0024](docs/adr/0024-data-definitions-as-declarative-artifacts.md) | Data definitions become first-class declarative artifacts (fields/units/identity/validation/metadata), not hardcoded `_PLATFORM_PATTERNS`; novel data flows into the one `integrated.json`; sequenced format → pipeline consumption → UI (admin route behind the existing obscurity gate, last). Prerequisite for the annotated-chart tool (ADR-0023). *(Proposed 2026-09-23.)* |
 
 > **Note (2026-05):** the report's output pivoted from Typst/PDF to
 > **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface. A
