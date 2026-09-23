@@ -1,7 +1,6 @@
 # Phase 3 design — kind-aware reprocess currency
 
-Status: **Phase 3a SHIPPED (2026-09-22)**; Phase 3b (categorical-flip detection)
-DEFERRED, blocked on template+binding persistence. Original draft 2026-09-02.
+Status: **Phase 3a + 3b SHIPPED (2026-09-22).** Original draft 2026-09-02.
 Depends on Phase 0 (`workflow/content_origin`) and Phase 2
 (`narrative/section_template.categorical_flips`), both committed.
 Design source: memory `project_integrated_wizard_versioned_preview.md` Decision 2.
@@ -21,13 +20,20 @@ Design source: memory `project_integrated_wizard_versioned_preview.md` Decision 
   disabled while any LLM section is stale-and-unaccepted (commit `b8c2fa6`).
 - Re-acceptance clears `stale` via `accept_section_step` (unchanged).
 
-**Phase 3b — NOT started, blocked on a prerequisite.** `classify_section_reprocess`
-still has the 2-arg signature; `REFRESH_WITH_WORDING_REVIEW` / `wording_review` markers
-do not exist. `narrative.section_template.categorical_flips()` EXISTS but is uncalled at
-reprocess because `bm2_*` sections persist rendered `paragraphs`, not `template + last
-binding`, so a reprocess cannot diff old-vs-new to detect a flip. Until that persistence
-lands (touches how `unified_narrative` output is stored in `process_integrated`), the
-programmatic path correctly degrades to "refresh, no flip detection." See "Prerequisite".
+**Phase 3b — DONE (commit `0348d83`), minimal-scope variant.** Instead of persisting the
+full `Template` + binding (the doc's original prerequisite — no near-term consumer under
+ADR-0018/0021), we persist only the CATEGORICAL slot VALUES per finding as a
+`cat_signature` on each apical section card (`narrative.unified_narrative.
+apical_cat_signature` / `platform_cat_signature`; card attach in `processing_helpers.py`;
+`_SECTIONS_CACHE_SCHEMA_VERSION` 9→10). Flip detection is `workflow.reprocess.
+cat_signature_flips` (diffs value dicts, not a Template — so `section_template.
+categorical_flips` stays unused). It runs at `materialize_result_sections` (the ONLY point
+old + new signatures coexist — invalidate runs at upload with no new binding), and stamps
+`wording_review: [keys]` gated on **prior approval** (not `user_edited`, which ADR-0018
+makes ~never true in-app). Surfaced as an amber, NON-blocking badge on the Sections row —
+deliberately not routed through the publish gate. `classify_section_reprocess` was left
+2-arg (no `REFRESH_WITH_WORDING_REVIEW` action — the marker is an additive annotation, not
+a currency state; programmatic sections still don't stale).
 
 ## The problem this fixes
 
