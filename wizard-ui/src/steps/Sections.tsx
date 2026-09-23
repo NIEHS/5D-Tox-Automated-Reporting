@@ -115,14 +115,35 @@ function SectionRow({
   else if (hasContent) state = { cls: "ok", text: "generated" };
   else state = { cls: "warn", text: "not generated" };
 
+  // Phase 3b inform-signal: a data-derived word (direction/trend) flipped under
+  // this approved section's wording on the last reprocess. NON-blocking — an amber
+  // nudge to re-read the prose, distinct from the currency/publish block.
+  const wordingReview = Array.isArray(content?.wording_review)
+    ? (content!.wording_review as string[])
+    : [];
+  const flippedSlots = Array.from(
+    new Set(wordingReview.map((k) => k.split(".").pop() || k))
+  ).join(", ");
+
   return (
     <div className="section-row">
       <div className="section-row-main">
         <strong>{label}</strong>
         {note && <span className="muted section-row-note">{note}</span>}
+        {flippedSlots && (
+          <span className="reaccept-note" role="note">
+            Data-derived wording may have changed ({flippedSlots}) since this was
+            approved — review the prose before export.
+          </span>
+        )}
       </div>
       <div className="section-row-status">
         {busy && <Spinner />}
+        {flippedSlots && (
+          <span className="badge warn" title={`Flipped: ${wordingReview.join(", ")}`}>
+            review wording
+          </span>
+        )}
         <span className={`badge ${state.cls}`}>{state.text}</span>
         {enabled && hasContent && (
           <span className="muted">{paras} {unit}{paras === 1 ? "" : "s"}</span>

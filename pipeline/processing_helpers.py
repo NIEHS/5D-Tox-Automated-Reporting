@@ -541,6 +541,14 @@ def _build_section_cards(
         # Drop sex groups that have no responsive endpoints (for narrative only)
         responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
 
+        # Categorical signature (Phase 3b): the data-derived WORDS (direction/trend)
+        # of this platform's significant findings, keyed by finding identity. Carried
+        # on the card so a later reprocess can flag a flip against an approved
+        # section (workflow.reprocess.cat_signature_flips). Parallel projection over
+        # the SAME rows the narrative uses — the prose is unaffected.
+        from narrative.unified_narrative import platform_cat_signature
+        cat_signature = platform_cat_signature(platform, sex_rows, dose_unit)
+
         # ── Body Weight: use sidecar builder when available ──────────────
         # Body weight bypasses the responsive filter because the NIEHS
         # reference ALWAYS includes Table 2 (body weights) regardless of
@@ -600,6 +608,7 @@ def _build_section_cards(
                     "title": platform,
                     "tables_json": bw_result["table_data"],
                     "narrative": narrative,
+                    "cat_signature": cat_signature,
                     # Pass through body-weight-specific fields that the
                     # Typst template and UI use for specialized rendering.
                     # `footnotes` is the typed footnote list (legend /
@@ -654,6 +663,7 @@ def _build_section_cards(
                         "title": platform,
                         "tables_json": cp_result["table_data"],
                         "narrative": narrative,
+                        "cat_signature": cat_signature,
                         "first_col_header": cp_result.get("first_col_header"),
                         "caption": cp_result.get("caption"),
                         # Typed footnote list — the significance legend and
@@ -698,6 +708,7 @@ def _build_section_cards(
                         "title": platform,
                         "tables_json": ow_result["table_data"],
                         "narrative": narrative,
+                        "cat_signature": cat_signature,
                         "first_col_header": ow_result.get("first_col_header"),
                         "caption": ow_result.get("caption"),
                         # Typed footnote list — the significance legend and
@@ -728,6 +739,7 @@ def _build_section_cards(
             "title": platform,
             "tables_json": tables_json,
             "narrative": narrative,
+            "cat_signature": cat_signature,
         })
     # Uniform apical sex prune — covers the sidecar builders (Body/Organ Weight)
     # whose fixed ("Male","Female") loop ignores the narrowed platform_tables.

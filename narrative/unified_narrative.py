@@ -1270,3 +1270,135 @@ def generate_clinical_pathology_narrative(
         paragraphs.extend(sub_paras)
 
     return paragraphs
+
+
+# ---------------------------------------------------------------------------
+# Categorical signature (Phase 3b — reprocess wording-review detection)
+# ---------------------------------------------------------------------------
+#
+# A programmatic finding sentence carries data-DERIVED WORDS (direction / trend),
+# not just magnitudes. A data reprocess auto-refreshes the numbers, but a FLIP of
+# one of those words can leave an author's approved wording contradicting the data.
+# These projections capture ONLY the categorical slot values per significant
+# finding, keyed by a stable identity (`{sex}|{label}`), so a later reprocess can
+# diff old-vs-new and flag the flip (workflow.reprocess.cat_signature_flips). They
+# are a SEPARATE pass over the same rows the paragraph builders use — the prose path
+# is untouched, so narrative output stays byte-identical.
+#
+# Only the CATEGORICAL binding values are collected (direction/trend/direction_noun/
+# direction_adj); numeric slots (bmd/bmdl/loel/unit) are silent-refresh-safe and
+# excluded. The filtering predicates mirror the builders EXACTLY (responsive AND
+# bmd_str != "ND"), so a finding appears in the signature iff it is templated in the
+# prose.
+
+
+def _cat_only(binding: dict) -> dict:
+    """Keep just the categorical slot values from a `_bind_*` projection."""
+    return {
+        k: v for k, v in binding.items()
+        if k in ("direction", "trend", "direction_noun", "direction_adj")
+    }
+
+
+def platform_cat_signature(
+    platform: str | None,
+    sex_rows: dict[str, list],
+    dose_unit: str,
+) -> dict[str, dict[str, str]]:
+    """Per-card categorical signature — one platform's `{sex -> [TableRow]}`.
+
+    The signature twin of `generate_platform_narrative`: dispatches to the same
+    per-platform projection so a section CARD (built per platform) carries the
+    categorical values of exactly the findings its prose describes. Keyed
+    `{sex}|{label}` (body weight / clinical) or `{sex}|{organ_name}` (organ). Empty
+    for platforms with no templated categorical findings (e.g. Tissue Concentration).
+    """
+    if not sex_rows:
+        return {}
+    if platform == "Body Weight":
+        return apical_cat_signature({"Body Weight": sex_rows}, dose_unit)
+    if platform == "Organ Weight":
+        return apical_cat_signature({"Organ Weight": sex_rows}, dose_unit)
+    if platform in CLINICAL_PATH_PLATFORMS:
+        return clinical_pathology_cat_signature({platform: sex_rows}, dose_unit)
+    # Unknown/None → auto-detect exactly like generate_platform_narrative: try the
+    # apical (body+organ) projection, else the clinical one.
+    sig = apical_cat_signature(
+        {"Body Weight": sex_rows, "Organ Weight": sex_rows}, dose_unit)
+    if sig:
+        return sig
+    return clinical_pathology_cat_signature({(platform or ""): sex_rows}, dose_unit)
+
+
+def apical_cat_signature(
+    platform_tables: dict[str, dict[str, list]],
+    dose_unit: str,
+    organ_allowlist: list[str] | None = None,
+    ow_sex_allowlist: list[str] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Categorical values for the significant Body Weight + Organ Weight findings.
+
+    Keyed `{sex}|{label}` for body weight (one row per endpoint) and
+    `{sex}|{organ_name}` for organ weight (grouped by organ, matching the prose).
+    Pure; mirrors _build_body_weight_paragraphs / _build_organ_weight_paragraphs
+    filtering so the signature and the prose describe the same findings.
+    """
+    sig: dict[str, dict[str, str]] = {}
+
+    # Body weight — one significant row per sex/endpoint.
+    bw_data = platform_tables.get("Body Weight", {})
+    for sex in ["Male", "Female"]:
+        for bw_row in bw_data.get(sex, []):
+            if _parse_organ_label(bw_row.label)[1] != "body_weight":
+                continue
+            if not bw_row.responsive or bw_row.bmd_str == "ND":
+                continue
+            direction = _endpoint_direction(bw_row)
+            binding = _bind_body_weight(bw_row, dose_unit, direction, None)
+            sig[f"{sex}|{bw_row.label}"] = _cat_only(binding)
+
+    # Organ weight — grouped by organ name per sex (same grain as the prose).
+    from document_model.filters import organ_allowed, sex_allowed
+
+    ow_data = platform_tables.get("Organ Weight", {})
+    for sex in ["Male", "Female"]:
+        if not sex_allowed(sex, ow_sex_allowlist):
+            continue
+        organ_rows = [
+            r for r in ow_data.get(sex, [])
+            if _parse_organ_label(r.label)[1] != "body_weight"
+            and organ_allowed(_parse_organ_label(r.label)[0], organ_allowlist)
+        ]
+        sig_rows = [r for r in organ_rows if r.responsive and r.bmd_str != "ND"]
+        organ_groups: dict[str, list] = {}
+        for r in sig_rows:
+            organ_name, _wt = _parse_organ_label(r.label)
+            organ_groups.setdefault(organ_name, []).append(r)
+        for organ_name, group_rows in organ_groups.items():
+            direction = _endpoint_direction(group_rows[0])
+            binding = _bind_organ_finding(group_rows, dose_unit, direction, None)
+            sig[f"{sex}|{organ_name}"] = _cat_only(binding)
+
+    return sig
+
+
+def clinical_pathology_cat_signature(
+    platform_tables: dict[str, dict[str, list]],
+    dose_unit: str,
+) -> dict[str, dict[str, str]]:
+    """Categorical values for the significant Clinical Pathology findings.
+
+    Keyed `{sub_platform}|{sex}|{label}` (one significant row per endpoint). Pure;
+    mirrors _build_sub_platform_paragraphs filtering.
+    """
+    sig: dict[str, dict[str, str]] = {}
+    for sub_platform in CLINICAL_PATH_ORDER:
+        sex_rows = platform_tables.get(sub_platform, {})
+        for sex in ["Male", "Female"]:
+            for r in sex_rows.get(sex, []):
+                if not r.responsive or r.bmd_str == "ND":
+                    continue
+                direction = _endpoint_direction(r)
+                binding = _bind_sub_platform_finding(r, dose_unit, direction, None)
+                sig[f"{sub_platform}|{sex}|{r.label}"] = _cat_only(binding)
+    return sig

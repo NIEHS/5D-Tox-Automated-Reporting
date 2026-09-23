@@ -252,3 +252,89 @@ def test_materialize_result_sections_no_cache_is_noop(sessions_dir):
     (sessions_dir / "DTXSID_VC").mkdir(parents=True)
     result = materialize_result_sections("DTXSID_VC", DiskPoolStore())
     assert result == {"ok": True, "materialized": []}
+
+
+# --- Phase 3b: wording_review flip detection at materialize -----------------
+# The section carries a `cat_signature` (categorical slot values per finding). On a
+# reprocess that FLIPS one against a section the human had APPROVED, materialize
+# stamps a non-blocking `wording_review` marker. Gate: prior-approved AND flipped.
+
+def _seed_cache(d, cat_signature):
+    import json
+
+    # Evict any prior sections cache (mimics _save_cache) so _latest_cache is
+    # unambiguous regardless of mtime granularity, then write the new superset.
+    for old in d.glob("_cache_sections_*.json"):
+        old.unlink()
+    (d / "_cache_sections_seed.json").write_text(json.dumps({"sections": [
+        {"platform": "Body Weight", "title": "Body Weight",
+         "tables_json": {"rows": []}, "narrative": ["Body weight decreased."],
+         "cat_signature": cat_signature},
+    ]}))
+
+
+def test_wording_review_stamped_on_flip_against_approved(sessions_dir):
+    import json
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_VC"
+    d.mkdir(parents=True)
+    # First materialize with direction "decreased", then the human approves it.
+    _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+    bw_path = d / "bm2_body-weight.json"
+    approved = json.loads(bw_path.read_text())
+    approved["approved"] = True
+    bw_path.write_text(json.dumps(approved))
+
+    # Reprocess flips the direction; materialize again.
+    _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "increased", "trend": "positive"}})
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+
+    bw = json.loads(bw_path.read_text())
+    assert bw["wording_review"] == [
+        "Male|Terminal Body Wt..direction", "Male|Terminal Body Wt..trend"
+    ]
+    # It is an inform-signal, not a currency block: the section is provisional again.
+    assert bw["approved"] is False
+
+
+def test_no_wording_review_when_never_approved(sessions_dir):
+    import json
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_VC"
+    d.mkdir(parents=True)
+    _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}})
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+    # NOT approved — just re-materialize with a flipped signature.
+    _seed_cache(d, {"Male|Terminal Body Wt.": {"direction": "increased", "trend": "positive"}})
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+
+    bw = json.loads((d / "bm2_body-weight.json").read_text())
+    assert "wording_review" not in bw  # provisional wording regenerates freely
+
+
+def test_no_wording_review_when_signature_unchanged(sessions_dir):
+    import json
+    from workflow.steps import materialize_result_sections
+    from workflow.store import DiskPoolStore
+
+    d = sessions_dir / "DTXSID_VC"
+    d.mkdir(parents=True)
+    sig = {"Male|Terminal Body Wt.": {"direction": "decreased", "trend": "negative"}}
+    _seed_cache(d, sig)
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+    bw_path = d / "bm2_body-weight.json"
+    approved = json.loads(bw_path.read_text())
+    approved["approved"] = True
+    bw_path.write_text(json.dumps(approved))
+
+    # Reprocess with the SAME signature (numbers may have refreshed, words did not).
+    _seed_cache(d, sig)
+    materialize_result_sections("DTXSID_VC", DiskPoolStore())
+
+    bw = json.loads(bw_path.read_text())
+    assert "wording_review" not in bw

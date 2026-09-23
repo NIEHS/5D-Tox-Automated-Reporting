@@ -168,6 +168,11 @@ export interface SectionData {
   // The per-section publish blocker carries the same reason; the UI decides
   // "Re-accept" from the parent-derived blockedReason prop, not from this field.
   regenerated?: { reason?: string } | null;
+  // Phase 3b inform-signal: a data-derived WORD (direction/trend) flipped under an
+  // APPROVED programmatic section's wording after a reprocess. NON-blocking — the
+  // numbers refreshed correctly, but the author's committed wording may now
+  // contradict the data. Each entry is a "finding_id.slot" key. Absent = no flip.
+  wording_review?: string[];
   [k: string]: unknown;
 }
 

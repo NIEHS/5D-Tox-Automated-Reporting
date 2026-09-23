@@ -68,8 +68,11 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     is read-only, not an authorable/approvable section — ADR-0018). Returns
     `{ok, materialized: [section_key, ...]}`.
     """
+    import json
+
     from pipeline.session_db import _latest_cache
     from pipeline.session_store import bm2_slug, save_section
+    from workflow.reprocess import cat_signature_flips
 
     sdir = store.session_dir(dtxsid)
     cache = _latest_cache(sdir, "sections")
@@ -84,18 +87,48 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         if not slug:
             continue
         section_key = f"bm2_{slug}"
+        cat_signature = sec.get("cat_signature") or {}
+
+        # Read the PRIOR section file (if any) BEFORE overwriting it — this is the
+        # only point where the old and new categorical signatures coexist, so it is
+        # where Phase 3b flip detection must run (invalidate ran at upload and kept
+        # no new binding; the reprocess that produced `sec` deleted the old cache).
+        # Capture whether the human had APPROVED the prior wording and its signature.
+        prior_path = sdir / f"{section_key}.json"
+        was_approved = False
+        old_signature: dict = {}
+        if prior_path.exists():
+            try:
+                prior = json.loads(prior_path.read_text(encoding="utf-8"))
+                was_approved = bool(prior.get("approved"))
+                old_signature = prior.get("cat_signature") or {}
+            except (json.JSONDecodeError, OSError, ValueError):
+                pass
+
         # Carry the render-relevant fields verbatim; stamp provisional (unapproved).
         data = {
             "platform": sec.get("platform"),
             "title": title,
             "tables_json": sec.get("tables_json"),
             "narrative": sec.get("narrative", []) or [],
+            "cat_signature": cat_signature,
             "first_col_header": sec.get("first_col_header"),
             "caption": sec.get("caption"),
             "footnotes": sec.get("footnotes"),
             "approved": False,
             "source": "generated",
         }
+
+        # Wording-review inform-signal (Phase 3b): only when the human had APPROVED
+        # the prior wording AND a data-derived WORD flipped under it. Not a block —
+        # programmatic content asserts no LLM judgement; it flags that the author's
+        # committed wording may now contradict the refreshed data. Fail-soft: no
+        # prior / never approved / no flip → no marker → byte-identical to before.
+        if was_approved:
+            flips = cat_signature_flips(old_signature, cat_signature)
+            if flips:
+                data["wording_review"] = flips
+
         # archive=False: a regenerate/materialize is not a new blessed version.
         save_section(dtxsid, section_key, data, archive=False)
         materialized.append(section_key)

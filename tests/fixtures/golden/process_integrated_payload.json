@@ -99,6 +99,16 @@
   },
   "sections": [
     {
+      "cat_signature": {
+        "Female|SD5": {
+          "direction": "increased",
+          "trend": "positive"
+        },
+        "Male|SD5": {
+          "direction": "increased",
+          "trend": "positive"
+        }
+      },
       "narrative": [],
       "platform": "Body Weight",
       "tables_json": {
@@ -154,6 +164,16 @@
       "title": "Body Weight"
     },
     {
+      "cat_signature": {
+        "Clinical Chemistry|Male|ALT": {
+          "direction": "increased",
+          "trend": "positive"
+        },
+        "Clinical Chemistry|Male|AST": {
+          "direction": "increased",
+          "trend": "positive"
+        }
+      },
       "narrative": [],
       "platform": "Clinical Chemistry",
       "tables_json": {

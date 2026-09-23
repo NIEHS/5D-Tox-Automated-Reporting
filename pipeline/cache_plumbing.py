@@ -184,7 +184,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 9  # bumped: sections cache is now filter-AGNOSTIC (full superset); apical/organ-weight filters applied after the cache read (phase 2)
+_SECTIONS_CACHE_SCHEMA_VERSION = 10  # bumped: apical cards carry `cat_signature` (categorical slot values per finding) for Phase 3b reprocess wording-review detection
 
 
 def _fingerprint_files(paths) -> list[list]:

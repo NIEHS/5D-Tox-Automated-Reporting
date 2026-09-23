@@ -119,3 +119,47 @@ def can_publish_report(sections: "dict[str, dict | None]") -> bool:
     LLM section. Empty/all-fresh -> True.
     """
     return not blocking_llm_sections(sections)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3b — categorical-flip detection for PROGRAMMATIC sections
+# ---------------------------------------------------------------------------
+#
+# A programmatic apical section refreshes its numbers silently on reprocess (it
+# asserts no LLM judgement to re-bless), BUT a data-derived WORD can flip
+# (direction increased<->decreased, trend positive<->negative). If the section was
+# approved, the author committed to wording that a flip may now contradict — worth
+# an inform-signal, not a hard block. This is the minimal-scope analogue of
+# narrative.section_template.categorical_flips: it diffs two "categorical
+# signatures" (nested {finding_id: {slot: value}} value dicts persisted on the
+# section, produced by narrative.unified_narrative.apical_cat_signature) instead of
+# a Template, so no template serialization is needed.
+
+
+def cat_signature_flips(
+    old: "dict | None", new: "dict | None"
+) -> list[str]:
+    """The categorical values that CHANGED between two signatures.
+
+    `old` / `new` are `{finding_id: {slot_key: value}}` (e.g.
+    `{"Male|liver": {"direction_adj": "increased", "trend": "positive"}}`). Returns
+    a sorted list of `"{finding_id}.{slot_key}"` for every slot whose value differs
+    across the two — a NON-empty result is the Phase 3b "wording may now contradict
+    the data" signal.
+
+    Only findings present in BOTH signatures are compared: a finding that appeared
+    or disappeared is a structural change the numeric refresh already handles (the
+    prose is rebuilt), not a wording contradiction under stable structure. A missing
+    or non-dict side yields no flips (fail-safe: nothing to compare -> no signal).
+    """
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return []
+    flips: list[str] = []
+    for finding_id, old_vals in old.items():
+        new_vals = new.get(finding_id)
+        if not isinstance(old_vals, dict) or not isinstance(new_vals, dict):
+            continue
+        for slot_key, old_v in old_vals.items():
+            if slot_key in new_vals and new_vals[slot_key] != old_v:
+                flips.append(f"{finding_id}.{slot_key}")
+    return sorted(flips)
