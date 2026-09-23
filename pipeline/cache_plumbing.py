@@ -75,15 +75,23 @@ def _load_cache(dtxsid: str, unit: str, hash_val: str) -> dict | None:
         unit:     Cache unit name (ntp, sections, bmds, genomics, bmd_summary).
         hash_val: 16-char hex hash of the inputs that affect this unit.
     """
+    from common import provenance
+
     cache_path = _session_dir(dtxsid) / f"_cache_{unit}_{hash_val}.json"
     if not cache_path.exists():
+        provenance.record("cache_miss", dtxsid=dtxsid, unit=unit, hash=hash_val)
         return None
     try:
-        data = orjson.loads(cache_path.read_bytes())
+        raw = cache_path.read_bytes()
+        data = orjson.loads(raw)
         logger.info("Cache hit: %s for %s (hash %s)", unit, dtxsid, hash_val)
+        provenance.record(
+            "cache_hit", dtxsid=dtxsid, unit=unit, hash=hash_val, bytes=len(raw)
+        )
         return data
     except Exception:
         logger.warning("Corrupted %s cache for %s, recomputing", unit, dtxsid)
+        provenance.record("cache_corrupt", dtxsid=dtxsid, unit=unit, hash=hash_val)
         return None
 
 
@@ -118,8 +126,13 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
         # / iterate them, never do arithmetic on the keys).  Without it the
         # methods cache write silently failed, so M&M re-ran the LLM on every
         # reload instead of being served from cache.
-        cache_path.write_bytes(orjson.dumps(data, option=orjson.OPT_NON_STR_KEYS))
+        payload = orjson.dumps(data, option=orjson.OPT_NON_STR_KEYS)
+        cache_path.write_bytes(payload)
         logger.info("Cached %s for %s (%s)", unit, dtxsid, cache_path.name)
+        from common import provenance
+        provenance.record(
+            "cache_saved", dtxsid=dtxsid, unit=unit, hash=hash_val, bytes=len(payload)
+        )
     except Exception:
         logger.warning("Failed to cache %s for %s", unit, dtxsid, exc_info=True)
 

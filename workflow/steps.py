@@ -132,6 +132,12 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
         # archive=False: a regenerate/materialize is not a new blessed version.
         save_section(dtxsid, section_key, data, archive=False)
         materialized.append(section_key)
+        from common import provenance
+        provenance.record(
+            "materialized", dtxsid=dtxsid, section_key=section_key,
+            platform=sec.get("platform"), was_approved=was_approved,
+            wording_review=bool(data.get("wording_review")),
+        )
 
     return {"ok": True, "materialized": materialized}
 

@@ -166,6 +166,50 @@ async def user_gate_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+def _dtxsid_from_path(path: str) -> str | None:
+    """Pull the DTXSID out of an /api/ path, whatever the route shape.
+
+    dtxsid appears as a path segment in every instrumented route
+    (/api/session/{dtxsid}, /api/workflow/{dtxsid}/..., /api/process-integrated/
+    {dtxsid}, /api/pool/materialize-sections/{dtxsid}). We scan segments rather than
+    match each route so a new route is covered for free."""
+    for seg in path.split("/"):
+        if seg.startswith("DTXSID"):
+            return seg
+    return None
+
+
+@app.middleware("http")
+async def provenance_middleware(request: Request, call_next):
+    """Open a per-request provenance context (a fresh request_id) and flush the
+    collected section-fate events to the session's .provenance.jsonl at request end.
+
+    Observability side channel only — wraps every /api/ request so any instrumented
+    seam reached during it records under one correlated id; a non-/api/ request (static
+    assets) is passed straight through. Fail-soft by construction (provenance.record /
+    flush swallow their own errors), and the timing/flush is best-effort — it must never
+    change the response."""
+    import time
+    import uuid
+
+    from common import provenance
+
+    path = request.url.path
+    if not path.startswith("/api/"):
+        return await call_next(request)
+
+    request_id = uuid.uuid4().hex[:12]
+    dtxsid = _dtxsid_from_path(path)
+    started = time.monotonic()
+    with provenance.request_context(request_id):
+        try:
+            return await call_next(request)
+        finally:
+            if dtxsid:
+                total_ms = round((time.monotonic() - started) * 1000, 1)
+                provenance.flush(dtxsid, path=path, total_ms=total_ms)
+
+
 # ---------------------------------------------------------------------------
 # Router mounts — each module defines an APIRouter with its endpoints
 # ---------------------------------------------------------------------------

@@ -244,6 +244,12 @@ async def api_session_load(dtxsid: Dtxsid):
         "summary": {...} or null
       }
     """
+    import time as _time
+
+    from common import provenance
+
+    _load_t0 = _time.monotonic()
+
     _bm2_uploads = get_bm2_uploads()
     _data_uploads = get_data_uploads()
 
@@ -266,11 +272,20 @@ async def api_session_load(dtxsid: Dtxsid):
         if entry.get("temp_path")
     }
 
-    # Helper: read a JSON file if it exists, else return None
+    # Helper: read a JSON file if it exists, else return None.
+    # Records a `disk_read` provenance event (bytes + ms) per hit so the session-load
+    # profile shows which reads dominate the "loading from cache" wait.
     def _read_json(name: str):
         p = d / name
         if p.exists():
-            return json.loads(p.read_text(encoding="utf-8"))
+            _t0 = _time.monotonic()
+            text = p.read_text(encoding="utf-8")
+            data = json.loads(text)
+            provenance.record(
+                "disk_read", dtxsid=dtxsid, unit=name, bytes=len(text),
+                ms=round((_time.monotonic() - _t0) * 1000, 1),
+            )
+            return data
         return None
 
     # Gather all bm2_*.json files into a dict keyed by slug.
@@ -283,7 +298,13 @@ async def api_session_load(dtxsid: Dtxsid):
     for f in sorted(d.glob("bm2_*.json")):
         # Filename is e.g. "bm2_organ-and-body-weights.json"
         slug = f.stem.removeprefix("bm2_")
-        section = json.loads(f.read_text(encoding="utf-8"))
+        _t0 = _time.monotonic()
+        _text = f.read_text(encoding="utf-8")
+        section = json.loads(_text)
+        provenance.record(
+            "disk_read", dtxsid=dtxsid, unit=f.stem, bytes=len(_text),
+            ms=round((_time.monotonic() - _t0) * 1000, 1),
+        )
 
         # Re-register the .bm2 file in _bm2_uploads if it exists on disk.
         # This makes the file fully functional (preview, process, export)
@@ -401,7 +422,13 @@ async def api_session_load(dtxsid: Dtxsid):
     genomics_sections = {}
     for f in sorted(d.glob("genomics_*.json")):
         slug = f.stem.removeprefix("genomics_")
-        genomics_sections[slug] = json.loads(f.read_text(encoding="utf-8"))
+        _t0 = _time.monotonic()
+        _text = f.read_text(encoding="utf-8")
+        genomics_sections[slug] = json.loads(_text)
+        provenance.record(
+            "disk_read", dtxsid=dtxsid, unit=f.stem, bytes=len(_text),
+            ms=round((_time.monotonic() - _t0) * 1000, 1),
+        )
 
     # Load the raw organ_sex-keyed genomics cache first — used by both
     # the narrative assembler and (Bug C fallback) by the client when
@@ -410,8 +437,14 @@ async def api_session_load(dtxsid: Dtxsid):
     genomics_cache_path = None
     try:
         for gc in sorted(d.glob("_cache_genomics_*.json")):
-            genomics_cache = json.loads(gc.read_text(encoding="utf-8"))
+            _t0 = _time.monotonic()
+            _text = gc.read_text(encoding="utf-8")
+            genomics_cache = json.loads(_text)
             genomics_cache_path = gc
+            provenance.record(
+                "disk_read", dtxsid=dtxsid, unit="_cache_genomics", bytes=len(_text),
+                ms=round((_time.monotonic() - _t0) * 1000, 1),
+            )
             break
     except Exception:
         pass
@@ -431,8 +464,14 @@ async def api_session_load(dtxsid: Dtxsid):
     chart_cache_path = None
     try:
         for cc in sorted(d.glob("_cache_charts_*.json")):
-            chart_images = json.loads(cc.read_text(encoding="utf-8"))
+            _t0 = _time.monotonic()
+            _text = cc.read_text(encoding="utf-8")
+            chart_images = json.loads(_text)
             chart_cache_path = cc
+            provenance.record(
+                "disk_read", dtxsid=dtxsid, unit="_cache_charts", bytes=len(_text),
+                ms=round((_time.monotonic() - _t0) * 1000, 1),
+            )
             break
     except Exception:
         pass

@@ -43,6 +43,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 
 import orjson
@@ -1360,6 +1361,8 @@ async def prepare_content_if_changed(ctx) -> bool:
                     logger.info(
                         "Content for %s unchanged — skipped preparation", ctx.dtxsid
                     )
+                    from common import provenance
+                    provenance.record("content_skipped", dtxsid=ctx.dtxsid)
                     return False
         except Exception:
             logger.warning(
@@ -1367,7 +1370,13 @@ async def prepare_content_if_changed(ctx) -> bool:
             )
 
     ctx.content_errors = []
+    from common import provenance
+    _content_t0 = time.monotonic()
     await prepare_content(ctx)
+    provenance.record(
+        "content_regenerated", dtxsid=ctx.dtxsid,
+        ms=round((time.monotonic() - _content_t0) * 1000, 1),
+    )
 
     # A degraded run (some fail-soft builder dropped its output — see
     # ProcessContext.content_errors) is served to the user this once but NOT
