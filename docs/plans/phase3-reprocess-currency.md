@@ -1,8 +1,33 @@
 # Phase 3 design — kind-aware reprocess currency
 
-Status: DRAFT for review (2026-09-02). Depends on Phase 0 (`workflow/content_origin`)
-and Phase 2 (`narrative/section_template.categorical_flips`), both committed.
+Status: **Phase 3a SHIPPED (2026-09-22)**; Phase 3b (categorical-flip detection)
+DEFERRED, blocked on template+binding persistence. Original draft 2026-09-02.
+Depends on Phase 0 (`workflow/content_origin`) and Phase 2
+(`narrative/section_template.categorical_flips`), both committed.
 Design source: memory `project_integrated_wizard_versioned_preview.md` Decision 2.
+
+## Implementation status (2026-09-22)
+
+**Phase 3a — DONE.** All of it is built and wired:
+- `workflow/reprocess.py` — pure router (`classify_section_reprocess`,
+  `should_stale_on_reprocess`, `blocking_llm_sections`, `can_publish_report`).
+- `pipeline/pool_state.invalidate_pool_artifacts` + `pool_admin.invalidate_downstream`
+  route by origin (programmatic refresh, LLM stale+demote+`regenerated`). Both iterate
+  the shared `session_store.iter_section_files` — the fix for the bug where the four
+  SINGLETON LLM sections (background/methods/summary/bmd_summary) were skipped by a
+  `bm2_*`/`genomics_*`-only glob and never demoted (commit `472e759`).
+- Publish gate: `engine.publish_readiness` + `GET /api/workflow/{id}/publish-readiness`
+  + `usePublishReadiness`, and **now ENFORCED** — the Preview deliverable download is
+  disabled while any LLM section is stale-and-unaccepted (commit `b8c2fa6`).
+- Re-acceptance clears `stale` via `accept_section_step` (unchanged).
+
+**Phase 3b — NOT started, blocked on a prerequisite.** `classify_section_reprocess`
+still has the 2-arg signature; `REFRESH_WITH_WORDING_REVIEW` / `wording_review` markers
+do not exist. `narrative.section_template.categorical_flips()` EXISTS but is uncalled at
+reprocess because `bm2_*` sections persist rendered `paragraphs`, not `template + last
+binding`, so a reprocess cannot diff old-vs-new to detect a flip. Until that persistence
+lands (touches how `unified_narrative` output is stored in `process_integrated`), the
+programmatic path correctly degrades to "refresh, no flip detection." See "Prerequisite".
 
 ## The problem this fixes
 
