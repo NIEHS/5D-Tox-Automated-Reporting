@@ -1,7 +1,19 @@
 # bmdx-pipe seam re-cut — scope
 
-Status: SCOPING (2026-09-08). The broad refactor motivated by ADR-0017 and the
-misnomer/mis-cut finding (`project_bmdx_pipe_seam`). Executed as ordered,
+Status: **DONE (2026-09-09).** The seam objective — data-model/compute vs.
+presentation, cut cleanly — is achieved. Increments **A1a** (retire the duplicated
+per-platform narrative; presentation off the library), **C1** (delete the docx
+emitters + CLI → library is data-only), and **D** (content-anchored dataType
+classifier, ADR-0017) all shipped and verified (see the per-increment "DONE"
+sections below). **B** (rename `bmdx_pipe`) was deliberately NOT done — downgraded
+to "keep the name": once A1a+C1 removed the presentation, what remains IS a data
+pipeline, and if it ever drives BMD Express runs "pipe" becomes literally accurate
+(maintainer decision). No open increments remain; the D-semantics "open question"
+(relax the value guard?) was resolved during the build — D classifies on dose-group
+DROP (a roster fact), so the value guard's block behavior stays as-is.
+
+Original scoping below (2026-09-08). The broad refactor motivated by ADR-0017 and
+the misnomer/mis-cut finding (`project_bmdx_pipe_seam`). Executed as ordered,
 independently-committable increments behind the characterization net
 (`bmdx-pipe/tests/test_classification_characterization.py`, and the rlm-bmdx
 integration/golden suites).
