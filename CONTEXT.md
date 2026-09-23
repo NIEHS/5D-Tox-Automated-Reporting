@@ -229,6 +229,7 @@ contradicts one, surface it explicitly rather than silently overriding.
 | [0020](docs/adr/0020-one-evolving-report-not-a-version-tree.md) | One evolving report with history, not a tree of coexisting versions — settles ADR-0014 vs ADR-0016; keeps 0016's substrate + rendering-domain seam, drops "a version is a rendering domain." *(Accepted.)* |
 | [0021](docs/adr/0021-three-concerns-data-content-rendering.md) | Three concerns — processing, content preparation, rendering — with content prep as an eager, separated step; the content→surface IR interface declined (YAGNI). *(Accepted.)* |
 | [0022](docs/adr/0022-session-interpretation-chat.md) | Session interpretation chat: a tool-using, knowledge-graph-grounded assistant over one session's data and report; citations verified post-answer; exploratory only (ADR-0018). *(Accepted 2026-09-21.)* |
+| [0023](docs/adr/0023-figure-provenance-boundary.md) | Figure provenance boundary: data-figures MUST be constructed from study data (no upload path), authored-figures (diagram/artwork) are supplied via the freeform channel; enforced by disjoint source channels, not inspection; a future AI-artwork tool stays on the authored side. *(Proposed 2026-09-23.)* |
 
 > **Note (2026-05):** the report's output pivoted from Typst/PDF to
 > **LaTeX/Overleaf** + the HTML preview; Typst/PDF is no longer a surface. A
