@@ -123,6 +123,36 @@ def safe_filename(name: str) -> str:
     return "".join(c if c.isalnum() or c in " -_" else "_" for c in name)
 
 
+# The singleton report-section files (one per session), distinct from the
+# instance families discovered by glob. This is the SAME vocabulary as
+# workflow.store.DiskPoolStore._BARE_SECTION_STEMS and the section catalog's
+# singletons; kept here too because the reprocess/invalidate paths need the file
+# stems (to write them back via save_section) without importing the workflow store.
+_SINGLETON_SECTION_STEMS: tuple[str, ...] = (
+    "background", "methods", "bmd_summary", "summary",
+)
+
+
+def iter_section_files(session_dir: "Path"):
+    """Yield (stem, path) for every report-section JSON file in a session dir.
+
+    The single authoritative "which files are report sections" rule: the four
+    singleton sections (background/methods/bmd_summary/summary) plus the instance
+    families (bm2_*, genomics_*) discovered by glob. Existence-filtered — only
+    files actually on disk are yielded. Shared by the reprocess/invalidate loops
+    so their section enumeration can never again drift from a hand-kept glob
+    (the F4 bug: the loops globbed only bm2_*/genomics_* and silently skipped the
+    singleton LLM sections, so a reprocess never demoted summary/background/etc.).
+    """
+    for stem in _SINGLETON_SECTION_STEMS:
+        p = session_dir / f"{stem}.json"
+        if p.exists():
+            yield stem, p
+    for pattern in ("bm2_*.json", "genomics_*.json"):
+        for p in sorted(session_dir.glob(pattern)):
+            yield p.stem, p
+
+
 # ---------------------------------------------------------------------------
 # Section persistence — write/read/delete session JSON files
 # ---------------------------------------------------------------------------

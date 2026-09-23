@@ -35,6 +35,12 @@ def staged_session(tmp_path, monkeypatch):
         json.dumps({"approved": True, "gene_set_narrative": ["genomics prose"],
                     "facts": ["final", "protected"]})
     )
+    # A SINGLETON LLM section (summary) — must be staled + demoted on reprocess
+    # just like genomics. The old bm2_*/genomics_*-only glob skipped it (F4).
+    (d / "summary.json").write_text(
+        json.dumps({"approved": True, "paragraphs": ["summary prose"],
+                    "facts": ["final", "protected"]})
+    )
     # integrated.json so the delete branch has something to do (not asserted).
     (d / "integrated.json").write_text("{}")
     return dtxsid, d
@@ -66,6 +72,16 @@ def test_programmatic_not_staled_llm_staled(staged_session):
     # Currency-forced demote (ADR-0015): FINAL withdrawn, PROTECTED stands.
     assert gen["facts"] == ["protected"]
 
+    # Singleton LLM summary: staled + demoted exactly like genomics (F4 — the
+    # bm2_*/genomics_*-only glob used to skip it, leaving a reprocessed report
+    # still claiming its summary was FINAL/approved).
+    summ = _load(d, "summary.json")
+    assert summ["stale"] is True
+    assert summ["regenerated"]["reason"] == "data_changed"
+    assert summ["approved"] is True
+    assert "summary.json" in summary["marked_stale"]
+    assert summ["facts"] == ["protected"]
+
 
 def test_regenerated_marker_only_on_llm(staged_session):
     from pipeline.pool_state import invalidate_pool_artifacts
@@ -87,10 +103,14 @@ def test_pool_admin_standalone_path_matches(staged_session):
 
     bm2 = _load(d, "bm2_organ-and-body-weights.json")
     gen = _load(d, "genomics_liver_male.json")
+    summ = _load(d, "summary.json")
     assert "stale" not in bm2 and "regenerated" not in bm2
     assert gen["stale"] is True
     assert gen["regenerated"]["reason"] == "data_changed"
     assert gen["facts"] == ["protected"]  # same demote as pool_state
+    # Singleton LLM section staled on the CLI path too (twins stay in lockstep).
+    assert summ["stale"] is True
+    assert summ["facts"] == ["protected"]
 
 
 def test_full_ratchet_roundtrip(staged_session):

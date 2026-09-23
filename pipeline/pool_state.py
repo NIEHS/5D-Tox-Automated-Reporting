@@ -233,41 +233,45 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
     # should_stale_on_reprocess is the single predicate (fail-safe: unknown -> LLM
     # -> staled). See docs/plans/phase3-reprocess-currency.md.
     from workflow.reprocess import should_stale_on_reprocess
-    from pipeline.session_store import save_section
+    from pipeline.session_store import save_section, iter_section_files
 
-    for pattern in ("bm2_*.json", "genomics_*.json"):
-        for section_file in d.glob(pattern):
-            try:
-                section_data = json.loads(section_file.read_text(encoding="utf-8"))
-                if not should_stale_on_reprocess(section_file.stem, section_data):
-                    continue  # programmatic (or nothing to act on) — refresh, don't stale
-                if not section_data.get("stale"):
-                    section_data["stale"] = True
-                    # Record WHY it went stale so the LLM rewrite is attributed and
-                    # the publish gate can require a human re-accept (fail-soft:
-                    # absent on programmatic/older sections).
-                    section_data["regenerated"] = {"reason": "data_changed"}
-                    # Involuntary down-ratchet (ADR-0015): the SYSTEM withdraws the
-                    # FINAL maturity claim (currency-forced) while leaving PROTECTED
-                    # standing, so the section stops asserting "editorially done"
-                    # but stays guarded until a human re-accepts. No-op on a section
-                    # holding no maturity fact (older/never-finalized).
-                    _demote_section_facts(section_data)
-                    # Phase 4: a reprocess that changes what the report says must
-                    # leave an AUDITABLE mark on the timeline before re-acceptance.
-                    # Route the write through save_section (not a bare write_text)
-                    # so the prior blessed version is archived and a cause-tagged
-                    # version is minted, born "needs-re-bless" (publish-blocked
-                    # until a human re-accepts — see accept_section_step). The
-                    # marker is transient: save_section pops it, so it never
-                    # persists in the section JSON.
-                    section_data[_VERSION_EVENT_KEY] = {
-                        "cause": "reprocess", "status": "needs-re-bless",
-                    }
-                    save_section(dtxsid, section_file.stem, section_data)
-                    summary["marked_stale"].append(section_file.name)
-                    logger.info("Marked %s as stale for %s", section_file.name, dtxsid)
-            except Exception as e:
-                logger.warning("Failed to mark %s as stale: %s", section_file.name, e)
+    # Iterate EVERY report-section file — the four singletons (background/methods/
+    # bmd_summary/summary) as well as the bm2_*/genomics_* instances. The old
+    # bm2_*/genomics_*-only glob silently skipped the singleton LLM sections, so a
+    # reprocess never demoted summary/background/methods/bmd_summary even though
+    # they are LLM-origin and must be re-blessed (F4).
+    for section_stem, section_file in iter_section_files(d):
+        try:
+            section_data = json.loads(section_file.read_text(encoding="utf-8"))
+            if not should_stale_on_reprocess(section_stem, section_data):
+                continue  # programmatic (or nothing to act on) — refresh, don't stale
+            if not section_data.get("stale"):
+                section_data["stale"] = True
+                # Record WHY it went stale so the LLM rewrite is attributed and
+                # the publish gate can require a human re-accept (fail-soft:
+                # absent on programmatic/older sections).
+                section_data["regenerated"] = {"reason": "data_changed"}
+                # Involuntary down-ratchet (ADR-0015): the SYSTEM withdraws the
+                # FINAL maturity claim (currency-forced) while leaving PROTECTED
+                # standing, so the section stops asserting "editorially done"
+                # but stays guarded until a human re-accepts. No-op on a section
+                # holding no maturity fact (older/never-finalized).
+                _demote_section_facts(section_data)
+                # Phase 4: a reprocess that changes what the report says must
+                # leave an AUDITABLE mark on the timeline before re-acceptance.
+                # Route the write through save_section (not a bare write_text)
+                # so the prior blessed version is archived and a cause-tagged
+                # version is minted, born "needs-re-bless" (publish-blocked
+                # until a human re-accepts — see accept_section_step). The
+                # marker is transient: save_section pops it, so it never
+                # persists in the section JSON.
+                section_data[_VERSION_EVENT_KEY] = {
+                    "cause": "reprocess", "status": "needs-re-bless",
+                }
+                save_section(dtxsid, section_stem, section_data)
+                summary["marked_stale"].append(section_file.name)
+                logger.info("Marked %s as stale for %s", section_file.name, dtxsid)
+        except Exception as e:
+            logger.warning("Failed to mark %s as stale: %s", section_file.name, e)
 
     return summary

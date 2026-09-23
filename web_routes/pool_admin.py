@@ -179,45 +179,50 @@ def invalidate_downstream(session_dir: Path, dry_run: bool = False) -> list[str]
     # staled; LLM (genomics_*) sections are staled + stamped `regenerated` so the
     # rewrite is attributed and the publish gate can require a re-accept.
     from workflow.reprocess import should_stale_on_reprocess
+    from pipeline.session_store import iter_section_files
 
-    for pattern in ("bm2_*.json", "genomics_*.json"):
-        for section_file in sorted(session_dir.glob(pattern)):
-            try:
-                data = json.loads(section_file.read_text(encoding="utf-8"))
-                if not should_stale_on_reprocess(section_file.stem, data):
-                    continue  # programmatic (or nothing to act on) — don't stale
-                if not data.get("stale"):
-                    if not dry_run:
-                        data["stale"] = True
-                        data["regenerated"] = {"reason": "data_changed"}
-                        # Currency-forced demote (ADR-0015) — mirror pool_state:
-                        # drop FINAL, leave PROTECTED. No-op without a maturity fact.
-                        from workflow.currency import demote_for_currency
-                        from workflow.ownership import (
-                            section_facts, store_content_facts,
-                        )
-                        store_content_facts(
-                            data, demote_for_currency(section_facts(data)))
-                        # Phase 4: mirror pool_state.invalidate_pool_artifacts —
-                        # route the write through save_section so the reprocess
-                        # archives the prior blessed version and mints a cause-
-                        # tagged "needs-re-bless" version (one audit timeline, no
-                        # divergence between the server path and this CLI). The
-                        # session dir name is the DTXSID (find_session_dir builds
-                        # SESSIONS_DIR/{dtxsid}); save_section resolves the same
-                        # path from session_store.SESSIONS_DIR.
-                        from pipeline.session_store import (
-                            save_section, _VERSION_EVENT_KEY,
-                        )
-                        data[_VERSION_EVENT_KEY] = {
-                            "cause": "reprocess", "status": "needs-re-bless",
-                        }
-                        save_section(session_dir.name, section_file.stem, data)
-                    actions.append(
-                        f"{'Would mark' if dry_run else 'Marked'} stale: {section_file.name}"
+    # Iterate EVERY report-section file (the four singletons AND the bm2_*/
+    # genomics_* instances) via the shared enumerator — mirrors the rewire in
+    # pool_state.invalidate_pool_artifacts. The old bm2_*/genomics_*-only glob
+    # skipped the singleton LLM sections (background/methods/summary/bmd_summary),
+    # so a CLI reprocess never demoted them (F4).
+    for section_stem, section_file in iter_section_files(session_dir):
+        try:
+            data = json.loads(section_file.read_text(encoding="utf-8"))
+            if not should_stale_on_reprocess(section_stem, data):
+                continue  # programmatic (or nothing to act on) — don't stale
+            if not data.get("stale"):
+                if not dry_run:
+                    data["stale"] = True
+                    data["regenerated"] = {"reason": "data_changed"}
+                    # Currency-forced demote (ADR-0015) — mirror pool_state:
+                    # drop FINAL, leave PROTECTED. No-op without a maturity fact.
+                    from workflow.currency import demote_for_currency
+                    from workflow.ownership import (
+                        section_facts, store_content_facts,
                     )
-            except Exception as e:
-                actions.append(f"WARNING: Could not process {section_file.name}: {e}")
+                    store_content_facts(
+                        data, demote_for_currency(section_facts(data)))
+                    # Phase 4: mirror pool_state.invalidate_pool_artifacts —
+                    # route the write through save_section so the reprocess
+                    # archives the prior blessed version and mints a cause-
+                    # tagged "needs-re-bless" version (one audit timeline, no
+                    # divergence between the server path and this CLI). The
+                    # session dir name is the DTXSID (find_session_dir builds
+                    # SESSIONS_DIR/{dtxsid}); save_section resolves the same
+                    # path from session_store.SESSIONS_DIR.
+                    from pipeline.session_store import (
+                        save_section, _VERSION_EVENT_KEY,
+                    )
+                    data[_VERSION_EVENT_KEY] = {
+                        "cause": "reprocess", "status": "needs-re-bless",
+                    }
+                    save_section(session_dir.name, section_stem, data)
+                actions.append(
+                    f"{'Would mark' if dry_run else 'Marked'} stale: {section_file.name}"
+                )
+        except Exception as e:
+            actions.append(f"WARNING: Could not process {section_file.name}: {e}")
 
     return actions
 
