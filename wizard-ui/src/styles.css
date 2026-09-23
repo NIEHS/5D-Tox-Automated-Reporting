@@ -605,6 +605,7 @@ tr.emphasize td { font-weight: 700; }
 }
 .download-link { color: var(--accent); font-size: 0.85rem; align-self: center; text-decoration: none; }
 .download-link:hover { text-decoration: underline; }
+.download-link.disabled { color: var(--muted); cursor: not-allowed; pointer-events: none; opacity: 0.6; }
 
 /* --- Knowledge-graph crawl-config editor --- */
 .kg-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start; }
