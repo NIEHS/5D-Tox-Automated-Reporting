@@ -31,9 +31,25 @@ import json
 import logging
 from contextlib import contextmanager
 
+import sys
+
 from common.clock import now_iso
 
+# The `provenance` logger streams one JSON line per event to stdout. It configures
+# its OWN StreamHandler at INFO rather than relying on the ambient config, because
+# the app installs no logging config — a bare getLogger sits at the root's default
+# level and would silently drop these INFO lines (the reason early events reached the
+# per-session JSONL sink but never the server log). propagate=False keeps them off the
+# root handlers so uvicorn's access log doesn't double-print them. Idempotent: guarded
+# so re-import (or a test re-running the module) never stacks duplicate handlers.
 logger = logging.getLogger("provenance")
+if not any(getattr(h, "_provenance_sink", False) for h in logger.handlers):
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("provenance %(message)s"))
+    _handler._provenance_sink = True  # marker so the guard above is idempotent
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # The active request's id and its accumulating event list. Both are ContextVars so
 # concurrent requests (async handlers) never bleed into each other's record. Default

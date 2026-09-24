@@ -71,6 +71,9 @@ times*.ttf
 # backend, not GitHub (this is a public HHS repo — never push study data here).
 # The golden TEST fixtures are separate, under tests/fixtures/golden/.
 sessions/
+# Manually-archived sessions (e.g. `mv sessions/<id> sessions_archive/` before a
+# clean-slate wipe) — same study data, same never-commit rule as sessions/.
+sessions_archive/
 
 # generated offline kaleido MathJax stub (see genomics_viz._ensure_offline_kaleido)
 **/assets/mathjax_noop.js
