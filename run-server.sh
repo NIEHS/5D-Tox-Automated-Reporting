@@ -99,7 +99,12 @@ if [[ -x "$_jdk21/bin/java" ]]; then
   export JAVA_HOME="$_jdk21"
   export PATH="$_jdk21/bin:$PATH"
 else
-  echo "run-server.sh: JDK 21 not found at $_jdk21/bin/java — Java integration will fail (UnsupportedClassVersionError)." >&2
+  # No dedicated JDK 21: fine when the java already on PATH is 21 or newer (a
+  # newer JDK runs the class-file-65 helpers), so warn only when it is older.
+  _jv="$(java -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+  if ! [[ "$_jv" =~ ^[0-9]+$ ]] || (( _jv < 21 )); then
+    echo "run-server.sh: JDK 21+ not found (PATH java: ${_jv:-none}; no $_jdk21) — Java integration will fail (UnsupportedClassVersionError)." >&2
+  fi
 fi
 # Default the BMDExpress root only to a path that EXISTS: the sandbox checkout
 # first, then bmdx-pipe's own default (~/Dev/Projects/BMDExpress-3, where a
@@ -116,7 +121,9 @@ fi
 # a host /ddn path that's dangling in the sandbox; the sibling
 # bmdexpress3-*.jar is the real artifact the glob picks up). So check for a
 # NON-DANGLING jar in target/, not that one symlink, to avoid a false alarm.
-if ! find "${BMDX_PROJECT_ROOT:-/nonexistent}/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
+# -L follows symlinks (the laptop layout symlinks its jars), while a DANGLING
+# symlink still fails -type f — which is exactly the false alarm to avoid.
+if ! find -L "${BMDX_PROJECT_ROOT:-/nonexistent}/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
   echo "run-server.sh: no readable *.jar under $BMDX_PROJECT_ROOT/target — Java classpath will be broken." >&2
 fi
 
