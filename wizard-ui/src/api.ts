@@ -72,6 +72,9 @@ export interface SectionInfo {
   kind: string;
   approvable: boolean;
   instance_of: string | null;
+  // The DocNode region this section lives in ("front" | "body" | null). Lets the
+  // Sections screen group the front-matter rows apart from body sections.
+  region?: string | null;
   enabled: boolean;
   approved: boolean;
   blocked_by: string[];
@@ -155,7 +158,9 @@ export interface SectionData {
   paragraphs?: string[];
   // Materialized apical result sections carry their prose as `narrative` (a
   // paragraph list) alongside `tables_json`; report_data reads it directly.
-  narrative?: string[];
+  // Usually a list; a legacy card may store a single string, so the type admits
+  // both and paragraphCount normalizes.
+  narrative?: string[] | string;
   // Materials & Methods stores its prose per subsection (methods.json: sections[]
   // each with its own paragraphs) rather than as one top-level list.
   sections?: { key?: string; heading?: string; paragraphs?: string[] }[];
@@ -173,6 +178,10 @@ export interface SectionData {
   // numbers refreshed correctly, but the author's committed wording may now
   // contradict the data. Each entry is a "finding_id.slot" key. Absent = no flip.
   wording_review?: string[];
+  // Front-matter status rows carry an explicit filled-vs-pending flag: their content
+  // is boilerplate/authored, so a non-null object does NOT imply real content (an
+  // empty About This Report is still an object). The row reads this, not `!!content`.
+  has_content?: boolean;
   [k: string]: unknown;
 }
 

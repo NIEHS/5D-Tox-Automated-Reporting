@@ -640,11 +640,79 @@ async def api_session_load(dtxsid: Dtxsid):
         for store in singleton_section_files()
     }
 
+    # Group narratives (animal_condition / clinical_pathology / internal_dose) are
+    # PROGRAMMATIC prose overlays that live only in the process cache's
+    # `unified_narratives` blob — they are never persisted as standalone section
+    # files. The Sections screen reads each row's content as session[key], so
+    # without this projection those rows read "not generated" even though the prose
+    # exists and renders in the report. Surface them here keyed by the tree's
+    # narrative_key (apical→animal_condition via the shared crosswalk), shaped like a
+    # SectionData ({paragraphs, title}) so the UI's paragraph count and state derive
+    # correctly. Same newest-cache glob used for genomics_cache / chart_images above.
+    group_narratives: dict = {}
+    try:
+        from rendering.report_data_overlays import UNIFIED_NARRATIVE_KEY_MAP
+        for sc in sorted(d.glob("_cache_sections_*.json")):
+            _t0 = _time.monotonic()
+            _text = sc.read_text(encoding="utf-8")
+            _sec_cache = json.loads(_text)
+            provenance.record(
+                "disk_read", dtxsid=dtxsid, unit="_cache_sections", bytes=len(_text),
+                ms=round((_time.monotonic() - _t0) * 1000, 1),
+            )
+            for _ck, _cv in (_sec_cache.get("unified_narratives") or {}).items():
+                paras = _cv.get("paragraphs", []) if isinstance(_cv, dict) else (
+                    _cv if isinstance(_cv, list) else [])
+                if not paras:
+                    continue
+                _key = UNIFIED_NARRATIVE_KEY_MAP.get(_ck, _ck)
+                _title = _cv.get("title") if isinstance(_cv, dict) else None
+                group_narratives[_key] = {"paragraphs": paras, "title": _title}
+            break
+    except Exception:
+        # Best-effort — an unreadable/absent cache leaves the rows as "not
+        # generated" (the prior behavior), never fails the whole session load.
+        pass
+
+    # Front-matter section STATUS for the Sections screen. The 6 authored/boilerplate
+    # front-matter sections (foreword, about_report, peer_review, publication_details,
+    # acknowledgments, abstract) are display-only workflow rows; the screen needs their
+    # filled-vs-pending status without rendering the whole report. Resolve it from the
+    # two per-session variables: front_matter.json (About authors/contributors) and
+    # whether processing produced abstract content (a background abstract sentence or a
+    # bmd summary). Boilerplate sections are always present. Keyed by data_key so the
+    # UI's session[key] read finds each row's content, same as the group narratives.
+    front_matter_status: dict = {}
+    try:
+        from rendering.front_matter import resolve_front_matter_status
+        _fm = _read_json("front_matter.json") or {}
+        _bg = _read_json("background.json") or {}
+        _abstract_filled = bool(
+            (_bg.get("abstract_background") or "").strip()
+            or any(d.glob("_cache_bmd_summary_*.json"))
+        )
+        _fm_status = resolve_front_matter_status(_fm, abstract_filled=_abstract_filled)
+        # Shape each as a SectionData-like dict so the UI's paragraphCount +
+        # generated/pending state derive the same way as any other row.
+        for _k, _st in _fm_status.items():
+            front_matter_status[_k] = {
+                "paragraphs": [""] * _st["paragraphs"],
+                "has_content": _st["has_content"],
+            }
+    except Exception:
+        pass
+
     return JSONResponse({
         "exists": True,
         "meta": _read_json("meta.json"),
         "identity": _read_json("identity.json"),
         **singleton_sections,
+        # Programmatic group narratives from the process cache (see above), keyed
+        # by tree narrative_key so the Sections screen's session[key] read finds
+        # them. Absent when the session hasn't been processed yet.
+        **group_narratives,
+        # Front-matter section status (foreword/about_report/…); display-only rows.
+        **front_matter_status,
         "bm2_sections": bm2_sections,
         "pending_files": pending_files,
         "animal_report": _read_json("animal_report.json"),

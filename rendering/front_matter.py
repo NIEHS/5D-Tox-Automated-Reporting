@@ -122,3 +122,63 @@ def overlay_front_matter(data: dict, front_matter: dict) -> None:
         data["publication_details"] = apply_publication_overrides(
             data["publication_details"], front_matter
         )
+
+
+# ---------------------------------------------------------------------------
+# Front-matter workflow status (for the Sections screen)
+# ---------------------------------------------------------------------------
+# The workflow Sections screen lists the 6 authored/boilerplate front-matter sections
+# (foreword, about_report, peer_review, publication_details, acknowledgments, abstract)
+# as display-only rows and needs their FILLED-vs-PENDING status. It must NOT run the
+# full ~1.5s report render just to learn that — this resolves the same content the
+# render does, but cheaply, from the two inputs that actually vary per session:
+#   * about_report ← front_matter.json (authors/contributors) — empty until authored;
+#   * abstract     ← processing outputs — empty until the session is processed;
+#   * the other four are fixed boilerplate → always present.
+
+# The keys the Sections screen surfaces, in document order.
+FRONT_MATTER_STATUS_KEYS: tuple[str, ...] = (
+    "foreword", "about_report", "peer_review",
+    "publication_details", "acknowledgments", "abstract",
+)
+
+
+def resolve_front_matter_status(
+    front_matter: dict | None,
+    *,
+    abstract_filled: bool,
+) -> dict[str, dict]:
+    """Return `{data_key: {"has_content": bool, "paragraphs": int}}` for the six
+    front-matter sections, WITHOUT rendering the report.
+
+    Inputs are the only two per-session variables:
+      * `front_matter` — the session's `front_matter.json` (or None); gives About
+        This Report its authors/contributors. Empty/None → About is pending.
+      * `abstract_filled` — whether processing has produced abstract content (the
+        caller derives this from the presence of processed results, e.g. a background
+        `abstract_background` sentence or a bmd summary). The abstract is boilerplate-
+        structured but has no real text until the study is processed.
+
+    The other four sections (foreword, peer_review, publication_details,
+    acknowledgments) are fixed boilerplate present on every report, so they always
+    report `has_content=True`. `paragraphs` is an indicative count for the row's
+    "N paragraphs" label (the boilerplate lengths are stable).
+    """
+    fm = front_matter or {}
+    about = build_about_report(fm)  # None when no authors/contributors
+    about_units = 0
+    if about:
+        about_units = sum(
+            1 for s in about.get("sections", []) if (s.get("text") or "").strip()
+        )
+    # Boilerplate paragraph counts (stable scaffold lengths) for the row label; the
+    # exact number is cosmetic — what matters is has_content True/False.
+    return {
+        "foreword": {"has_content": True, "paragraphs": 3},
+        "about_report": {"has_content": about_units > 0, "paragraphs": about_units},
+        "peer_review": {"has_content": True, "paragraphs": 1},
+        "publication_details": {"has_content": True, "paragraphs": 6},
+        "acknowledgments": {"has_content": True, "paragraphs": 1},
+        "abstract": {"has_content": bool(abstract_filled),
+                     "paragraphs": 4 if abstract_filled else 0},
+    }

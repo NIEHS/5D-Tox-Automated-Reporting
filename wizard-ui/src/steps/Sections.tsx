@@ -27,6 +27,13 @@ const SECTION_COPY: Record<string, { label: string; note: string }> = {
   animal_condition: { label: "Animal Condition, Body & Organ Weights", note: "Deterministic narrative from the processed data." },
   clinical_pathology: { label: "Clinical Pathology", note: "Deterministic narrative from the processed data." },
   internal_dose: { label: "Internal Dose Assessment", note: "Deterministic narrative from the processed data." },
+  // Front-matter content sections (display-only status rows).
+  foreword: { label: "Foreword", note: "Fixed NIEHS boilerplate." },
+  about_report: { label: "About This Report", note: "Authors & contributors — set externally; pending until authored." },
+  peer_review: { label: "Peer Review", note: "Boilerplate peer-review statement." },
+  publication_details: { label: "Publication Details", note: "Publisher/DOI — DOI assigned at publication." },
+  acknowledgments: { label: "Acknowledgments", note: "Boilerplate acknowledgment." },
+  abstract: { label: "Abstract", note: "Assembled from the processed results." },
 };
 
 // The authored singletons that auto-generate on visit (each has a distinct
@@ -52,6 +59,10 @@ function sectionContent(session: SessionLoad | null, key: string): SectionData |
 function paragraphCount(content: SectionData | null): number {
   if (!content) return 0;
   if (content.paragraphs?.length) return content.paragraphs.length;
+  // `narrative` is normally a paragraph list, but a section could persist it as a
+  // single string (e.g. an older Tissue Concentration card) — count that as one
+  // paragraph, not its character length.
+  if (typeof content.narrative === "string") return content.narrative ? 1 : 0;
   if (content.narrative?.length) return content.narrative.length;
   if (content.sections?.length) {
     return content.sections.reduce((n, s) => n + (s.paragraphs?.length ?? 0), 0);
@@ -87,6 +98,7 @@ function SectionRow({
   onRevise,
   acting,
   unit = "paragraph",
+  hasContentOverride,
 }: {
   label: string;
   note?: string;
@@ -105,9 +117,14 @@ function SectionRow({
   // Noun for the content count ("paragraph" by default; "endpoint" for the
   // derived BMD summary table).
   unit?: string;
+  // Explicit filled-vs-pending override for rows whose content object is present
+  // but may be empty (front-matter status rows: an empty About This Report is still
+  // an object). When set, it decides "generated" vs "not generated" instead of the
+  // generic `!!content` heuristic.
+  hasContentOverride?: boolean;
 }) {
   const paras = paragraphCount(content);
-  const hasContent = paras > 0 || !!content;
+  const hasContent = hasContentOverride ?? (paras > 0 || !!content);
   let state: { cls: string; text: string };
   if (busy) state = { cls: "", text: "generating…" };
   else if (!enabled) state = { cls: "", text: "blocked" };
@@ -380,12 +397,22 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   }
 
   // Row groups, all DERIVED from the catalog (document order preserved):
-  //   front matter   — approvable singletons that are generated (background/methods/summary)
-  //   narratives     — programmatic group narratives, display-only (animal_condition, …)
-  //   bmdSummary     — the single derived Apical BMD Summary entry, if present
-  //   results        — the apical bm2_* instances
-  //   genomics       — the genomics_* instances (deterministic, read-only)
-  const frontMatter = useMemo(
+  //   frontMatterRows — the region==="front" content sections (display-only status)
+  //   authored        — approvable singletons that are generated (background/methods/summary)
+  //   narratives      — programmatic group narratives, display-only (animal_condition, …)
+  //   bmdSummary      — the single derived Apical BMD Summary entry, if present
+  //   results         — the apical bm2_* instances
+  //   genomics        — the genomics_* instances (deterministic, read-only)
+  //
+  // The front-matter content sections (Foreword, About This Report, Peer Review,
+  // Publication Details, Acknowledgments, Abstract) are display-only: the app is not
+  // an editor (ADR-0018), so the row reflects filled-vs-pending (via each section's
+  // has_content flag), with no generate/approve control.
+  const frontMatterRows = useMemo(
+    () => sections.filter((s) => s.region === "front"),
+    [sections]
+  );
+  const authored = useMemo(
     () => sections.filter((s) => s.instance_of === null && GENERATORS[s.key]),
     [sections]
   );
@@ -429,8 +456,32 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
       <WarningBox warning={citationWarning} />
       {loading && <Spinner label="Loading sections…" />}
 
-      <h3 className="group-heading">Front matter</h3>
-      {frontMatter.map((s) => (
+      {frontMatterRows.length > 0 && (
+        <>
+          <h3 className="group-heading">Front matter</h3>
+          {frontMatterRows.map((s) => {
+            const c = sectionContent(session, s.key);
+            return (
+              <SectionRow
+                key={s.key}
+                label={sectionLabel(s.key)}
+                note={SECTION_COPY[s.key]?.note}
+                enabled={s.enabled}
+                approved={s.approved}
+                blockedBy={s.blocked_by}
+                content={c}
+                // Front-matter content is boilerplate/authored — a present-but-empty
+                // object (an unauthored About This Report) must read as "not
+                // generated", so trust the server's explicit has_content flag.
+                hasContentOverride={c?.has_content === true}
+              />
+            );
+          })}
+        </>
+      )}
+
+      <h3 className="group-heading">Authored sections</h3>
+      {authored.map((s) => (
         <SectionRow
           key={s.key}
           label={sectionLabel(s.key)}

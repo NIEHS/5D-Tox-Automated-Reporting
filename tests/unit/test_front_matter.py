@@ -9,6 +9,8 @@ from rendering.front_matter import (
     build_about_report,
     apply_publication_overrides,
     overlay_front_matter,
+    resolve_front_matter_status,
+    FRONT_MATTER_STATUS_KEYS,
 )
 
 
@@ -81,3 +83,25 @@ def test_overlay_noop_when_empty():
     data = {"about_report": {"x": 1}}
     overlay_front_matter(data, {})
     assert data == {"about_report": {"x": 1}}  # untouched
+
+
+# --- Front-matter workflow status (Sections screen) --------------------------
+
+
+def test_status_about_pending_when_unauthored():
+    # No front_matter.json + no processed abstract → About This Report and Abstract
+    # are the only PENDING rows; boilerplate is always present.
+    st = resolve_front_matter_status(None, abstract_filled=False)
+    assert set(st) == set(FRONT_MATTER_STATUS_KEYS)
+    assert st["about_report"]["has_content"] is False
+    assert st["abstract"]["has_content"] is False
+    for key in ("foreword", "peer_review", "publication_details", "acknowledgments"):
+        assert st[key]["has_content"] is True, key
+
+
+def test_status_about_filled_when_authored():
+    fm = {"authors": [{"name": "Jane A. Smith", "role": "Study Scientist"}]}
+    st = resolve_front_matter_status(fm, abstract_filled=True)
+    assert st["about_report"]["has_content"] is True
+    assert st["about_report"]["paragraphs"] >= 1
+    assert st["abstract"]["has_content"] is True

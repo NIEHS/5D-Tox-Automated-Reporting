@@ -151,6 +151,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
             "kind": spec.kind,
             "approvable": spec.approvable,
             "instance_of": spec.instance_of,
+            "region": spec.region,
             "enabled": r.get("enabled", True),
             "approved": r.get("approved", False),
             "blocked_by": r.get("blocked_by", []),

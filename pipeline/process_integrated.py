@@ -730,10 +730,14 @@ async def _get_sections(ctx):
                     dose_unit=dose_unit,
                 )
                 if tc_result and tc_result.get("table_data"):
-                    narrative = (
+                    # A paragraph LIST, matching every other card's narrative shape
+                    # (generate_platform_narrative returns list[str]). A bare string
+                    # here made downstream paragraph-counting read its characters as
+                    # paragraphs — keep it a one-element list like its siblings.
+                    narrative = [
                         f"Plasma concentrations of {compound_name} were "
                         f"measured in biosampling animals."
-                    )
+                    ]
                     sections.append({
                         "platform": "Tissue Concentration",
                         "title": "Tissue Concentration",

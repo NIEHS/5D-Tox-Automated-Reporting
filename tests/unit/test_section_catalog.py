@@ -26,7 +26,9 @@ def _by_key(tree):
 
 def test_global_tree_yields_expected_workflow_units():
     specs = _by_key(DOCUMENT_TREE)
-    # The four singletons + three group narratives + two families.
+    # The four singletons + three group narratives + two families + the six
+    # authored/boilerplate front-matter content sections (display-only rows so the
+    # workflow surfaces an unauthored About This Report as pending).
     assert set(specs) == {
         "background",
         "methods",
@@ -37,7 +39,27 @@ def test_global_tree_yields_expected_workflow_units():
         "internal_dose",
         "bm2",
         "genomics",
+        "foreword",
+        "about_report",
+        "peer_review",
+        "publication_details",
+        "acknowledgments",
+        "abstract",
     }
+
+
+def test_front_matter_content_sections_are_display_only_front_region():
+    specs = _by_key(DOCUMENT_TREE)
+    for key in (
+        "foreword", "about_report", "peer_review",
+        "publication_details", "acknowledgments", "abstract",
+    ):
+        spec = specs[key]
+        assert spec.kind == "authored", key
+        assert spec.approvable is False, key   # the app is not an editor (ADR-0018)
+        assert spec.instance_of is None, key
+        assert spec.region == "front", key
+        assert spec.store == "", key           # rendered from scaffold/overlay, no file
 
 
 def test_internal_dose_is_a_display_only_row():
@@ -107,20 +129,25 @@ def test_removing_a_section_drops_it_from_the_catalog():
     assert set(_by_key(trimmed)) == {"summary"}
 
 
-def test_front_matter_and_generated_lists_are_not_workflow_units():
-    # front-matter parts, abstract, references, and the sample-counts table carry
-    # data_keys but are NOT authorable workflow sections — they must not appear.
+def test_front_matter_content_is_a_workflow_unit_but_generated_lists_are_not():
+    # Front-matter CONTENT (foreword, abstract, …) IS a display-only workflow unit —
+    # the workflow must surface an unauthored front-matter section as pending. But the
+    # auto-generated LIST nodes (references, sample-counts) are produced entirely by a
+    # tree walk and carry no workflow row.
     tree = [
         DocNode(id="foreword", title="Foreword", level=1,
-                node_type="front-matter", data_key="foreword"),
+                node_type="front-matter", data_key="foreword", region="front"),
         DocNode(id="abstract", title="Abstract", level=1,
-                node_type="front-matter", data_key="abstract"),
+                node_type="front-matter", data_key="abstract", region="front"),
         DocNode(id="references", title="References", level=1,
                 node_type="narrative", data_key="references"),
         DocNode(id="table-sample-counts", title="Sample Counts", level=1,
                 node_type="sample-counts-table", data_key="sample_counts"),
     ]
-    assert _by_key(tree) == {}
+    specs = _by_key(tree)
+    assert set(specs) == {"foreword", "abstract"}
+    assert all(specs[k].region == "front" and not specs[k].approvable
+               for k in specs)
 
 
 def test_catalog_preserves_document_order():

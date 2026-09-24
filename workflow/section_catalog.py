@@ -65,6 +65,17 @@ KIND_UNLOCK: dict[str, tuple[str, ...]] = {
     "animal_condition": (),
     "clinical_pathology": (),
     "internal_dose": (),
+    # Authored/boilerplate front-matter content sections — display-only status rows.
+    # Boilerplate (foreword/peer_review/publication_details/acknowledgments) is always
+    # populated from the render scaffold; about_report is human-set (front_matter.json,
+    # empty until authored); abstract is study-specific. None gate on approval — they
+    # are always "available", the row just reflects filled-vs-pending.
+    "foreword": (),
+    "about_report": (),
+    "peer_review": (),
+    "publication_details": (),
+    "acknowledgments": (),
+    "abstract": (),
 }
 
 
@@ -87,6 +98,8 @@ class SectionSpec:
     unlock: tuple[str, ...]
     instance_of: str | None
     store: str
+    region: str | None = None  # "front" | "body" | None — the DocNode region the
+    # section lives in; lets the workflow UI group front-matter rows separately.
 
 
 # Group narratives that render as prose overlays (narrative+tables nodes whose
@@ -96,10 +109,12 @@ _GROUP_NARRATIVE_KEYS: frozenset[str] = frozenset(
     {"animal_condition", "clinical_pathology", "internal_dose"}
 )
 
-# data_key values that are front-matter / generated-list nodes with no workflow unit
-# (title page, ToC, tables list, abstract, references, and the authored front-matter
-# parts). Present in the tree, produced elsewhere — never a Sections-screen row.
-_FRONT_MATTER_DATA_KEYS: frozenset[str] = frozenset(
+# AUTHORED / boilerplate front-matter CONTENT sections — these DO get a display-only
+# workflow row (their content can be pending: About This Report is empty until authored,
+# the abstract until processed). Kept out of the singleton branch below and emitted via
+# their own visit clause so they are display-only (approvable=False), not authored-
+# approvable like background/methods.
+_FRONT_MATTER_CONTENT_DATA_KEYS: frozenset[str] = frozenset(
     {
         "foreword",
         "about_report",
@@ -107,6 +122,14 @@ _FRONT_MATTER_DATA_KEYS: frozenset[str] = frozenset(
         "publication_details",
         "acknowledgments",
         "abstract",
+    }
+)
+
+# data_key values that are auto-generated LIST nodes with no workflow unit (the ToC's
+# tables list, the references list, sample counts). Present in the tree, produced
+# entirely by a tree walk — never a Sections-screen row.
+_FRONT_MATTER_DATA_KEYS: frozenset[str] = frozenset(
+    {
         "references",
         "sample_counts",
     }
@@ -125,6 +148,11 @@ def _kind_for(key: str, family: str | None) -> str:
         return "derived"
     if key in _GROUP_NARRATIVE_KEYS:
         return "programmatic"
+    if key in _FRONT_MATTER_CONTENT_DATA_KEYS:
+        # Front-matter content is authored/boilerplate (scaffold text + human-set
+        # front_matter.json), not model-generated — classify as "authored" so the UI
+        # neither offers a generate button nor mislabels it as an LLM section.
+        return "authored"
     origin = origin_for_section_type(family or key)
     if origin is ContentOrigin.PROGRAMMATIC:
         return "programmatic"
@@ -143,7 +171,10 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
     specs: list[SectionSpec] = []
     seen: set[str] = set()
 
-    def add(key: str, node_id: str, *, family: str | None, approvable: bool) -> None:
+    def add(
+        key: str, node_id: str, *, family: str | None, approvable: bool,
+        region: str | None = None,
+    ) -> None:
         if key in seen:
             # Merge the additional feeding node into the existing spec (e.g. a
             # family spanning several platform table nodes, or genomics' two
@@ -158,6 +189,7 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
                         unlock=s.unlock,
                         instance_of=s.instance_of,
                         store=s.store,
+                        region=s.region,
                     )
                     break
             return
@@ -167,8 +199,8 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
             store = "bm2_{slug}.json"
         elif family == "genomics":
             store = "genomics_{organ}_{sex}.json"
-        elif key in _GROUP_NARRATIVE_KEYS:
-            store = ""  # rendered from the process overlay; no standalone file
+        elif key in _GROUP_NARRATIVE_KEYS or key in _FRONT_MATTER_CONTENT_DATA_KEYS:
+            store = ""  # rendered from the scaffold/overlay; no standalone section file
         else:
             store = f"{key}.json"
         specs.append(
@@ -180,6 +212,7 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
                 unlock=KIND_UNLOCK.get(family or key, ()),
                 instance_of=family,
                 store=store,
+                region=region,
             )
         )
 
@@ -197,18 +230,25 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
             return
         # Programmatic group narratives (narrative+tables) → display-only rows.
         if nt == "narrative+tables" and node.narrative_key in _GROUP_NARRATIVE_KEYS:
-            add(node.narrative_key, node.id, family=None, approvable=False)
+            add(node.narrative_key, node.id, family=None, approvable=False,
+                region=node.region)
             return
         # Singleton content sections, identified by their data_key.
         dk = node.data_key
         if not dk or dk in _FRONT_MATTER_DATA_KEYS:
+            return
+        # Authored/boilerplate front-matter content → display-only rows (region-tagged
+        # so the UI groups them apart from body sections). Not approvable: the app is
+        # not an editor (ADR-0018); the row just reflects filled-vs-pending.
+        if dk in _FRONT_MATTER_CONTENT_DATA_KEYS:
+            add(dk, node.id, family=None, approvable=False, region=node.region)
             return
         if dk == "genomics_sections":
             # A genomics node without node_type genomics-section — still the family.
             add("genomics", node.id, family="genomics", approvable=False)
             return
         if dk in ("background", "methods", "summary", "bmd_summary"):
-            add(dk, node.id, family=None, approvable=True)
+            add(dk, node.id, family=None, approvable=True, region=node.region)
 
     walk_tree(tree, visit)
     return specs

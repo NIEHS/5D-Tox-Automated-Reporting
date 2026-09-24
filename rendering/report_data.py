@@ -172,7 +172,11 @@ def normalize_apical_section_for_render(sec: dict) -> dict:
     # only authoritative form, and leaving both around invites the next
     # renderer drift.
     out.pop("tables_json", None)
-    out["narrative"] = sec.get("narrative", []) or []
+    # Normalize narrative to a paragraph LIST: it is normally list[str], but a
+    # legacy card (older Tissue Concentration) persisted a single string, which the
+    # paragraph-iterating renderers would otherwise walk character-by-character.
+    _narr = sec.get("narrative", []) or []
+    out["narrative"] = [_narr] if isinstance(_narr, str) else _narr
     return out
 
 
