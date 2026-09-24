@@ -49,6 +49,7 @@ from document_model.document_tree import (
     find_node,
 )
 from rendering.render_common import (
+    table_caption,
     RenderDispatchError,
     assert_dispatch_covers,
     front_matter_plan,
@@ -446,8 +447,12 @@ def _emit_sample_counts_table(node: DocNode, data: dict) -> list:
     built = sample_counts_table(node, data)
     if built is None:
         return [_todo(node, "sample-counts data pending")]
+    # Number the caption through the shared helper (positional "Table N." from
+    # the tree), exactly as the HTML/LaTeX emitters do — the built dict's
+    # caption carries no locator, so without this BITS emitted the matrix
+    # with no <label> and the cross-surface table-number parity test failed.
     return [_table_wrap(
-        node.id, built.get("caption", node.title or ""),
+        node.id, table_caption(node, built.get("caption", node.title or "")),
         [str(h) for h in built.get("headers", [])],
         built.get("rows", []) or [],
         built.get("footnotes", []) or [],
