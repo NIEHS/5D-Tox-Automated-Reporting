@@ -128,9 +128,25 @@ def safe_filename(name: str) -> str:
 # workflow.store.DiskPoolStore._BARE_SECTION_STEMS and the section catalog's
 # singletons; kept here too because the reprocess/invalidate paths need the file
 # stems (to write them back via save_section) without importing the workflow store.
-_SINGLETON_SECTION_STEMS: tuple[str, ...] = (
+# Fallback ONLY if the catalog cannot be imported (it should always be importable
+# at call time; the import is function-local to keep session_store a low-level
+# module). The catalog is the source of truth for which singleton sections exist.
+_FALLBACK_SINGLETON_STEMS: tuple[str, ...] = (
     "background", "methods", "bmd_summary", "summary",
 )
+
+
+def singleton_section_stems() -> tuple[str, ...]:
+    """The singleton report-section file stems, DERIVED from the section catalog
+    (workflow.section_catalog.singleton_section_files → strip ".json"). One
+    vocabulary for every consumer: reprocess/invalidate loops, the pool store's
+    section readers, readiness seeding, reset. Adding a singleton to the template
+    adds it everywhere."""
+    try:
+        from workflow.section_catalog import singleton_section_files
+        return tuple(f[:-5] if f.endswith(".json") else f for f in singleton_section_files())
+    except Exception:  # pragma: no cover — import failure would be a packaging bug
+        return _FALLBACK_SINGLETON_STEMS
 
 
 def iter_section_files(session_dir: "Path"):
@@ -144,7 +160,7 @@ def iter_section_files(session_dir: "Path"):
     (the F4 bug: the loops globbed only bm2_*/genomics_* and silently skipped the
     singleton LLM sections, so a reprocess never demoted summary/background/etc.).
     """
-    for stem in _SINGLETON_SECTION_STEMS:
+    for stem in singleton_section_stems():
         p = session_dir / f"{stem}.json"
         if p.exists():
             yield stem, p

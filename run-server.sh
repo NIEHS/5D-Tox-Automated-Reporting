@@ -85,9 +85,6 @@ if [[ -n "$_ca" && -f "$_ca" ]]; then export SSL_CERT_FILE="$_ca"; else unset SS
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
   echo "run-server.sh: no ANTHROPIC_API_KEY (checked \$ANTHROPIC_API_KEY and $SETTINGS) — LLM layers will fail." >&2
 fi
-if [[ -n "${SSL_CERT_FILE:-}" && ! -f "${SSL_CERT_FILE:-}" ]]; then
-  echo "run-server.sh: SSL_CERT_FILE=${SSL_CERT_FILE:-} does not exist — TLS to the proxy may fail." >&2
-fi
 
 # --- Java pipeline env (integration + BMDS) --------------------------------
 # The Java layer (IntegrateProject, RunPrefilter, …) is compiled for JDK 21;
@@ -119,8 +116,7 @@ fi
 # a host /ddn path that's dangling in the sandbox; the sibling
 # bmdexpress3-*.jar is the real artifact the glob picks up). So check for a
 # NON-DANGLING jar in target/, not that one symlink, to avoid a false alarm.
-if ! compgen -G "$BMDX_PROJECT_ROOT/target/*.jar" >/dev/null 2>&1 || \
-   ! find "$BMDX_PROJECT_ROOT/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
+if ! find "${BMDX_PROJECT_ROOT:-/nonexistent}/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
   echo "run-server.sh: no readable *.jar under $BMDX_PROJECT_ROOT/target — Java classpath will be broken." >&2
 fi
 

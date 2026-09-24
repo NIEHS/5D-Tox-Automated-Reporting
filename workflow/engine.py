@@ -154,7 +154,9 @@ class WorkflowEngine:
 
     # -- derived section readiness ----------------------------------------
 
-    def derive_section_readiness(self) -> dict:
+    def derive_section_readiness(
+        self, section_states: "dict[str, bool] | None" = None, catalog=None,
+    ) -> dict:
         """Per-report-section readiness, DERIVED from what is approved on disk.
 
         Reads the approved-state of every section via the store and applies the
@@ -164,14 +166,19 @@ class WorkflowEngine:
         replaces the imperative `ready.methods` / `ready.summary` flags the JS
         front-end sets from a dozen call sites.
         """
-        section_states = self.store.read_section_states(self.dtxsid)
+        # Callers that already read the states / built the session catalog for
+        # their own purposes pass them in, so a request does each exactly once.
+        if section_states is None:
+            section_states = self.store.read_section_states(self.dtxsid)
+        if catalog is None:
+            catalog = catalog_for_session(self.dtxsid)
         return derive_section_readiness(
             section_states,
             resources={
                 "knowledge_base": _has_knowledge_base(),
                 "processed": _is_processed(self.store.session_dir(self.dtxsid)),
             },
-            catalog=catalog_for_session(self.dtxsid),
+            catalog=catalog,
         )
 
     # -- derived publish readiness (currency BLOCK, report grain) ----------

@@ -29,6 +29,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from web_routes.dtxsid_param import Dtxsid
+from common.dtxsid import validate_dtxsid
 
 from pipeline.session_store import safe_filename
 from narrative.style_learning import (
@@ -165,6 +166,15 @@ async def api_export_overleaf_bundle(request: Request):
     from rendering.latex_export import build_overleaf_bundle
 
     body = await request.json()
+    # Same server-side publish gate as the preview download (Phase 3a): the
+    # Overleaf bundle IS the deliverable, so a stale report must not ship here
+    # either. Only sessions can be gated; a body without a dtxsid is a scratch
+    # render and passes through.
+    _gate_dtxsid = body.get("dtxsid") if isinstance(body, dict) else None
+    if _gate_dtxsid:
+        from web_routes.preview_routes import publish_gate_response
+        if (gate := publish_gate_response(validate_dtxsid(_gate_dtxsid))) is not None:
+            return gate
     _resolve_bm2_into_body(body)
     session_tree = _session_tree_for(body)
 

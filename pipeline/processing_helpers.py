@@ -468,6 +468,35 @@ def prune_card_sexes(card: dict | None, sex_allow: list[str] | None) -> dict | N
     return card
 
 
+def _signature_rows(
+    platform: str,
+    sex_rows: dict,
+    organ_allowlist: "list[str] | None",
+    ow_sex_allow: "list[str] | None",
+) -> dict:
+    """The rows a card's categorical signature is computed over: the same
+    organ / organ-weight-sex filtering the Organ Weight prose receives (other
+    platforms are already sex/assay-filtered upstream by apply_apical_filters).
+    No-op when neither allowlist is set."""
+    if platform != "Organ Weight" or not (organ_allowlist or ow_sex_allow):
+        return sex_rows
+    from tables.table_builder_common import organ_allowed, sex_allowed
+    out: dict = {}
+    for sex, rows in sex_rows.items():
+        if not sex_allowed(sex, ow_sex_allow):
+            continue
+        if organ_allowlist:
+            kept = []
+            for r in rows:
+                label = getattr(r, "label", "") or ""
+                token = label.split(" Absolute")[0].split(" Relative")[0].strip()
+                if organ_allowed(token, organ_allowlist):
+                    kept.append(r)
+            rows = kept
+        out[sex] = rows
+    return out
+
+
 def _build_section_cards(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
@@ -547,7 +576,15 @@ def _build_section_cards(
         # section (workflow.reprocess.cat_signature_flips). Parallel projection over
         # the SAME rows the narrative uses — the prose is unaffected.
         from narrative.unified_narrative import platform_cat_signature
-        cat_signature = platform_cat_signature(platform, sex_rows, dose_unit)
+        # The Organ Weight prose is built under the document's organ / organ-weight
+        # sex allowlists (threaded to its builder below), so its signature must be
+        # computed over the SAME filtered rows — otherwise a reprocess can flag a
+        # wording flip on a finding the approved prose never mentioned.
+        cat_signature = platform_cat_signature(
+            platform,
+            _signature_rows(platform, sex_rows, organ_allowlist, ow_sex_allow),
+            dose_unit,
+        )
 
         # ── Body Weight: use sidecar builder when available ──────────────
         # Body weight bypasses the responsive filter because the NIEHS

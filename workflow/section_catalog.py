@@ -98,6 +98,12 @@ class SectionSpec:
     unlock: tuple[str, ...]
     instance_of: str | None
     store: str
+    # Whether a DATA reprocess (new/corrected study files) can invalidate this
+    # section's content. False for sections generated from the chemical identity
+    # alone (Background) and for authored front matter — a reprocess does not change
+    # their inputs, so staling/demoting them (Phase 3a) would demand a re-bless of
+    # prose that could not have changed. Consulted by workflow.reprocess.
+    data_dependent: bool = True
     region: str | None = None  # "front" | "body" | None — the DocNode region the
     # section lives in; lets the workflow UI group front-matter rows separately.
 
@@ -134,6 +140,39 @@ _FRONT_MATTER_DATA_KEYS: frozenset[str] = frozenset(
         "sample_counts",
     }
 )
+
+
+# Sections whose inputs are the chemical IDENTITY, not the study data: a data
+# reprocess leaves them untouched. Background is generated from the identity
+# (regulatory lookups + literature) and api_pool_reset deliberately preserves it
+# for the same reason.
+_IDENTITY_ONLY_KEYS: frozenset[str] = frozenset({"background"})
+
+
+def _data_dependent_for(key: str, kind: str) -> bool:
+    """Does a data reprocess invalidate this section? (See SectionSpec.data_dependent.)"""
+    if key in _IDENTITY_ONLY_KEYS:
+        return False
+    if kind == "authored":
+        return False
+    return True
+
+
+def is_data_dependent(section_key: str, tree: list[DocNode] | None = None) -> bool:
+    """Catalog lookup for workflow.reprocess: instance keys (bm2_*, genomics_*)
+    resolve through their family spec; unknown keys default to True (fail-safe —
+    an unknown section is treated as data-derived and staled)."""
+    from document_model.document_tree import DOCUMENT_TREE
+
+    family = (
+        "bm2" if section_key.startswith("bm2_")
+        else "genomics" if section_key.startswith("genomics_")
+        else section_key
+    )
+    for spec in catalog_for_tree(tree if tree is not None else DOCUMENT_TREE):
+        if spec.key == family:
+            return spec.data_dependent
+    return True
 
 
 def _kind_for(key: str, family: str | None) -> str:
@@ -189,6 +228,7 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
                         unlock=s.unlock,
                         instance_of=s.instance_of,
                         store=s.store,
+                        data_dependent=s.data_dependent,
                         region=s.region,
                     )
                     break
@@ -212,6 +252,7 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
                 unlock=KIND_UNLOCK.get(family or key, ()),
                 instance_of=family,
                 store=store,
+                data_dependent=_data_dependent_for(key, kind),
                 region=region,
             )
         )
@@ -254,6 +295,11 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
     return specs
 
 
+# Memo for approvable_section_types(): {id(tree): (tree, result)} — single entry,
+# invalidated by identity (see the function body).
+_APPROVABLE_CACHE: dict[int, tuple[object, frozenset]] = {}
+
+
 def approvable_section_types(tree: list[DocNode] | None = None) -> frozenset[str]:
     """The section TYPES a write route may accept (R2 `VALID_SECTION_TYPES`).
 
@@ -264,7 +310,21 @@ def approvable_section_types(tree: list[DocNode] | None = None) -> frozenset[str
     """
     from document_model.document_tree import DOCUMENT_TREE
 
-    catalog = catalog_for_tree(tree if tree is not None else DOCUMENT_TREE)
+    if tree is None:
+        # The global tree is rebuilt as a NEW list on template reload, so its
+        # identity is a valid cache key; a constant result per tree object means
+        # one walk per template load, not one per approve/save request.
+        tree = DOCUMENT_TREE
+        cached = _APPROVABLE_CACHE.get(id(tree))
+        if cached is not None and cached[0] is tree:
+            return cached[1]
+        result = frozenset(
+            (s.instance_of or s.key) for s in catalog_for_tree(tree) if s.store
+        )
+        _APPROVABLE_CACHE.clear()
+        _APPROVABLE_CACHE[id(tree)] = (tree, result)
+        return result
+    catalog = catalog_for_tree(tree)
     return frozenset(
         (s.instance_of or s.key) for s in catalog if s.store
     )
@@ -284,7 +344,9 @@ def singleton_section_files(tree: list[DocNode] | None = None) -> tuple[str, ...
     )
 
 
-def resolve_section_key(body: dict) -> tuple[str | None, str | None]:
+def resolve_section_key(
+    body: dict, approvable: "frozenset[str] | None" = None,
+) -> tuple[str | None, str | None]:
     """Map a request body's section_type (+ extras) onto the on-disk section_key.
 
     The catalog-owned twin of session_routes._resolve_section_key (R3): singletons
@@ -292,7 +354,10 @@ def resolve_section_key(body: dict) -> tuple[str | None, str | None]:
     Returns (section_key, error); exactly one is non-None.
     """
     section_type = body.get("section_type", "")
-    approvable = approvable_section_types()
+    # Callers that already computed the allowlist (the approve route validates
+    # the type before resolving the key) pass it in — one tree walk per request.
+    if approvable is None:
+        approvable = approvable_section_types()
     if section_type not in approvable:
         return (None, f"Unknown section_type: {section_type}")
     if section_type == "bm2":

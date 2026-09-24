@@ -81,7 +81,13 @@ def should_stale_on_reprocess(section_key: str, section: "dict | None") -> bool:
     behavior-change is defined in ONE place and pinned by one characterization
     test.
     """
-    return classify_section_reprocess(section_key, section) is ReprocessAction.REWRITE_LLM
+    if classify_section_reprocess(section_key, section) is not ReprocessAction.REWRITE_LLM:
+        return False
+    # An LLM section whose inputs a data reprocess cannot touch (Background is
+    # generated from the chemical identity) must not be staled/demoted either —
+    # the catalog declares which sections are data-dependent (SectionSpec).
+    from workflow.section_catalog import is_data_dependent
+    return is_data_dependent(section_key)
 
 
 # ---------------------------------------------------------------------------

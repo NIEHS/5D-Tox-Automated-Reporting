@@ -313,12 +313,15 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   }
 
   // Map a readiness key to the approve/unapprove API's (section_type, extra).
-  // Singletons map to themselves; apical results are `bm2_<slug>`; genomics
-  // instances are deterministic and not offered for approval here.
+  // Derived from the catalog entry, not a literal allowlist: any approvable
+  // singleton the template declares can be approved here; apical results are
+  // `bm2_<slug>`; genomics instances need organ/sex and are not offered.
   function approvalTarget(key: string): { sectionType: string; extra: { bm2_slug?: string } } | null {
-    if (key.startsWith("bm2_")) return { sectionType: "bm2", extra: { bm2_slug: key.slice("bm2_".length) } };
-    if (["background", "methods", "bmd_summary", "summary"].includes(key)) return { sectionType: key, extra: {} };
-    return null;
+    const s = byKey[key];
+    if (!s || !s.approvable) return null;
+    if (s.instance_of === "bm2") return { sectionType: "bm2", extra: { bm2_slug: key.slice("bm2_".length) } };
+    if (s.instance_of !== null) return null;
+    return { sectionType: key, extra: {} };
   }
 
   const [actingKey, setActingKey] = useState<string | null>(null);
@@ -432,6 +435,18 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
     () => sections.filter((s) => s.instance_of === "genomics").sort((a, b) => a.key.localeCompare(b.key)),
     [sections]
   );
+  // Catch-all: every catalog singleton no group above claimed (e.g. a new
+  // approvable section added to the template that has no generator yet). It is
+  // rendered rather than silently dropped, with Approve when the catalog says so.
+  const other = useMemo(() => {
+    const claimed = new Set<string>([
+      ...frontMatterRows.map((s) => s.key),
+      ...authored.map((s) => s.key),
+      ...narratives.map((s) => s.key),
+      "bmd_summary",
+    ]);
+    return sections.filter((s) => s.instance_of === null && !claimed.has(s.key));
+  }, [sections, frontMatterRows, authored, narratives]);
 
   if (!dtxsid) {
     return (
@@ -568,6 +583,26 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
               approved={false}
               blockedBy={s.blocked_by}
               content={null}
+            />
+          ))}
+        </>
+      )}
+
+      {other.length > 0 && (
+        <>
+          <h3 className="group-heading">Other sections</h3>
+          {other.map((s) => (
+            <SectionRow
+              key={s.key}
+              label={sectionLabel(s.key)}
+              note={SECTION_COPY[s.key]?.note ?? `${s.kind} section declared by the template.`}
+              enabled={s.enabled}
+              approved={s.approved}
+              blockedBy={s.blocked_by}
+              content={sectionContent(session, s.key)}
+              onApprove={s.approvable ? () => void approve(s.key) : undefined}
+              onRevise={s.approvable ? () => void revise(s.key) : undefined}
+              acting={actingKey === s.key}
             />
           ))}
         </>

@@ -42,7 +42,11 @@ def test_should_stale_only_llm_sections():
     # The behavior change vs the old "stale everything": programmatic is NOT staled.
     assert should_stale_on_reprocess("bm2_liver", _CONTENT) is False
     assert should_stale_on_reprocess("genomics_liver_male", _CONTENT) is True
-    assert should_stale_on_reprocess("background", _CONTENT) is True
+    # Background is generated from the chemical IDENTITY, which a data reprocess
+    # does not change — the catalog declares it data-independent, so it is NOT
+    # staled/demoted (it used to be, forcing a pointless re-bless).
+    assert should_stale_on_reprocess("background", _CONTENT) is False
+    assert should_stale_on_reprocess("summary", _CONTENT) is True
     # unknown fails safe to staled (conservative)
     assert should_stale_on_reprocess("mystery", _CONTENT) is True
     # nothing to act on -> not staled

@@ -175,10 +175,6 @@ class DiskPoolStore:
         from pipeline.session_store import save_section
         save_section(dtxsid, key, data, archive=archive)
 
-    # Bare-stem section files (the singleton report sections). The prefixed
-    # instance families (bm2_*, genomics_*) are discovered by glob below.
-    _BARE_SECTION_STEMS = ("background", "methods", "bmd_summary", "summary")
-
     def _iter_section_dicts(self, dtxsid: str):
         """Yield (stem, dict) for every report-section file on disk. Shared by
         read_section_states + read_section_dicts so the "which files are sections"
@@ -192,18 +188,13 @@ class DiskPoolStore:
                 return None
             return data if isinstance(data, dict) else None
 
-        for stem in self._BARE_SECTION_STEMS:
-            p = d / f"{stem}.json"
-            if p.exists():
-                data = _load(p)
-                if data is not None:
-                    yield stem, data
-
-        for pattern in ("bm2_*.json", "genomics_*.json"):
-            for section_file in sorted(d.glob(pattern)):
-                data = _load(section_file)
-                if data is not None:
-                    yield section_file.stem, data
+        # One "which files are sections" rule for the whole app: the session
+        # store's iterator (singletons from the catalog + the glob families).
+        from pipeline.session_store import iter_section_files
+        for stem, section_file in iter_section_files(d):
+            data = _load(section_file)
+            if data is not None:
+                yield stem, data
 
     def read_section_states(self, dtxsid: str) -> dict[str, bool]:
         return {

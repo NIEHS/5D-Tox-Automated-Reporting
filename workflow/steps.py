@@ -581,6 +581,11 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     data["approved"] = True
     data["approved_at"] = datetime.now(tz=timezone.utc).isoformat()
     data.pop("stale", None)
+    # The Phase 3b wording-review inform-signal is answered by exactly this act:
+    # the human has read the prose against the refreshed data and re-blessed it.
+    # Clearing it here (and in the route twin) is what lets a LATER flip be a
+    # fresh signal instead of noise that never goes away.
+    data.pop("wording_review", None)
     _promote_to_final(data)
 
     # Phase 4: record this acceptance as an "edit"/"blessed" version event. This

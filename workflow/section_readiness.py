@@ -53,8 +53,9 @@ if TYPE_CHECKING:
 
 # The singleton report sections that always appear in the readiness map, even
 # before anything is on disk (a UI wants to show them as present-but-locked).
-# Instance families (bm2_*, genomics_*) only appear once they exist on disk.
-_SINGLETON_KEYS: tuple[str, ...] = ("background", "methods", "bmd_summary", "summary")
+# Instance families (bm2_*, genomics_*) only appear once they exist on disk. The
+# singleton keys are NOT a literal here: they come from the catalog passed in (or,
+# for callers that pass none, from the catalog of the global tree).
 
 
 # Declared dependency table (DATA, not code): section TYPE / family → the unlock
@@ -145,9 +146,13 @@ def derive_section_readiness(
 
     # Universe of keys to report on: the fixed singletons + any instance
     # sections that exist on disk (approved or not) + any non-family catalog keys.
-    keys = set(_SINGLETON_KEYS) | set(section_states.keys())
-    if catalog is not None:
-        keys |= {spec.key for spec in catalog if spec.instance_of is None}
+    if catalog is None:
+        from workflow.section_catalog import catalog_for_tree
+        from document_model.document_tree import DOCUMENT_TREE
+        catalog = catalog_for_tree(DOCUMENT_TREE)
+    keys = set(section_states.keys()) | {
+        spec.key for spec in catalog if spec.instance_of is None
+    }
 
     readiness: dict[str, dict] = {}
     for key in sorted(keys):

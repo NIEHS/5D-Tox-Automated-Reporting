@@ -686,7 +686,9 @@ async def api_session_load(dtxsid: Dtxsid):
     try:
         from rendering.front_matter import resolve_front_matter_status
         _fm = _read_json("front_matter.json") or {}
-        _bg = _read_json("background.json") or {}
+        # Reuse the catalog-derived singleton read (no second parse of
+        # background.json, no double-counted disk_read provenance event).
+        _bg = singleton_sections.get("background") or {}
         _abstract_filled = bool(
             (_bg.get("abstract_background") or "").strip()
             or any(d.glob("_cache_bmd_summary_*.json"))
@@ -902,6 +904,10 @@ async def api_session_approve(request: Request):
     data["approved"] = True
     data["approved_at"] = now_iso()
     data.pop("stale", None)
+    # Re-blessing answers the Phase 3b wording-review signal (twin of
+    # workflow.steps.accept_section_step): the UI re-sends the section content
+    # it loaded, which still carries the marker, so strip it here or it persists.
+    data.pop("wording_review", None)
     # Assert the FINAL content fact (ADR-0015 facts-on-disk): approve = editorial
     # "done" → FINAL (auto-sets PROTECTED), serialized to data["facts"] so a later
     # reprocess can demote_for_currency. Shares the lifted step's helper so the
@@ -1058,7 +1064,7 @@ def _resolve_section_key(body: dict) -> tuple[str | None, str | None]:
     (workflow.section_catalog) instead of being re-implemented here.
     """
     from workflow.section_catalog import resolve_section_key
-    return resolve_section_key(body)
+    return resolve_section_key(body)  # memoized allowlist inside
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from web_routes.dtxsid_param import Dtxsid
 
 from pipeline.session_store import safe_filename
+from workflow.engine import WorkflowEngine
+from workflow.store import DiskPoolStore
 from rendering.preview_surface import (
     DEFAULT_SURFACE,
     KNOWN_SURFACES,
@@ -100,11 +102,39 @@ async def api_preview_view(dtxsid: Dtxsid, view: str | None = None, surface: str
     return FileResponse(str(path), media_type=media_type)
 
 
+def publish_gate_response(dtxsid: str) -> JSONResponse | None:
+    """The server-side publish gate shared by every route that ships the report
+    (preview download, Overleaf bundle). Returns a 409 JSONResponse naming the
+    blocking sections when the report is not publishable, else None. Derived on
+    every call from section currency (WorkflowEngine.publish_readiness); never
+    stored."""
+    readiness = WorkflowEngine(dtxsid, DiskPoolStore()).publish_readiness()
+    if readiness.get("can_publish", True):
+        return None
+    blocking = readiness.get("blocking") or []
+    keys = ", ".join(b.get("section_key", "?") for b in blocking)
+    return JSONResponse(
+        {
+            "error": (
+                "Report is not publishable: re-accept the sections a data "
+                f"reprocess invalidated ({keys})"
+            ),
+            "blocking": blocking,
+        },
+        status_code=409,
+    )
+
+
 @router.get("/api/preview/{dtxsid}/download")
 async def api_preview_download(dtxsid: Dtxsid, view: str | None = None, surface: str = DEFAULT_SURFACE):
     """Download a materialized deliverable (default docx) as an attachment."""
     if (bad := _reject_bad_dtxsid(dtxsid)) is not None:
         return bad
+    # Phase 3a publish gate, enforced HERE (server-derived), not only in the
+    # React link: a stale/regenerated LLM section blocks the deliverable until a
+    # human re-accepts it, whatever URL the request came from.
+    if (gate := publish_gate_response(dtxsid)) is not None:
+        return gate
     path = preview_file_path(dtxsid, surface, view)
     if not path.exists():
         return JSONResponse(

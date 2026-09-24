@@ -125,9 +125,11 @@ async def api_workflow_sections(dtxsid: Dtxsid):
 
     store = DiskPoolStore()
     engine = WorkflowEngine(dtxsid, store)
-    readiness = engine.derive_section_readiness()
+    # One tree build and one pass over the section files per request: the
+    # states (key → approved) double as the "present on disk" set.
     catalog = catalog_for_session(dtxsid)
-    on_disk = store.read_section_dicts(dtxsid)
+    on_disk = store.read_section_states(dtxsid)
+    readiness = engine.derive_section_readiness(section_states=on_disk, catalog=catalog)
 
     def _family_for(key: str) -> str:
         if key.startswith("bm2_"):
