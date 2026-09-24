@@ -130,3 +130,66 @@ def flush(dtxsid: str, *, path: str | None = None, total_ms: float | None = None
             f.write(line + "\n")
     except Exception:  # pragma: no cover - observability must never break a request
         pass
+
+
+def step_provenance(fn):
+    """Decorator: emit step_start / step_done / step_error around a workflow step.
+
+    Every workflow step (workflow/steps.py) is `step(dtxsid, ..., store)` — sync or
+    async — and raises StepError on failure. This wraps one so the phase boundary is
+    logged uniformly: `step_start` at entry, `step_done {ms}` on success, or
+    `step_error {ms, error, status}` before RE-RAISING (the decorator never swallows a
+    step's exception or alters its return). `dtxsid` is the first positional arg. The
+    provenance calls are fail-soft (record() swallows), so instrumentation can never
+    break the step; timing uses monotonic. Handles async transparently via
+    iscoroutinefunction so `process_step`/`document_step` are covered too."""
+    import asyncio
+    import functools
+    import time
+
+    step_name = getattr(fn, "__name__", "step")
+
+    def _dtxsid(args) -> str | None:
+        return args[0] if args and isinstance(args[0], str) else None
+
+    def _error_fields(exc: Exception) -> dict:
+        f = {"error": type(exc).__name__}
+        status = getattr(exc, "status_code", None)
+        if status is not None:
+            f["status"] = status
+        return f
+
+    if asyncio.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def _async_wrapper(*args, **kwargs):
+            dtxsid = _dtxsid(args)
+            record("step_start", step=step_name, dtxsid=dtxsid)
+            t0 = time.monotonic()
+            try:
+                result = await fn(*args, **kwargs)
+            except Exception as exc:
+                record("step_error", step=step_name, dtxsid=dtxsid,
+                       ms=round((time.monotonic() - t0) * 1000, 1),
+                       **_error_fields(exc))
+                raise
+            record("step_done", step=step_name, dtxsid=dtxsid,
+                   ms=round((time.monotonic() - t0) * 1000, 1))
+            return result
+        return _async_wrapper
+
+    @functools.wraps(fn)
+    def _sync_wrapper(*args, **kwargs):
+        dtxsid = _dtxsid(args)
+        record("step_start", step=step_name, dtxsid=dtxsid)
+        t0 = time.monotonic()
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as exc:
+            record("step_error", step=step_name, dtxsid=dtxsid,
+                   ms=round((time.monotonic() - t0) * 1000, 1),
+                   **_error_fields(exc))
+            raise
+        record("step_done", step=step_name, dtxsid=dtxsid,
+               ms=round((time.monotonic() - t0) * 1000, 1))
+        return result
+    return _sync_wrapper

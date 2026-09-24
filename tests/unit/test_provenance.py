@@ -109,3 +109,61 @@ def test_record_fail_soft_on_bad_field(monkeypatch):
     with provenance.request_context("req"):
         provenance.record("cache_hit", dtxsid="X", weird=Weird())  # no raise
         assert provenance._events.get()[0]["event"] == "cache_hit"
+
+
+class TestStepProvenance:
+    """The @step_provenance decorator — uniform step_start/step_done/step_error
+    around every workflow step (sync + async), never altering the step's result or
+    swallowing its exception."""
+
+    def test_sync_emits_start_and_done(self):
+        @provenance.step_provenance
+        def my_step(dtxsid, store):
+            return {"ok": True}
+
+        with provenance.request_context("r"):
+            out = my_step("DTX_A", None)
+            assert out == {"ok": True}  # return value untouched
+            evs = provenance._events.get()
+            assert [e["event"] for e in evs] == ["step_start", "step_done"]
+            assert all(e["step"] == "my_step" for e in evs)
+            assert all(e["dtxsid"] == "DTX_A" for e in evs)
+            assert "ms" in evs[1]
+
+    def test_async_emits_start_and_done(self):
+        import asyncio
+
+        @provenance.step_provenance
+        async def my_astep(dtxsid, store):
+            return 42
+
+        with provenance.request_context("r"):
+            out = asyncio.run(my_astep("DTX_B", None))
+            assert out == 42
+            assert [e["event"] for e in provenance._events.get()] == [
+                "step_start", "step_done"
+            ]
+
+    def test_error_emits_step_error_and_reraises(self):
+        class Boom(Exception):
+            status_code = 400
+
+        @provenance.step_provenance
+        def bad_step(dtxsid, store):
+            raise Boom("nope")
+
+        with provenance.request_context("r"):
+            with pytest.raises(Boom):  # exception propagates unchanged
+                bad_step("DTX_C", None)
+            evs = provenance._events.get()
+            assert [e["event"] for e in evs] == ["step_start", "step_error"]
+            err = evs[1]
+            assert err["error"] == "Boom"
+            assert err["status"] == 400  # StepError.status_code surfaced
+
+    def test_preserves_name(self):
+        @provenance.step_provenance
+        def named_step(dtxsid, store):
+            return None
+
+        assert named_step.__name__ == "named_step"

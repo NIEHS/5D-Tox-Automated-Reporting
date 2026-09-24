@@ -40,6 +40,7 @@ from pipeline.integrated_io import _enrich_source_experiment_counts
 from pipeline.session_store import _VERSION_EVENT_KEY
 from styling_export.llm_helpers import llm_generate_json as _llm_generate_json
 
+from common.provenance import step_provenance
 from workflow.errors import StepError
 from workflow.store import PoolStore
 
@@ -50,6 +51,7 @@ logger = logging.getLogger(__name__)
 # materialize result sections (ADR-0018 Phase 1)
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     """Write the apical result sections from the Process cache to disk as section
     files, so the document surface shows them and the deliverable renders complete.
@@ -146,6 +148,7 @@ def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
 # validate
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def validate_step(dtxsid: str, store: PoolStore) -> dict:
     """Re-fingerprint the pool and run full cross-validation.
 
@@ -191,6 +194,7 @@ def validate_step(dtxsid: str, store: PoolStore) -> dict:
 # resolve
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore) -> dict:
     """Append one precedence decision to precedence.json.
 
@@ -218,6 +222,7 @@ def resolve_step(dtxsid: str, issue_index, chosen_file_id: str, store: PoolStore
 # confirm-metadata
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def confirm_metadata_step(dtxsid: str, confirmed: dict, store: PoolStore) -> dict:
     """Apply user metadata corrections to fingerprints and write txt/csv headers.
 
@@ -306,6 +311,7 @@ def _write_metadata_headers(file_path, platform: str, data_type: str) -> None:
 # integrate
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict:
     """Merge the pool into a unified BMDProject and cache it.
 
@@ -433,6 +439,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
 # generate-animal-report
 # ---------------------------------------------------------------------------
 
+@step_provenance
 def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
     """Build the per-animal traceability report and persist it.
 
@@ -463,6 +470,7 @@ def generate_animal_report_step(dtxsid: str, store: PoolStore) -> dict:
 # process
 # ---------------------------------------------------------------------------
 
+@step_provenance
 async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
     """Turn the integrated project into report content (the heavy compute).
 
@@ -486,6 +494,7 @@ async def process_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
 # document (content preparation) — concern [2], ADR-0021
 # ---------------------------------------------------------------------------
 
+@step_provenance
 async def document_step(dtxsid: str, params: dict, store: PoolStore) -> dict:
     """Prepare the document CONTENT from processed data + declarations (ADR-0021).
 
@@ -538,6 +547,7 @@ def _promote_to_final(data: dict) -> None:
 
     store_content_facts(data, promote(section_facts(data), Fact.FINAL))
 
+@step_provenance
 def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict:
     """Approve (lock) an existing report section.
 
@@ -599,6 +609,7 @@ def accept_section_step(dtxsid: str, section_key: str, store: PoolStore) -> dict
     }
 
 
+@step_provenance
 def release_section_step(
     dtxsid: str, section_key: str, store: PoolStore, *, reason: str = "",
 ) -> dict:
