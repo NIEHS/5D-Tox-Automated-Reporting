@@ -68,15 +68,51 @@ export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$SETTINGS_KEY}"
 # 2026-09-21 on a machine with no proxy configured.)
 _base_url="${ANTHROPIC_BASE_URL:-$SETTINGS_BASE_URL}"
 if [[ -n "$_base_url" ]]; then export ANTHROPIC_BASE_URL="$_base_url"; else unset ANTHROPIC_BASE_URL; fi
-_ca="${SSL_CERT_FILE:-$SETTINGS_CA}"
-if [[ -n "$_ca" ]]; then export SSL_CERT_FILE="$_ca"; else unset SSL_CERT_FILE; fi
-# The Python SDK honors SSL_CERT_FILE (httpx), not NODE_EXTRA_CA_CERTS.
+# CA bundle resolution, in priority order:
+#   1. $SSL_CERT_FILE already in the shell (explicit override)
+#   2. settings.json's env.NODE_EXTRA_CA_CERTS ($SETTINGS_CA)
+#   3. $NODE_EXTRA_CA_CERTS from the ambient shell — THIS sandbox sets the NIEHS
+#      bundle here (Claude Code / Node reads it), NOT in settings.json's env block,
+#      so relying on (2) alone left SSL_CERT_FILE empty and every Python LLM call
+#      failed cert verification against the LiteLLM proxy (self-signed chain).
+#   4. the known sandbox path as a last resort.
+# The Python SDK (httpx) honors SSL_CERT_FILE, NOT NODE_EXTRA_CA_CERTS — so we must
+# copy whichever of these resolves INTO SSL_CERT_FILE. Only export a non-empty,
+# existing path (an empty SSL_CERT_FILE can disable default cert loading entirely).
+_ca="${SSL_CERT_FILE:-${SETTINGS_CA:-${NODE_EXTRA_CA_CERTS:-/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt}}}"
+if [[ -n "$_ca" && -f "$_ca" ]]; then export SSL_CERT_FILE="$_ca"; else unset SSL_CERT_FILE; fi
 
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
   echo "run-server.sh: no ANTHROPIC_API_KEY (checked \$ANTHROPIC_API_KEY and $SETTINGS) — LLM layers will fail." >&2
 fi
 if [[ -n "${SSL_CERT_FILE:-}" && ! -f "${SSL_CERT_FILE:-}" ]]; then
   echo "run-server.sh: SSL_CERT_FILE=${SSL_CERT_FILE:-} does not exist — TLS to the proxy may fail." >&2
+fi
+
+# --- Java pipeline env (integration + BMDS) --------------------------------
+# The Java layer (IntegrateProject, RunPrefilter, …) is compiled for JDK 21;
+# running it under the sandbox's default JDK 17 fails with
+# UnsupportedClassVersionError (class file 65.0 vs 61.0). And bmdx_pipe.java_bridge
+# resolves the classpath under $BMDX_PROJECT_ROOT (its default is a nonexistent
+# ~/Dev path). pool_integrator invokes a BARE `java`, so JDK 21 must lead $PATH,
+# not just $JAVA_HOME. Shell-set values win (one-off override); we supply the
+# sandbox defaults and warn if a path is absent.
+_jdk21="${BMDX_JDK_HOME:-/opt/liberica-jdk-21}"
+if [[ -x "$_jdk21/bin/java" ]]; then
+  export JAVA_HOME="$_jdk21"
+  export PATH="$_jdk21/bin:$PATH"
+else
+  echo "run-server.sh: JDK 21 not found at $_jdk21/bin/java — Java integration will fail (UnsupportedClassVersionError)." >&2
+fi
+export BMDX_PROJECT_ROOT="${BMDX_PROJECT_ROOT:-/workspace/BMDExpress-3}"
+# java_bridge.build_classpath globs target/*.jar, so ANY real jar there works —
+# it does NOT require the `bmdx-core.jar` name specifically (which is a symlink to
+# a host /ddn path that's dangling in the sandbox; the sibling
+# bmdexpress3-*.jar is the real artifact the glob picks up). So check for a
+# NON-DANGLING jar in target/, not that one symlink, to avoid a false alarm.
+if ! compgen -G "$BMDX_PROJECT_ROOT/target/*.jar" >/dev/null 2>&1 || \
+   ! find "$BMDX_PROJECT_ROOT/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
+  echo "run-server.sh: no readable *.jar under $BMDX_PROJECT_ROOT/target — Java classpath will be broken." >&2
 fi
 
 # Default to binding all interfaces so the host port-forward reaches us (see the
