@@ -104,7 +104,16 @@ if [[ -x "$_jdk21/bin/java" ]]; then
 else
   echo "run-server.sh: JDK 21 not found at $_jdk21/bin/java — Java integration will fail (UnsupportedClassVersionError)." >&2
 fi
-export BMDX_PROJECT_ROOT="${BMDX_PROJECT_ROOT:-/workspace/BMDExpress-3}"
+# Default the BMDExpress root only to a path that EXISTS: the sandbox checkout
+# first, then bmdx-pipe's own default (~/Dev/Projects/BMDExpress-3, where a
+# by-hand target/ layout lives on the author's laptop — see the README in that
+# target/). Exporting a nonexistent path would override java_bridge's default
+# and break integration on machines that are not the sandbox.
+if [[ -z "${BMDX_PROJECT_ROOT:-}" ]]; then
+  for _cand in /workspace/BMDExpress-3 "$HOME/Dev/Projects/BMDExpress-3"; do
+    if [[ -d "$_cand/target" ]]; then export BMDX_PROJECT_ROOT="$_cand"; break; fi
+  done
+fi
 # java_bridge.build_classpath globs target/*.jar, so ANY real jar there works —
 # it does NOT require the `bmdx-core.jar` name specifically (which is a symlink to
 # a host /ddn path that's dangling in the sandbox; the sibling
