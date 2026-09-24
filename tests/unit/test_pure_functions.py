@@ -397,3 +397,33 @@ class TestHashFunctions:
             imputed_cells={"Body Weight": {"Male": {"100": 2}}},
         )
         assert h1 != h2
+
+
+class TestResolveCompoundName:
+    """`_resolve_compound_name` — the identity fallback that stops a bare
+    re-process (run_process without compound_name) baking the dtxsid / "Test
+    Compound" into the sections cache captions + narratives."""
+
+    def test_reads_name_from_identity(self, sessions_dir):
+        import json
+        from pipeline.process_integrated import _resolve_compound_name
+
+        d = sessions_dir / "DTXSID_RC"
+        d.mkdir(parents=True)
+        (d / "identity.json").write_text(json.dumps({"name": "Perfluorohexanesulfonamide"}))
+        assert _resolve_compound_name("DTXSID_RC") == "Perfluorohexanesulfonamide"
+
+    def test_defaults_when_no_identity(self, sessions_dir):
+        from pipeline.process_integrated import _resolve_compound_name
+
+        (sessions_dir / "DTXSID_RC").mkdir(parents=True)
+        assert _resolve_compound_name("DTXSID_RC") == "Test Compound"
+
+    def test_defaults_on_blank_name(self, sessions_dir):
+        import json
+        from pipeline.process_integrated import _resolve_compound_name
+
+        d = sessions_dir / "DTXSID_RC"
+        d.mkdir(parents=True)
+        (d / "identity.json").write_text(json.dumps({"name": "   "}))
+        assert _resolve_compound_name("DTXSID_RC") == "Test Compound"

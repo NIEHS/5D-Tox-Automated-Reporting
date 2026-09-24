@@ -1402,6 +1402,25 @@ async def prepare_content_if_changed(ctx) -> bool:
     return True
 
 
+def _resolve_compound_name(dtxsid: str) -> str:
+    """The session's chemical name from identity.json, else "Test Compound".
+
+    The single fallback when a caller omits `compound_name`. Mirrors the identity
+    read already used for the LLM prompt (and rendering/preview_surface._identity):
+    identity.json is authored at integration, so a processable session has it.
+    Fail-soft — an unreadable/absent identity falls back to the scaffold default
+    rather than raising."""
+    try:
+        p = _session_dir(dtxsid) / "identity.json"
+        if p.exists():
+            name = (json.loads(p.read_text()).get("name") or "").strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    return "Test Compound"
+
+
 def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext":
     """Parse request params + template filters, load the integrated project, and
     build the ProcessContext threaded through every layer.
@@ -1412,7 +1431,13 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     StepError(400) when the session is not integrated. Also migrates any leftover
     monolithic _processed_cache_* files (a cheap idempotent cleanup)."""
     body = params or {}
-    compound_name = body.get("compound_name", "Test Compound")
+    # Compound name resolution order: caller-supplied → session identity.json →
+    # "Test Compound" default. Resolving from identity when the caller omits it is
+    # what keeps a bare re-process (e.g. run_process(dtxsid, {})) from baking a wrong
+    # name — the dtxsid or "Test Compound" — into the sections cache's captions and
+    # narratives. identity.json is authored at integration and always on disk for a
+    # processable session, so the default is now only a last resort.
+    compound_name = body.get("compound_name") or _resolve_compound_name(dtxsid)
     dose_unit = body.get("dose_unit", "mg/kg")
 
     # BMD statistics — array of stat keys, each producing a separate GO table.
