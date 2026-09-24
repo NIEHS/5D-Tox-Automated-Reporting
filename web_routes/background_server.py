@@ -471,6 +471,11 @@ async def sessions_summary():
                 # Skip non-directories and internal dirs (underscore-prefixed)
                 if not d.is_dir() or d.name.startswith("_"):
                     continue
+                # session_dir() creates the folder on ANY access (a state probe
+                # for a remembered id is enough), so an empty directory is not a
+                # session — listing it resurrects sessions the user just reset.
+                if not any(d.iterdir()):
+                    continue
                 section_files = list(d.glob("*.json"))
                 # Exclude meta.json from the section count
                 sections = [f.stem for f in section_files if f.stem != "meta"]
