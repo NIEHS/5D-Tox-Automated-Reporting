@@ -26,21 +26,26 @@ interface ValidationState {
 // Bindings the inspector offers per type (in addition to the catalog's
 // `requires`). Everything else present on a node is preserved untouched.
 const OPTIONAL_KEYS: Record<string, string[]> = {
-  narrative: ["methods_key"],
+  narrative: ["methods_key", "binding"],
   "heading-only": ["data_key", "methods_key"],
-  "narrative+tables": ["narrative_key"],
+  "narrative+tables": ["narrative_key", "binding"],
+  "front-matter": ["binding"],
   "bmd-summary": ["caption"],
   "sample-counts-table": ["caption"],
+  "data-table": ["caption"],
+  "authored-table": ["caption", "content_file"],
   table: ["caption"],
   "incidence-table": ["caption"],
-  figure: ["caption", "subtype"],
+  figure: ["caption", "subtype", "content_file"],
   "freeform-block": ["content_file"],
   "freeform-page": ["content_file"],
+  "supplementary-material": ["content_file"],
   "title-page": ["subtype"],
   cover: ["subtype"],
 };
 
 const KEY_LABELS: Record<string, string> = {
+  binding: "Binding",
   data_key: "Data key",
   platform: "Platform",
   narrative_key: "Narrative key",
@@ -758,6 +763,9 @@ function Inspector({
         return catalog.vocab.subtypes;
       case "orientation":
         return catalog.vocab.orientations;
+      case "binding":
+        // ADR-0025: only the bindings this preset admits (the server refuses others).
+        return ct?.bindings ?? catalog.bindings;
       default:
         return [];
     }
@@ -824,6 +832,7 @@ function Inspector({
           {ct.breakable ? "may start a new page · " : ""}
           {ct.editable ? "editable prose · " : ""}
           {ct.captionable ? "captioned · " : ""}
+          {`role ${ct.role} · binding ${ct.bindings.join(" | ")} · `}
           {ct.allowed_children.length ? `may contain: ${ct.allowed_children.join(", ")}` : "no children"}
         </p>
       )}

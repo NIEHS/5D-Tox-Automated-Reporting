@@ -57,7 +57,8 @@ def test_figure_emits_furniture_roles():
 
 
 def test_figure_subtypes_and_graphic_role():
-    assert rc.FIGURE_SUBTYPES == {"chart", "logo"}
+    assert rc.FIGURE_SUBTYPES == {"chart", "logo", "diagram", "photograph"}
+    assert rc.AUTHORED_FIGURE_SUBTYPES == {"diagram", "photograph"}
     assert rc.figure_graphic_role("chart") == "fig_graphic"
     assert rc.figure_graphic_role("logo") == "logo_graphic"
     assert rc.figure_graphic_role(None) == "fig_graphic"

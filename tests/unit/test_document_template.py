@@ -82,13 +82,14 @@ def test_missing_required_key_is_rejected():
 
 
 def test_disallowed_child_is_rejected():
-    # `table` is not an allowed child of `narrative` (only of narrative+tables).
+    # A generated list (role `toc`) is a leaf in the BITS profile: nothing may
+    # nest under it.  (A `table` under a `narrative` IS legal since ADR-0025 —
+    # both are ordinary <sec> flow content.)
     bad = [
         {
             "id": "p",
-            "type": "narrative",
+            "type": "toc",
             "title": "P",
-            "data_key": "d",
             "children": [{"id": "c", "type": "table", "title": "C", "platform": "P"}],
         }
     ]

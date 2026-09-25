@@ -89,13 +89,49 @@ def test_content_kinds_use_known_vocabulary():
             )
 
 
-def test_allowed_children_reference_real_types():
-    """allowed_children may only name types that exist in the catalog."""
+def test_every_type_has_a_profile_role_and_real_bindings():
+    """ADR-0025: each preset names a role from the BITS profile and a non-empty
+    list of bindings from the closed vocabulary."""
+    from document_model.render_capabilities import BINDINGS, ROLE_PROFILE
     for node_type, spec in COMPONENT_CATALOG.items():
-        for child_type in spec.allowed_children:
-            assert child_type in COMPONENT_CATALOG, (
-                f"{node_type!r} allows unknown child type {child_type!r}"
-            )
+        assert spec.role in ROLE_PROFILE, f"{node_type!r} has unknown role {spec.role!r}"
+        assert spec.bindings, f"{node_type!r} lists no bindings"
+        for b in spec.bindings:
+            assert b in BINDINGS, f"{node_type!r} lists unknown binding {b!r}"
+
+
+def test_role_profile_children_are_roles():
+    """The containment grammar is written once, per role, in terms of roles."""
+    from document_model.render_capabilities import ROLE_PROFILE
+    for role, spec in ROLE_PROFILE.items():
+        for child in spec.allowed_children:
+            assert child in ROLE_PROFILE, f"role {role!r} allows unknown child role {child!r}"
+
+
+def test_allowed_children_are_derived_from_roles():
+    """allowed_children_for(type) is exactly the catalog types whose role the
+    parent's role admits — nothing per-type."""
+    from document_model.render_capabilities import ROLE_PROFILE, allowed_children_for
+    for node_type, spec in COMPONENT_CATALOG.items():
+        child_roles = ROLE_PROFILE[spec.role].allowed_children
+        expected = tuple(n for n, c in COMPONENT_CATALOG.items() if c.role in child_roles)
+        assert allowed_children_for(node_type) == expected
+        for child in allowed_children_for(node_type):
+            assert is_allowed_child(node_type, child)
+
+
+# Presets whose `caption` belongs to the ONE table-wrap they contain rather than
+# to the section itself (ADR-0025 §4: bmd-summary is a <sec> with a single
+# table-wrap content item; the caption moves onto that item in migration phase 4).
+_CAPTION_ON_INNER_TABLE = {"bmd-summary"}
+
+
+def test_captionable_implies_table_wrap_or_fig_role():
+    """Only BITS <table-wrap> / <fig> carry <caption>; a captionable section
+    would be a grammar error (modulo the documented inner-table exception)."""
+    for node_type, spec in COMPONENT_CATALOG.items():
+        if spec.captionable and node_type not in _CAPTION_ON_INNER_TABLE:
+            assert spec.role in ("table-wrap", "fig"), node_type
 
 
 def test_emits_roles_resolve_in_the_shipped_vocabulary():

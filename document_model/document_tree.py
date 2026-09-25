@@ -130,7 +130,9 @@ def walk_tree(nodes: list[DocNode], visit) -> None:
 # source of truth; cross_references._TABLE_TYPES is the consumer-side mirror and
 # must stay equal to it (see the assertion in cross_references.py).
 NUMBERED_TABLE_TYPES = frozenset(
-    {"sample-counts-table", "table", "incidence-table", "bmd-summary"}
+    {"sample-counts-table", "table", "incidence-table", "bmd-summary",
+     # ADR-0025: every table-wrap role preset is numbered, whatever produced it.
+     "data-table", "authored-table"}
 )
 
 

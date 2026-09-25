@@ -9,11 +9,13 @@ tables, drawings and the 14 section breaks (portrait/landscape), all in body ord
 An earlier pass from `docs/NIEHS-Report-10-Reference.pdf` (heading font sizes) was
 superseded by this one; the differences are listed at the end.
 
-**Artifact:** `niehs-10-structure.faithful.yaml` — 84 nodes, one per heading / table /
-figure in the reference, typed as naturally as the grammar allows. It does **not**
-validate. Checked exhaustively against `render_capabilities.COMPONENT_CATALOG`
-(allowed children + required bindings) → **37 violations**, and the real validator
-(`document_config._tree_from_document_list`) stops at the first:
+**Artifact:** `niehs-10-structure.faithful.yaml`. **Status 2026-09-25 (later the same
+day): it now VALIDATES** — 139 nodes (Appendix F's 55 supplementary files included) —
+as an instance of the ADR-0025 profile, and is pinned as an acceptance test in
+`tests/unit/test_bits_profile.py`. The analysis below records the state that led to
+ADR-0025: the first version (84 nodes, typed as naturally as the old grammar allowed)
+did **not** validate — **37 violations** against `COMPONENT_CATALOG`, the real
+validator stopping at
 `template node 'authors': type 'heading-only' is not an allowed child of parent type 'front-matter'`.
 
 ## What lines up (no violations)

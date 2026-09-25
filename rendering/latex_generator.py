@@ -1309,6 +1309,43 @@ def _render_title_page(node: DocNode, data: dict) -> str:
     return "\n".join(parts)
 
 
+def _render_figures_list(node: DocNode, data: dict) -> str:
+    r"""
+    List of figures (ADR-0025) — the figure twin of _render_tables_list.  Every
+    figure node renders as a \begin{figure} float with \caption, so LaTeX's
+    \listoffigures enumerates them with page numbers automatically.
+    """
+    return f"{_heading(node.level, node.title)}\n\n\\listoffigures"
+
+
+def _render_authored_table(node: DocNode, data: dict) -> str:
+    r"""
+    An AUTHORED table (ADR-0025): a niehstable float carrying the positional
+    "Table N." caption (so it is numbered, labelled and listed like every
+    other table) whose body is the author's own LaTeX — resolved like the
+    freeform types (verbatim, or a pending note when only HTML was supplied).
+    """
+    caption = _table_caption(node, node.title or "")
+    return (
+        f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
+        f"{_freeform_body_latex(node)}\n"
+        f"\\end{{niehstable}}"
+    )
+
+
+def _render_supplementary_material(node: DocNode, data: dict) -> str:
+    r"""
+    One supplied data file (ADR-0025; BITS <supplementary-material>): a bold
+    entry title, then the file name in monospace on its own line when given.
+    """
+    lines = [f"\\noindent\\textbf{{{_escape_latex(node.title)}}}"]
+    if node.content_file:
+        lines[0] += "\\\\"
+        lines.append(f"\\texttt{{{_escape_latex(node.content_file)}}}")
+    lines.append("\\par\\medskip")
+    return "\n".join(lines)
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types not yet ported (table, bmd-summary,
@@ -1359,6 +1396,11 @@ _DISPATCH: dict[str, object] = {
     "freeform-page":     _render_freeform_page,
     "freeform-block":    _render_freeform_block,
     "page-break":        _render_page_break,
+    # ADR-0025 presets (data-table shares the sample-counts matrix emitter).
+    "figures-list":      _render_figures_list,
+    "data-table":        _render_sample_counts_table,
+    "authored-table":    _render_authored_table,
+    "supplementary-material": _render_supplementary_material,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical

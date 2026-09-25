@@ -47,13 +47,21 @@ from document_model.document_node import DocNode
 from document_model.content_item import ContentItem
 from styling_export.freeform_content import VALID_REPRESENTATIONS, resolve_freeform
 from document_model.render_capabilities import (
+    AUTHORED_FIGURE_SUBTYPES,
+    BINDINGS,
     COMPONENT_CATALOG,
     CONTENT_KINDS,
+    FIGURE_SUBTYPES,
+    ROLE_PROFILE,
+    bindings_for,
     capabilities_for,
+    default_binding_for,
     is_allowed_child,
     is_captionable,
     is_headingless,
+    preset_for,
     required_bindings_for,
+    role_for,
 )
 
 
@@ -76,15 +84,26 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 #   resolved_content — computed by _instantiate_node from the authored
 #               content/content_file/representation (freeform nodes); never
 #               authored.
+# `role` and `binding` (ADR-0025) are NOT listed: they are DocNode fields a
+# template entry MAY carry — `role` only to assert the preset's role, `binding`
+# to pick one of the preset's listed bindings — and the instantiator fills in
+# the computed/default value when an entry omits them.
 _COMPUTED_OR_SPECIAL = frozenset(
     {"level", "node_type", "children", "content_items", "table_number",
      "figure_number", "region", "resolved_content"}
 )
 
-# The freeform component types whose content is AUTHORED (in the template or an
-# external file) rather than read from the pipeline data dict.  Their content
-# bindings get a dedicated validation branch + a resolve step at instantiation.
-_FREEFORM_TYPES = frozenset({"freeform-page", "freeform-block"})
+# The component types whose content is AUTHORED (in the template or an external
+# file) rather than read from the pipeline data dict, as content / content_file
+# / representation.  Their content bindings get a dedicated validation branch +
+# a resolve step at instantiation.  `authored-table` (ADR-0025) joins the two
+# freeform types: its caption is a table caption, its body is supplied markup.
+_FREEFORM_TYPES = frozenset({"freeform-page", "freeform-block", "authored-table"})
+
+# Types that name a SUPPLIED FILE in `content_file` WITHOUT a representation
+# (the file is not markup to splice): a supplementary-material entry names its
+# data file; an authored figure (subtype diagram / photograph) names its image.
+_FILE_ONLY_TYPES = frozenset({"supplementary-material"})
 
 # Node types that may carry a `subtype`.  For cover/title-page it selects the
 # branded cover layout (see cover_layouts); for `figure` it is the pictorial KIND
@@ -112,22 +131,64 @@ _BINDING_FIELDS = tuple(
 # a stale field) and is rejected loudly.
 _KNOWN_KEYS = frozenset(_BINDING_FIELDS) | {"type", "children", "content_items"}
 
-# Keys every node entry must supply regardless of type.
-_REQUIRED_KEYS = ("id", "type", "title")
+# Keys every node entry must supply regardless of type.  `type` is required
+# too, UNLESS the entry states an explicit `role` + `binding` pair that resolves
+# to a preset (see _resolve_type) — ADR-0025 §4: presets are sugar.
+_REQUIRED_KEYS = ("id", "title")
 
 
 # ---------------------------------------------------------------------------
 # Helper / validation functions (private)
 # ---------------------------------------------------------------------------
 
+def _resolve_type(entry: dict) -> str:
+    """
+    The catalog type (preset) a validated-shape entry denotes.
+
+    Either the entry names a `type`, or it states a `role` + `binding` pair
+    (ADR-0025 §4) that resolves to the canonical preset for that pair.  A pair
+    with no preset is a loud error naming the pair, so an author learns that the
+    combination needs an emitter before it can be used — never a silent
+    fallback to some other type.
+    """
+    node_id = entry.get("id", "<no-id>")
+    if "type" in entry:
+        return entry["type"]
+    role, binding = entry.get("role"), entry.get("binding")
+    if not role or not binding:
+        raise ValueError(
+            f"template node {node_id!r} is missing required key 'type' "
+            f"(or an explicit 'role' + 'binding' pair)"
+        )
+    if role not in ROLE_PROFILE:
+        raise ValueError(
+            f"template node {node_id!r}: role {role!r} is not in the profile "
+            f"(known: {sorted(ROLE_PROFILE)})"
+        )
+    if binding not in BINDINGS:
+        raise ValueError(
+            f"template node {node_id!r}: binding {binding!r} is not a binding "
+            f"(known: {sorted(BINDINGS)})"
+        )
+    preset = preset_for(role, binding)
+    if preset is None:
+        raise ValueError(
+            f"template node {node_id!r}: no catalog preset renders role {role!r} "
+            f"with binding {binding!r}"
+        )
+    return preset
+
+
 def _validate_entry(entry: dict, parent_type: str | None) -> None:
     """
     Reject a malformed template entry before it becomes a broken tree node.
 
     Checks, in order: it's a mapping; it has the required keys; it has no
-    unknown keys; its type exists in the catalog; the catalog's containment
-    grammar permits this type under its parent; and every binding the type
-    REQUIRES (e.g. a `table` needs a `platform`) is present and non-empty.
+    unknown keys; its type exists in the catalog (or its role + binding pair
+    resolves to one); an explicit `role` matches the preset and an explicit
+    `binding` is one the preset lists; the role profile permits this type under
+    its parent; and every field the type REQUIRES (e.g. a `table` needs a
+    `platform`) is present and non-empty.
     """
     if not isinstance(entry, dict):
         raise ValueError(
@@ -144,10 +205,27 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
     if unknown:
         raise ValueError(f"template node {node_id!r} has unknown key(s): {sorted(unknown)}")
 
-    node_type = entry["type"]
+    node_type = _resolve_type(entry)
     if node_type not in COMPONENT_CATALOG:
         raise ValueError(
             f"template node {node_id!r} uses type {node_type!r}, which is not in the catalog"
+        )
+
+    # ADR-0025: an explicit `role` may only ASSERT the preset's role (the tree
+    # carries the computed role either way); an explicit `binding` must be one
+    # the preset admits — `binding: llm` on a data table is a lie the workflow
+    # would act on, so it is refused here.
+    role = entry.get("role")
+    if role is not None and role != role_for(node_type):
+        raise ValueError(
+            f"template node {node_id!r}: role {role!r} does not match type "
+            f"{node_type!r} (role {role_for(node_type)!r})"
+        )
+    binding = entry.get("binding")
+    if binding is not None and binding not in bindings_for(node_type):
+        raise ValueError(
+            f"template node {node_id!r}: binding {binding!r} is not one type "
+            f"{node_type!r} admits ({list(bindings_for(node_type))})"
         )
 
     # Containment grammar: a child's type must be an allowed child of its
@@ -194,17 +272,23 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
             f"{node_type!r} is not captionable"
         )
 
-    # Freeform authored-content bindings (freeform-page / freeform-block).
+    # Authored-content bindings (freeform-page / freeform-block / authored-table).
     if node_type in _FREEFORM_TYPES:
         _validate_freeform_entry(entry, node_id)
+    elif node_type in _FILE_ONLY_TYPES or (
+        node_type == "figure" and entry.get("subtype") in AUTHORED_FIGURE_SUBTYPES
+    ):
+        # A supplied FILE (a data file, an image): `content_file` names it and
+        # nothing else applies — no inline content, no representation.
+        _validate_file_only_entry(entry, node_id, node_type)
     elif any(entry.get(k) for k in ("content", "content_file", "representation")):
-        # content/content_file/representation only mean something on freeform
-        # types; flag a stray binding on any other type rather than silently
-        # ignoring it.
+        # content/content_file/representation only mean something on the
+        # authored types; flag a stray binding on any other type rather than
+        # silently ignoring it.
         raise ValueError(
             f"template node {node_id!r} of type {node_type!r}: "
             f"content/content_file/representation are only valid on "
-            f"{sorted(_FREEFORM_TYPES)}"
+            f"{sorted(_FREEFORM_TYPES | _FILE_ONLY_TYPES)} (or an authored figure)"
         )
 
     # `subtype` (which branded cover layout) is only meaningful on cover /
@@ -214,6 +298,13 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
         raise ValueError(
             f"template node {node_id!r} of type {node_type!r}: "
             f"subtype is only valid on {sorted(_SUBTYPABLE_TYPES)}"
+        )
+    # A figure's subtype is its provenance declaration (ADR-0023) and must be a
+    # known kind — an unknown one would render as a chart-shaped pending note.
+    if node_type == "figure" and entry.get("subtype") and entry["subtype"] not in FIGURE_SUBTYPES:
+        raise ValueError(
+            f"template node {node_id!r}: figure subtype {entry['subtype']!r} is not "
+            f"one of {sorted(FIGURE_SUBTYPES)}"
         )
 
     # ADR-0003 Part B: validate an authored content_items list (if any).
@@ -270,6 +361,28 @@ def _validate_content_items(items, node_id: str) -> None:
                 f"{node_id!r} (item ids must be unique within a component)"
             )
         seen.add(item_id)
+
+
+def _validate_file_only_entry(entry: dict, node_id: str, node_type: str) -> None:
+    """
+    Validate a node that names a SUPPLIED FILE (ADR-0025): a supplementary-
+    material entry (its data file) or an authored figure (its image).  Rules:
+    `content_file` is a required, single, non-empty path; inline `content` and
+    `representation` are meaningless here and rejected.  Existence of the file
+    is NOT checked at load — the fixture that documents the reference report
+    names files the app does not ship; the emitter reports a missing file.
+    """
+    content_file = entry.get("content_file")
+    if not isinstance(content_file, str) or not content_file.strip():
+        raise ValueError(
+            f"template node {node_id!r} of type {node_type!r}: requires "
+            f"`content_file` (the supplied file's path)"
+        )
+    if entry.get("content") is not None or entry.get("representation"):
+        raise ValueError(
+            f"template node {node_id!r} of type {node_type!r}: only "
+            f"`content_file` applies (no inline content / representation)"
+        )
 
 
 def _validate_freeform_entry(entry: dict, node_id: str) -> None:
@@ -402,7 +515,7 @@ def _instantiate_node(
     derivation; `parent_type` drives containment validation.
     """
     _validate_entry(entry, parent_type)
-    node_type = entry["type"]
+    node_type = _resolve_type(entry)
     # level is derived, never authored: headingless types (cover, title page,
     # bare data tables) are level 0; everything else takes its nesting depth.
     level = 0 if is_headingless(node_type) else depth
@@ -417,6 +530,11 @@ def _instantiate_node(
     # Forward every binding field by name; an absent optional field becomes
     # None (DocNode's default), exactly matching the old hand-written literal.
     bindings = {name: entry.get(name) for name in _BINDING_FIELDS}
+    # ADR-0025: the tree carries both axes explicitly.  `role` is always the
+    # preset's (an authored value was already checked to match); `binding` is
+    # the authored choice or the preset's default.
+    bindings["role"] = role_for(node_type)
+    bindings["binding"] = entry.get("binding") or default_binding_for(node_type)
     node = DocNode(
         node_type=node_type, level=level, children=children,
         content_items=content_items, region=region, **bindings

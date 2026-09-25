@@ -1255,6 +1255,57 @@ def _render_page_break(node: DocNode, data: dict) -> str:
     return '<div class="page-break" style="break-before:page"></div>'
 
 
+def _render_figures_list(node: DocNode, data: dict) -> str:
+    """
+    List of figures (ADR-0025) — the figure twin of _render_tables_list, built
+    from data["figure_entries"] when the marshal step populates it.  Nothing
+    populates it yet (the figure-entry walk is ADR-0025 migration phase 4), so
+    today this shows its heading and a visible pending note — never a silent
+    empty list.  LaTeX gets \\listoffigures natively.
+    """
+    heading = _heading(node.level, node.title)
+    entries = data.get("figure_entries") or []
+    if not entries:
+        return f"{heading}\n{_pending('List of figures: pending.')}"
+    items: list[str] = []
+    for entry in entries:
+        title = entry.get("title", "")
+        n = entry.get("figure_number")
+        ready = entry.get("ready", False)
+        line = f"Figure {n}. {title}" if n is not None else title
+        cls = "" if ready else 'class="pending-item"'
+        items.append(f"<li {cls}>{_esc(line)}</li>")
+    return f"{heading}\n<ol class=\"figures-list\">{''.join(items)}</ol>"
+
+
+def _render_authored_table(node: DocNode, data: dict) -> str:
+    """
+    An AUTHORED table (ADR-0025): the positional "Table N." caption from the
+    shared caption helper, then the author's own table markup (resolved like
+    the freeform types — verbatim HTML when this surface has it, else a pending
+    note naming the surface it was authored for).
+    """
+    caption = _table_caption(node, node.title or "")
+    body = _freeform_body_html(node)
+    return (
+        '<div class="authored-table">'
+        f'<p class="table-caption"><strong>{_esc(caption)}</strong></p>'
+        f"{body}</div>"
+    )
+
+
+def _render_supplementary_material(node: DocNode, data: dict) -> str:
+    """
+    One supplied data file (ADR-0025; BITS <supplementary-material>): the entry
+    title and, when given, the file name it refers to.  The reference lists 55
+    of these under Appendix F's four headings.
+    """
+    title = f'<span class="supp-title">{_esc(node.title)}</span>'
+    file = node.content_file or ""
+    file_html = f' <code class="supp-file">{_esc(file)}</code>' if file else ""
+    return f'<p class="supplementary-material">{title}{file_html}</p>'
+
+
 def _render_unimplemented(node: DocNode, data: dict) -> str:
     """
     Catch-all for node_types we haven't ported.  Emits this node's
@@ -1289,6 +1340,12 @@ _DISPATCH: dict[str, object] = {
     "freeform-page":    _render_freeform_page,
     "freeform-block":   _render_freeform_block,
     "page-break":       _render_page_break,
+    # ADR-0025 presets.  data-table shares the sample-counts emitter: same
+    # {caption, headers, rows, footnotes} matrix at data[data_key].
+    "figures-list":     _render_figures_list,
+    "data-table":       _render_sample_counts_table,
+    "authored-table":   _render_authored_table,
+    "supplementary-material": _render_supplementary_material,
 }
 
 # ADR-0006 #3: fail loudly at import if this table drifts from the canonical

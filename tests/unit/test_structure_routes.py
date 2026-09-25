@@ -34,14 +34,15 @@ def test_validate_reports_ok_and_attributes_errors(client):
     default = client.get("/api/document-config/DTXSID_SE?default=1").json()["yaml"]
     doc = client.post("/api/document-structure/parse", json={"yaml": default}).json()["document"]
     assert client.post("/api/document-structure/validate", json={"document": doc}).json() == {"ok": True}
-    # Illegal containment: a `table` directly under a heading-only node.
+    # Illegal containment: a `table` under a generated list (role `toc` is a
+    # leaf in the BITS profile — ADR-0025; a table under a heading is legal now).
     broken = yaml.safe_load(yaml.safe_dump(doc))
-    body_region = next(r for r in broken if r.get("region") == "body")
-    methods = next(n for n in body_region["children"] if n.get("id") == "methods")
-    methods["children"].append({"id": "rogue-table", "type": "table", "title": "X", "platform": "Body Weight"})
+    front_region = next(r for r in broken if r.get("region") == "front")
+    methods = next(n for n in front_region["children"] if n.get("type") == "tables-list")
+    methods.setdefault("children", []).append({"id": "rogue-table", "type": "table", "title": "X", "platform": "Body Weight"})
     res = client.post("/api/document-structure/validate", json={"document": broken}).json()
     assert res["ok"] is False and res["error"]
-    assert res["node_id"] in ("rogue-table", "methods")
+    assert res["node_id"] in ("rogue-table", "tables-list")
     # Bad shape is a 400, not a crash.
     assert client.post("/api/document-structure/validate", json={"document": "nope"}).status_code == 400
 

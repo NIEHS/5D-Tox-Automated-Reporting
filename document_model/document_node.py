@@ -109,6 +109,19 @@ class DocNode:
                         cover_layouts.get_cover_layout by the renderers; None falls
                         back to the default layout.  A pure render concern — not
                         serialized to the frontend.
+        role:           The document ROLE this node plays (ADR-0025): a key of
+                        render_capabilities.ROLE_PROFILE ("sec", "table-wrap",
+                        "fig", "app", …).  COMPUTED by the instantiator from the
+                        node_type preset; a template entry may state it only to
+                        assert it (a mismatch is a load error).  Containment is
+                        decided by role, so the tree carries it explicitly.
+        binding:        HOW this node's content is produced (ADR-0025): one of
+                        render_capabilities.BINDINGS — container / programmatic /
+                        llm / authored / derived.  Defaults to the preset's first
+                        binding; a template entry may choose another binding the
+                        preset lists (e.g. `binding: llm` on the abstract).  The
+                        workflow reads this (readiness, approvability) instead of
+                        inferring it from the type.
     """
     id: str
     title: str
@@ -132,3 +145,5 @@ class DocNode:
     representation: str | None = None
     resolved_content: dict | None = None
     subtype: str | None = None
+    role: str | None = None
+    binding: str | None = None

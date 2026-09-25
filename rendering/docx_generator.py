@@ -1595,6 +1595,54 @@ def _render_page_break(doc: Document, node: DocNode, data: dict) -> None:
     _add_page_break(doc)
 
 
+def _render_figures_list(doc: Document, node: DocNode, data: dict) -> None:
+    """List of figures (ADR-0025) — the figure twin of _render_tables_list.
+    Heading in the front-matter look, then the cached entries from
+    data["figure_entries"].  Nothing populates that yet (migration phase 4 adds
+    the figure-entry walk and a `TOC \\c "Figure"` field alongside SEQ-numbered
+    figure captions), so today the heading is followed by a visible pending
+    note rather than an empty field."""
+    head = _add_heading(doc, node.level, node.title, data)
+    if head is not None:
+        _style_front_matter_heading(head)
+    entries = data.get("figure_entries") or []
+    if not entries:
+        _add_pending(doc, "List of figures: pending.")
+        return
+    for entry in entries:
+        n = entry.get("figure_number")
+        title = _clean(entry.get("title", ""))
+        doc.add_paragraph(f"Figure {n}. {title}" if n is not None else title)
+
+
+def _render_authored_table(doc: Document, node: DocNode, data: dict) -> None:
+    """An AUTHORED table (ADR-0025): the SEQ-numbered 0-25_Table_Title caption
+    (so the Tables list collects it), then the author's content as body text —
+    the Word surface has no native form for supplied LaTeX/HTML table markup, so
+    it degrades to the freeform text path (tags stripped) like freeform-block."""
+    _add_table_caption(doc, _table_caption(node, node.title or ""))
+    _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
+
+
+def _render_supplementary_material(doc: Document, node: DocNode, data: dict) -> None:
+    """One supplied data file (ADR-0025): the entry title in the NTP
+    4-09a_Supplementary_Material_Title style and the file name in
+    4-09c_Supplementary_Material_Filename — the two roles the reference's
+    Appendix F uses — resolved through the vocabulary (plain paragraphs when no
+    vocabulary/style base is active)."""
+    title_style = _pstyle_or_default(doc, data, "supplementary_material_title")
+    if title_style:
+        doc.add_paragraph(_clean(node.title), style=title_style)
+    else:
+        doc.add_paragraph(_clean(node.title))
+    if node.content_file:
+        file_style = _pstyle_or_default(doc, data, "supplementary_material_filename")
+        if file_style:
+            doc.add_paragraph(_clean(node.content_file), style=file_style)
+        else:
+            doc.add_paragraph(_clean(node.content_file))
+
+
 def _render_unimplemented(doc: Document, node: DocNode, data: dict) -> None:
     """Catch-all — heading (if any) + a visible pending placeholder."""
     _add_heading(doc, node.level, node.title, data)
@@ -1633,6 +1681,11 @@ _DISPATCH: dict[str, object] = {
     "freeform-page":       _render_freeform_page,
     "freeform-block":      _render_freeform_block,
     "page-break":          _render_page_break,
+    # ADR-0025 presets (data-table shares the sample-counts matrix emitter).
+    "figures-list":        _render_figures_list,
+    "data-table":          _render_sample_counts_table,
+    "authored-table":      _render_authored_table,
+    "supplementary-material": _render_supplementary_material,
 }
 
 # Fail loudly at import if this table drifts from the canonical registry — the

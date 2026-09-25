@@ -579,6 +579,7 @@ _TABLE_EMITTERS = {
     "table": _emit_apical_table,
     "incidence-table": _emit_incidence_table,
     "sample-counts-table": _emit_sample_counts_table,
+    "data-table": _emit_sample_counts_table,   # same matrix shape (ADR-0025)
     "bmd-summary": _emit_bmd_summary,
     "genomics-section": _emit_genomics_section,
 }
@@ -699,6 +700,33 @@ def _emit_handled_by_book_shell(parent: etree._Element, node: DocNode, data: dic
     return
 
 
+def _emit_authored_table(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """authored-table (ADR-0025) → a <table-wrap> carrying the positional
+    <label> + <caption> so the table keeps its number and its slot; the SUPPLIED
+    body markup (LaTeX/HTML) has no XML projection yet, so the wrap holds a
+    visible tracer comment instead of a <table> — a label/caption-only
+    <table-wrap> is DTD-valid."""
+    tw = E("table-wrap", {"id": table_wrap_id(node.id)})
+    label, descriptive = _split_label(table_caption(node, node.title or ""))
+    if label:
+        tw.append(E.label(label))
+    if descriptive:
+        tw.append(E.caption(E.p(descriptive)))
+    tw.append(_todo(node, "authored table body not yet projected"))
+    parent.append(tw)
+
+
+def _emit_supplementary_material(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """supplementary-material (ADR-0025) → BITS <supplementary-material
+    xlink:href="<file>"><label>title</label></supplementary-material>: the one
+    node type whose BITS element is a near-identity projection."""
+    sm = E("supplementary-material", {"id": f"supp-{node.id}"})
+    if node.content_file:
+        sm.set(f"{{{_XLINK}}}href", node.content_file)
+    sm.append(E.label(node.title))
+    parent.append(sm)
+
+
 def _emit_unprojected_gap(parent: etree._Element, node: DocNode, data: dict) -> None:
     """A registered type this surface does NOT project yet (ADR-0004 gap):
     appendix / freeform-page / freeform-block.  Leave a tracer comment so the
@@ -713,15 +741,20 @@ _DISPATCH: dict[str, object] = {
     "table":               _emit_raw_table_blocks,
     "incidence-table":     _emit_raw_table_blocks,
     "sample-counts-table": _emit_titled_table_bundle,
+    "data-table":          _emit_titled_table_bundle,
     "bmd-summary":         _emit_titled_table_bundle,
     "genomics-section":    _emit_titled_table_bundle,
     "figure":              _emit_figure_todo,
+    # ADR-0025 presets
+    "authored-table":      _emit_authored_table,
+    "supplementary-material": _emit_supplementary_material,
     # handled by the book shell (see _emit_handled_by_book_shell)
     "cover":               _emit_handled_by_book_shell,
     "title-page":          _emit_handled_by_book_shell,
     "front-matter":        _emit_handled_by_book_shell,
     "toc":                 _emit_handled_by_book_shell,
     "tables-list":         _emit_handled_by_book_shell,
+    "figures-list":        _emit_handled_by_book_shell,
     "page-break":          _emit_handled_by_book_shell,
     # not yet projected (ADR-0004 gap) — visible TODO, not a silent drop
     "appendix":            _emit_unprojected_gap,

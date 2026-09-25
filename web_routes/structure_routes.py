@@ -51,7 +51,8 @@ def _catalog_payload() -> dict:
     """The component catalog + binding vocabularies, JSON-shaped."""
     from document_model import document_template as dt
     from document_model.render_capabilities import (
-        COMPONENT_CATALOG, FIGURE_SUBTYPES, FRONT_MATTER_ROLES_BY_DATA_KEY,
+        BINDINGS, COMPONENT_CATALOG, FIGURE_SUBTYPES, FRONT_MATTER_ROLES_BY_DATA_KEY,
+        ROLE_PROFILE, allowed_children_for,
     )
     from workflow.phases import APICAL_PLATFORMS
 
@@ -59,7 +60,12 @@ def _catalog_payload() -> dict:
     for name, comp in COMPONENT_CATALOG.items():
         cap = comp.capabilities
         types[name] = {
-            "allowed_children": list(comp.allowed_children),
+            # Containment is DERIVED from the role profile (ADR-0025): the list
+            # here is what the editor's canPlace() consults, computed server-side
+            # so the UI never carries its own copy of the BITS grammar.
+            "allowed_children": list(allowed_children_for(name)),
+            "role": comp.role,
+            "bindings": list(comp.bindings),
             "requires": list(comp.requires),
             "orientable": cap.orientable,
             "breakable": cap.breakable,
@@ -96,6 +102,14 @@ def _catalog_payload() -> dict:
         "types": types,
         "node_keys": sorted(dt._KNOWN_KEYS),
         "regions": list(_REGIONS),
+        # The two axes behind the presets (ADR-0025): each role with the roles
+        # it may contain, and the closed binding vocabulary.
+        "roles": {
+            role: {"bits_element": spec.bits_element,
+                   "allowed_children": list(spec.allowed_children)}
+            for role, spec in ROLE_PROFILE.items()
+        },
+        "bindings": sorted(BINDINGS),
         "vocab": {
             "platforms": sorted(seen["platform"]),
             "data_keys": sorted(seen["data_key"]),

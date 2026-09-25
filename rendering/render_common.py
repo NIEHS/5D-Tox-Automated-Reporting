@@ -1292,6 +1292,12 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
     "freeform-page",
     "freeform-block",
     "page-break",
+    # ADR-0025 presets: the figure twin of tables-list, a generic programmatic
+    # matrix table, an authored (supplied-markup) table, and one supplied file.
+    "figures-list",
+    "data-table",
+    "authored-table",
+    "supplementary-material",
 })
 
 # Node types a renderer may legitimately NOT implement, with the structural

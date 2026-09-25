@@ -167,6 +167,10 @@ export interface DocEntry {
 }
 export interface CatalogType {
   allowed_children: string[];
+  /** ADR-0025: the document role this preset plays (a BITS profile role). */
+  role: string;
+  /** ADR-0025: the content bindings the preset admits; [0] is the default. */
+  bindings: string[];
   requires: string[];
   orientable: boolean;
   breakable: boolean;
@@ -180,6 +184,10 @@ export interface DocumentCatalog {
   types: Record<string, CatalogType>;
   node_keys: string[];
   regions: string[];
+  /** ADR-0025: each role with the roles it may contain. */
+  roles: Record<string, { bits_element: string | null; allowed_children: string[] }>;
+  /** ADR-0025: the closed binding vocabulary. */
+  bindings: string[];
   vocab: {
     platforms: string[];
     data_keys: string[];

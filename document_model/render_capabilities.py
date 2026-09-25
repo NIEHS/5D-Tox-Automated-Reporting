@@ -10,10 +10,23 @@ each document-semantic type it declares
   - the *content kinds* a component of that type may hold (text, table,
     chart, …) — the seed of the sub-addressable content-item model,
   - whether the type is *headingless* (renders with no heading of its own —
-    e.g. the cover, a bare data table), and
-  - its *allowed children* — the set of node types that may nest directly
-    under it (a flat per-type adjacency list; the containment grammar is a
-    DAG, since e.g. `table` lives under several parents).
+    e.g. the cover, a bare data table),
+  - its *role* — the document role it plays, drawn from a closed BITS 2.x
+    profile (ROLE_PROFILE).  Containment (what may nest under what) is decided
+    by ROLE ALONE, and the per-role allowed children are copied from the BITS
+    content models, never invented here (ADR-0025), and
+  - its *bindings* — how its content is produced (BINDINGS: container /
+    programmatic / llm / authored / derived).  The first listed binding is the
+    preset's default; a template entry may pick another listed one.
+
+Two orthogonal axes (ADR-0025)
+------------------------------
+A catalog `type` is a PRESET: a named (role, binding) pair plus the render
+facts (capabilities, emitted paragraph roles, required fields).  The role says
+WHERE a node may sit and how it lays out; the binding says WHERE ITS CONTENT
+COMES FROM and what the workflow tracks about it.  Keeping the two apart is
+what lets an authored table sit in an appendix, or a figure sit inside a
+sub-section, without a new type being invented for each combination.
 
 Why this exists
 ---------------
@@ -25,7 +38,7 @@ know what to do with it: zero code change.  Only a genuinely new component
 type (a new capability profile, content kind, or containment rule) requires
 an edit here.  This is also what a data-driven template (ADR-0003) selects
 from: a template picks types from this catalog and orders/nests them, and
-the instantiator validates the nesting against `allowed_children`.
+the instantiator validates the nesting against the role profile.
 
 Decoupling contract
 --------------------
@@ -36,8 +49,8 @@ Decoupling contract
     behaviour on capabilities; background_server annotates the serialized
     tree so the frontend reads capabilities instead of hardcoding its own
     copy of the mapping; the instantiator (ADR-0003 Phase 2) reads
-    `headingless` to derive heading level and `allowed_children` to validate
-    a template.
+    `headingless` to derive heading level and the role profile (via
+    allowed_children_for / is_allowed_child) to validate a template.
   - User choices (orientation/break/edit) are stored separately, keyed by
     node *id*; this module only says what's *possible* per node *type*.
 
@@ -95,6 +108,81 @@ class NodeCapabilities:
 
 
 @dataclass(frozen=True)
+class RoleSpec:
+    """
+    One document ROLE in the BITS profile (ADR-0025 §2): the structural facts a
+    node inherits from the BITS element it projects to.
+
+    Fields:
+        bits_element     — the BITS 2.x element this role maps to on export
+                           (None for the one presentation-only marker, page-break,
+                           which has no XML counterpart).
+        allowed_children — the ROLES that may nest directly under this role.
+                           Copied from the BITS content model of `bits_element`
+                           (e.g. <sec> and <app> hold flow blocks then <sec>*);
+                           this table is the ONLY place containment is written.
+    """
+    bits_element: str | None
+    allowed_children: tuple[str, ...] = ()
+
+
+# The BITS profile — every role a node may play, keyed by role name.  Allowed
+# children come from the BITS 2.1 tag library (verified 2026-09-25):
+#   <front-matter-part> → <named-book-part-body> → <sec>*  (+ flow blocks)
+#   <sec>  → (flow blocks)*, <sec>*      flow blocks = table-wrap | fig |
+#   <app>  → (flow blocks)*, <sec>*                    supplementary-material
+#   <toc>, <table-wrap>, <fig>, <supplementary-material> → leaves for our purposes
+# Two deliberate extensions beyond base BITS (ADR-0025 §7): a generated `toc`
+# may sit first inside an `app` (the reference's per-appendix mini-ToCs; the
+# BITS emitter promotes such an appendix to a book-part or drops the derived
+# toc), and `page-break` — a print directive with no XML meaning — is tolerated
+# anywhere a flow block is.
+ROLE_PROFILE: dict[str, RoleSpec] = {
+    # <book-meta> material: the branded cover and the inner title page.
+    "book-meta": RoleSpec("book-meta"),
+    # A named front-matter section (Foreword, About This Report, Abstract …).
+    # May hold sub-sections — the reference nests Authors / Contributors under
+    # About This Report.
+    "front-matter-part": RoleSpec(
+        "front-matter-part", ("sec", "table-wrap", "fig", "page-break"),
+    ),
+    # A generated list: contents, list of tables, list of figures.
+    "toc": RoleSpec("toc"),
+    # THE recursive container: any titled section at any depth.
+    "sec": RoleSpec(
+        "sec", ("sec", "table-wrap", "fig", "supplementary-material", "page-break"),
+    ),
+    # A captioned table, whatever produced it.
+    "table-wrap": RoleSpec("table-wrap"),
+    # A captioned figure, whatever produced it.
+    "fig": RoleSpec("fig"),
+    # One supplied data file (title + file name) — the reference's Appendix F.
+    "supplementary-material": RoleSpec("supplementary-material"),
+    # An appendix: a structured document part in its own right.
+    "app": RoleSpec(
+        "app", ("toc", "sec", "table-wrap", "fig", "supplementary-material", "page-break"),
+    ),
+    # Presentation-only marker; no BITS element.
+    "page-break": RoleSpec(None),
+}
+
+# The closed binding vocabulary — HOW a node's content is produced (ADR-0025
+# §3).  It is the section catalog's `kind` vocabulary promoted to a declared
+# node attribute, plus `container` for nodes with no content of their own.
+#   container    — no own content; its children carry it.
+#   programmatic — built from integrated.json by code (a platform table, the
+#                  sample-counts matrix, the body-weight narrative).
+#   llm          — generated by a narrative generator; reviewable/approvable.
+#   authored     — supplied content (ADR-0018): a content_file / inline content,
+#                  a supplied figure, a supplied table.
+#   derived      — computed from the tree or the session's artifacts; never
+#                  authored or approved (a ToC, a list of tables, labels).
+BINDINGS: frozenset[str] = frozenset(
+    {"container", "programmatic", "llm", "authored", "derived"}
+)
+
+
+@dataclass(frozen=True)
 class ComponentType:
     """
     One entry in the component-type catalog — everything the system knows
@@ -114,11 +202,15 @@ class ComponentType:
                            instantiator derives heading level from this:
                            level = 0 if headingless else nesting-depth, so
                            level need not be authored in the template.
-        allowed_children — node types that may nest directly under this type
-                           (a flat adjacency list).  Empty = a leaf type.
-                           The instantiator validates a template's nesting
-                           against this; it is a DAG, not a tree, because a
-                           type like `table` appears under several parents.
+        role             — the document role this preset plays (a ROLE_PROFILE
+                           key).  Containment is decided by role: this type may
+                           nest under a parent iff its role is in the parent
+                           role's allowed_children (see allowed_children_for).
+        bindings         — the content bindings this preset admits (BINDINGS
+                           members); bindings[0] is the DEFAULT a template entry
+                           gets when it names none.  A preset whose content
+                           source varies by data_key (narrative, front-matter)
+                           lists every binding it can honestly carry.
         requires         — binding fields a node of this type MUST supply
                            (e.g. a `table` must name a `platform`).  The
                            instantiator rejects a template node that omits one
@@ -147,7 +239,8 @@ class ComponentType:
     capabilities: NodeCapabilities = field(default_factory=NodeCapabilities)
     content_kinds: tuple[str, ...] = ()
     headingless: bool = False
-    allowed_children: tuple[str, ...] = ()
+    role: str = "sec"
+    bindings: tuple[str, ...] = ("container",)
     requires: tuple[str, ...] = ()
     captionable: bool = False
     emits: tuple[str, ...] = ()
@@ -173,17 +266,21 @@ CONTENT_KINDS: frozenset[str] = frozenset(
     {"text", "table", "chart", "image", "toc-entry", "freeform"}
 )
 
-# The catalog: node_type → ComponentType.  This is the single place that
-# grows when the template gains a node type.  `headingless` and
-# `allowed_children` mirror today's DOCUMENT_TREE (Phase 2 verifies the
-# match); `content_kinds` describes what each component carries.
+# The catalog: node_type → ComponentType.  Each entry is a PRESET for a
+# (role, binding) pair (ADR-0025 §4); this is the single place that grows when
+# the template gains a node type.  `headingless` mirrors today's DOCUMENT_TREE
+# (Phase 2 verifies the match); `content_kinds` describes what each component
+# carries; containment is NOT written here — it follows from `role` via
+# ROLE_PROFILE.
 COMPONENT_CATALOG: dict[str, ComponentType] = {
     # ── Fixed front pages — auto-laid-out, headingless, nothing to configure.
     "cover": ComponentType(
         capabilities=_FIXED, content_kinds=(), headingless=True,
+        role="book-meta", bindings=("derived",),
     ),
     "title-page": ComponentType(
         capabilities=_FIXED, content_kinds=(), headingless=True,
+        role="book-meta", bindings=("derived",),
         # The title page is the ORIGINAL role-emitting node (it already styles per
         # semantic role via the title_page sub-layer — the proof-of-pattern this
         # crosswalk generalizes).  It emits one paragraph per title-page role.
@@ -196,6 +293,15 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     # ── Auto-generated list of tables — generated entries; can start a page.
     "tables-list": ComponentType(
         capabilities=_STRUCTURAL, content_kinds=("toc-entry",),
+        role="toc", bindings=("derived",),
+    ),
+    # ── Auto-generated list of figures — the figure twin of tables-list (the
+    #    reference's appendices C and D open with a "Figures" list).  Same role
+    #    (BITS <toc>, distinguished by content-type); entries come from the
+    #    numbered figure nodes.
+    "figures-list": ComponentType(
+        capabilities=_STRUCTURAL, content_kinds=("toc-entry",),
+        role="toc", bindings=("derived",),
     ),
     # ── Generated Table of Contents — a front-matter component (distinct from
     #    the navigation panel).  It SELF-HEADS: LaTeX's \tableofcontents emits
@@ -204,17 +310,14 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    (level 0).  Generated from the tree's section order.
     "toc": ComponentType(
         capabilities=_STRUCTURAL, content_kinds=("toc-entry",), headingless=True,
+        role="toc", bindings=("derived",),
     ),
     # ── A heading with no own content; its child NODES carry the content.
     #    This is the recursive structural container (it may nest itself).
     "heading-only": ComponentType(
         capabilities=_STRUCTURAL,
         content_kinds=(),
-        allowed_children=(
-            "heading-only", "narrative", "narrative+tables",
-            "bmd-summary", "genomics-section", "sample-counts-table",
-            "freeform-page", "freeform-block", "page-break",
-        ),
+        role="sec", bindings=("container",),
         emits=("section_heading",),
     ),
     # ── An explicit page break — a headingless, content-free structural marker
@@ -228,6 +331,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    marker (HTML), reusing the same mechanism freeform-page uses.
     "page-break": ComponentType(
         capabilities=_FIXED, content_kinds=(), headingless=True,
+        role="page-break", bindings=("derived",),
     ),
     # ── Prose sections — editable text, breakable; never landscape (running
     #    body text doesn't rotate).
@@ -236,12 +340,21 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     # styles the Abstract head differently from the Foreword title from the
     # Reference head, so a generic section_heading/body_para would lose that.  The
     # generic pair here is the FALLBACK for a data_key with no specific mapping.
+    # Its content source varies by data_key: boilerplate/provisioned parts
+    # (foreword, about_report, peer_review, publication_details, acknowledgments)
+    # are AUTHORED; the abstract is LLM-generated.  Authored is the default; an
+    # entry may declare `binding: llm`.
     "front-matter": ComponentType(
         capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
+        role="front-matter-part", bindings=("authored", "llm", "programmatic"),
         emits=("section_heading", "body_para"),
     ),
+    # A titled prose section.  Background / Methods / Summary are LLM-generated
+    # (the default); References is DERIVED from the citation inventory; a
+    # programmatic narrative (built from data by code) is also expressible.
     "narrative": ComponentType(
         capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
+        role="sec", bindings=("llm", "programmatic", "derived"),
         emits=("section_heading", "body_para"),
     ),
     # Appendices carry their own heading; a body is either a data-derived
@@ -249,9 +362,12 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     # nested as a child (Appendices A/D/E/F — the reference's static prose /
     # rules tables / manifests).  freeform children are the sanctioned
     # authored-content channel, so allow them here.
+    # Its role is BITS <app>: a structured document part that may hold sections,
+    # tables, figures, supplied files and a generated mini-ToC (ADR-0025) — no
+    # longer restricted to freeform children.
     "appendix": ComponentType(
         capabilities=_PROSE, content_kinds=("text",),
-        allowed_children=("freeform-block", "freeform-page"),
+        role="app", bindings=("container",),
         emits=("appendix_heading", "body_para"),
     ),
     # ── Prose + child tables — the section's own content is the narrative
@@ -260,18 +376,24 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     "narrative+tables": ComponentType(
         capabilities=_PROSE,
         content_kinds=("text",),
-        allowed_children=("table", "incidence-table"),
+        # The group narratives (animal condition, clinical pathology, internal
+        # dose) are built from the tables by code — programmatic, not LLM.
+        role="sec", bindings=("programmatic", "llm"),
         emits=("section_heading", "body_para"),
     ),
     # ── Data tables — orientable + breakable, headingless (caption/label, no
     #    section heading); data comes from the integrated dataset, not text.
+    # `platform` is required by the PROGRAMMATIC-APICAL binding these presets
+    # carry, not by the table-wrap role (an authored table needs none).
     "table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
+        role="table-wrap", bindings=("programmatic",),
         requires=("platform",), captionable=True,
         emits=("table_title", "table_body_cell", "table_footnote"),
     ),
     "incidence-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
+        role="table-wrap", bindings=("programmatic",),
         requires=("platform",), captionable=True,
         emits=("table_title", "table_body_cell", "table_footnote"),
     ),
@@ -284,8 +406,30 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    dose columns want landscape.
     "sample-counts-table": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
+        role="table-wrap", bindings=("programmatic",),
         requires=("data_key",), captionable=True,
         emits=("table_title", "table_body_cell", "table_footnote"),
+    ),
+    # ── A generic programmatic matrix table: the same {caption, headers, rows,
+    #    footnotes} shape at data[data_key] that sample-counts-table renders, but
+    #    for ANY pipeline-built table (an appendix's animal roster, an eFDR
+    #    false-positive count).  Same emitters; a distinct preset so the
+    #    sample-counts name stops doing double duty (ADR-0025 §4).
+    "data-table": ComponentType(
+        capabilities=_DATA_BLOCK, content_kinds=("table",), headingless=True,
+        role="table-wrap", bindings=("programmatic",),
+        requires=("data_key",), captionable=True,
+        emits=("table_title", "table_body_cell", "table_footnote"),
+    ),
+    # ── An AUTHORED table: caption + supplied table markup (content /
+    #    content_file, validated like the freeform types).  The reference's
+    #    Appendix D model-rules table.  Captioned and numbered like any
+    #    table-wrap; the body is the author's own markup.
+    "authored-table": ComponentType(
+        capabilities=_DATA_BLOCK, content_kinds=("table", "freeform"), headingless=True,
+        role="table-wrap", bindings=("authored",),
+        captionable=True,
+        emits=("table_title",),
     ),
     # ── A figure — the pictorial peer of `table` (ADR-0012).  Data/content as an
     #    IMAGE (a lossless PNG), where `table` is data as a grid.  The KIND of
@@ -297,8 +441,11 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    subtype-dependent (fig_graphic vs logo_graphic), so it is NOT in `emits`
     #    here — the handler selects it.  Its plot-internal styling is chart_style's
     #    job, deliberately NOT folded into the paragraph vocabulary (ADR-0009).
+    # Its binding follows the subtype (ADR-0023): `chart` is programmatic (a
+    # data figure); `diagram` / `photograph` / `logo` are authored (supplied).
     "figure": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("chart", "image"), headingless=True,
+        role="fig", bindings=("programmatic", "authored"),
         captionable=True,
         emits=("fig_title", "fig_caption", "fig_source", "fig_note", "fig_alt_text"),
     ),
@@ -307,6 +454,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    descriptive paragraph (BITS-wise, the <table-wrap> carries the caption).
     "bmd-summary": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), requires=("data_key",),
+        role="sec", bindings=("programmatic",),
         captionable=True,
         emits=("section_heading", "table_title", "table_body_cell", "table_footnote"),
     ),
@@ -315,6 +463,7 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    into ordered, sub-addressable content items.
     "genomics-section": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("text", "table", "chart"),
+        role="sec", bindings=("llm",),
         requires=("data_key", "narrative_key"),
         emits=("section_heading", "body_para", "table_title",
                "table_body_cell", "fig_caption"),
@@ -328,11 +477,25 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     #    (the authored content carries its own structure), not orientable.
     #    freeform-page forces its own page (the renderer emits a page break);
     #    freeform-block is an inline insert with no forced break.
+    #    Both are role `sec` (a titled authored section that may itself hold
+    #    sub-sections, tables and figures — the reference's appendix prose).
     "freeform-page": ComponentType(
         capabilities=_STRUCTURAL, content_kinds=("freeform",),
+        role="sec", bindings=("authored",),
     ),
     "freeform-block": ComponentType(
         capabilities=_STRUCTURAL, content_kinds=("freeform",),
+        role="sec", bindings=("authored",),
+    ),
+    # ── One supplied data file: a title paragraph plus the file name (the
+    #    reference's Appendix F lists 55 of them under four headings).  Role
+    #    BITS <supplementary-material>; `content_file` names the file.  Listed
+    #    as authored: the entry is written by hand; a session-derived manifest
+    #    (binding `derived`) is the intended follow-on.
+    "supplementary-material": ComponentType(
+        capabilities=_FIXED, content_kinds=(), headingless=True,
+        role="supplementary-material", bindings=("authored", "derived"),
+        emits=("supplementary_material_title", "supplementary_material_filename"),
     ),
 }
 
@@ -341,6 +504,10 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
 # lets the template reference a type before it has an entry — the new type
 # is simply inert until someone defines it above.
 _DEFAULT_COMPONENT = ComponentType()
+
+# Fallback for a role not in the profile: an inert leaf that nothing may nest
+# under (and that, absent from every allowed_children tuple, nests nowhere).
+_DEFAULT_ROLE = RoleSpec(None)
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +580,16 @@ def front_matter_roles_for(data_key: str | None) -> tuple[str, str]:
 # cases: data-derived plots + cover/title branding).  photograph/diagram/... are
 # reserved: add here + give them an artifact source + a graphic role when a report
 # needs one.  A subtype absent here is a template authoring error (rejected at load).
-FIGURE_SUBTYPES = frozenset({"chart", "logo"})
+FIGURE_SUBTYPES = frozenset({"chart", "logo", "diagram", "photograph"})
+
+# Subtypes whose image is SUPPLIED (ADR-0023 authored-figures): the template
+# names the image file in `content_file`.  `chart` is the data-figure subtype
+# (programmatic, from a chart payload at data[data_key]); `logo` is a fixed
+# branding asset the renderer locates itself.  The image channel for diagram /
+# photograph is validated at load (the file name is required) and wired to the
+# emitters in ADR-0025 migration phase 3 — until then they render the visible
+# "[Figure pending]" note like any figure without a payload.
+AUTHORED_FIGURE_SUBTYPES = frozenset({"diagram", "photograph"})
 
 # Which figure-furniture GRAPHIC role a subtype's image paragraph uses.  A logo is
 # branding (1-26_Logo_Graphic); everything else is a content figure graphic
@@ -437,9 +613,49 @@ def is_headingless(node_type: str) -> bool:
     return component_for(node_type).headingless
 
 
+def role_for(node_type: str) -> str:
+    """The document role (a ROLE_PROFILE key) a catalog type plays."""
+    return component_for(node_type).role
+
+
+def role_spec_for(role: str) -> RoleSpec:
+    """The profile entry for a role; an unknown role is an inert leaf."""
+    return ROLE_PROFILE.get(role, _DEFAULT_ROLE)
+
+
+def bindings_for(node_type: str) -> tuple[str, ...]:
+    """The content bindings a catalog type admits (bindings[0] is the default)."""
+    return component_for(node_type).bindings
+
+
+def default_binding_for(node_type: str) -> str:
+    """The binding a template entry of this type gets when it names none."""
+    return bindings_for(node_type)[0]
+
+
+def preset_for(role: str, binding: str) -> str | None:
+    """
+    The canonical catalog type for an explicit (role, binding) pair — the first
+    preset (in catalog order) whose role matches and whose bindings include
+    `binding`; None when no preset exists for the pair.  This is how a template
+    entry that states `role:` + `binding:` instead of `type:` resolves.
+    """
+    for name, comp in COMPONENT_CATALOG.items():
+        if comp.role == role and binding in comp.bindings:
+            return name
+    return None
+
+
 def allowed_children_for(node_type: str) -> tuple[str, ...]:
-    """Return the node types that may nest directly under this type."""
-    return component_for(node_type).allowed_children
+    """
+    Return the node types that may nest directly under this type — DERIVED
+    from the role profile: every catalog type whose role is an allowed child
+    role of this type's role (in catalog order).  Nothing is written per type.
+    """
+    child_roles = role_spec_for(role_for(node_type)).allowed_children
+    return tuple(
+        name for name, comp in COMPONENT_CATALOG.items() if comp.role in child_roles
+    )
 
 
 def required_bindings_for(node_type: str) -> tuple[str, ...]:
@@ -461,11 +677,13 @@ def is_captionable(node_type: str) -> bool:
 
 def is_allowed_child(parent_type: str, child_type: str) -> bool:
     """
-    Whether `child_type` is permitted directly under `parent_type` per the
-    catalog's containment grammar.  Used by the template instantiator to
-    reject malformed nesting before it becomes a broken tree.
+    Whether `child_type` is permitted directly under `parent_type` — decided by
+    ROLE alone (ADR-0025 §1): the child's role must be in the parent role's
+    allowed children.  Used by the template instantiator to reject malformed
+    nesting before it becomes a broken tree.
     """
-    return child_type in allowed_children_for(parent_type)
+    parent_role = role_for(parent_type)
+    return role_for(child_type) in role_spec_for(parent_role).allowed_children
 
 
 def landscape_requested(

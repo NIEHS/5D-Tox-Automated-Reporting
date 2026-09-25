@@ -1,6 +1,7 @@
 # 0025 — The document grammar is a BITS profile; provenance is a binding attribute
 
-- **Status:** Proposed (2026-09-25) — a design decision pinned before code. Amends
+- **Status:** Proposed (2026-09-25); **migration phases 0–1 implemented the same day**
+  (see "Implementation notes" at the end). Amends
   [ADR-0004](0004-bits-jats-export-surface.md): its "BITS is a projection only"
   clause stays true for *storage* (the `DocNode` tree + YAML remain canonical; no XML
   is stored or authored) but is withdrawn for *grammar* — the catalog's structural
@@ -182,10 +183,14 @@ Rather than rewrite them at once, **every existing type becomes a named preset f
 |---|---|---|
 | `heading-only` | `sec` | `container` |
 | `narrative` | `sec` | `llm` or `programmatic` (decided by `data_key`, as the section catalog does today) |
-| `narrative+tables` | `sec` | `llm` (children are `table-wrap`s) |
+| `narrative+tables` | `sec` | `programmatic` — the group narratives are built from the tables by code (children are `table-wrap`s) |
 | `front-matter` | `front-matter-part` | `llm` / `programmatic` per `data_key` |
 | `table`, `incidence-table` | `table-wrap` | `programmatic`, `table_kind` apical / incidence |
 | `sample-counts-table` | `table-wrap` | `programmatic`, `table_kind` sample-counts |
+| `data-table` (new) | `table-wrap` | `programmatic` — any pipeline-built `{caption, headers, rows, footnotes}` matrix at a `data_key` (an appendix roster, an eFDR count); same emitters as sample-counts |
+| `authored-table` (new) | `table-wrap` | `authored` — caption + supplied markup |
+| `figures-list` (new) | `toc` | `derived` (content-type figures) |
+| `supplementary-material` (new) | `supplementary-material` | `authored` (a `derived` session manifest is the follow-on) |
 | `bmd-summary` | `sec` with one `table-wrap` content item | `programmatic`, `table_kind` bmd-summary |
 | `genomics-section` | `sec` | `llm` (+ its programmatic tables and charts as content items) |
 | `figure` | `fig` | from subtype (§3) |
@@ -305,3 +310,40 @@ ADR-0023's provenance boundary — now enforced by the same mechanism for all co
 - The submission profile details (journal `article` vs. `book`) — ADR-0004's open
   question, unchanged.
 - Any authoring UI for `authored` content: ADR-0018 governs; content is supplied.
+
+## Implementation notes (phases 0–1, 2026-09-25)
+
+What landed, and where the code deviates from the text above:
+
+- **Catalog** (`document_model/render_capabilities.py`): `RoleSpec` + `ROLE_PROFILE`
+  (9 roles: book-meta, front-matter-part, toc, sec, table-wrap, fig,
+  supplementary-material, app, page-break), `BINDINGS`, and `role` / `bindings`
+  on every `ComponentType`. `allowed_children` is no longer written per type; it
+  is derived from the role profile (`allowed_children_for`, `is_allowed_child`).
+- **Profile simplifications.** `abstract`, `ack` and `ref-list` are not separate
+  roles yet: the abstract and acknowledgments are `front-matter-part` (their
+  `data_key` picks the BITS element on export), References is a `sec` with
+  `binding: derived`. `page-break` stays an authored node (a tolerated
+  non-BITS role) rather than becoming a `break_before` attribute; that rewrite
+  is deferred.
+- **Validator** (`document_model/document_template.py`): an entry names a
+  `type` or an explicit `role` + `binding` pair (`preset_for`); an explicit
+  `role` must match the preset; an explicit `binding` must be one the preset
+  lists; the tree carries both (`DocNode.role`, `DocNode.binding`).
+  `authored-table` validates like the freeform types; `supplementary-material`
+  and the authored figure subtypes (`diagram`, `photograph`) take a single
+  `content_file` whose existence is not checked at load.
+- **Presets added** with emitters on all four surfaces: `figures-list`,
+  `data-table`, `authored-table`, `supplementary-material` (the last is a
+  near-identity BITS projection). `figures-list` renders a pending note on
+  HTML/DOCX until the figure-entry walk (phase 4) exists; LaTeX gets
+  `\listoffigures`.
+- **Acceptance instances** (`tests/unit/test_bits_profile.py`): the shipped
+  template and `docs/reference/niehs-10-structure.faithful.yaml` (139 nodes,
+  including Appendix F's 55 supplementary files read from the docx) both
+  validate. The reference's 37 violations are gone with no per-type rule added.
+- **Not yet done** (phases 2–6): appendix-scoped labels ("Table B-1" is still a
+  literal in the Appendix B roster emitters), the authored-figure image channel,
+  per-appendix scoping of `toc` / lists, the section catalog reading `binding`,
+  and the editor's second-axis inspector (it shows role/bindings and offers the
+  `binding` picker; it does not yet author by pair).
