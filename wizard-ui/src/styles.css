@@ -682,3 +682,41 @@ button.danger { color: var(--err); }
 /* Preview: keep the surface/rebuild/download controls visible while the
    paginated frame scrolls beneath them. */
 .preview-toolbar { position: sticky; top: 0; z-index: 2; background: var(--panel); padding: 0.4rem 0; align-items: flex-end; }
+
+/* --- Document structure editor (Configure → Document structure) --- */
+.se-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.6rem 0; }
+.se-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.se-validating { margin: 0.2rem 0; font-size: 0.8rem; }
+.se-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .se-layout { grid-template-columns: 1fr; } }
+.se-tree { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 0.4rem 0.3rem; max-height: 70vh; overflow: auto; }
+.se-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.4rem; border-radius: 6px; cursor: pointer; min-height: 1.9rem; }
+.se-row:hover { background: rgba(56,189,248,0.06); }
+.se-row.selected { background: rgba(56,189,248,0.14); outline: 1px solid var(--accent); }
+.se-row.error { outline: 1px solid var(--err); }
+.se-row.drop-into { background: rgba(74,222,128,0.14); outline: 1px dashed var(--ok); }
+.se-node.region > .se-row { cursor: default; font-family: var(--sans, inherit); }
+.se-twisty { background: none; border: none; color: var(--muted); width: 1.2rem; padding: 0; cursor: pointer; }
+.se-handle { color: var(--muted); cursor: grab; font-size: 0.8rem; letter-spacing: -2px; }
+.se-type { font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.05rem 0.4rem; border-radius: 3px; background: rgba(148,163,184,0.18); color: var(--muted); white-space: nowrap; }
+.se-type.region { background: rgba(56,189,248,0.18); color: var(--accent); }
+.se-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.se-id { font-size: 0.72rem; font-family: var(--mono, monospace); }
+.se-btns { display: none; gap: 0.15rem; }
+.se-row:hover .se-btns, .se-row.selected .se-btns { display: inline-flex; }
+.se-btns button { font-size: 0.75rem; padding: 0.05rem 0.35rem; line-height: 1.3; }
+.se-add { position: relative; }
+.se-menu { position: absolute; right: 0; top: 1.6rem; z-index: 5; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem; display: flex; flex-direction: column; min-width: 12rem; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.se-menu .link { background: none; border: none; color: var(--text); text-align: left; padding: 0.25rem 0.4rem; cursor: pointer; font-family: var(--mono, monospace); font-size: 0.8rem; }
+.se-menu .link:hover { background: rgba(56,189,248,0.12); }
+.se-drop { height: 4px; margin: 0 0.4rem; border-radius: 2px; transition: height 0.08s; }
+.se-drop.on { height: 10px; background: var(--ok); }
+.se-drop.no { opacity: 0.3; }
+.se-drop.end { height: 8px; }
+.se-inspector { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); padding: 0.7rem 0.8rem; position: sticky; top: 0.5rem; }
+.se-inspector-head { margin-bottom: 0.6rem; }
+.se-field { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.55rem; font-size: 0.85rem; color: var(--muted); }
+.se-field input, .se-field select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.5rem; font: inherit; }
+.se-req { color: var(--warn); font-style: normal; font-size: 0.75rem; }
+.se-caps { font-size: 0.75rem; margin-top: 0.6rem; }
+.badge.err { background: rgba(248,113,113,0.15); color: var(--err); }

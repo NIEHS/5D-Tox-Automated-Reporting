@@ -154,6 +154,42 @@ export interface ChatTurnResult {
 }
 export interface ChatEvent { event: string; data: Record<string, any> }
 
+// --- Document structure (visual editor) ---
+// A node entry exactly as it appears in the document YAML. `children` nests;
+// a top-level entry with `region` (and no type) is a region container.
+export interface DocEntry {
+  id?: string;
+  type?: string;
+  title?: string;
+  region?: string;
+  children?: DocEntry[];
+  [key: string]: unknown;
+}
+export interface CatalogType {
+  allowed_children: string[];
+  requires: string[];
+  orientable: boolean;
+  breakable: boolean;
+  editable: boolean;
+  captionable: boolean;
+  headingless: boolean;
+  subtypable: boolean;
+  freeform: boolean;
+}
+export interface DocumentCatalog {
+  types: Record<string, CatalogType>;
+  node_keys: string[];
+  regions: string[];
+  vocab: {
+    platforms: string[];
+    data_keys: string[];
+    narrative_keys: string[];
+    methods_keys: string[];
+    subtypes: string[];
+    orientations: string[];
+  };
+}
+
 export interface SectionData {
   paragraphs?: string[];
   // Materialized apical result sections carry their prose as `narrative` (a
@@ -508,6 +544,28 @@ export const api = {
     }).then((r) => jsonOrThrow<{ ok: boolean; front_matter: FrontMatter }>(r)),
 
   // --- Configurator: document structure (session YAML, over the existing route) ---
+  // --- Visual structure editor helpers (web_routes/structure_routes) ---
+  getDocumentCatalog: () =>
+    fetch(`/api/document-structure/catalog`).then((r) => jsonOrThrow<DocumentCatalog>(r)),
+  parseDocumentConfig: (yamlText: string) =>
+    fetch(`/api/document-structure/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ yaml: yamlText }),
+    }).then((r) => jsonOrThrow<{ document: DocEntry[] }>(r)),
+  dumpDocumentConfig: (document: DocEntry[]) =>
+    fetch(`/api/document-structure/dump`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document }),
+    }).then((r) => jsonOrThrow<{ yaml: string }>(r)),
+  validateDocumentConfig: (document: DocEntry[]) =>
+    fetch(`/api/document-structure/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document }),
+    }).then((r) => jsonOrThrow<{ ok: boolean; error?: string; node_id?: string | null }>(r)),
+
   getDocumentConfig: (dtxsid: string, loadDefault = false) =>
     fetch(
       `/api/document-config/${encodeURIComponent(dtxsid)}${loadDefault ? "?default=1" : ""}`

@@ -246,6 +246,12 @@ app.include_router(export_routes.router)
 import web_routes.genomics_routes as genomics_routes
 app.include_router(genomics_routes.router)
 
+# Visual document-structure editor helpers: catalog, YAML parse/dump, dry-run
+# validation (Configure step). Read-only; saving still goes through
+# /api/document-config/{dtxsid}.
+import web_routes.structure_routes as structure_routes
+app.include_router(structure_routes.router)
+
 # Session interpretation chat (ADR-0022): tool-using, knowledge-graph-grounded
 # Q&A over one session's data and generated report; exploratory only.
 import web_routes.chat_routes as chat_routes

@@ -8,6 +8,7 @@ import {
 } from "../api";
 import { invalidate } from "../useServerResource";
 import { ErrorBox, Spinner, StepProps } from "./shared";
+import { StructureEditor } from "./StructureEditor";
 
 // The document configurator: edits per-report human-set FRONT-MATTER METADATA
 // (authors, contributors, publication overrides) that the study pipeline can't
@@ -296,91 +297,7 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
   );
 }
 
-// ── Document structure: session YAML editor over the existing config route ──
-function StructureEditor({ dtxsid }: { dtxsid: string }) {
-  const [yaml, setYaml] = useState("");
-  const [isDefault, setIsDefault] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  const load = useCallback(
-    async (loadDefault = false) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await api.getDocumentConfig(dtxsid, loadDefault);
-        setYaml(r.yaml);
-        setIsDefault(r.is_default);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [dtxsid]
-  );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function save() {
-    setSaving(true);
-    setError(null);
-    setSaved(false);
-    try {
-      await api.saveDocumentConfig(dtxsid, yaml);
-      setIsDefault(false);
-      await invalidate(dtxsid);
-      try {
-        await api.materializePreview(dtxsid);
-      } catch {
-        /* best-effort */
-      }
-      setSaved(true);
-    } catch (e) {
-      // 422 validation message surfaces here; the previous structure is intact.
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) return <Spinner label="Loading structure…" />;
-
-  return (
-    <div className="configure-form">
-      <p className="help" style={{ marginTop: 0 }}>
-        The document structure as YAML (sections, order, table numbering).{" "}
-        {isDefault ? (
-          <em>Showing the shared default — saving creates this session's own copy.</em>
-        ) : (
-          <em>This session's saved structure.</em>
-        )}{" "}
-        Invalid edits are rejected with a message; the current structure stays intact.
-      </p>
-      <ErrorBox error={error} />
-      <textarea
-        className="query-editor structure-editor"
-        value={yaml}
-        spellCheck={false}
-        onChange={(e) => setYaml(e.target.value)}
-        rows={22}
-      />
-      <div className="config-save">
-        <button className="primary" onClick={save} disabled={saving}>
-          {saving ? <Spinner label="Validating…" /> : "Save structure"}
-        </button>
-        <button onClick={() => load(true)} disabled={saving}>
-          Load default
-        </button>
-        {saved && <span className="badge ok">saved</span>}
-      </div>
-    </div>
-  );
-}
+// ── Document structure: the visual editor lives in ./StructureEditor ──────────
 
 // ── Data filters: per-report VIEWS (session scope) or the template default ────
 // Filters are a render-time lens over the one report (no reprocess). Session
