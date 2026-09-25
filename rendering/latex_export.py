@@ -916,9 +916,10 @@ def load_session_data(
     from document_model.document_tree import serialize_tree
     from rendering.report_data_toc import _build_toc_entries
     data["document_tree"] = serialize_tree(DOCUMENT_TREE)
-    toc_entries, table_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
+    toc_entries, table_entries, figure_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
+    data["figure_entries"] = figure_entries
 
     # ── Per-node layout styling (page breaks, typography) ─────────────
     # The template's `styles:` block (+ any per-session styles.yaml override) is

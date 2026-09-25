@@ -507,9 +507,10 @@ def marshal_export_data(
     # complete Table of Contents with ready/placeholder styling, even
     # though the body headings are stripped from the compiled document.
     from rendering.report_data_toc import _build_toc_entries, _apply_section_filter
-    toc_entries, table_entries = _build_toc_entries(data, tree=active_tree)
+    toc_entries, table_entries, figure_entries = _build_toc_entries(data, tree=active_tree)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
+    data["figure_entries"] = figure_entries
 
     # Apply section filter for PDF previews.
     # Uses the document tree to determine which data keys and platforms

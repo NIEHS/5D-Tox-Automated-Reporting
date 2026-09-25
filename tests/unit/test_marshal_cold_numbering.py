@@ -142,7 +142,9 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
         ("gene", "liver"): 11,
         ("gene", "kidney"): 12,
     }
-    # The front-matter Tables list continues the sequence too.
-    table_nums = [e["table_number"] for e in out["table_entries"]]
+    # The front-matter Tables list continues the sequence too.  Only the BODY
+    # scope: appendix tables ("B-1") are numbered per appendix (ADR-0025 §5)
+    # and belong to the appendix's own list.
+    table_nums = [e["table_number"] for e in out["table_entries"] if e.get("scope") is None]
     assert 9 in table_nums and 12 in table_nums
     assert table_nums == sorted(table_nums)

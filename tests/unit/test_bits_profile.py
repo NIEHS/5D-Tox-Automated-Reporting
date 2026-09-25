@@ -240,3 +240,95 @@ def test_reference_report_labels_match_the_docx():
     assert [find_node(f"figure-c-{n}", tree).figure_label for n in range(1, 7)] == [f"C-{n}" for n in range(1, 7)]
     assert [find_node(f"figure-d-{n}", tree).figure_label for n in (1, 2)] == ["D-1", "D-2"]
     assert find_node("apical-endpoint-benchmark-dose-summary", tree).table_label == "8"
+
+
+# ---------------------------------------------------------------------------
+# Scoped lists (ADR-0025 phase 4): Contents / Tables / Figures per appendix
+# ---------------------------------------------------------------------------
+
+def _listed_tree():
+    return instantiate([
+        {"region": "front", "children": [
+            {"id": "toc", "type": "toc", "title": "Contents"},
+            {"id": "tables", "type": "tables-list", "title": "Tables"},
+            {"id": "figures", "type": "figures-list", "title": "Figures"}]},
+        {"region": "body", "children": [
+            {"id": "s", "type": "heading-only", "title": "Results", "children": [
+                {"id": "t1", "type": "data-table", "title": "Body table", "data_key": "m"},
+                {"id": "f1", "type": "figure", "title": "Body figure", "subtype": "chart", "data_key": "c"}]}]},
+        {"region": "back", "children": [
+            {"id": "app-a", "type": "appendix", "title": "Alpha", "children": [
+                {"id": "toc-a", "type": "toc", "title": "Contents"},
+                {"id": "tables-a", "type": "tables-list", "title": "Tables"},
+                {"id": "figures-a", "type": "figures-list", "title": "Figures"},
+                {"id": "sa", "type": "freeform-block", "title": "Alpha section", "content": {"html": "<p/>"}, "children": [
+                    {"id": "ta", "type": "data-table", "title": "Alpha table", "data_key": "m"},
+                    {"id": "fa", "type": "figure", "title": "Alpha figure", "subtype": "chart", "data_key": "c"}]}]}]},
+    ])
+
+
+def test_entries_carry_scope_and_figures_are_walked():
+    from rendering.report_data_toc import _build_toc_entries
+    tree = _listed_tree()
+    toc, tables, figures = _build_toc_entries({"m": {"headers": ["h"], "rows": [["1"]]}}, tree=tree)
+    assert [(e["title"], e["scope"]) for e in toc] == [
+        ("Results", None), ("Appendix A. Alpha", None), ("Alpha section", "A")]
+    assert [(e["label"], e["scope"], e["ready"]) for e in tables] == [("1", None, True), ("A-1", "A", True)]
+    assert [(e["label"], e["scope"], e["ready"]) for e in figures] == [("1", None, False), ("A-1", "A", False)]
+
+
+def test_list_nodes_show_only_their_scope_on_every_surface():
+    from docx import Document
+    from rendering import html_generator as hg, latex_generator as lg, docx_generator as dg
+    from rendering.report_data_toc import _build_toc_entries
+    from document_model.document_tree import find_node
+    tree = _listed_tree()
+    toc, tables, figures = _build_toc_entries({}, tree=tree)
+    data = {"toc_entries": toc, "table_entries": tables, "figure_entries": figures}
+    # Front matter: body only (the appendix title is a body-level placeholder).
+    front_tables = hg._render_tables_list(find_node("tables", tree), data)
+    assert "Table 1. Body table" in front_tables and "A-1" not in front_tables
+    front_toc = hg._render_toc(find_node("toc", tree), data)
+    assert "Appendix A. Alpha" in front_toc and "Alpha section" not in front_toc
+    assert "Figure 1. Body figure" in hg._render_figures_list(find_node("figures", tree), data)
+    # Appendix A's own lists: A-scoped only.
+    a_tables = hg._render_tables_list(find_node("tables-a", tree), data)
+    assert "Table A-1. Alpha table" in a_tables and "Body table" not in a_tables
+    a_toc = hg._render_toc(find_node("toc-a", tree), data)
+    assert "Alpha section" in a_toc and "Results" not in a_toc
+    # LaTeX: native commands for the body lists, an itemized list per appendix.
+    assert lg._render_tables_list(find_node("tables", tree), data).endswith("\\listoftables")
+    assert lg._render_toc(find_node("toc", tree), data) == "\\tableofcontents"
+    a_tex = lg._render_tables_list(find_node("tables-a", tree), data)
+    assert "\\item Table A-1. Alpha table" in a_tex and "Body table" not in a_tex
+    assert "\\item Alpha section" in lg._render_toc(find_node("toc-a", tree), data)
+    assert "\\item Figure A-1. Alpha figure" in lg._render_figures_list(find_node("figures-a", tree), data)
+    # Word: plain entries for the scoped lists.
+    doc = Document(); dg._render_tables_list(doc, find_node("tables-a", tree), data)
+    assert any("Table A-1. Alpha table" in p.text for p in doc.paragraphs)
+    doc = Document(); dg._render_toc(doc, find_node("toc-a", tree), data)
+    assert any(p.text == "Alpha section" for p in doc.paragraphs)
+
+
+def test_appendix_tables_stay_out_of_the_front_latex_list():
+    from rendering import latex_generator as lg
+    from document_model.document_tree import find_node
+    tree = _listed_tree()
+    from document_model.document_tree import compute_table_numbers
+    compute_table_numbers(tree)
+    assert "\\niehsunlistedtrue" in lg._render_appendix(find_node("app-a", tree), {})
+    cls = (REPO / "latex" / "niehs.cls").read_text(encoding="utf-8")
+    assert "\\ifniehsunlisted\\caption[]{#2}\\else\\caption{#2}\\fi" in cls
+
+
+def test_reference_lists_per_appendix_match_the_docx():
+    from rendering.report_data_toc import _build_toc_entries
+    document = yaml.safe_load(REFERENCE_YAML.read_text(encoding="utf-8"))["document"]
+    tree = _tree_from_document_list(document)
+    toc, tables, figures = _build_toc_entries({}, tree=tree)
+    assert [e["label"] for e in tables if e["scope"] is None] == [str(n) for n in range(1, 9)]
+    assert [e["label"] for e in figures if e["scope"] == "C"] == [f"C-{n}" for n in range(1, 7)]
+    assert [e["label"] for e in tables if e["scope"] == "D"] == ["D-1"]
+    assert [e["title"] for e in figures if e["scope"] == "D"][0].startswith("Benchmark Dose Model")
+    assert [e["title"] for e in toc if e["scope"] == "C"] == [
+        "Gene Expression Quality Control", "Empirical False Discovery Rate", "Methods", "Results"]

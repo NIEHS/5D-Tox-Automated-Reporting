@@ -83,9 +83,10 @@ def test_appendix_b_renders_longtable_roster_latex():
 def test_appendix_b_longtable_carries_scoped_caption_and_label_latex():
     app, table = _appendix_b()
     out = latex_matrix(table, _data())
-    # Numbered caption (steps LaTeX's counter, listed by \listoftables) + a
-    # \label so \ref{tab:table-b-1} resolves; the text is the scoped label.
-    assert "\\caption{Table B-1. Animal Numbers and FASTQ Data File Names}" in out
+    # Numbered caption (steps LaTeX's counter) with the EMPTY short form — an
+    # appendix table belongs to the appendix's own Tables list, not the front
+    # \listoftables — plus a \label so \ref{tab:table-b-1} resolves.
+    assert "\\caption[]{Table B-1. Animal Numbers and FASTQ Data File Names}" in out
     assert "\\label{tab:table-b-1}" in out
     assert "\\endfirsthead" in out
 

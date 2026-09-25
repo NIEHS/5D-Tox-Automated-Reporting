@@ -21,6 +21,12 @@ top-level imports beyond what the functions pull in locally.
 # can render a manual TOC with placeholder styling for incomplete sections.
 # ---------------------------------------------------------------------------
 
+def _strip_figure_prefix(caption: str) -> str:
+    """The figure twin of _strip_table_prefix ("Figure C-1. Foo" -> "Foo")."""
+    import re
+    return re.sub(r"^Figure\s+[A-Z]?-?\d+\.\s*", "", caption or "").strip()
+
+
 def _strip_table_prefix(caption: str) -> str:
     """Drop a leading "Table N. " from a caption — the Tables-list numbering adds
     its own "Table N." label, so the stored title is just the descriptive text."""
@@ -58,19 +64,34 @@ def _table_list_title(node, data: dict) -> str:
     return stripped or node.title
 
 
-def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dict], list[dict]]:
+def _build_toc_entries(
+    data: dict, tree: "list | None" = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
     """
-    Walk the document tree and build two arrays for the Typst template:
+    Walk the document tree and build three arrays the surfaces' generated
+    lists render from:
 
-      toc_entries:   [{title, level, ready, id}, ...]
-                     Every heading (level 1-3) in the document tree.
-                     "ready" is True when the section has real content
-                     (not just the scaffold placeholder).
+      toc_entries:    [{title, level, ready, id, scope}, ...]
+                      Every heading (level 1-3) in the document tree.
+                      "ready" is True when the section has real content
+                      (not just the scaffold placeholder).
 
-      table_entries: [{title, table_number, ready}, ...]
-                     Every numbered table in the Results section.
-                     "ready" is True when the table's platform has data
-                     in apical_sections or elsewhere.
+      table_entries:  [{title, table_number, label, ready, scope}, ...]
+                      Every numbered table (tree nodes + the data-driven
+                      genomics tables).  "ready" is True when the table's
+                      data is present.
+
+      figure_entries: [{title, figure_number, label, ready, scope}, ...]
+                      Every numbered figure (tree `figure` nodes + the
+                      attached genomics charts).
+
+    ``scope`` (ADR-0025 §5 / phase 4) is the letter of the enclosing appendix
+    for anything INSIDE an appendix, else None.  A list node shows only the
+    entries of ITS scope: the front-matter Contents / Tables / Figures show
+    the body (scope None — the appendix titles themselves are body-level
+    entries), and an appendix's own mini-Contents / Tables / Figures show
+    that appendix's headings, tables and figures.  This is how the reference
+    lays out its lists.
 
     "Ready" determination:
       - Front matter sections (foreword, about, peer review, etc.) are
@@ -97,6 +118,7 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
 
     toc_entries = []
     table_entries = []
+    figure_entries = []
 
     # --- Readiness checks for each data_key ---
     # Front matter keys are always "ready" (scaffold provides boilerplate).
@@ -130,10 +152,16 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                         return True
             return False
 
-        # Sample-counts table (Table 1) — ready iff its built matrix has rows.
-        if node.node_type == "sample-counts-table":
+        # Matrix tables (the sample-counts Table 1, any data-table) — ready iff
+        # the built matrix at their data_key has rows.
+        if node.node_type in ("sample-counts-table", "data-table"):
             built = data.get(dk) if dk else None
             return bool(isinstance(built, dict) and built.get("rows"))
+
+        # An authored table is ready iff its supplied markup resolved.
+        if node.node_type == "authored-table":
+            resolved = getattr(node, "resolved_content", None) or {}
+            return bool(resolved.get("html") or resolved.get("latex"))
 
         # BMD summary — check for non-placeholder endpoints
         if node.node_type == "bmd-summary":
@@ -198,25 +226,30 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
     # must not contribute entries.  walk_tree always recurses, so it can't
     # express that pruning; the manual recursion below keeps the intent explicit
     # rather than relying on those node types happening to be childless today.
-    def _walk_toc(nodes: list):
+    def _walk_toc(nodes: list, scope: str | None = None):
         """
         Recursively walk tree nodes, emitting toc_entries for headings
-        (level >= 1) and table_entries for table nodes with numbers.  Does not
-        descend into structural / appendix nodes (see the note above).
+        (level >= 1), table_entries for numbered tables and figure_entries for
+        numbered figures, each tagged with the appendix ``scope`` it sits in.
+        Does not descend into structural pages or list nodes (see the note
+        above); an appendix contributes its own title entry at the enclosing
+        scope, then its subtree at ITS scope.
         """
         for node in nodes:
             # Skip structural pages (cover, title) — they're not TOC entries
             if node.node_type in ("cover", "title-page"):
                 continue
 
-            # Tables list node — skip (it IS the TOC, not an entry in it)
-            if node.node_type == "tables-list":
+            # Generated list nodes — skip (they ARE lists, not entries in one)
+            if node.node_type in ("toc", "tables-list", "figures-list"):
                 continue
 
-            # Appendix nodes — always show as placeholders in the TOC.  The entry
-            # text is composed "Appendix {letter}. {title}" from the positional
-            # letter (node.title no longer carries the literal prefix), matching
-            # the reference ToC and the rendered appendix headings.
+            # Appendix nodes — a placeholder entry in the enclosing (body) scope.
+            # The entry text is composed "Appendix {letter}. {title}" from the
+            # positional letter (node.title no longer carries the literal prefix),
+            # matching the reference ToC and the rendered appendix headings.  Then
+            # the appendix's subtree is walked at the appendix's OWN scope, so its
+            # mini-Contents / Tables / Figures lists have entries to show.
             if node.node_type == "appendix":
                 from rendering.render_common import appendix_heading_text
                 toc_entries.append({
@@ -224,11 +257,16 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                     "level": node.level,
                     "ready": False,
                     "id": node.id,
+                    "scope": scope,
                 })
+                if node.children:
+                    _walk_toc(node.children, node.appendix_letter)
                 continue
 
-            # Heading entries (level >= 1) go into the TOC
-            if node.level >= 1:
+            # Heading entries (level >= 1) go into the TOC.  An UNTITLED node
+            # (the template's bare freeform appendix bodies) has no heading and
+            # is not an entry.
+            if node.level >= 1 and node.title:
                 if node.node_type == "narrative+tables":
                     ready = _is_narrative_tables_ready(node)
                 else:
@@ -238,6 +276,7 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                     "level": node.level,
                     "ready": ready,
                     "id": node.id,
+                    "scope": scope,
                 })
 
             # Table entries (numbered tables) go into the Tables list.  Use the
@@ -257,11 +296,25 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                     # ADR-0025 §5); the lists show this, not the bare number.
                     "label": node.table_label or str(node.table_number),
                     "ready": ready,
+                    "scope": scope,
+                })
+
+            # Figure entries (numbered figures) go into the Figures list.  Ready
+            # iff the shared figure_payload extract finds an image (a data
+            # figure's payload, or an authored figure's file).
+            if node.figure_number is not None:
+                from rendering.render_common import figure_payload
+                figure_entries.append({
+                    "title": _strip_figure_prefix(node.caption or node.title),
+                    "figure_number": node.figure_number,
+                    "label": node.figure_label or str(node.figure_number),
+                    "ready": figure_payload(node, data) is not None,
+                    "scope": scope,
                 })
 
             # Recurse into children
             if node.children:
-                _walk_toc(node.children)
+                _walk_toc(node.children, scope)
 
     _walk_toc(nodes)
 
@@ -284,9 +337,30 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
         if entry.get("table_number") is not None
     ]
     genomics_tables.sort(key=lambda e: e["table_number"])
+    for entry in genomics_tables:
+        entry["label"] = str(entry["table_number"])
+        entry["scope"] = None
     table_entries.extend(genomics_tables)
 
-    return toc_entries, table_entries
+    # Genomics CHARTS are data-driven figures (numbered by
+    # assign_genomics_figure_numbers, continuing the body figure sequence);
+    # append them to the Figures list in figure_number order, body scope.
+    genomics_figures = [
+        {
+            "title": chart.get("caption", ""),
+            "figure_number": chart["figure_number"],
+            "label": str(chart["figure_number"]),
+            "ready": bool(chart.get("png_b64") or chart.get("filename")),
+            "scope": None,
+        }
+        for entry in (data.get("genomics_sections") or [])
+        for chart in (entry.get("charts") or [])
+        if chart.get("figure_number") is not None
+    ]
+    genomics_figures.sort(key=lambda e: e["figure_number"])
+    figure_entries.extend(genomics_figures)
+
+    return toc_entries, table_entries, figure_entries
 
 
 def _apply_section_filter(data: dict, section_filter: str, tree: "list | None" = None) -> None:

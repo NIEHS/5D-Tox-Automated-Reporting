@@ -14,8 +14,9 @@
 #     visible "[... pending]" notes until that artifact exists;
 #   - the flowcharts of Appendix D are authored figures (subtype diagram, content_file);
 #   - Appendix F's four parts hold one `supplementary-material` node per supplied file.
-# Appendix titles carry no "Appendix X." prefix: the letter is positional
-# (compute_appendix_letters).  Landscape orientation follows the docx section breaks.
+# Titles are BARE: "Table 3." / "Figure C-1." / "Appendix B." labels are computed by the
+# scoped numbering pass (document_tree._number_scoped / compute_appendix_letters), never
+# authored; the node ids carry the reference's numbers for cross-checking.  Landscape orientation follows the docx section breaks.
 document:
 - region: front
   children:
@@ -141,7 +142,7 @@ document:
         methods_key: txomics_qc
       - id: table-1-sample-counts
         type: sample-counts-table
-        title: Table 1. Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
         data_key: sample_counts
       - id: data-normalization
         type: narrative
@@ -190,12 +191,12 @@ document:
       children:
       - id: table-2
         type: table
-        title: Table 2. Summary of Body Weights of Male and Female Rats
+        title: Summary of Body Weights of Male and Female Rats
         platform: Body Weight
         orientation: landscape
       - id: table-3
         type: table
-        title: Table 3. Summary of Liver Weights of Male Rats
+        title: Summary of Liver Weights of Male Rats
         platform: Organ Weight
         orientation: landscape
     - id: clinical-pathology
@@ -205,17 +206,17 @@ document:
       children:
       - id: table-4
         type: table
-        title: Table 4. Summary of Select Clinical Chemistry Data
+        title: Summary of Select Clinical Chemistry Data
         platform: Clinical Chemistry
         orientation: landscape
       - id: table-5
         type: table
-        title: Table 5. Summary of Select Hematology Data
+        title: Summary of Select Hematology Data
         platform: Hematology
         orientation: landscape
       - id: table-6
         type: table
-        title: Table 6. Summary of Select Hormone Data
+        title: Summary of Select Hormone Data
         platform: Hormones
         orientation: landscape
     - id: internal-dose-assessment
@@ -225,7 +226,7 @@ document:
       children:
       - id: table-7
         type: table
-        title: Table 7. Summary of Plasma Concentration Data
+        title: Summary of Plasma Concentration Data
         platform: Tissue Concentration
     - id: apical-endpoint-benchmark-dose-summary
       type: bmd-summary
@@ -276,7 +277,7 @@ document:
       title: Tables
     - id: table-b-1
       type: data-table
-      title: Table B-1. Animal Numbers and FASTQ Data File Names
+      title: Animal Numbers and FASTQ Data File Names
       data_key: appendix_animals_matrix
   - id: appendix-c
     type: appendix
@@ -300,22 +301,22 @@ document:
       children:
       - id: figure-c-1
         type: figure
-        title: Figure C-1. A Principal Component Analysis of the Normalized Data from the Liver of Male Rats
+        title: A Principal Component Analysis of the Normalized Data from the Liver of Male Rats
         subtype: chart
         data_key: pca_liver_male
       - id: figure-c-2
         type: figure
-        title: Figure C-2. A Principal Component Analysis of the Normalized Data from the Liver of Female Rats
+        title: A Principal Component Analysis of the Normalized Data from the Liver of Female Rats
         subtype: chart
         data_key: pca_liver_female
       - id: figure-c-3
         type: figure
-        title: Figure C-3. A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats
+        title: A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats
         subtype: chart
         data_key: pca_kidney_male
       - id: figure-c-4
         type: figure
-        title: Figure C-4. A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats
+        title: A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats
         subtype: chart
         data_key: pca_kidney_female
     - id: c-2
@@ -340,18 +341,18 @@ document:
         children:
         - id: figure-c-5
           type: figure
-          title: Figure C-5. Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination
+          title: Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination
           subtype: chart
           data_key: efdr_gene_fpr_boxplots
         - id: figure-c-6
           type: figure
-          title: Figure C-6. Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue
+          title: Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue
             per Sex Combination
           subtype: chart
           data_key: efdr_gobp_fpr_boxplots
         - id: table-c-1
           type: data-table
-          title: Table C-1. Number of False Positives
+          title: Number of False Positives
           data_key: efdr_false_positives
   - id: appendix-d
     type: appendix
@@ -365,20 +366,20 @@ document:
       title: Figures
     - id: table-d-1
       type: authored-table
-      title: Table D-1. Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints
+      title: Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints
       content:
         latex: '\emph{[Supplied: the model-rules table is authored outside the app.]}'
         html: '<p><em>[Supplied: the model-rules table is authored outside the app.]</em></p>'
     - id: figure-d-1
       type: figure
-      title: Figure D-1. Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
         Execution
       subtype: diagram
       content_file: reference/figure-d-1.png
       orientation: landscape
     - id: figure-d-2
       type: figure
-      title: Figure D-2. Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
         of Transcriptomic Data
       subtype: diagram
       content_file: reference/figure-d-2.png

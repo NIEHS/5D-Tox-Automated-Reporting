@@ -92,6 +92,7 @@ from rendering.render_common import (
     table_caption as _table_caption,
     figure_prefix,
     figure_payload,
+    list_entries,
 )
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
@@ -755,7 +756,7 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     otherwise fall back to a stub message.
     """
     heading = _heading(node.level, node.title)
-    entries = data.get("table_entries") or []
+    entries = list_entries(node, data, "table_entries")
     if not entries:
         return f"{heading}\n{_pending('List of tables: pending.')}"
     items: list[str] = []
@@ -780,7 +781,7 @@ def _render_toc(node: DocNode, data: dict) -> str:
     `toc` headingless and we emit the heading explicitly here rather than via
     the generic _heading() machinery.
     """
-    entries = data.get("toc_entries") or []
+    entries = list_entries(node, data, "toc_entries")
     heading = f'<h2 class="toc-heading">{_esc(node.title)}</h2>'
     if not entries:
         return f"{heading}\n{_pending('Table of contents: pending.')}"
@@ -1243,19 +1244,19 @@ def _render_page_break(node: DocNode, data: dict) -> str:
 def _render_figures_list(node: DocNode, data: dict) -> str:
     """
     List of figures (ADR-0025) — the figure twin of _render_tables_list, built
-    from data["figure_entries"] when the marshal step populates it.  Nothing
-    populates it yet (the figure-entry walk is ADR-0025 migration phase 4), so
-    today this shows its heading and a visible pending note — never a silent
-    empty list.  LaTeX gets \\listoffigures natively.
+    from data["figure_entries"] (tree figures + genomics charts, walked by
+    report_data_toc) for THIS list's scope: the body in the front matter, or
+    one appendix's figures inside that appendix.  An empty scope shows a
+    visible pending note — never a silent empty list.
     """
     heading = _heading(node.level, node.title)
-    entries = data.get("figure_entries") or []
+    entries = list_entries(node, data, "figure_entries")
     if not entries:
         return f"{heading}\n{_pending('List of figures: pending.')}"
     items: list[str] = []
     for entry in entries:
         title = entry.get("title", "")
-        n = entry.get("figure_number")
+        n = entry.get("label") or entry.get("figure_number")
         ready = entry.get("ready", False)
         line = f"Figure {n}. {title}" if n is not None else title
         cls = "" if ready else 'class="pending-item"'

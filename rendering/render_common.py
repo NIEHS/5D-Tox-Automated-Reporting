@@ -532,6 +532,20 @@ def authored_table_matrix(node: DocNode) -> dict | None:
     return {"caption": None, "headers": headers, "rows": rows, "footnotes": []}
 
 
+def list_entries(node: DocNode, data: dict, key: str) -> list[dict]:
+    """
+    EXTRACT for a generated list node (`toc`, `tables-list`, `figures-list`):
+    the entries of ``data[key]`` that belong to the list's numbering scope
+    (ADR-0025 phase 4).  A list in the front matter (no appendix scope) shows
+    the body's entries — those with ``scope`` None, which includes the appendix
+    title placeholders; a list inside Appendix C shows only entries whose scope
+    is "C" (its own headings, tables, figures).  Entries with no ``scope`` key
+    (hand-built test data) count as body entries.
+    """
+    scope = node.appendix_scope
+    return [e for e in (data.get(key) or []) if e.get("scope") == scope]
+
+
 def figure_prefix(node: DocNode) -> str:
     """The "Figure N. " prefix for a numbered figure node — scope-aware like
     table_caption ("Figure C-1. " inside Appendix C).  Empty when the node has

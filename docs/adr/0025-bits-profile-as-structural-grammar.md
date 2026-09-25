@@ -368,8 +368,23 @@ What landed, and where the code deviates from the text above:
   real grid on Word and BITS and a tabular on LaTeX when no LaTeX source was
   given; a LaTeX-only source stays verbatim on LaTeX and leaves a tracer on
   BITS. Tests: `tests/unit/test_authored_content_channels.py`.
-- **Not yet done** (phases 4–6): per-appendix scoping of `toc` / lists and the
-  figure-entry walk (with `bmd-summary`'s caption moving onto its content
-  item), the section catalog reading `binding`, and the editor's second-axis
-  inspector (it shows role/bindings and offers the `binding` picker; it does
-  not yet author by pair).
+- **Phase 4 (same day): scoped lists.** `report_data_toc._build_toc_entries`
+  walks appendix subtrees and tags every contents / table / figure entry with
+  its `scope` (the appendix letter, or None for the body); it now also builds
+  `figure_entries` (tree figures + genomics charts). `render_common.list_entries`
+  gives a `toc` / `tables-list` / `figures-list` node exactly the entries of
+  its own scope, so the front-matter lists show the body and each appendix's
+  mini-Contents / Tables / Figures show that appendix — as the reference lays
+  them out. HTML filters; Word emits plain entries for scoped lists (a field
+  cannot be restricted to one appendix without a bookmark region); LaTeX keeps
+  the native `\tableofcontents` / `\listoftables` for the body, emits itemized
+  lists for appendix scopes and for every figures list (figures are placed
+  with caption text, not `\caption`), and niehs.cls gained `\ifniehsunlisted`
+  so appendix tables take `\caption[]{…}` and stay out of the front list.
+  The reference fixture's titles were made bare (labels are computed, never
+  authored). `bmd-summary`'s caption stays on the node (content items are a
+  later refactor, not needed for reference fidelity).
+- **Not yet done** (phases 5–6): the section catalog reading `binding` instead
+  of inferring `kind`, and the editor's second-axis inspector (it shows
+  role/bindings and offers the `binding` picker; it does not yet author by
+  pair).

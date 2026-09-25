@@ -92,6 +92,7 @@ from rendering.render_common import (
     table_caption as _table_caption,
     figure_prefix,
     figure_payload,
+    list_entries,
     authored_table_matrix,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
@@ -858,9 +859,15 @@ def _render_tables_list(doc: Document, node: DocNode, data: dict) -> None:
     with real page numbers."""
     head = _add_heading(doc, node.level, node.title, data)
     _style_front_matter_heading(head)  # reference front-matter heading look
-    entries = data.get("table_entries") or []
+    entries = list_entries(node, data, "table_entries")
     if not entries:
         _add_pending(doc, "List of tables: pending.")
+        return
+    if node.appendix_scope:
+        # An appendix's own Tables list (ADR-0025 phase 4): plain entries, no
+        # field — a TOF field would re-collect EVERY 0-25_Table_Title caption in
+        # the document on refresh, not just this appendix's.
+        _add_plain_list_entries(doc, entries, "Table")
         return
     _add_tof_field(doc, entries)
 
@@ -946,8 +953,33 @@ def _render_toc(doc: Document, node: DocNode, data: dict) -> None:
     # entry.  The reference's Contents heading uses NTP_Contents_Heading (no
     # outline level) precisely to avoid that — mirror it by suppressing here.
     _suppress_outline_level(head)
-    entries = data.get("toc_entries") or []
+    entries = list_entries(node, data, "toc_entries")
+    if node.appendix_scope:
+        # A per-appendix mini-Contents (ADR-0025 phase 4): plain entries — a
+        # TOC field cannot be restricted to one appendix without a bookmark
+        # region, and on refresh it would list the whole document.
+        _add_plain_list_entries(doc, entries, None)
+        return
     _add_toc_field(doc, entries)
+
+
+def _add_plain_list_entries(doc: Document, entries: list, kind: str | None) -> None:
+    """The scoped-list fallback (an appendix's own Contents / Tables / Figures):
+    one plain paragraph per entry — "Table B-1.  <title>" when ``kind`` names the
+    label prefix, or the bare heading title (indented by level) for a Contents
+    list.  No field, no page numbers: a scoped Word field needs a bookmark region
+    this surface does not build yet."""
+    for entry in entries:
+        title = _clean(entry.get("title", ""))
+        if kind:
+            label = entry.get("label")
+            text = f"{kind} {label}. {title}" if label else title
+            doc.add_paragraph(text)
+        else:
+            lvl = entry.get("level", 1)
+            para = doc.add_paragraph(title)
+            if isinstance(lvl, int) and lvl > 1:
+                para.paragraph_format.left_indent = Pt(12 * (lvl - 1))
 
 
 # Right tab stop for a TOC line: the text width (US-Letter, 1" margins = 6.5").
@@ -1592,22 +1624,18 @@ def _render_page_break(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_figures_list(doc: Document, node: DocNode, data: dict) -> None:
     """List of figures (ADR-0025) — the figure twin of _render_tables_list.
-    Heading in the front-matter look, then the cached entries from
-    data["figure_entries"].  Nothing populates that yet (migration phase 4 adds
-    the figure-entry walk and a `TOC \\c "Figure"` field alongside SEQ-numbered
-    figure captions), so today the heading is followed by a visible pending
-    note rather than an empty field."""
+    Heading in the front-matter look, then one plain entry per figure in this
+    list's scope (data["figure_entries"]: tree figures + genomics charts).  Plain
+    paragraphs rather than a Word field: figure captions are literal text, not
+    SEQ-numbered, so a `TOC \\c "Figure"` field would collect nothing."""
     head = _add_heading(doc, node.level, node.title, data)
     if head is not None:
         _style_front_matter_heading(head)
-    entries = data.get("figure_entries") or []
+    entries = list_entries(node, data, "figure_entries")
     if not entries:
         _add_pending(doc, "List of figures: pending.")
         return
-    for entry in entries:
-        n = entry.get("figure_number")
-        title = _clean(entry.get("title", ""))
-        doc.add_paragraph(f"Figure {n}. {title}" if n is not None else title)
+    _add_plain_list_entries(doc, entries, "Figure")
 
 
 def _render_authored_table(doc: Document, node: DocNode, data: dict) -> None:

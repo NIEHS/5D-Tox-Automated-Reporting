@@ -111,6 +111,7 @@ from rendering.render_common import (
     table_caption as _table_caption,
     figure_prefix,
     figure_payload,
+    list_entries,
     authored_table_matrix,
 )
 from document_model.layout_style import resolve_layout_style
@@ -509,7 +510,11 @@ def _render_appendix(node: DocNode, data: dict) -> str:
         letter = node.appendix_letter
         scope = (
             "\\setcounter{table}{0}\\renewcommand{\\thetable}{" + letter + "-\\arabic{table}}\n"
-            "\\setcounter{figure}{0}\\renewcommand{\\thefigure}{" + letter + "-\\arabic{figure}}"
+            "\\setcounter{figure}{0}\\renewcommand{\\thefigure}{" + letter + "-\\arabic{figure}}\n"
+            # Appendix tables belong to the appendix's own Tables list, not the
+            # front-matter \listoftables: niehs.cls's niehstable switches to
+            # \caption[]{...} (no list entry) while this flag is set.
+            "\\niehsunlistedtrue"
         )
     if node.children:
         return f"{heading}\n{scope}" if scope else heading
@@ -535,9 +540,12 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
     colspec = " ".join("l" for _ in range(ncols))
     header_cells = " & ".join(_escape_latex(h) for h in headers)
     col_head = "\\toprule\n" + header_cells + " \\\\\n\\midrule\n"
+    # Inside an appendix the caption takes an empty short form so it stays out
+    # of the front-matter \listoftables (the appendix's own list carries it).
+    cap_cmd = "\\caption[]" if node.appendix_scope else "\\caption"
     head = (
         "\\begin{longtable}{" + colspec + "}\n"
-        "\\caption{" + caption + "}\\label{tab:" + latex_label_key(node.id) + "}\\\\\n"
+        + cap_cmd + "{" + caption + "}\\label{tab:" + latex_label_key(node.id) + "}\\\\\n"
         + col_head + "\\endfirsthead\n"
         + col_head + "\\endhead\n"
     )
@@ -554,7 +562,32 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     \listoftables enumerate them automatically with page numbers — no
     manual scaffolding needed.
     """
+    if node.appendix_scope:
+        return _scoped_list(node, data, "table_entries", "Table")
     return f"{_heading(node.level, node.title)}\n\n\\listoftables"
+
+
+def _scoped_list(node: DocNode, data: dict, key: str, kind: str | None) -> str:
+    r"""
+    A per-appendix Contents / Tables / Figures list (ADR-0025 phase 4) as a
+    plain itemized list of this scope's entries.  LaTeX's native
+    \tableofcontents / \listoftables are whole-document lists with no
+    appendix-local form (without the etoc package, which the offline bundle
+    does not ship), so scoped lists are emitted from the shared entries; a
+    table entry gets \pageref{tab:<id>} where the tree node carries a label.
+    """
+    entries = list_entries(node, data, key)
+    heading = _heading(node.level, node.title)
+    if not entries:
+        return f"{heading}\n\n\\emph{{[List pending: {_escape_latex(node.title)}]}}"
+    lines = [heading, "", "\\begin{itemize}"]
+    for entry in entries:
+        title = _escape_latex(entry.get("title", ""))
+        label = entry.get("label")
+        text = f"{kind} {label}. {title}" if (kind and label) else title
+        lines.append(f"  \\item {text}")
+    lines.append("\\end{itemize}")
+    return "\n".join(lines)
 
 
 def _render_toc(node: DocNode, data: dict) -> str:
@@ -569,6 +602,8 @@ def _render_toc(node: DocNode, data: dict) -> str:
     why the catalog marks `toc` headingless.  This was previously hardcoded in
     the document skeleton; it is now driven by a `toc` node in the tree.
     """
+    if node.appendix_scope:
+        return _scoped_list(node, data, "toc_entries", None)
     return "\\tableofcontents"
 
 
@@ -1314,11 +1349,13 @@ def _render_title_page(node: DocNode, data: dict) -> str:
 
 def _render_figures_list(node: DocNode, data: dict) -> str:
     r"""
-    List of figures (ADR-0025) — the figure twin of _render_tables_list.  Every
-    figure node renders as a \begin{figure} float with \caption, so LaTeX's
-    \listoffigures enumerates them with page numbers automatically.
+    List of figures (ADR-0025) — the figure twin of _render_tables_list, built
+    from data["figure_entries"] for this list's scope (see _scoped_list).
     """
-    return f"{_heading(node.level, node.title)}\n\n\\listoffigures"
+    # Figures are placed as centered \includegraphics with caption TEXT (no
+    # \caption), so \listoffigures would be empty; the list is emitted from
+    # the shared figure entries in every scope.
+    return _scoped_list(node, data, "figure_entries", "Figure")
 
 
 def _render_authored_table(node: DocNode, data: dict) -> str:
