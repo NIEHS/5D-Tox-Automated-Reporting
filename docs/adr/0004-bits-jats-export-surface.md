@@ -22,6 +22,7 @@
   the end). NOTE: the "Net: … remains this ADR's roadmap" conclusion at the very
   end predates the build and is SUPERSEDED by the status above — the surface
   shipped; what remains are the two limits named above, not the whole surface.
+- **Amended by [ADR-0025](0025-bits-profile-as-structural-grammar.md) (2026-09-25):** the "BITS is a projection only" clause stays true for *storage* (DocNode/YAML canonical, no XML stored) but is withdrawn for *grammar* — the catalog's role vocabulary and containment rules are now a BITS profile, and provenance is a separate `binding` axis. The three `ADR-0004 gap` handlers in `jats_generator` (appendix / freeform) close as a consequence of that migration.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0001](0001-bmdproject-schema-as-load-barrier.md) (the
   integrated dataset every component reads through); [ADR-0002](0002-decompose-api-process-integrated.md)

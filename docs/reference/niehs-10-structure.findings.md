@@ -88,7 +88,7 @@ matter are "supplied", not "constructed". Two ways to close the gap:
    authored-figures supplied), and the faithful YAML is documentation of what the
    supplied files must contain, not a template.
 
-The choice is a product decision. The section-catalog work (2026-09-22/23) makes
+**Decided 2026-09-25 in [ADR-0025](../adr/0025-bits-profile-as-structural-grammar.md):** neither option as stated — the grammar becomes a BITS profile (roles + containment from BITS 2.x) with provenance as a separate `binding` axis, and this YAML becomes the validator's first acceptance instance. The choice was a product decision. The section-catalog work (2026-09-22/23) makes
 option 1 cheaper than it was: a new node type declared in the catalog reaches the
 workflow, the editor and the validator without further registries.
 
