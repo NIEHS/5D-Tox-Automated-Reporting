@@ -91,6 +91,7 @@ from rendering.render_common import (
     GENE_TABLE_HEADERS,
     table_caption as _table_caption,
     figure_prefix,
+    figure_payload,
 )
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
@@ -875,12 +876,13 @@ def _render_figure(node: DocNode, data: dict) -> str:
     <img alt> carries the DESCRIPTIVE caption alone (the fig_alt_text
     accessibility role); the visible <figcaption> gets the "Figure N." prefix.  A
     missing payload emits a visible pending note, never a silent gap."""
-    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    payload = figure_payload(node, data) or {}
     png = payload.get("png_b64", "")
     descriptive = node.caption or payload.get("caption") or node.title or ""
     if not png:
         return _pending(f"Figure pending: {node.title}")
-    src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
+    mimetype = payload.get("mimetype") or "image/png"
+    src = png if png.startswith("data:") else f"data:{mimetype};base64,{png}"
     label = figure_prefix(node)
     display = f"{label}{descriptive}" if descriptive else ""
     return (

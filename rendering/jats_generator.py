@@ -49,6 +49,7 @@ from document_model.document_tree import (
     find_node,
 )
 from rendering.render_common import (
+    authored_table_matrix,
     table_caption,
     RenderDispatchError,
     assert_dispatch_covers,
@@ -701,18 +702,24 @@ def _emit_handled_by_book_shell(parent: etree._Element, node: DocNode, data: dic
 
 
 def _emit_authored_table(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """authored-table (ADR-0025) → a <table-wrap> carrying the positional
-    <label> + <caption> so the table keeps its number and its slot; the SUPPLIED
-    body markup (LaTeX/HTML) has no XML projection yet, so the wrap holds a
-    visible tracer comment instead of a <table> — a label/caption-only
+    """authored-table (ADR-0025) → a <table-wrap> with the positional <label> +
+    <caption>.  A supplied HTML <table> is projected as a real <table> through
+    the shared matrix extract; a LaTeX-only source has no XML projection, so the
+    wrap then holds a visible tracer comment instead — a label/caption-only
     <table-wrap> is DTD-valid."""
+    caption = table_caption(node, node.title or "")
+    built = authored_table_matrix(node)
+    if built is not None:
+        # An HTML <table> was supplied: project its grid like any matrix.
+        parent.append(_table_wrap(node.id, caption, built["headers"], built["rows"]))
+        return
     tw = E("table-wrap", {"id": table_wrap_id(node.id)})
-    label, descriptive = _split_label(table_caption(node, node.title or ""))
+    label, descriptive = _split_label(caption)
     if label:
         tw.append(E.label(label))
     if descriptive:
         tw.append(E.caption(E.p(descriptive)))
-    tw.append(_todo(node, "authored table body not yet projected"))
+    tw.append(_todo(node, "authored table body (LaTeX-only source) not projected"))
     parent.append(tw)
 
 

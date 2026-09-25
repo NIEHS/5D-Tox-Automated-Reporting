@@ -46,7 +46,7 @@ from tables.table_builder_common import format_mean_se_display, format_display_n
 # render_capabilities is a clean low-level module that imports nothing from
 # document_tree / the renderers / this module, so importing it here keeps
 # render_common a leaf (the tree walk itself is still passed in, never imported).
-from document_model.render_capabilities import landscape_requested
+from document_model.render_capabilities import AUTHORED_FIGURE_SUBTYPES, landscape_requested
 # Guard is the DERIVED edit-hardness scale (ADR-0015).  rendering may import
 # workflow (workflow must never import rendering); this pulls in only the small
 # GuardLevel enum, no engine/store, so render_common stays a leaf on the render
@@ -441,6 +441,95 @@ def table_caption(node: DocNode, base_caption: str) -> str:
     if label is not None:
         return f"Table {label}. {cleaned}" if cleaned else f"Table {label}"
     return cleaned
+
+
+# Image formats an authored figure may supply, by file extension → MIME type
+# (the HTML surface needs the type for its data URI; LaTeX/Word accept the
+# raster ones and PDF/none respectively — each emitter degrades to a visible
+# pending note for a format it cannot place).
+_IMAGE_MIMETYPES: dict[str, str] = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".svg": "image/svg+xml", ".pdf": "application/pdf",
+}
+
+
+def figure_payload(node: DocNode, data: dict) -> dict | None:
+    """
+    EXTRACT for a `figure` node: the image payload every surface renders, or
+    None when there is none (the emitter shows its "[Figure pending]" note).
+
+    Two provenances, one shape (ADR-0023 / ADR-0025 phase 3):
+      - a DATA figure (subtype `chart` / `logo`, or any figure bound to a
+        `data_key`): the pipeline's payload at ``data[data_key]`` as-is —
+        ``{png_b64, filename?, caption?}`` (the genomics chart shape);
+      - an AUTHORED figure (subtype `diagram` / `photograph`): the image file
+        named by ``content_file``, read from templates/ (the same base the
+        freeform content channel uses), returned as ``{png_b64, filename,
+        mimetype, caption: None}``.  A missing or unreadable file yields None —
+        the reference-structure fixture names files the app does not ship, so
+        a missing image is a visible gap, never a load error.
+    The key stays ``png_b64`` for the data-figure emitters' sake even when the
+    bytes are JPEG/SVG; ``mimetype`` says what they really are.
+    """
+    if node.subtype in AUTHORED_FIGURE_SUBTYPES:
+        if not node.content_file:
+            return None
+        from document_model.document_template import TEMPLATES_DIR
+        path = TEMPLATES_DIR / node.content_file
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            return None
+        if not raw:
+            return None
+        import base64
+        return {
+            "png_b64": base64.b64encode(raw).decode("ascii"),
+            "filename": path.name,
+            "mimetype": _IMAGE_MIMETYPES.get(path.suffix.lower(), "application/octet-stream"),
+            "caption": None,
+        }
+    payload = data.get(node.data_key) if node.data_key else None
+    return payload or None
+
+
+def authored_table_matrix(node: DocNode) -> dict | None:
+    """
+    EXTRACT for an `authored-table` node whose supplied markup is HTML: the
+    first <table> in ``node.resolved_content["html"]`` as the neutral
+    ``{caption, headers, rows, footnotes}`` matrix the Word and BITS surfaces
+    build tables from (they have no way to splice raw HTML).  Header cells are
+    the first row when it is made of <th> cells (or sits in <thead>); every
+    other row is body text, cell by cell (spans are flattened).  None when the
+    node has no HTML source or it holds no <table> — the emitter then falls
+    back to its text/tracer path.
+    """
+    resolved = node.resolved_content or {}
+    html = resolved.get("html")
+    if not html or "<table" not in html.lower():
+        return None
+    try:
+        import lxml.html as _lh
+        root = _lh.fromstring(f"<div>{html}</div>")
+    except Exception:
+        return None
+    tables = root.findall(".//table")
+    if not tables:
+        return None
+    table = tables[0]
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    for tr in table.iter("tr"):
+        cells = [c for c in tr if c.tag in ("th", "td")]
+        texts = [" ".join((c.text_content() or "").split()) for c in cells]
+        in_head = tr.getparent() is not None and tr.getparent().tag == "thead"
+        if not headers and not rows and (in_head or (cells and all(c.tag == "th" for c in cells))):
+            headers = texts
+        else:
+            rows.append(texts)
+    if not headers and not rows:
+        return None
+    return {"caption": None, "headers": headers, "rows": rows, "footnotes": []}
 
 
 def figure_prefix(node: DocNode) -> str:

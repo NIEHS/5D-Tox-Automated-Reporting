@@ -110,6 +110,8 @@ from rendering.render_common import (
     GENE_TABLE_HEADERS,
     table_caption as _table_caption,
     figure_prefix,
+    figure_payload,
+    authored_table_matrix,
 )
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
@@ -1025,13 +1027,16 @@ def _render_figure(node: DocNode, data: dict) -> str:
     the bundle by latex_export (same path genomics charts use), so the .tex
     reference and the written file agree.  A missing payload emits a visible
     pending note, never a silent gap."""
-    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    payload = figure_payload(node, data) or {}
     text = node.caption or payload.get("caption") or node.title
     label = figure_prefix(node)
     caption = _escape_latex(f"{label}{text}") if text else ""
     filename = payload.get("filename")
     if not filename:
         return f"\\emph{{[Figure pending: {_escape_latex(node.title)}]}}"
+    if not filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
+        # \includegraphics cannot place SVG/GIF; say so instead of a broken build.
+        return f"\\emph{{[Figure pending: {_escape_latex(node.title)} — unsupported image format {_escape_latex(filename)}]}}"
     return (
         "\\begin{center}\n"
         f"\\includegraphics[width=0.85\\linewidth]{{figures/{filename}}}\\\\\n"
@@ -1324,11 +1329,34 @@ def _render_authored_table(node: DocNode, data: dict) -> str:
     freeform types (verbatim, or a pending note when only HTML was supplied).
     """
     caption = _table_caption(node, node.title or "")
+    resolved = node.resolved_content or {}
+    if resolved.get("latex"):
+        body = _freeform_body_latex(node)
+    else:
+        # No LaTeX source: an HTML <table> (if supplied) becomes a tabular via
+        # the shared matrix extract; otherwise the usual pending note.
+        built = authored_table_matrix(node)
+        body = _emit_matrix_tabular(built) if built else _freeform_body_latex(node)
     return (
         f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{caption}}}\n"
-        f"{_freeform_body_latex(node)}\n"
+        f"{body}\n"
         f"\\end{{niehstable}}"
     )
+
+
+def _emit_matrix_tabular(built: dict) -> str:
+    r"""A plain booktabs tabular from a ``{headers, rows}`` matrix (the authored-
+    table HTML fallback): header row, rule, body rows; cells escaped once."""
+    headers = [str(h) for h in built.get("headers", [])]
+    rows = [[str(c) for c in r] for r in built.get("rows", [])]
+    ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
+    colspec = "l" + "c" * (ncols - 1) if ncols > 1 else "l"
+    lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule"]
+    if headers:
+        lines += [_emit_tabular_row(headers), "\\midrule"]
+    lines += [_emit_tabular_row(r) for r in rows]
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    return "{\\small\n" + "\n".join(lines) + "\n}"
 
 
 def _render_supplementary_material(node: DocNode, data: dict) -> str:

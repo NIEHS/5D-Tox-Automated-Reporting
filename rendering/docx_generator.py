@@ -91,6 +91,8 @@ from rendering.render_common import (
     sample_counts_table,
     table_caption as _table_caption,
     figure_prefix,
+    figure_payload,
+    authored_table_matrix,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from document_model.layout_style import resolve_layout_style
@@ -1328,7 +1330,7 @@ def _render_figure(doc: Document, node: DocNode, data: dict) -> None:
     the same way.  Caption is ``node.caption`` (authored) or the payload's, prefixed
     with the positional ``Figure N.`` from node.figure_number.  A missing payload
     renders a visible pending note, never a silent gap."""
-    payload = (data.get(node.data_key) if node.data_key else None) or {}
+    payload = figure_payload(node, data) or {}
     png = payload.get("png_b64", "")
     if png.startswith("data:"):
         png = png.split(",", 1)[1]
@@ -1610,10 +1612,17 @@ def _render_figures_list(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_authored_table(doc: Document, node: DocNode, data: dict) -> None:
     """An AUTHORED table (ADR-0025): the SEQ-numbered 0-25_Table_Title caption
-    (so the Tables list collects it), then the author's content as body text —
-    the Word surface has no native form for supplied LaTeX/HTML table markup, so
-    it degrades to the freeform text path (tags stripped) like freeform-block."""
-    _add_table_caption(doc, _table_caption(node, node.title or ""))
+    (so the Tables list collects it), then the body.  When the author supplied an
+    HTML <table>, its grid becomes a real Word table (authored_table_matrix →
+    _booktabs_table); otherwise (LaTeX-only source) the Word surface degrades to
+    the freeform text path (tags stripped) like freeform-block."""
+    caption = _table_caption(node, node.title or "")
+    built = authored_table_matrix(node)
+    if built is not None:
+        # An HTML <table> was supplied: build a real Word table from its grid.
+        _booktabs_table(doc, built["headers"], built["rows"], caption=caption)
+        return
+    _add_table_caption(doc, caption)
     _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
 
 

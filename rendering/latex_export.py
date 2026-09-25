@@ -545,15 +545,22 @@ from genomics.genomics_charts import decode_png as _decode_png
 from genomics.genomics_charts import attach_genomics_charts as _attach_genomics_charts
 
 
-def _collect_figure_files(data: dict) -> dict:
+def _collect_figure_files(data: dict, tree: list | None = None) -> dict:
     """
-    Decode every attached genomics chart into raw PNG bytes keyed by its
-    figures/ filename, for build_overleaf_bundle to write into the zip.
+    Every image the .tex references, as raw bytes keyed by its figures/ filename,
+    for build_overleaf_bundle to write into the zip:
 
-    Charts are validated as decodable when attached (_attach_genomics_charts),
-    so by here every chart is expected to decode; the None-guard remains as
-    defense in depth.
+      - every attached genomics chart (validated as decodable when attached by
+        _attach_genomics_charts; the None-guard remains as defense in depth), and
+      - every tree `figure` node with a payload (ADR-0025 phase 3): a data
+        figure's chart-shaped payload, or an authored figure's image file read
+        through the shared figure_payload extract — so the \\includegraphics the
+        LaTeX emitter writes always has a file behind it.
     """
+    import base64
+    from document_model.document_tree import DOCUMENT_TREE, walk_tree
+    from rendering.render_common import figure_payload
+
     out: dict[str, bytes] = {}
     for entry in data.get("genomics_sections", []) or []:
         for chart in entry.get("charts") or []:
@@ -561,6 +568,21 @@ def _collect_figure_files(data: dict) -> dict:
             raw = _decode_png(chart.get("png_b64"))
             if name and raw is not None:
                 out[name] = raw
+
+    def _figure_node(node) -> None:
+        if node.node_type != "figure":
+            return
+        payload = figure_payload(node, data) or {}
+        name, b64 = payload.get("filename"), payload.get("png_b64") or ""
+        if not name or not b64:
+            return
+        if b64.startswith("data:"):
+            b64 = b64.split(",", 1)[1]
+        try:
+            out[name] = base64.b64decode(b64)
+        except (ValueError, TypeError):
+            return
+    walk_tree(DOCUMENT_TREE if tree is None else tree, _figure_node)
     return out
 
 
@@ -1125,7 +1147,7 @@ def _assemble_bundle_files(
     # shipped at the bundle root so the cover's bare \includegraphics resolves.
     for asset in _cover_layouts.required_assets(_cover_subtypes_in_tree(tree)):
         files[asset] = _read_cover_asset(asset)
-    figures = _collect_figure_files(data)
+    figures = _collect_figure_files(data, tree)
     if figures:
         for fig_name, raw in figures.items():
             files[f"figures/{fig_name}"] = raw

@@ -357,8 +357,19 @@ What landed, and where the code deviates from the text above:
   appendix emitters lost their roster special case, and the "Table B-1"
   literal is gone from the codebase. A `breakable` matrix renders as a
   longtable on LaTeX. Golden fixtures were regenerated for the new node.
-- **Not yet done** (phases 3–6): the authored-figure image channel and the
-  authored-table body in BITS, per-appendix scoping of `toc` / lists and the
-  figure-entry walk, the section catalog reading `binding`, and the editor's
-  second-axis inspector (it shows role/bindings and offers the `binding`
-  picker; it does not yet author by pair).
+- **Phase 3 (same day): authored content channels.** `render_common.figure_payload`
+  is the one extract every figure emitter reads: a data figure's payload at its
+  `data_key`, or an authored figure's image file (`content_file`, read from
+  templates/, MIME type by extension; a missing file is a visible pending note,
+  never a load error). The LaTeX bundle (`_collect_figure_files`) now ships
+  tree figures' bytes too, data and authored alike (data figures used to be
+  referenced but never bundled). `render_common.authored_table_matrix` parses
+  a supplied HTML `<table>` into the neutral matrix, so an authored table is a
+  real grid on Word and BITS and a tabular on LaTeX when no LaTeX source was
+  given; a LaTeX-only source stays verbatim on LaTeX and leaves a tracer on
+  BITS. Tests: `tests/unit/test_authored_content_channels.py`.
+- **Not yet done** (phases 4–6): per-appendix scoping of `toc` / lists and the
+  figure-entry walk (with `bmd-summary`'s caption moving onto its content
+  item), the section catalog reading `binding`, and the editor's second-axis
+  inspector (it shows role/bindings and offers the `binding` picker; it does
+  not yet author by pair).
