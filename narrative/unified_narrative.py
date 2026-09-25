@@ -679,40 +679,50 @@ def _build_body_weight_paragraphs(
     if not bw_data:
         return []
 
-    bw_findings: list[str] = []
+    significant: list[str] = []   # full sentences, one per responsive row
+    nd_sexes: list[str] = []      # "<sex> rats (Table 2)" — ONCE per sex
 
     for sex in ["Male", "Female"]:
         rows = bw_data.get(sex, [])
         bw_rows = [r for r in rows if _parse_organ_label(r.label)[1] == "body_weight"]
-
+        if not bw_rows:
+            continue
+        sex_sentences: list[str] = []
         for bw_row in bw_rows:
             if not bw_row.responsive or bw_row.bmd_str == "ND":
-                # Not significant — just note the sex for the combined sentence
-                bw_findings.append(f"{sex.lower()} rats (Table 2)")
-            else:
-                # Significant — full sentence built as a template (author wording
-                # Literals + live data Slots) then rendered.  Byte-identical to the
-                # former f-string; the template is what lets a wording edit and a
-                # data reprocess stay separable (Phase 2, section_template).
-                direction = _endpoint_direction(bw_row)
-                low_dose = _lowest_sig_dose(bw_row)
-                tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None)
-                binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
-                bw_findings.append(render(tpl, binding))
+                continue
+            # Significant — full sentence built as a template (author wording
+            # Literals + live data Slots) then rendered.  Byte-identical to the
+            # former f-string; the template is what lets a wording edit and a
+            # data reprocess stay separable (Phase 2, section_template).
+            direction = _endpoint_direction(bw_row)
+            low_dose = _lowest_sig_dose(bw_row)
+            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None)
+            binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
+            sex_sentences.append(render(tpl, binding))
+        if sex_sentences:
+            significant.extend(sex_sentences)
+        else:
+            # The "no change" note is about the SEX, not about each body-weight
+            # row (a session carries several — terminal weight, gain, per-study-
+            # day weights). Appending one ref per row produced "male rats
+            # (Table 2), male rats (Table 2), male rats (Table 2)" (2026-09-24).
+            nd_sexes.append(f"{sex.lower()} rats (Table 2)")
 
-    if not bw_findings:
+    if not significant and not nd_sexes:
         return []
 
-    # Check if ALL findings are non-significant (just table refs like "male rats (Table 2)")
-    all_nd = all(f.startswith(("male", "female")) for f in bw_findings)
-    if all_nd:
-        sex_refs = _oxford_comma(bw_findings, conjunction="or")
-        return [
-            f"No significant changes in terminal body weight for "
-            f"{sex_refs} occurred with exposure to {compound_name}."
-        ]
-    else:
-        return [" ".join(bw_findings)]
+    nd_sentence = (
+        f"No significant changes in terminal body weight for "
+        f"{_oxford_comma(nd_sexes, conjunction='or')} occurred with exposure to "
+        f"{compound_name}."
+    ) if nd_sexes else ""
+
+    if not significant:
+        return [nd_sentence]
+    # Mixed: the significant finding(s) first, then the no-change note for the
+    # other sex as its own sentence (never a bare "female rats (Table 2)" fragment).
+    return [" ".join(significant + ([nd_sentence] if nd_sentence else []))]
 
 
 def _organ_finding_template(

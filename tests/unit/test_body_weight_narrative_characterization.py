@@ -53,3 +53,34 @@ def test_all_non_significant_combined_sentence():
 
 def test_no_body_weight_platform_returns_empty():
     assert _build_body_weight_paragraphs({}, "PFHxSAm", "mg/kg/day") == []
+
+
+def test_several_non_significant_rows_per_sex_note_each_sex_once():
+    """Regression (2026-09-24): a session has several body-weight rows per sex
+    (terminal weight, gain, per-study-day weights). The no-change note must name
+    each sex ONCE, not once per row."""
+    male = [_row(f"Body Weight SD{d}", "ND", "ND", {0.0: "100.0"}, resp=False) for d in (1, 3, 5)]
+    female = [_row(f"Body Weight SD{d}", "ND", "ND", {0.0: "90.0"}, resp=False) for d in (1, 3, 5)]
+    tables = {"Body Weight": {"Male": male, "Female": female}}
+    out = _build_body_weight_paragraphs(tables, "PFHxSAm", "mg/kg/day")
+    assert out == [
+        "No significant changes in terminal body weight for male rats (Table 2) "
+        "or female rats (Table 2) occurred with exposure to PFHxSAm."
+    ]
+
+
+def test_mixed_sexes_significant_then_no_change_sentence():
+    """One sex significant, the other not: a full sentence for the finding,
+    then a proper no-change sentence for the other sex — never a bare
+    'female rats (Table 2)' fragment glued onto the finding."""
+    male = _row("Terminal Body Wt.", "41.2", "22.8",
+                {0.0: "100.0", 50.0: "85.0*", 100.0: "70.0**"})
+    female = [_row(f"Body Weight SD{d}", "ND", "ND", {0.0: "90.0"}, resp=False) for d in (1, 5)]
+    tables = {"Body Weight": {"Male": [male], "Female": female}}
+    out = _build_body_weight_paragraphs(tables, "PFHxSAm", "mg/kg/day")
+    assert out == [
+        "Terminal body weight was significantly decreased in male rats at ≥50 "
+        "mg/kg/day with a negative trend (Table 2). The BMD and BMDL were 41.2 "
+        "and 22.8 mg/kg/day, respectively. No significant changes in terminal "
+        "body weight for female rats (Table 2) occurred with exposure to PFHxSAm."
+    ]
