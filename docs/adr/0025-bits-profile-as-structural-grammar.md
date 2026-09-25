@@ -1,7 +1,7 @@
 # 0025 — The document grammar is a BITS profile; provenance is a binding attribute
 
-- **Status:** Proposed (2026-09-25); **migration phases 0–1 implemented the same day**
-  (see "Implementation notes" at the end). Amends
+- **Status:** Accepted (2026-09-25); **migration phases 0–5 implemented the same day,
+  phase 6 closed** (see "Implementation notes" at the end). Amends
   [ADR-0004](0004-bits-jats-export-surface.md): its "BITS is a projection only"
   clause stays true for *storage* (the `DocNode` tree + YAML remain canonical; no XML
   is stored or authored) but is withdrawn for *grammar* — the catalog's structural
@@ -384,7 +384,18 @@ What landed, and where the code deviates from the text above:
   The reference fixture's titles were made bare (labels are computed, never
   authored). `bmd-summary`'s caption stays on the node (content items are a
   later refactor, not needed for reference fidelity).
-- **Not yet done** (phases 5–6): the section catalog reading `binding` instead
-  of inferring `kind`, and the editor's second-axis inspector (it shows
-  role/bindings and offers the `binding` picker; it does not yet author by
-  pair).
+- **Phase 5 (same day): the workflow reads `binding`.** `section_catalog`
+  takes each section's `kind` from the feeding node's declared `binding`; the
+  content-origin inference (`_kind_for`) is now only the fallback for nodes
+  built without a template, and for a `container` binding (a heading that
+  merely carries a section's data_key). `heading-only` may declare `llm` /
+  `programmatic` for that case, and the shipped template does so on Materials
+  and Methods. `bmd-summary` defaults to `derived`, the workflow's long-standing
+  classification (approvable, auto-derived), so the Sections screen is
+  unchanged. Readiness, approvability and reprocess staleness therefore hang
+  off the declared axis, as §3 intended.
+- **Phase 6 (closed as is).** The editor exposes each preset's role and
+  bindings in the inspector and offers a `binding` picker limited to what the
+  preset admits; the validator accepts an explicit `role` + `binding` pair in
+  place of `type`. Presets remain the authoring path — a pair-first authoring
+  UI is not planned while every needed combination has a preset.

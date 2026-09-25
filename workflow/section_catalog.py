@@ -176,8 +176,12 @@ def is_data_dependent(section_key: str, tree: list[DocNode] | None = None) -> bo
 
 
 def _kind_for(key: str, family: str | None) -> str:
-    """Classify a section's producer kind, reusing content_origin as the source.
+    """FALLBACK classification of a section's producer kind, for nodes that carry
+    no declared ``binding`` (hand-built DocNodes in tests / legacy scaffolds).
 
+    Since ADR-0025 phase 5 the kind IS the node's ``binding`` — declared on the
+    template entry or defaulted from its preset by the instantiator — and this
+    inference is consulted only when that is absent.  It reuses content_origin:
     ``bmd_summary`` is auto-DERIVED (a deterministic reduction that also carries an
     LLM paragraph — one section, not two); group narratives are PROGRAMMATIC prose;
     everything else defers to ``content_origin`` (LLM vs programmatic), which is the
@@ -212,7 +216,7 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
 
     def add(
         key: str, node_id: str, *, family: str | None, approvable: bool,
-        region: str | None = None,
+        region: str | None = None, binding: str | None = None,
     ) -> None:
         if key in seen:
             # Merge the additional feeding node into the existing spec (e.g. a
@@ -234,7 +238,12 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
                     break
             return
         seen.add(key)
-        kind = _kind_for(key, family)
+        # ADR-0025 phase 5: the declared binding on the (first) feeding node is
+        # the producer kind.  `container` says nothing about who produces the
+        # content (a heading that merely carries the section's data_key, like
+        # Materials and Methods), so it — like an absent binding on a node built
+        # without a template — falls back to the content_origin inference.
+        kind = binding if binding and binding != "container" else _kind_for(key, family)
         if family == "bm2":
             store = "bm2_{slug}.json"
         elif family == "genomics":
@@ -261,18 +270,19 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
         nt = node.node_type
         # Genomics interpretation nodes → the genomics family.
         if nt == "genomics-section":
-            add("genomics", node.id, family="genomics", approvable=False)
+            add("genomics", node.id, family="genomics", approvable=False,
+                binding=node.binding)
             return
         # Apical result tables (platform-bound) → the bm2 family. Two platform table
         # nodes (Body Weight, Organ Weight, …) collapse into one family spec; the
         # concrete bm2_<slug> instances are disk-discovered.
         if node.platform and nt in ("table", "incidence-table"):
-            add("bm2", node.id, family="bm2", approvable=True)
+            add("bm2", node.id, family="bm2", approvable=True, binding=node.binding)
             return
         # Programmatic group narratives (narrative+tables) → display-only rows.
         if nt == "narrative+tables" and node.narrative_key in _GROUP_NARRATIVE_KEYS:
             add(node.narrative_key, node.id, family=None, approvable=False,
-                region=node.region)
+                region=node.region, binding=node.binding)
             return
         # Singleton content sections, identified by their data_key.
         dk = node.data_key
@@ -282,14 +292,17 @@ def catalog_for_tree(tree: list[DocNode]) -> list[SectionSpec]:
         # so the UI groups them apart from body sections). Not approvable: the app is
         # not an editor (ADR-0018); the row just reflects filled-vs-pending.
         if dk in _FRONT_MATTER_CONTENT_DATA_KEYS:
-            add(dk, node.id, family=None, approvable=False, region=node.region)
+            add(dk, node.id, family=None, approvable=False, region=node.region,
+                binding=node.binding)
             return
         if dk == "genomics_sections":
             # A genomics node without node_type genomics-section — still the family.
-            add("genomics", node.id, family="genomics", approvable=False)
+            add("genomics", node.id, family="genomics", approvable=False,
+                binding=node.binding)
             return
         if dk in ("background", "methods", "summary", "bmd_summary"):
-            add(dk, node.id, family=None, approvable=True, region=node.region)
+            add(dk, node.id, family=None, approvable=True, region=node.region,
+                binding=node.binding)
 
     walk_tree(tree, visit)
     return specs

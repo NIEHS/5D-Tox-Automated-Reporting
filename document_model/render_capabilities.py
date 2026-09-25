@@ -314,10 +314,13 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     ),
     # ── A heading with no own content; its child NODES carry the content.
     #    This is the recursive structural container (it may nest itself).
+    # A plain container by default; a heading that carries a section's data_key
+    # (Materials and Methods, whose subsections are the LLM-generated prose) may
+    # declare the producer of that content.
     "heading-only": ComponentType(
         capabilities=_STRUCTURAL,
         content_kinds=(),
-        role="sec", bindings=("container",),
+        role="sec", bindings=("container", "llm", "programmatic"),
         emits=("section_heading",),
     ),
     # ── An explicit page break — a headingless, content-free structural marker
@@ -452,9 +455,13 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
     # ── A summary section whose body is one table (it DOES have a heading).
     #    Captionable because its body is the table whose <caption><p> is the
     #    descriptive paragraph (BITS-wise, the <table-wrap> carries the caption).
+    # The workflow classifies the BMD summary as DERIVED (a deterministic
+    # reduction of the apical results that also carries an LLM paragraph — one
+    # section, still approvable); that stays its default so the Sections screen
+    # keeps treating it as it always has (section_catalog).
     "bmd-summary": ComponentType(
         capabilities=_DATA_BLOCK, content_kinds=("table",), requires=("data_key",),
-        role="sec", bindings=("programmatic",),
+        role="sec", bindings=("derived", "programmatic"),
         captionable=True,
         emits=("section_heading", "table_title", "table_body_cell", "table_footnote"),
     ),

@@ -84,6 +84,7 @@ document:
     type: heading-only
     title: Materials and Methods
     data_key: methods
+    binding: llm   # the section's prose (its subsections) is LLM-generated (ADR-0025)
     children:
     - id: mm-study-design
       type: narrative

@@ -198,3 +198,26 @@ def test_resolve_section_key_matches_historical_branches():
     ) == ("genomics_liver_male", None)
     assert resolve_section_key({"section_type": "genomics", "organ": "liver"})[0] is None
     assert resolve_section_key({"section_type": "nope"})[0] is None
+
+
+def test_declared_binding_is_the_kind(tmp_path):
+    """ADR-0025 phase 5: the template entry's `binding` (or its preset default)
+    IS the producer kind; the content_origin inference is only a fallback for
+    nodes built without a template."""
+    from document_model.document_template import instantiate
+    from workflow.section_catalog import catalog_for_tree
+    tree = instantiate([
+        {"id": "summary", "type": "narrative", "title": "Summary", "data_key": "summary",
+         "binding": "programmatic"},
+        {"id": "background", "type": "narrative", "title": "Background", "data_key": "background"},
+        {"id": "abstract", "type": "front-matter", "title": "Abstract", "data_key": "abstract",
+         "binding": "llm"},
+    ])
+    specs = {s.key: s for s in catalog_for_tree(tree)}
+    assert specs["summary"].kind == "programmatic"     # declared override
+    assert specs["background"].kind == "llm"           # preset default
+    assert specs["abstract"].kind == "llm"             # declared override on front matter
+    # A hand-built node with no binding still classifies by inference.
+    from document_model.document_node import DocNode
+    bare = [DocNode(id="summary", title="S", node_type="narrative", data_key="summary")]
+    assert {s.key: s.kind for s in catalog_for_tree(bare)}["summary"] == "llm"
