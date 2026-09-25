@@ -41,7 +41,7 @@ class TestPoolValidate:
         platform/data_type fields on every fingerprint.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/pool/validate/DTXSID50469320")
@@ -63,7 +63,7 @@ class TestPoolValidate:
         metadata).
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/pool/validate/DTXSID50469320")
@@ -103,7 +103,7 @@ class TestPoolValidate:
         expected platforms should appear in at least one fingerprint.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/pool/validate/DTXSID50469320")
@@ -129,7 +129,7 @@ class TestPoolValidate:
         Validation should write validation_report.json to the session dir.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
         resp = client.post("/api/pool/validate/DTXSID50469320")
@@ -149,7 +149,7 @@ class TestPoolValidate:
         Validating a session with no files/ directory returns 404.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         # Create session dir but no files/ subdirectory
         (sessions_dir / "DTXSID_EMPTY").mkdir(parents=True)

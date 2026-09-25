@@ -84,6 +84,7 @@ document:
     type: heading-only
     title: Materials and Methods
     data_key: methods
+    binding: llm   # the section's prose (its subsections) is LLM-generated (ADR-0025)
     children:
     - id: mm-study-design
       type: narrative
@@ -242,6 +243,7 @@ document:
     - id: internal-dose
       type: narrative+tables
       title: Internal Dose Assessment
+      narrative_key: internal_dose
       ready_key: internalDose
       children:
       - id: table-tissue-conc
@@ -300,6 +302,14 @@ document:
   - id: appendix-b
     type: appendix
     title: Animal Identifiers
+    children:
+    # The animal roster is an ordinary programmatic matrix table (ADR-0025):
+    # its "Table B-1" label comes from the appendix-scoped numbering pass, its
+    # rows from data[appendix_animals_matrix] (built from animal_report.json).
+    - id: table-b-1
+      type: data-table
+      title: Animal Numbers and FASTQ Data File Names
+      data_key: appendix_animals_matrix
   - id: appendix-c
     type: appendix
     title: Transcriptomic Quality Control and Empirical False Discovery Rate

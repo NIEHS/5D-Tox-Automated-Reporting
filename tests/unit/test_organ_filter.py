@@ -21,7 +21,7 @@ import textwrap
 import pytest
 
 from bmdx_pipe import TableRow
-from table_builder_common import organ_allowed
+from tables.table_builder_common import organ_allowed
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ def test_multi_token_allowlist():
 
 @pytest.fixture
 def template_dir(tmp_path, monkeypatch):
-    import document_template as dt
+    import document_model.document_template as dt
     monkeypatch.setattr(dt, "TEMPLATES_DIR", tmp_path)
     return tmp_path
 
@@ -80,7 +80,7 @@ def _write(template_dir, body: str) -> str:
 
 
 def test_missing_organs_key_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document:
           - id: x
@@ -92,7 +92,7 @@ def test_missing_organs_key_returns_empty(template_dir):
 
 
 def test_bare_list_template_returns_empty(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         - id: x
           type: narrative
@@ -103,7 +103,7 @@ def test_bare_list_template_returns_empty(template_dir):
 
 
 def test_per_area_block_lowercased_and_stripped(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -118,7 +118,7 @@ def test_per_area_block_lowercased_and_stripped(template_dir):
 
 def test_flat_list_organs_block_is_rejected(template_dir):
     # The old flat-list shape is no longer valid — must be a per-area mapping.
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -129,7 +129,7 @@ def test_flat_list_organs_block_is_rejected(template_dir):
 
 
 def test_unknown_area_key_is_rejected(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -140,7 +140,7 @@ def test_unknown_area_key_is_rejected(template_dir):
 
 
 def test_area_value_must_be_a_list(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -152,7 +152,7 @@ def test_area_value_must_be_a_list(template_dir):
 
 
 def test_area_entries_must_be_strings(template_dir):
-    import document_template as dt
+    import document_model.document_template as dt
     name = _write(template_dir, """
         document: []
         organs:
@@ -209,7 +209,7 @@ def _row(label: str, responsive: bool = True) -> TableRow:
 
 
 def test_organ_weight_narrative_honors_allowlist():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -228,7 +228,7 @@ def test_organ_weight_narrative_honors_allowlist():
 
 
 def test_organ_weight_narrative_component_match_laterality():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -244,7 +244,7 @@ def test_organ_weight_narrative_component_match_laterality():
 
 
 def test_organ_weight_narrative_unfiltered_when_no_allowlist():
-    from unified_narrative import _build_organ_weight_paragraphs
+    from narrative.unified_narrative import _build_organ_weight_paragraphs
 
     platform_tables = {
         "Organ Weight": {
@@ -261,7 +261,7 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
     """Scope guard: the clinical-pathology narrative takes NO organ allowlist, so
     a clinical-chemistry endpoint (which _parse_organ_label also names) survives
     regardless of any organ-weight filter."""
-    from unified_narrative import generate_clinical_pathology_narrative
+    from narrative.unified_narrative import generate_clinical_pathology_narrative
 
     platform_tables = {
         "Clinical Chemistry": {
@@ -276,24 +276,35 @@ def test_clinical_chem_endpoints_not_dropped_by_organ_filter():
 # 5. _hash_sections — organ-weight allowlist sensitivity + backward compat
 # ---------------------------------------------------------------------------
 
-def test_hash_sections_unfiltered_is_backward_compatible():
-    from cache_plumbing import _hash_sections
-    legacy = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    none_ = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, organ_allowlist=None)
-    empty = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                           imputed_cells=None, organ_allowlist=[])
-    assert legacy == none_ == empty
+def test_hash_sections_is_filter_agnostic():
+    # Phase 2: the sections cache stores the FULL superset; the organ allowlist
+    # is applied AFTER the cache read (apply_section_filters), so it is NOT part
+    # of the key.  _hash_sections no longer accepts filter args.
+    from pipeline.cache_plumbing import _hash_sections
+    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
+    assert a == b  # deterministic; identical inputs → identical key
 
 
-def test_hash_sections_changes_with_allowlist_and_is_order_independent():
-    from cache_plumbing import _hash_sections
-    base = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s", imputed_cells=None)
-    filt = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                          imputed_cells=None, organ_allowlist=["kidney"])
-    assert filt != base
-    a = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                       imputed_cells=None, organ_allowlist=["liver", "kidney"])
-    b = _hash_sections("nt", "C", "mg/kg", sidecar_hash="s",
-                       imputed_cells=None, organ_allowlist=["kidney", "liver"])
-    assert a == b
+def test_organ_allowlist_applied_after_cache_via_apply_section_filters():
+    # The organ allowlist now filters the Organ Weight card's rows at
+    # presentation time and rebuilds the caption from what survives.
+    from pipeline.processing_helpers import apply_section_filters
+    superset = [{
+        "platform": "Organ Weight",
+        "title": "Organ Weight",
+        "caption": "Summary of Select Organ Weight Data for Male and Female Rats "
+                   "Administered C for Five Days",
+        "tables_json": {
+            "Male": [
+                {"label": "n", "is_n_row": True},
+                {"label": "Liver Absolute (g)"},
+                {"label": "Kidney Absolute (g)"},
+            ],
+        },
+    }]
+    out = apply_section_filters(superset, organ_allowlist=["liver"], compound_name="C")
+    labels = [r["label"] for r in out[0]["tables_json"]["Male"]]
+    assert labels == ["n", "Liver Absolute (g)"]  # kidney dropped, n-row kept
+    # single organ + single sex → the specific caption
+    assert out[0]["caption"] == "Summary of Liver Weights of Male Rats Administered C for Five Days"

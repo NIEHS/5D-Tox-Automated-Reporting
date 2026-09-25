@@ -70,6 +70,7 @@
       "A summary of the calculated BMDs for each toxicological endpoint is provided in Table 8. The endpoint-specific LOEL and NOEL are included and could be informative for endpoints that lack a calculated BMD either because no viable model was available or because the estimated BMD was below the lower limit of extrapolation (<1 mg/kg)."
     ]
   },
+  "breaks": {},
   "casrn": "1-1-1",
   "chemical_name": "Test Article",
   "document_tree": [
@@ -258,6 +259,7 @@
               "id": "table-sample-counts",
               "level": 0,
               "region": "body",
+              "table_label": "1",
               "table_number": 1,
               "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
               "type": "sample-counts-table"
@@ -347,6 +349,7 @@
               "platform": "Body Weight",
               "ready_key": "animalCondition",
               "region": "body",
+              "table_label": "2",
               "table_number": 2,
               "title": "Summary of Body Weights",
               "type": "table"
@@ -358,6 +361,7 @@
               "platform": "Organ Weight",
               "ready_key": "animalCondition",
               "region": "body",
+              "table_label": "3",
               "table_number": 3,
               "title": "Summary of Organ Weights",
               "type": "table"
@@ -380,6 +384,7 @@
               "platform": "Clinical Chemistry",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "4",
               "table_number": 4,
               "title": "Summary of Select Clinical Chemistry Data",
               "type": "table"
@@ -391,6 +396,7 @@
               "platform": "Hematology",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "5",
               "table_number": 5,
               "title": "Summary of Select Hematology Data",
               "type": "table"
@@ -402,6 +408,7 @@
               "platform": "Hormones",
               "ready_key": "clinicalPath",
               "region": "body",
+              "table_label": "6",
               "table_number": 6,
               "title": "Summary of Select Hormone Data",
               "type": "table"
@@ -423,6 +430,7 @@
               "platform": "Tissue Concentration",
               "ready_key": "internalDose",
               "region": "body",
+              "table_label": "7",
               "table_number": 7,
               "title": "Summary of Plasma Concentration Data",
               "type": "table"
@@ -430,6 +438,7 @@
           ],
           "id": "internal-dose",
           "level": 2,
+          "narrative_key": "internal_dose",
           "ready_key": "internalDose",
           "region": "body",
           "title": "Internal Dose Assessment",
@@ -442,6 +451,7 @@
           "level": 2,
           "ready_key": "bmdSummary",
           "region": "body",
+          "table_label": "8",
           "table_number": 8,
           "title": "Apical Endpoint Benchmark Dose Summary",
           "type": "bmd-summary"
@@ -508,6 +518,18 @@
     },
     {
       "appendix_letter": "B",
+      "children": [
+        {
+          "data_key": "appendix_animals_matrix",
+          "id": "table-b-1",
+          "level": 0,
+          "region": "back",
+          "table_label": "B-1",
+          "table_number": 1,
+          "title": "Animal Numbers and FASTQ Data File Names",
+          "type": "data-table"
+        }
+      ],
       "id": "appendix-b",
       "level": 1,
       "region": "back",
@@ -575,6 +597,7 @@
     }
   ],
   "dtxsid": "DTXSID_TEST_NO_SESSION",
+  "figure_entries": [],
   "foreword": {
     "paragraphs": [
       "Foreword text."
@@ -700,47 +723,72 @@
   },
   "table_entries": [
     {
+      "label": "1",
       "ready": false,
+      "scope": null,
       "table_number": 1,
       "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data"
     },
     {
+      "label": "2",
       "ready": false,
+      "scope": null,
       "table_number": 2,
       "title": "Summary of Body Weights"
     },
     {
+      "label": "3",
       "ready": false,
+      "scope": null,
       "table_number": 3,
       "title": "Summary of Organ Weights"
     },
     {
+      "label": "4",
       "ready": false,
+      "scope": null,
       "table_number": 4,
       "title": "Summary of Select Clinical Chemistry Data"
     },
     {
+      "label": "5",
       "ready": false,
+      "scope": null,
       "table_number": 5,
       "title": "Summary of Select Hematology Data"
     },
     {
+      "label": "6",
       "ready": false,
+      "scope": null,
       "table_number": 6,
       "title": "Summary of Select Hormone Data"
     },
     {
+      "label": "7",
       "ready": false,
+      "scope": null,
       "table_number": 7,
       "title": "Summary of Plasma Concentration Data"
     },
     {
+      "label": "8",
       "ready": true,
+      "scope": null,
       "table_number": 8,
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
+      "label": "B-1",
       "ready": false,
+      "scope": "B",
+      "table_number": 1,
+      "title": "Animal Numbers and FASTQ Data File Names"
+    },
+    {
+      "label": "9",
+      "ready": false,
+      "scope": null,
       "table_number": 9,
       "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
@@ -813,258 +861,301 @@
       "id": "foreword",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Foreword"
     },
     {
       "id": "about",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "About This Report"
     },
     {
       "id": "peer-review",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Peer Review"
     },
     {
       "id": "publication",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Publication Details"
     },
     {
       "id": "acknowledgments",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Acknowledgments"
     },
     {
       "id": "abstract",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Abstract"
     },
     {
       "id": "background",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Background"
     },
     {
       "id": "methods",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Materials and Methods"
     },
     {
       "id": "mm-study-design",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Study Design"
     },
     {
       "id": "mm-dose-rationale",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Dose Selection Rationale"
     },
     {
       "id": "mm-chemistry",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Chemistry"
     },
     {
       "id": "mm-clin-exam",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Clinical Examinations and Sample Collection"
     },
     {
       "id": "mm-clin-obs",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Clinical Observations"
     },
     {
       "id": "mm-body-organ-wt",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Body and Organ Weights"
     },
     {
       "id": "mm-clin-path",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "mm-internal-dose",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Internal Dose Assessment"
     },
     {
       "id": "mm-transcriptomics",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Transcriptomics"
     },
     {
       "id": "mm-tx-sample",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sample Collection for Transcriptomics"
     },
     {
       "id": "mm-tx-rna",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "RNA Isolation, Library Creation, and Sequencing"
     },
     {
       "id": "mm-tx-processing",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sequence Data Processing"
     },
     {
       "id": "mm-tx-qc",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Sequencing Quality Checks and Outlier Removal"
     },
     {
       "id": "mm-tx-norm",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Data Normalization"
     },
     {
       "id": "mm-data-analysis",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Data Analysis"
     },
     {
       "id": "mm-stat-apical",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology"
     },
     {
       "id": "mm-bmd-apical",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology"
     },
     {
       "id": "mm-bmd-tx",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Benchmark Dose Analysis of Transcriptomics Data"
     },
     {
       "id": "mm-fdr",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Empirical False Discovery Rate Determination for Genomic Dose-response Modeling"
     },
     {
       "id": "mm-data-access",
       "level": 3,
       "ready": true,
+      "scope": null,
       "title": "Data Accessibility"
     },
     {
       "id": "results",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Results"
     },
     {
       "id": "animal-condition",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Animal Condition, Body Weights, and Organ Weights"
     },
     {
       "id": "clinical-path",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Clinical Pathology"
     },
     {
       "id": "internal-dose",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Internal Dose Assessment"
     },
     {
       "id": "bmd-summary",
       "level": 2,
       "ready": true,
+      "scope": null,
       "title": "Apical Endpoint Benchmark Dose Summary"
     },
     {
       "id": "gene-sets",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Gene Set Benchmark Dose Analysis"
     },
     {
       "id": "gene-bmd",
       "level": 2,
       "ready": false,
+      "scope": null,
       "title": "Gene Benchmark Dose Analysis"
     },
     {
       "id": "summary",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "Summary"
     },
     {
       "id": "references",
       "level": 1,
       "ready": true,
+      "scope": null,
       "title": "References"
     },
     {
       "id": "appendix-a",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix A. Internal Dose Assessment"
     },
     {
       "id": "appendix-b",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix B. Animal Identifiers"
     },
     {
       "id": "appendix-c",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate"
     },
     {
       "id": "appendix-d",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies"
     },
     {
       "id": "appendix-e",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix E. Organ Weight Descriptions"
     },
     {
       "id": "appendix-f",
       "level": 1,
       "ready": false,
+      "scope": null,
       "title": "Appendix F. Supplemental Data"
     }
   ],

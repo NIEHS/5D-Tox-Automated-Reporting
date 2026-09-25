@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from table_builder_common import (
+from tables.table_builder_common import (
     legend_footnote,
     definition_footnote,
     lettered_footnote,

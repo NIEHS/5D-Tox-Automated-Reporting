@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Walkthrough: rlm-bmdx (package layout)</title>
+<style>
+:root {
+    --bg: #ffffff; --fg: #1a1a2e; --muted: #6c6c80; --border: #e0e0e8;
+    --accent: #4361ee; --accent-light: #eef0ff; --code-bg: #f5f5fa; --row-hover: #f8f8fc;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1a1a2e; --fg: #e0e0e8; --muted: #9090a0; --border: #2e2e42;
+        --accent: #6b8aff; --accent-light: #252540; --code-bg: #22223a; --row-hover: #22223a;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.6;
+    max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem;
+}
+h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+h2 { font-size: 1.35rem; margin-top: 2.5rem; margin-bottom: 0.8rem;
+     padding-bottom: 0.3rem; border-bottom: 2px solid var(--accent); scroll-margin-top: 1rem; }
+h3 { font-size: 1.1rem; margin-top: 1.6rem; margin-bottom: 0.4rem; }
+p, li { margin-bottom: 0.5rem; }
+ul, ol { padding-left: 1.5rem; margin-bottom: 0.6rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 650; }
+code, .mono {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 3px;
+}
+table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+tr:hover { background: var(--row-hover); }
+blockquote {
+    padding: 0.7rem 1rem; border-radius: 5px; margin: 0.9rem 0; font-size: 0.93rem;
+    border-left: 3px solid var(--accent); background: var(--accent-light);
+}
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+.docnav { font-size: 0.9rem; color: var(--muted); margin-bottom: 1.5rem; }
+.docnav a { margin-right: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="docnav">Docs: <a href="CONTEXT.html">Context</a> · <a href="architecture-map.html">Architecture Map</a> · <a href="code-walkthrough.html">Code Walkthrough</a></div>
+<h1 id="code-walkthrough">Code Walkthrough</h1>
+<blockquote><p>A <strong>flow-oriented</strong> tour of rlm-bmdx on the <strong>package-layout</strong> branch: how a request actually moves through the code, traced symbol-by-symbol against the call graph. Generated 2026-08-26 from an <code>rlm-code</code> index of the branch (262 files, 2,841 symbols, 15,702 edges — Python + the TypeScript/React <code>wizard-ui</code>). Every <code>file:line</code> was read out of the graph; line numbers drift, so re-index (<code>rlm-code index --force</code>) if they feel stale.</p>
+<p><strong>Read the other two docs first for orientation, then this one for motion:</strong></p>
+<ul>
+<li><a href="../CONTEXT.md"><code>CONTEXT.md</code></a> — <em>why</em> the architecture is shaped this way (domain-driven).</li>
+<li><a href="architecture-map.md"><code>architecture-map.md</code></a> — <em>what</em> lives where (14 packages, static).</li>
+<li><strong>This doc</strong> — <em>how</em> control flows across those packages at runtime (dynamic).</li>
+</ul>
+<p><strong>Layout note:</strong> this branch is the <strong>package-layout</strong> world (ADR-0013). Modules live in concern packages and imports are package-qualified (<code>from pipeline.process_integrated import run_process</code>). This differs from <code>main</code>, where everything is still flat at the repo root.</p></blockquote>
+<hr>
+<h2 id="1-the-shape-of-the-system-from-the-graph">1. The shape of the system, from the graph</h2>
+<p><strong>Hot paths</strong> (PageRank over the reversed call graph — ranks orchestrators):</p>
+<table>
+<thead><tr><th>Symbol</th><th>Location</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>PendingContentError</code> / <code>BMDProjectValidationError</code> / <code>StepError</code></td><td><code>rendering/render_common.py:99</code>, <code>pipeline/bmd_project_schema.py:157</code>, <code>workflow/errors.py:22</code></td><td>the three <strong>load/guard barriers</strong> (render, data, workflow)</td></tr>
+<tr><td><code>run_process</code></td><td><code>pipeline/process_integrated.py:1074</code></td><td><strong>the pipeline orchestrator</strong> (out=31)</td></tr>
+<tr><td><code>marshal_export_data</code></td><td><code>rendering/report_data.py:228</code></td><td>the web/preview <strong>assembly</strong> path</td></tr>
+<tr><td><code>load_session_data</code></td><td><code>rendering/latex_export.py:567</code></td><td>the export-side assembly path</td></tr>
+<tr><td><code>_get_sections</code></td><td><code>pipeline/process_integrated.py:653</code></td><td>apical section-card builder + cache</td></tr>
+<tr><td><code>api_process_integrated</code></td><td><code>pipeline/process_integrated.py:1043</code></td><td>thin HTTP wrapper → delegates to <code>run_process</code> (out=2)</td></tr>
+<tr><td><code>process_step</code></td><td><code>workflow/steps.py:369</code></td><td>the workflow-engine entry that also calls <code>run_process</code></td></tr>
+<tr><td><code>generate_docx</code></td><td><code>rendering/docx_generator.py:2408</code></td><td>Word emitter (in=72 — most-referenced render entry)</td></tr>
+</tbody>
+</table>
+<p><strong>God objects</strong> (highest total degree):</p>
+<table>
+<thead><tr><th>Symbol</th><th>in / out</th><th>Why it&#x27;s central</th></tr></thead>
+<tbody>
+<tr><td><code>Vocabulary.get</code> (<code>document_model/vocabulary.py</code>)</td><td>631 / 1</td><td>the semantic-type lookup; every render decision consults it</td></tr>
+<tr><td><code>generate_docx</code> / <code>generate_html</code> / <code>generate_latex</code></td><td>72 / 42 / 40</td><td>the three live render surfaces</td></tr>
+<tr><td><code>instantiate</code> (<code>document_model/document_template.py</code>)</td><td>48 / 3</td><td>builds the <code>DocNode</code> tree from a YAML template</td></tr>
+<tr><td><code>run_process</code> (<code>pipeline/process_integrated.py</code>)</td><td>2 / 31</td><td>the orchestrator (high fan-out, low fan-in — pure top of the pipeline)</td></tr>
+<tr><td><code>find_node</code> (<code>document_model/document_tree.py</code>)</td><td>37 / 2</td><td>the tree&#x27;s addressing primitive</td></tr>
+</tbody>
+</table>
+<p>The center of gravity is unchanged from <code>main</code> — a <strong>tree</strong> + a <strong>vocabulary</strong> feeding <strong>assembly</strong> and <strong>emitters</strong> — but the branch adds two structural layers: a <strong><code>workflow/</code> engine</strong> and a <strong><code>query/</code> substrate</strong> (both appear in the hot paths above).</p>
+<hr>
+<h2 id="2-the-defining-branch-change-api_process_integrated-is-now-thin">2. The defining branch change: <code>api_process_integrated</code> is now thin</h2>
+<p>On <code>main</code>, <code>api_process_integrated</code> <em>was</em> the god function (out=26). On this branch it&#x27;s a <strong>2-callee HTTP shim</strong>; the real orchestration moved into <strong><code>run_process</code></strong> so it can be driven without HTTP. Both the route and the workflow engine call the same core:</p>
+<p>``` api_process_integrated (web handler)   pipeline/process_integrated.py:1043    └─ run_process ····················· pipeline/process_integrated.py:1074   (out=31)</p>
+<p>process_step (workflow engine)         workflow/steps.py:369    └─ run_process ····················· pipeline/process_integrated.py         (same core) ```</p>
+<p>This is <strong>ADR-0014</strong> — &quot;extract a UI-agnostic workflow engine from the browser.&quot; The pipeline core is now callable from an HTTP route, the workflow engine, or a notebook, all through <code>run_process</code>.</p>
+<hr>
+<h2 id="3-the-main-flow-run_process">3. The main flow: <code>run_process</code></h2>
+<p>The orchestrator&#x27;s 31 callees fall into the same four ordered stages as <code>main</code>&#x27;s old <code>api_process_integrated</code>, plus one new stage — the query substrate:</p>
+<p>``<code> run_process                                    pipeline/process_integrated.py:1074 │ ├─ (1) LOAD via the injectable store seam (ADR-0014 Q2) │     PoolStore.get_integrated / DiskPoolStore.get_integrated ··· workflow/store.py │     _session_dir ····················· pipeline/pool_globals.py │ ├─ (2) CACHE FENCE — hash each section&#x27;s inputs │     _hash_sidecars / _hash_sections / _hash_bmds │     _hash_genomics / _hash_methods ··· pipeline/cache_plumbing.py │ ├─ (3) RESOLVE report-scoped context from the tree/template │     load_report_organs / _sex / _assays / _genes / _gene_sets ··· document_model/document_template.py │ ├─ (4) BUILD content — the ADR-0002 labeled layers │     _build_ntp_stats                  # Java-backed Williams/Dunnett stats │     _get_sections / _get_bmds / _get_genomics / _get_methods │     _build_charts / _build_bmd_summary │     _build_genomics_llm_narratives / _build_genomics_body_narratives │     _build_apical_bmd_narrative │ └─ (5) MATERIALIZE the query substrate  (NEW — ADR-0016)       _build_query_substrate ··········· pipeline/process_integrated.py               └─ writes session.duckdb via pipeline/session_db.py + session_schema.py </code>``</p>
+<p>Everything downstream of <code>run_process</code> (the <code>_get_*</code>/<code>_build_*</code> layers) is the same NTP report machinery documented in <code>main</code>&#x27;s walkthrough — see <code>_get_sections</code> (<code>pipeline/process_integrated.py:653</code>) for the apical-tables layer, which reads <strong>integrated.json + sidecars</strong> (never raw <code>.bm2</code>) via <code>table_builder_common</code>.</p>
+<hr>
+<h2 id="4-the-workflow-engine-adr-0014-adr-0015">4. The workflow engine (ADR-0014 / ADR-0015)</h2>
+<p><code>workflow/</code> is the branch&#x27;s biggest new subsystem — the pool lifecycle lifted out of the browser into HTTP-free, testable pieces:</p>
+<table>
+<thead><tr><th>Layer</th><th>Module</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td>Phase machine</td><td><code>workflow/phases.py</code></td><td>UI-agnostic port of the pool phase sequence (step 1)</td></tr>
+<tr><td>Steps</td><td><code>workflow/steps.py</code></td><td>HTTP-free step functions; <code>process_step</code> calls <code>run_process</code> (step 2)</td></tr>
+<tr><td>Engine</td><td><code>workflow/engine.py</code></td><td>drives steps against a store (step 3)</td></tr>
+<tr><td>Store seam</td><td><code>workflow/store.py</code></td><td>injectable state (<code>PoolStore</code> / <code>DiskPoolStore</code>) — the seam that makes the pipeline HTTP-free</td></tr>
+<tr><td>Currency</td><td><code>workflow/currency.py</code></td><td>staleness / recompute detection (step 6)</td></tr>
+<tr><td><strong>Labels</strong></td><td><code>workflow/labels.py</code></td><td>the FACT layer — what humans assert about content (ADR-0015)</td></tr>
+<tr><td><strong>Guard</strong></td><td><code>workflow/guard.py</code> + <code>ownership.py</code></td><td>the DERIVED edit-hardness — consequences the system computes from labels</td></tr>
+</tbody>
+</table>
+<p>ADR-0015&#x27;s thesis shows up directly in the split: <strong><code>labels.py</code> (facts humans assert)</strong> vs <strong><code>guard.py</code>/<code>ownership.py</code> (consequences the system derives)</strong> — the same &quot;derived, never imperatively set&quot; principle the UI phase already followed, now applied to content ownership.</p>
+<hr>
+<h2 id="5-the-query-substrate-adr-0016">5. The query substrate (ADR-0016)</h2>
+<p>A new capability: each processed session materializes its own <strong>DuckDB</strong>, exposed read-only over HTTP and to an in-browser query UI.</p>
+<p>``` WRITE (during processing)   run_process → _build_query_substrate       └─ pipeline/session_db.py       # materialize session.duckdb          pipeline/session_schema.py   # the canonical per-session schema</p>
+<p>READ (on demand)   web_routes/query_routes.py  (HTTP, ADR-0016 Phase B)       └─ query/session_query.py :: SessionQuerier              ├─ validate_sql()   # read-only guard — rejects writes/DDL              ├─ run_sql()        # execute against session.duckdb              └─ schema()         # table/column introspection ```</p>
+<p><code>SessionQuerier</code> (<code>query/session_query.py:95</code>) is the seam: a context-managed, timeout-bounded, <strong>read-only-validated</strong> SQL surface. The <code>wizard-ui</code> frontend consumes it (below); <code>value_validation.py</code> (<code>pipeline/</code>) uses the same substrate idea for an xlsx↔CSV provenance cross-check that blocks on divergence.</p>
+<hr>
+<h2 id="6-the-wizard-ui-typescript-react-adr-0016">6. The wizard UI (TypeScript / React, ADR-0016)</h2>
+<p>A from-scratch step-by-step report builder under <code>wizard-ui/</code> (built to <code>web_wizard/</code>, served at <code>/wizard</code>). Unlike the main app&#x27;s server-rendered flow, this is a client app that talks to the query substrate:</p>
+<p>``<code> wizard-ui/src/App.tsx                     # step orchestrator   ├─ api.ts                               # client for query_routes + wizard_routes   ├─ duckdb.ts                            # in-browser DuckDB-WASM   └─ steps/        ├─ SessionPicker.tsx               # pick a processed session        ├─ DataTree.tsx / ConfirmMetadata.tsx   # inspect the data        ├─ QueryBuilder.tsx + buildSql.ts + Query.tsx   # visual query builder (tables=nodes, joins=edges)        ├─ SummaryTables.tsx               # tabular results        └─ ReportGallery.tsx              # data-lineage gallery — a card per report table/chart </code>``</p>
+<p>The query builder composes SQL client-side (<code>buildSql.ts</code>) and runs it either in the browser (<code>duckdb.ts</code>, DuckDB-WASM over per-table Parquet) or against the server&#x27;s <code>SessionQuerier</code>.</p>
+<hr>
+<h2 id="7-the-render-flow-one-tree-four-surfaces">7. The render flow: one tree, four surfaces</h2>
+<p>Unchanged in structure from <code>main</code> (ADR-0006), just package-qualified. Assembly happens once, then each emitter projects the same <code>DocNode</code> tree:</p>
+<ul>
+<li><strong>Assembly</strong> — <code>marshal_export_data</code> (<code>rendering/report_data.py:228</code>, web path)</li>
+</ul>
+<p>  and <code>load_session_data</code> (<code>rendering/latex_export.py:567</code>, export path) both walk   <code>document_model/document_tree.py</code>, compute <strong>positional</strong> table numbers   (<code>compute_table_numbers</code>), overlay content domains, and apply user overrides   from <code>roundtrip/overrides.py</code>.</p>
+<ul>
+<li><strong>Emit</strong> — <code>generate_html</code> / <code>generate_latex</code> / <code>generate_docx</code> /</li>
+</ul>
+<p>  <code>jats_generator</code> (all under <code>rendering/</code>) funnel through <code>find_node</code> on the   shared tree. <code>render_common.py</code> holds the format-agnostic EXTRACT plan; each   emitter owns only its markup. Parity is enforced at import (a node-type registry   fails to load if any type lacks an emitter on HTML/LaTeX/Word).</p>
+<p><code>Vocabulary.get</code> (<code>document_model/vocabulary.py</code>, in-degree 631) is consulted throughout — it resolves each node&#x27;s semantic type to its style.</p>
+<hr>
+<h2 id="8-the-kb-grounding-flow-genomics-interpretation">8. The KB-grounding flow: genomics interpretation</h2>
+<p>Unchanged from <code>main</code>, package-qualified: <code>narrative/interpret.py</code> and <code>interpret_analysis.py</code> pull literature-grounded facts from the knowledge base via <code>ToxKBQuerier</code> (<code>knowledge_base/toxkb.py</code>) — <code>gene_go_terms</code>, <code>gene_organs</code>, <code>gene_papers</code>, <code>gene_claims</code> — run enrichment (<code>knowledge_base/enrichment_stats.py</code>), and feed that context to the LLM. Apical narratives (<code>narrative/unified_narrative.py</code>) stay largely deterministic.</p>
+<blockquote><p><strong>Note the two DuckDBs, don&#x27;t confuse them:</strong> <code>knowledge_base/bmdx.duckdb</code> is the cross-session literature KB (grounds genomics prose); the ADR-0016 <code>session.duckdb</code> (§5) is per-session materialized report data (powers the query UI). Different databases, different purposes.</p></blockquote>
+<hr>
+<h2 id="9-how-to-navigate-further">9. How to navigate further</h2>
+<ul>
+<li><strong>Browse interactively:</strong> <code>rlm-code viz</code> for this worktree at</li>
+</ul>
+<p>  <code>http://localhost:9000</code> — tree, call graph, per-symbol callers/callees, and the   Opus summaries inline.</p>
+<ul>
+<li><strong>Query the graph:</strong> <code>rlm-code query &lt;symbol&gt; --path /workspace/package-layout-workflow-engine</code>,</li>
+</ul>
+<p>  plus <code>trace</code> / <code>related</code> / <code>hotspots</code> / <code>patterns</code>.</p>
+<ul>
+<li><strong>Re-index after changes:</strong> <code>rlm-code index --force /workspace/package-layout-workflow-engine</code>.</li>
+</ul>
+</body>
+</html>

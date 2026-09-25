@@ -15,19 +15,18 @@ rule or a generator change reintroduces a metadata error, add it to KNOWN_GAPS
 only as a deliberate, documented triage step, then drive it back to empty.
 """
 
-from pathlib import Path
 
 import pytest
 
-from jats_generator import generate_bits, generate_jats
-from jats_stylecheck import (
+from rendering.jats_generator import generate_bits, generate_jats
+from rendering.jats_stylecheck import (
     BITS_DTD_DIR,
     JATS_DTD_DIR,
     STYLECHECKER_DIR,
     dtd_validate,
     stylecheck,
 )
-from report_data import scaffold_report_data
+from rendering.report_data import scaffold_report_data
 
 
 # ADR-0004 migration step 1 (article-meta completeness) is now BUILT — the
@@ -72,7 +71,7 @@ def test_no_stylechecker_errors_beyond_known_gaps(scaffold):
     unexpected = sorted(set(result.errors) - KNOWN_GAPS)
     assert not unexpected, (
         "New StyleChecker errors outside the documented ADR-0004 metadata "
-        f"baseline:\n  " + "\n  ".join(unexpected)
+        "baseline:\n  " + "\n  ".join(unexpected)
     )
 
 
@@ -83,7 +82,7 @@ def test_known_gaps_are_not_stale(scaffold):
     fixed = sorted(KNOWN_GAPS - set(result.errors))
     assert not fixed, (
         "These KNOWN_GAPS no longer occur — delete them from KNOWN_GAPS so the "
-        f"gate ratchets toward zero:\n  " + "\n  ".join(fixed)
+        "gate ratchets toward zero:\n  " + "\n  ".join(fixed)
     )
 
 
@@ -113,7 +112,7 @@ def test_jats_dtd_assets_present():
 
 
 def _real_session_jats() -> str:
-    from latex_export import load_session_data
+    from rendering.latex_export import load_session_data
     data = load_session_data(
         dtxsid="DTXSID50469320",
         chemical_name="Perfluorohexanesulfonamide",
@@ -128,12 +127,33 @@ def test_scaffold_is_dtd_valid(scaffold):
     assert not errors, "scaffold JATS is not DTD-valid:\n  " + "\n  ".join(errors)
 
 
-def test_real_session_is_dtd_valid():
+def test_real_session_is_dtd_valid(real_session_50469320):
     """The full report WITH data tables (the case that broke the Previewer:
     <table-wrap>s interleaved among <sec> siblings) must be DTD-valid — every
     table now sits in a proper nested <sec>, honoring body's (block)*, sec*."""
     errors = dtd_validate(_real_session_jats())
     assert not errors, "real-session JATS is not DTD-valid:\n  " + "\n  ".join(errors)
+
+
+def test_real_session_genomics_narrative_present():
+    """ADR-0003 Part B / Stage 1: the genomics-section now emits its narrative
+    <p> prose (previously DROPPED — JATS only emitted the tables). Assert the
+    real session's genomics narrative text surfaces in the JATS body, so the
+    JATS surface reaches parity with LaTeX/HTML/docx on genomics prose."""
+    from rendering.latex_export import load_session_data
+    data = load_session_data(
+        dtxsid="DTXSID50469320",
+        chemical_name="Perfluorohexanesulfonamide",
+        casrn="41997-13-1",
+    )
+    entries = [e for e in (data.get("genomics_sections") or []) if e.get("narrative")]
+    if not entries:
+        import pytest
+        pytest.skip("real session has no genomics narrative to assert on")
+    first = entries[0]["narrative"]
+    snippet = (first[0] if isinstance(first, list) else str(first))[:40]
+    xml = generate_jats(data)
+    assert snippet in xml, "genomics narrative prose is missing from JATS output"
 
 
 def test_dtd_validate_catches_body_ordering_violation():
@@ -177,7 +197,7 @@ def test_bits_dtd_assets_present():
 
 
 def _real_session_bits() -> str:
-    from latex_export import load_session_data
+    from rendering.latex_export import load_session_data
     data = load_session_data(
         dtxsid="DTXSID50469320",
         chemical_name="Perfluorohexanesulfonamide",
@@ -193,7 +213,7 @@ def test_bits_scaffold_valid_and_clean(scaffold):
     assert not stylecheck(xml, "book").errors, "scaffold BITS has StyleChecker errors"
 
 
-def test_bits_real_session_valid_and_clean():
+def test_bits_real_session_valid_and_clean(real_session_50469320):
     """The full book WITH front matter + body chapters + 12 data tables passes
     both book gates (DTD content model + StyleChecker style=book)."""
     xml = _real_session_bits()
@@ -203,7 +223,7 @@ def test_bits_real_session_valid_and_clean():
     assert not sc.errors, "real-session BITS StyleChecker errors:\n  " + "\n  ".join(sc.errors)
 
 
-def test_bits_emits_front_matter_sections():
+def test_bits_emits_front_matter_sections(real_session_50469320):
     """The five front-matter sections that were dropped in the article <body>
     now appear as BITS front-matter (foreword / front-matter-part / ack).  About
     This Report is empty in this session, so 3 of 4 populated sections show."""
@@ -213,7 +233,7 @@ def test_bits_emits_front_matter_sections():
         assert title in xml, f"front-matter section missing: {title}"
 
 
-def test_bits_body_is_book_parts_with_tables():
+def test_bits_body_is_book_parts_with_tables(real_session_50469320):
     """The body is chapters (<book-part>), and all 12 data tables survive."""
     xml = _real_session_bits()
     assert xml.count("<book-part ") == 4, "expected 4 body chapters"

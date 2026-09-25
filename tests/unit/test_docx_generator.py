@@ -28,10 +28,10 @@ import pytest
 from docx import Document
 from docx.shared import Inches, Pt
 
-from docx_generator import _DISPATCH, generate_docx
-from latex_export import load_session_data
-from render_common import RENDERABLE_NODE_TYPES
-from report_data import scaffold_report_data
+from rendering.docx_generator import _DISPATCH, generate_docx
+from rendering.latex_export import load_session_data
+from rendering.render_common import RENDERABLE_NODE_TYPES
+from rendering.report_data import scaffold_report_data
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,8 +61,10 @@ def rich() -> dict:
     a valid render INPUT (unlike the marshal_rich fixture, which is a marshal
     OUTPUT and not shaped for the renderers).
     """
-    if not SESSION_DIR.exists():
-        pytest.skip(f"session {SESSION_DTXSID} not present")
+    # The directory can exist but be empty (unmounted GCS); require the
+    # processed session's integrated.json, not just the folder.
+    if not (SESSION_DIR / "integrated.json").exists():
+        pytest.skip(f"processed session {SESSION_DTXSID} not present")
     return load_session_data(
         SESSION_DTXSID,
         chemical_name="Perfluorohexanesulfonamide",
@@ -560,7 +562,6 @@ def test_break_before_and_after_apply_once_at_node_boundary(scaffold):
     """break_before sets pageBreakBefore on the node's FIRST paragraph; break_after
     appends a page-break run on its LAST — once each, not per paragraph (parity
     with HTML's one wrapping div and LaTeX's one \\clearpage)."""
-    from docx.enum.text import WD_BREAK
     from docx.oxml.ns import qn
 
     data = dict(scaffold)
@@ -990,7 +991,7 @@ def test_body_headings_are_collectable_by_the_field(scaffold):
 def test_no_field_no_dirty_flag():
     """A document with no field must NOT set updateFields (the flag is scoped to
     the field's presence, detected from the body, not always-on)."""
-    from docx_generator import _build_style_skeleton
+    from rendering.docx_generator import _build_style_skeleton
     from docx import Document as _Doc
     # A hand-built doc with a paragraph but no field: _mark_fields_dirty is only
     # called by generate_docx when a fldChar exists, so exercise that guard.

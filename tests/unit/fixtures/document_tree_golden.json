@@ -184,6 +184,7 @@
             "id": "table-sample-counts",
             "level": 0,
             "region": "body",
+            "table_label": "1",
             "table_number": 1,
             "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
             "type": "sample-counts-table"
@@ -273,6 +274,7 @@
             "platform": "Body Weight",
             "ready_key": "animalCondition",
             "region": "body",
+            "table_label": "2",
             "table_number": 2,
             "title": "Summary of Body Weights",
             "type": "table"
@@ -284,6 +286,7 @@
             "platform": "Organ Weight",
             "ready_key": "animalCondition",
             "region": "body",
+            "table_label": "3",
             "table_number": 3,
             "title": "Summary of Organ Weights",
             "type": "table"
@@ -306,6 +309,7 @@
             "platform": "Clinical Chemistry",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "4",
             "table_number": 4,
             "title": "Summary of Select Clinical Chemistry Data",
             "type": "table"
@@ -317,6 +321,7 @@
             "platform": "Hematology",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "5",
             "table_number": 5,
             "title": "Summary of Select Hematology Data",
             "type": "table"
@@ -328,6 +333,7 @@
             "platform": "Hormones",
             "ready_key": "clinicalPath",
             "region": "body",
+            "table_label": "6",
             "table_number": 6,
             "title": "Summary of Select Hormone Data",
             "type": "table"
@@ -349,6 +355,7 @@
             "platform": "Tissue Concentration",
             "ready_key": "internalDose",
             "region": "body",
+            "table_label": "7",
             "table_number": 7,
             "title": "Summary of Plasma Concentration Data",
             "type": "table"
@@ -356,6 +363,7 @@
         ],
         "id": "internal-dose",
         "level": 2,
+        "narrative_key": "internal_dose",
         "ready_key": "internalDose",
         "region": "body",
         "title": "Internal Dose Assessment",
@@ -368,6 +376,7 @@
         "level": 2,
         "ready_key": "bmdSummary",
         "region": "body",
+        "table_label": "8",
         "table_number": 8,
         "title": "Apical Endpoint Benchmark Dose Summary",
         "type": "bmd-summary"
@@ -434,6 +443,18 @@
   },
   {
     "appendix_letter": "B",
+    "children": [
+      {
+        "data_key": "appendix_animals_matrix",
+        "id": "table-b-1",
+        "level": 0,
+        "region": "back",
+        "table_label": "B-1",
+        "table_number": 1,
+        "title": "Animal Numbers and FASTQ Data File Names",
+        "type": "data-table"
+      }
+    ],
     "id": "appendix-b",
     "level": 1,
     "region": "back",

@@ -19,7 +19,7 @@ class TestUploadBm2:
     def test_upload_registers_file(self, sessions_dir, mock_bmdx_pipe):
         """Uploading a .bm2 file registers it in the uploads dict."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
@@ -47,7 +47,7 @@ class TestUploadCsv:
     def test_upload_csv_registers_file(self, sessions_dir, mock_bmdx_pipe):
         """Uploading a .csv file registers it in the data uploads dict."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
@@ -69,7 +69,7 @@ class TestUploadCsv:
     def test_upload_txt_registers_file(self, sessions_dir, mock_bmdx_pipe):
         """Uploading a .txt file works the same as .csv."""
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
@@ -93,7 +93,7 @@ class TestPreview:
         After session load re-registers files, preview should return content.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
+        from web_routes.background_server import app
 
         client = TestClient(app)
 
