@@ -109,6 +109,15 @@ class DocNode:
                         cover_layouts.get_cover_layout by the renderers; None falls
                         back to the default layout.  A pure render concern — not
                         serialized to the frontend.
+        appendix_scope: COMPUTED by the numbering pass (ADR-0025 §5): the letter of
+                        the enclosing appendix ("B") for every node inside an
+                        appendix subtree, None elsewhere.  Tables and figures in a
+                        scope are numbered per appendix, not in the body sequence.
+        table_label:    COMPUTED display label for a numbered table: "3" in the
+                        body, "B-1" inside Appendix B.  The renderers and lists
+                        show this; table_number stays the integer (global position
+                        in the body, or the appendix-local position in a scope).
+        figure_label:   COMPUTED display label for a numbered figure, same rule.
         role:           The document ROLE this node plays (ADR-0025): a key of
                         render_capabilities.ROLE_PROFILE ("sec", "table-wrap",
                         "fig", "app", …).  COMPUTED by the instantiator from the
@@ -147,3 +156,6 @@ class DocNode:
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None
+    appendix_scope: str | None = None
+    table_label: str | None = None
+    figure_label: str | None = None

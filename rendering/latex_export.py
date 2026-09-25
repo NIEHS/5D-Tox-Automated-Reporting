@@ -839,6 +839,10 @@ def load_session_data(
     animals = _load_animal_identifiers(session_dir)
     if animals:
         data["appendix_animals"] = animals
+        # The roster renders through the `data-table` node under Appendix B
+        # (ADR-0025): the generic matrix shape at the node's data_key.
+        from rendering.render_common import build_animal_roster_matrix
+        data["appendix_animals_matrix"] = build_animal_roster_matrix(animals)
 
     # ── Abstract (Background + Results + Summary) ─────────────────────
     # Use the SHARED assembler (the same one the web path calls) so both

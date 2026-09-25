@@ -245,7 +245,8 @@ def resolve_xrefs_html(text: str) -> str:
                 return f"Table {num}"
             return _broken(target_id)
         if node.node_type in _TABLE_TYPES:
-            num = node.table_number if node.table_number is not None else "?"
+            # Scope-aware label ("B-1" in an appendix — ADR-0025 §5).
+            num = node.table_label or (node.table_number if node.table_number is not None else "?")
             return f'<a class="xref" href="#sec-{target_id}">Table {num}</a>'
         return _broken(target_id)
     return _resolve(text, render)

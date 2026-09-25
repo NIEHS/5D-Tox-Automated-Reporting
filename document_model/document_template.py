@@ -90,7 +90,9 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 # the computed/default value when an entry omits them.
 _COMPUTED_OR_SPECIAL = frozenset(
     {"level", "node_type", "children", "content_items", "table_number",
-     "figure_number", "region", "resolved_content"}
+     "figure_number", "region", "resolved_content",
+     # ADR-0025 §5: numbering products, never authored.
+     "appendix_letter", "appendix_scope", "table_label", "figure_label"}
 )
 
 # The component types whose content is AUTHORED (in the template or an external

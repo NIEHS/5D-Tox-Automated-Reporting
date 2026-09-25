@@ -136,42 +136,63 @@ NUMBERED_TABLE_TYPES = frozenset(
 )
 
 
+def _number_scoped(nodes: list[DocNode], scope: str | None, counters: dict) -> None:
+    """
+    The scope-aware numbering walk behind compute_table_numbers /
+    compute_figure_numbers (ADR-0025 §5).
+
+    `scope` is the letter of the enclosing appendix (None in the front matter and
+    body); `counters` holds the running table / figure counts FOR THAT SCOPE.
+    Entering an `appendix` node opens a fresh scope with fresh counters, so its
+    tables read "B-1, B-2, …" and its figures "C-1, C-2, …", while the body
+    sequence is untouched by anything that sits in an appendix.  Every visited
+    node records its scope in `appendix_scope`; the label is the scope-prefixed
+    form the surfaces display, the number the integer within its scope.
+    """
+    for node in nodes:
+        node.appendix_scope = scope
+        if node.node_type in NUMBERED_TABLE_TYPES:
+            counters["table"] += 1
+            node.table_number = counters["table"]
+            node.table_label = _scoped_label(scope, counters["table"])
+        if node.node_type in NUMBERED_FIGURE_TYPES:
+            counters["figure"] += 1
+            node.figure_number = counters["figure"]
+            node.figure_label = _scoped_label(scope, counters["figure"])
+        if node.node_type == "appendix":
+            # A new numbering scope: the appendix letter (assigned by
+            # compute_appendix_letters before this walk) prefixes every number.
+            _number_scoped(node.children, node.appendix_letter, {"table": 0, "figure": 0})
+        else:
+            _number_scoped(node.children, scope, counters)
+
+
+def _scoped_label(scope: str | None, number: int) -> str:
+    """"3" in the body; "B-1" inside Appendix B."""
+    return f"{scope}-{number}" if scope else str(number)
+
+
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     """
-    Walk the whole tree in document order and assign table_number to every
-    node whose node_type is in NUMBERED_TABLE_TYPES.
+    Walk the whole tree in document order and assign table_number (and
+    table_label) to every node whose node_type is in NUMBERED_TABLE_TYPES.
 
-    Numbering is fully positional and starts at Table 1: the first numbered
-    node in document order is the Methods sample-counts table (a
-    `sample-counts-table` node under Transcriptomics), so it earns Table 1 by
-    position; the Results tables follow (2, 3, ...).  Numbering is not scoped to
-    a section id, so re-parenting or renaming a section can't silently drop a
-    number.
+    Numbering is positional and starts at Table 1: the first numbered node in
+    document order is the Methods sample-counts table, so it earns Table 1 by
+    position; the Results tables follow (2, 3, ...).  It is not scoped to a
+    section id, so re-parenting or renaming a section can't silently drop a
+    number.  The ONE scope boundary is the appendix (ADR-0025 §5): each
+    `appendix` node restarts the count with its letter as prefix ("Table B-1"),
+    and appendix tables never advance the body sequence.
 
-    Mutates nodes in place.
+    Figures and appendix letters share every call site, so this one call also
+    assigns figure numbers/labels and appendix letters.  Mutates nodes in place.
     """
     if tree is None:
         tree = DOCUMENT_TREE
-
-    # Positional from 1: the sample-counts-table node in Methods is the first
-    # numbered node in document order, so it becomes Table 1; Results tables
-    # follow.  (Previously Table 1 was reserved for a DOCX-only inline table
-    # that no tree node carried — that hack is gone now the table is a node.)
-    counter = 1
-
-    def visit(node: DocNode) -> None:
-        nonlocal counter
-        if node.node_type in NUMBERED_TABLE_TYPES:
-            node.table_number = counter
-            counter += 1
-
-    walk_tree(tree, visit)
-    # Figures share every table-numbering call site (a separate counter); fold the
-    # figure pass in here so all ~10 callers get both without a second call each.
-    compute_figure_numbers(tree)
-    # Appendix letters share the same call sites (a positional letter counter);
-    # fold them in too so every caller assigns A/B/C… without a third call.
+    # Letters first: the scoped walk prefixes appendix numbers with them.
     compute_appendix_letters(tree)
+    _number_scoped(tree, None, {"table": 0, "figure": 0})
 
 
 # Node types that earn a positional FIGURE number (ADR-0012).  Distinct counter
@@ -186,21 +207,16 @@ NUMBERED_FIGURE_TYPES = frozenset({"figure"})
 
 
 def compute_figure_numbers(tree: list[DocNode] | None = None) -> None:
-    """Walk the tree in document order and assign figure_number to every node
-    whose node_type is in NUMBERED_FIGURE_TYPES.  Positional from Figure 1, the
-    figure sibling of compute_table_numbers.  Mutates nodes in place."""
+    """Walk the tree in document order and assign figure_number / figure_label
+    to every node whose node_type is in NUMBERED_FIGURE_TYPES.  Positional from
+    Figure 1, the figure sibling of compute_table_numbers, with the same
+    per-appendix scoping ("Figure C-1").  It runs the SAME scoped walk (tables
+    are (re)assigned identically), so calling either entry point leaves the
+    tree fully numbered.  Mutates nodes in place."""
     if tree is None:
         tree = DOCUMENT_TREE
-
-    counter = 1
-
-    def visit(node: DocNode) -> None:
-        nonlocal counter
-        if node.node_type in NUMBERED_FIGURE_TYPES:
-            node.figure_number = counter
-            counter += 1
-
-    walk_tree(tree, visit)
+    compute_appendix_letters(tree)
+    _number_scoped(tree, None, {"table": 0, "figure": 0})
 
 
 def compute_appendix_letters(tree: list[DocNode] | None = None) -> None:
@@ -267,10 +283,12 @@ def assign_genomics_table_numbers(
         return
 
     # Continue from the highest number the tree already assigned (Table 8 here).
+    # Appendix-scoped tables ("B-1") live in their own sequences (ADR-0025 §5)
+    # and must not push the body count.
     tree_max = 1
     def _max(node: DocNode) -> None:
         nonlocal tree_max
-        if node.table_number is not None:
+        if node.table_number is not None and not node.appendix_scope:
             tree_max = max(tree_max, node.table_number)
     walk_tree(tree, _max)
 
@@ -331,7 +349,8 @@ def assign_genomics_figure_numbers(
     tree_max = 0
     def _max(node: DocNode) -> None:
         nonlocal tree_max
-        if node.figure_number is not None:
+        # Appendix-scoped figures ("C-1") do not advance the body sequence.
+        if node.figure_number is not None and not node.appendix_scope:
             tree_max = max(tree_max, node.figure_number)
     walk_tree(tree, _max)
 
@@ -493,8 +512,12 @@ def serialize_tree(tree: list[DocNode] | None = None) -> list[dict]:
             d["narrative_key"] = node.narrative_key
         if node.table_number is not None:
             d["table_number"] = node.table_number
+        if node.table_label is not None:
+            d["table_label"] = node.table_label
         if node.figure_number is not None:
             d["figure_number"] = node.figure_number
+        if node.figure_label is not None:
+            d["figure_label"] = node.figure_label
         if node.appendix_letter is not None:
             d["appendix_letter"] = node.appendix_letter
         if node.ready_key:

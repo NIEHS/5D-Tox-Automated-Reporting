@@ -95,9 +95,7 @@ from rendering.render_common import (
     apical_table_plan,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
-    appendix_roster_rows,
     appendix_heading_text,
-    ANIMAL_ROSTER_HEADERS,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -111,6 +109,7 @@ from rendering.render_common import (
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     table_caption as _table_caption,
+    figure_prefix,
 )
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
@@ -490,59 +489,55 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
-    """
+    r"""
     Appendix node (Appendix A through F).
 
-    Three body sources, in precedence order:
-      - Appendix B (Animal Identifiers) renders the animal roster from
-        data["appendix_animals"] when the session supplied it.
-      - Appendices A/D/E/F carry authored freeform CHILD nodes (the reference's
-        static prose / rules tables / manifests).  We emit only the heading here
-        and let the walker render the child body after us — so we must NOT also
-        emit the pending stub, or the appendix would show stub + real content.
-      - An appendix with neither (Appendix C, whose content needs pipeline data
-        we don't retain) still emits the visible "[Appendix body pending]" line.
+    Emits the heading and OPENS THE APPENDIX NUMBERING SCOPE (ADR-0025 §5):
+    LaTeX's table / figure counters restart and their printed form becomes
+    "<letter>-<n>", so a ``\ref{tab:...}`` to an appendix table resolves to
+    "B-1" — the same label the tree's numbering pass put in the caption text.
+    The body is the appendix's CHILD nodes (authored sections, the Appendix B
+    roster data-table, figures, lists), rendered by the walker after this; an
+    appendix with no children still emits the visible "[Appendix body pending]"
+    line.
     """
     heading = _heading(node.level, appendix_heading_text(node))
-    rows = appendix_roster_rows(node, data)
-    if rows is not None:
-        return f"{heading}\n\n{_emit_animal_roster(rows)}"
+    scope = ""
+    if node.appendix_letter:
+        letter = node.appendix_letter
+        scope = (
+            "\\setcounter{table}{0}\\renewcommand{\\thetable}{" + letter + "-\\arabic{table}}\n"
+            "\\setcounter{figure}{0}\\renewcommand{\\thefigure}{" + letter + "-\\arabic{figure}}"
+        )
     if node.children:
-        return heading
+        return f"{heading}\n{scope}" if scope else heading
     body = f"\\emph{{[Appendix body pending: {_escape_latex(node.title)}]}}"
-    return f"{heading}\n\n{body}"
+    return f"{heading}\n{scope}\n\n{body}" if scope else f"{heading}\n\n{body}"
 
 
-def _emit_animal_roster(rows: list[list[str]]) -> str:
+def _emit_long_matrix(node: DocNode, built: dict) -> str:
     r"""
-    EMIT the Appendix B roster as a page-breaking longtable — the reference's
-    Table B-1 "Animal Numbers and FASTQ Data File Names", one row per
-    (animal x tissue).
-
-    Hundreds of rows don't fit one page, and the niehstable float can't break
-    across pages — so this uses longtable (loaded by niehs.cls), whose
-    \endhead repeats the column header on every page.  Rows come pre-built
-    (animal_number, sex, dose, tissue, fastq_file_id) from appendix_roster_rows;
-    the header text is driven from ANIMAL_ROSTER_HEADERS so it can't drift from
-    the shared column vocabulary.
-
-    Each cell is escaped exactly once (by _emit_tabular_row) — matching the
-    HTML roster's single-escape.
+    EMIT a ``breakable`` matrix (the Appendix B animal roster: hundreds of
+    (animal x tissue) rows) as a page-breaking longtable — the niehstable float
+    cannot break across pages.  ``\endhead`` repeats the column header on every
+    page.  The caption goes through ``\caption`` (not ``\caption*``) so the
+    table steps LaTeX's counter, gets a ``\label`` for ``\ref``, and appears
+    in ``\listoftables`` — with niehs.cls's empty label format, only our
+    "Table B-1. …" text prints.  Each cell is escaped exactly once (by
+    _emit_tabular_row).
     """
-    caption = ("\\caption*{\\textbf{Table B-1. Animal Numbers and FASTQ Data "
-               "File Names}}\\\\\n")
-    # colspec: number | sex | dose(r) | tissue | fastq-id — mirrors the 5 headers.
-    colspec = "l l r l l"
-    header_cells = " & ".join(_escape_latex(h) for h in ANIMAL_ROSTER_HEADERS)
-    col_head = (
-        "\\toprule\n"
-        f"{header_cells} \\\\\n"
-        "\\midrule\n"
-    )
+    headers = [str(h) for h in built.get("headers", [])]
+    rows = [[str(c) for c in r] for r in built.get("rows", [])]
+    ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
+    caption = _table_caption(node, built.get("caption", node.title or ""))
+    colspec = " ".join("l" for _ in range(ncols))
+    header_cells = " & ".join(_escape_latex(h) for h in headers)
+    col_head = "\\toprule\n" + header_cells + " \\\\\n\\midrule\n"
     head = (
-        f"\\begin{{longtable}}{{{colspec}}}\n"
-        f"{caption}{col_head}\\endfirsthead\n"
-        f"{col_head}\\endhead\n"
+        "\\begin{longtable}{" + colspec + "}\n"
+        "\\caption{" + caption + "}\\label{tab:" + latex_label_key(node.id) + "}\\\\\n"
+        + col_head + "\\endfirsthead\n"
+        + col_head + "\\endhead\n"
     )
     body = "\n".join(_emit_tabular_row(r) for r in rows)
     return head + body + "\n\\bottomrule\n\\end{longtable}"
@@ -739,6 +734,9 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
     built = sample_counts_table(node, data)
     if built is None:
         return _emit_table_placeholder(node)
+    if built.get("breakable"):
+        # A long matrix (the animal roster) must paginate: longtable, not a float.
+        return _emit_long_matrix(node, built)
 
     headers = [str(h) for h in built.get("headers", [])]
     rows = built.get("rows", [])
@@ -1029,7 +1027,7 @@ def _render_figure(node: DocNode, data: dict) -> str:
     pending note, never a silent gap."""
     payload = (data.get(node.data_key) if node.data_key else None) or {}
     text = node.caption or payload.get("caption") or node.title
-    label = f"Figure {node.figure_number}. " if node.figure_number else ""
+    label = figure_prefix(node)
     caption = _escape_latex(f"{label}{text}") if text else ""
     filename = payload.get("filename")
     if not filename:

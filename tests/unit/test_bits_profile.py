@@ -145,3 +145,98 @@ def test_every_preset_pair_round_trips_through_preset_for():
         assert canonical is not None
         c = COMPONENT_CATALOG[canonical]
         assert c.role == comp.role and comp.bindings[0] in c.bindings
+
+
+# ---------------------------------------------------------------------------
+# Appendix-scoped numbering (ADR-0025 §5)
+# ---------------------------------------------------------------------------
+
+def _scoped_tree():
+    """Body: two tables + a figure.  Appendix A: a table + two figures.
+    Appendix B: a table nested two sections deep."""
+    return instantiate([
+        {"region": "body", "children": [
+            {"id": "s", "type": "heading-only", "title": "S", "children": [
+                {"id": "t1", "type": "table", "title": "T1", "platform": "Body Weight"},
+                {"id": "t2", "type": "data-table", "title": "T2", "data_key": "m"},
+                {"id": "f1", "type": "figure", "title": "F1", "subtype": "chart", "data_key": "c"}]}]},
+        {"region": "back", "children": [
+            {"id": "app-a", "type": "appendix", "title": "A", "children": [
+                {"id": "ta", "type": "authored-table", "title": "TA", "content": {"html": "<table/>"}},
+                {"id": "fa1", "type": "figure", "title": "FA1", "subtype": "chart", "data_key": "c"},
+                {"id": "fa2", "type": "figure", "title": "FA2", "subtype": "diagram", "content_file": "x.png"}]},
+            {"id": "app-b", "type": "appendix", "title": "B", "children": [
+                {"id": "sb", "type": "freeform-block", "title": "SB", "content": {"html": "<p/>"}, "children": [
+                    {"id": "sbb", "type": "freeform-block", "title": "SBB", "content": {"html": "<p/>"}, "children": [
+                        {"id": "tb", "type": "data-table", "title": "TB", "data_key": "m"}]}]}]}]},
+    ])
+
+
+def test_appendix_tables_and_figures_number_per_appendix():
+    from document_model.document_tree import compute_table_numbers, find_node
+    tree = _scoped_tree()
+    compute_table_numbers(tree)
+    labels = {i: (find_node(i, tree).table_number, find_node(i, tree).table_label)
+              for i in ("t1", "t2", "ta", "tb")}
+    assert labels == {"t1": (1, "1"), "t2": (2, "2"), "ta": (1, "A-1"), "tb": (1, "B-1")}
+    figs = {i: (find_node(i, tree).figure_number, find_node(i, tree).figure_label)
+            for i in ("f1", "fa1", "fa2")}
+    assert figs == {"f1": (1, "1"), "fa1": (1, "A-1"), "fa2": (2, "A-2")}
+    # Scope is recorded on every node inside an appendix, and nowhere else.
+    assert find_node("sbb", tree).appendix_scope == "B"
+    assert find_node("app-a", tree).appendix_scope is None
+    assert find_node("s", tree).appendix_scope is None
+
+
+def test_scoped_captions_and_prefixes_use_the_label():
+    from document_model.document_tree import compute_table_numbers, find_node
+    from rendering.render_common import table_caption, figure_prefix
+    tree = _scoped_tree()
+    compute_table_numbers(tree)
+    assert table_caption(find_node("tb", tree), "Rows") == "Table B-1. Rows"
+    assert table_caption(find_node("t2", tree), "Rows") == "Table 2. Rows"
+    assert figure_prefix(find_node("fa2", tree)) == "Figure A-2. "
+    assert figure_prefix(find_node("f1", tree)) == "Figure 1. "
+
+
+def test_genomics_numbers_continue_the_body_sequence_only():
+    """Data-driven genomics tables/charts continue from the last BODY number;
+    appendix-scoped numbers must not push them."""
+    from document_model.document_tree import (
+        compute_table_numbers, assign_genomics_table_numbers, assign_genomics_figure_numbers,
+    )
+    tree = instantiate([
+        {"region": "body", "children": [
+            {"id": "t1", "type": "data-table", "title": "T1", "data_key": "m"},
+            {"id": "f1", "type": "figure", "title": "F1", "subtype": "chart", "data_key": "c"},
+            {"id": "g", "type": "genomics-section", "title": "G", "data_key": "genomics_sections",
+             "narrative_key": "gene_set_narrative"}]},
+        {"region": "back", "children": [
+            {"id": "app-a", "type": "appendix", "title": "A", "children": [
+                {"id": "ta1", "type": "data-table", "title": "A1", "data_key": "m"},
+                {"id": "ta2", "type": "data-table", "title": "A2", "data_key": "m"},
+                {"id": "ta3", "type": "data-table", "title": "A3", "data_key": "m"},
+                {"id": "fa1", "type": "figure", "title": "FA1", "subtype": "chart", "data_key": "c"},
+                {"id": "fa2", "type": "figure", "title": "FA2", "subtype": "chart", "data_key": "c"}]}]},
+    ])
+    compute_table_numbers(tree)
+    sections = [{"type": "gene_set", "organ": "Liver", "sex": "Male",
+                 "charts": [{"type": "umap"}]}]
+    assign_genomics_table_numbers(tree, sections)
+    assign_genomics_figure_numbers(tree, sections)
+    assert sections[0]["table_number"] == 2      # after body Table 1, not after A-3
+    assert sections[0]["charts"][0]["figure_number"] == 2
+
+
+def test_reference_report_labels_match_the_docx():
+    """The reference instance numbers exactly as the printed report does."""
+    from document_model.document_tree import compute_table_numbers, find_node
+    document = yaml.safe_load(REFERENCE_YAML.read_text(encoding="utf-8"))["document"]
+    tree = _tree_from_document_list(document)
+    compute_table_numbers(tree)
+    got = {i: find_node(i, tree).table_label
+           for i in ("table-1-sample-counts", "table-b-1", "table-c-1", "table-d-1")}
+    assert got == {"table-1-sample-counts": "1", "table-b-1": "B-1", "table-c-1": "C-1", "table-d-1": "D-1"}
+    assert [find_node(f"figure-c-{n}", tree).figure_label for n in range(1, 7)] == [f"C-{n}" for n in range(1, 7)]
+    assert [find_node(f"figure-d-{n}", tree).figure_label for n in (1, 2)] == ["D-1", "D-2"]
+    assert find_node("apical-endpoint-benchmark-dose-summary", tree).table_label == "8"

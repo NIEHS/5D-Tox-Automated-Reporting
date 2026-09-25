@@ -64,13 +64,11 @@ from document_model.cover_layouts import get_cover_layout
 from document_model.document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from rendering.render_common import (
-    ANIMAL_ROSTER_HEADERS,
     BMD_SUMMARY_HEADERS,
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     apical_table_plan,
     appendix_heading_text,
-    appendix_roster_rows,
     assert_dispatch_covers,
     bmd_summary_plan,
     NarrativeContent,
@@ -92,6 +90,7 @@ from rendering.render_common import (
     resolve_protection,
     sample_counts_table,
     table_caption as _table_caption,
+    figure_prefix,
 )
 from docx.opc.constants import RELATIONSHIP_TYPE as _REL
 from document_model.layout_style import resolve_layout_style
@@ -796,15 +795,9 @@ def _add_appendix_heading(doc: Document, node: DocNode, data: dict):
 
 
 def _render_appendix(doc: Document, node: DocNode, data: dict) -> None:
-    """Appendix — B renders the animal roster; others heading + stub/children."""
+    """Appendix heading; the body is its child nodes (the Appendix B roster is a
+    data-table child — ADR-0025), rendered by the walker.  Childless → stub."""
     _add_appendix_heading(doc, node, data)
-    rows = appendix_roster_rows(node, data)
-    if rows is not None:
-        _booktabs_table(
-            doc, list(ANIMAL_ROSTER_HEADERS), rows,
-            caption="Table B-1. Animal Numbers and FASTQ Data File Names",
-        )
-        return
     if not node.children:
         _add_pending(doc, f"Appendix body pending: {node.title}")
 
@@ -892,7 +885,7 @@ def _add_tof_field(doc: Document, entries: list) -> None:
 
     style = _ensure_tof_entry_style(doc)
     for i, entry in enumerate(entries):
-        num = entry.get("table_number")
+        num = entry.get("label") or entry.get("table_number")
         title = _clean(entry.get("title", ""))
         para = doc.add_paragraph(style=style)
 
@@ -1348,7 +1341,7 @@ def _render_figure(doc: Document, node: DocNode, data: dict) -> None:
         _add_pending(doc, f"Figure pending: {node.title}")
     text = node.caption or payload.get("caption") or node.title
     if text:
-        label = f"Figure {node.figure_number}. " if node.figure_number else ""
+        label = figure_prefix(node)
         cap = doc.add_paragraph()
         run = cap.add_run(_clean(f"{label}{text}"))
         run.italic = True

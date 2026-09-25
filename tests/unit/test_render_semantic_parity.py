@@ -374,20 +374,32 @@ def test_roster_cell_escaping_is_single_on_both_surfaces():
     """
     A roster cell carrying a LaTeX special is escaped exactly once — previously
     the LaTeX roster double-escaped (pre-escape + _emit_tabular_row), diverging
-    from HTML's single-escape.  The FASTQ file id (Plate1-<n> etc.) is the cell
-    most likely to carry an underscore-style special, so exercise it there.
+    from HTML's single-escape.  Since ADR-0025 the roster is a `data-table` node
+    under Appendix B rendered by the shared matrix emitters; the FASTQ file id
+    (Plate1-<n> etc.) is the cell most likely to carry an underscore-style
+    special, so exercise it there.
     """
-    node = DocNode(id="appendix-b", title="Animal Identifiers",
-                   node_type="appendix", level=1)
-    data = {"appendix_animals": [{
+    from rendering.render_common import build_animal_roster_matrix
+    from document_model.document_tree import compute_table_numbers
+    table = DocNode(id="table-b-1", title="Animal Numbers and FASTQ Data File Names",
+                    node_type="data-table", level=0, data_key="appendix_animals_matrix")
+    app = DocNode(id="appendix-b", title="Animal Identifiers",
+                  node_type="appendix", level=1, children=[table])
+    first = DocNode(id="appendix-a", title="A", node_type="appendix", level=1)
+    compute_table_numbers([first, app])   # letters are positional: A, then B
+    data = {"appendix_animals_matrix": build_animal_roster_matrix([{
         "animal_number": "1", "sex": "Male", "dose": 0,
         "tissue": "Liver", "fastq_file_id": "A_1",
-    }]}
+    }])}
 
-    tex = latex_generator._render_appendix(node, data)
+    tex = latex_generator._render_sample_counts_table(table, data)
+    html = html_generator._render_sample_counts_table(table, data)
 
     assert r"A\_1" in tex, "expected the single-escaped id A\\_1"
     assert r"\textbackslash" not in tex, "id was double-escaped (the old divergence)"
+    assert "A_1" in html
+    # Both surfaces carry the SAME scoped label.
+    assert "Table B-1. Animal Numbers" in tex and "Table B-1. Animal Numbers" in html
 
 
 def test_override_recognized_by_same_anchor_id_on_both_surfaces(session_data):

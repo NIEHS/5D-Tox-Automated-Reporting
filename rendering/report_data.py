@@ -367,6 +367,23 @@ def marshal_export_data(
                 fm = {}
             overlay_front_matter(data, fm)
 
+    # ── Appendix B roster (ADR-0025): the SAME join the LaTeX export runs, so
+    # the HTML/DOCX preview's data-table under Appendix B is no longer pending.
+    # Keyed by the body's dtxsid; a session with no animal_report.json simply
+    # leaves the key absent (the table renders its visible pending note).
+    _dtxsid_roster = body.get("dtxsid")
+    if _dtxsid_roster and "appendix_animals_matrix" not in data:
+        try:
+            from pipeline.session_store import session_dir as _sdir_roster
+            from rendering.latex_export import _load_animal_identifiers
+            from rendering.render_common import build_animal_roster_matrix
+            _animals = _load_animal_identifiers(_sdir_roster(_dtxsid_roster))
+        except Exception:
+            _animals = []
+        if _animals:
+            data["appendix_animals"] = _animals
+            data["appendix_animals_matrix"] = build_animal_roster_matrix(_animals)
+
     peer_review = body.get("peer_review")
     if peer_review:
         data["peer_review"] = _ensure_paragraphs(peer_review)

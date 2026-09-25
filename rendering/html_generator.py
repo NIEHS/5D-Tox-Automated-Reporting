@@ -76,9 +76,7 @@ from rendering.render_common import (
     apical_table_plan,
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
-    appendix_roster_rows,
     appendix_heading_text,
-    ANIMAL_ROSTER_HEADERS,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -92,6 +90,7 @@ from rendering.render_common import (
     GENE_SET_TABLE_HEADERS,
     GENE_TABLE_HEADERS,
     table_caption as _table_caption,
+    figure_prefix,
 )
 from document_model.layout_style import resolve_layout_style
 from styling_export.freeform_content import pending_note as _freeform_pending_note
@@ -733,28 +732,12 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
 def _render_appendix(node: DocNode, data: dict) -> str:
     """
-    Appendix node — Appendix B renders the animal roster; A/D/E/F carry authored
-    freeform child nodes (heading only here, walker renders the child body);
-    Appendix C (no roster, no children) still stubs out.
-
-    ADR-0006 Amendment 1: the "which appendix carries the roster" decision and
-    the roster rows are the shared appendix_roster_rows EXTRACT; only the HTML
-    table markup (and the stub) are emit here.  The HTML roster scrolls — no
-    pagination — unlike the LaTeX longtable.  The children guard mirrors the
-    LaTeX renderer so both surfaces agree on when the stub shows.
+    Appendix node: the "Appendix X. Title" heading; its body is its CHILD nodes
+    (authored sections, data tables such as the Appendix B roster, figures,
+    lists — ADR-0025), which the walker renders after this.  An appendix with
+    no children still shows a visible pending stub.
     """
     heading = _heading(node.level, appendix_heading_text(node))
-    rows = appendix_roster_rows(node, data)
-    if rows is not None:
-        body_rows = "".join(_emit_table_row(r) for r in rows)
-        roster = (
-            '<table class="niehstable">'
-            + "<caption><strong>Table B-1. Animal Numbers and FASTQ Data "
-            + "File Names</strong></caption>"
-            + _emit_table_header(list(ANIMAL_ROSTER_HEADERS))
-            + f"<tbody>{body_rows}</tbody></table>"
-        )
-        return f"{heading}\n{roster}"
     if node.children:
         return heading
     body = f'<div class="appendix-stub">Appendix body pending: {_esc(node.title)}</div>'
@@ -777,7 +760,7 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     items: list[str] = []
     for entry in entries:
         title = entry.get("title", "")
-        n = entry.get("table_number")
+        n = entry.get("label") or entry.get("table_number")
         ready = entry.get("ready", False)
         line = f"Table {n}. {title}" if n is not None else title
         cls = "" if ready else 'class="pending-item"'
@@ -898,7 +881,7 @@ def _render_figure(node: DocNode, data: dict) -> str:
     if not png:
         return _pending(f"Figure pending: {node.title}")
     src = png if png.startswith("data:") else f"data:image/png;base64,{png}"
-    label = f"Figure {node.figure_number}. " if node.figure_number else ""
+    label = figure_prefix(node)
     display = f"{label}{descriptive}" if descriptive else ""
     return (
         f'<figure class="report-figure">'

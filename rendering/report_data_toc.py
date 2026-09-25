@@ -25,7 +25,7 @@ def _strip_table_prefix(caption: str) -> str:
     """Drop a leading "Table N. " from a caption — the Tables-list numbering adds
     its own "Table N." label, so the stored title is just the descriptive text."""
     import re
-    return re.sub(r"^Table\s+\d+\.\s*", "", caption or "").strip()
+    return re.sub(r"^Table\s+[A-Z]?-?\d+\.\s*", "", caption or "").strip()
 
 
 def _table_list_title(node, data: dict) -> str:
@@ -50,7 +50,7 @@ def _table_list_title(node, data: dict) -> str:
         elif node.node_type == "bmd-summary":
             plan = bmd_summary_plan(node, data)
             caption = getattr(plan, "caption", None)
-        elif node.node_type == "sample-counts-table":
+        elif node.node_type in ("sample-counts-table", "data-table", "authored-table"):
             caption = table_caption(node, node.caption or node.title)
     except Exception:
         caption = None
@@ -253,6 +253,9 @@ def _build_toc_entries(data: dict, tree: "list | None" = None) -> tuple[list[dic
                 table_entries.append({
                     "title": _table_list_title(node, data),
                     "table_number": node.table_number,
+                    # Scope-aware display label ("B-1" for appendix tables —
+                    # ADR-0025 §5); the lists show this, not the bare number.
+                    "label": node.table_label or str(node.table_number),
                     "ready": ready,
                 })
 

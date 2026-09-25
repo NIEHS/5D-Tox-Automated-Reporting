@@ -342,8 +342,23 @@ What landed, and where the code deviates from the text above:
   template and `docs/reference/niehs-10-structure.faithful.yaml` (139 nodes,
   including Appendix F's 55 supplementary files read from the docx) both
   validate. The reference's 37 violations are gone with no per-type rule added.
-- **Not yet done** (phases 2–6): appendix-scoped labels ("Table B-1" is still a
-  literal in the Appendix B roster emitters), the authored-figure image channel,
-  per-appendix scoping of `toc` / lists, the section catalog reading `binding`,
-  and the editor's second-axis inspector (it shows role/bindings and offers the
-  `binding` picker; it does not yet author by pair).
+- **Phase 2 (same day): appendix-scoped numbering.** `document_tree._number_scoped`
+  numbers tables and figures per appendix (`table_label` / `figure_label` =
+  "B-1", `appendix_scope` on every node in the subtree; body sequences are
+  unaffected, and the data-driven genomics numbers continue the BODY sequence
+  only). `render_common.table_caption` / `figure_prefix`, the lists
+  (`table_entries[].label`), the HTML cross-reference resolver and the DOCX
+  list field all display the label. The LaTeX appendix emitter opens the scope
+  (`\setcounter` + `\renewcommand{\thetable}{B-\arabic{table}}`) so `\ref`
+  resolves to "B-1" natively. **The Appendix B roster is now a `data-table`
+  node** (`table-b-1`, `data_key: appendix_animals_matrix`) in the shipped
+  template; `build_animal_roster_matrix` feeds it on both the LaTeX export and
+  the marshal path (the HTML/DOCX preview gains the roster), the three
+  appendix emitters lost their roster special case, and the "Table B-1"
+  literal is gone from the codebase. A `breakable` matrix renders as a
+  longtable on LaTeX. Golden fixtures were regenerated for the new node.
+- **Not yet done** (phases 3–6): the authored-figure image channel and the
+  authored-table body in BITS, per-appendix scoping of `toc` / lists and the
+  figure-entry walk, the section catalog reading `binding`, and the editor's
+  second-axis inspector (it shows role/bindings and offers the `binding`
+  picker; it does not yet author by pair).

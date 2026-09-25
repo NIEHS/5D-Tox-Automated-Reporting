@@ -435,9 +435,20 @@ def table_caption(node: DocNode, base_caption: str) -> str:
     cleaned = (node.caption or base_caption or "")
     cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
     cleaned = cleaned.strip()
-    if node.table_number is not None:
-        return f"Table {node.table_number}. {cleaned}" if cleaned else f"Table {node.table_number}"
+    # The display label is scope-aware ("3" in the body, "B-1" in Appendix B —
+    # ADR-0025 §5); table_number alone is the fallback for hand-built nodes.
+    label = node.table_label if node.table_label is not None else node.table_number
+    if label is not None:
+        return f"Table {label}. {cleaned}" if cleaned else f"Table {label}"
     return cleaned
+
+
+def figure_prefix(node: DocNode) -> str:
+    """The "Figure N. " prefix for a numbered figure node — scope-aware like
+    table_caption ("Figure C-1. " inside Appendix C).  Empty when the node has
+    no number (a hand-built node outside any numbering pass)."""
+    label = node.figure_label if node.figure_label is not None else node.figure_number
+    return f"Figure {label}. " if label else ""
 
 
 @dataclass(frozen=True)
@@ -715,30 +726,37 @@ def _roster_dose(dose) -> str:
     return "—"
 
 
-def appendix_roster_rows(node: DocNode, data: dict) -> list[list[str]] | None:
+def build_animal_roster_matrix(animals: list[dict]) -> dict:
     """
-    EXTRACT for the Appendix B animal roster: one row per (animal x tissue) in
-    ANIMAL_ROSTER_HEADERS order — [animal_number, sex, dose, tissue, fastq_file_id]
-    — format-agnostic (raw strings; each emitter escapes).
+    Build the Appendix B animal roster as a generic MATRIX — the ``{caption,
+    headers, rows, footnotes}`` shape a ``data-table`` node renders (ADR-0025:
+    the roster is a tree node bound to ``data["appendix_animals_matrix"]``, not a
+    special case inside the appendix emitters; its "Table B-1" label comes from
+    the scoped numbering pass, never from a literal).
 
-    Rows arrive already joined + sorted (latex_export._load_animal_identifiers);
-    this only projects them to the shared column order.  Returns None for any
-    appendix other than B, or when the session supplied no roster — the emitter
-    then shows its "[Appendix body pending]" stub.  The "Appendix B carries the
-    roster" decision is the semantic part and lives here.
+    One row per (animal x tissue) in ANIMAL_ROSTER_HEADERS order —
+    [animal_number, sex, dose, tissue, fastq_file_id] — raw strings (each
+    emitter escapes).  Rows arrive already joined + sorted
+    (latex_export._load_animal_identifiers).  ``breakable`` tells the LaTeX
+    emitter to use a page-breaking longtable: hundreds of rows never fit one
+    float page.
     """
-    if node.id != "appendix-b" or not data.get("appendix_animals"):
-        return None
-    return [
-        [
-            str(r.get("animal_number", "")),
-            str(r.get("sex", "")),
-            _roster_dose(r.get("dose")),
-            str(r.get("tissue", "")),
-            str(r.get("fastq_file_id", "")),
-        ]
-        for r in data["appendix_animals"]
-    ]
+    return {
+        "caption": "Animal Numbers and FASTQ Data File Names",
+        "headers": list(ANIMAL_ROSTER_HEADERS),
+        "rows": [
+            [
+                str(r.get("animal_number", "")),
+                str(r.get("sex", "")),
+                _roster_dose(r.get("dose")),
+                str(r.get("tissue", "")),
+                str(r.get("fastq_file_id", "")),
+            ]
+            for r in animals or []
+        ],
+        "footnotes": [],
+        "breakable": True,
+    }
 
 
 def methods_subsection_content(
