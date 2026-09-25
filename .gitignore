@@ -89,3 +89,7 @@ sessions_archive/
 wizard-ui/node_modules/
 wizard-ui/tsconfig.tsbuildinfo
 web_wizard/
+
+# Reference report sources (NIEHS-10 PFHxSAm_Final.docx etc.) used by the docx
+# tooling — large binaries kept out of the public repo.
+examples/

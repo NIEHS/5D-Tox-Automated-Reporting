@@ -1,0 +1,360 @@
+# Faithful structure of NIEHS Report 10 (the reference), derived 2026-09-25 from
+# docs/NIEHS-Report-10-Reference.pdf: one node per heading / table / figure, typed as
+# naturally as the template grammar allows. NOT valid against the grammar — see
+# docs/reference/niehs-10-structure.findings.md for every violation.
+document:
+- region: front
+  children:
+  - id: title-page
+    type: title-page
+    title: Title Page
+    subtype: niehs-5d-tox
+  - id: foreword
+    type: front-matter
+    title: Foreword
+    data_key: foreword
+  - id: table-of-contents
+    type: toc
+    title: Table of Contents
+  - id: tables
+    type: tables-list
+    title: Tables
+  - id: about-this-report
+    type: front-matter
+    title: About This Report
+    data_key: about_report
+    children:
+    - id: authors
+      type: heading-only
+      title: Authors
+    - id: contributors
+      type: heading-only
+      title: Contributors
+  - id: peer-review
+    type: front-matter
+    title: Peer Review
+    data_key: peer_review
+  - id: publication-details
+    type: front-matter
+    title: Publication Details
+    data_key: publication_details
+    children:
+    - id: acknowledgments
+      type: front-matter
+      title: Acknowledgments
+      data_key: acknowledgments
+  - id: abstract
+    type: front-matter
+    title: Abstract
+    data_key: abstract
+- region: body
+  children:
+  - id: background
+    type: narrative
+    title: Background
+    data_key: background
+  - id: materials-and-methods
+    type: heading-only
+    title: Materials and Methods
+    data_key: methods
+    children:
+    - id: study-design
+      type: narrative
+      title: Study Design
+      data_key: methods
+      methods_key: study_design
+    - id: dose-selection-rationale
+      type: narrative
+      title: Dose Selection Rationale
+      data_key: methods
+      methods_key: dose_selection
+    - id: chemistry
+      type: narrative
+      title: Chemistry
+      data_key: methods
+      methods_key: chemistry
+    - id: clinical-examinations-and-sample-collection
+      type: heading-only
+      title: Clinical Examinations and Sample Collection
+      data_key: methods
+      methods_key: clinical_exams
+      children:
+      - id: clinical-observations
+        type: narrative
+        title: Clinical Observations
+        data_key: methods
+        methods_key: clinical_obs
+      - id: body-and-organ-weights
+        type: narrative
+        title: Body and Organ Weights
+        data_key: methods
+        methods_key: body_organ_weights
+      - id: mm-clinical-pathology
+        type: narrative
+        title: Clinical Pathology
+        data_key: methods
+        methods_key: clinical_pathology
+      - id: mm-internal-dose
+        type: narrative
+        title: Internal Dose Assessment
+        data_key: methods
+        methods_key: internal_dose
+    - id: transcriptomics
+      type: heading-only
+      title: Transcriptomics
+      data_key: methods
+      methods_key: transcriptomics
+      children:
+      - id: sample-collection-for-transcriptomics
+        type: narrative
+        title: Sample Collection for Transcriptomics
+        data_key: methods
+        methods_key: txomics_sample
+      - id: rna-isolation-library-creation-and-sequencing
+        type: narrative
+        title: RNA Isolation, Library Creation, and Sequencing
+        data_key: methods
+        methods_key: txomics_rna
+      - id: sequence-data-processing
+        type: narrative
+        title: Sequence Data Processing
+        data_key: methods
+        methods_key: txomics_seq_processing
+      - id: sequencing-quality-checks-and-outlier-removal
+        type: narrative
+        title: Sequencing Quality Checks and Outlier Removal
+        data_key: methods
+        methods_key: txomics_qc
+      - id: table-1-sample-counts
+        type: sample-counts-table
+        title: Table 1. Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        data_key: sample_counts
+      - id: data-normalization
+        type: narrative
+        title: Data Normalization
+        data_key: methods
+        methods_key: txomics_normalization
+    - id: data-analysis
+      type: heading-only
+      title: Data Analysis
+      data_key: methods
+      methods_key: data_analysis
+      children:
+      - id: statistical-analysis-of-body-weights-organ-weights-and-clinical-pathology
+        type: narrative
+        title: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: stat_analysis
+      - id: benchmark-dose-analysis-of-body-weights-organ-weights-and-clinical-pathology
+        type: narrative
+        title: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: bmd_apical
+      - id: benchmark-dose-analysis-of-transcriptomics-data
+        type: narrative
+        title: Benchmark Dose Analysis of Transcriptomics Data
+        data_key: methods
+        methods_key: bmd_genomics
+      - id: empirical-false-discovery-rate-determination-for-genomic-dose-response-modeling
+        type: narrative
+        title: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
+        data_key: methods
+        methods_key: efdr
+      - id: data-accessibility
+        type: narrative
+        title: Data Accessibility
+        data_key: methods
+        methods_key: data_accessibility
+  - id: results
+    type: heading-only
+    title: Results
+    children:
+    - id: animal-condition-body-weights-and-organ-weights
+      type: narrative+tables
+      title: Animal Condition, Body Weights, and Organ Weights
+      narrative_key: animal_condition
+      children:
+      - id: table-2
+        type: table
+        title: Table 2. Summary of Body Weights of Male and Female Rats
+        platform: Body Weight
+      - id: table-3
+        type: table
+        title: Table 3. Summary of Liver Weights of Male Rats
+        platform: Organ Weight
+    - id: clinical-pathology
+      type: narrative+tables
+      title: Clinical Pathology
+      narrative_key: clinical_pathology
+      children:
+      - id: table-4
+        type: table
+        title: Table 4. Summary of Select Clinical Chemistry Data
+        platform: Clinical Chemistry
+      - id: table-5
+        type: table
+        title: Table 5. Summary of Select Hematology Data
+        platform: Hematology
+      - id: table-6
+        type: table
+        title: Table 6. Summary of Select Hormone Data
+        platform: Hormones
+    - id: internal-dose-assessment
+      type: narrative+tables
+      title: Internal Dose Assessment
+      narrative_key: internal_dose
+      children:
+      - id: table-7
+        type: table
+        title: Table 7. Summary of Plasma Concentration Data
+        platform: Tissue Concentration
+    - id: apical-endpoint-benchmark-dose-summary
+      type: bmd-summary
+      title: Apical Endpoint Benchmark Dose Summary
+      data_key: bmd_summary
+      caption: Table 8. BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to
+        High
+    - id: gene-set-benchmark-dose-analysis
+      type: genomics-section
+      title: Gene Set Benchmark Dose Analysis
+      data_key: genomics_sections
+      narrative_key: gene_set_narrative
+    - id: gene-benchmark-dose-analysis
+      type: genomics-section
+      title: Gene Benchmark Dose Analysis
+      data_key: genomics_sections
+      narrative_key: gene_narrative
+  - id: summary
+    type: narrative
+    title: Summary
+    data_key: summary
+  - id: references
+    type: narrative
+    title: References
+    data_key: references
+- region: back
+  children:
+  - id: appendix-a-internal-dose-assessment
+    type: appendix
+    title: Appendix A. Internal Dose Assessment
+    children:
+    - id: toc-a
+      type: toc
+      title: Table of Contents
+    - id: a-1-quantitation-of-perfluorohexanesulfonamide-in-plasma
+      type: narrative
+      title: A.1. Quantitation of Perfluorohexanesulfonamide in Plasma
+      data_key: appendix_a
+  - id: appendix-b-animal-identifiers
+    type: appendix
+    title: Appendix B. Animal Identifiers
+    children:
+    - id: tables-b
+      type: tables-list
+      title: Tables
+    - id: table-b-1
+      type: table
+      title: 'Table B-1: Animal Numbers and FASTQ Data File Names'
+  - id: appendix-c-transcriptomic-quality-control-and-empirical-false-discovery-rate
+    type: appendix
+    title: Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate
+    children:
+    - id: toc-c
+      type: toc
+      title: Table of Contents
+    - id: tables-c
+      type: tables-list
+      title: Tables
+    - id: figures-c
+      type: tables-list
+      title: Figures
+    - id: c-1-gene-expression-quality-control
+      type: narrative
+      title: C.1. Gene Expression Quality Control
+      data_key: appendix_c1
+    - id: figure-c-1
+      type: figure
+      title: 'Figure C-1: A Principal Component Analysis of the Normalized Data from the Liver of Male Rats'
+      subtype: chart
+    - id: figure-c-2
+      type: figure
+      title: 'Figure C-2: A Principal Component Analysis of the Normalized Data from the Liver of Female Rats'
+      subtype: chart
+    - id: figure-c-3
+      type: figure
+      title: 'Figure C-3: A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats'
+      subtype: chart
+    - id: figure-c-4
+      type: figure
+      title: 'Figure C-4: A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats'
+      subtype: chart
+    - id: c-2-empirical-false-discovery-rate
+      type: narrative
+      title: C.2. Empirical False Discovery Rate
+      data_key: appendix_c2
+    - id: table-c-1
+      type: table
+      title: 'Table C-1: Number of False Positives'
+    - id: figure-c-5
+      type: figure
+      title: 'Figure C-5: Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination'
+      subtype: chart
+    - id: figure-c-6
+      type: figure
+      title: 'Figure C-6: Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue per
+        Sex Combination'
+      subtype: chart
+  - id: appendix-d-benchmark-dose-model-recommendation-and-selection-methodologies
+    type: appendix
+    title: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies
+    children:
+    - id: tables-d
+      type: tables-list
+      title: Tables
+    - id: figures-d
+      type: tables-list
+      title: Figures
+    - id: table-d-1
+      type: table
+      title: 'Table D-1: Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints'
+    - id: figure-d-1
+      type: figure
+      title: 'Figure D-1: Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
+        Execution'
+      subtype: chart
+    - id: figure-d-2
+      type: figure
+      title: 'Figure D-2: Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
+        of Transcriptomic Data'
+      subtype: chart
+  - id: appendix-e-organ-weight-descriptions
+    type: appendix
+    title: Appendix E. Organ Weight Descriptions
+    children:
+    - id: toc-e
+      type: toc
+      title: Table of Contents
+    - id: e-1-organ-weight-descriptions
+      type: narrative
+      title: E.1. Organ Weight Descriptions
+      data_key: appendix_e
+  - id: appendix-f-supplemental-data
+    type: appendix
+    title: Appendix F. Supplemental Data
+    children:
+    - id: f-1-apical-benchmark-dose-analysis
+      type: narrative
+      title: F.1. Apical Benchmark Dose Analysis
+      data_key: appendix_f1
+    - id: f-2-genomic-benchmark-dose-analysis
+      type: narrative
+      title: F.2. Genomic Benchmark Dose Analysis
+      data_key: appendix_f2
+    - id: f-3-study-tables
+      type: narrative
+      title: F.3. Study Tables
+      data_key: appendix_f3
+    - id: f-4-individual-animal-data
+      type: narrative
+      title: F.4. Individual Animal Data
+      data_key: appendix_f4
