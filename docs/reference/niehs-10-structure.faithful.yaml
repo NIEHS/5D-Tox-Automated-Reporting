@@ -1,7 +1,11 @@
-# Faithful structure of NIEHS Report 10 (the reference), derived 2026-09-25 from
-# docs/NIEHS-Report-10-Reference.pdf: one node per heading / table / figure, typed as
-# naturally as the template grammar allows. NOT valid against the grammar — see
-# docs/reference/niehs-10-structure.findings.md for every violation.
+# Faithful structure of NIEHS Report 10 (the reference report), derived 2026-09-25
+# from examples/NIEHS-10 PFHxSAm_Final.docx (paragraph styles + outline levels, tables,
+# drawings and section breaks in body order; cross-checked against the reference PDF).
+# One node per heading / table / figure, typed as naturally as the template grammar
+# allows. Landscape orientation follows the docx section breaks. NOT valid against the
+# grammar: see docs/reference/niehs-10-structure.findings.md for every violation.
+# Appendix F's four parts each hold a supplementary-material LIST (55 title + filename
+# entries in the docx), a construct the grammar has no node for; they appear as narratives.
 document:
 - region: front
   children:
@@ -38,11 +42,10 @@ document:
     type: front-matter
     title: Publication Details
     data_key: publication_details
-    children:
-    - id: acknowledgments
-      type: front-matter
-      title: Acknowledgments
-      data_key: acknowledgments
+  - id: acknowledgments
+    type: front-matter
+    title: Acknowledgments
+    data_key: acknowledgments
   - id: abstract
     type: front-matter
     title: Abstract
@@ -178,10 +181,12 @@ document:
         type: table
         title: Table 2. Summary of Body Weights of Male and Female Rats
         platform: Body Weight
+        orientation: landscape
       - id: table-3
         type: table
         title: Table 3. Summary of Liver Weights of Male Rats
         platform: Organ Weight
+        orientation: landscape
     - id: clinical-pathology
       type: narrative+tables
       title: Clinical Pathology
@@ -191,14 +196,17 @@ document:
         type: table
         title: Table 4. Summary of Select Clinical Chemistry Data
         platform: Clinical Chemistry
+        orientation: landscape
       - id: table-5
         type: table
         title: Table 5. Summary of Select Hematology Data
         platform: Hematology
+        orientation: landscape
       - id: table-6
         type: table
         title: Table 6. Summary of Select Hormone Data
         platform: Hormones
+        orientation: landscape
     - id: internal-dose-assessment
       type: narrative+tables
       title: Internal Dose Assessment
@@ -254,7 +262,7 @@ document:
       title: Tables
     - id: table-b-1
       type: table
-      title: 'Table B-1: Animal Numbers and FASTQ Data File Names'
+      title: Table B-1. Animal Numbers and FASTQ Data File Names
   - id: appendix-c-transcriptomic-quality-control-and-empirical-false-discovery-rate
     type: appendix
     title: Appendix C. Transcriptomic Quality Control and Empirical False Discovery Rate
@@ -274,36 +282,46 @@ document:
       data_key: appendix_c1
     - id: figure-c-1
       type: figure
-      title: 'Figure C-1: A Principal Component Analysis of the Normalized Data from the Liver of Male Rats'
+      title: Figure C-1. A Principal Component Analysis of the Normalized Data from the Liver of Male Rats
       subtype: chart
     - id: figure-c-2
       type: figure
-      title: 'Figure C-2: A Principal Component Analysis of the Normalized Data from the Liver of Female Rats'
+      title: Figure C-2. A Principal Component Analysis of the Normalized Data from the Liver of Female Rats
       subtype: chart
     - id: figure-c-3
       type: figure
-      title: 'Figure C-3: A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats'
+      title: Figure C-3. A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats
       subtype: chart
     - id: figure-c-4
       type: figure
-      title: 'Figure C-4: A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats'
+      title: Figure C-4. A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats
       subtype: chart
     - id: c-2-empirical-false-discovery-rate
       type: narrative
       title: C.2. Empirical False Discovery Rate
       data_key: appendix_c2
-    - id: table-c-1
-      type: table
-      title: 'Table C-1: Number of False Positives'
-    - id: figure-c-5
-      type: figure
-      title: 'Figure C-5: Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination'
-      subtype: chart
-    - id: figure-c-6
-      type: figure
-      title: 'Figure C-6: Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue per
-        Sex Combination'
-      subtype: chart
+      children:
+      - id: c-2-1-methods
+        type: narrative
+        title: C.2.1. Methods
+        data_key: appendix_c2_methods
+      - id: c-2-2-results
+        type: narrative
+        title: C.2.2. Results
+        data_key: appendix_c2_results
+        children:
+        - id: figure-c-5
+          type: figure
+          title: Figure C-5. Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination
+          subtype: chart
+        - id: figure-c-6
+          type: figure
+          title: Figure C-6. Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue
+            per Sex Combination
+          subtype: chart
+        - id: table-c-1
+          type: table
+          title: Table C-1. Number of False Positives
   - id: appendix-d-benchmark-dose-model-recommendation-and-selection-methodologies
     type: appendix
     title: Appendix D. Benchmark Dose Model Recommendation and Selection Methodologies
@@ -316,17 +334,19 @@ document:
       title: Figures
     - id: table-d-1
       type: table
-      title: 'Table D-1: Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints'
+      title: Table D-1. Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints
     - id: figure-d-1
       type: figure
-      title: 'Figure D-1: Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
-        Execution'
+      title: Figure D-1. Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
+        Execution
       subtype: chart
+      orientation: landscape
     - id: figure-d-2
       type: figure
-      title: 'Figure D-2: Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
-        of Transcriptomic Data'
+      title: Figure D-2. Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
+        of Transcriptomic Data
       subtype: chart
+      orientation: landscape
   - id: appendix-e-organ-weight-descriptions
     type: appendix
     title: Appendix E. Organ Weight Descriptions
