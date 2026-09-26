@@ -111,10 +111,12 @@ async def api_workflow_sections(dtxsid: Dtxsid):
 
     The single seam the Sections screen consumes instead of its hardcoded row
     lists (the FRONT_MATTER constant + the approvable-type allowlist). Each entry
-    carries the catalog's declared identity (`kind`, `approvable`, `instance_of`)
-    plus the per-key readiness (`enabled`, `approved`, `blocked_by`) and a light
-    `present` flag so the UI can render every section the *template* contains —
-    including programmatic group narratives (`internal_dose`) that had no row.
+    carries the catalog's declared identity (`kind`, `approvable`, `instance_of`,
+    `region`) plus the per-key readiness (`enabled`, `approved`, `blocked_by`). The
+    UI derives each row's filled-vs-pending state from the section CONTENT (the
+    session payload), not from whether an on-disk artifact exists — so no `present`
+    flag is emitted (it only ever meant "has a file on disk", which is false for the
+    derived/cache-only rows despite their having content).
 
     Instance families (`bm2`, `genomics`) are returned as their concrete on-disk
     instances (`bm2_<slug>`, `genomics_<organ>_<sex>`), inheriting the family's
@@ -143,7 +145,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
     entries: list[dict] = []
     seen: set[str] = set()
 
-    def _emit(key: str, spec, *, present: bool | None = None) -> None:
+    def _emit(key: str, spec) -> None:
         if key in seen:
             return
         seen.add(key)
@@ -157,7 +159,6 @@ async def api_workflow_sections(dtxsid: Dtxsid):
             "enabled": r.get("enabled", True),
             "approved": r.get("approved", False),
             "blocked_by": r.get("blocked_by", []),
-            "present": (key in on_disk) if present is None else present,
         })
 
     # Singletons and group narratives, in catalog (document) order.
@@ -177,8 +178,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
     # genomics_<organ>_<sex>.json. Their content lives in the process cache
     # (_cache_interpretation_<organ>_<sex>_*.json). Discover the organ×sex instances
     # from those caches so the Sections screen lists them — the genomics analogue of
-    # surfacing the group narratives from the sections cache. present=True: the content
-    # demonstrably exists (it just isn't a standalone artifact).
+    # surfacing the group narratives from the sections cache.
     genomics_spec = by_family.get("genomics")
     if genomics_spec is not None:
         from pipeline.session_store import session_dir as _session_dir
@@ -187,7 +187,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
             # _cache_interpretation_<organ>_<sex>_<hash>.json → organ_sex (drop hash).
             organ_sex = p.stem.removeprefix("_cache_interpretation_").rsplit("_", 1)[0]
             if organ_sex:
-                _emit(f"genomics_{organ_sex}", genomics_spec, present=True)
+                _emit(f"genomics_{organ_sex}", genomics_spec)
 
     return JSONResponse({"sections": entries})
 

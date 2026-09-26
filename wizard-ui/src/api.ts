@@ -66,7 +66,8 @@ export type SectionReadinessMap = Record<string, SectionReadiness>;
 // the document tree, not hardcoded in the client. `kind` is the producer class
 // ("llm" | "programmatic" | "derived" | "authored"); `instance_of` is the family
 // ("bm2" | "genomics") for concrete instances, null for singletons/group
-// narratives; `present` is whether the section has content on disk.
+// narratives. Each row's filled-vs-pending state comes from the section CONTENT
+// (the session payload), not from any on-disk-presence flag.
 export interface SectionInfo {
   key: string;
   kind: string;
@@ -78,7 +79,6 @@ export interface SectionInfo {
   enabled: boolean;
   approved: boolean;
   blocked_by: string[];
-  present: boolean;
 }
 
 // Report-grain publish gate (Phase 3a currency BLOCK). GET

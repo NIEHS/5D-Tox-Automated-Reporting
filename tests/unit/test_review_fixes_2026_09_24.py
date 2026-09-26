@@ -156,9 +156,12 @@ def test_overleaf_bundle_refuses_stale_report(client, sessions_dir):
     assert "not publishable" in resp.json()["error"]
 
 
-# --- F6: the sections route builds the tree once and reports presence -------
+# --- F6: the sections route builds the tree once and reports section state ---
 
-def test_workflow_sections_route_reports_presence_from_states(client, sessions_dir, monkeypatch):
+def test_workflow_sections_route_reports_state_once(client, sessions_dir, monkeypatch):
+    # The route lists every template section and reports its approved state, building
+    # the per-session catalog exactly once. (There is no `present`/on-disk flag: the
+    # UI derives filled-vs-pending from the section content, not artifact existence.)
     d = sessions_dir / "DTXSID_SEC"
     d.mkdir()
     (d / "background.json").write_text(json.dumps({"paragraphs": ["p"], "approved": False}))
@@ -173,9 +176,10 @@ def test_workflow_sections_route_reports_presence_from_states(client, sessions_d
     resp = client.get("/api/workflow/DTXSID_SEC/sections")
     assert resp.status_code == 200
     by_key = {e["key"]: e for e in resp.json()["sections"]}
-    assert by_key["background"]["present"] is True
-    assert by_key["bm2_body-weight"]["present"] is True and by_key["bm2_body-weight"]["approved"] is True
-    assert by_key["methods"]["present"] is False
+    assert "present" not in by_key["background"], "the dead on-disk present flag is gone"
+    assert by_key["bm2_body-weight"]["approved"] is True
+    assert by_key["background"]["approved"] is False
+    assert "methods" in by_key   # template section still listed even with nothing on disk
     assert calls["n"] == 1, "the per-session catalog must be built once per request"
 
 
@@ -194,4 +198,3 @@ def test_workflow_sections_route_surfaces_genomics_from_cache(client, sessions_d
         assert key in by_key, key
         assert by_key[key]["instance_of"] == "genomics"
         assert by_key[key]["approvable"] is False
-        assert by_key[key]["present"] is True   # content exists though it's not a file
