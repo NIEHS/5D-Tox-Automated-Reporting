@@ -40,6 +40,45 @@ UNIFIED_NARRATIVE_KEY_MAP: dict[str, str] = {
 # Session cache lookup
 # ---------------------------------------------------------------------------
 
+
+def load_group_narratives(session_dir: Path) -> dict[str, dict]:
+    """Read a session's deterministic group narratives from its process cache.
+
+    The unified cross-platform narratives (Animal Condition, Clinical Pathology,
+    Internal Dose Assessment) are DERIVED during Process and cached in the sections
+    blob under `unified_narratives`, keyed by the process/JS key (`apical`, …); they
+    are NOT persisted as standalone section artifacts (they re-derive from the data,
+    and the default-filtered set is what the session-reload path reads). This is the
+    ONE accessor every consumer shares — the render/export path
+    (`latex_export.load_session_data`) and the session-load API
+    (`web_routes.session_routes`) — so the cache-reach-in and the
+    `UNIFIED_NARRATIVE_KEY_MAP` crosswalk live in a single place and cannot drift.
+
+    Returns `{tree_narrative_key: {"paragraphs": [...], "title": str | None}}` for
+    every narrative that has paragraphs, or `{}` when the session has no cache /
+    no narratives. Read-only; never writes.
+    """
+    import json
+
+    out: dict[str, dict] = {}
+    cache_path = _latest_session_cache(session_dir, "_cache_sections_*.json")
+    if cache_path is None:
+        return out
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out
+    for key, val in (cache.get("unified_narratives") or {}).items():
+        paras = val.get("paragraphs", []) if isinstance(val, dict) else (
+            val if isinstance(val, list) else [])
+        if not paras:
+            continue
+        title = val.get("title") if isinstance(val, dict) else None
+        out[UNIFIED_NARRATIVE_KEY_MAP.get(key, key)] = {
+            "paragraphs": paras, "title": title,
+        }
+    return out
+
 def _latest_session_cache(session_dir: Path, glob_pattern: str):
     """
     Return the NEWEST session cache file matching `glob_pattern`, or None.

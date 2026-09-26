@@ -645,30 +645,13 @@ async def api_session_load(dtxsid: Dtxsid):
     # `unified_narratives` blob — they are never persisted as standalone section
     # files. The Sections screen reads each row's content as session[key], so
     # without this projection those rows read "not generated" even though the prose
-    # exists and renders in the report. Surface them here keyed by the tree's
-    # narrative_key (apical→animal_condition via the shared crosswalk), shaped like a
-    # SectionData ({paragraphs, title}) so the UI's paragraph count and state derive
-    # correctly. Same newest-cache glob used for genomics_cache / chart_images above.
+    # exists and renders in the report. `load_group_narratives` is the SHARED accessor
+    # (also used by the render/export path) that reads the cache and applies the
+    # process→tree key crosswalk, so the two paths cannot drift.
     group_narratives: dict = {}
     try:
-        from rendering.report_data_overlays import UNIFIED_NARRATIVE_KEY_MAP
-        for sc in sorted(d.glob("_cache_sections_*.json")):
-            _t0 = _time.monotonic()
-            _text = sc.read_text(encoding="utf-8")
-            _sec_cache = json.loads(_text)
-            provenance.record(
-                "disk_read", dtxsid=dtxsid, unit="_cache_sections", bytes=len(_text),
-                ms=round((_time.monotonic() - _t0) * 1000, 1),
-            )
-            for _ck, _cv in (_sec_cache.get("unified_narratives") or {}).items():
-                paras = _cv.get("paragraphs", []) if isinstance(_cv, dict) else (
-                    _cv if isinstance(_cv, list) else [])
-                if not paras:
-                    continue
-                _key = UNIFIED_NARRATIVE_KEY_MAP.get(_ck, _ck)
-                _title = _cv.get("title") if isinstance(_cv, dict) else None
-                group_narratives[_key] = {"paragraphs": paras, "title": _title}
-            break
+        from rendering.report_data_overlays import load_group_narratives
+        group_narratives = load_group_narratives(d)
     except Exception:
         # Best-effort — an unreadable/absent cache leaves the rows as "not
         # generated" (the prior behavior), never fails the whole session load.
