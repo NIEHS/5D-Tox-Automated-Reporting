@@ -237,6 +237,9 @@ export interface SessionLoad {
   summary?: SectionData | null;
   bm2_sections?: Record<string, SectionData>;
   genomics_sections?: Record<string, SectionData>;
+  // Unapproved fallback: raw organ_sex-keyed genomics data surfaced when no approved
+  // genomics_sections exist, so the Sections screen can still show the read-only rows.
+  genomics_cache?: Record<string, SectionData> | null;
   meta?: Record<string, unknown> | null;
   identity?: Record<string, unknown> | null;
   [k: string]: unknown;

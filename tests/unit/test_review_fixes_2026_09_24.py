@@ -177,3 +177,21 @@ def test_workflow_sections_route_reports_presence_from_states(client, sessions_d
     assert by_key["bm2_body-weight"]["present"] is True and by_key["bm2_body-weight"]["approved"] is True
     assert by_key["methods"]["present"] is False
     assert calls["n"] == 1, "the per-session catalog must be built once per request"
+
+
+def test_workflow_sections_route_surfaces_genomics_from_cache(client, sessions_dir):
+    # Genomics interpretation sections are deterministic + read-only: they are never
+    # approved and never written as genomics_*.json, so the route must discover them
+    # from the process interpretation caches (_cache_interpretation_<organ>_<sex>_*).
+    d = sessions_dir / "DTXSID_GEN"
+    d.mkdir()
+    (d / "_cache_interpretation_liver_male_abc123.json").write_text("{}")
+    (d / "_cache_interpretation_kidney_female_def456.json").write_text("{}")
+    resp = client.get("/api/workflow/DTXSID_GEN/sections")
+    assert resp.status_code == 200
+    by_key = {e["key"]: e for e in resp.json()["sections"]}
+    for key in ("genomics_liver_male", "genomics_kidney_female"):
+        assert key in by_key, key
+        assert by_key[key]["instance_of"] == "genomics"
+        assert by_key[key]["approvable"] is False
+        assert by_key[key]["present"] is True   # content exists though it's not a file

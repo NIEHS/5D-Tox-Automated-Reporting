@@ -143,7 +143,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
     entries: list[dict] = []
     seen: set[str] = set()
 
-    def _emit(key: str, spec) -> None:
+    def _emit(key: str, spec, *, present: bool | None = None) -> None:
         if key in seen:
             return
         seen.add(key)
@@ -157,7 +157,7 @@ async def api_workflow_sections(dtxsid: Dtxsid):
             "enabled": r.get("enabled", True),
             "approved": r.get("approved", False),
             "blocked_by": r.get("blocked_by", []),
-            "present": key in on_disk,
+            "present": (key in on_disk) if present is None else present,
         })
 
     # Singletons and group narratives, in catalog (document) order.
@@ -171,6 +171,23 @@ async def api_workflow_sections(dtxsid: Dtxsid):
         spec = by_family.get(fam)
         if spec is not None and spec.instance_of is not None:
             _emit(key, spec)
+
+    # Genomics interpretation sections are deterministic + READ-ONLY, so (unlike the
+    # approvable bm2 results) they are never approved and never written as
+    # genomics_<organ>_<sex>.json. Their content lives in the process cache
+    # (_cache_interpretation_<organ>_<sex>_*.json). Discover the organ×sex instances
+    # from those caches so the Sections screen lists them — the genomics analogue of
+    # surfacing the group narratives from the sections cache. present=True: the content
+    # demonstrably exists (it just isn't a standalone artifact).
+    genomics_spec = by_family.get("genomics")
+    if genomics_spec is not None:
+        from pipeline.session_store import session_dir as _session_dir
+        sdir = _session_dir(dtxsid)
+        for p in sorted(sdir.glob("_cache_interpretation_*.json")):
+            # _cache_interpretation_<organ>_<sex>_<hash>.json → organ_sex (drop hash).
+            organ_sex = p.stem.removeprefix("_cache_interpretation_").rsplit("_", 1)[0]
+            if organ_sex:
+                _emit(f"genomics_{organ_sex}", genomics_spec, present=True)
 
     return JSONResponse({"sections": entries})
 

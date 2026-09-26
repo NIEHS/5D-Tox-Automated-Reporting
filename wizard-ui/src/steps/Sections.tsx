@@ -48,6 +48,15 @@ const GENERATORS: Record<string, true> = {
 function sectionContent(session: SessionLoad | null, key: string): SectionData | null {
   if (!session) return null;
   if (key.startsWith("bm2_")) return session.bm2_sections?.[key.slice("bm2_".length)] ?? null;
+  // Genomics interpretation sections are deterministic + read-only; their content
+  // lives under genomics_sections (approved) or genomics_cache (the unapproved
+  // fallback), keyed by organ_sex — not as a top-level session[key].
+  if (key.startsWith("genomics_")) {
+    const slug = key.slice("genomics_".length);
+    return (session.genomics_sections?.[slug]
+      ?? (session.genomics_cache as Record<string, SectionData> | undefined)?.[slug]
+      ?? null);
+  }
   return (session[key] as SectionData | null) ?? null;
 }
 
@@ -68,6 +77,9 @@ function paragraphCount(content: SectionData | null): number {
     return content.sections.reduce((n, s) => n + (s.paragraphs?.length ?? 0), 0);
   }
   if (content.endpoints?.length) return content.endpoints.length;
+  // Genomics interpretation sections carry no prose here — their headline count is
+  // the number of responsive genes (paired with unit="responsive gene").
+  if (typeof content.total_responsive_genes === "number") return content.total_responsive_genes;
   return 0;
 }
 
@@ -582,7 +594,8 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
               enabled={s.enabled}
               approved={false}
               blockedBy={s.blocked_by}
-              content={null}
+              content={sectionContent(session, s.key)}
+              unit="responsive gene"
             />
           ))}
         </>
