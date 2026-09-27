@@ -542,6 +542,16 @@ export const api = {
       jsonOrThrow<{ identity: Record<string, string> }>(r)
     ),
 
+  // Resolve a chemical identifier (e.g. a DTXSID) to its full identity via
+  // PubChem/CTX. Used to pre-fill the compound Name/CASRN so they're never left to
+  // fall back to the DTXSID. Network-dependent — callers treat failure as best-effort.
+  resolveChemical: (identifier: string, idType = "auto") =>
+    fetch(`/api/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, id_type: idType }),
+    }).then((r) => jsonOrThrow<Record<string, string>>(r)),
+
   // --- Configurator: front-matter metadata (authors/contributors/publication) ---
   getFrontMatter: (dtxsid: string) =>
     fetch(`/api/document/${encodeURIComponent(dtxsid)}/front-matter`).then((r) =>

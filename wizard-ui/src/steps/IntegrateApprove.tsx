@@ -143,13 +143,51 @@ export function IntegrateApprove({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dtxsid]);
 
+  // Pre-fill Name/CASRN from the resolved chemical identity so the compound Name is
+  // never left to fall back to the DTXSID on submit (a DTXSID is not a chemical name;
+  // that wrong name would persist into identity.json and flow into captions/narratives).
+  // identity.json wins when it holds a REAL name; otherwise resolve from the DTXSID
+  // (best-effort — resolution is network-dependent and may be unavailable offline).
+  useEffect(() => {
+    if (!dtxsid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { identity } = await api.getIdentity(dtxsid);
+        let n = (identity?.name || "").trim();
+        let c = (identity?.casrn || "").trim();
+        if (!n || n === dtxsid) {
+          try {
+            const resolved = await api.resolveChemical(dtxsid);
+            if (resolved?.name && resolved.name !== dtxsid) n = resolved.name;
+            if (!c && resolved?.casrn) c = resolved.casrn;
+          } catch {
+            /* resolution unavailable (e.g. offline) — leave the field for the user */
+          }
+        }
+        if (cancelled) return;
+        if (n && n !== dtxsid) setName((prev) => prev || n);
+        if (c) setCasrn((prev) => prev || c);
+      } catch {
+        /* identity read failed — non-fatal, the user can still type a name */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dtxsid]);
+
   async function runIntegrate() {
     if (!dtxsid) return;
     setIntegrating(true);
     setError(null);
     try {
+      // Never substitute the DTXSID for an empty name — a DTXSID is not a chemical
+      // name, and persisting it into identity.json corrupts every downstream caption.
+      // An empty name is tolerated by integrate_step (no test_article) and is far
+      // safer than a wrong one; the pre-fill effect above normally supplies a real one.
       const s = await api.integrate(dtxsid, {
-        name: name.trim() || dtxsid,
+        name: name.trim(),
         casrn: casrn.trim(),
         dtxsid,
       });
@@ -213,6 +251,12 @@ export function IntegrateApprove({
           />
         </label>
       </div>
+      {!name.trim() && (
+        <p className="muted" style={{ marginTop: "-0.4rem" }}>
+          Enter the compound name — it appears in every table caption and narrative.
+          (Leaving it blank integrates without a name; the DTXSID is never used as a name.)
+        </p>
+      )}
 
       <button className="primary" onClick={runIntegrate} disabled={integrating}>
         {integrating ? (

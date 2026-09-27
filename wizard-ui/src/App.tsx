@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMemoState } from "./steps/shared";
 import { usePhase } from "./usePhase";
 import { invalidate } from "./useServerResource";
@@ -96,6 +96,20 @@ export function App() {
 
   const phase = state?.phase ?? null;
   const suggested = mode === "document" ? 0 : phaseToDataStep(phase);
+
+  // Reconcile a persisted step against the server-derived phase (CONTEXT.md invariant
+  // 3: the UI phase is DERIVED from artifacts, never trusted from client state). A
+  // stepIndex restored from sessionStorage — e.g. a returning DTXSID whose prior
+  // client step was Integrate & Approve, or a session the mirror re-populated at an
+  // earlier stage — must not sit AHEAD of what the artifacts support. When the phase
+  // resolves (or the session changes) clamp the step down to the phase's step. This
+  // fires only on dtxsid/phase change, NOT on step change, so forward navigation the
+  // user does afterward (clicking any chip) is untouched.
+  useEffect(() => {
+    if (mode === "document" || phase === null) return;
+    setStepIndex((cur) => (cur > suggested ? suggested : cur));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dtxsid, phase]);
 
   function goto(i: number) {
     setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
