@@ -716,9 +716,18 @@ def load_session_data(
                 ow_sex_allow=_vf["sex_ow"],
                 compound_name=chemical_name,
             )
-            data["apical_sections"] = [
-                _normalize_apical_section(s) for s in raw_sections
-            ]
+            # Re-interpolate the compound name into each caption: the cache bakes it
+            # at Process time, so a session integrated before its name resolved would
+            # otherwise render the DTXSID in every caption. (Organ Weight is already
+            # rebuilt from filtered rows inside apply_section_filters.)
+            from tables.table_builder_common import refresh_caption_compound
+            _apical = []
+            for s in raw_sections:
+                ns = _normalize_apical_section(s)
+                if ns.get("caption"):
+                    ns["caption"] = refresh_caption_compound(ns["caption"], chemical_name)
+                _apical.append(ns)
+            data["apical_sections"] = _apical
         # Unified cross-platform narratives are cached in the sections blob under
         # the `unified_narratives` key (run_process writes the default-filtered
         # set there for the session-reload export path).  Overlay when present;

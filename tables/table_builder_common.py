@@ -862,6 +862,31 @@ def is_reportable_bmd(bmd_text) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Caption compound-name refresh
+# ---------------------------------------------------------------------------
+
+# The apical table captions all end in the NIEHS "Administered <compound> for Five
+# Days" segment. The compound name is DATA and the caption is DOCUMENT text — they
+# should be composed at render time, but the section cache bakes the name in at
+# Process time (so a session integrated before its name resolved carries the DTXSID
+# in every caption). This re-interpolates that one segment with the current name so
+# the rendered caption always reflects the resolved compound, regardless of what was
+# cached. Only Organ Weight was previously rebuilt (from filtered rows); this covers
+# the rest (Body Weight, Clinical Chemistry, Hematology, Hormones, Tissue Conc).
+_CAPTION_COMPOUND_RE = re.compile(r"Administered .+? for Five Days")
+
+
+def refresh_caption_compound(caption: str, compound_name: str) -> str:
+    """Replace the compound name in a "…Administered <compound> for Five Days"
+    caption with `compound_name`. No-op when the caption lacks that segment or when
+    `compound_name` is empty (so a caption of another form is left untouched)."""
+    if not caption or not compound_name:
+        return caption
+    return _CAPTION_COMPOUND_RE.sub(
+        f"Administered {compound_name} for Five Days", caption)
+
+
+# ---------------------------------------------------------------------------
 # Dose label formatting
 # ---------------------------------------------------------------------------
 

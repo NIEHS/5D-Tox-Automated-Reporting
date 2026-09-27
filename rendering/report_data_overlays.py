@@ -307,9 +307,14 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
 
             # Accept caption from either key — the body_weight_table builder
             # outputs "caption" directly, while the frontend uses
-            # "table_caption_template".
-            caption = (sec.get("caption")
-                       or sec.get("table_caption_template", ""))
+            # "table_caption_template". Re-interpolate the compound name (the cache /
+            # section files bake it at Process time, so an early-integrated session
+            # would otherwise carry the DTXSID here — see refresh_caption_compound).
+            from tables.table_builder_common import refresh_caption_compound
+            caption = refresh_caption_compound(
+                (sec.get("caption") or sec.get("table_caption_template", "")),
+                chemical_name,
+            )
 
             apical_entry = {
                 "title": section_title,
