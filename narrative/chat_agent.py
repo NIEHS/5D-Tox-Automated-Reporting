@@ -117,6 +117,9 @@ async def run_turn(
     model: str | None = None,
     client: Any = None,
     emit: EmitFn | None = None,
+    system_prompt: str | None = None,
+    max_tokens: int | None = None,
+    max_rounds: int | None = None,
 ) -> dict:
     """Answer one user message with tool use.
 
@@ -132,6 +135,12 @@ async def run_turn(
         emit:          ``emit(event, data)`` callback for progress streaming:
                        events are "thinking", "tool_call", "tool_result",
                        "answer".
+        system_prompt: override the chat SYSTEM_PROMPT verbatim (already
+                       interpolated); defaults to the chat prompt. Used by
+                       non-chat callers that reuse this loop (e.g. the totality
+                       analysis writer).
+        max_tokens / max_rounds: per-call budget overrides; default to the
+                       module constants so the chat path is unchanged.
 
     Returns ``{"answer", "references", "unresolved_citations", "tool_trace",
     "model_used", "rounds"}``.
@@ -139,7 +148,9 @@ async def run_turn(
     chosen = model or DEFAULT_CHAT_MODEL
     client = client or build_async_anthropic_client()
     messages = history_to_messages(history) + [{"role": "user", "content": user_message}]
-    system = SYSTEM_PROMPT.format(chemical=chemical_name)
+    system = system_prompt if system_prompt is not None else SYSTEM_PROMPT.format(chemical=chemical_name)
+    tok_budget = max_tokens or MAX_TOKENS
+    round_budget = max_rounds or MAX_TOOL_ROUNDS
 
     final_text: list[str] = []
     rounds = 0
@@ -148,13 +159,16 @@ async def run_turn(
         await _emit(emit, "thinking", {"round": rounds})
         # No temperature: newer models reject the parameter and the answers
         # should be deterministic-ish anyway (data-grounded).
-        response = await client.messages.create(
+        create_kwargs = dict(
             model=resolve_model_name(chosen),
             system=system,
             messages=messages,
-            tools=toolbox.specs(),
-            max_tokens=MAX_TOKENS,
+            max_tokens=tok_budget,
         )
+        specs = toolbox.specs()
+        if specs:  # a tool-free caller (specs == []) makes a plain completion
+            create_kwargs["tools"] = specs
+        response = await client.messages.create(**create_kwargs)
         blocks = [_block_to_dict(b) for b in (response.content or [])]
         text_parts = [b["text"] for b in blocks if b["type"] == "text" and b["text"].strip()]
         tool_uses = [b for b in blocks if b["type"] == "tool_use"]
@@ -162,7 +176,7 @@ async def run_turn(
         if getattr(response, "stop_reason", None) != "tool_use" or not tool_uses:
             final_text = text_parts
             break
-        if rounds > MAX_TOOL_ROUNDS:
+        if rounds > round_budget:
             final_text = text_parts or [
                 "I could not finish within the tool-call budget for one answer. "
                 "Please narrow the question."
