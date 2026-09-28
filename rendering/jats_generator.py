@@ -9,23 +9,23 @@ decisions, never a re-derivation.
 
 Coverage: metadata (journal-meta / article-meta), the narrative spine (title,
 structured abstract, and every body narrative section via the shared
-resolve_narrative_content dispatch), and DATA TABLES — apical / incidence /
+resolve_narrative_content dispatch), DATA TABLES — apical / incidence /
 sample-counts / bmd-summary plus the genomics gene-set & gene GRIDS — projected
-to BITS <table-wrap>.  Still deferred (each emits a visible <!-- TODO --> comment
-so a gap is never silent): figures / genomics CHARTS (BITS <fig>/<graphic> +
-image packaging is a distinct phase) and the genomics section narrative.
+to BITS <table-wrap>, and (BITS <book> path) the BACK MATTER: the References
+list (<ref-list> of <mixed-citation>) and the appendices (<book-app> inside
+<book-app-group>), whose authored freeform prose is projected HTML→JATS
+(headings → <sec>, prose → <p> with inline emphasis / super- & subscripts /
+links, tables → <table-wrap>, lists → <list>).  Still deferred (each emits a
+visible <!-- TODO --> comment so a gap is never silent): genomics CHARTS as BITS
+<fig>/<graphic> (the image-packaging phase; tree `figure` nodes DO project, but
+data-driven chart images are not bundled yet).
 
-Why journal <article> and not book <book>: per the current working assumption
-the reports are treated as PMC journal articles (the self-service PMC Article
-Previewer + StyleChecker path).  If they later become BITS <book-part>, the
-region split (front/body/back) and the element vocabulary change, but the
-tree-walk + plan reuse below do not.
-
-Why journal <article> and not book <book>: per the current working assumption
-the reports are treated as PMC journal articles (the self-service PMC Article
-Previewer + StyleChecker path).  If they later become BITS <book-part>, the
-region split (front/body/back) and the element vocabulary change, but the
-tree-walk + IR reuse below do not.
+Two entry points over the same tree walk + shared plans: generate_jats emits a
+PMC journal <article> (the self-service Article Previewer + StyleChecker path),
+generate_bits emits a Bookshelf <book> (front-matter / book-body / book-back).
+The reports publish as books (NBK589955), so generate_bits is the primary
+deliverable; the element vocabulary differs (region containers, book-app) but the
+tree-walk + plan reuse are shared.
 
 The tree numbering (compute_table_numbers) is positional, so in-text references
 are authored as [[xref:id]] tokens (cross_references.py) and materialize here to
@@ -51,6 +51,8 @@ from document_model.document_tree import (
 from rendering.render_common import (
     authored_table_matrix,
     table_caption,
+    figure_payload,
+    figure_prefix,
     RenderDispatchError,
     assert_dispatch_covers,
     front_matter_plan,
@@ -504,7 +506,6 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
         if isinstance(para, str) and para.strip():
             out.append(_p(para))
 
-    charts_deferred = False
     for r in resolve_content_items(node, data):
         # ADR-0003 Part B: a template-authored item (text fully wired; other
         # kinds a visible pending marker) comes before the data-derived items.
@@ -545,14 +546,44 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
                 if combined and combined.strip():
                     out.append(_p(combined))
         elif part == "chart":
-            charts_deferred = True
+            chart = next(
+                (c for c in (entry.get("charts") or [])
+                 if c.get("key") == r.item.get("chart_key")),
+                None,
+            )
+            if chart is not None:
+                out.append(_chart_fig(entry, chart))
 
     if not entries:
         out.append(_todo(node, "genomics data pending"))
-    # Charts are the one remaining gap — mark it explicitly (image-packaging phase).
-    if charts_deferred:
-        out.append(_todo(node, "genomics charts deferred to figures phase"))
     return out
+
+
+def _chart_fig(entry: dict, chart: dict) -> etree._Element:
+    """A genomics chart (base64 PNG in the data) → BITS <fig>: <label>Figure N</label>
+    <caption><p>…</p></caption> <graphic xlink:href="<filename>">.  The href names
+    the chart's own image file (chart["filename"], e.g. genomics-liver-umap.png);
+    the BYTES are supplied out of band — written into the submission bundle's
+    figures/ dir (as the LaTeX bundle already does) or inlined by the Bookshelf
+    preview (rendering.bookshelf_preview.chart_images) — since a BITS <graphic>
+    references an external file, never a data URI."""
+    organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
+    key = (chart.get("key") or "chart").strip().lower().replace(" ", "-")
+    fig = E("fig", {"id": f"fig-genomics-{organ}-{key}"})
+    fig_num = chart.get("figure_number")
+    if fig_num is not None:
+        fig.append(E.label(f"Figure {fig_num}"))
+    descriptive = chart.get("caption")
+    if descriptive:
+        fig.append(E.caption(E.p(descriptive)))
+    href = chart.get("filename")
+    if href:
+        graphic = E.graphic()
+        graphic.set(f"{{{_XLINK}}}href", href)
+        fig.append(graphic)
+    else:
+        fig.append(etree.Comment(" TODO tracer: chart image has no filename "))
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -688,9 +719,214 @@ def _emit_titled_table_bundle(parent: etree._Element, node: DocNode, data: dict)
     parent.append(sec)
 
 
-def _emit_figure_todo(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """figure → not yet projected; leave a visible tracer comment."""
-    parent.append(_todo(node, "figure not yet projected"))
+def _emit_figure(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """figure → BITS <fig>: <label>? <caption>? <graphic xlink:href>.
+
+    The image href is the figure payload's filename (figure_payload — a data
+    chart's own file, or an authored figure's content_file basename).  The image
+    BYTES are packaged separately (the submission bundle / the preview base_dir);
+    a figure with no resolvable file keeps a visible tracer instead of a broken
+    <graphic>, so the gap stays honest rather than silently emitting nothing."""
+    fig = E("fig", {"id": f"fig-{node.id}"})
+    label = figure_prefix(node).strip().rstrip(".")  # "Figure N" / "Figure C-1"
+    if label:
+        fig.append(E.label(label))
+    payload = figure_payload(node, data) or {}
+    caption = node.caption or payload.get("caption")
+    if caption:
+        fig.append(E.caption(E.p(caption)))
+    href = payload.get("filename")
+    if href:
+        graphic = E.graphic()
+        graphic.set(f"{{{_XLINK}}}href", href)
+        fig.append(graphic)
+    else:
+        fig.append(_todo(node, "figure image not bundled"))
+    parent.append(fig)
+
+
+def _emit_appendix(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """appendix → BITS <book-app>: a titled document part that nests its children
+    (freeform prose, data tables, figures, supplied files).  BITS names the
+    book-context appendix <book-app> (inside <book-app-group>) and gives it the
+    SAME shape as a chapter — (book-part-meta?, body?) — so the title lives in
+    <book-part-meta><title-group> and the content in <body>, mirroring
+    _build_book_body.  An appendix with no children (a pending stub, e.g.
+    Appendix C) keeps a visible tracer in its body so the gap is explicit."""
+    meta = E("book-part-meta", E("title-group", E.title(node.title or "")))
+    inner = E.body()
+    if not node.children:
+        # A stub appendix (e.g. Appendix C, whose QC/eFDR figures need data the
+        # pipeline does not retain): a VISIBLE pending paragraph, not a comment —
+        # BITS <body> must not be empty, and the gap should read as content.
+        inner.append(E.p(f"[{node.title or 'Appendix'}: content pending — "
+                         f"source data not retained by the pipeline.]"))
+    for child in node.children:
+        _append_node(inner, child, data)
+    parent.append(E("book-app", {"id": f"app-{node.id}"}, meta, inner))
+
+
+def _emit_freeform(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """freeform-page / freeform-block → the authored HTML content projected into
+    JATS blocks (see _freeform_blocks).  A node with no HTML source (a LaTeX-only
+    freeform, or an empty one) keeps a visible tracer rather than dropping."""
+    blocks = _freeform_blocks(node)
+    if not blocks:
+        parent.append(_todo(node, "freeform authored content not projected (no HTML source)"))
+        return
+    for block in blocks:
+        parent.append(block)
+
+
+# HTML inline element → JATS inline element name (others flatten to their text).
+_INLINE_MAP = {
+    "em": "italic", "i": "italic", "strong": "bold", "b": "bold",
+    "sup": "sup", "sub": "sub", "code": "monospace", "a": "ext-link",
+}
+
+
+def _convert_inline(src, dst: etree._Element) -> None:
+    """Copy an lxml.html element's mixed inline content into a JATS element `dst`,
+    mapping em/strong/sup/sub/code/a to their JATS peers and flattening any other
+    wrapper to its text.  Character data lands on `dst.text` or the preceding
+    child's tail so mixed content round-trips correctly."""
+    def add_text(t: str | None) -> None:
+        if not t:
+            return
+        if len(dst) == 0:
+            dst.text = (dst.text or "") + t
+        else:
+            dst[-1].tail = (dst[-1].tail or "") + t
+
+    add_text(src.text)
+    for child in src:
+        tag = child.tag if isinstance(child.tag, str) else ""
+        mapped = _INLINE_MAP.get(tag)
+        if mapped:
+            j = E(mapped)
+            _convert_inline(child, j)
+            if mapped == "ext-link":
+                j.set("ext-link-type", "uri")
+                j.set(f"{{{_XLINK}}}href", child.get("href", ""))
+            dst.append(j)
+        else:
+            add_text(child.text_content() or "")
+        add_text(child.tail)
+
+
+def _table_wrap_from_html(table_el, node_id: str) -> etree._Element | None:
+    """A freeform HTML <table> → a JATS <table-wrap> (no label/caption), reusing
+    the neutral header/rows extraction the authored-table matrix uses."""
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    for tr in table_el.iter("tr"):
+        cells = [c for c in tr if c.tag in ("th", "td")]
+        texts = [" ".join((c.text_content() or "").split()) for c in cells]
+        in_head = tr.getparent() is not None and tr.getparent().tag == "thead"
+        if not headers and not rows and (in_head or (cells and all(c.tag == "th" for c in cells))):
+            headers = texts
+        else:
+            rows.append(texts)
+    if not headers and not rows:
+        return None
+    return _table_wrap(node_id, "", headers, rows)
+
+
+def _list_from_html(el) -> etree._Element | None:
+    """A freeform HTML <ul>/<ol> → a JATS <list> of <list-item><p>."""
+    lst = E("list", {"list-type": "order" if el.tag == "ol" else "bullet"})
+    for li in el.findall("li"):
+        p = E.p()
+        _convert_inline(li, p)
+        lst.append(E("list-item", p))
+    return lst if len(lst) else None
+
+
+def _freeform_blocks(node: DocNode) -> list:
+    """Project a freeform node's authored HTML (node.resolved_content['html'])
+    into a list of JATS blocks.  Headings (<h1>–<h6>) open a <sec> that collects
+    the blocks that follow them (so an appendix's authored sub-sections keep their
+    titles and the container stays DTD-valid: leading blocks, then <sec>s);
+    <p>/<table>/<ul>/<ol> become <p>/<table-wrap>/<list>.  Inline emphasis, super/
+    subscripts and links are preserved; anything else flattens to its text."""
+    resolved = node.resolved_content or {}
+    html = resolved.get("html") if isinstance(resolved, dict) else None
+    if not html or not str(html).strip():
+        return []
+    import lxml.html as _lh
+    try:
+        root = _lh.fromstring(f"<div>{html}</div>")
+    except Exception:
+        return []
+
+    blocks: list = []
+    current: etree._Element | None = None
+    tcount = 0
+
+    def target() -> list:
+        return current if current is not None else blocks
+
+    def add(block) -> None:
+        if current is not None:
+            current.append(block)
+        else:
+            blocks.append(block)
+
+    for el in root:
+        tag = el.tag if isinstance(el.tag, str) else ""
+        if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            current = E.sec({"id": f"sec-{node.id}-{len(blocks) + 1}"})
+            title = E.title()
+            _convert_inline(el, title)
+            current.append(title)
+            blocks.append(current)
+        elif tag == "p":
+            p = E.p()
+            _convert_inline(el, p)
+            if (p.text and p.text.strip()) or len(p):
+                add(p)
+        elif tag == "table":
+            tcount += 1
+            tw = _table_wrap_from_html(el, f"{node.id}-t{tcount}")
+            if tw is not None:
+                add(tw)
+        elif tag in ("ul", "ol"):
+            lst = _list_from_html(el)
+            if lst is not None:
+                add(lst)
+        elif tag == "div":
+            # A wrapper div: lift its block children (one level) into the flow.
+            for block in _freeform_blocks_from_element(el, node, len(blocks)):
+                add(block)
+        else:
+            text = " ".join((el.text_content() or "").split())
+            if text:
+                add(E.p(text))
+    return blocks
+
+
+def _freeform_blocks_from_element(el, node: DocNode, offset: int) -> list:
+    """The <p>/<table>/<list> block children of a wrapper element (a <div>), used
+    to flatten one level of nesting in authored HTML.  Headings inside a wrapper
+    are rendered as their own paragraph rather than opening a section (keeping the
+    grouping logic in _freeform_blocks single-level and predictable)."""
+    out: list = []
+    for child in el:
+        tag = child.tag if isinstance(child.tag, str) else ""
+        if tag == "p" or tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            p = E.p()
+            _convert_inline(child, p)
+            if (p.text and p.text.strip()) or len(p):
+                out.append(p)
+        elif tag == "table":
+            tw = _table_wrap_from_html(child, f"{node.id}-d{offset}")
+            if tw is not None:
+                out.append(tw)
+        elif tag in ("ul", "ol"):
+            lst = _list_from_html(child)
+            if lst is not None:
+                out.append(lst)
+    return out
 
 
 def _emit_handled_by_book_shell(parent: etree._Element, node: DocNode, data: dict) -> None:
@@ -734,13 +970,6 @@ def _emit_supplementary_material(parent: etree._Element, node: DocNode, data: di
     parent.append(sm)
 
 
-def _emit_unprojected_gap(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """A registered type this surface does NOT project yet (ADR-0004 gap):
-    appendix / freeform-page / freeform-block.  Leave a tracer comment so the
-    gap is visible in the XML instead of silently dropping the content."""
-    parent.append(_todo(node, f"{node.node_type} not yet projected to BITS (ADR-0004 gap)"))
-
-
 _DISPATCH: dict[str, object] = {
     "narrative":           _emit_narrative,
     "narrative+tables":    _emit_narrative,
@@ -751,10 +980,14 @@ _DISPATCH: dict[str, object] = {
     "data-table":          _emit_titled_table_bundle,
     "bmd-summary":         _emit_titled_table_bundle,
     "genomics-section":    _emit_titled_table_bundle,
-    "figure":              _emit_figure_todo,
+    "figure":              _emit_figure,
     # ADR-0025 presets
     "authored-table":      _emit_authored_table,
     "supplementary-material": _emit_supplementary_material,
+    # back-matter structure (ADR-0025 §8; closes the ADR-0004 appendix/freeform gap)
+    "appendix":            _emit_appendix,
+    "freeform-page":       _emit_freeform,
+    "freeform-block":      _emit_freeform,
     # handled by the book shell (see _emit_handled_by_book_shell)
     "cover":               _emit_handled_by_book_shell,
     "title-page":          _emit_handled_by_book_shell,
@@ -763,10 +996,6 @@ _DISPATCH: dict[str, object] = {
     "tables-list":         _emit_handled_by_book_shell,
     "figures-list":        _emit_handled_by_book_shell,
     "page-break":          _emit_handled_by_book_shell,
-    # not yet projected (ADR-0004 gap) — visible TODO, not a silent drop
-    "appendix":            _emit_unprojected_gap,
-    "freeform-page":       _emit_unprojected_gap,
-    "freeform-block":      _emit_unprojected_gap,
 }
 
 # ADR-0006 #3, extended to the fourth surface: fail at import if this table
@@ -945,6 +1174,60 @@ def _build_book_body(data: dict) -> etree._Element:
     return book_body
 
 
+def _build_ref_list(node: DocNode, data: dict) -> etree._Element | None:
+    """<ref-list> for the References node: a <title> + one <ref><mixed-citation>
+    per reference paragraph.  mixed-citation is the unstructured citation form
+    (structured <element-citation> is the future refinement, project_bits_export);
+    it is a valid, lossless home for the citation strings we hold today.  Returns
+    None when there are no references so an empty <ref-list> is never emitted."""
+    rc = resolve_narrative_content(node, data)
+    if rc.kind in ("paragraphs", "methods"):
+        texts = [inline_plain_text(p) for p in rc.paragraphs]
+    elif rc.kind == "labeled":
+        texts = [btext for _label, btext in rc.labeled_parts]
+    else:
+        texts = []
+    texts = [t.strip() for t in texts if t and t.strip()]
+    if not texts:
+        return None
+    rl = E("ref-list", {"id": "ref-list1"}, E.title(node.title or "References"))
+    for i, text in enumerate(texts, start=1):
+        rl.append(E.ref({"id": f"ref{i}"}, E("mixed-citation", text)))
+    return rl
+
+
+def _build_book_back(data: dict) -> etree._Element | None:
+    """<book-back>: the back-region tree — the References list and the appendices.
+
+    References (a `narrative` node with data_key "references") projects to a
+    <ref-list>; each `appendix` node projects to an <app> (via the shared
+    _append_node dispatch), all grouped under one <app-group> as the reference
+    report serves them (a-2-A … a-2-F).  Any other back-region node falls through
+    to the normal dispatch.  Returns None when the back region is empty, so the
+    book shell only grows a <book-back> when there is one — this is the element
+    generate_bits previously omitted entirely, dropping every appendix.
+    """
+    back = E("book-back")
+    appendices: list[DocNode] = []
+    for node in DOCUMENT_TREE:
+        if node.region != "back":
+            continue
+        if node.node_type == "appendix":
+            appendices.append(node)
+        elif node.data_key == "references":
+            ref_list = _build_ref_list(node, data)
+            if ref_list is not None:
+                back.append(ref_list)
+        else:
+            _append_node(back, node, data)
+    if appendices:
+        app_group = E("book-app-group", {"id": "app-group1"})
+        for node in appendices:
+            _append_node(app_group, node, data)
+        back.append(app_group)
+    return back if len(back) else None
+
+
 def generate_bits(data: dict) -> str:
     """Project the report to a BITS <book> XML string (the Bookshelf submission
     format).  Numbering first (positional xref labels), then book-meta +
@@ -959,6 +1242,9 @@ def generate_bits(data: dict) -> str:
     if fm is not None:
         book.append(fm)
     book.append(_build_book_body(data))
+    back = _build_book_back(data)
+    if back is not None:
+        book.append(back)
     return etree.tostring(
         book, xml_declaration=True, encoding="UTF-8", pretty_print=True,
         doctype=_BITS_DOCTYPE,
