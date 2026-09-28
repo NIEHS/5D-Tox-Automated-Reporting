@@ -40,6 +40,7 @@ _MEDIA_TYPES: dict[str, str] = {
     "html": "text/html",
     "latex": "application/x-tex",
     "jats": "application/xml",
+    "bookshelf": "text/html",
 }
 
 

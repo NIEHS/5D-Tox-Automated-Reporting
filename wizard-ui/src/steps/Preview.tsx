@@ -29,8 +29,9 @@ function humanizeKey(key: string): string {
 const SURFACES: { key: string; label: string; enabled: boolean }[] = [
   { key: "docx", label: "Word (.docx)", enabled: true },
   { key: "html", label: "HTML", enabled: true },
+  { key: "bookshelf", label: "Bookshelf preview", enabled: true },
+  { key: "jats", label: "JATS/BITS (XML)", enabled: true },
   { key: "latex", label: "LaTeX (soon)", enabled: false },
-  { key: "jats", label: "JATS/BITS (soon)", enabled: false },
 ];
 
 const VERSION = "default";
@@ -75,7 +76,11 @@ export function Preview({ dtxsid, back }: StepProps) {
     );
   }
 
-  const viewUrl = `${api.previewViewUrl(dtxsid, VERSION, "html")}&_=${nonce}`;
+  // The on-screen frame shows an HTML-renderable surface: the Bookshelf skin when
+  // that deliverable is selected, otherwise the always-emitted preview.html proxy
+  // (docx/jats/latex can't render in an iframe).
+  const frameSurface = surface === "bookshelf" ? "bookshelf" : "html";
+  const viewUrl = `${api.previewViewUrl(dtxsid, VERSION, frameSurface)}&_=${nonce}`;
   const downloadUrl = api.previewDownloadUrl(dtxsid, VERSION, surface);
 
   const surfaceEnabled = SURFACES.find((s) => s.key === surface)?.enabled ?? false;

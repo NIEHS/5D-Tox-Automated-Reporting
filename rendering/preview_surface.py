@@ -5,10 +5,11 @@ The four report emitters (`generate_html`, `generate_latex`, `generate_docx`,
 `generate_bits`/`generate_jats`) all project the SAME marshalled data dict + DocNode
 tree onto different output formats (see project_render_surfaces). This module adds:
 
-  1. `render_surface` — one dispatch over the emitters, keyed by surface name. Only
-     `docx` (the default deliverable) and `html` (the always-viewable proxy) are
-     implemented; `latex`/`jats` are named but raise NotImplementedError — the
-     "provisioned but unimplemented" surfaces (adding one later is a one-line wire).
+  1. `render_surface` — one dispatch over the emitters, keyed by surface name.
+     `docx` (default deliverable), `html` (always-viewable proxy), `jats` (the BITS
+     <book> XML we submit) and `bookshelf` (that BITS rendered to a Bookshelf
+     reader-view lookalike, rendering.bookshelf_preview) are implemented; `latex`
+     is named but raises NotImplementedError (adding it later is a one-line wire).
   2. `materialize_preview` — build the data on-disk (no request body), render, and
      write a preview ARTIFACT under the session dir instead of the old pull-based
      ephemeral srcdoc (project_integrated_wizard_versioned_preview Decision 5).
@@ -37,17 +38,23 @@ from rendering.latex_export import load_session_data
 
 # Surfaces the dispatch knows about. IMPLEMENTED_SURFACES render today; the rest
 # are provisioned (named so the UI can list them) but raise on use.
-IMPLEMENTED_SURFACES: frozenset[str] = frozenset({"docx", "html"})
-KNOWN_SURFACES: frozenset[str] = frozenset({"docx", "html", "latex", "jats"})
+#   jats      — the BITS <book> XML we submit to Bookshelf.
+#   bookshelf — that same BITS, rendered to a Bookshelf reader-view lookalike
+#               HTML (rendering.bookshelf_preview): a faithful preview of the
+#               ultimate deliverable's on-Bookshelf appearance.
+IMPLEMENTED_SURFACES: frozenset[str] = frozenset({"docx", "html", "jats", "bookshelf"})
+KNOWN_SURFACES: frozenset[str] = frozenset({"docx", "html", "latex", "jats", "bookshelf"})
 
 DEFAULT_SURFACE = "docx"
 
-# Filename the deliverable/view files take, per surface.
+# Filename the deliverable/view files take, per surface.  The bookshelf view is a
+# distinct HTML file so it never clobbers the always-emitted `preview.html`.
 _SURFACE_FILENAME: dict[str, str] = {
     "docx": "preview.docx",
     "html": "preview.html",
     "latex": "preview.tex",
     "jats": "preview.xml",
+    "bookshelf": "preview.bookshelf.html",
 }
 
 
@@ -59,10 +66,10 @@ def render_surface(
 ) -> bytes | str:
     """Render `data` to one output surface.
 
-    docx → bytes (generate_docx); html → str (generate_html). latex/jats are known
-    surface names but NOT implemented — they raise NotImplementedError so the caller
-    (and the UI) can offer them as disabled options without a silent wrong render.
-    An unknown surface raises ValueError.
+    docx → bytes (generate_docx); html/bookshelf → str; jats → str (BITS XML).
+    `latex` is a known surface name but NOT implemented — it raises
+    NotImplementedError so the caller (and the UI) can offer it as a disabled
+    option without a silent wrong render.  An unknown surface raises ValueError.
     """
     if surface == "docx":
         from rendering.docx_generator import generate_docx
@@ -70,7 +77,16 @@ def render_surface(
     if surface == "html":
         from rendering.html_generator import generate_html
         return generate_html(data, section_filter=section_filter, tree=tree)
-    if surface in ("latex", "jats"):
+    if surface == "jats":
+        from rendering.jats_generator import generate_bits
+        return generate_bits(data)
+    if surface == "bookshelf":
+        from rendering.jats_generator import generate_bits
+        from rendering.bookshelf_preview import render_book_xml, chart_images
+        # Inline chart PNGs (base64 in the data) so the preview is self-contained;
+        # the BITS <graphic> only carries a filename.
+        return render_book_xml(generate_bits(data), images=chart_images(data))
+    if surface == "latex":
         raise NotImplementedError(
             f"Preview surface {surface!r} is provisioned but not implemented yet"
         )

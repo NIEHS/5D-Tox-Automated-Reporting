@@ -33,7 +33,20 @@ def test_render_surface_html_returns_str():
     assert isinstance(out, str) and "<" in out
 
 
-@pytest.mark.parametrize("surface", ["latex", "jats"])
+def test_render_surface_jats_returns_bits_xml():
+    out = render_surface(_scaffold(), None, surface="jats")
+    assert isinstance(out, str) and "<book" in out
+
+
+def test_render_surface_bookshelf_returns_html():
+    out = render_surface(_scaffold(), None, surface="bookshelf")
+    assert isinstance(out, str)
+    assert "<!doctype html>" in out.lower()
+    # The Bookshelf skin carries the content column + its preview banner.
+    assert "Bookshelf" in out and 'class="toc-rail"' in out
+
+
+@pytest.mark.parametrize("surface", ["latex"])
 def test_render_surface_unimplemented_raises(surface):
     with pytest.raises(NotImplementedError):
         render_surface(_scaffold(), None, surface=surface)
