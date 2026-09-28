@@ -20,7 +20,8 @@ from document_model.document_config import _tree_from_document_list, load_templa
 from document_model.document_template import instantiate
 from document_model.document_tree import walk_tree
 from document_model.render_capabilities import (
-    BINDINGS, COMPONENT_CATALOG, ROLE_PROFILE, preset_for, role_for,
+    BINDINGS, CANONICAL_PRESETS, COMPONENT_CATALOG, ROLE_PROFILE,
+    _CANONICAL_PRESET_EXCLUSIONS, emits_for, preset_for, role_for,
 )
 
 REPO = Path(__file__).resolve().parents[2]
@@ -87,7 +88,7 @@ def test_explicit_role_and_binding_resolve_to_a_preset_without_type():
 
 
 def test_explicit_pair_without_a_preset_is_rejected():
-    with pytest.raises(ValueError, match="no catalog preset renders role 'toc' with binding 'llm'"):
+    with pytest.raises(ValueError, match="no canonical preset for role 'toc' with binding 'llm'"):
         instantiate([{"id": "x", "role": "toc", "binding": "llm", "title": "X"}])
 
 
@@ -137,14 +138,67 @@ def test_authored_figure_subtypes_name_their_image_file():
         instantiate([{"id": "f", "type": "figure", "title": "F", "subtype": "sketch"}])
 
 
-def test_every_preset_pair_round_trips_through_preset_for():
-    """The canonical preset for (role, default binding) is a type with that
-    role admitting that binding — the reverse map is total over the catalog."""
-    for name, comp in COMPONENT_CATALOG.items():
-        canonical = preset_for(comp.role, comp.bindings[0])
-        assert canonical is not None
-        c = COMPONENT_CATALOG[canonical]
-        assert c.role == comp.role and comp.bindings[0] in c.bindings
+def test_preset_for_is_intentional_not_catalog_order():
+    """The regression this fix closes: `role: sec, binding: llm` must resolve to
+    `narrative` (a prose section), NOT `heading-only` (which merely happened to
+    sit first in the catalog and emits no body).  The resolved preset for every
+    producer binding on a `sec` must actually emit a body paragraph, so the
+    silent "section renders no prose" failure can never come back."""
+    assert preset_for("sec", "container") == "heading-only"
+    assert preset_for("sec", "llm") == "narrative"
+    assert preset_for("sec", "programmatic") == "narrative"
+    assert preset_for("sec", "derived") == "narrative"
+    assert preset_for("sec", "llm") != "heading-only"
+    for binding in ("llm", "programmatic", "derived"):
+        assert "body_para" in emits_for(preset_for("sec", binding))
+
+
+def test_preset_for_matches_the_declared_canonical_map():
+    """`preset_for` is exactly a lookup into CANONICAL_PRESETS, and every entry
+    is self-consistent (the target exists, its role matches the key, it admits
+    the key's binding)."""
+    for (role, binding), name in CANONICAL_PRESETS.items():
+        assert preset_for(role, binding) == name
+        comp = COMPONENT_CATALOG[name]
+        assert comp.role == role
+        assert binding in comp.bindings
+
+
+def test_preset_for_refuses_ambiguous_and_unknown_pairs():
+    """Structural pairs with no single natural preset are refused (author names a
+    `type:`), and so is a pair no preset admits — never a silent first-match."""
+    for role, binding in _CANONICAL_PRESET_EXCLUSIONS:
+        assert preset_for(role, binding) is None
+    assert preset_for("book-meta", "derived") is None   # cover vs. title-page
+    assert preset_for("toc", "derived") is None          # toc vs. tables/figures list
+    assert preset_for("sec", "nonsense") is None
+    assert preset_for("no-such-role", "llm") is None
+
+
+def test_canonical_presets_cover_every_admitted_pair():
+    """Totality (mirrors the import-time guard so a catalog edit that adds a new
+    (role, binding) without mapping or excluding it fails HERE, visibly): every
+    pair a preset admits is either in CANONICAL_PRESETS or explicitly excluded,
+    and no pair is both."""
+    admitted = {
+        (comp.role, b) for comp in COMPONENT_CATALOG.values() for b in comp.bindings
+    }
+    assert not (set(CANONICAL_PRESETS) & _CANONICAL_PRESET_EXCLUSIONS)
+    unhandled = admitted - set(CANONICAL_PRESETS) - _CANONICAL_PRESET_EXCLUSIONS
+    assert not unhandled, f"unmapped (role, binding) pairs: {sorted(unhandled)}"
+
+
+def test_role_binding_pair_authoring_path_resolves_end_to_end():
+    """The explicit `role:` + `binding:` path (no `type:`) instantiates through
+    the canonical preset — a `sec`/`llm` pair becomes a real narrative node that
+    carries both axes — and an ambiguous pair fails loudly instead of guessing."""
+    ok = instantiate([{"id": "s", "role": "sec", "binding": "llm",
+                       "title": "S", "data_key": "background"}])
+    assert ok[0].node_type == "narrative"
+    assert ok[0].role == "sec" and ok[0].binding == "llm"
+    with pytest.raises(ValueError, match="name an explicit `type:`"):
+        instantiate([{"id": "c", "role": "book-meta", "binding": "derived",
+                      "title": "C"}])
 
 
 # ---------------------------------------------------------------------------

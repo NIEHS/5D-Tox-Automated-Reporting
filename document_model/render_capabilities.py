@@ -518,6 +518,108 @@ _DEFAULT_ROLE = RoleSpec(None)
 
 
 # ---------------------------------------------------------------------------
+# The reverse map: an explicit (role, binding) pair → its canonical preset.
+# ---------------------------------------------------------------------------
+# A `type` is a preset FOR a (role, binding) pair, but the mapping is MANY-to-one:
+# several presets share a role and admit the same binding — four `table-wrap`
+# programmatic presets (table / incidence-table / sample-counts-table /
+# data-table), three `sec` presets that admit `llm` (heading-only / narrative /
+# genomics-section).  So a bare (role, binding) pair does NOT identify a preset by
+# itself.  The pre-fix `preset_for` returned "the first match in catalog order",
+# which made the result an accident of dict insertion order: `(sec, llm)` resolved
+# to `heading-only` (a heading with NO body) instead of `narrative`, so an author
+# who wrote `role: sec, binding: llm` silently got a section that rendered no prose.
+#
+# This table makes the choice INTENTIONAL: for each pair reachable via the explicit
+# `role:` + `binding:` authoring path it names the ONE canonical preset — always the
+# most GENERAL member.  Specialized siblings (a platform `table`, the group-narrative
+# `narrative+tables`, the genomics monolith, the `freeform-block` inline variant) are
+# named with `type:` instead.  Pairs with no natural winner are deliberately absent
+# (see _CANONICAL_PRESET_EXCLUSIONS): `preset_for` returns None and the instantiator
+# turns that into a loud "name a type" error rather than guessing.
+CANONICAL_PRESETS: dict[tuple[str, str], str] = {
+    # A titled section, provenance by binding: `heading-only` is the pure
+    # container; every other producer is the general `narrative` (prose whose
+    # source is its binding).  narrative+tables / bmd-summary / genomics-section
+    # are specialized layouts, reached by `type:`.
+    ("sec", "container"): "heading-only",
+    ("sec", "llm"): "narrative",
+    ("sec", "programmatic"): "narrative",
+    ("sec", "derived"): "narrative",
+    ("sec", "authored"): "freeform-page",
+    # Front matter: one preset spans all three producer bindings.
+    ("front-matter-part", "authored"): "front-matter",
+    ("front-matter-part", "llm"): "front-matter",
+    ("front-matter-part", "programmatic"): "front-matter",
+    # A captioned table: the generic pipeline matrix (`data-table`, requires a
+    # data_key) for programmatic; `authored-table` for supplied markup.  A
+    # platform table is the specialized `type: table`.
+    ("table-wrap", "programmatic"): "data-table",
+    ("table-wrap", "authored"): "authored-table",
+    # A captioned figure: one preset, subtype/binding decide the source.
+    ("fig", "programmatic"): "figure",
+    ("fig", "authored"): "figure",
+    ("app", "container"): "appendix",
+    ("supplementary-material", "authored"): "supplementary-material",
+    ("supplementary-material", "derived"): "supplementary-material",
+    ("page-break", "derived"): "page-break",
+}
+
+# (role, binding) pairs some preset ADMITS but that have no single natural
+# canonical, so the explicit path deliberately refuses them (the author names a
+# `type:`).  Listed so the import-time guard can tell "intentionally excluded"
+# apart from "forgot to map":
+#   (book-meta, derived) — cover vs. title-page
+#   (toc, derived)       — toc vs. tables-list vs. figures-list
+_CANONICAL_PRESET_EXCLUSIONS: frozenset[tuple[str, str]] = frozenset({
+    ("book-meta", "derived"),
+    ("toc", "derived"),
+})
+
+
+def _assert_canonical_presets_consistent() -> None:
+    """Fail LOUDLY at import if CANONICAL_PRESETS drifts from the catalog — the
+    reverse map's twin of assert_dispatch_covers.  Guarantees: every canonical
+    target is a real preset whose role/binding match its key; no pair is both
+    mapped and excluded; and every (role, binding) pair ANY preset admits is
+    either mapped or explicitly excluded — so a newly-admitted binding cannot
+    silently become an unreachable pair."""
+    for (role, binding), name in CANONICAL_PRESETS.items():
+        comp = COMPONENT_CATALOG.get(name)
+        if comp is None:
+            raise ValueError(
+                f"CANONICAL_PRESETS[{(role, binding)!r}] = {name!r} is not a catalog type"
+            )
+        if comp.role != role:
+            raise ValueError(
+                f"CANONICAL_PRESETS[{(role, binding)!r}] = {name!r} has role "
+                f"{comp.role!r}, not {role!r}"
+            )
+        if binding not in comp.bindings:
+            raise ValueError(
+                f"CANONICAL_PRESETS[{(role, binding)!r}] = {name!r} does not admit "
+                f"binding {binding!r} (admits {list(comp.bindings)})"
+            )
+    overlap = set(CANONICAL_PRESETS) & _CANONICAL_PRESET_EXCLUSIONS
+    if overlap:
+        raise ValueError(
+            f"(role, binding) pairs are both mapped and excluded: {sorted(overlap)}"
+        )
+    admitted = {
+        (comp.role, b) for comp in COMPONENT_CATALOG.values() for b in comp.bindings
+    }
+    unhandled = admitted - set(CANONICAL_PRESETS) - _CANONICAL_PRESET_EXCLUSIONS
+    if unhandled:
+        raise ValueError(
+            f"(role, binding) pairs a preset admits but that are neither mapped in "
+            f"CANONICAL_PRESETS nor excluded: {sorted(unhandled)}"
+        )
+
+
+_assert_canonical_presets_consistent()
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -642,15 +744,18 @@ def default_binding_for(node_type: str) -> str:
 
 def preset_for(role: str, binding: str) -> str | None:
     """
-    The canonical catalog type for an explicit (role, binding) pair — the first
-    preset (in catalog order) whose role matches and whose bindings include
-    `binding`; None when no preset exists for the pair.  This is how a template
-    entry that states `role:` + `binding:` instead of `type:` resolves.
+    The canonical catalog type for an explicit (role, binding) pair — looked up
+    in CANONICAL_PRESETS, the INTENTIONAL reverse map, NOT "the first preset in
+    catalog order" (which made the result an accident of insertion order and
+    resolved `(sec, llm)` to the body-less `heading-only`).  This is how a
+    template entry that states `role:` + `binding:` instead of `type:` resolves.
+
+    Returns None when the pair has no canonical preset — either it is a genuinely
+    ambiguous structural pair the profile refuses (book-meta/derived is cover vs.
+    title-page; see _CANONICAL_PRESET_EXCLUSIONS) or no preset admits it at all.
+    The instantiator then requires an explicit `type:`.  See CANONICAL_PRESETS.
     """
-    for name, comp in COMPONENT_CATALOG.items():
-        if comp.role == role and binding in comp.bindings:
-            return name
-    return None
+    return CANONICAL_PRESETS.get((role, binding))
 
 
 def allowed_children_for(node_type: str) -> tuple[str, ...]:

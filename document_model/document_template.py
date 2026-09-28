@@ -175,8 +175,8 @@ def _resolve_type(entry: dict) -> str:
     preset = preset_for(role, binding)
     if preset is None:
         raise ValueError(
-            f"template node {node_id!r}: no catalog preset renders role {role!r} "
-            f"with binding {binding!r}"
+            f"template node {node_id!r}: no canonical preset for role {role!r} "
+            f"with binding {binding!r} — name an explicit `type:` instead"
         )
     return preset
 
