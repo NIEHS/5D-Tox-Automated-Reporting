@@ -615,7 +615,14 @@ export const api = {
   getView: (dtxsid: string, name: string) =>
     fetch(
       `/api/views/${encodeURIComponent(dtxsid)}/${encodeURIComponent(name)}`
-    ).then((r) => jsonOrThrow<{ view: ReportView }>(r)),
+    ).then((r) =>
+      jsonOrThrow<{
+        view: ReportView;
+        // EFFECTIVE filters/charts the render uses (view override else template
+        // default) — seed the editor from this so inherited state shows honestly.
+        resolved?: { filters?: Record<string, unknown>; charts?: string[] | null };
+      }>(r)
+    ),
   saveView: async (dtxsid: string, name: string, view: ReportView) => {
     const r = await fetch(
       `/api/views/${encodeURIComponent(dtxsid)}/${encodeURIComponent(name)}`,

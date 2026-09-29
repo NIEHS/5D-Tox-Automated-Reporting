@@ -926,11 +926,17 @@ async def api_list_views(dtxsid: Dtxsid):
 async def api_get_view(dtxsid: Dtxsid, name: str):
     """Return one view's stored mapping (document / filters / charts / methods).
 
-    An absent file (including 'default' with none saved) returns {} — the caller
-    then renders against the global template's structure + filters."""
-    from document_model.view_config import load_view
+    An absent file (including 'default' with none saved) returns {} for `view` —
+    the caller then renders against the global template's structure + filters. The
+    `resolved` block is the EFFECTIVE filters/charts the render actually uses (a
+    view's own override, else the template default), so the editor can seed its
+    controls from what renders rather than from the raw (often empty) override."""
+    from document_model.view_config import load_view, resolve_view_filters
     try:
-        return JSONResponse({"view": load_view(dtxsid, name)})
+        return JSONResponse({
+            "view": load_view(dtxsid, name),
+            "resolved": resolve_view_filters(dtxsid, name),
+        })
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=422)
 

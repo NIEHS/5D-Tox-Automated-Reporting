@@ -356,7 +356,7 @@ function FiltersEditor({ dtxsid }: { dtxsid: string }) {
             checked={scope === "session"}
             onChange={() => setScope("session")}
           />{" "}
-          This report (views)
+          This report
         </label>
         <label style={{ marginLeft: "1rem" }}>
           <input
@@ -365,7 +365,7 @@ function FiltersEditor({ dtxsid }: { dtxsid: string }) {
             checked={scope === "default"}
             onChange={() => setScope("default")}
           />{" "}
-          Default (all reports)
+          All reports (template default)
         </label>
       </div>
       {scope === "session" ? (
@@ -406,7 +406,7 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
       setError(null);
       setSaved(false);
       try {
-        const { view } = await api.getView(dtxsid, name);
+        const { view, resolved } = await api.getView(dtxsid, name);
         const f = (view.filters ?? {}) as Record<string, unknown>;
         // sex: canonical is {area: {sex_key: [tokens]}}; collapse to {area:[sexes]}
         // for the checkboxes (a sex appears if it's allowlisted under any sex_key).
@@ -421,7 +421,11 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
           if (present.size) nextSex[area] = [...present];
         }
         setSex(nextSex);
-        setCharts(view.charts ?? null);
+        // Seed from the EFFECTIVE charts (resolved: view override else template
+        // default), so an inherited `charts: []` shows as "no charts" honestly
+        // instead of the misleading "rendering all". Fall back to the raw view
+        // only if the server predates the `resolved` field.
+        setCharts(resolved ? resolved.charts ?? null : view.charts ?? null);
         // Open-vocab blocks → comma-separated inputs (canonical shapes collapsed).
         const nextOrgans: Record<string, string> = {};
         for (const area of ORGAN_AREAS)
@@ -562,11 +566,14 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
           <select value={active} onChange={(e) => setActive(e.target.value)}>
             {views.map((v) => (
               <option key={v} value={v}>
-                {v}
+                {v === "default" ? "This report (default view)" : v}
               </option>
             ))}
           </select>
         </label>
+        <button className="primary" onClick={save} disabled={saving || loading}>
+          {saving ? "Saving…" : active === "default" ? "Save to this report" : `Save "${active}"`}
+        </button>
         <button onClick={newView}>+ New view</button>
         <button onClick={deleteActive} disabled={active === "default"} title="Delete view">
           Delete
@@ -628,9 +635,9 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
               <button
                 style={{ marginLeft: "1rem" }}
                 onClick={() => setCharts(null)}
-                title="Clear the allowlist (render all charts)"
+                title="Remove the allowlist so every produced chart type renders"
               >
-                Reset to all
+                Render all chart types (clear allowlist)
               </button>
             )}
           </section>
@@ -701,7 +708,13 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
 
           <div className="config-save">
             <button className="primary" onClick={save} disabled={saving}>
-              {saving ? <Spinner label="Saving…" /> : `Save "${active}"`}
+              {saving ? (
+                <Spinner label="Saving…" />
+              ) : active === "default" ? (
+                "Save to this report"
+              ) : (
+                `Save "${active}"`
+              )}
             </button>
             {saved && <span className="badge ok">saved</span>}
           </div>
