@@ -329,7 +329,7 @@ _GENOMICS_CACHE_SCHEMA_VERSION = 5  # bumped: extraction reads the genomics side
 # inputs.  Mixed into charts_hash on top of genomics_hash, so the
 # chart cache invalidates while the (slow + LLM-costed) genomics
 # pipeline cache stays warm.
-_CHARTS_CACHE_SCHEMA_VERSION = 2  # bumped: bounded jitter (no clipped top-cluster points)
+_CHARTS_CACHE_SCHEMA_VERSION = 3  # bumped: cluster scatter now K-means (was agglomerative)
 
 
 def _hash_genomics(
