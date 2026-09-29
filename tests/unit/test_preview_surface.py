@@ -42,8 +42,11 @@ def test_render_surface_bookshelf_returns_html():
     out = render_surface(_scaffold(), None, surface="bookshelf")
     assert isinstance(out, str)
     assert "<!doctype html>" in out.lower()
-    # The Bookshelf skin carries the content column + its preview banner.
-    assert "Bookshelf" in out and 'class="toc-rail"' in out
+    # The Bookshelf skin is a page-by-page reader: the section navigator, the
+    # per-page articles and the Prev/Next pager are all present.
+    assert "Bookshelf" in out
+    assert 'class="bk-secnav"' in out and 'class="bk-page"' in out
+    assert 'id="bk-pager-top"' in out
 
 
 @pytest.mark.parametrize("surface", ["latex"])
