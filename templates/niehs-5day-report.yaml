@@ -343,19 +343,22 @@ document:
       content_file:
         latex: freeform/appendix-f.tex
         html: freeform/appendix-f.html
-  # Provenance record for the benchmark-dose analysis: the EXACT BMDExpress/ToxicR
-  # settings each analysis was run with, tabulated data-derived from
-  # data[appendix_bmd_config_matrix] (built from each bMDResult.analysisInfo). Its
-  # "Table G-1" label comes from the appendix-scoped numbering pass. Continuous BMD
-  # model-averaging is build-dependent, so recording the version is load-bearing.
-  - id: appendix-g
-    type: appendix
-    title: Benchmark Dose Analysis Configuration
-    children:
-    - id: table-g-1
-      type: data-table
-      title: BMDExpress/ToxicR Analysis Configuration
-      data_key: appendix_bmd_config_matrix
+  # OPT-IN provenance appendix — ships DORMANT to keep the NIEHS-10 reference at
+  # appendices A–F (adding it here puts a 7th appendix on every report and diverges
+  # from the reference's appendix set). Uncomment to record the EXACT BMDExpress/
+  # ToxicR settings each analysis ran with, tabulated data-derived from
+  # data[appendix_bmd_config_matrix] (built from each bMDResult.analysisInfo by
+  # render_common.build_bmd_config_matrix; the data key is already populated on both
+  # render paths, so uncommenting is all that's needed). Continuous BMD model-
+  # averaging is build-dependent, so recording the version is load-bearing when on.
+  #   - id: appendix-g
+  #     type: appendix
+  #     title: Benchmark Dose Analysis Configuration
+  #     children:
+  #     - id: table-g-1
+  #       type: data-table
+  #       title: BMDExpress/ToxicR Analysis Configuration
+  #       data_key: appendix_bmd_config_matrix
   # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
   # freeform-page / freeform-block carry content authored HERE (or in an
   # external file), not read from the pipeline.  Uncomment + adapt to insert a
