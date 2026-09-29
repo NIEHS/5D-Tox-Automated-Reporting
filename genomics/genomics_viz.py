@@ -459,15 +459,18 @@ _SVG_PREFIX: dict[str, str] = {"umap": "u", "cluster": "c"}
 
 def _compute_gene_overlap_clusters(gene_sets: list[dict]) -> dict[str, int]:
     """
-    Gene-overlap clustering of GO categories (same logic as the
-    /api/genomics-clusters endpoint): agglomerative clustering on pairwise
-    Jaccard distance of gene sets, threshold 0.7.  Returns ``go_id → cluster_id``
-    (outliers / empty gene sets get -1).  Extracted verbatim from the old inline
-    block so the cluster figure builder and the enrichment summary share one
-    deterministic assignment.
+    Gene-overlap clustering of GO categories: **K-means** over the pairwise
+    Jaccard-distance profiles of the gene sets, with the number of clusters set to
+    ``round(sqrt(#active GO terms))`` (active = categories with a non-empty gene
+    set).  Returns ``go_id → cluster_id`` (empty gene sets get -1).  A fixed seed +
+    k-means++ init keep the assignment deterministic (same input → same figure), so
+    the cluster figure builder and the enrichment summary share one assignment.
+
+    NOTE: this is the FIGURE path.  The interactive ``/api/genomics-clusters``
+    endpoint keeps its own configurable hierarchical (agglomerative, selectable
+    linkage) clustering — it is intentionally not changed here.
     """
-    from scipy.cluster.hierarchy import linkage as _linkage, fcluster as _fcluster
-    from scipy.spatial.distance import squareform as _squareform
+    from scipy.cluster.vq import kmeans2
 
     parsed_cats = []
     for gs in gene_sets:
@@ -481,6 +484,10 @@ def _compute_gene_overlap_clusters(gene_sets: list[dict]) -> dict[str, int]:
         return {p["go_id"]: 0 for p in parsed_cats}
 
     nv = len(valid_cats)
+    # Pairwise Jaccard distance of the gene sets — the gene-overlap basis. Each
+    # row is a category's dissimilarity profile to every other; K-means clusters
+    # those profiles (so the overlap metric stays Jaccard; only the algorithm
+    # changed from hierarchical to K-means).
     dm = np.zeros((nv, nv))
     for i in range(nv):
         for j in range(i + 1, nv):
@@ -488,11 +495,14 @@ def _compute_gene_overlap_clusters(gene_sets: list[dict]) -> dict[str, int]:
             inter = len(a & b)
             union = len(a | b)
             dm[i, j] = dm[j, i] = 1.0 - (inter / union) if union > 0 else 1.0
-    Z = _linkage(_squareform(dm), method="average")
-    labels = _fcluster(Z, t=0.7, criterion="distance")
+
+    # k = round(sqrt(#active terms)), clamped to [1, nv]. Deterministic init.
+    k = max(1, min(nv, int(round(nv ** 0.5))))
+    _centroids, labels = kmeans2(dm, k, minit="++", seed=0, iter=50, missing="warn")
+
     clusters: dict[str, int] = {}
     for i, v in enumerate(valid_cats):
-        clusters[v["go_id"]] = int(labels[i]) - 1
+        clusters[v["go_id"]] = int(labels[i])
     for p in parsed_cats:
         if p["go_id"] not in clusters:
             clusters[p["go_id"]] = -1
