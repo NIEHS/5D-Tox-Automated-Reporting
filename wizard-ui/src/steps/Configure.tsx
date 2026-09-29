@@ -407,7 +407,11 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
       setSaved(false);
       try {
         const { view, resolved } = await api.getView(dtxsid, name);
-        const f = (view.filters ?? {}) as Record<string, unknown>;
+        // Seed the filter fields from the EFFECTIVE filters (view override else
+        // template default), like charts below — so the editor shows what actually
+        // renders AND saving a charts change round-trips the inherited filters
+        // instead of silently wiping them (composing filters:{} from empty fields).
+        const f = ((resolved?.filters ?? view.filters) ?? {}) as Record<string, unknown>;
         // sex: canonical is {area: {sex_key: [tokens]}}; collapse to {area:[sexes]}
         // for the checkboxes (a sex appears if it's allowlisted under any sex_key).
         const sexBlock = (f.sex ?? {}) as Record<string, unknown>;
@@ -612,33 +616,49 @@ function SessionFiltersEditor({ dtxsid }: { dtxsid: string }) {
           <section className="config-group">
             <h3 className="group-heading">Charts</h3>
             <p className="help" style={{ marginTop: 0 }}>
-              {charts === null ? (
-                <em>Rendering all produced charts (no allowlist).</em>
-              ) : (
-                <em>
-                  Allowlist active — only checked types render (none checked ⇒ no
-                  charts).
-                </em>
-              )}
+              Which genomics charts (UMAP semantic maps + cluster scatters) appear
+              in this report.
             </p>
-            {CHART_TYPES.map((t) => (
-              <label key={t} style={{ marginRight: "1rem" }}>
-                <input
-                  type="checkbox"
-                  checked={(charts ?? []).includes(t)}
-                  onChange={() => toggleChart(t)}
-                />{" "}
-                {t}
-              </label>
-            ))}
-            {charts !== null && (
-              <button
-                style={{ marginLeft: "1rem" }}
-                onClick={() => setCharts(null)}
-                title="Remove the allowlist so every produced chart type renders"
-              >
-                Render all chart types (clear allowlist)
-              </button>
+            <label style={{ marginRight: "1rem" }}>
+              <input
+                type="radio"
+                name="charts-mode"
+                checked={charts === null}
+                onChange={() => setCharts(null)}
+              />{" "}
+              All chart types
+            </label>
+            <label style={{ marginRight: "1rem" }}>
+              <input
+                type="radio"
+                name="charts-mode"
+                checked={Array.isArray(charts) && charts.length === 0}
+                onChange={() => setCharts([])}
+              />{" "}
+              No charts
+            </label>
+            <label style={{ marginRight: "1rem" }}>
+              <input
+                type="radio"
+                name="charts-mode"
+                checked={Array.isArray(charts) && charts.length > 0}
+                onChange={() => setCharts([...CHART_TYPES])}
+              />{" "}
+              Only selected types
+            </label>
+            {Array.isArray(charts) && charts.length > 0 && (
+              <div style={{ marginTop: ".4rem", paddingLeft: "1.2rem" }}>
+                {CHART_TYPES.map((t) => (
+                  <label key={t} style={{ marginRight: "1rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={charts.includes(t)}
+                      onChange={() => toggleChart(t)}
+                    />{" "}
+                    {t}
+                  </label>
+                ))}
+              </div>
             )}
           </section>
 
