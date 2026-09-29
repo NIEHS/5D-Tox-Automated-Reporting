@@ -23,7 +23,7 @@ import pathlib
 
 import pytest
 
-from report_data import marshal_export_data
+from rendering.report_data import marshal_export_data
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 

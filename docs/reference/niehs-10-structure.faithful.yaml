@@ -1,0 +1,639 @@
+# Faithful structure of NIEHS Report 10 (the reference report) as an INSTANCE of the
+# document grammar (ADR-0025).  Derived 2026-09-25 from examples/NIEHS-10 PFHxSAm_Final.docx
+# (paragraph styles + outline levels, tables, drawings, section breaks, and the 55
+# supplementary-material entries of Appendix F, in body order).
+#
+# This file VALIDATES (tests/unit/test_bits_profile.py loads it through the real
+# instantiator) and is the grammar's first acceptance instance.  Bindings are honest:
+#   - body + flat front matter: the presets the shipped template uses (llm / programmatic);
+#   - the abstract is `binding: llm`, References `binding: derived`;
+#   - appendix prose the app does not write is `freeform-block` (role sec, authored) with
+#     an inline dual-source stub in place of the reference's text;
+#   - appendix data tables / data figures the pipeline does not build yet are `data-table`
+#     / `figure` (subtype chart) bound to the data_key the pipeline OWES — they render as
+#     visible "[... pending]" notes until that artifact exists;
+#   - the flowcharts of Appendix D are authored figures (subtype diagram, content_file);
+#   - Appendix F's four parts hold one `supplementary-material` node per supplied file.
+# Titles are BARE: "Table 3." / "Figure C-1." / "Appendix B." labels are computed by the
+# scoped numbering pass (document_tree._number_scoped / compute_appendix_letters), never
+# authored; the node ids carry the reference's numbers for cross-checking.  Landscape orientation follows the docx section breaks.
+document:
+- region: front
+  children:
+  - id: title-page
+    type: title-page
+    title: Title Page
+    subtype: niehs-5d-tox
+  - id: foreword
+    type: front-matter
+    title: Foreword
+    data_key: foreword
+  - id: table-of-contents
+    type: toc
+    title: Table of Contents
+  - id: tables
+    type: tables-list
+    title: Tables
+  - id: about-this-report
+    type: front-matter
+    title: About This Report
+    data_key: about_report
+    children:
+    - id: authors
+      type: heading-only
+      title: Authors
+    - id: contributors
+      type: heading-only
+      title: Contributors
+  - id: peer-review
+    type: front-matter
+    title: Peer Review
+    data_key: peer_review
+  - id: publication-details
+    type: front-matter
+    title: Publication Details
+    data_key: publication_details
+  - id: acknowledgments
+    type: front-matter
+    title: Acknowledgments
+    data_key: acknowledgments
+  - id: abstract
+    type: front-matter
+    title: Abstract
+    data_key: abstract
+    binding: llm
+- region: body
+  children:
+  - id: background
+    type: narrative
+    title: Background
+    data_key: background
+  - id: materials-and-methods
+    type: heading-only
+    title: Materials and Methods
+    data_key: methods
+    children:
+    - id: study-design
+      type: narrative
+      title: Study Design
+      data_key: methods
+      methods_key: study_design
+    - id: dose-selection-rationale
+      type: narrative
+      title: Dose Selection Rationale
+      data_key: methods
+      methods_key: dose_selection
+    - id: chemistry
+      type: narrative
+      title: Chemistry
+      data_key: methods
+      methods_key: chemistry
+    - id: clinical-examinations-and-sample-collection
+      type: heading-only
+      title: Clinical Examinations and Sample Collection
+      data_key: methods
+      methods_key: clinical_exams
+      children:
+      - id: clinical-observations
+        type: narrative
+        title: Clinical Observations
+        data_key: methods
+        methods_key: clinical_obs
+      - id: body-and-organ-weights
+        type: narrative
+        title: Body and Organ Weights
+        data_key: methods
+        methods_key: body_organ_weights
+      - id: mm-clinical-pathology
+        type: narrative
+        title: Clinical Pathology
+        data_key: methods
+        methods_key: clinical_pathology
+      - id: mm-internal-dose
+        type: narrative
+        title: Internal Dose Assessment
+        data_key: methods
+        methods_key: internal_dose
+    - id: transcriptomics
+      type: heading-only
+      title: Transcriptomics
+      data_key: methods
+      methods_key: transcriptomics
+      children:
+      - id: sample-collection-for-transcriptomics
+        type: narrative
+        title: Sample Collection for Transcriptomics
+        data_key: methods
+        methods_key: txomics_sample
+      - id: rna-isolation-library-creation-and-sequencing
+        type: narrative
+        title: RNA Isolation, Library Creation, and Sequencing
+        data_key: methods
+        methods_key: txomics_rna
+      - id: sequence-data-processing
+        type: narrative
+        title: Sequence Data Processing
+        data_key: methods
+        methods_key: txomics_seq_processing
+      - id: sequencing-quality-checks-and-outlier-removal
+        type: narrative
+        title: Sequencing Quality Checks and Outlier Removal
+        data_key: methods
+        methods_key: txomics_qc
+      - id: table-1-sample-counts
+        type: sample-counts-table
+        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        data_key: sample_counts
+      - id: data-normalization
+        type: narrative
+        title: Data Normalization
+        data_key: methods
+        methods_key: txomics_normalization
+    - id: data-analysis
+      type: heading-only
+      title: Data Analysis
+      data_key: methods
+      methods_key: data_analysis
+      children:
+      - id: statistical-analysis-of-body-weights-organ-weights-and-clinical-pathology
+        type: narrative
+        title: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: stat_analysis
+      - id: benchmark-dose-analysis-of-body-weights-organ-weights-and-clinical-pathology
+        type: narrative
+        title: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
+        data_key: methods
+        methods_key: bmd_apical
+      - id: benchmark-dose-analysis-of-transcriptomics-data
+        type: narrative
+        title: Benchmark Dose Analysis of Transcriptomics Data
+        data_key: methods
+        methods_key: bmd_genomics
+      - id: empirical-false-discovery-rate-determination-for-genomic-dose-response-modeling
+        type: narrative
+        title: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
+        data_key: methods
+        methods_key: efdr
+      - id: data-accessibility
+        type: narrative
+        title: Data Accessibility
+        data_key: methods
+        methods_key: data_accessibility
+  - id: results
+    type: heading-only
+    title: Results
+    children:
+    - id: animal-condition-body-weights-and-organ-weights
+      type: narrative+tables
+      title: Animal Condition, Body Weights, and Organ Weights
+      narrative_key: animal_condition
+      children:
+      - id: table-2
+        type: table
+        title: Summary of Body Weights of Male and Female Rats
+        platform: Body Weight
+        orientation: landscape
+      - id: table-3
+        type: table
+        title: Summary of Liver Weights of Male Rats
+        platform: Organ Weight
+        orientation: landscape
+    - id: clinical-pathology
+      type: narrative+tables
+      title: Clinical Pathology
+      narrative_key: clinical_pathology
+      children:
+      - id: table-4
+        type: table
+        title: Summary of Select Clinical Chemistry Data
+        platform: Clinical Chemistry
+        orientation: landscape
+      - id: table-5
+        type: table
+        title: Summary of Select Hematology Data
+        platform: Hematology
+        orientation: landscape
+      - id: table-6
+        type: table
+        title: Summary of Select Hormone Data
+        platform: Hormones
+        orientation: landscape
+    - id: internal-dose-assessment
+      type: narrative+tables
+      title: Internal Dose Assessment
+      narrative_key: internal_dose
+      children:
+      - id: table-7
+        type: table
+        title: Summary of Plasma Concentration Data
+        platform: Tissue Concentration
+    - id: apical-endpoint-benchmark-dose-summary
+      type: bmd-summary
+      title: Apical Endpoint Benchmark Dose Summary
+      data_key: bmd_summary
+      caption: Table 8. BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to
+        High
+    - id: gene-set-benchmark-dose-analysis
+      type: genomics-section
+      title: Gene Set Benchmark Dose Analysis
+      data_key: genomics_sections
+      narrative_key: gene_set_narrative
+    - id: gene-benchmark-dose-analysis
+      type: genomics-section
+      title: Gene Benchmark Dose Analysis
+      data_key: genomics_sections
+      narrative_key: gene_narrative
+  - id: summary
+    type: narrative
+    title: Summary
+    data_key: summary
+  - id: references
+    type: narrative
+    title: References
+    data_key: references
+    binding: derived
+- region: back
+  children:
+  - id: appendix-a
+    type: appendix
+    title: Internal Dose Assessment
+    children:
+    - id: toc-a
+      type: toc
+      title: Table of Contents
+    - id: a-1
+      type: freeform-block
+      title: Quantitation of Perfluorohexanesulfonamide in Plasma
+      content:
+        latex: '\emph{[Supplied: Quantitation of Perfluorohexanesulfonamide in Plasma is authored outside the app.]}'
+        html: '<p><em>[Supplied: Quantitation of Perfluorohexanesulfonamide in Plasma is authored outside the app.]</em></p>'
+  - id: appendix-b
+    type: appendix
+    title: Animal Identifiers
+    children:
+    - id: tables-b
+      type: tables-list
+      title: Tables
+    - id: table-b-1
+      type: data-table
+      title: Animal Numbers and FASTQ Data File Names
+      data_key: appendix_animals_matrix
+  - id: appendix-c
+    type: appendix
+    title: Transcriptomic Quality Control and Empirical False Discovery Rate
+    children:
+    - id: toc-c
+      type: toc
+      title: Table of Contents
+    - id: tables-c
+      type: tables-list
+      title: Tables
+    - id: figures-c
+      type: figures-list
+      title: Figures
+    - id: c-1
+      type: freeform-block
+      title: Gene Expression Quality Control
+      content:
+        latex: '\emph{[Supplied: Gene Expression Quality Control is authored outside the app.]}'
+        html: '<p><em>[Supplied: Gene Expression Quality Control is authored outside the app.]</em></p>'
+      children:
+      - id: figure-c-1
+        type: figure
+        title: A Principal Component Analysis of the Normalized Data from the Liver of Male Rats
+        subtype: chart
+        data_key: pca_liver_male
+      - id: figure-c-2
+        type: figure
+        title: A Principal Component Analysis of the Normalized Data from the Liver of Female Rats
+        subtype: chart
+        data_key: pca_liver_female
+      - id: figure-c-3
+        type: figure
+        title: A Principal Component Analysis of the Normalized Data from the Kidney of Male Rats
+        subtype: chart
+        data_key: pca_kidney_male
+      - id: figure-c-4
+        type: figure
+        title: A Principal Component Analysis of the Normalized Data from the Kidney of Female Rats
+        subtype: chart
+        data_key: pca_kidney_female
+    - id: c-2
+      type: freeform-block
+      title: Empirical False Discovery Rate
+      content:
+        latex: '\emph{[Supplied: Empirical False Discovery Rate is authored outside the app.]}'
+        html: '<p><em>[Supplied: Empirical False Discovery Rate is authored outside the app.]</em></p>'
+      children:
+      - id: c-2-1
+        type: freeform-block
+        title: Methods
+        content:
+          latex: '\emph{[Supplied: Methods is authored outside the app.]}'
+          html: '<p><em>[Supplied: Methods is authored outside the app.]</em></p>'
+      - id: c-2-2
+        type: freeform-block
+        title: Results
+        content:
+          latex: '\emph{[Supplied: Results is authored outside the app.]}'
+          html: '<p><em>[Supplied: Results is authored outside the app.]</em></p>'
+        children:
+        - id: figure-c-5
+          type: figure
+          title: Boxplots of the False Positive Gene Rate for Each Tissue per Sex Combination
+          subtype: chart
+          data_key: efdr_gene_fpr_boxplots
+        - id: figure-c-6
+          type: figure
+          title: Boxplots of the False Positive Gene Ontology Biological Process Rate for Each Tissue
+            per Sex Combination
+          subtype: chart
+          data_key: efdr_gobp_fpr_boxplots
+        - id: table-c-1
+          type: data-table
+          title: Number of False Positives
+          data_key: efdr_false_positives
+  - id: appendix-d
+    type: appendix
+    title: Benchmark Dose Model Recommendation and Selection Methodologies
+    children:
+    - id: tables-d
+      type: tables-list
+      title: Tables
+    - id: figures-d
+      type: figures-list
+      title: Figures
+    - id: table-d-1
+      type: authored-table
+      title: Benchmark Dose Model Recommendation/Selection Rules for Apical Endpoints
+      content:
+        latex: '\emph{[Supplied: the model-rules table is authored outside the app.]}'
+        html: '<p><em>[Supplied: the model-rules table is authored outside the app.]</em></p>'
+    - id: figure-d-1
+      type: figure
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose
+        Execution
+      subtype: diagram
+      content_file: reference/figure-d-1.png
+      orientation: landscape
+    - id: figure-d-2
+      type: figure
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution
+        of Transcriptomic Data
+      subtype: diagram
+      content_file: reference/figure-d-2.png
+      orientation: landscape
+  - id: appendix-e
+    type: appendix
+    title: Organ Weight Descriptions
+    children:
+    - id: toc-e
+      type: toc
+      title: Table of Contents
+    - id: e-1
+      type: freeform-block
+      title: Organ Weight Descriptions
+      content:
+        latex: '\emph{[Supplied: Organ Weight Descriptions is authored outside the app.]}'
+        html: '<p><em>[Supplied: Organ Weight Descriptions is authored outside the app.]</em></p>'
+  - id: appendix-f
+    type: appendix
+    title: Supplemental Data
+    children:
+    - id: apical-benchmark-dose-analysis
+      type: heading-only
+      title: Apical Benchmark Dose Analysis
+      children:
+      - id: supp-mean-body-weight-summary-1
+        type: supplementary-material
+        title: Mean Body Weight Summary
+        content_file: C20022-01_Mean_Body_Weight_Summary.docx
+      - id: supp-organ-weights-summary-2
+        type: supplementary-material
+        title: Organ Weights Summary
+        content_file: C20022-01_Organ_Weights_Summary.docx
+      - id: supp-clinical-chemistry-summary-3
+        type: supplementary-material
+        title: Clinical Chemistry Summary
+        content_file: C20022-01_Clinical_Chemistry_Summary.docx
+      - id: supp-hematology-summary-4
+        type: supplementary-material
+        title: Hematology Summary
+        content_file: C20022-01_Hematology_Data_Summary.docx
+      - id: supp-hormone-and-enzymes-summary-5
+        type: supplementary-material
+        title: Hormone and Enzymes Summary
+        content_file: C20022-01_Hormone_Summary.docx
+      - id: supp-bmd-noel-and-loel-summary-for-apical-end-6
+        type: supplementary-material
+        title: BMD, NOEL and LOEL Summary for Apical Endpoints
+        content_file: C20022-01_BMD_BMDL_LOEL_and_NOEL_Summary_for_Apical_Endpoints_Sorted_by_BMD_LOEL_from_Low_to_High.docx
+      - id: supp-male-bmd-apical-endpoints-model-fits-7
+        type: supplementary-material
+        title: Male BMD Apical Endpoints Model Fits
+        content_file: C20022-01_Appendix_Male_07282021.docx
+      - id: supp-female-bmd-apical-endpoints-model-fits-8
+        type: supplementary-material
+        title: Female BMD Apical Endpoints Model Fits
+        content_file: C20022=01_Appendix_Female_07282021.docx
+      - id: supp-bmd-model-recommendation-selection-rules-9
+        type: supplementary-material
+        title: BMD Model Recommendation Selection Rules
+        content_file: C20022-01_Benchmark_Dose_Model_Recommendation_Selection_Rules_for_Apical_Endpoints.docx
+      - id: supp-read-me-10
+        type: supplementary-material
+        title: Read Me
+        content_file: C20022-01_ReadME.docx
+      - id: supp-male-model-parameters-11
+        type: supplementary-material
+        title: Male Model Parameters
+        content_file: C20022-01_Parameter_Male_07282021.xlsx
+      - id: supp-female-model-parameters-12
+        type: supplementary-material
+        title: Female Model Parameters
+        content_file: C20022-01_Parameter_Female_07282021.xlsx
+      - id: supp-bmds-code-package-13
+        type: supplementary-material
+        title: BMDs code package
+        content_file: C20022-01_bmds.zip
+    - id: genomic-benchmark-dose-analysis
+      type: heading-only
+      title: Genomic Benchmark Dose Analysis
+      children:
+      - id: supp-bmdexpress-project-file-bm2-format-1
+        type: supplementary-material
+        title: BMDExpress Project File (bm2 format)
+        content_file: C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional.bm2
+      - id: supp-top-10-genes-ranked-by-potency-of-pertur-2
+        type: supplementary-material
+        title: Top 10 Genes Ranked by Potency of Perturbation_Kidney
+        content_file: C20022-01_Kidney_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx
+      - id: supp-top-10-go-biological-process-gene-sets-k-3
+        type: supplementary-material
+        title: Top 10 GO Biological Process Gene Sets_Kidney
+        content_file: C20022-01_Kidney_Top_10_GO_Biological_Process_Gene_Sets_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx
+      - id: supp-top-10-genes-ranked-by-potency-of-pertur-4
+        type: supplementary-material
+        title: Top 10 Genes Ranked by Potency of Perturbation_Liver
+        content_file: C20022-01_Liver_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx
+      - id: supp-top-10-go-biological-process-gene-sets-l-5
+        type: supplementary-material
+        title: Top 10 GO Biological Process Gene Sets_Liver
+        content_file: C20022-01-01_Liver_Top_10_GO_Biological_Process_Gene_Sets_Ranked_by_Potency_of_Perturbation_Sorted_by_BMD_Median.docx
+      - id: supp-bmdexpress-expression-data-kidney-female-6
+        type: supplementary-material
+        title: BMDExpress Expression Data_Kidney_Female
+        content_file: C20022-01_Kidney_PFHxSAm_Female.txt
+      - id: supp-bmdexpress-expression-data-kidney-male-7
+        type: supplementary-material
+        title: BMDExpress Expression Data_Kidney_Male
+        content_file: C20022-01_Kidney_PFHxSAm_Male.txt
+      - id: supp-bmdexpress-expression-data-liver-female-8
+        type: supplementary-material
+        title: BMDExpress Expression Data_Liver_Female
+        content_file: C20022-01_Liver_PFHxSAm_Female.txt
+      - id: supp-bmdexpress-expression-data-liver-male-9
+        type: supplementary-material
+        title: BMDExpress Expression Data_Liver_Male
+        content_file: C20022-01_Liver_PFHxSAm_Male.txt
+      - id: supp-bmdexpress-individual-gene-bmd-results-k-10
+        type: supplementary-material
+        title: BMDExpress Individual Gene BMD Results_Kidney_Male
+        content_file: C20022-01_Kidney_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+      - id: supp-bmdexpress-go-biological-process-dedupli-11
+        type: supplementary-material
+        title: BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Male
+        content_file: C20022-01_Kidney_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+      - id: supp-bmdexpress-individual-gene-bmd-results-k-12
+        type: supplementary-material
+        title: BMDExpress Individual Gene BMD Results_Kidney_Female
+        content_file: C20022-01_Kidney_PFHxSAm_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+      - id: supp-bmdexpress-go-biological-process-dedupli-13
+        type: supplementary-material
+        title: BMDExpress GO Biological Process Deduplicated BMD Results_Kidney_Female
+        content_file: C20022-01_Kidney_PFHxSAm_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+      - id: supp-bmdexpress-individual-gene-bmd-results-l-14
+        type: supplementary-material
+        title: BMDExpress Individual Gene BMD Results_Liver_Male
+        content_file: C20022-01_Liver_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+      - id: supp-bmdexpress-go-biological-process-dedupli-15
+        type: supplementary-material
+        title: BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Male
+        content_file: C20022-01_Liver_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+      - id: supp-bmdexpress-individual-gene-bmd-results-l-16
+        type: supplementary-material
+        title: BMDExpress Individual Gene BMD Results_Liver_Female
+        content_file: C20022-01_Liver_PFHxSAm_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GENE_true_true_pval0.1_ratio40_foldchange2_conf0.5.txt
+      - id: supp-bmdexpress-go-biological-process-dedupli-17
+        type: supplementary-material
+        title: BMDExpress GO Biological Process Deduplicated BMD Results_Liver_Female
+        content_file: C20022-01_Liver_PFHxSAm_Female_williams_0.05_NOMTC_foldfilter1.5_BMD_S1500_Plus_Rat_GO_BP_true_true_pval0.1_ratio40_conf0.5_deduplicate.txt
+      - id: supp-bmdexpress-prefilter-results-kidney-fema-18
+        type: supplementary-material
+        title: BMDExpress Prefilter Results_ Kidney _Female
+        content_file: C20022-01_BMDExpress_Prefilter_Results_Kidney_Female.txt
+      - id: supp-bmdexpress-prefilter-results-kidney-male-19
+        type: supplementary-material
+        title: BMDExpress Prefilter Results_ Kidney _Male
+        content_file: C20022-01_BMDExpress_Prefilter_Results_Kidney_Male.txt
+      - id: supp-bmdexpress-prefilter-results-liver-femal-20
+        type: supplementary-material
+        title: BMDExpress Prefilter Results_ Liver _Female
+        content_file: C20022-01_BMDExpress_Prefilter_Results_Liver_Female.txt
+      - id: supp-bmdexpress-prefilter-results-liver-male-21
+        type: supplementary-material
+        title: BMDExpress Prefilter Results_ Liver _Male
+        content_file: C20022-01_BMDExpress_Prefilter_Results_Liver_Male.txt
+      - id: supp-animal-and-fastaq-metadata-22
+        type: supplementary-material
+        title: Animal and Fastaq Metadata
+        content_file: C20022-01_Animal_and_FASTQ_Metadata.zip
+      - id: supp-kidney-principal-components-analysis-fil-23
+        type: supplementary-material
+        title: Kidney Principal Components Analysis Files
+        content_file: C20022-01_Kidney_PCA.zip
+      - id: supp-liver-principal-components-analysis-file-24
+        type: supplementary-material
+        title: Liver Principal Components Analysis Files
+        content_file: C20022-01_Liver_PCA.zip
+      - id: supp-individual-gene-bmd-analysis-results-fil-25
+        type: supplementary-material
+        title: Individual Gene BMD Analysis Results File
+        content_file: C20022-01_Individual_Gene_Defined_Category_Files_for_Gene_Level_BMD_Analysis_of_Array_Platform_GPL1355.zip
+      - id: supp-bmdexpress-software-26
+        type: supplementary-material
+        title: BMDExpress Software
+        content_file: C20022-01_Software.zip
+      - id: supp-bmdexpress-project-file-json-format-27
+        type: supplementary-material
+        title: BMDExpress Project File (JSON format)
+        content_file: C20022-01_EPA_PFAS_Kidney_Overflow_plate_removed_S1500_Plus_Analysis_Traditional_JSON.zip
+      - id: supp-go-biological-process-bmd-analysis-resul-28
+        type: supplementary-material
+        title: GO Biological Process BMD Analysis Results
+        content_file: C20022-01_Functional_Classification_Annotation_Files_for_GO_Biological_Process_Analysis_of_Array_Platform_GPL1355.zip
+    - id: study-tables
+      type: heading-only
+      title: Study Tables
+      children:
+      - id: supp-i04-mean-body-weight-summary-1
+        type: supplementary-material
+        title: I04 – Mean_Body_Weight_Summary
+        content_file: C20022-01_I04_–_Mean_Body_Weight_Summary.pdf
+      - id: supp-i05-clinical-observations-summary-2
+        type: supplementary-material
+        title: I05 – Clinical_Observations_Summary
+        content_file: C20022-01_I05_–_Clinical_Observations_Summary.pdf
+      - id: supp-pa06-organ-weights-summary-3
+        type: supplementary-material
+        title: PA06 – Organ_Weights_Summary
+        content_file: C20022-01_PA06_–_Organ_Weights_Summary.pdf
+      - id: supp-pa41-clinical-chemistry-summary-4
+        type: supplementary-material
+        title: PA41 – Clinical_Chemistry_Summary
+        content_file: C20022-01_PA41_–_Clinical_Chemistry_Summary.pdf
+      - id: supp-pa43-hematology-summary-5
+        type: supplementary-material
+        title: PA43 – Hematology Summary
+        content_file: C20022-01_PA43_–_Hematology_Summary.pdf
+      - id: supp-pa48-summary-of-tissue-concentration-6
+        type: supplementary-material
+        title: PA48 – Summary of Tissue Concentration
+        content_file: C20022-01_PA48_-_Summary_of_Tissue_Concentration.pdf
+      - id: supp-r07-hormone-summary-7
+        type: supplementary-material
+        title: R07 – Hormone_Summary
+        content_file: C20022-01_R07_–_Hormone_Summary.pdf
+    - id: individual-animal-data
+      type: heading-only
+      title: Individual Animal Data
+      children:
+      - id: supp-individual-animal-body-weight-data-1
+        type: supplementary-material
+        title: Individual Animal Body Weight Data
+        content_file: C20022-01_Individual_Animal_Body_Weight_Data.xlsx
+      - id: supp-individual-animal-clinical-chemistry-dat-2
+        type: supplementary-material
+        title: Individual Animal Clinical Chemistry Data
+        content_file: C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx
+      - id: supp-individual-animal-clinical-observations--3
+        type: supplementary-material
+        title: Individual Animal Clinical Observations Data
+        content_file: C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx
+      - id: supp-individual-animal-hormone-data-4
+        type: supplementary-material
+        title: Individual Animal Hormone Data
+        content_file: C20022-01_Individual_Animal_Hormone_Data.xlsx
+      - id: supp-individual-animal-organ-weight-data-5
+        type: supplementary-material
+        title: Individual Animal Organ Weight Data
+        content_file: C20022-01_Individual_Animal_Organ_Weight_Data.xlsx
+      - id: supp-individual-animal-hematology-data-6
+        type: supplementary-material
+        title: Individual Animal Hematology Data
+        content_file: C20022-01_Individual_Animal_Hematology_Data.xlsx
+      - id: supp-individual-animal-tissue-concentration-d-7
+        type: supplementary-material
+        title: Individual Animal Tissue Concentration Data
+        content_file: C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx

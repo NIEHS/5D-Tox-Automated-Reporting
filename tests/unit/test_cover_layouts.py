@@ -11,7 +11,7 @@ Pins the contract the cover/title-page renderers depend on:
 
 import pytest
 
-import cover_layouts as cl
+import document_model.cover_layouts as cl
 
 
 def test_default_subtype_resolves():

@@ -139,10 +139,23 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     Returns the parsed JSON payload.
     """
     from fastapi.testclient import TestClient
-    from background_server import app
+    from web_routes.background_server import app
 
     _setup_session(sessions_dir)
     mock_bmdx_pipe.build_table_data.return_value = _make_enriched_table_data()
+
+    # Neutralize the GLOBAL report-level filters (the active template's
+    # organs/sex/assays/genes/gene_sets allowlists) so the synthetic fixture's
+    # endpoints (SD5 / ALT / AST) survive.  Otherwise the template's real assay
+    # allowlist (male: [cholesterol]) drops them at the presentation step and the
+    # oracle would freeze an empty apical summary — testing nothing.  The golden
+    # thus pins the UNFILTERED superset payload, which is exactly the phase-2
+    # cache contract.  Imported at run_process call time from document_template.
+    for _fn in ("load_report_organs", "load_report_sex", "load_report_genes",
+                "load_report_gene_sets", "load_report_assays"):
+        monkeypatch.setattr(
+            f"document_model.document_template.{_fn}", lambda name: {}
+        )
 
     # Layer 2 — Materials & Methods LLM.  Bound at module top in
     # process_integrated as `_llm_generate_json_async`.  Empty dict → the
@@ -150,7 +163,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     # and table1 but no LLM prose, so the methods closure's captured locals
     # (integrated, fingerprints, dtxsid) still drive the output.
     monkeypatch.setattr(
-        "process_integrated._llm_generate_json_async",
+        "pipeline.process_integrated._llm_generate_json_async",
         AsyncMock(return_value={}),
     )
 
@@ -158,7 +171,7 @@ def _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch):
     # the handler as `from llm_routes import generate_apical_bmd_narrative_async`,
     # so patch it on the llm_routes module.
     monkeypatch.setattr(
-        "llm_routes.generate_apical_bmd_narrative_async",
+        "narrative.apical_bmd_llm.generate_apical_bmd_narrative_async",
         AsyncMock(return_value={
             "paragraphs": ["MOCK analytical paragraph for the BMD summary."],
             "model_used": "mock-model",
@@ -240,3 +253,83 @@ class TestProcessIntegratedGolden:
             "bmd_stat_labels",
             "methods",
         }
+
+    def test_content_skip_guard_warm_rerun_is_byte_identical(
+        self, sessions_dir, mock_bmdx_pipe, monkeypatch
+    ):
+        """ADR-0021 Phase C: re-processing an unchanged session must skip content
+        preparation (prepare_content) AND return a byte-identical payload.
+
+        The golden oracle only exercises a COLD run, so it cannot catch a
+        skip-guard that either fails to fire (no perf win) or fires but restores
+        stale/partial outputs (a correctness regression). This test drives the
+        pipeline twice against the same session and asserts both properties:
+        the second run restores from cache (prepare_content NOT re-invoked) yet
+        the payload is identical to the first."""
+        import pipeline.process_integrated as pi
+
+        # Wrap prepare_content with a call counter so we can prove the guard
+        # skipped it on the warm run. Patch the name the guard actually calls.
+        calls = {"n": 0}
+        real_prepare = pi.prepare_content
+
+        async def _counting_prepare(ctx):
+            calls["n"] += 1
+            return await real_prepare(ctx)
+
+        monkeypatch.setattr(pi, "prepare_content", _counting_prepare)
+
+        first = _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch)
+        assert calls["n"] == 1, "cold run must prepare content once"
+
+        # Second run: same session, same inputs — the guard should restore the
+        # cached outputs and NOT call prepare_content again.
+        second = _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch)
+        assert calls["n"] == 1, (
+            "warm re-run re-prepared content — skip-guard did not fire "
+            f"(prepare_content called {calls['n']}x, expected 1)"
+        )
+
+        # The restored payload must be byte-identical to the cold one.
+        assert _canonical(second) == _canonical(first), (
+            "content skip-guard restored a payload that differs from the cold run"
+        )
+
+        # The guard's on-disk artifacts must exist after the first run.
+        session = sessions_dir / DTXSID
+        assert (session / ".prepare_content.fingerprint").exists()
+        assert (session / ".prepare_content.outputs.json").exists()
+
+    def test_process_builds_query_substrate(
+        self, sessions_dir, mock_bmdx_pipe, monkeypatch, tmp_path
+    ):
+        """ADR-0016 Phase A integration: processing a session materializes its
+        queryable session.duckdb (+ Parquet) as a side effect, and the DB opens
+        read-only with the expected schema tables."""
+        import os
+        import duckdb
+        from pipeline.session_schema import table_names
+
+        # Build the DB via a lock-safe temp dir (the sandbox XFS mount hangs on
+        # DuckDB's create-time fcntl; /dev/shm is tmpfs — see build_session_db).
+        if os.path.isdir("/dev/shm"):
+            monkeypatch.setenv("BMDX_SESSION_DB_TMPDIR", "/dev/shm")
+
+        _run_pipeline(sessions_dir, mock_bmdx_pipe, monkeypatch)
+
+        db_path = sessions_dir / DTXSID / "session.duckdb"
+        assert db_path.exists(), "processing did not build session.duckdb"
+        # Parquet transport dir is emitted too
+        assert (sessions_dir / DTXSID / "session_parquet").is_dir()
+
+        con = duckdb.connect(str(db_path), read_only=True)
+        try:
+            built = {
+                r[0] for r in con.execute(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'main'"
+                ).fetchall()
+            }
+        finally:
+            con.close()
+        assert set(table_names()) <= built

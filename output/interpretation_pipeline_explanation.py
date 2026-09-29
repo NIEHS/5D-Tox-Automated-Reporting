@@ -7,8 +7,7 @@ paragraphs, tables, and styled text that mirrors the original markdown response.
 """
 
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
 from docx.enum.table import WD_TABLE_ALIGNMENT
 import os
 

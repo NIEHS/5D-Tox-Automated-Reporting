@@ -61,15 +61,70 @@ PY
 # Env already set in the shell wins over settings.json (lets you override for a
 # one-off run without editing the file).
 export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$SETTINGS_KEY}"
-export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-$SETTINGS_BASE_URL}"
-# The Python SDK honors SSL_CERT_FILE (httpx), not NODE_EXTRA_CA_CERTS.
-export SSL_CERT_FILE="${SSL_CERT_FILE:-$SETTINGS_CA}"
+# Only export the base URL / CA bundle when there is a VALUE. An exported empty
+# string is not "unset" to the Anthropic SDK: ANTHROPIC_BASE_URL="" makes every
+# request target a blank URL and fail with a bare "Connection error", and an
+# empty SSL_CERT_FILE can disable default certificate loading. (Bit us on
+# 2026-09-21 on a machine with no proxy configured.)
+_base_url="${ANTHROPIC_BASE_URL:-$SETTINGS_BASE_URL}"
+if [[ -n "$_base_url" ]]; then export ANTHROPIC_BASE_URL="$_base_url"; else unset ANTHROPIC_BASE_URL; fi
+# CA bundle resolution, in priority order:
+#   1. $SSL_CERT_FILE already in the shell (explicit override)
+#   2. settings.json's env.NODE_EXTRA_CA_CERTS ($SETTINGS_CA)
+#   3. $NODE_EXTRA_CA_CERTS from the ambient shell — THIS sandbox sets the NIEHS
+#      bundle here (Claude Code / Node reads it), NOT in settings.json's env block,
+#      so relying on (2) alone left SSL_CERT_FILE empty and every Python LLM call
+#      failed cert verification against the LiteLLM proxy (self-signed chain).
+#   4. the known sandbox path as a last resort.
+# The Python SDK (httpx) honors SSL_CERT_FILE, NOT NODE_EXTRA_CA_CERTS — so we must
+# copy whichever of these resolves INTO SSL_CERT_FILE. Only export a non-empty,
+# existing path (an empty SSL_CERT_FILE can disable default cert loading entirely).
+_ca="${SSL_CERT_FILE:-${SETTINGS_CA:-${NODE_EXTRA_CA_CERTS:-/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt}}}"
+if [[ -n "$_ca" && -f "$_ca" ]]; then export SSL_CERT_FILE="$_ca"; else unset SSL_CERT_FILE; fi
 
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
   echo "run-server.sh: no ANTHROPIC_API_KEY (checked \$ANTHROPIC_API_KEY and $SETTINGS) — LLM layers will fail." >&2
 fi
-if [[ -n "$SSL_CERT_FILE" && ! -f "$SSL_CERT_FILE" ]]; then
-  echo "run-server.sh: SSL_CERT_FILE=$SSL_CERT_FILE does not exist — TLS to the proxy may fail." >&2
+
+# --- Java pipeline env (integration + BMDS) --------------------------------
+# The Java layer (IntegrateProject, RunPrefilter, …) is compiled for JDK 21;
+# running it under the sandbox's default JDK 17 fails with
+# UnsupportedClassVersionError (class file 65.0 vs 61.0). And bmdx_pipe.java_bridge
+# resolves the classpath under $BMDX_PROJECT_ROOT (its default is a nonexistent
+# ~/Dev path). pool_integrator invokes a BARE `java`, so JDK 21 must lead $PATH,
+# not just $JAVA_HOME. Shell-set values win (one-off override); we supply the
+# sandbox defaults and warn if a path is absent.
+_jdk21="${BMDX_JDK_HOME:-/opt/liberica-jdk-21}"
+if [[ -x "$_jdk21/bin/java" ]]; then
+  export JAVA_HOME="$_jdk21"
+  export PATH="$_jdk21/bin:$PATH"
+else
+  # No dedicated JDK 21: fine when the java already on PATH is 21 or newer (a
+  # newer JDK runs the class-file-65 helpers), so warn only when it is older.
+  _jv="$(java -version 2>&1 | head -1 | sed -E 's/.*version "([0-9]+).*/\1/')"
+  if ! [[ "$_jv" =~ ^[0-9]+$ ]] || (( _jv < 21 )); then
+    echo "run-server.sh: JDK 21+ not found (PATH java: ${_jv:-none}; no $_jdk21) — Java integration will fail (UnsupportedClassVersionError)." >&2
+  fi
+fi
+# Default the BMDExpress root only to a path that EXISTS: the sandbox checkout
+# first, then bmdx-pipe's own default (~/Dev/Projects/BMDExpress-3, where a
+# by-hand target/ layout lives on the author's laptop — see the README in that
+# target/). Exporting a nonexistent path would override java_bridge's default
+# and break integration on machines that are not the sandbox.
+if [[ -z "${BMDX_PROJECT_ROOT:-}" ]]; then
+  for _cand in /workspace/BMDExpress-3 "$HOME/Dev/Projects/BMDExpress-3"; do
+    if [[ -d "$_cand/target" ]]; then export BMDX_PROJECT_ROOT="$_cand"; break; fi
+  done
+fi
+# java_bridge.build_classpath globs target/*.jar, so ANY real jar there works —
+# it does NOT require the `bmdx-core.jar` name specifically (which is a symlink to
+# a host /ddn path that's dangling in the sandbox; the sibling
+# bmdexpress3-*.jar is the real artifact the glob picks up). So check for a
+# NON-DANGLING jar in target/, not that one symlink, to avoid a false alarm.
+# -L follows symlinks (the laptop layout symlinks its jars), while a DANGLING
+# symlink still fails -type f — which is exactly the false alarm to avoid.
+if ! find -L "${BMDX_PROJECT_ROOT:-/nonexistent}/target" -maxdepth 1 -name '*.jar' -type f 2>/dev/null | grep -q .; then
+  echo "run-server.sh: no readable *.jar under $BMDX_PROJECT_ROOT/target — Java classpath will be broken." >&2
 fi
 
 # Default to binding all interfaces so the host port-forward reaches us (see the
@@ -81,6 +136,6 @@ for arg in "$@"; do
 done
 
 if [[ "$host_given" == false ]]; then
-  exec "$PY" background_server.py --host 0.0.0.0 "$@"
+  exec "$PY" -m web_routes.background_server --host 0.0.0.0 "$@"
 fi
-exec "$PY" background_server.py "$@"
+exec "$PY" -m web_routes.background_server "$@"

@@ -1,6 +1,17 @@
 # 0009 — Complete the layout-style vocabulary (roadmap)
 
-- **Status:** Proposed (2026-07-22).
+- **Status:** Proposed — roadmap, in progress (noted 2026-08-17). **Phase A**
+  (title-page / display typography) **SHIPPED 2026-07-22**; the four-part contract's
+  remaining phases (B–D) are not done. This is an explicit multi-phase roadmap, so
+  it stays Proposed until the contract is complete — the per-phase markers in the
+  body are the source of truth for what's built.
+- **★ This vocabulary IS the platform-neutral hub (2026-08-17).** Per the
+  platform-neutral source-of-truth principle (memory
+  `project_platform_neutral_source_of_truth.md`), these per-node style KEYS are
+  part of the neutral source of truth that all surfaces (Word/LaTeX/HTML) project
+  from — not Word-fidelity polish. Finishing phases B/C is building the hub; the
+  four-part contract (all three translators emit every key) is exactly the
+  "no spoke diverges" guarantee. Kept + prioritized, not stale.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0006](0006-unify-html-latex-renderers.md) (the single tree
   walk + shared per-node styling the three surfaces resolve identically; this

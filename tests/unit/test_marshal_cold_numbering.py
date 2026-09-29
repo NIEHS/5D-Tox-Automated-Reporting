@@ -18,12 +18,11 @@ The dtxsid has no session directory, so the disk-backed genomics-cache reads
 are deterministic no-ops (same rationale as test_marshal_golden.py).
 """
 
-import copy
 
 import pytest
 
-from report_data import marshal_export_data
-from document_tree import DOCUMENT_TREE, walk_tree
+from rendering.report_data import marshal_export_data
+from document_model.document_tree import DOCUMENT_TREE, walk_tree
 
 
 # Positional numbers assigned by compute_table_numbers() on the canonical
@@ -143,7 +142,9 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
         ("gene", "liver"): 11,
         ("gene", "kidney"): 12,
     }
-    # The front-matter Tables list continues the sequence too.
-    table_nums = [e["table_number"] for e in out["table_entries"]]
+    # The front-matter Tables list continues the sequence too.  Only the BODY
+    # scope: appendix tables ("B-1") are numbered per appendix (ADR-0025 §5)
+    # and belong to the appendix's own list.
+    table_nums = [e["table_number"] for e in out["table_entries"] if e.get("scope") is None]
     assert 9 in table_nums and 12 in table_nums
     assert table_nums == sorted(table_nums)

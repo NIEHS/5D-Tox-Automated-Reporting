@@ -1,22 +1,32 @@
 """
-Tests for Appendix B (Animal Identifiers) rendering + roster reconstruction.
+Tests for Appendix B (Animal Identifiers): the roster as a `data-table` node.
 
-Appendix B reconstructs the reference's Table B-1 "Animal Numbers and FASTQ Data
-File Names": one row per (animal x sequenced tissue).  The LaTeX path uses a
-page-breaking longtable (hundreds of rows); the HTML path a plain table.  The
-row JOIN (bare animal number + Plate1-/Plate5- FASTQ ids → tissue rows) lives in
-latex_export._load_animal_identifiers; the renderers consume the already-joined
-rows via the shared appendix_roster_rows EXTRACT.
+Since ADR-0025 the reference's Table B-1 "Animal Numbers and FASTQ Data File
+Names" is an ordinary programmatic matrix table under the appendix — a
+`data-table` node bound to data["appendix_animals_matrix"] — not a special case
+inside the appendix emitters.  Its "Table B-1" label is assigned by the
+appendix-scoped numbering pass (document_tree._number_scoped), never written as
+a literal.  The row JOIN (bare animal number + Plate1-/Plate5- FASTQ ids →
+tissue rows) still lives in latex_export._load_animal_identifiers; the matrix
+builder (render_common.build_animal_roster_matrix) projects those rows to the
+shared {caption, headers, rows, footnotes, breakable} shape every surface
+renders.
 """
 
-import json
+from document_model.document_node import DocNode
+from document_model.document_tree import compute_table_numbers
+from rendering.render_common import build_animal_roster_matrix, ANIMAL_ROSTER_HEADERS
+from rendering.latex_generator import (
+    _render_appendix as latex_appendix,
+    _render_sample_counts_table as latex_matrix,
+)
+from rendering.html_generator import (
+    _render_appendix as html_appendix,
+    _render_sample_counts_table as html_matrix,
+)
 
-from document_node import DocNode
-from latex_generator import _render_appendix as latex_appendix
-from html_generator import _render_appendix as html_appendix
-
-# Post-join rows (the shape appendix_roster_rows / the emitters consume): one
-# row per (animal, tissue).
+# Post-join rows (the shape build_animal_roster_matrix consumes): one row per
+# (animal, tissue).
 _ROWS = [
     {"animal_number": "101", "sex": "Male", "dose": 0.0,
      "tissue": "Kidney", "fastq_file_id": "Plate5-101"},
@@ -27,117 +37,103 @@ _ROWS = [
 ]
 
 
-def _node(node_id, title):
-    return DocNode(id=node_id, title=title, level=1, node_type="appendix")
+def _appendix_b() -> tuple[DocNode, DocNode]:
+    """A numbered Appendix B holding the roster data-table (as the template does)."""
+    table = DocNode(id="table-b-1", title="Animal Numbers and FASTQ Data File Names",
+                    level=0, node_type="data-table", data_key="appendix_animals_matrix")
+    app = DocNode(id="appendix-b", title="Animal Identifiers", level=1,
+                  node_type="appendix", children=[table])
+    # Letters are positional: an Appendix A must precede it for B to be "B".
+    first = DocNode(id="appendix-a", title="Internal Dose Assessment", level=1,
+                    node_type="appendix")
+    compute_table_numbers([first, app])
+    return app, table
+
+
+def _data():
+    return {"appendix_animals_matrix": build_animal_roster_matrix(_ROWS)}
+
+
+def test_matrix_builder_projects_rows_in_header_order():
+    built = build_animal_roster_matrix(_ROWS)
+    assert built["headers"] == list(ANIMAL_ROSTER_HEADERS)
+    assert built["rows"][0] == ["101", "Male", "0", "Kidney", "Plate5-101"]
+    # Integer doses drop the trailing .0; fractional doses are kept verbatim.
+    assert built["rows"][2][2] == "1000"
+    assert built["breakable"] is True and built["footnotes"] == []
+
+
+def test_roster_is_labelled_b_1_by_the_scoped_numbering_pass():
+    app, table = _appendix_b()
+    assert app.appendix_letter == "B"
+    assert (table.table_number, table.table_label, table.appendix_scope) == (1, "B-1", "B")
 
 
 def test_appendix_b_renders_longtable_roster_latex():
-    out = latex_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
-                         {"appendix_animals": _ROWS})
+    app, table = _appendix_b()
+    out = latex_matrix(table, _data())
     assert "\\begin{longtable}" in out and "\\endhead" in out
-    # New FASTQ-mapping columns + a joined FASTQ file id.
     assert "Animal Number" in out and "FASTQ File ID" in out
     assert "Plate5-101" in out and "Kidney" in out
-    # Integer doses drop the trailing .0; fractional doses are kept verbatim.
     assert "1000" in out and "1000.0" not in out
-
-
-def test_appendix_b_longtable_has_five_columns_latex():
-    out = latex_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
-                         {"appendix_animals": _ROWS})
     # 5-column colspec (number | sex | dose | tissue | fastq id).
-    assert "\\begin{longtable}{l l r l l}" in out
+    assert "\\begin{longtable}{l l l l l}" in out
 
 
-def test_appendix_b_without_data_is_pending_latex():
-    out = latex_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"), {})
-    assert "Appendix body pending" in out
-    assert "longtable" not in out
+def test_appendix_b_longtable_carries_scoped_caption_and_label_latex():
+    app, table = _appendix_b()
+    out = latex_matrix(table, _data())
+    # Numbered caption (steps LaTeX's counter) with the EMPTY short form — an
+    # appendix table belongs to the appendix's own Tables list, not the front
+    # \listoftables — plus a \label so \ref{tab:table-b-1} resolves.
+    assert "\\caption[]{Table B-1. Animal Numbers and FASTQ Data File Names}" in out
+    assert "\\label{tab:table-b-1}" in out
+    assert "\\endfirsthead" in out
 
 
-def test_other_appendix_stays_pending_even_with_roster_data_latex():
-    out = latex_appendix(_node("appendix-a", "Appendix A. Internal Dose Assessment"),
-                         {"appendix_animals": _ROWS})
-    assert "Appendix body pending" in out
+def test_appendix_opens_its_numbering_scope_latex():
+    app, _ = _appendix_b()
+    out = latex_appendix(app, _data())
+    assert "\\section{Appendix B. Animal Identifiers}" in out
+    assert "\\renewcommand{\\thetable}{B-\\arabic{table}}" in out
+    assert "\\setcounter{figure}{0}" in out
+    # Children carry the body: no pending stub, no roster inline.
+    assert "Appendix body pending" not in out and "longtable" not in out
+
+
+def test_appendix_b_without_data_is_pending():
+    app, table = _appendix_b()
+    assert "Table data pending" in latex_matrix(table, {})
+    assert "Table data pending" in html_matrix(table, {})
+    # A childless appendix still stubs.
+    lone = DocNode(id="appendix-c", title="QC", level=1, node_type="appendix")
+    assert "Appendix body pending" in latex_appendix(lone, {})
+    assert "Appendix body pending" in html_appendix(lone, {})
 
 
 def test_appendix_b_renders_table_html():
-    out = html_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
-                        {"appendix_animals": _ROWS})
+    app, table = _appendix_b()
+    out = html_matrix(table, _data())
     assert "<table" in out and "Animal Number" in out
     assert "FASTQ File ID" in out and "Plate5-101" in out
+    assert "<caption>Table B-1. Animal Numbers and FASTQ Data File Names</caption>" in out
 
 
-def test_appendix_b_longtable_carries_fastq_caption_latex():
-    out = latex_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
-                         {"appendix_animals": _ROWS})
-    # The roster names itself Table B-1 with the reference's FASTQ title,
-    # emitted once on the first page via \endfirsthead / \endhead.
-    assert "Table B-1. Animal Numbers and FASTQ Data File Names" in out
-    assert "\\endfirsthead" in out and "\\endhead" in out
-
-
-def test_appendix_b_table_caption_html():
-    out = html_appendix(_node("appendix-b", "Appendix B. Animal Identifiers"),
-                        {"appendix_animals": _ROWS})
-    assert "<caption>" in out
-    assert "Table B-1. Animal Numbers and FASTQ Data File Names" in out
+def test_roster_cell_escaping_is_single_latex():
+    """A LaTeX special in a FASTQ id is escaped exactly once (the old inline
+    roster double-escaped)."""
+    _, table = _appendix_b()
+    data = {"appendix_animals_matrix": build_animal_roster_matrix([{
+        "animal_number": "1", "sex": "Male", "dose": 0, "tissue": "Liver",
+        "fastq_file_id": "A_1"}])}
+    tex = latex_matrix(table, data)
+    assert r"A\_1" in tex and r"\textbackslash" not in tex
 
 
 def test_appendix_with_freeform_child_emits_heading_only_no_stub():
-    # An appendix carrying an authored freeform child renders heading only; the
-    # walker renders the child body separately, so NO pending stub is emitted.
-    node = DocNode(id="appendix-e", title="Appendix E. Organ Weight Descriptions",
+    node = DocNode(id="appendix-e", title="Organ Weight Descriptions",
                    level=1, node_type="appendix")
     node.children = [DocNode(id="appendix-e-body", title="", level=2,
                              node_type="freeform-block")]
-    latex_out = latex_appendix(node, {})
-    html_out = html_appendix(node, {})
-    assert "pending" not in latex_out.lower()
-    assert "pending" not in html_out.lower()
-
-
-# ---------------------------------------------------------------------------
-# The roster JOIN — bare animal number + Plate1-/Plate5- FASTQ ids → tissue rows
-# ---------------------------------------------------------------------------
-
-def _write_report(tmp_path, animals: dict) -> object:
-    (tmp_path / "animal_report.json").write_text(
-        json.dumps({"animals": animals}), encoding="utf-8"
-    )
-    return tmp_path
-
-
-def test_load_identifiers_joins_id_forms_into_tissue_rows(tmp_path):
-    from latex_export import _load_animal_identifiers
-    # One physical animal (111) under all three id-forms.
-    animals = {
-        "111": {"animal_id": "111", "sex": "Female", "dose": 0.0},
-        "Plate1-111": {"animal_id": "Plate1-111", "sex": "Female", "dose": 0.0},
-        "Plate5-111": {"animal_id": "Plate5-111", "sex": "Female", "dose": 0.0},
-    }
-    rows = _load_animal_identifiers(_write_report(tmp_path, animals))
-    # Exactly two rows (one per tissue), Kidney before Liver, bare id carries no row.
-    assert [r["tissue"] for r in rows] == ["Kidney", "Liver"]
-    assert rows[0]["fastq_file_id"] == "Plate5-111"   # Kidney
-    assert rows[1]["fastq_file_id"] == "Plate1-111"   # Liver
-    assert all(r["animal_number"] == "111" for r in rows)
-    assert all(r["sex"] == "Female" and r["dose"] == 0.0 for r in rows)
-
-
-def test_load_identifiers_sorts_by_number_then_kidney_before_liver(tmp_path):
-    from latex_export import _load_animal_identifiers
-    animals = {
-        "Plate1-2": {"animal_id": "Plate1-2", "sex": "Male", "dose": 1.0},
-        "Plate5-2": {"animal_id": "Plate5-2", "sex": "Male", "dose": 1.0},
-        "Plate1-1": {"animal_id": "Plate1-1", "sex": "Male", "dose": 0.0},
-        "Plate5-1": {"animal_id": "Plate5-1", "sex": "Male", "dose": 0.0},
-    }
-    rows = _load_animal_identifiers(_write_report(tmp_path, animals))
-    got = [(r["animal_number"], r["tissue"]) for r in rows]
-    assert got == [("1", "Kidney"), ("1", "Liver"), ("2", "Kidney"), ("2", "Liver")]
-
-
-def test_load_identifiers_missing_file_returns_empty(tmp_path):
-    from latex_export import _load_animal_identifiers
-    assert _load_animal_identifiers(tmp_path) == []
+    assert "Appendix body pending" not in latex_appendix(node, {})
+    assert "Appendix body pending" not in html_appendix(node, {})

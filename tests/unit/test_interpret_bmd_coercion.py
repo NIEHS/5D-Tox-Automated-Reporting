@@ -22,9 +22,9 @@ import math
 
 import pandas as pd
 
-import interpret
-import interpret_analysis
-from interpret import AnalysisResult
+import narrative.interpret as interpret
+import narrative.interpret_analysis as interpret_analysis
+from narrative.interpret import AnalysisResult
 
 
 # A gene list mirroring the real liver_male data that triggered the crash:

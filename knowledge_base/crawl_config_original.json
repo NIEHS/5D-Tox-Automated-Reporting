@@ -1,0 +1,110 @@
+{
+  "max_depth": 2,
+  "max_papers": 300,
+  "max_api_calls": 500,
+  "relevance_threshold": 0.3,
+  "saturation_window": 20,
+  "saturation_threshold": 0.05,
+  "max_refs_per_paper": 30,
+  "max_cites_per_paper": 15,
+  "rate_limit_delay": 1.5,
+  "topic_keywords": [
+    "toxicogenomics",
+    "toxicogenomic",
+    "gene expression",
+    "transcriptomics",
+    "transcriptomic",
+    "rat",
+    "rattus",
+    "liver",
+    "hepat",
+    "kidney",
+    "renal",
+    "nephro",
+    "heart",
+    "cardiac",
+    "lung",
+    "pulmonary",
+    "organ",
+    "tissue",
+    "hallmark",
+    "biomarker",
+    "signature",
+    "toxicity",
+    "toxic",
+    "adverse",
+    "human health",
+    "translational",
+    "drug-induced",
+    "chemical exposure"
+  ],
+  "organ_keywords": {
+    "liver": [
+      "liver",
+      "hepat",
+      "hepatocyte",
+      "hepatotoxic",
+      "hepatic"
+    ],
+    "kidney": [
+      "kidney",
+      "renal",
+      "nephro",
+      "nephrotoxic",
+      "tubular"
+    ],
+    "heart": [
+      "heart",
+      "cardiac",
+      "cardiotoxic",
+      "myocard",
+      "cardiovascular"
+    ],
+    "lung": [
+      "lung",
+      "pulmonary",
+      "pneumo",
+      "respiratory",
+      "alveol"
+    ],
+    "brain": [
+      "brain",
+      "neuro",
+      "cerebr",
+      "hippocamp",
+      "cortical"
+    ],
+    "bone_marrow": [
+      "bone marrow",
+      "hematopoiet",
+      "myelotoxic"
+    ],
+    "intestine": [
+      "intestin",
+      "gut",
+      "gastro",
+      "colonic",
+      "entero"
+    ],
+    "spleen": [
+      "spleen",
+      "splenic"
+    ],
+    "muscle": [
+      "muscle",
+      "myotoxic",
+      "skeletal muscle"
+    ],
+    "thyroid": [
+      "thyroid"
+    ],
+    "adrenal": [
+      "adrenal"
+    ],
+    "testis": [
+      "testis",
+      "testicular",
+      "spermat"
+    ]
+  }
+}

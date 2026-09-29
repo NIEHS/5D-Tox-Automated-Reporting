@@ -10,7 +10,7 @@ Pins the styling contract both renderers bind to:
     / bool), while an unknown KEY stays non-fatal (unknown_layout_keys).
 """
 
-import layout_style as ls
+import document_model.layout_style as ls
 
 
 # ---------------------------------------------------------------------------

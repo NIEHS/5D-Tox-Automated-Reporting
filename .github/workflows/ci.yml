@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# CI — lint + unit/integration tests on every push and pull request.
+#
+# Why this shape:
+#   * bmdx-pipe is a PRIVATE sibling repo consumed as an editable path
+#     dependency (`[tool.uv.sources] bmdx-pipe = { path = "../bmdx-pipe" }`,
+#     see pyproject.toml). To satisfy that path, this workflow checks the app
+#     out into `rlm-bmdx/` and bmdx-pipe into the sibling `bmdx-pipe/`
+#     directory of the same workspace. That checkout needs a token with read
+#     access to daniel-sciome/bmdx-pipe stored as the repository secret
+#     BMDX_PIPE_TOKEN (fine-grained PAT, Contents: read).
+#   * e2e (Playwright) tests are already excluded by pyproject's addopts;
+#     they are an interactive walkthrough, not a regression suite.
+#   * Tests that need the PROCESSED golden session (a GCS mount that exists
+#     only on the author's machines) skip themselves via the
+#     `real_session_50469320` fixture in tests/conftest.py.
+#   * Java / BMDS / LLM calls are mocked by tests/conftest.py, so no JDK,
+#     TeX Live or API key is needed here.
+# ---------------------------------------------------------------------------
+name: CI
+
+# Trigger is MANUAL for now (Actions tab → CI → Run workflow). The private
+# bmdx-pipe checkout needs the BMDX_PIPE_TOKEN secret, which is not yet set;
+# until it is, an automatic run on every push would only ever go red. Restore
+# `push:` / `pull_request:` triggers once the secret exists.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out rlm-bmdx
+        uses: actions/checkout@v4
+        with:
+          path: rlm-bmdx
+
+      - name: Check out bmdx-pipe (private sibling dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: daniel-sciome/bmdx-pipe
+          token: ${{ secrets.BMDX_PIPE_TOKEN }}
+          path: bmdx-pipe
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          working-directory: rlm-bmdx
+
+      - name: Sync dependencies (dev group includes pytest + ruff)
+        working-directory: rlm-bmdx
+        run: uv sync --group dev
+
+      - name: Lint (ruff — pyflakes + syntax subset, see pyproject.toml)
+        working-directory: rlm-bmdx
+        run: uv run ruff check .
+
+      - name: Unit + integration tests
+        working-directory: rlm-bmdx
+        run: uv run pytest tests/unit tests/integration -p no:cacheprovider

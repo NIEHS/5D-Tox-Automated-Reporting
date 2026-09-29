@@ -12,7 +12,6 @@ Walks through the complete pipeline using golden DTXSID50469320 session data:
 This covers the 9-point checklist for validating the domain model refactor.
 """
 
-import json
 
 import pytest
 
@@ -64,9 +63,9 @@ class TestFullPipeline:
         → clear state → restore from disk.
         """
         from fastapi.testclient import TestClient
-        from background_server import app
-        import pool_orchestrator
-        import server_state
+        from web_routes.background_server import app
+        import pipeline.pool_orchestrator as pool_orchestrator
+        import web_routes.server_state as server_state
 
         client = TestClient(app)
         dtxsid = "DTXSID50469320"

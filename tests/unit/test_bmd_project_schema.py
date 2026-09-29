@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from bmd_project_schema import BMDProjectValidationError, load_and_validate
+from pipeline.bmd_project_schema import BMDProjectValidationError, load_and_validate
 
 
 # ---------------------------------------------------------------------------

@@ -1,9 +1,12 @@
 # 0012 — `figure` as a first-class semantic content type
 
-- **Status:** Proposed (2026-07-23). Being implemented alongside the vocabulary
-  work: a `figure` node type + subtype axis, the `fig_*` furniture roles, and
-  docx/LaTeX/HTML handlers; charts stay suppressed by the template's `charts: []`
-  until a report opts them in.
+- **Status:** **Implemented for the real cases (verified 2026-08-17).** `figure`
+  is a live `COMPONENT_CATALOG` content type (`render_capabilities.py`) and a
+  member of `_SUBTYPABLE_TYPES` (`document_template.py`); `compute_figure_numbers()`
+  walks the tree assigning positional figure numbers (`document_tree.py`). The
+  real cases (data charts + cover/title branding) are built; the reserved
+  subtypes (`photograph`, `diagram`, …) stay declared-not-built until a report
+  needs one — a deliberate scope line, not a gap. Was Proposed 2026-07-23.
 - **Deciders:** Dan Svoboda
 - **Related:** [ADR-0003](0003-document-component-model.md) (the component
   catalog + `DocNode` tree this adds a type to); [ADR-0010](0010-semantic-type-vocabulary-system.md)

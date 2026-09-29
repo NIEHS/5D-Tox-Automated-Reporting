@@ -12,9 +12,9 @@ Two concerns:
      (verified more strongly by the byte-identical golden/baseline checks).
 """
 
-from document_node import DocNode
-from genomics_content import genomics_content_plan
-from latex_generator import _render_genomics_section
+from document_model.document_node import DocNode
+from genomics.genomics_content import genomics_content_plan
+from rendering.latex_generator import _render_genomics_section
 
 _GENE_SET_ROW = {
     "rank": 1, "go_id": "GO:0001", "go_term": "apoptosis",
@@ -117,5 +117,7 @@ def test_latex_renders_chart_includegraphics_with_matching_filename():
     # bundler writes the same name (no missing-figure compile error).
     assert "figures/genomics-liver-male-umap.png" in out
     # ADR-0004 amendment (e): figcaption carries "Figure N." from the chart's
-    # positional figure_number assigned at attach time.
+    # positional figure_number (assigned by the render-time
+    # assign_genomics_figure_numbers pass — ADR-0021 D1; here supplied directly
+    # as a renderer-input fixture).
     assert "Figure 5. UMAP of liver" in out

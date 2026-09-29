@@ -25,13 +25,12 @@ What this does NOT prove
     The contract is "same data, same structure, same node types".
 """
 
-from pathlib import Path
 
 import pytest
 
-from html_generator import generate_html
-from latex_export import load_session_data
-from report_data import scaffold_report_data
+from rendering.html_generator import generate_html
+from rendering.latex_export import load_session_data
+from rendering.report_data import scaffold_report_data
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +335,7 @@ def test_apical_table_uses_niehstable_class(session_data):
     assert 'class="niehstable"' in html
 
 
-def test_apical_table_marks_sex_separator_and_n_rows(session_data):
+def test_apical_table_marks_sex_separator_and_n_rows(session_data, real_session_50469320):
     """
     Sex-separator rows and n-rows get specific CSS class hooks so
     the stylesheet can render them distinctly without inline styles.
@@ -346,7 +345,7 @@ def test_apical_table_marks_sex_separator_and_n_rows(session_data):
     assert 'class="n-row"' in html
 
 
-def test_genomics_section_stacks_sexes_no_h4(session_data):
+def test_genomics_section_stacks_sexes_no_h4(session_data, real_session_50469320):
     """Genomics tables are PER-ORGAN with both sexes stacked (reference Tables
     9–12): no per-(organ, sex) H4 subsection, and the sexes are delineated by
     full-width sex-separator rows inside the table instead."""
@@ -417,7 +416,7 @@ def test_apical_row_values_render_real_measurements_not_dose_keys():
     label key 'label') and verify the rendered HTML carries the actual
     measurement strings, not the dose-string keys.
     """
-    from report_data import marshal_export_data
+    from rendering.report_data import marshal_export_data
     body = {
         "chemical_name": "TestChem",
         "casrn": "00-00-0",
@@ -460,7 +459,7 @@ def test_apical_row_values_render_real_measurements_not_dose_keys():
 
 def test_normalize_apical_section_is_idempotent():
     """Re-normalizing an already-normalized section is a no-op."""
-    from report_data import normalize_apical_section_for_render
+    from rendering.report_data import normalize_apical_section_for_render
     sec = {
         "platform": "Body Weight",
         "table_data": {

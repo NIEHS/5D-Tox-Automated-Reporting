@@ -137,7 +137,7 @@ def live_server():
     _log(f"{_ts()}\tSESSION\tStarting live server on port {port}")
 
     proc = subprocess.Popen(
-        [sys.executable, str(PROJECT_ROOT / "background_server.py"),
+        [sys.executable, "-m", "web_routes.background_server",
          "--port", str(port), "--host", "127.0.0.1"],
         cwd=str(PROJECT_ROOT),
         stdout=subprocess.PIPE,

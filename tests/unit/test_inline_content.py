@@ -7,10 +7,10 @@ annotation; each surface derives its own presentation.  A paragraph is either a
 plain str (unchanged) or a list of inline units (str runs + typed dicts).
 """
 
-import render_common as rc
-import html_generator as hg
-import latex_generator as lg
-import docx_generator as dg
+import rendering.render_common as rc
+import rendering.html_generator as hg
+import rendering.latex_generator as lg
+import rendering.docx_generator as dg
 from docx import Document
 from docx.oxml.ns import qn
 
@@ -101,7 +101,7 @@ def test_unknown_inline_unit_degrades_to_text():
 # ---------------------------------------------------------------------------
 
 def test_foreword_hyperlinks_render_end_to_end():
-    from report_data import scaffold_report_data
+    from rendering.report_data import scaffold_report_data
     from io import BytesIO
     data = scaffold_report_data(chemical_name="X", casrn="1-1-1", dtxsid="X")
 
