@@ -14,9 +14,13 @@ pages work: a click switches to the target's page and scrolls to it.
 
 The content column mirrors the real Bookshelf reader DOM (``main-content
 lit-style`` › ``meta-content fm-sec`` h1 with ``label``/``title`` spans ›
-``body-content whole_rhythm`` with ``table``/``large_tbl`` and ``figure bk_fig``
-blocks, ``temp-labeled-list`` footnotes, ``pagination``/``page_link``).  Matching
-those class names means a copy of NCBI's real ``books.min.css`` dropped at
+``body-content whole_rhythm``, ``temp-labeled-list`` footnotes,
+``pagination``/``page_link``).  As in the real reader, data tables and figures
+render as floated **thumbnail cards** (``iconblock table-wrap``): a shrunk
+preview + "Table/Figure N" heading + caption, whose full object opens in a
+client-side **lightbox** on click and shows a peek preview on hover; inline
+prose references to a table/figure open the same lightbox.  Matching those class
+names means a copy of NCBI's real ``books.min.css`` dropped at
 ``assets/bookshelf/bookshelf.css`` styles the content faithfully with no code
 change (see ``_stylesheet``).
 
@@ -37,6 +41,7 @@ Public API:
 from __future__ import annotations
 
 import html
+import itertools
 import json
 import string
 from dataclasses import dataclass, field
@@ -53,6 +58,15 @@ _VENDORED_CSS = _REPO / "assets" / "bookshelf" / "bookshelf.css"
 # Block-level BITS elements we render inside a body/section (anything else at the
 # block level — book-part-meta, title — is handled by the caller or ignored).
 _BLOCK_TAGS = frozenset({"sec", "p", "table-wrap", "fig", "list", "boxed-text"})
+
+# Per-render counter giving an id to a table/figure that carries none, so every
+# object has a stable lightbox target within one document.  Reset at the top of
+# _build_html (rendering is single-pass per document).
+_OBJ_COUNTER = {"seq": itertools.count(1)}
+
+
+def _next_obj_id() -> str:
+    return f"obj{next(_OBJ_COUNTER['seq'])}"
 
 
 def _ln(el) -> str:
@@ -148,18 +162,14 @@ def _temp_labeled(inner_html: str) -> str:
 
 
 def _render_table_wrap(el) -> str:
-    tid = el.get("id", "")
+    tid = el.get("id") or _next_obj_id()
+    obj_id = f"obj-{tid}"
     label = el.findtext("label")
     cap = el.find("caption")
     caption_html = _inline(cap.find("p")) if (cap is not None and cap.find("p") is not None) else \
         (_inline(cap) if cap is not None else "")
-    head = ""
-    if label or caption_html:
-        lab = f'<span class="label">{_esc(label)}</span>' if label else ""
-        head = f'<h3>{lab}<span class="title">{caption_html}</span></h3>'
     table = el.find("table")
     table_html = _render_table(table) if table is not None else ""
-    body = f'<div class="large_tbl">{table_html}</div>'
     foot = ""
     twf = el.find("table-wrap-foot")
     if twf is not None:
@@ -169,12 +179,28 @@ def _render_table_wrap(el) -> str:
         notes += [f'<p class="no_margin">{_inline(p)}</p>' for p in twf.findall("p")]
         if notes:
             foot = _temp_labeled("".join(notes))
-    anchor = f' id="{_esc(tid)}"' if tid else ""
-    return f'<div class="table"{anchor}>{head}{body}{foot}</div>'
+    lab = _esc(label) if label else "Table"
+    # Full object — opens in the lightbox / hover preview; hidden in-flow.
+    obj_head = (f'<h3><span class="label">{lab}</span> '
+                f'<span class="title">{caption_html}</span></h3>') if (label or caption_html) else ""
+    obj = (f'<div class="bk-object" id="{_esc(obj_id)}">{obj_head}'
+           f'<div class="large_tbl">{table_html}</div>{foot}</div>')
+    # Thumbnail card in the reading column (real Bookshelf renders data tables as
+    # a floated thumbnail that opens the full table on click).
+    caption_card = f'<p class="float-caption">{caption_html}</p>' if caption_html else ""
+    card = (f'<div class="iconblock table-wrap clearfix" id="{_esc(tid)}">'
+            f'<a class="icnblk_img figpopup bk-figpopup" data-obj="{_esc(obj_id)}" '
+            f'title="{lab}" role="button" tabindex="0">'
+            f'<span class="bk-thumb"><span class="bk-thumb-scale">{table_html}</span>'
+            f'<span class="bk-thumb-zoom" aria-hidden="true">&#128269;</span></span></a>'
+            f'<div class="icnblk_cntnt"><h4><a class="bk-figpopup" data-obj="{_esc(obj_id)}" '
+            f'role="button" tabindex="0">{lab}</a></h4>{caption_card}</div></div>')
+    return card + obj
 
 
 def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
-    fid = el.get("id", "")
+    fid = el.get("id") or _next_obj_id()
+    obj_id = f"obj-{fid}"
     label = el.findtext("label")
     cap = el.find("caption")
     caption_html = _inline(cap.find("p")) if (cap is not None and cap.find("p") is not None) else \
@@ -191,16 +217,31 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
     b64 = (images or {}).get(href)
     if b64:
         src = b64 if b64.startswith("data:") else f"data:image/png;base64,{b64}"
-        graphic_html = f'<div class="graphic"><img src="{src}" alt="{alt}"></div>'
+        img = f'<img src="{src}" alt="{alt}">'
+        have_img = True
     elif href and base_dir is not None and (base_dir / href).exists():
-        graphic_html = f'<div class="graphic"><img src="{_esc(href)}" alt="{alt}"></div>'
+        img = f'<img src="{_esc(href)}" alt="{alt}">'
+        have_img = True
     else:
-        graphic_html = (f'<div class="graphic"><div class="fig-missing">'
-                        f'[figure: {_esc(href or "image not bundled")}]</div></div>')
-    lab = f'<h3><span class="label">{_esc(label)}</span></h3>' if label else ""
-    caption = f'<div class="caption"><p>{caption_html}</p></div>' if caption_html else ""
-    anchor = f' id="{_esc(fid)}"' if fid else ""
-    return f'<div class="figure bk_fig"{anchor}>{graphic_html}{lab}{caption}</div>'
+        img = f'<div class="fig-missing">[figure: {_esc(href or "image not bundled")}]</div>'
+        have_img = False
+    lab = _esc(label) if label else "Figure"
+    lab_h3 = f'<h3><span class="label">{lab}</span></h3>' if label else ""
+    caption_div = f'<div class="caption"><p>{caption_html}</p></div>' if caption_html else ""
+    # Full object (lightbox / hover), hidden in-flow.
+    obj = (f'<div class="bk-object" id="{_esc(obj_id)}"><div class="figure bk_fig">'
+           f'<div class="graphic">{img}</div>{lab_h3}{caption_div}</div></div>')
+    # Thumbnail card.
+    thumb_cls = "bk-thumb bk-thumb-img" if have_img else "bk-thumb bk-thumb-missing"
+    caption_card = f'<p class="float-caption">{caption_html}</p>' if caption_html else ""
+    card = (f'<div class="iconblock fig-wrap clearfix" id="{_esc(fid)}">'
+            f'<a class="icnblk_img figpopup bk-figpopup" data-obj="{_esc(obj_id)}" '
+            f'title="{lab}" role="button" tabindex="0">'
+            f'<span class="{thumb_cls}">{img}'
+            f'<span class="bk-thumb-zoom" aria-hidden="true">&#128269;</span></span></a>'
+            f'<div class="icnblk_cntnt"><h4><a class="bk-figpopup" data-obj="{_esc(obj_id)}" '
+            f'role="button" tabindex="0">{lab}</a></h4>{caption_card}</div></div>')
+    return card + obj
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +494,7 @@ def _citation(m: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | None) -> str:
+    _OBJ_COUNTER["seq"] = itertools.count(1)
     m = _meta(root)
     pages = _collect_pages(root, base_dir, images)
 
@@ -494,6 +536,14 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
   </aside>
 </div>
 <footer class="bk-footer">Rendered from BITS/JATS &lt;book&gt; &#8212; a content-only lookalike of the NCBI Bookshelf reader view. Approximate appearance; not an NCBI/NIEHS page.</footer>
+<div id="bk-hover" class="bk-hover" hidden></div>
+<div id="bk-modal" class="bk-modal" hidden>
+  <div class="bk-modal-backdrop" data-close="1"></div>
+  <div class="bk-modal-box" role="dialog" aria-modal="true">
+    <button class="bk-modal-close" data-close="1" aria-label="Close" type="button">&#215;</button>
+    <div class="bk-modal-body"></div>
+  </div>
+</div>
 <script>{js}</script>
 </body>
 </html>"""
@@ -703,16 +753,58 @@ ul.bk-secnav li.current a{background:#e3ecf4; border-left:3px solid var(--accent
   padding-left:11px; font-weight:600; color:#12263a;}
 .bk-footer{border-top:1px solid var(--rule); color:var(--muted); font-size:12px;
   padding:16px 24px 40px; max-width:1180px; margin:0 auto; background:#fafbfc;}
+/* table/figure thumbnail cards + lightbox + hover preview */
+.bk-object{display:none;}
+.iconblock.table-wrap,.iconblock.fig-wrap{display:flex; gap:16px; align-items:flex-start;
+  margin:18px 0 22px;}
+a.bk-figpopup{cursor:pointer; text-decoration:none;}
+a.bk-figpopup:hover{text-decoration:none;}
+a.icnblk_img.bk-figpopup{flex:0 0 auto;}
+.bk-thumb{display:block; width:170px; height:120px; overflow:hidden; position:relative;
+  border:1px solid var(--rule); background:#fff; border-radius:3px;}
+.bk-thumb-scale{display:block; width:680px; transform:scale(0.25); transform-origin:top left;}
+.bk-thumb-img{display:flex; align-items:center; justify-content:center; background:#fafbfc;}
+.bk-thumb-img img{max-width:100%; max-height:100%; object-fit:contain;}
+.bk-thumb-missing{display:flex; align-items:center; justify-content:center; color:var(--muted);
+  font-size:.68rem; text-align:center; padding:6px;}
+.bk-thumb-zoom{position:absolute; right:3px; bottom:3px; font-size:11px; line-height:1;
+  background:rgba(255,255,255,.86); border:1px solid var(--rule); border-radius:3px; padding:1px 3px;}
+a.bk-figpopup:hover .bk-thumb{border-color:var(--accent); box-shadow:0 1px 7px rgba(20,60,120,.18);}
+.iconblock .icnblk_cntnt{min-width:0;}
+.icnblk_cntnt h4{margin:0 0 4px; font-size:1.0rem;}
+.icnblk_cntnt h4 a{color:var(--link); font-weight:700; cursor:pointer;}
+.float-caption{margin:0; font-size:.9rem; color:#333; line-height:1.42;}
+.bk-hover{position:fixed; z-index:60; max-width:560px; max-height:420px; overflow:hidden;
+  background:#fff; border:1px solid #b7c2cc; border-radius:5px;
+  box-shadow:0 6px 24px rgba(0,0,0,.22); padding:12px 14px; pointer-events:none; font-size:.82rem;}
+.bk-hover h3{margin:0 0 6px; font-size:.9rem;}
+.bk-hover .large_tbl{overflow:hidden; border:1px solid var(--rule);}
+.bk-hover table.no_margin{font-size:.72rem;}
+.bk-hover img{max-width:100%; height:auto;}
+.bk-modal{position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center;}
+.bk-modal-backdrop{position:absolute; inset:0; background:rgba(20,30,40,.55);}
+.bk-modal-box{position:relative; background:#fff; border-radius:6px; max-width:min(1100px,94vw);
+  max-height:92vh; overflow:auto; padding:26px 30px 30px; box-shadow:0 10px 40px rgba(0,0,0,.35);}
+.bk-modal-close{position:absolute; top:6px; right:12px; border:0; background:transparent;
+  font-size:1.8rem; line-height:1; color:var(--muted); cursor:pointer;}
+.bk-modal-close:hover{color:#12263a;}
+.bk-modal-body h3{margin-top:0;}
+.bk-modal-body .large_tbl{overflow-x:auto; border:1px solid var(--rule);}
+.bk-modal-body .figure.bk_fig{margin:0; text-align:center;}
+.bk-modal-body .figure.bk_fig .graphic img{max-width:100%; max-height:78vh; height:auto;}
 @media (max-width:900px){
   .bk-container{flex-direction:column; padding:16px 14px 50px;}
   .bk-main{padding:18px 18px 30px; width:100%;}
   .bk-rail{position:static; flex-basis:auto; max-height:none; width:100%; order:3;}
   .bk-inthispage{float:none; width:auto; margin:0 0 14px;}
+  .iconblock.table-wrap,.iconblock.fig-wrap{flex-direction:column;}
 }
 @media print{
-  .preview-banner,.bk-rail,.pagination.bk-pager,.bk-inthispage{display:none !important;}
+  .preview-banner,.bk-rail,.pagination.bk-pager,.bk-inthispage,.bk-modal,.bk-hover{display:none !important;}
   .bk-page[hidden]{display:block !important;}
   .bk-main{border:0; padding:0;}
+  .bk-object{display:block !important;}
+  .iconblock.table-wrap .icnblk_img,.iconblock.fig-wrap .icnblk_img{display:none !important;}
 }
 """
 
@@ -773,14 +865,79 @@ _JS = """
     activate(chain[0].slug);
   }
   window.addEventListener('hashchange', fromHash);
+
+  // Objects (tables/figures): thumbnail -> lightbox, hover -> peek preview.
+  var modal = document.getElementById('bk-modal');
+  var modalBody = modal ? modal.querySelector('.bk-modal-body') : null;
+  var hoverEl = document.getElementById('bk-hover');
+  var hoverTimer = null;
+  function openObject(objId){
+    var o = document.getElementById(objId);
+    if(!o || !modal || !modalBody) return;
+    modalBody.innerHTML = o.innerHTML;
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    if(hoverEl) hoverEl.hidden = true;
+  }
+  function closeModal(){
+    if(!modal) return;
+    modal.hidden = true;
+    if(modalBody) modalBody.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+  if(modal){
+    modal.addEventListener('click', function(e){
+      if(e.target.getAttribute && e.target.getAttribute('data-close')) closeModal();
+    });
+  }
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeModal();
+  });
+  function positionHover(target){
+    if(!hoverEl) return;
+    var r = target.getBoundingClientRect();
+    hoverEl.style.visibility = 'hidden';
+    hoverEl.hidden = false;
+    var hw = hoverEl.offsetWidth, hh = hoverEl.offsetHeight;
+    var left = r.right + 12;
+    if(left + hw > window.innerWidth - 8) left = Math.max(8, r.left - hw - 12);
+    var top = r.top;
+    if(top + hh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - hh - 8);
+    hoverEl.style.left = left + 'px';
+    hoverEl.style.top = top + 'px';
+    hoverEl.style.visibility = 'visible';
+  }
+  document.addEventListener('mouseover', function(e){
+    var t = e.target.closest ? e.target.closest('.bk-figpopup[data-obj]') : null;
+    if(!t || !hoverEl) return;
+    var o = document.getElementById(t.getAttribute('data-obj'));
+    if(!o) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(function(){
+      hoverEl.innerHTML = o.innerHTML;
+      positionHover(t);
+    }, 160);
+  });
+  document.addEventListener('mouseout', function(e){
+    var t = e.target.closest ? e.target.closest('.bk-figpopup[data-obj]') : null;
+    if(!t || !hoverEl) return;
+    clearTimeout(hoverTimer);
+    hoverEl.hidden = true;
+  });
+
   document.addEventListener('click', function(e){
+    var obj = e.target.closest ? e.target.closest('[data-obj]') : null;
+    if(obj){ e.preventDefault(); openObject(obj.getAttribute('data-obj')); return; }
     var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
     if(!a) return;
     var id = a.getAttribute('href').slice(1);
-    if(!id || id in pages) return;   // page-slug links: let hashchange handle
+    if(!id) return;
+    if(document.getElementById('obj-' + id)){ e.preventDefault(); openObject('obj-' + id); return; }
+    if(id in pages) return;   // page-slug link: let hashchange handle
     var pe = pageElFor(id);
     if(pe){ e.preventDefault(); location.hash = '#' + id; }
   });
+
   var pb = document.getElementById('bk-print');
   if(pb) pb.addEventListener('click', function(e){ e.preventDefault(); window.print(); });
   fromHash();
