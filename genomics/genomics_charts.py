@@ -80,6 +80,26 @@ def decode_png(b64: str | None) -> bytes | None:
 # Public API
 # ---------------------------------------------------------------------------
 
+
+def find_chart_for_item(entry: dict, item: dict) -> dict | None:
+    """Fetch the exact chart a content-plan chart item refers to.
+
+    A per-organ entry can stack the same chart TYPE for multiple sexes, so a
+    type-only match (``chart_key``) is ambiguous — two items with the same key
+    would both resolve to the first chart (duplicate figures / duplicate ids).
+    Prefer the item's ``chart_ref`` (the chart's unique filename); fall back to
+    ``chart_key`` for content plans that predate the ref. Shared by all four
+    emitters so they resolve a chart item identically.
+    """
+    charts = entry.get("charts") or []
+    ref = item.get("chart_ref")
+    if ref:
+        for c in charts:
+            if isinstance(c, dict) and c.get("filename") == ref:
+                return c
+    key = item.get("chart_key")
+    return next((c for c in charts if isinstance(c, dict) and c.get("key") == key), None)
+
 def attach_genomics_charts(
     genomics_sections: list,
     charts_cache: list,
@@ -138,39 +158,54 @@ def attach_genomics_charts(
         if entry.get("type") != "gene_set":
             continue
         organ = (entry.get("organ") or "").lower()
-        sex = (entry.get("sex") or "").lower()
-        cache_entry = by_os.get((organ, sex))
-        if not cache_entry:
-            continue
-        slug = f"{organ}-{sex}".replace(" ", "-")
+        # A per-organ gene_set entry stacks one block per sex in `sexes` (the entry
+        # itself has NO flat `sex`), while the chart cache is keyed per (organ, sex).
+        # Join on the entry's sex tokens so BOTH sexes' figures attach for a two-sex
+        # organ, and a sex-less study (single "unknown" block) still matches its
+        # "unknown" cache entry. Fall back to a legacy flat `sex` for pre-restructure
+        # entries. (Earlier this read entry["sex"] directly, which is None for the
+        # per-organ entries — so nothing ever matched the per-(organ,sex) cache.)
+        sex_tokens = [
+            (b.get("sex") or "").strip().lower()
+            for b in (entry.get("sexes") or [])
+            if isinstance(b, dict)
+        ]
+        if not sex_tokens:
+            sex_tokens = [(entry.get("sex") or "").strip().lower()]
         charts = []
-        # Which chart types this cache entry carries.  Prefer the explicit
-        # `types` list written by render_chart_images (contract C5); fall back to
-        # the original umap/cluster pair for caches that pre-date it.
-        chart_keys = cache_entry.get("types")
-        if not isinstance(chart_keys, list) or not chart_keys:
-            chart_keys = ["umap", "cluster"]
-        for key in chart_keys:
-            # Config allowlist (charts:): skip any type not enabled.  `allow`
-            # is None when the template omits `charts:` (no filtering).
-            if allow is not None and key.lower() not in allow:
+        for sex in sex_tokens:
+            cache_entry = by_os.get((organ, sex))
+            if not cache_entry:
                 continue
-            png = cache_entry.get(f"{key}_png")
-            if not png:
-                continue
-            # Validate the base64 decodes NOW and drop a chart we can't decode,
-            # so it never reaches the renderer as a \includegraphics with no
-            # backing file in figures/ (which would break the Overleaf compile).
-            if decode_png(png) is None:
-                continue
-            charts.append({
-                "key": key,
-                "filename": f"genomics-{slug}-{key}.png",
-                "png_b64": png,
-                "caption": cache_entry.get(f"{key}_caption", ""),
-                # figure_number is assigned later by
-                # document_tree.assign_genomics_figure_numbers (render-time,
-                # positional — continues the tree's figure sequence).
-            })
+            slug = (f"{organ}-{sex}" if sex else organ).replace(" ", "-")
+            # Which chart types this cache entry carries.  Prefer the explicit
+            # `types` list written by render_chart_images (contract C5); fall back
+            # to the original umap/cluster pair for caches that pre-date it.
+            chart_keys = cache_entry.get("types")
+            if not isinstance(chart_keys, list) or not chart_keys:
+                chart_keys = ["umap", "cluster"]
+            for key in chart_keys:
+                # Config allowlist (charts:): skip any type not enabled.  `allow`
+                # is None when the template omits `charts:` (no filtering).
+                if allow is not None and key.lower() not in allow:
+                    continue
+                png = cache_entry.get(f"{key}_png")
+                if not png:
+                    continue
+                # Validate the base64 decodes NOW and drop a chart we can't decode,
+                # so it never reaches the renderer as a \includegraphics with no
+                # backing file in figures/ (which would break the Overleaf compile).
+                if decode_png(png) is None:
+                    continue
+                charts.append({
+                    "key": key,
+                    "sex": sex,  # disambiguates same-type charts across sexes
+                    "filename": f"genomics-{slug}-{key}.png",
+                    "png_b64": png,
+                    "caption": cache_entry.get(f"{key}_caption", ""),
+                    # figure_number is assigned later by
+                    # document_tree.assign_genomics_figure_numbers (render-time,
+                    # positional — continues the tree's figure sequence).
+                })
         if charts:
             entry["charts"] = charts

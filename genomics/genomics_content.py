@@ -82,9 +82,17 @@ def genomics_content_plan(entry: dict, role: str) -> list[dict]:
     # entry["charts"].
     for chart in entry.get("charts") or []:
         key = chart.get("key", "chart")
+        # The item id + fetch ref must be unique PER CHART: a per-organ entry stacks
+        # the same chart type for BOTH sexes (e.g. male + female UMAP), so keying by
+        # type alone collides (two items with the same id → the renderer fetches the
+        # first chart twice → duplicate figures / duplicate JATS ids). Fold the
+        # chart's sex into the id and carry its unique filename as the fetch ref.
+        sex = (chart.get("sex") or "").strip().lower()
+        suffix = f"{sex}-{key}" if sex else key
         plan.append(
-            {"item_id": f"{base}-{key}", "kind": "chart", "part": "chart",
-             "chart_key": key, "orientable": True, "breakable": True}
+            {"item_id": f"{base}-{suffix}", "kind": "chart", "part": "chart",
+             "chart_key": key, "chart_ref": chart.get("filename"),
+             "orientable": True, "breakable": True}
         )
 
     descriptions = (

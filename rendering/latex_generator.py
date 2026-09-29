@@ -1021,7 +1021,7 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
             else _render_gene_table(entry)
         )
     if part == "chart":
-        return _render_genomics_chart(entry, item.get("chart_key"))
+        return _render_genomics_chart(entry, item)
     if part == "descriptions":
         descriptions = (
             entry.get("go_descriptions") if role == "gene_set"
@@ -1031,17 +1031,15 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
     return ""
 
 
-def _render_genomics_chart(entry: dict, chart_key: str | None) -> str:
+def _render_genomics_chart(entry: dict, item: dict) -> str:
     r"""
     Render one attached genomics chart as a centered \includegraphics with an
     italic caption.  The image file (figures/<filename>) is written into the
     bundle by latex_export.build_overleaf_bundle; the filename comes from the
     chart dict so the .tex reference and the written file always agree.
     """
-    chart = next(
-        (c for c in (entry.get("charts") or []) if c.get("key") == chart_key),
-        None,
-    )
+    from genomics.genomics_charts import find_chart_for_item
+    chart = find_chart_for_item(entry, item)
     if not chart or not chart.get("filename"):
         return ""
     # ADR-0004 amendment (e) — the "Figure N." caption text is the shared

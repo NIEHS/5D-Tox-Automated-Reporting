@@ -1035,10 +1035,8 @@ def _render_genomics_item(entry: dict, role: str, item: dict) -> str:
             else _render_gene_table(entry)
         )
     if part == "chart":
-        chart = next(
-            (c for c in (entry.get("charts") or []) if c.get("key") == item.get("chart_key")),
-            None,
-        )
+        from genomics.genomics_charts import find_chart_for_item
+        chart = find_chart_for_item(entry, item)
         if not chart:
             return ""
         png = chart.get("png_b64", "")

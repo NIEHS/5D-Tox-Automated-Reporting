@@ -546,11 +546,8 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
                 if combined and combined.strip():
                     out.append(_p(combined))
         elif part == "chart":
-            chart = next(
-                (c for c in (entry.get("charts") or [])
-                 if c.get("key") == r.item.get("chart_key")),
-                None,
-            )
+            from genomics.genomics_charts import find_chart_for_item
+            chart = find_chart_for_item(entry, r.item)
             if chart is not None:
                 out.append(_chart_fig(entry, chart))
 
@@ -567,9 +564,18 @@ def _chart_fig(entry: dict, chart: dict) -> etree._Element:
     figures/ dir (as the LaTeX bundle already does) or inlined by the Bookshelf
     preview (rendering.bookshelf_preview.chart_images) — since a BITS <graphic>
     references an external file, never a data URI."""
-    organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
-    key = (chart.get("key") or "chart").strip().lower().replace(" ", "-")
-    fig = E("fig", {"id": f"fig-genomics-{organ}-{key}"})
+    # The chart's own filename (genomics-<organ>-<sex>-<key>.png) is unique per
+    # chart, so derive the fig id from it — a per-organ entry now stacks charts for
+    # BOTH sexes, and an organ+key-only id collided between them (a duplicate-id DTD
+    # error). Fall back to organ+key when no filename is present.
+    fname = (chart.get("filename") or "").strip()
+    if fname:
+        fig_id = f"fig-{fname.rsplit('.', 1)[0]}"
+    else:
+        organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
+        key = (chart.get("key") or "chart").strip().lower().replace(" ", "-")
+        fig_id = f"fig-genomics-{organ}-{key}"
+    fig = E("fig", {"id": fig_id})
     fig_num = chart.get("figure_number")
     if fig_num is not None:
         fig.append(E.label(f"Figure {fig_num}"))

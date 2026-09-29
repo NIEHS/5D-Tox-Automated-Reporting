@@ -1339,10 +1339,8 @@ def _render_genomics_item(doc: Document, entry: dict, role: str, item: dict) -> 
         else:
             _render_gene_table(doc, entry)
     elif part == "chart":
-        chart = next(
-            (c for c in (entry.get("charts") or []) if c.get("key") == item.get("chart_key")),
-            None,
-        )
+        from genomics.genomics_charts import find_chart_for_item
+        chart = find_chart_for_item(entry, item)
         if chart:
             _add_chart_image(doc, chart)
     elif part == "descriptions":
