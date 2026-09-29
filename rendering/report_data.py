@@ -384,6 +384,24 @@ def marshal_export_data(
             data["appendix_animals"] = _animals
             data["appendix_animals_matrix"] = build_animal_roster_matrix(_animals)
 
+    # ── BMD Analysis Configuration appendix: the report's provenance record for
+    # the benchmark-dose analysis (exact BMDExpress version + settings from each
+    # bMDResult.analysisInfo). Deterministic, so nothing is genericized. Absent
+    # key ⇒ the appendix renders its pending note (session with no bMDResults).
+    _dtxsid_cfg = body.get("dtxsid")
+    if _dtxsid_cfg and "appendix_bmd_config_matrix" not in data:
+        try:
+            from pipeline.session_store import session_dir as _sdir_cfg
+            from rendering.render_common import build_bmd_config_matrix
+            import json as _json_cfg
+            _integ_path = _sdir_cfg(_dtxsid_cfg) / "integrated.json"
+            _integ = _json_cfg.loads(_integ_path.read_text(encoding="utf-8")) if _integ_path.exists() else {}
+            _cfg_matrix = build_bmd_config_matrix(_integ)
+        except Exception:
+            _cfg_matrix = None
+        if _cfg_matrix:
+            data["appendix_bmd_config_matrix"] = _cfg_matrix
+
     peer_review = body.get("peer_review")
     if peer_review:
         data["peer_review"] = _ensure_paragraphs(peer_review)

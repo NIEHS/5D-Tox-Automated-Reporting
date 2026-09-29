@@ -90,7 +90,18 @@ def build_abstract_summary(
     Returns:
         Paragraph string, or empty string if no reliable BMDs exist anywhere.
     """
-    sexes = sexes or ["Male", "Female"]
+    # Iterate the conditions ACTUALLY present (metadata-driven, from derive_study_sexes).
+    # Real sexes → per-sex tracks with "in {sex} rats" prose. No sex dimension (explicit
+    # []) → one sexless track per genomics sex-token present (e.g. "unknown"), rendered
+    # sex-neutrally. `sexes is None` (caller didn't derive) keeps the legacy Male/Female
+    # default so existing callers are unaffected.
+    if sexes is None:
+        sexes = ["Male", "Female"]
+    if sexes:
+        tracks = [(s, s.lower()) for s in sexes]  # (prose label, genomics key token)
+    else:
+        _tokens = sorted({k.rsplit("_", 1)[-1] for k in (genomics_sections or {}) if "_" in k})
+        tracks = [(None, tok) for tok in _tokens]  # sexless: label None → neutral prose
 
     # Lower limit of extrapolation (LLE) — reuse same convention as Results
     nonzero_doses = [d for d in (dose_groups or []) if d and d > 0]
@@ -111,12 +122,12 @@ def build_abstract_summary(
     # --- Per-sex lowest-BMD lookups ---
     # Each helper returns {bmd_str, bmdl_str} or None if no reliable
     # value exists for the sex × category combination.
-    def _lowest_geneset(sex: str) -> dict | None:
+    def _lowest_geneset(token: str) -> dict | None:
         if not genomics_sections or not chosen_stat:
             return None
         candidates: list[dict] = []
         for key, sec in genomics_sections.items():
-            if not key.endswith(f"_{sex.lower()}"):
+            if not key.endswith(f"_{token}"):
                 continue
             sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
             candidates.extend(_picks_above_lle(sets, lle, n=1))
@@ -130,12 +141,12 @@ def build_abstract_summary(
             "bmdl": _format_dose_value(winner.get("bmdl")),
         }
 
-    def _lowest_gene(sex: str) -> dict | None:
+    def _lowest_gene(token: str) -> dict | None:
         if not genomics_sections:
             return None
         candidates: list[dict] = []
         for key, sec in genomics_sections.items():
-            if not key.endswith(f"_{sex.lower()}"):
+            if not key.endswith(f"_{token}"):
                 continue
             genes = sec.get("top_genes", [])
             candidates.extend(_picks_above_lle(genes, lle, n=1))
@@ -148,13 +159,13 @@ def build_abstract_summary(
             "bmdl": _format_dose_value(winner.get("bmdl")),
         }
 
-    def _lowest_apical(sex: str) -> dict | None:
-        if not apical_bmd_summary:
+    def _lowest_apical(label) -> dict | None:
+        if not apical_bmd_summary or label is None:
             return None
         # Apply same reliability + anomaly filters as the Results paragraph
         reliable = [
             e for e in apical_bmd_summary
-            if e.get("sex") == sex
+            if e.get("sex") == label
             and _is_reliable_bmd(e)
             and not _is_anomalous_bmd(e)
             and e.get("direction")
@@ -174,21 +185,21 @@ def build_abstract_summary(
     sentences: list[str] = []
     has_any_content = False
 
-    for sex in sexes:
-        gs = _lowest_geneset(sex)
-        gene = _lowest_gene(sex)
-        apical = _lowest_apical(sex)
+    for sex_label, sex_token in tracks:
+        gs = _lowest_geneset(sex_token)
+        gene = _lowest_gene(sex_token)
+        apical = _lowest_apical(sex_label)
 
         # Build the (label, value_string) pairs in NIEHS reference order:
         # gene set → individual gene → apical endpoint.
         category_phrases: list[tuple[str, str]] = []
         if gs:
-            label = (
+            gs_label = (
                 f"the most sensitive gene set BMD (BMDL) {stat_label}"
                 if stat_label else
                 "the most sensitive gene set BMD (BMDL)"
             )
-            category_phrases.append((label, f"{gs['bmd']} ({gs['bmdl']})"))
+            category_phrases.append((gs_label, f"{gs['bmd']} ({gs['bmdl']})"))
         if gene:
             category_phrases.append((
                 "individual gene BMD (BMDL)",
@@ -200,12 +211,15 @@ def build_abstract_summary(
                 f"{apical['bmd']} ({apical['bmdl']})",
             ))
 
+        # Sex-neutral phrasing when the study has no sex dimension (sex_label None).
+        in_sex = f" in {sex_label.lower()} rats" if sex_label else ""
+
         if not category_phrases:
-            # Nothing reliable for this sex at all — skip the sentence,
-            # but still emit the apical-missing fallback if relevant.
-            if apical_bmd_summary:
+            # Nothing reliable for this track — emit the apical-missing fallback
+            # only for a real sex (a sex-less genomics study has no apical track).
+            if apical_bmd_summary and sex_label is not None:
                 sentences.append(
-                    f"There were no apical endpoints in {sex.lower()} rats "
+                    f"There were no apical endpoints{in_sex} "
                     f"for which a BMD value could be reliably estimated."
                 )
             continue
@@ -215,27 +229,27 @@ def build_abstract_summary(
         values = [p[1] for p in category_phrases]
         plural = len(category_phrases) > 1
 
-        # Sentence start: the very first sex sentence is preceded by
-        # the "Taken together, " connective (which uses lowercase "in"
-        # because it comes after a comma); subsequent sex sentences are
-        # standalone and start with capital "In".
-        if not sentences:
-            opener = f"Taken together, in {sex.lower()} rats,"
+        # Sentence start: the very first sentence carries the "Taken together,"
+        # connective; later ones stand alone. Real sex → "in {sex} rats,"; no sex
+        # dimension → sex-neutral.
+        if sex_label:
+            opener = (f"Taken together, in {sex_label.lower()} rats,"
+                      if not sentences else f"In {sex_label.lower()} rats,")
         else:
-            opener = f"In {sex.lower()} rats,"
+            opener = "Taken together," if not sentences else ""
 
         sentences.append(
-            f"{opener} "
-            f"{_join_oxford(labels)} value{'s' if plural else ''} that could "
+            (f"{opener} " if opener else "")
+            + f"{_join_oxford(labels)} value{'s' if plural else ''} that could "
             f"be reliably determined occurred at {_join_oxford(values)} "
             f"{dose_unit}{', respectively' if plural else ''}."
         )
 
         # If apical was missing for this sex but genomics existed, add
-        # the standard fallback sentence about apical specifically.
-        if apical_bmd_summary and not apical:
+        # the standard fallback sentence about apical specifically (real sexes only).
+        if apical_bmd_summary and not apical and sex_label is not None:
             sentences.append(
-                f"There were no apical endpoints in {sex.lower()} rats "
+                f"There were no apical endpoints{in_sex} "
                 f"for which a BMD value could be reliably estimated."
             )
 

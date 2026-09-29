@@ -862,6 +862,126 @@ def build_animal_roster_matrix(animals: list[dict]) -> dict:
     }
 
 
+def derive_study_sexes(integrated: dict) -> list[str]:
+    """Distinct sexes ACTUALLY present in the study, from the .bm2 metadata — the
+    single source of truth for which experimental conditions were run.
+
+    Reads ``doseResponseExperiments[].experimentDescription.sex`` (the per-experiment
+    condition) plus the apical bMDResult data-source prefixes (``male_…`` / ``female_…``)
+    as a fallback. Returns canonical order ``["Male", "Female"]`` filtered to what is
+    present — so a both-sexes study yields both, a male-only study yields just Male, and
+    a sex-less study (e.g. a pooled S1500+ transcriptomics run) yields ``[]``. Narrative
+    that loops over this instead of hardcoding ("Male","Female") is sex-correct by
+    construction: no sex dimension ⇒ no per-sex prose.
+    """
+    found: set[str] = set()
+    for dre in integrated.get("doseResponseExperiments") or []:
+        sex = (dre.get("experimentDescription") or {}).get("sex")
+        if isinstance(sex, str):
+            s = sex.strip().lower()
+            if s.startswith("m"):
+                found.add("Male")
+            elif s.startswith("f"):
+                found.add("Female")
+    for b in integrated.get("bMDResult") or []:
+        notes = (b.get("analysisInfo") or {}).get("notes") or []
+        ds = next((n.split(":", 1)[1].strip().lower() for n in notes if n.startswith("Data Source")), "")
+        if ds.startswith("male"):
+            found.add("Male")
+        elif ds.startswith("female"):
+            found.add("Female")
+    return [s for s in ("Male", "Female") if s in found]
+
+
+def _bmd_config_note_value(notes: list[str], prefix: str) -> str:
+    """Pull the value after ``prefix:`` from a bMDResult.analysisInfo.notes list."""
+    for n in notes or []:
+        if n.startswith(prefix):
+            return n.split(":", 1)[1].strip() if ":" in n else ""
+    return ""
+
+
+def _bmd_config_prefilter(work_source: str) -> str:
+    """Derive the human prefilter label from a Work Source name (e.g.
+    ``female_clin_chem_williams_0.05_NOMTC_nofoldfilter`` → 'Williams trend, p≤0.05,
+    no MTC'; ``..._curvefitprefilter_nofoldfilter`` → 'Curve-fit prefilter')."""
+    s = (work_source or "").lower()
+    if "williams" in s:
+        return "Williams trend (p≤0.05, no MTC, no fold filter)"
+    if "curvefit" in s:
+        return "Curve-fit prefilter (no fold filter)"
+    if "oneway" in s or "anova" in s:
+        return "One-way ANOVA"
+    return "—"
+
+
+def build_bmd_config_matrix(integrated: dict) -> dict | None:
+    """
+    Build the Benchmark Dose Analysis Configuration appendix as a generic MATRIX —
+    the ``{caption, headers, rows, footnotes}`` shape a ``data-table`` node renders.
+
+    One row per ``bMDResult`` (data source), reporting the EXACT settings the .bm2
+    recorded in ``analysisInfo.notes`` (BMDExpress version, prefilter, models, MA
+    method, BMR, constant variance, step-function threshold).  This is the report's
+    provenance record for the BMD analysis — deterministic (no LLM), so the exact
+    version and settings are preserved rather than genericized.  Continuous BMD
+    Model-Averaging is build-dependent, so recording the version is load-bearing for
+    reproducibility.  Returns None when the session has no bMDResults.
+    """
+    results = integrated.get("bMDResult") or []
+    rows: list[list[str]] = []
+    seen: set[tuple] = set()
+    for b in results:
+        notes = (b.get("analysisInfo") or {}).get("notes") or []
+        source = _bmd_config_note_value(notes, "Data Source") or (b.get("name") or "")
+        work_source = _bmd_config_note_value(notes, "Work Source")
+        version = _bmd_config_note_value(notes, "BMDExpress3 Version")
+        ma_method = _bmd_config_note_value(notes, "Model Averaging Method")
+        models = _bmd_config_note_value(notes, "Models fit")
+        bmr_type = _bmd_config_note_value(notes, "BMR Type")
+        bmr_factor = _bmd_config_note_value(notes, "BMR Factor")
+        const_var = _bmd_config_note_value(notes, "Constant Variance")
+        step_fn = _bmd_config_note_value(notes, "Step Function Calculation Threshold")
+        if not (version or models or bmr_type):
+            continue  # not a BMDExpress BMD result with a recorded config
+        bmr = f"{bmr_type} / {bmr_factor}".strip(" /") if (bmr_type or bmr_factor) else "—"
+        const = "Yes" if const_var.strip() in ("1", "true", "True") else ("No" if const_var else "—")
+        row = [
+            source,
+            version or "—",
+            _bmd_config_prefilter(work_source),
+            models or "—",
+            ma_method or "—",
+            bmr or "—",
+            const,
+            step_fn or "—",
+        ]
+        key = tuple(row[1:])  # collapse rows that share an identical config (keep distinct sources visible)
+        if (source, key) in seen:
+            continue
+        seen.add((source, key))
+        rows.append(row)
+
+    if not rows:
+        return None
+
+    return {
+        "caption": "BMDExpress/ToxicR Analysis Configuration",
+        "headers": [
+            "Analysis (data source)", "BMDExpress Version", "Pre-filter",
+            "Models Fit", "Model Averaging", "BMR (type / factor)",
+            "Constant Variance", "Step-Function Threshold",
+        ],
+        "rows": rows,
+        "footnotes": [
+            "Settings are as recorded in each analysis's benchmark-dose "
+            "analysisInfo. Continuous BMD model-averaging results are specific to "
+            "the BMDExpress version shown.",
+        ],
+        "breakable": True,
+    }
+
+
 def methods_subsection_content(
     node: DocNode, data: dict
 ) -> tuple[list[str], dict | None]:

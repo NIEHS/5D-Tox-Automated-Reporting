@@ -100,18 +100,26 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
 
     # Build the study context block with actual data
     dose_str = ", ".join(str(d) for d in ctx.dose_groups) if ctx.dose_groups else "not specified"
-    sexes_str = " and ".join(ctx.sexes) if ctx.sexes else "male and female"
+    # A study with no sex dimension (e.g. a pooled / single-cohort S1500+ transcriptomics
+    # run) has ctx.sexes empty. Do NOT fall back to "male and female" — assert nothing about
+    # sex, so the LLM writes sex-neutral prose instead of inventing per-sex cohorts.
+    sexless = not ctx.sexes
+    sexes_str = " and ".join(ctx.sexes)
+
+    sex_line = "- Sexes: not applicable (no sex dimension in this study)" if sexless else f"- Sexes: {sexes_str}"
+    per_group = f"{ctx.n_per_group} per dose" if sexless else f"{ctx.n_per_group} {sexes_str} per dose"
+    control_n = f"{ctx.n_control}" if sexless else f"{ctx.n_control} {sexes_str}"
 
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
 - Species: {ctx.species} rats
-- Sexes: {sexes_str}
+{sex_line}
 - Route of administration: oral {ctx.route}
 - Vehicle: {ctx.vehicle}
 - Duration: {ctx.duration_days} days
 - Dose groups ({ctx.dose_unit}): {dose_str}
-- Animals per treatment group: {ctx.n_per_group} {sexes_str} per dose
-- Animals in vehicle control: {ctx.n_control} {sexes_str}"""
+- Animals per treatment group: {per_group}
+- Animals in vehicle control: {control_n}"""
 
     if ctx.n_biosampling > 0:
         context_block += f"\n- Biosampling animals: {ctx.n_biosampling} total"
@@ -155,6 +163,15 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     # Per-subsection guidance for the LLM
     guidelines = _build_subsection_guidelines(ctx, skeleton)
 
+    # For a sex-less study, tell the LLM not to invent sex wording anywhere (it otherwise
+    # elaborates "male and female" into per-sex normalization / cohorts on its own).
+    sexless_note = (
+        "\n- This study has NO sex dimension: do NOT mention sex anywhere — no "
+        "\"male and female\", no per-sex cohorts, no sex-specific normalization or "
+        "analysis. Refer to the animals sex-neutrally (\"rats\", \"animals\")."
+        if sexless else ""
+    )
+
     user_prompt = f"""Generate the Materials and Methods section for a {ctx.duration_days}-day genomic dose-response study report.
 
 {context_block}
@@ -173,7 +190,7 @@ Keys to generate: {subsection_keys}
 - Write in past tense, third person, formal NIEHS/NTP technical report style.
 - Reference exact study parameters from the context above (dose groups, species, etc.).
 - Each value should be a single string. Use \\n\\n to separate multiple paragraphs within a subsection.
-- Return ONLY the JSON object, no markdown code fences."""
+- Return ONLY the JSON object, no markdown code fences.{sexless_note}"""
 
     return system, user_prompt
 
@@ -196,15 +213,20 @@ def _build_subsection_guidelines(
         Formatted string of guidelines.
     """
     dose_str = ", ".join(str(d) for d in ctx.dose_groups) if ctx.dose_groups else "not specified"
-    sexes_str = " and ".join(ctx.sexes) if ctx.sexes else "male and female"
+    sexless = not ctx.sexes
+    sexes_str = " and ".join(ctx.sexes)
+    sample_sizes = (
+        f"{ctx.n_per_group} per treatment group, {ctx.n_control} vehicle control"
+        if sexless else
+        f"{ctx.n_per_group} {sexes_str} per treatment group, {ctx.n_control} {sexes_str} vehicle control"
+    )
 
     guides: dict[str, str] = {
         "study_design": (
             f"One paragraph covering: animal source and quarantine (7 days), "
             f"randomization by body weight, dose groups ({dose_str} {ctx.dose_unit}), "
             f"dosing schedule ({ctx.duration_days} consecutive days by oral {ctx.route}), "
-            f"sample sizes ({ctx.n_per_group} {sexes_str} per treatment group, "
-            f"{ctx.n_control} {sexes_str} vehicle control), "
+            f"sample sizes ({sample_sizes}), "
             f"{'biosampling animals for internal dose assessment, ' if ctx.n_biosampling > 0 else ''}"
             f"necropsy timing (approximately 24 hours after the final dose)."
         ),

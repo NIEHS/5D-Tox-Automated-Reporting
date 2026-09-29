@@ -866,6 +866,22 @@ def load_session_data(
         from rendering.render_common import build_animal_roster_matrix
         data["appendix_animals_matrix"] = build_animal_roster_matrix(animals)
 
+    # ── Appendix G: BMD Analysis Configuration (provenance record) ────
+    # The exact BMDExpress/ToxicR settings each analysis ran with, data-derived
+    # from integrated.json's bMDResult.analysisInfo. Deterministic, so the version
+    # + settings are preserved (not genericized like the Methods prose). Absent key
+    # ⇒ the appendix renders its pending note.
+    try:
+        import json as _json_cfg
+        from rendering.render_common import build_bmd_config_matrix
+        _integ_path = session_dir / "integrated.json"
+        _integ = _json_cfg.loads(_integ_path.read_text(encoding="utf-8")) if _integ_path.exists() else {}
+        _cfg_matrix = build_bmd_config_matrix(_integ)
+    except Exception:
+        _cfg_matrix = None
+    if _cfg_matrix:
+        data["appendix_bmd_config_matrix"] = _cfg_matrix
+
     # ── Abstract (Background + Results + Summary) ─────────────────────
     # Use the SHARED assembler (the same one the web path calls) so both
     # surfaces produce the same abstract.  We pass explicit inputs: the apical
@@ -876,11 +892,15 @@ def load_session_data(
     # don't pass an explicit methods_context here (the M&M prose is overlaid
     # onto data["methods"] above and rendered directly by the M&M nodes).
     from rendering.report_data_overlays import overlay_abstract
+    from rendering.render_common import derive_study_sexes
     overlay_abstract(
         data,
         abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
         genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
         dose_unit="mg/kg",
+        # Sexes come from the .bm2 metadata (single source of truth): a sex-less
+        # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
+        sexes=derive_study_sexes(_integ),
     )
 
     # ── User-owned content overrides (ADR-0005 round-trip) ────────────

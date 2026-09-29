@@ -106,6 +106,7 @@ def overlay_abstract(
     dose_unit: str = "mg/kg",
     bmd_stat=None,
     methods_context: dict | None = None,
+    sexes: list[str] | None = None,
 ) -> None:
     """
     Assemble data["abstract"]["sections"] (Background / Methods / Results /
@@ -170,6 +171,7 @@ def overlay_abstract(
                 dose_unit=dose_unit,
                 bmd_stat=bmd_stat,
                 methods_ctx=methods_context,
+                sexes=sexes,
             )
             if results_text:
                 abstract_updates["Results"] = results_text
@@ -179,6 +181,7 @@ def overlay_abstract(
                 dose_groups=dose_groups,
                 dose_unit=dose_unit,
                 bmd_stat=bmd_stat,
+                sexes=sexes,
             )
             if summary_text:
                 abstract_updates["Summary"] = summary_text
@@ -226,6 +229,7 @@ def _overlay_abstract(data: dict, body: dict) -> None:
     # The request body carries genomics as an array, but the abstract builders
     # want the cached organ×sex dict — read it from disk by dtxsid.
     genomics_cache = None
+    study_sexes: list[str] | None = None
     dtxsid = body.get("dtxsid", "")
     if dtxsid:
         try:
@@ -236,6 +240,15 @@ def _overlay_abstract(data: dict, body: dict) -> None:
                 genomics_cache = orjson.loads(cache.read_bytes())
         except Exception:
             pass
+        # Sexes from the .bm2 metadata (single source of truth) — sex-less study → [].
+        try:
+            import json as _json_sx
+            from rendering.render_common import derive_study_sexes
+            _ip = Path("sessions") / dtxsid / "integrated.json"
+            if _ip.exists():
+                study_sexes = derive_study_sexes(_json_sx.loads(_ip.read_text(encoding="utf-8")))
+        except Exception:
+            study_sexes = None
 
     overlay_abstract(
         data,
@@ -245,6 +258,7 @@ def _overlay_abstract(data: dict, body: dict) -> None:
         dose_groups=dose_groups,
         dose_unit=dose_unit,
         methods_context=methods_context,
+        sexes=study_sexes,
     )
 
 
