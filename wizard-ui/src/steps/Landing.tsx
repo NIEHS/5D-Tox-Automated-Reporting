@@ -211,9 +211,19 @@ export function Landing({
                 onClick={gotoKnowledgeGraph}
                 title="Configure the literature knowledge-graph crawl"
               >
-                <div className="pillar-title">Knowledge graph construction</div>
+                <div className="pillar-title">
+                  &ldquo;Knowledge graph&rdquo; construction<sup>*</sup>
+                </div>
                 <div className="pillar-sub">
                   Configure the literature crawl that builds the knowledge graph.
+                </div>
+                <div className="pillar-footnote">
+                  <sup>*</sup> In quotes because most of what we build isn&rsquo;t a
+                  knowledge graph in the strict sense. The literature layer holds
+                  bibliometric relations (paper cites paper; paper mentions gene or
+                  organ) plus free-text annotations &mdash; retrieval, not traversable
+                  domain relations. Only the imported ontologies (GO, KEGG, Reactome)
+                  qualify. See ADR-0026.
                 </div>
               </button>
 

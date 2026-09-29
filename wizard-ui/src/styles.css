@@ -187,6 +187,15 @@ body {
 .pillar-title { font-weight: 600; font-size: 1rem; }
 .pillar-sub { color: var(--muted); font-size: 0.85rem; }
 .pillar-status { margin-top: 0.15rem; }
+.pillar-footnote {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+.pillar-footnote sup { font-weight: 600; }
 
 /* Compound identifiers box (read-only) */
 .identity-box {
