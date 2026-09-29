@@ -895,7 +895,15 @@ async def _get_sections(ctx):
 
 
 async def _get_bmds(ctx):
-    """Run pybmds modeling on all endpoints, or return cached."""
+    """Fit apical BMDs via the ToxicR Java engine, or return cached.
+
+    Each endpoint is fit with the config its .bm2 was run with (parse_bmd_configs);
+    config-less apical platforms are inferred per assay family and flagged. The
+    ToxicR fit is BMDExpress-identical, so its overlap values validate against the
+    .bm2 (hard-stop) and its fills complete the report.
+    """
+    from tables.apical_bmds import parse_bmd_configs
+
     dtxsid = ctx.dtxsid
     bmds_inputs = ctx.bmds_inputs
     bmds_hash = ctx.bmds_hash
@@ -907,9 +915,13 @@ async def _get_bmds(ctx):
     if not bmds_inputs:
         ctx.bmds_results = {}
         return
+
+    # {(sex, platform_token): config} from the .bm2 analysisInfo — matched per endpoint.
+    configs = parse_bmd_configs(ctx.integrated)
+
     loop = asyncio.get_running_loop()
     results = await loop.run_in_executor(
-        None, run_bmds_for_endpoints, bmds_inputs,
+        None, run_bmds_for_endpoints, bmds_inputs, configs,
     )
     _save_cache(dtxsid, "bmds", bmds_hash, results)
     ctx.bmds_results = results
@@ -1133,13 +1145,16 @@ async def run_data(ctx) -> None:
     # BMDS models every endpoint once and the result cache serves every
     # version regardless of its apical filters (dropped endpoints are pruned
     # from the summary at presentation time, not skipped in modeling).
-    ctx.bmds_inputs = [
-        row._bmds_input
-        for sex_rows in ctx.platform_tables.values()
-        for rows in sex_rows.values()
-        for row in rows
-        if hasattr(row, "_bmds_input") and row._bmds_input
-    ]
+    # Attach the platform (the platform_tables key) onto each _bmds_input so the
+    # ToxicR path can resolve the per-endpoint fit config (recorded vs inferred BMR).
+    ctx.bmds_inputs = []
+    for platform, sex_rows in ctx.platform_tables.items():
+        for rows in sex_rows.values():
+            for row in rows:
+                bi = getattr(row, "_bmds_input", None)
+                if bi:
+                    bi = {**bi, "platform": platform}
+                    ctx.bmds_inputs.append(bi)
 
     # Compute per-unit hashes.  The sections stage reads sidecar JSONs
     # and the clinical-obs CSVs straight off disk and uses
