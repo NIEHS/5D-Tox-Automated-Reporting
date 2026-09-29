@@ -20,9 +20,12 @@ from __future__ import annotations
 
 import html as _html
 import logging
+import subprocess
+import tempfile
+from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from common.paths import SESSIONS_DIR
 from rendering.latex_export import _load_json
@@ -32,6 +35,18 @@ from web_routes.dtxsid_param import Dtxsid
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# How long a docx→pdf (LibreOffice) conversion may run before we give up.
+_PDF_TIMEOUT_S = 180
+
+
+def _download_links(dtxsid: str) -> list[dict]:
+    """The right-rail download links for a session's facsimile — the PDF and DOCX
+    previews, each an on-demand GET route below."""
+    return [
+        {"label": "PDF (preview)", "href": f"/Bookshelf/{dtxsid}/report.pdf"},
+        {"label": "Word (.docx)", "href": f"/Bookshelf/{dtxsid}/report.docx"},
+    ]
 
 
 def _session_title(dtxsid: str) -> str:
@@ -47,14 +62,19 @@ def _session_title(dtxsid: str) -> str:
     return dtxsid
 
 
+# Sync `def` handlers: rendering (generate_bits + skin) and docx→pdf conversion
+# are blocking CPU/subprocess work; FastAPI runs sync handlers in a threadpool, so
+# they don't stall the event loop.
+
 @router.get("/Bookshelf/{dtxsid}", response_class=HTMLResponse)
-async def bookshelf_facsimile(dtxsid: Dtxsid):
-    """Render one session's report as a Bookshelf reader-view facsimile page."""
+def bookshelf_facsimile(dtxsid: Dtxsid):
+    """Render one session's report as a Bookshelf reader-view facsimile page, with
+    a right-rail Download panel (PDF + DOCX previews)."""
     sess = SESSIONS_DIR / dtxsid
     if not sess.exists():
         return HTMLResponse(_not_found_page(dtxsid), status_code=404)
     try:
-        page = render_preview(dtxsid, surface="bookshelf")
+        page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid))
     except Exception:
         logger.exception("Bookshelf facsimile render failed for %s", dtxsid)
         return HTMLResponse(_error_page(dtxsid), status_code=500)
@@ -62,8 +82,53 @@ async def bookshelf_facsimile(dtxsid: Dtxsid):
     return HTMLResponse(page)
 
 
+@router.get("/Bookshelf/{dtxsid}/report.docx")
+def bookshelf_docx(dtxsid: Dtxsid):
+    """Download the DOCX preview — the actual Word deliverable, rendered on demand
+    (no prior materialize needed; not the gated final export)."""
+    if not (SESSIONS_DIR / dtxsid).exists():
+        return JSONResponse({"error": f"No such session: {dtxsid}"}, status_code=404)
+    try:
+        docx = render_preview(dtxsid, surface="docx")
+    except Exception:
+        logger.exception("Bookshelf docx render failed for %s", dtxsid)
+        return JSONResponse({"error": "Could not render the DOCX preview."}, status_code=500)
+    assert isinstance(docx, bytes)
+    return Response(
+        docx,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{dtxsid}-report.docx"'},
+    )
+
+
+@router.get("/Bookshelf/{dtxsid}/report.pdf")
+def bookshelf_pdf(dtxsid: Dtxsid):
+    """Download the PDF preview — the DOCX deliverable converted to PDF on demand
+    (LibreOffice/docx2pdf, offline).  503 if the conversion tool fails."""
+    if not (SESSIONS_DIR / dtxsid).exists():
+        return JSONResponse({"error": f"No such session: {dtxsid}"}, status_code=404)
+    try:
+        docx = render_preview(dtxsid, surface="docx")
+        assert isinstance(docx, bytes)
+        pdf = _docx_to_pdf(docx)
+    except Exception:
+        logger.exception("Bookshelf pdf render failed for %s", dtxsid)
+        return JSONResponse({"error": "Could not render the PDF preview."}, status_code=500)
+    if pdf is None:
+        return JSONResponse(
+            {"error": "PDF conversion (docx2pdf) failed on the server. The DOCX "
+                      "preview and the facsimile page are unaffected."},
+            status_code=503,
+        )
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{dtxsid}-report.pdf"'},
+    )
+
+
 @router.get("/Bookshelf", response_class=HTMLResponse)
-async def bookshelf_shelf():
+def bookshelf_shelf():
     """The shelf: list the sessions on disk, each linked to its facsimile."""
     try:
         dtxsids = sorted(
@@ -73,6 +138,27 @@ async def bookshelf_shelf():
     except OSError:
         dtxsids = []
     return HTMLResponse(_shelf_page(dtxsids))
+
+
+def _docx_to_pdf(docx_bytes: bytes) -> bytes | None:
+    """Convert DOCX bytes to PDF bytes with the offline `docx2pdf` (LibreOffice)
+    CLI, in a scratch dir.  Returns None on any failure (missing tool, non-zero
+    exit, no output) so the caller can 503 rather than 500.  A preview-fidelity
+    render — the higher-fidelity docx path (OnlyOffice x2t) is host-only."""
+    with tempfile.TemporaryDirectory(prefix="bookshelf_pdf_") as tmp:
+        tmp_path = Path(tmp)
+        src = tmp_path / "report.docx"
+        src.write_bytes(docx_bytes)
+        try:
+            subprocess.run(
+                ["docx2pdf", str(src), str(tmp_path)],
+                capture_output=True, text=True, timeout=_PDF_TIMEOUT_S, check=True,
+            )
+        except (subprocess.SubprocessError, OSError):
+            logger.exception("docx2pdf conversion failed")
+            return None
+        pdf = tmp_path / "report.pdf"
+        return pdf.read_bytes() if pdf.exists() else None
 
 
 # ---------------------------------------------------------------------------

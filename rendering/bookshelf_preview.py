@@ -309,7 +309,27 @@ def _render_abstract(abs_el, base_dir, nav: list[tuple]) -> str:
     return "".join(parts)
 
 
-def _build_html(root, base_dir, images: dict | None) -> str:
+def _download_rail(downloads: list[dict] | None) -> str:
+    """The right-rail "Download" panel (Bookshelf's right sidebar analogue) from a
+    list of {label, href} links.  Empty string when there are none, so the preview
+    surface / CLI (which pass no downloads) render with just the TOC + content."""
+    if not downloads:
+        return ""
+    links = "".join(
+        f'<li><a href="{_esc(d["href"])}">{_esc(d["label"])}</a></li>'
+        for d in downloads if d.get("href") and d.get("label")
+    )
+    if not links:
+        return ""
+    return (
+        '<aside class="side-rail">'
+        '<div class="rail-panel"><div class="rail-title">Download</div>'
+        f'<ul class="rail-links">{links}</ul></div>'
+        '</aside>'
+    )
+
+
+def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | None) -> str:
     m = _meta(root)
     nav: list[tuple] = []
     body_html: list[str] = []
@@ -359,6 +379,7 @@ def _build_html(root, base_dir, images: dict | None) -> str:
         subtitle=_esc(subtitle),
         nav="".join(nav_html),
         body="".join(body_html),
+        side_rail=_download_rail(downloads),
         css=_stylesheet(),
     )
 
@@ -376,7 +397,8 @@ def _parse(xml) -> etree._Element:
 
 
 def render_book_xml(xml, base_dir: Path | None = None,
-                    images: dict | None = None) -> str:
+                    images: dict | None = None,
+                    downloads: list[dict] | None = None) -> str:
     """Render a BITS <book> (XML string or bytes) to a Bookshelf-style HTML page.
 
     `base_dir` roots relative figure `graphic` hrefs (a missing/absent image
@@ -384,8 +406,11 @@ def render_book_xml(xml, base_dir: Path | None = None,
     optional {filename → base64-PNG} map that inlines figure images as data URIs
     so the page is self-contained — use chart_images(data) to build it from the
     session data (the BITS XML only carries the filename, not the bytes).
+    `downloads` is an optional list of {label, href} rendered as a right-rail
+    "Download" panel (the /Bookshelf page passes the PDF + DOCX links); omitted,
+    the page shows just the TOC + content (the in-app preview surface / CLI).
     """
-    return _build_html(_parse(xml), base_dir, images)
+    return _build_html(_parse(xml), base_dir, images, downloads)
 
 
 def render_book_file(xml_path: Path) -> str:
@@ -505,10 +530,23 @@ ol.ref-list{font-size:.9rem; line-height:1.5; padding-left:26px;}
 ol.ref-list li{margin:0 0 8px;}
 .docfoot{border-top:1px solid var(--rule); color:var(--muted); font-size:12px;
   padding:16px 46px 40px; max-width:1180px; margin:0 auto;}
-@media (max-width:820px){
+/* Right rail — the Bookshelf "Views"/download sidebar. */
+aside.side-rail{flex:0 0 220px; align-self:flex-start; position:sticky; top:0;
+  max-height:100vh; overflow:auto; padding:22px 16px 40px;}
+.rail-panel{border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:#fff;}
+.rail-title{background:var(--nav-bg); border-bottom:1px solid var(--rule);
+  font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); padding:8px 12px;}
+ul.rail-links{list-style:none; margin:0; padding:6px 0;}
+ul.rail-links li{margin:0;}
+ul.rail-links a{display:block; padding:8px 14px; color:var(--link); font-size:.9rem;}
+ul.rail-links a:hover{background:#eef2f5; text-decoration:none;}
+@media (max-width:900px){
   .layout{flex-direction:column;}
   nav.toc-rail{position:static; flex-basis:auto; max-height:none; width:100%;
     border-right:0; border-bottom:1px solid var(--rule);}
+  aside.side-rail{position:static; flex-basis:auto; max-height:none; width:100%;
+    border-top:1px solid var(--rule); order:3;}
   main{padding:20px 18px 60px;}
 }
 """
@@ -530,6 +568,7 @@ _PAGE = """<!doctype html>
 <div class="layout">
   <nav class="toc-rail">{nav}</nav>
   <main>{body}</main>
+  {side_rail}
 </div>
 <div class="docfoot">Rendered from BITS/JATS &lt;book&gt; via rendering/bookshelf_preview.py — a content-only lookalike of the NCBI Bookshelf reader view.</div>
 </body>

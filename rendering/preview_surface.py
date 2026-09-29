@@ -63,6 +63,7 @@ def render_surface(
     tree: "list | None",
     surface: str = DEFAULT_SURFACE,
     section_filter: str | None = None,
+    downloads: list[dict] | None = None,
 ) -> bytes | str:
     """Render `data` to one output surface.
 
@@ -70,6 +71,10 @@ def render_surface(
     `latex` is a known surface name but NOT implemented — it raises
     NotImplementedError so the caller (and the UI) can offer it as a disabled
     option without a silent wrong render.  An unknown surface raises ValueError.
+
+    `downloads` (a list of {label, href}) is honored only by the `bookshelf`
+    surface, which renders it as the page's right-rail Download panel; every other
+    surface ignores it.
     """
     if surface == "docx":
         from rendering.docx_generator import generate_docx
@@ -85,7 +90,9 @@ def render_surface(
         from rendering.bookshelf_preview import render_book_xml, chart_images
         # Inline chart PNGs (base64 in the data) so the preview is self-contained;
         # the BITS <graphic> only carries a filename.
-        return render_book_xml(generate_bits(data), images=chart_images(data))
+        return render_book_xml(
+            generate_bits(data), images=chart_images(data), downloads=downloads
+        )
     if surface == "latex":
         raise NotImplementedError(
             f"Preview surface {surface!r} is provisioned but not implemented yet"
@@ -218,15 +225,17 @@ def _preview_inputs(dtxsid: str, view: str) -> tuple[dict, "list | None"]:
 
 
 def render_preview(
-    dtxsid: str, surface: str = DEFAULT_SURFACE, view: str | None = None
+    dtxsid: str, surface: str = DEFAULT_SURFACE, view: str | None = None,
+    downloads: list[dict] | None = None,
 ) -> bytes | str:
     """Render a session's report to `surface` and RETURN it, WITHOUT persisting —
     the no-archive twin of materialize_preview, for on-demand views like the
     Bookshelf facsimile page (web_routes.bookshelf_routes).  Uses the same data
     loading + tree resolution, so an on-demand render matches the materialized one.
+    `downloads` is forwarded to render_surface (honored only by `bookshelf`).
     Raises ValueError on an unknown surface, NotImplementedError on a provisioned-
     but-unimplemented one (e.g. latex)."""
     if surface not in KNOWN_SURFACES:
         raise ValueError(f"Unknown preview surface: {surface!r}")
     data, tree = _preview_inputs(dtxsid, view or DEFAULT_VIEW)
-    return render_surface(data, tree, surface=surface)
+    return render_surface(data, tree, surface=surface, downloads=downloads)
