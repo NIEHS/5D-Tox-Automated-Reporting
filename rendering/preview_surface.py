@@ -157,9 +157,7 @@ def materialize_preview(
     view = view or DEFAULT_VIEW
     ts = now_iso()
 
-    chemical_name, casrn = _identity(dtxsid)
-    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, view=view)
-    tree = build_view_tree(dtxsid, view)
+    data, tree = _preview_inputs(dtxsid, view)
 
     preview_dir = _preview_dir(dtxsid, view)
     preview_dir.mkdir(parents=True, exist_ok=True)
@@ -206,3 +204,29 @@ def preview_file_path(
     view = view or DEFAULT_VIEW
     name = _SURFACE_FILENAME.get(surface, "preview.html")
     return _preview_dir(dtxsid, view) / name
+
+
+def _preview_inputs(dtxsid: str, view: str) -> tuple[dict, "list | None"]:
+    """The (data, tree) a preview renders from: the session data loaded for the
+    view, plus the view's DocNode tree.  Shared by materialize_preview (which
+    persists) and render_preview (on-demand, no persist) so the two cannot
+    diverge on how a report is built."""
+    chemical_name, casrn = _identity(dtxsid)
+    data = load_session_data(dtxsid, chemical_name=chemical_name, casrn=casrn, view=view)
+    tree = build_view_tree(dtxsid, view)
+    return data, tree
+
+
+def render_preview(
+    dtxsid: str, surface: str = DEFAULT_SURFACE, view: str | None = None
+) -> bytes | str:
+    """Render a session's report to `surface` and RETURN it, WITHOUT persisting —
+    the no-archive twin of materialize_preview, for on-demand views like the
+    Bookshelf facsimile page (web_routes.bookshelf_routes).  Uses the same data
+    loading + tree resolution, so an on-demand render matches the materialized one.
+    Raises ValueError on an unknown surface, NotImplementedError on a provisioned-
+    but-unimplemented one (e.g. latex)."""
+    if surface not in KNOWN_SURFACES:
+        raise ValueError(f"Unknown preview surface: {surface!r}")
+    data, tree = _preview_inputs(dtxsid, view or DEFAULT_VIEW)
+    return render_surface(data, tree, surface=surface)

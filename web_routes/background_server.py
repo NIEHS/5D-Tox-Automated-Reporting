@@ -277,6 +277,11 @@ app.include_router(knowledge_graph_routes.router)
 import web_routes.corpus_routes as corpus_routes
 app.include_router(corpus_routes.router)
 
+# Bookshelf facsimile pages: GET /Bookshelf and /Bookshelf/{dtxsid} — the report
+# rendered through the `bookshelf` preview surface as a standalone page (not /api/).
+import web_routes.bookshelf_routes as bookshelf_routes
+app.include_router(bookshelf_routes.router)
+
 
 # ---------------------------------------------------------------------------
 # GET / — serve the web UI
