@@ -50,6 +50,7 @@ from .apical_report import (
 from .apical_stats import (
     analyze_endpoint,
     run_java_prefilter,
+    run_apical_bmds_java,
     EndpointStats,
 )
 

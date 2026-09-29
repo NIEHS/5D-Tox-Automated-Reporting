@@ -196,6 +196,43 @@ def jonckheere_test(groups_by_dose: dict[float, list[float]]) -> tuple[float, st
 # Java classpath and helper directory are centralized in java_bridge.py
 # to avoid duplication across apical_report, apical_stats, and pool_integrator.
 from .java_bridge import build_classpath as _build_classpath
+from .java_bridge import BMDX_PROJECT as _BMDX_PROJECT
+
+
+def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str, dict]:
+    """Fit apical continuous BMDs via the BMDExpress ToxicR engine (RunApicalBmds).
+
+    The Java/ToxicR replacement for the Python pybmds recompute: pipes per-endpoint
+    per-animal dose-response data + the SAME fit config the endpoint's .bm2 was run
+    with (model set, BMR type/factor, constant variance) to the RunApicalBmds helper,
+    which drives libDRBMD.so via ToxicRJNI and returns model-averaged BMD/BMDL.
+
+    Each endpoint dict: {key, doses:[per-animal], Y:[per-animal], models:[int],
+    bmr_type:int(1=SD,2=RelDev), bmr_factor:float, is_ncv:bool}. Returns
+    {key: {bmd, bmdl, bmdu, model_name, status, notes}} — SAME shape the old
+    run_bmds_for_endpoints produced, so downstream consumers are unchanged.
+
+    MUST set -Djava.library.path so ToxicRJNI's System.loadLibrary("DRBMD") resolves
+    (BMDX_PROJECT is where libDRBMD.so lives). Raises RuntimeError on process failure.
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    if not endpoints:
+        return {}
+    cp = _build_classpath()
+    proc = _subprocess.run(
+        ["java", f"-Djava.library.path={_BMDX_PROJECT}", "-cp", cp, "RunApicalBmds"],
+        input=_json.dumps({"endpoints": endpoints}),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"RunApicalBmds failed (exit {proc.returncode}): {proc.stderr}"
+        )
+    return _json.loads(proc.stdout)
 
 
 def _call_java_prefilter(

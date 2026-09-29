@@ -954,6 +954,18 @@ def build_table_data(
                 (se_per_dose.get(d, 0.0) or 0.0) * math.sqrt(n_per_dose.get(d, 1))
                 for d in _sorted_doses
             ],
+            # Per-animal vectors for the ToxicR Java fitter (suff_stat=false path):
+            # BMDExpress fits from individual values, not group summaries, so match it
+            # for digit-identical validation. groups_by_dose already holds per-animal
+            # values (cleaned) — flatten to parallel doses[]/Y[] arrays.
+            "doses_per_animal": [
+                d for d in _sorted_doses for _ in groups_by_dose.get(d, [])
+            ],
+            "Y": [
+                v for d in _sorted_doses for v in groups_by_dose.get(d, [])
+            ],
+            "sex": sex,
+            "endpoint": probe_name,
         }
 
     return tables

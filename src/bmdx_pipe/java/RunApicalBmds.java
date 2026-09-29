@@ -1,0 +1,184 @@
+/**
+ * RunApicalBmds — fit apical continuous BMD models via the BMDExpress ToxicR engine.
+ *
+ * Standalone JSON-in / JSON-out CLI, same mold as RunPrefilter: the Python layer
+ * pipes per-endpoint dose-response data on stdin and reads BMD/BMDL results on
+ * stdout. This replaces the Python `pybmds` recompute (tables/apical_bmds.py) with
+ * the SAME native engine BMDExpress itself uses (ToxicR via libDRBMD.so), so the
+ * numbers are BMDExpress-identical rather than an EPA-BMDS approximation.
+ *
+ * Requires the native library on java.library.path:
+ *   java -Djava.library.path=$BMDX_PROJECT_ROOT -cp <cp>:<helperdir> RunApicalBmds
+ * (ToxicRJNI does System.loadLibrary("DRBMD").)
+ *
+ * The fit CONFIG is per-endpoint, extracted by the Python caller from each
+ * bMDResult.analysisInfo (Models fit / BMR Type / BMR Factor / Constant Variance),
+ * so an endpoint is modeled with the SAME settings its .bm2 was — which is what makes
+ * the downstream overlap comparison (hard-stop validation) like-for-like.
+ *
+ * Input (JSON on stdin):
+ *   {
+ *     "endpoints": [
+ *       {
+ *         "key": "Male::Total Thyroxine",
+ *         "doses": [0,0,0,0, 4,4,4,4, 37,37,37, 111,111,111],   // per-animal
+ *         "Y":     [10.1,9.8,...],                               // per-animal, same length
+ *         "models": [6,8,3,5],          // HILL,POWER,EXP3,EXP5 (from "Models fit")
+ *         "bmr_type": 2,                // 1=Standard Deviation, 2=Relative Deviation
+ *         "bmr_factor": 0.25,           // "BMR Factor"
+ *         "is_ncv": false               // "Constant Variance: 1" -> false
+ *       }, ...
+ *     ]
+ *   }
+ *
+ * Output (JSON on stdout): { "<key>": {bmd, bmdl, bmdu, model_name, status, notes}, ... }
+ *   status ∈ viable | NR | UREP | NVM   (value-based NIEHS rules; see notes)
+ */
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import com.sciome.bmdexpress2.mvp.model.LogTransformationEnum;
+import com.sciome.bmdexpress2.mvp.model.stat.ModelAveragingResult;
+import com.sciome.bmdexpress2.util.bmds.BMDSToxicRUtils;
+
+public class RunApicalBmds {
+
+    // NIEHS "not reportable": BMD below 1/3 of the lowest nonzero dose (mirror of
+    // tables/apical_bmds.py _NR_FRACTION — the extrapolation guard).
+    private static final double NR_FRACTION = 1.0 / 3.0;
+    // UREP: unreliable confidence interval (mirror of the pybmds BMDU/BMDL > 40 rule).
+    private static final double UREP_CI_RATIO = 40.0;
+
+    public static void main(String[] args) throws Exception {
+        // NaN -> JSON null, matching RunPrefilter/IntegrateProject so Python sees null.
+        ObjectMapper mapper = IntegrateProject.createNanSafeMapper();
+        JsonNode input = mapper.readTree(System.in);
+        JsonNode endpoints = input.get("endpoints");
+
+        ObjectNode out = mapper.createObjectNode();
+
+        for (JsonNode ep : endpoints) {
+            String key = ep.get("key").asText();
+            try {
+                out.set(key, fitEndpoint(mapper, ep));
+            } catch (Throwable t) {
+                // Never let one endpoint's failure abort the batch — emit an NVM row
+                // with the reason, exactly as the pybmds path returned _failure_result.
+                out.set(key, failure(mapper, "fit error: " + t.getMessage()));
+                System.err.println("RunApicalBmds: endpoint '" + key + "' failed: " + t);
+            }
+        }
+
+        System.out.println(mapper.writeValueAsString(out));
+    }
+
+    private static ObjectNode fitEndpoint(ObjectMapper mapper, JsonNode ep) throws Exception {
+        double[] doses = toDoubleArray(ep.get("doses"));
+        double[] Y = toDoubleArray(ep.get("Y"));
+        int[] models = toIntArray(ep.get("models"));
+        int bmrType = ep.get("bmr_type").asInt();
+        double bmrFactor = ep.get("bmr_factor").asDouble();
+        boolean isNcv = ep.has("is_ncv") && ep.get("is_ncv").asBoolean();
+        boolean isFast = ep.has("is_fast") && ep.get("is_fast").asBoolean();
+
+        // --- computability gate (mirror of run_bmds_session validation) ---
+        if (doses.length != Y.length || doses.length < 3) {
+            return failure(mapper, "Insufficient data or mismatched dose/Y lengths");
+        }
+        // Need at least 3 distinct dose groups (control + 2 treatment).
+        if (distinctCount(doses) < 3) {
+            return failure(mapper, "Fewer than 3 distinct dose groups");
+        }
+        // Zero variance everywhere -> no dose-response to model.
+        if (allEqual(Y)) {
+            return failure(mapper, "Zero variance across all responses");
+        }
+
+        // Laplace model averaging, non-MCMC, transform NONE (apical data is not
+        // log-transformed). bmrType 1/2 is remapped to ToxicR SD/REL inside.
+        ModelAveragingResult ma = BMDSToxicRUtils.calculateToxicRMA(
+                models, Y, doses, bmrType, bmrFactor, isNcv,
+                /*useMCMC*/ false, isFast, LogTransformationEnum.NONE);
+
+        double bmd = ma.getBMD();
+        double bmdl = ma.getBMDL();
+        double bmdu = ma.getBMDU();
+        String modelName = (ma.getModelWithHighestPP() != null)
+                ? ma.getModelWithHighestPP().getModel() : "Model Average";
+
+        if (Double.isNaN(bmd) || Double.isInfinite(bmd)) {
+            return failure(mapper, "BMD is NaN or Inf");
+        }
+
+        // Value-based NIEHS status (ToxicR MA has no recommender bin — see plan note).
+        double lnzd = lowestNonzeroDose(doses);
+        String status;
+        if (lnzd > 0 && bmd < lnzd * NR_FRACTION) {
+            status = "NR";
+        } else if (bmdl > 0 && !Double.isNaN(bmdu) && bmdu / bmdl > UREP_CI_RATIO) {
+            status = "UREP";
+        } else {
+            status = "viable";
+        }
+
+        ObjectNode r = mapper.createObjectNode();
+        r.put("bmd", round3(bmd));
+        r.put("bmdl", (Double.isNaN(bmdl) || bmdl <= 0) ? null : (Double) round3(bmdl));
+        r.put("bmdu", (Double.isNaN(bmdu) || bmdu <= 0) ? null : (Double) round3(bmdu));
+        r.put("model_name", modelName);
+        r.put("status", status);
+        r.put("notes", "");
+        return r;
+    }
+
+    private static ObjectNode failure(ObjectMapper mapper, String note) {
+        ObjectNode r = mapper.createObjectNode();
+        r.putNull("bmd");
+        r.putNull("bmdl");
+        r.putNull("bmdu");
+        r.putNull("model_name");
+        r.put("status", "NVM");
+        r.put("notes", note);
+        return r;
+    }
+
+    // --- helpers ---
+
+    private static double[] toDoubleArray(JsonNode n) {
+        double[] a = new double[n.size()];
+        for (int i = 0; i < n.size(); i++) a[i] = n.get(i).asDouble();
+        return a;
+    }
+
+    private static int[] toIntArray(JsonNode n) {
+        int[] a = new int[n.size()];
+        for (int i = 0; i < n.size(); i++) a[i] = n.get(i).asInt();
+        return a;
+    }
+
+    private static int distinctCount(double[] a) {
+        List<Double> seen = new ArrayList<>();
+        for (double v : a) if (!seen.contains(v)) seen.add(v);
+        return seen.size();
+    }
+
+    private static boolean allEqual(double[] a) {
+        for (int i = 1; i < a.length; i++) if (a[i] != a[0]) return false;
+        return true;
+    }
+
+    private static double lowestNonzeroDose(double[] doses) {
+        double min = Double.POSITIVE_INFINITY;
+        for (double d : doses) if (d > 0 && d < min) min = d;
+        return Double.isInfinite(min) ? 0 : min;
+    }
+
+    private static double round3(double v) {
+        return Math.round(v * 1000.0) / 1000.0;
+    }
+}
