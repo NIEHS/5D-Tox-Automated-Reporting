@@ -102,13 +102,15 @@ logger = logging.getLogger(__name__)
 # unvalidated BMD — so the design (user decision) is a FULL STOP that halts the
 # run and names the endpoint + both values for the data team.
 #
-# The gate is DORMANT for now: the available libDRBMD build does not reproduce the
-# .bm2's model-averaged BMDs (task #48 — the .bm2 was computed with a different
-# BMDExpress build), so every overlap currently diverges.  Until the engine
-# matches the .bm2 build, divergence is recorded + logged (flag-only) and the run
-# proceeds; the fills and provenance still land.  Flip _BMD_HARD_STOP to True to
-# arm the blocking gate once #48 makes the overlap like-for-like.
-_BMD_HARD_STOP = False
+# ARMED (2026-09-30): task #48 is resolved — libDRBMD 3.20.158 (byte-identical to
+# 3.20.161, the authoritative build) is in place and REPRODUCES the .bm2's
+# model-averaged BMDs.  Verified on the real PFHxSAm session: all 11 overlap
+# endpoints agree within tolerance (most exact; worst 15%), so the gate no longer
+# false-fires.  A genuine overlap divergence beyond tolerance now HALTS the run and
+# names the endpoint + both values for the data team.  (History: this was dormant
+# while an older libDRBMD build was installed and every overlap spuriously diverged
+# — see project_bmd_toxicr_reconcile memory.)
+_BMD_HARD_STOP = True
 
 
 class BmdDivergenceError(StepError):
