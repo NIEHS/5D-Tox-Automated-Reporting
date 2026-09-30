@@ -84,6 +84,7 @@ from pipeline.processing_helpers import (
     apply_genomics_cutoffs,
     _build_apical_bmd_summary,
     _build_bmds_bmd_summary,
+    _BMD_DIVERGENCE_TOL,
     apply_apical_filters,
     apply_section_filters,
 )
@@ -91,6 +92,50 @@ from workflow.errors import StepError
 
 
 logger = logging.getLogger(__name__)
+
+
+# Task #34 — the bm2↔ToxicR overlap divergence hard-stop.
+#
+# Where the .bm2 AND the ToxicR recompute both model an endpoint, they should
+# agree (same engine, per-endpoint .bm2 config).  A disagreement beyond tolerance
+# means the data or config is wrong, and shipping either number would assert an
+# unvalidated BMD — so the design (user decision) is a FULL STOP that halts the
+# run and names the endpoint + both values for the data team.
+#
+# The gate is DORMANT for now: the available libDRBMD build does not reproduce the
+# .bm2's model-averaged BMDs (task #48 — the .bm2 was computed with a different
+# BMDExpress build), so every overlap currently diverges.  Until the engine
+# matches the .bm2 build, divergence is recorded + logged (flag-only) and the run
+# proceeds; the fills and provenance still land.  Flip _BMD_HARD_STOP to True to
+# arm the blocking gate once #48 makes the overlap like-for-like.
+_BMD_HARD_STOP = False
+
+
+class BmdDivergenceError(StepError):
+    """A bm2-modeled apical endpoint and the ToxicR recompute disagree beyond
+    tolerance (raised only when _BMD_HARD_STOP is armed).  A correctness gate:
+    shipping either number would assert an unvalidated BMD."""
+
+
+def _report_bmd_divergences(dtxsid: str, divergences: list[dict]) -> None:
+    """Handle bm2↔ToxicR overlap divergences (task #34): always log them
+    (endpoint + both values) for the data team, and raise BmdDivergenceError to
+    halt the run before the payload assembles WHEN the hard-stop is armed.  While
+    dormant (_BMD_HARD_STOP is False) divergence is flag-only."""
+    lines = [
+        f"{d['sex']} {d['endpoint']} ({d['platform']}): "
+        f"bm2={d['bm2_bmd']:.4g} vs ToxicR={d['toxicr_bmd']:.4g} "
+        f"(Δ{d['rel_delta'] * 100:.0f}%)"
+        for d in divergences
+    ]
+    msg = (
+        f"{len(divergences)} apical BMD endpoint(s) diverge between the .bm2 and "
+        f"the ToxicR recompute beyond {_BMD_DIVERGENCE_TOL:.0%} — "
+        + "; ".join(lines)
+    )
+    if _BMD_HARD_STOP:
+        raise BmdDivergenceError(msg)
+    logger.warning("BMD overlap divergence (hard-stop dormant, task #48): %s", msg)
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +226,7 @@ class ProcessContext:
     methods_result: dict | None = None
     apical_bmd_summary: list | None = None
     apical_bmd_summary_bmds: list | None = None
+    bmd_divergences: list | None = None
     chart_images: list | None = None
     llm_gs_by_organ: dict | None = None
     llm_gene_by_organ: dict | None = None
@@ -492,14 +538,26 @@ def _build_bmd_summary(ctx):
     # touch the summaries — pre-phase-2 it filtered only the Organ Weight section
     # table + narrative, never the BMD summary rows.
     _sex_allow = (ctx.sex_filters or {}).get("apical")
+    _tables_for_summary = platform_tables
     if _sex_allow or ctx.assay_filters:
-        _filt_tables = apply_apical_filters(
+        _tables_for_summary = apply_apical_filters(
             platform_tables, sex_allow=_sex_allow, assay_filters=ctx.assay_filters,
         )
-        apical_bmd_summary = _build_apical_bmd_summary(_filt_tables)
-        apical_bmd_summary_bmds = _build_bmds_bmd_summary(_filt_tables, bmds_results)
+        apical_bmd_summary_bmds = _build_bmds_bmd_summary(_tables_for_summary, bmds_results)
+
+    # Task #34 — the RENDERED apical summary is the bm2 summary reconciled with the
+    # ToxicR recompute: provenance stamped, bm2-blank endpoints filled from viable
+    # ToxicR fits, and overlap divergences collected.  Built from the SAME
+    # (filter-applied) tables so the row set matches the platform tables.
+    divergences: list[dict] = []
+    apical_bmd_summary = _build_apical_bmd_summary(
+        _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
+    )
+    if divergences:
+        _report_bmd_divergences(ctx.dtxsid, divergences)
     ctx.apical_bmd_summary = apical_bmd_summary
     ctx.apical_bmd_summary_bmds = apical_bmd_summary_bmds
+    ctx.bmd_divergences = divergences
 
 
 def _chart_types_fingerprint(registry: dict) -> dict:

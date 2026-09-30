@@ -23,7 +23,9 @@
       "loel": 100.0,
       "noel": 10.0,
       "platform": "Clinical Chemistry",
-      "sex": "Male"
+      "sex": "Male",
+      "source": "bm2",
+      "validated": null
     },
     {
       "bmd": "55.0",
@@ -34,7 +36,9 @@
       "loel": 100.0,
       "noel": 10.0,
       "platform": "Clinical Chemistry",
-      "sex": "Male"
+      "sex": "Male",
+      "source": "bm2",
+      "validated": null
     }
   ],
   "apical_bmd_summary_bmds": [],

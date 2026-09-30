@@ -1282,7 +1282,81 @@ def _summary_endpoint_label(label: str, platform: str) -> str:
     return _SUMMARY_LABEL_OVERRIDES.get(key, raw)
 
 
-def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> list[dict]:
+# Relative tolerance for the bm2↔ToxicR overlap cross-check (task #34).  An
+# endpoint both engines model numerically is "validated" when they agree within
+# this; beyond it the endpoint is flagged as a divergence.  The blocking hard-stop
+# that consumes these divergences is DORMANT until the ToxicR engine matches the
+# .bm2 build (task #48) — see _BMD_HARD_STOP in process_integrated._build_bmd_summary.
+_BMD_DIVERGENCE_TOL = 0.25
+
+
+def _finite_pos_bmd(value) -> float | None:
+    """Parse a BMD/BMDL cell to a finite positive float, or None for a blank or
+    marker cell (UREP / NVM / NR / '—' / '')."""
+    import math
+    try:
+        f = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f) or f <= 0:
+        return None
+    return f
+
+
+def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None) -> None:
+    """Reconcile one bm2 apical-summary entry with the ToxicR recompute (task #34).
+
+    Stamps provenance on the entry (`source` = bm2|toxicr, `validated` = bool|None);
+    FILLS a bm2 endpoint that has no usable BMD (blank / NVM / UREP / NR) from a
+    viable ToxicR fit; and, where BOTH engines produced a numeric BMD, records any
+    divergence beyond `_BMD_DIVERGENCE_TOL` into `divergences`.  The blocking
+    hard-stop that would halt on a non-empty `divergences` is armed by
+    `_BMD_HARD_STOP` (currently off) — until then divergence is flag-only.
+    """
+    entry["source"] = "bm2"
+    entry["validated"] = None
+    tox = bmds_results.get(entry.get("_key"))
+    bm2_bmd = _finite_pos_bmd(entry.get("bmd"))
+    tox_bmd = _finite_pos_bmd(tox.get("bmd")) if tox else None
+
+    if bm2_bmd is not None:
+        # bm2 gave a usable BMD → keep it; cross-check against ToxicR when present.
+        if tox_bmd is not None:
+            rel = abs(bm2_bmd - tox_bmd) / bm2_bmd
+            entry["validated"] = rel <= _BMD_DIVERGENCE_TOL
+            if rel > _BMD_DIVERGENCE_TOL and divergences is not None:
+                divergences.append({
+                    "endpoint": entry.get("endpoint"),
+                    "sex": entry.get("sex"),
+                    "platform": entry.get("platform"),
+                    "bm2_bmd": bm2_bmd,
+                    "toxicr_bmd": tox_bmd,
+                    "rel_delta": round(rel, 4),
+                })
+        return
+
+    # bm2 has no usable BMD → fill from a viable ToxicR fit (recovers the ~18
+    # bm2-blank endpoints incl. thyroid T3/T4 the reference reports).
+    if tox and tox.get("status") == "viable" and tox_bmd is not None:
+        entry["source"] = "toxicr"
+        entry["filled"] = True
+        entry["bmd"] = f"{tox_bmd:.3g}"
+        tox_bmdl = tox.get("bmdl")
+        entry["bmdl"] = f"{float(tox_bmdl):.3g}" if tox_bmdl not in (None, "") else "—"
+        entry["bmd_status"] = "viable"
+        if tox.get("model_name"):
+            entry["model_name"] = tox["model_name"]
+        # This endpoint is now a ToxicR value, not the bm2 anomaly marker.
+        entry.pop("anomalous", None)
+        entry.pop("bmd_original", None)
+        entry.pop("bmdl_original", None)
+
+
+def _build_apical_bmd_summary(
+    platform_tables: dict[str, dict[str, list]],
+    bmds_results: dict | None = None,
+    divergences: list | None = None,
+) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
 
@@ -1290,6 +1364,12 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
     a flat list for the separate BMD summary card.  Matches the NIEHS reference
     report structure where platform tables (Tables 2-7) show dose-response data
     and Table 8 summarizes BMDs.
+
+    When `bmds_results` (the raw ToxicR fits, keyed ``f"{sex}::{label}"``) is
+    given, each row is reconciled with the ToxicR recompute (task #34): provenance
+    is stamped, bm2-blank endpoints are filled from viable ToxicR fits, and
+    overlap divergences beyond tolerance are appended to `divergences`.  Passing
+    ``None`` (the default) leaves the pure-bm2 summary byte-identical.
 
     Only includes endpoints that have a BMD result OR significant trend/pairwise
     findings (LOEL exists).  Endpoints with neither are uninteresting.
@@ -1342,6 +1422,8 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
                     "loel": row.loel,
                     "noel": row.noel,
                     "direction": row.direction,
+                    # Internal ToxicR join key (raw label); stripped after merge.
+                    "_key": f"{sex}::{row.label}",
                 })
 
     # --- Apply UREP marking ---
@@ -1357,6 +1439,15 @@ def _build_apical_bmd_summary(platform_tables: dict[str, dict[str, list]]) -> li
             entry["bmdl"] = "UREP"
             entry["direction"] = "–"  # en dash — matches reference Table 8
             entry["anomalous"] = True
+
+    # --- Reconcile with ToxicR (task #34): provenance + fill + divergence flag ---
+    # Only when the caller passes the ToxicR fits; otherwise the pure-bm2 summary
+    # stays byte-identical (the standalone build + the filter-agnostic cache).
+    if bmds_results is not None:
+        for entry in raw_entries:
+            _merge_toxicr_into(entry, bmds_results, divergences)
+    for entry in raw_entries:
+        entry.pop("_key", None)
 
     # --- Sort: reliable BMDs first (ascending), then by LOEL ascending ---
     # Reliable = numeric, parseable, non-empty bmd string.  Reference
