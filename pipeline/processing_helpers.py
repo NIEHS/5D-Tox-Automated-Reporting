@@ -1346,6 +1346,11 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
         entry["bmd_status"] = "viable"
         if tox.get("model_name"):
             entry["model_name"] = tox["model_name"]
+        # How the fit's BMR was chosen: bm2_config (copied from a sibling result's
+        # analysisInfo) or inferred (assay-family default, needs data-team sign-off
+        # before it renders — the task #36 approval gate keys on this).
+        if tox.get("bmr_config"):
+            entry["bmr_config"] = tox["bmr_config"]
         # This endpoint is now a ToxicR value, not the bm2 anomaly marker.
         entry.pop("anomalous", None)
         entry.pop("bmd_original", None)
