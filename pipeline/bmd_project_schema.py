@@ -111,7 +111,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,11 @@ logger = logging.getLogger(__name__)
 # `experimentDescription.sex`.  Lowercase is the canonical form;
 # downstream code (e.g. `_partition_by_platform`) capitalizes for display.
 ALLOWED_SEX_VALUES = ("male", "female")
+
+# BMDExpress 3 vocabulary values meaning "not a single sex" (bmdx-pipe's
+# experiment_metadata.VOCABULARIES["sex"]).  Normalized to None on load — the
+# rlm-bmdx representation of a sexless / pooled experiment.
+_NOT_SINGLE_SEX_VALUES = frozenset({"both", "mixed", "na", ""})
 
 # The two valid `tier` values that rlm-bmdx writes into
 # `_meta.source_files[*].tier`.  "bm2" means the BMDExpress 3 binary
@@ -541,8 +548,23 @@ class ExperimentDescription(_BaseModel):
     provider: Optional[str] = None
 
     # The animal sex, lowercase.  rlm-bmdx splits tables by sex
-    # downstream.  None on stub descriptions attached to result lists.
+    # downstream.  None on stub descriptions attached to result lists, and
+    # for any experiment that is not a single sex (sexless / pooled data).
     sex: Optional[Literal["male", "female"]] = None
+
+    @field_validator("sex", mode="before")
+    @classmethod
+    def _not_single_sex_is_none(cls, v):
+        """Map BMDExpress's "not a single sex" vocabulary values to None.
+
+        bmdx-pipe's annotator may emit `both` / `mixed` / `NA` (legal in the
+        BMDExpress 3 vocabulary — e.g. for a sexless genomics study), but
+        rlm-bmdx represents "not one sex" as None (derive_study_sexes → []).
+        Only these known values are translated; anything else still fails the
+        Literal, so genuine value drift is caught."""
+        if isinstance(v, str) and v.strip().lower() in _NOT_SINGLE_SEX_VALUES:
+            return None
+        return v
 
     # The dataType field exists in the source-files compound key
     # ("Platform|dataType") but is not currently populated on the

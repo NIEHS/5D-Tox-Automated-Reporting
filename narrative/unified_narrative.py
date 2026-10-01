@@ -393,18 +393,38 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _animal_condition_survived_template() -> Template:
+def _mortality_sex_subject(mortality: dict) -> str:
+    """The rats-subject phrase for the study's ACTUAL sexes, from the mortality
+    data (`by_dose[dose]` is keyed by sex): "male and female rats" when both are
+    present, "male rats" / "female rats" for a single-sex study, else "rats"."""
+    sexes = {
+        str(s).lower()
+        for per_sex in (mortality.get("by_dose") or {}).values()
+        for s in (per_sex or {})
+    }
+    if {"male", "female"} <= sexes:
+        return "male and female rats"
+    if sexes == {"male"}:
+        return "male rats"
+    if sexes == {"female"}:
+        return "female rats"
+    return "rats"
+
+
+def _animal_condition_survived_template(subject: str = "male and female rats") -> Template:
     """The all-survived brief statement.  `expected_day` (the terminal study day,
-    e.g. "SD5") is NUMERIC — a day identifier that just refreshes."""
+    e.g. "SD5") is NUMERIC — a day identifier that just refreshes.  `subject` is the
+    study's sex phrase (_mortality_sex_subject) — structural, baked as a Literal."""
     return [
-        Literal("All male and female rats survived to study termination ("),
+        Literal(f"All {subject} survived to study termination ("),
         Slot("expected_day", SlotKind.NUMERIC),
         Literal(") without signs of overt toxicity."),
     ]
 
 
 def _animal_condition_opening_template(
-    compound_name: str, has_death_day: bool, has_signs: bool
+    compound_name: str, has_death_day: bool, has_signs: bool,
+    subject: str = "male and female rats",
 ) -> Template:
     """The mortality/toxicity opening sentence.  `compound_name` is baked into a
     Literal — the chemical identity is structural, not a reprocess value.  Dose
@@ -414,7 +434,7 @@ def _animal_condition_opening_template(
     The two clauses are present only when the former `if earliest_death_day` /
     `if clinical_signs` branches fired."""
     segs: list = [
-        Literal("Male and female rats administered "),
+        Literal(f"{subject[:1].upper()}{subject[1:]} administered "),
         Slot("doses", SlotKind.NUMERIC),
         Literal(" "),
         Slot("unit", SlotKind.NUMERIC),
@@ -524,7 +544,8 @@ def _build_animal_condition_paragraphs(
         # No mortality — brief statement that all survived (template + render;
         # byte-identical to the former f-string).
         paragraphs.append(
-            render(_animal_condition_survived_template(), {"expected_day": expected_day})
+            render(_animal_condition_survived_template(_mortality_sex_subject(mortality)),
+                   {"expected_day": expected_day})
         )
         return paragraphs
 
@@ -571,7 +592,8 @@ def _build_animal_condition_paragraphs(
         opening_binding["signs"] = _oxford_comma(clinical_signs[:5], conjunction="and")
     sentence1 = render(
         _animal_condition_opening_template(
-            compound_name, bool(earliest_death_day), bool(clinical_signs)),
+            compound_name, bool(earliest_death_day), bool(clinical_signs),
+            subject=_mortality_sex_subject(mortality)),
         opening_binding,
     )
 

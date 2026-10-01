@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """tooling/stq_to_ntp.py — convert raw STQ LIMS body/organ-weight extracts into
-the NTP "Individual Animal Data" xlsx format the rlm-bmdx pool ingests.
+the long-format NTP "truth" CSVs the rlm-bmdx pool ingests.
 
 The Triclosan/BPAF apical weights arrived as raw study-database exports
 (`assets/IAD_STQ_{BODYWEIGHTS,ORGANWEIGHTS}_*.xlsx`): DB-native columns, a `SQL`
 query sheet, both chemicals combined by `DEPOSITOR_STUDY_NUMBER`, and organ
-weights in LONG form (one row per animal×organ). The rlm-bmdx pool keys the
-PLATFORM off the filename (`Body_Weight` / `Organ_Weight`) and the DATA_TYPE
-(`tox_study`) off the two-sheet `Key to Column Labels` + `Data` structure
-(`file_integrator.fingerprint_xlsx`). This rewrites each study into a
-per-chemical NTP-format file named like the reference set, so it classifies and
-parses identically.
+weights in LONG form (one row per animal×organ).
+
+The pool's accepted apical source is a long-format `*_truth*.csv` (one row per
+animal/observation, NTP columns): the filename sets platform + `tox_study`
+(file_integrator patterns), and on upload `fingerprint_and_store` converts it
+into the wide `{stem}.txt` BMDExpress pivot + `{stem}.sidecar.json` per-animal
+metadata (bmdx_pipe.tox_study_csv_to_pivot_txt) — exactly how the reference
+`body_weight_truth_male.*` / `organ_weights_truth_male.*` were produced.  (xlsx
+study files are NOT an accepted source: the BMDProject schema rejects tier xlsx.)
 
 Study→chemical (confirmed by matching each STQ study's dose series to the
 session's genomics doses):
@@ -22,9 +25,13 @@ Assumptions (all from the delivered data, flagged deliberately):
   * `SELECTION` (`None` / `Core Males`) maps to `Core Animals` — no biosampling
     cohort is present in the extract, so every animal is treated as core-study.
   * `DOSE_FACTOR` is empty, so `Concentration = DOSE` (mg/kg) directly.
-  * Organ weights are pivoted LONG→WIDE (Kidney-Left / Kidney-Right / Liver /
-    Terminal Body Weight); the reference's `Heart` column is absent here and is
-    simply not emitted (the studies did not weigh heart).
+  * Organ weights are pivoted to one row per animal (Kidney-Left / Kidney-Right /
+    Liver / Terminal Body Weight); the reference's `Heart` column is absent here
+    and is simply not emitted (the studies did not weigh heart).
+
+Output: one folder per chemical (both produce the same filenames):
+    <out>/<Chem>/body_weight_truth_male.csv
+    <out>/<Chem>/organ_weights_truth_male.csv
 
 Usage:
     python -m tooling.stq_to_ntp [--body PATH] [--organ PATH] [--out DIR]
@@ -33,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 from pathlib import Path
 
@@ -43,12 +51,11 @@ _STUDY_RE = re.compile(r"^[A-Z]\d+-\d+$")
 
 
 def _normalize_study(raw: str) -> str:
-    """Return a study number the pool extractor recognizes.
+    """Return a study number in the NTP `C12345-01` form.
 
     The extract mixes two spellings (`C03039C-01` in the organ file, `C03039-01`
-    in the body-weight filename); the latter matches the extractor regex, the
-    former (a trailing study-variant letter) does not. Strip that trailing letter
-    so both weight files for a chemical share one extractable study number."""
+    in the body-weight filename); strip the trailing study-variant letter so both
+    weight files for a chemical carry one study number."""
     s = str(raw).strip()
     if _STUDY_RE.match(s):
         return s
@@ -89,29 +96,22 @@ def _sel(value) -> str:
     return SELECTION_MAP.get(str(value).strip(), "Core Animals")
 
 
-def _key_sheet(columns_expl: list[tuple[str, str]], study_number: str) -> list[list]:
-    """The `Key to Column Labels` sheet: col A/B = label/explanation, col D = the
-    NTP study-metadata block (row 2 study type, row 3 study number, row 4 date)."""
-    col_d = ["Evaluation of", "TOX", study_number, ""]
-    rows = [["Column Label", "Explanation of Column Label", None, col_d[0]]]
-    for i, (label, expl) in enumerate(columns_expl):
-        d = col_d[i + 1] if i + 1 < len(col_d) else None
-        rows.append([label, expl, None, d])
-    return rows
+def _cell(v) -> str:
+    return "" if v is None else str(v)
 
 
-def _write_ntp(out_path: Path, key_rows: list[list], data_header: list[str],
-               data_rows: list[list]) -> None:
-    wb = openpyxl.Workbook()
-    ks = wb.active
-    ks.title = "Key to Column Labels"
-    for r in key_rows:
-        ks.append(r)
-    ds = wb.create_sheet("Data")
-    ds.append(data_header)
-    for r in data_rows:
-        ds.append(r)
-    wb.save(out_path)
+def _write_csv(out_path: Path, header: list[str], rows: list[list]) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(header)
+        for r in rows:
+            w.writerow([_cell(c) for c in r])
+
+
+def _sex_suffix(rows: list[list], sex_idx: int) -> str:
+    sexes = {str(r[sex_idx]).strip().lower() for r in rows if r[sex_idx]}
+    return sexes.pop() if len(sexes) == 1 else "all"
 
 
 def convert_body_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]:
@@ -123,29 +123,20 @@ def convert_body_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]:
     for r in rows:
         by_study.setdefault(r[idx["DEPOSITOR_STUDY_NUMBER"]], []).append(r)
 
-    data_header = ["NTP Study Number", "Concentration", "Animal ID", "Sex",
-                   "Selection", "Body Weight", "Observation Day", "Terminal Flag"]
-    expl = [("NTP Study Number", "NTP study number"),
-            ("Concentration", "Dose in mg/kg"),
-            ("Animal ID", "Animal number"),
-            ("Sex", "Sex"),
-            ("Selection", "Cohort assigned"),
-            ("Body Weight", "Body weight measured in grams"),
-            ("Observation Day", "Study day body weight was measured (SD = Study Day)"),
-            ("Terminal Flag", "Yes indicates that this was a terminal body weight")]
+    out_header = ["NTP Study Number", "Concentration", "Animal ID", "Sex",
+                  "Selection", "Body Weight", "Observation Day", "Terminal Flag"]
     written = []
     for study, srows in by_study.items():
         chem, _ = STUDY_TO_CHEM.get(study, (study, None))
         study_out = _normalize_study(study)
-        drows = []
-        for r in srows:
-            drows.append([
-                study_out, r[idx["DOSE"]], str(r[idx["ANMLNUM"]]), r[idx["SEX"]],
-                _sel(r[idx["SELECTION"]]), r[idx["WGTVALUE"]], r[idx["OBSDAY"]],
-                "Yes" if str(r[idx["TERMINAL_FLAG"]]).strip() == "Yes" else "",
-            ])
-        out = outdir / f"{study_out}_Individual_Animal_Body_Weight_Data.xlsx"
-        _write_ntp(out, _key_sheet(expl, study_out), data_header, drows)
+        drows = [[
+            study_out, r[idx["DOSE"]], _cell(r[idx["ANMLNUM"]]), r[idx["SEX"]],
+            _sel(r[idx["SELECTION"]]), r[idx["WGTVALUE"]], r[idx["OBSDAY"]],
+            "Yes" if str(r[idx["TERMINAL_FLAG"]]).strip() == "Yes" else "",
+        ] for r in srows]
+        sex = _sex_suffix(srows, idx["SEX"])
+        out = outdir / chem / f"body_weight_truth_{sex}.csv"
+        _write_csv(out, out_header, drows)
         written.append((out, chem, len(drows)))
     return written
 
@@ -155,11 +146,11 @@ def convert_organ_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]
     idx = {c: header.index(c) for c in (
         "DEPOSITOR_STUDY_NUMBER", "DOSE", "ANMLID", "SEX", "SELECTION",
         "RMVLDAY", "ORGAN_NAME", "ORGANVALUE")}
-    # Pivot LONG→WIDE: gather each animal's organ rows into one record.
+    # One row per animal: gather each animal's organ rows into one record.
     animals: dict[tuple, dict] = {}
     order: list[tuple] = []
     for r in rows:
-        study, anml = r[idx["DEPOSITOR_STUDY_NUMBER"]], str(r[idx["ANMLID"]])
+        study, anml = r[idx["DEPOSITOR_STUDY_NUMBER"]], _cell(r[idx["ANMLID"]])
         key = (study, anml)
         if key not in animals:
             animals[key] = {
@@ -176,27 +167,21 @@ def convert_organ_weight(path: str, outdir: Path) -> list[tuple[Path, str, int]]
     for key in order:
         by_study.setdefault(animals[key]["study"], []).append(animals[key])
 
-    data_header = ["NTP Study Number", "Concentration", "Animal ID", "Sex",
-                   "Selection", "Removal Day"] + ORGAN_COLS
-    expl = [("NTP Study Number", "NTP study number"),
-            ("Concentration", "Dose in mg/kg"),
-            ("Animal ID", "Animal number"),
-            ("Sex", "Sex"),
-            ("Selection", "Cohort assigned"),
-            ("Removal Day", "Study day the animal was removed (SD = Study Day)")]
-    expl += [(c, f"{c} weight in grams") for c in ORGAN_COLS]
+    out_header = ["NTP Study Number", "Concentration", "Animal ID", "Sex",
+                  "Selection", "Removal Day"] + ORGAN_COLS
     written = []
     for study, alist in by_study.items():
         chem, _ = STUDY_TO_CHEM.get(study, (study, None))
         study_out = _normalize_study(study)
-        drows = []
-        for a in alist:
-            drows.append(
-                [study_out, a["dose"], a["anml"], a["sex"], _sel(a["sel"]), a["rmvl"]]
-                + [a["organs"].get(c, "") for c in ORGAN_COLS]
-            )
-        out = outdir / f"{study_out}_Individual_Animal_Organ_Weight_Data.xlsx"
-        _write_ntp(out, _key_sheet(expl, study_out), data_header, drows)
+        drows = [
+            [study_out, a["dose"], a["anml"], a["sex"], _sel(a["sel"]), a["rmvl"]]
+            + [a["organs"].get(c, "") for c in ORGAN_COLS]
+            for a in alist
+        ]
+        sexes = {str(a["sex"]).strip().lower() for a in alist if a["sex"]}
+        sex = sexes.pop() if len(sexes) == 1 else "all"
+        out = outdir / chem / f"organ_weights_truth_{sex}.csv"
+        _write_csv(out, out_header, drows)
         written.append((out, chem, len(drows)))
     return written
 
@@ -210,12 +195,11 @@ def main() -> None:
     args = ap.parse_args()
 
     outdir = Path(args.out)
-    outdir.mkdir(parents=True, exist_ok=True)
-    print(f"writing NTP-format xlsx to {outdir}/")
+    print(f"writing NTP truth CSVs to {outdir}/<chemical>/")
     for out, chem, n in convert_body_weight(args.body, outdir):
-        print(f"  body   {chem:10} {out.name}  ({n} rows)")
+        print(f"  body   {chem:10} {out.relative_to(outdir)}  ({n} rows)")
     for out, chem, n in convert_organ_weight(args.organ, outdir):
-        print(f"  organ  {chem:10} {out.name}  ({n} animals)")
+        print(f"  organ  {chem:10} {out.relative_to(outdir)}  ({n} animals)")
 
 
 if __name__ == "__main__":
