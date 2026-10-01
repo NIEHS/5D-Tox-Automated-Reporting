@@ -100,3 +100,16 @@ examples/
 assets/*.zip
 assets/IAD_*.xlsx
 assets/converted/
+
+# Published CEBS study data (NIEHS 5-day reports) — ~7 GB of raw downloads.
+# Keep only the per-package MANIFEST.md summaries; tooling + CHRONOLOGY.md at the
+# top level are tracked, raw page captures / logs are not.  dl.sh re-fetches.
+assets/cebs/*/*
+!assets/cebs/*/MANIFEST.md
+assets/cebs/page_*.html
+assets/cebs/dl.log
+assets/cebs/missing.tsv
+assets/cebs-niehs-10/*
+!assets/cebs-niehs-10/MANIFEST.md
+assets/given-2026/*
+!assets/given-2026/MANIFEST.md
