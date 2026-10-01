@@ -100,6 +100,21 @@ class DocNode:
         representation: For freeform nodes: "latex" | "html" | "docx" — how to
                         interpret `content`/`content_file`.  Not needed when
                         `content` is a dual-source mapping.
+        session_content: For freeform nodes: name of PER-STUDY authored content
+                        (`<name>.html` / `<name>.tex`, or a `<name>.json` file
+                        list) looked up in the study's own content —
+                        sessions/<dtxsid>/authored/, then the version-controlled
+                        templates/studies/<dtxsid>/ — never shared across
+                        chemicals.  Resolved per request (document_tree.render_nodes).
+        requires_platform: Data gate: the node's content applies only when this
+                        data domain was collected (e.g. "Tissue Concentration"),
+                        or — a list — when ANY of the listed domains was.
+        not_collected_text: Shippable statement rendered instead when none of
+                        `requires_platform` was collected by the study (default:
+                        "<title> was not evaluated in this study.").
+        missing_content_text: Shippable statement rendered when the study supplies
+                        no `session_content`.  Unset ⇒ a pending placeholder (the
+                        content is required and still has to be authored).
         resolved_content: COMPUTED at load by the instantiator — the per-surface
                         markup {latex: str|None, html: str|None} produced from the
                         authored source (docx is parsed once here).  Not authored;
@@ -153,6 +168,10 @@ class DocNode:
     content_file: str | None = None
     representation: str | None = None
     resolved_content: dict | None = None
+    session_content: str | None = None
+    requires_platform: str | list | None = None
+    not_collected_text: str | None = None
+    missing_content_text: str | None = None
     subtype: str | None = None
     role: str | None = None
     binding: str | None = None

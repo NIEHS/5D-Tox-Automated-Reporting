@@ -1076,6 +1076,14 @@ def resolve_narrative_content(node: DocNode, data: dict) -> NarrativeContent:
     also serves genuine `front-matter` nodes — so this one function covers all
     three narrative-family node types uniformly.
     """
+    # Data gate (requires_platform): a section/subsection describing a domain the
+    # study did not collect states that fact instead of its normal content — never
+    # a pending placeholder (it is not missing work) and never invented prose.
+    from document_model.document_tree import platform_gate_closed, not_collected_statement
+    if platform_gate_closed(node, data.get("collected_platforms")):
+        return NarrativeContent("paragraphs", node.level, node.title,
+                                paragraphs=[not_collected_statement(node)])
+
     if node.node_type == "narrative+tables":
         paragraphs = unified_narrative_paragraphs(node, data)
         kind = "paragraphs" if has_paragraph_content(paragraphs) else "none"

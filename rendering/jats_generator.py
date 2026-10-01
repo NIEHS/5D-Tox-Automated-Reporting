@@ -42,7 +42,6 @@ from lxml import etree
 from lxml.builder import ElementMaker
 
 from document_model.document_tree import (
-    DOCUMENT_TREE,
     DocNode,
     NUMBERED_TABLE_TYPES,
     compute_table_numbers,
@@ -787,6 +786,13 @@ def _emit_freeform(parent: etree._Element, node: DocNode, data: dict) -> None:
     freeform, or an empty one) keeps a visible tracer rather than dropping."""
     blocks = _freeform_blocks(node)
     if not blocks:
+        if node.session_content:
+            # Required STUDY-SPECIFIC content not yet supplied: a visible pending
+            # paragraph (the release gate's marker shape), so the gap shows and the
+            # BITS body is never empty.
+            p = etree.SubElement(parent, "p")
+            p.text = f"[Appendix body pending: {node.session_content} not supplied for this study]"
+            return
         parent.append(_todo(node, "freeform authored content not projected (no HTML source)"))
         return
     for block in blocks:

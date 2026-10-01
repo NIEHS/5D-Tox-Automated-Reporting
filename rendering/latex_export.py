@@ -839,7 +839,7 @@ def load_session_data(
     # is finalized; a no-op when there are none.
     from document_model.document_tree import (
         DOCUMENT_TREE, assign_genomics_table_numbers,
-        prune_uncollected_tables, compute_table_numbers,
+        study_tree,
     )
     # "Not collected" domains (section-level collapse): the render tree drops the
     # apical table nodes whose data domain this study did not collect, so numbering,
@@ -854,9 +854,10 @@ def load_session_data(
     if data.get("genomics_sections"):
         _collected.add("gene_expression")
     data["collected_platforms"] = sorted(_collected)  # JSON-safe; emitters re-prune
-    render_tree = prune_uncollected_tables(DOCUMENT_TREE, _collected)
-    if render_tree is not DOCUMENT_TREE:
-        compute_table_numbers(render_tree)
+    # This study's own authored content for study-bound freeform nodes.
+    from styling_export.freeform_content import load_study_authored
+    data["authored"] = load_study_authored(dtxsid)
+    render_tree = study_tree(DOCUMENT_TREE, _collected, data["authored"])
     assign_genomics_table_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──

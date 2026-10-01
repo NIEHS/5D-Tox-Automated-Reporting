@@ -158,7 +158,7 @@ def test_validation_rejects_both_content_and_content_file():
 
 
 def test_validation_rejects_neither_content_nor_file():
-    with pytest.raises(ValueError, match="requires `content` or `content_file`"):
+    with pytest.raises(ValueError, match="requires `content`, `content_file`, or `session_content`"):
         instantiate([_page(representation="latex")])
 
 

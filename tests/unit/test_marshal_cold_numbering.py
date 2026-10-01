@@ -73,6 +73,12 @@ def _apical_body(*platforms: str) -> dict:
             }
             for platform in platforms
         ],
+        # A full study also has transcriptomics, so the Methods sample-counts
+        # table (Table 1) is present and the apical tables number from 2.  (A
+        # study WITHOUT transcriptomics drops it — see the apical-only test.)
+        "genomics_sections": [
+            {"type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [{"rank": 1}]},
+        ],
     }
 
 
@@ -153,3 +159,16 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
     table_nums = [e["table_number"] for e in out["table_entries"] if e.get("scope") is None]
     assert 9 in table_nums and 12 in table_nums
     assert table_nums == sorted(table_nums)
+
+
+def test_study_without_transcriptomics_drops_sample_counts_and_renumbers(cold_tree):
+    """A study that did not collect transcriptomics (no genomics) has no
+    transcriptomics sample-counts table: it is gated out with its Methods
+    section, and the apical tables renumber from Table 1."""
+    body = _apical_body("Body Weight", "Organ Weight")
+    body.pop("genomics_sections")
+    out = marshal_export_data(body)
+    got = {s["title"]: s["table_number"] for s in out["apical_sections"]}
+    assert got == {"Body Weight": 1, "Organ Weight": 2}
+    titles = [e["title"] for e in out["table_entries"]]
+    assert not any("Sample Counts" in t for t in titles)

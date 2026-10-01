@@ -50,7 +50,6 @@ import html as _html
 from typing import Optional
 
 from document_model.document_tree import (
-    DOCUMENT_TREE,
     DocNode,
     find_node,
     first_body_node_id,

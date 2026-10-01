@@ -215,24 +215,105 @@ def prune_uncollected_tables(tree, collected):
     return _prune(copy.deepcopy(tree))
 
 
-def render_nodes(data: dict, tree=None):
-    """The node list an emitter walks: the not-collected-pruned + renumbered tree
-    when `data` carries a `collected_platforms` set (from the data layer), else the
-    passed `tree` (or the global DOCUMENT_TREE).
+def study_tree(base, collected, authored=None):
+    """THIS study's view of the document tree — the single builder every data
+    layer and emitter uses, so the body, the table numbers and the List of Tables
+    cannot diverge.  On a copy (the shared tree is never mutated); returns `base`
+    itself when nothing applies:
 
-    A study that omitted data domains stamps `data["collected_platforms"]`; this
-    drops the absent-domain table nodes and renumbers on a per-call copy so the
-    body, the List of Tables and the table numbers stay contiguous — identically
-    across every surface — with no shared-tree mutation.  Returns the SAME base
-    object (no copy, byte-identical) when nothing is dropped."""
+    1. Not-collected domains (`collected`): apical table nodes for uncollected
+       domains are dropped.
+    2. Data gates (`requires_platform`): a node whose domain(s) were not collected
+       keeps its heading but its subtree is dropped and it states the fact
+       (`not_collected_text`).
+    3. Study-bound authored content (`session_content`): freeform nodes take THIS
+       study's text (`authored`), else `missing_content_text`, else pending.
+
+    Any copy is renumbered (numbering is positional)."""
+    nodes = base
+    if collected:
+        nodes = prune_uncollected_tables(base, collected)
+    if _has_study_bound(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        _resolve_study_bound(nodes, authored or {},
+                             set(collected) if collected is not None else None)
+    if nodes is not base:
+        compute_table_numbers(nodes)
+    return nodes
+
+
+def render_nodes(data: dict, tree=None):
+    """The node list an emitter walks for THIS report: `study_tree` over the
+    passed tree (or DOCUMENT_TREE) with the data layer's `collected_platforms`
+    and `authored` content."""
     base = tree if tree is not None else DOCUMENT_TREE
-    collected = data.get("collected_platforms")
-    if not collected:
-        return base
-    pruned = prune_uncollected_tables(base, collected)
-    if pruned is not base:
-        compute_table_numbers(pruned)
-    return pruned
+    return study_tree(base, data.get("collected_platforms"), data.get("authored"))
+
+
+def platform_gate_closed(node, collected) -> bool:
+    """True when `node.requires_platform` (a domain name or a list of them, any-of)
+    names domains the study did NOT collect — the node's normal content does not
+    apply and its `not_collected_text` is rendered instead.  False when there is
+    no gate or no collected-set signal (a scaffold: nothing is decided yet)."""
+    req = node.requires_platform
+    if not req or collected is None:
+        return False
+    wanted = [req] if isinstance(req, str) else list(req)
+    return not (set(wanted) & set(collected))
+
+
+def not_collected_statement(node) -> str:
+    """The shippable statement for a gated-out node: its authored
+    `not_collected_text`, else one built from its own title."""
+    return node.not_collected_text or f"{node.title} was not evaluated in this study."
+
+
+def _has_study_bound(nodes) -> bool:
+    for n in nodes:
+        if n.session_content or n.requires_platform:
+            return True
+        if n.children and _has_study_bound(n.children):
+            return True
+    return False
+
+
+def _statement_markup(text: str) -> dict:
+    """{html, latex} for a plain shippable statement (no pending marker)."""
+    import html as _html
+    tex = text
+    for a, b in (("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"),
+                 ("$", r"\$"), ("#", r"\#"), ("_", r"\_")):
+        tex = tex.replace(a, b)
+    return {"html": f"<p>{_html.escape(text)}</p>", "latex": tex}
+
+
+def _resolve_study_bound(nodes, authored: dict, collected: "set | None") -> None:
+    for n in nodes:
+        if platform_gate_closed(n, collected):
+            # One statement stands for the whole gated section: drop its subtree
+            # (sub-headings would otherwise each repeat it).  Narrative nodes get
+            # the statement via resolve_narrative_content; freeform nodes here.
+            n.children = []
+            if n.node_type == "heading-only":
+                # A bare structural heading has no body to carry the statement;
+                # render it as a narrative so the shared narrative resolver's
+                # gate emits the statement under the same heading.
+                n.node_type = "narrative"
+            if n.session_content or n.resolved_content is not None:
+                n.resolved_content = _statement_markup(not_collected_statement(n))
+            continue
+        if n.session_content:
+            content = authored.get(n.session_content)
+            if content:
+                n.resolved_content = dict(content)
+            elif n.missing_content_text:
+                n.resolved_content = _statement_markup(n.missing_content_text)
+            else:
+                n.resolved_content = None  # required, not yet authored → pending
+        if n.children:
+            _resolve_study_bound(n.children, authored, collected)
 
 
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:

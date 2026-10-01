@@ -483,7 +483,15 @@ def marshal_export_data(
     # present.  Only once the report has real content — a pure scaffold keeps every
     # heading-only stub so a fresh session previews its full structure.  The helper
     # returns the SAME tree (no copy, byte-identical) when nothing is dropped.
-    from document_model.document_tree import compute_table_numbers, prune_uncollected_tables
+    # This study's own authored content for study-bound freeform nodes
+    # (`session_content`) — e.g. its analytical method or supplemental file list.
+    # JSON-safe {name: {html, latex}}; resolved onto THIS study's tree by
+    # document_tree.study_tree.  Never shared across chemicals.
+    from styling_export.freeform_content import load_study_authored
+    data["authored"] = load_study_authored(body.get("dtxsid"))
+
+    from document_model.document_tree import compute_table_numbers, study_tree
+    _collected = None
     if body.get("apical_sections") or body.get("genomics_sections") or body.get("sections"):
         _collected = {s["platform"] for s in (body.get("apical_sections") or [])
                       if s.get("platform")}
@@ -492,8 +500,12 @@ def marshal_export_data(
         # JSON-safe signal for the emitters (render_nodes) to prune + renumber the
         # same way here — so the body, the List of Tables and the numbers agree.
         data["collected_platforms"] = sorted(_collected)
-        active_tree = prune_uncollected_tables(active_tree, _collected)
-        tree = active_tree  # overlays + find_node use the pruned tree too
+    # This study's tree: uncollected tables dropped, data gates applied, study
+    # content resolved — the same builder render_nodes uses, so the TOC/numbers
+    # computed here match the body exactly.
+    _study = study_tree(active_tree, _collected, data["authored"])
+    if _study is not active_tree:
+        active_tree = tree = _study  # overlays + find_node use it too
 
     # Assign positional table numbers on the document tree before any overlay
     # reads them.  _overlay_apical_sections resolves each section's table number

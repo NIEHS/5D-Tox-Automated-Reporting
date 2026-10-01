@@ -414,9 +414,13 @@ def _validate_freeform_entry(entry: dict, node_id: str) -> None:
             f"freeform node {node_id!r}: set exactly one of `content` / "
             f"`content_file`, not both"
         )
+    has_session = bool(entry.get("session_content"))
     if not has_inline and not has_file:
+        if has_session:
+            return  # content is per-study, resolved per request (render_nodes)
         raise ValueError(
-            f"freeform node {node_id!r}: requires `content` or `content_file`"
+            f"freeform node {node_id!r}: requires `content`, `content_file`, "
+            f"or `session_content`"
         )
 
     if is_dual_content or is_dual_file:
@@ -545,7 +549,7 @@ def _instantiate_node(
     # ONCE here (a docx file is parsed a single time) and store it on the node so
     # both renderers just read node.resolved_content.  Validation has already
     # confirmed the source fields are well-formed.
-    if node_type in _FREEFORM_TYPES:
+    if node_type in _FREEFORM_TYPES and (node.content is not None or node.content_file):
         node.resolved_content = resolve_freeform(
             node.content, node.content_file, node.representation,
             base_dir=TEMPLATES_DIR,

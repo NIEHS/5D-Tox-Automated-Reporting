@@ -424,3 +424,76 @@ def resolve_freeform(
         f"freeform representation must be one of {sorted(VALID_REPRESENTATIONS)}, "
         f"got {rep!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-study authored content (freeform nodes with `session_content`)
+# ---------------------------------------------------------------------------
+# Study-specific authored text (an analytical-chemistry method, a supplemental
+# file list) must never live in the SHARED template — every chemical would inherit
+# it.  It is looked up per study instead:
+#   1. sessions/<dtxsid>/authored/      — supplied at runtime with the study
+#   2. templates/studies/<dtxsid>/      — version-controlled, scoped to one study
+# For a name, `<name>.html` / `<name>.tex` give the per-surface markup; or a
+# `<name>.json` list of {"label", "file"} renders a supplemental-file list.
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _study_content_dirs(dtxsid: str) -> list[Path]:
+    from common.paths import SESSIONS_DIR
+    return [SESSIONS_DIR / dtxsid / "authored",
+            _REPO_ROOT / "templates" / "studies" / dtxsid]
+
+
+def _render_file_list(items: list) -> dict:
+    """{html, latex} for a JSON file list [{label, file}, ...]."""
+    import html as _html
+    li_html, li_tex = [], []
+    for it in items:
+        label, fname = str(it.get("label", "")), str(it.get("file", ""))
+        li_html.append(f"<li>{_html.escape(label)} &mdash; <code>{_html.escape(fname)}</code></li>")
+        li_tex.append(f"  \\item {_latex_escape(label)} --- \\texttt{{{_latex_escape(fname)}}}")
+    return {"html": "<ul>\n" + "\n".join(li_html) + "\n</ul>",
+            "latex": "\\begin{itemize}\n" + "\n".join(li_tex) + "\n\\end{itemize}"}
+
+
+def _latex_escape(text: str) -> str:
+    for a, b in (("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"), ("$", r"\$"),
+                 ("#", r"\#"), ("_", r"\_"), ("{", r"\{"), ("}", r"\}")):
+        text = text.replace(a, b)
+    return text
+
+
+def load_study_authored(dtxsid: str | None) -> dict[str, dict]:
+    """All per-study authored content for a study: {name: {html, latex}}.
+
+    The first directory that supplies a name wins (runtime session content
+    overrides the version-controlled copy).  Empty when the study has none —
+    the renderer then shows the node's `missing_content_text` or a pending note."""
+    import json as _json
+    if not dtxsid:
+        return {}
+    out: dict[str, dict] = {}
+    for d in _study_content_dirs(dtxsid):
+        if not d.is_dir():
+            continue
+        names = {p.stem for p in d.iterdir() if p.suffix in (".html", ".tex", ".json")}
+        for name in names:
+            if name in out:
+                continue
+            js = d / f"{name}.json"
+            if js.exists():
+                try:
+                    out[name] = _render_file_list(_json.loads(js.read_text(encoding="utf-8")))
+                except (ValueError, OSError):
+                    logger.warning("Unreadable study content list %s", js)
+                continue
+            entry = {}
+            for ext, key in ((".html", "html"), (".tex", "latex")):
+                f = d / f"{name}{ext}"
+                if f.exists():
+                    entry[key] = f.read_text(encoding="utf-8")
+            if entry:
+                out[name] = {"html": entry.get("html"), "latex": entry.get("latex")}
+    return out

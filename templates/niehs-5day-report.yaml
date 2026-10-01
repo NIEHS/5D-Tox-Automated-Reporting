@@ -112,26 +112,36 @@ document:
         title: Clinical Observations
         data_key: methods
         methods_key: clinical_obs
+        requires_platform: Clinical Observations
+        not_collected_text: "Clinical observations were not evaluated in this study."
       - id: mm-body-organ-wt
         type: narrative
         title: Body and Organ Weights
         data_key: methods
         methods_key: body_organ_weights
+        requires_platform: [Body Weight, Organ Weight]
+        not_collected_text: "Body and organ weights were not evaluated in this study."
       - id: mm-clin-path
         type: narrative
         title: Clinical Pathology
         data_key: methods
         methods_key: clinical_pathology
+        requires_platform: [Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Clinical pathology was not evaluated in this study."
       - id: mm-internal-dose
         type: narrative
         title: Internal Dose Assessment
         data_key: methods
         methods_key: internal_dose
+        requires_platform: Tissue Concentration
+        not_collected_text: "Internal dose was not assessed in this study."
     - id: mm-transcriptomics
       type: heading-only
       title: Transcriptomics
       data_key: methods
       methods_key: transcriptomics
+      requires_platform: gene_expression
+      not_collected_text: "Transcriptomic analyses were not performed in this study."
       children:
       - id: mm-tx-sample
         type: narrative
@@ -174,21 +184,29 @@ document:
         title: Statistical Analysis of Body Weights, Organ Weights, and Clinical Pathology
         data_key: methods
         methods_key: stat_analysis
+        requires_platform: [Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Apical endpoints were not evaluated in this study."
       - id: mm-bmd-apical
         type: narrative
         title: Benchmark Dose Analysis of Body Weights, Organ Weights, and Clinical Pathology
         data_key: methods
         methods_key: bmd_apical
+        requires_platform: [Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones]
+        not_collected_text: "Apical endpoints were not evaluated in this study."
       - id: mm-bmd-tx
         type: narrative
         title: Benchmark Dose Analysis of Transcriptomics Data
         data_key: methods
         methods_key: bmd_genomics
+        requires_platform: gene_expression
+        not_collected_text: "Transcriptomic analyses were not performed in this study."
       - id: mm-fdr
         type: narrative
         title: Empirical False Discovery Rate Determination for Genomic Dose-response Modeling
         data_key: methods
         methods_key: efdr
+        requires_platform: gene_expression
+        not_collected_text: "Transcriptomic analyses were not performed in this study."
       - id: mm-data-access
         type: narrative
         title: Data Accessibility
@@ -279,10 +297,11 @@ document:
     type: narrative
     title: References
     data_key: references
-  # Appendices A/D/E/F carry AUTHORED static content (the reference's plasma
-  # method, BMD rules table, organ descriptions, supplemental manifest) as a
-  # freeform-block child — dual-surface, one .tex + one .html per appendix
-  # under templates/freeform/.  Appendix B renders the data-derived animal
+  # Appendices D/E carry AUTHORED static content shared by every study (BMD
+  # rules table, organ descriptions) as a freeform-block child — dual-surface,
+  # one .tex + one .html per appendix under templates/freeform/.  Appendices A/F
+  # are STUDY-SPECIFIC (a chemical's plasma method, its supplemental files):
+  # `session_content` resolves them per study, never from the shared template.  Appendix B renders the data-derived animal
   # roster (no child).  Appendix C stays a pending stub (its QC/eFDR figures
   # need transcriptomics data the pipeline does not retain).
   # Appendix titles carry ONLY the descriptive name — the "Appendix A." letter
@@ -296,9 +315,11 @@ document:
     - id: appendix-a-body
       type: freeform-block
       title: ""
-      content_file:
-        latex: freeform/appendix-a.tex
-        html: freeform/appendix-a.html
+      # The plasma analytical method is study-specific: supplied per study
+      # (sessions/<dtxsid>/authored/ or templates/studies/<dtxsid>/), never shared.
+      session_content: appendix-a
+      requires_platform: Tissue Concentration
+      not_collected_text: "Internal dose was not assessed in this study."
   - id: appendix-b
     type: appendix
     title: Animal Identifiers
@@ -340,9 +361,10 @@ document:
     - id: appendix-f-body
       type: freeform-block
       title: ""
-      content_file:
-        latex: freeform/appendix-f.tex
-        html: freeform/appendix-f.html
+      # The supplemental file list is study-specific (a per-study appendix-f.json
+      # list, or authored appendix-f.html/.tex), never shared across chemicals.
+      session_content: appendix-f
+      missing_content_text: "Supplemental data files are not available for this study."
   # OPT-IN provenance appendix — ships DORMANT to keep the NIEHS-10 reference at
   # appendices A–F (adding it here puts a 7th appendix on every report and diverges
   # from the reference's appendix set). Uncomment to record the EXACT BMDExpress/

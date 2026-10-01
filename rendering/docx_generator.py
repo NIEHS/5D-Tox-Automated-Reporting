@@ -61,7 +61,7 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor, Twips
 
 from document_model.cover_layouts import get_cover_layout
-from document_model.document_tree import DOCUMENT_TREE, DocNode, first_body_node_id, walk_tree
+from document_model.document_tree import DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
