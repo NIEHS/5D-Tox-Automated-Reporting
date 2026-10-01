@@ -301,6 +301,15 @@ select, input[type="text"] {
   font-size: 0.82rem;
 }
 .file-list .size { color: var(--muted); font-variant-numeric: tabular-nums; }
+.file-list li { align-items: center; }
+.file-list .file-actions { display: inline-flex; align-items: center; gap: 0.75rem; }
+
+/* Destructive "start over" actions on the Upload step */
+.danger-zone {
+  margin-top: 1.5rem; padding: 0.75rem 1rem;
+  border: 1px solid var(--err); border-radius: 6px;
+}
+.help.notice { color: var(--ok); }
 
 /* Status lines */
 .badge {

@@ -853,6 +853,22 @@ export const api = {
       method: "POST",
     }).then((r) => jsonOrThrow<{ ok: boolean; deleted: string[] }>(r)),
 
+  /** Remove one file (plus its sidecar / converted original) from the pool.
+   *  The server moves it to the session's _removed/ folder (recoverable). */
+  removeFile: (dtxsid: string, filename: string) =>
+    fetch(
+      `/api/pool/${encodeURIComponent(dtxsid)}/files/${encodeURIComponent(filename)}`,
+      { method: "DELETE" }
+    ).then((r) =>
+      jsonOrThrow<{ ok: boolean; removed: string[]; moved_to: string; pool_invalidated: boolean }>(r)
+    ),
+
+  /** Delete the WHOLE session (identity, history, files, sections). */
+  deleteSession: (dtxsid: string) =>
+    fetch(`/api/session/reset/${encodeURIComponent(dtxsid)}`, {
+      method: "POST",
+    }).then((r) => jsonOrThrow<{ ok: boolean }>(r)),
+
   // --- Section authoring (Phase 6) ---
 
   // DERIVED per-section readiness — the replacement for the legacy imperative

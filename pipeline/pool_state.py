@@ -38,6 +38,7 @@ pool_orchestrator.py re-exports the three names so the original API
 # ---------------------------------------------------------------------------
 
 import json
+import os
 import logging
 
 from pipeline.pool_globals import (
@@ -275,3 +276,87 @@ def invalidate_pool_artifacts(dtxsid: str) -> dict:
             logger.warning("Failed to mark %s as stale: %s", section_file.name, e)
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Per-file removal
+# ---------------------------------------------------------------------------
+
+class PoolFileError(ValueError):
+    """A per-file removal request that cannot be honored (bad name, missing
+    file, or a companion file that must be removed via its data file)."""
+
+
+_SIDECAR_SUFFIX = ".sidecar.json"
+
+
+def remove_pool_file(dtxsid: str, filename: str) -> dict:
+    """Remove ONE file from a session's pool, with everything that rides on it.
+
+    Removes the file plus its companions — the `.sidecar.json` written next to a
+    pivoted data file, and the long-format original that conversion parked in
+    `_originals/` — drops its fingerprint (in memory AND the filename-keyed
+    `_fingerprints.json` cache that session restore reuses), and invalidates
+    downstream artifacts when the pool had already progressed (the pool's
+    composition changed, so validation/integration must be redone).
+
+    Reversible: files are MOVED to `_removed/<timestamp>/` rather than deleted.
+
+    Raises PoolFileError for a name that is not a plain file in `files/`, or for
+    a sidecar (it belongs to its data file — remove that instead).
+    """
+    import shutil
+    from datetime import datetime, timezone
+
+    name = os.path.basename(filename or "")
+    if not name or name != filename or name.startswith("."):
+        raise PoolFileError(f"Not a pool file name: {filename!r}")
+    if name.endswith(_SIDECAR_SUFFIX):
+        raise PoolFileError(
+            f"{name} is companion metadata for a data file; remove the data file instead")
+
+    d = _session_dir(dtxsid)
+    files_dir = d / "files"
+    target = files_dir / name
+    if not target.is_file():
+        raise PoolFileError(f"No file {name!r} in the pool for {dtxsid}")
+
+    stem = os.path.splitext(name)[0]
+    companions = [files_dir / f"{stem}{_SIDECAR_SUFFIX}"]
+    originals = d / "_originals"
+    if originals.is_dir():
+        companions += [p for p in originals.iterdir()
+                       if p.is_file() and os.path.splitext(p.name)[0] == stem]
+
+    progressed = pool_has_progressed(dtxsid)
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    trash = d / "_removed" / stamp
+    trash.mkdir(parents=True, exist_ok=True)
+    moved = []
+    for p in [target, *companions]:
+        if p.is_file():
+            shutil.move(str(p), str(trash / p.name))
+            moved.append(p.name)
+
+    # In-memory fingerprints + upload registries (persists the cache when the
+    # pool is loaded in memory) …
+    remove_old_file_entries(dtxsid, name)
+    # … and the on-disk filename-keyed cache directly, so a COLD process (empty
+    # in-memory pool) can't later restore the removed file's stale fingerprint.
+    cache_path = d / "_fingerprints.json"
+    if cache_path.exists():
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            cache = None
+        if isinstance(cache, dict) and any(k in cache for k in moved):
+            for k in moved:
+                cache.pop(k, None)
+            cache_path.write_text(json.dumps(cache, indent=2, default=str), encoding="utf-8")
+
+    invalidated = invalidate_pool_artifacts(dtxsid) if progressed else None
+    logger.info("Removed %s from pool %s → %s (invalidated=%s)",
+                name, dtxsid, trash.name, bool(invalidated))
+    return {"removed": moved, "moved_to": f"_removed/{stamp}",
+            "pool_invalidated": bool(invalidated), "invalidated": invalidated}

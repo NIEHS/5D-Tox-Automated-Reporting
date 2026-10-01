@@ -1585,6 +1585,23 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
 # POST /api/pool/reset/{dtxsid} — full pool reset (destructive)
 # ---------------------------------------------------------------------------
 
+@router.delete("/api/pool/{dtxsid}/files/{filename}")
+async def api_pool_remove_file(dtxsid: Dtxsid, filename: str):
+    """Remove ONE file (plus its sidecar/original companions) from the pool.
+
+    Reversible on disk: files move to sessions/<dtxsid>/_removed/<timestamp>/.
+    Invalidates validation/integration when the pool had progressed past upload.
+    400 for an invalid name, a sidecar, or a file not in the pool."""
+    from pipeline.pool_state import PoolFileError, remove_pool_file
+    if not (SESSIONS_DIR / validate_dtxsid(dtxsid)).exists():
+        return JSONResponse({"error": f"No session found for {dtxsid}"}, status_code=404)
+    try:
+        result = remove_pool_file(dtxsid, filename)
+    except PoolFileError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return JSONResponse({"ok": True, **result})
+
+
 @router.post("/api/pool/reset/{dtxsid}")
 async def api_pool_reset(dtxsid: Dtxsid):
     """
@@ -1608,9 +1625,16 @@ async def api_pool_reset(dtxsid: Dtxsid):
       - _integrated_pool[dtxsid]
       - _data_uploads entries for this session's files
 
+    Also deletes everything derived from the pool: the fingerprint cache, all
+    processing caches, the genomics sidecar, session.duckdb / session_parquet,
+    rendered previews, converted-file originals (_originals/) and the
+    per-file-removal holding area (_removed/).
+
     Does NOT delete:
       - meta.json, identity.json (chemical identity — still valid)
       - history/ (version history of approved sections — archival)
+      - views/ (report view configuration), references.json, background.json,
+        .provenance.jsonl (audit log)
 
     The user is warned on the client side before this endpoint is called.
     After reset, the session directory still exists but is effectively empty
@@ -1637,14 +1661,31 @@ async def api_pool_reset(dtxsid: Dtxsid):
         shutil.rmtree(files_dir)
         deleted_items.append("files/")
 
-    # 2. Delete integration artifacts
+    # 2. Delete integration artifacts and everything DERIVED from the pool.
+    #    _fingerprints.json matters most: it is a filename-keyed cache that
+    #    session restore reuses, so leaving it would resurrect a deleted file's
+    #    classification for a different file later uploaded under the same name.
     for artifact in ("integrated.json", "integrated.bm2",
                      "metadata_approved.json", "validation_report.json",
-                     "precedence.json", "animal_report.json"):
+                     "precedence.json", "animal_report.json",
+                     "_fingerprints.json", "_category_lookup.json",
+                     "genomics.sidecar.json", "session.duckdb",
+                     ".session_db.fingerprint", ".prepare_content.fingerprint",
+                     ".prepare_content.outputs.json"):
         p = d / artifact
         if p.exists():
             p.unlink()
             deleted_items.append(artifact)
+    for cache_file in d.glob("_cache_*.json"):
+        cache_file.unlink()
+        deleted_items.append(cache_file.name)
+    #    Converted-file originals, per-file-removal holding area, the session's
+    #    parquet export and rendered previews — all derived from the old pool.
+    for sub in ("_originals", "_removed", "session_parquet", "preview"):
+        p = d / sub
+        if p.is_dir():
+            shutil.rmtree(p)
+            deleted_items.append(f"{sub}/")
 
     # 3. Delete all approved section files (bm2_*, genomics_*, methods, etc.)
     for pattern in ("bm2_*.json", "genomics_*.json"):

@@ -17,10 +17,19 @@ function roleOf(name: string): FileRole {
   return "data";
 }
 
-export function Upload({ dtxsid, next, back, refresh }: StepProps) {
+export function Upload({
+  dtxsid,
+  setDtxsid,
+  next,
+  back,
+  refresh,
+  setProcessResult,
+  gotoLanding,
+}: StepProps) {
   const [files, setFiles] = useState<{ name: string; size: number }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [over, setOver] = useState(false);
 
   const loadFiles = useCallback(async () => {
@@ -61,6 +70,84 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Run a destructive pool action with shared busy/error/notice handling.
+  async function act(fn: () => Promise<string | null>) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      setNotice(await fn());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function removeFile(name: string) {
+    if (!dtxsid) return;
+    const ok = confirm(
+      `Remove ${name} from the pool?\n\n` +
+        "Its companion metadata (.sidecar.json) goes with it. The file is moved " +
+        "to this session's _removed/ folder, not permanently deleted. If the pool " +
+        "was already validated or integrated, those results are cleared and must " +
+        "be re-run."
+    );
+    if (!ok) return;
+    void act(async () => {
+      const r = await api.removeFile(dtxsid, name);
+      setProcessResult(null);
+      await loadFiles();
+      await refresh();
+      return (
+        `Removed ${r.removed.join(", ")}.` +
+        (r.pool_invalidated ? " Validation and integration were cleared; re-run them." : "")
+      );
+    });
+  }
+
+  function resetPool() {
+    if (!dtxsid) return;
+    const ok = confirm(
+      `RESET POOL for ${dtxsid}\n\n` +
+        "Permanently deletes: every uploaded file, validation and integration " +
+        "results, processing caches, approved report sections, and rendered " +
+        "previews.\n\n" +
+        "Keeps: the chemical identity, section history, report view settings, " +
+        "and the Background section.\n\nThis cannot be undone."
+    );
+    if (!ok) return;
+    void act(async () => {
+      await api.reset(dtxsid);
+      setProcessResult(null);
+      await loadFiles();
+      await refresh();
+      return "Pool reset. Upload files to start over.";
+    });
+  }
+
+  function deleteSession() {
+    if (!dtxsid) return;
+    const typed = prompt(
+      `DELETE SESSION ${dtxsid}\n\n` +
+        "Permanently deletes EVERYTHING for this chemical: identity, history, " +
+        "files, sections and settings. This cannot be undone.\n\n" +
+        "Type the DTXSID to confirm:"
+    );
+    if (typed === null) return;
+    if (typed.trim() !== dtxsid) {
+      setError("Session not deleted: the DTXSID you typed did not match.");
+      return;
+    }
+    void act(async () => {
+      await api.deleteSession(dtxsid);
+      setProcessResult(null);
+      setDtxsid(null);
+      gotoLanding();
+      return null;
+    });
   }
 
   function onDrop(e: React.DragEvent) {
@@ -108,6 +195,7 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
       </div>
 
       <ErrorBox error={error} />
+      {notice && <p className="help notice">{notice}</p>}
 
       {files.length > 0 &&
         (() => {
@@ -133,7 +221,17 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
                             {roleOf(f.name) === "bm2" ? "BMD result" : "data"}
                           </span>
                         </span>
-                        <span className="size">{(f.size / 1024).toFixed(1)} KB</span>
+                        <span className="file-actions">
+                          <span className="size">{(f.size / 1024).toFixed(1)} KB</span>
+                          <button
+                            className="danger small"
+                            disabled={busy}
+                            onClick={() => removeFile(f.name)}
+                            title={`Remove ${f.name} (and its companion metadata) from the pool`}
+                          >
+                            Remove
+                          </button>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -168,6 +266,25 @@ export function Upload({ dtxsid, next, back, refresh }: StepProps) {
             </>
           );
         })()}
+
+      {dtxsid && (
+        <div className="danger-zone">
+          <h3 className="group-heading">Start over</h3>
+          <p className="help" style={{ marginTop: 0 }}>
+            <strong>Reset pool</strong> clears every file and everything derived from
+            them, but keeps this chemical's identity and history.{" "}
+            <strong>Delete session</strong> removes the chemical entirely.
+          </p>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <button className="danger" disabled={busy || files.length === 0} onClick={resetPool}>
+              Reset pool
+            </button>
+            <button className="danger" disabled={busy} onClick={deleteSession}>
+              Delete session…
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="actions">
         <button onClick={back}>Back</button>
