@@ -133,6 +133,22 @@ from document_model.filters import (  # noqa: E402,F401
 )
 
 
+def present_sexes(table_data: dict) -> list[str]:
+    """The sexes that actually have rows in a builder's sex-keyed `table_data`,
+    in canonical order ("Male", "Female")."""
+    keys = {str(k).strip().title(): v for k, v in (table_data or {}).items()}
+    return [s for s in ("Male", "Female") if keys.get(s)]
+
+
+def sex_subject(table_data: dict) -> str:
+    """The caption subject for the sexes PRESENT in the table — "Male and Female
+    Rats", "Male Rats", "Female Rats" — or plain "Rats" when the table carries no
+    sex dimension.  Captions must state what the data shows, never a fixed sex.
+    (The species word is still a literal — see the hard-coding audit note.)"""
+    sexes = present_sexes(table_data)
+    return f"{' and '.join(sexes)} Rats" if sexes else "Rats"
+
+
 def legend_footnote(text: str) -> dict:
     """Build a `legend` footnote record (unlettered, e.g. the `*`/`**` key)."""
     return {"kind": "legend", "text": text}

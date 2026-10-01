@@ -518,6 +518,7 @@ async def api_methods_context(dtxsid: Dtxsid):
         fingerprints=fingerprints,
         animal_report=animal_report_data,
         bm2_jsons=bm2_jsons,
+        session_dir=str(SESSIONS_DIR / validate_dtxsid(dtxsid)),
     )
 
     # --- Build response ---

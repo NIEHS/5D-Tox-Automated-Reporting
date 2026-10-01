@@ -38,6 +38,7 @@ from __future__ import annotations
 
 
 from tables.table_builder_common import (
+    sex_subject,
     BMD_DEFINITION,
     SIGNIFICANCE_EXPLANATION,
     SIGNIFICANCE_MARKER_LEGEND,
@@ -67,7 +68,7 @@ from tables.table_builder_common import (
 # and a single sex (the reference's Table 3), _organ_weight_caption swaps in the
 # specific "Summary of {Organ} Weights of {Sex} Rats …" form instead.
 CAPTION_TEMPLATE = (
-    "Summary of Select Organ Weight Data for Male and Female Rats "
+    "Summary of Select Organ Weight Data for {subject} "
     "Administered {compound} for Five Days"
 )
 
@@ -99,7 +100,8 @@ def _organ_weight_caption(serialized: dict, compound_name: str) -> str:
             f"Summary of {organs[0]} Weights of {sexes[0]} Rats "
             f"Administered {compound_name} for Five Days"
         )
-    return CAPTION_TEMPLATE.replace("{compound}", compound_name)
+    return (CAPTION_TEMPLATE.replace("{compound}", compound_name)
+            .replace("{subject}", sex_subject(serialized)))
 
 FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean."

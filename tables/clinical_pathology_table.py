@@ -32,6 +32,7 @@ pipeline provides significance markers and BMD/BMDL values.
 from __future__ import annotations
 
 from tables.table_builder_common import (
+    sex_subject,
     BMD_DEFINITION,
     SIGNIFICANCE_EXPLANATION,
     SIGNIFICANCE_MARKER_LEGEND,
@@ -57,7 +58,7 @@ from tables.table_builder_common import (
 # Caption template.  {platform} is "Clinical Chemistry", "Hematology", etc.
 # {compound} is the full chemical name.
 CAPTION_TEMPLATE = (
-    "Summary of Select {platform} Data for Male and Female Rats "
+    "Summary of Select {platform} Data for {subject} "
     "Administered {compound} for Five Days"
 )
 
@@ -386,7 +387,8 @@ def build_clinical_pathology_table_from_sidecar(
     caption_platform = "Hormone" if platform == "Hormones" else platform
     return {
         "title": platform,
-        "caption": CAPTION_TEMPLATE.replace("{platform}", caption_platform).replace("{compound}", compound_name),
+        "caption": CAPTION_TEMPLATE.replace("{platform}", caption_platform).replace("{compound}", compound_name)
+            .replace("{subject}", sex_subject(serialized)),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",

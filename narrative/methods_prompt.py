@@ -107,8 +107,11 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     sexes_str = " and ".join(ctx.sexes)
 
     sex_line = "- Sexes: not applicable (no sex dimension in this study)" if sexless else f"- Sexes: {sexes_str}"
-    per_group = f"{ctx.n_per_group} per dose" if sexless else f"{ctx.n_per_group} {sexes_str} per dose"
-    control_n = f"{ctx.n_control}" if sexless else f"{ctx.n_control} {sexes_str}"
+    _unk = "not available in the data — do not state a number"
+    per_group = (_unk if ctx.n_per_group is None else
+                 f"{ctx.n_per_group} per dose" if sexless else f"{ctx.n_per_group} {sexes_str} per dose")
+    control_n = (_unk if ctx.n_control is None else
+                 f"{ctx.n_control}" if sexless else f"{ctx.n_control} {sexes_str}")
 
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
@@ -215,11 +218,14 @@ def _build_subsection_guidelines(
     dose_str = ", ".join(str(d) for d in ctx.dose_groups) if ctx.dose_groups else "not specified"
     sexless = not ctx.sexes
     sexes_str = " and ".join(ctx.sexes)
-    sample_sizes = (
-        f"{ctx.n_per_group} per treatment group, {ctx.n_control} vehicle control"
-        if sexless else
-        f"{ctx.n_per_group} {sexes_str} per treatment group, {ctx.n_control} {sexes_str} vehicle control"
-    )
+    if ctx.n_per_group is None or ctx.n_control is None:
+        sample_sizes = "group sizes are not available in the data; do not state animal counts"
+    else:
+        sample_sizes = (
+            f"{ctx.n_per_group} per treatment group, {ctx.n_control} vehicle control"
+            if sexless else
+            f"{ctx.n_per_group} {sexes_str} per treatment group, {ctx.n_control} {sexes_str} vehicle control"
+        )
 
     guides: dict[str, str] = {
         "study_design": (

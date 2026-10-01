@@ -62,6 +62,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from tables.table_builder_common import (
+    sex_subject,
     js_dose_key as _js_dose_key,
     mean_se as _mean_se,
     format_mean_se as _format_mean_se,
@@ -82,7 +83,7 @@ from tables.table_builder_common import (
 # The table caption template.  {compound} is replaced with the full
 # chemical name (table_caption name form, never abbreviated).
 CAPTION_TEMPLATE = (
-    "Summary of Body Weights of Male and Female Rats "
+    "Summary of Body Weights of {subject} "
     "Administered {compound} for Five Days"
 )
 
@@ -681,7 +682,8 @@ def build_body_weight_table_from_sidecar(
 
     return {
         "title": "Animal Condition, Body Weights, and Organ Weights",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name),
+        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name)
+            .replace("{subject}", sex_subject(serialized)),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Study Day",

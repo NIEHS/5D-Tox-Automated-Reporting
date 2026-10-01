@@ -92,8 +92,11 @@ class MethodsContext:
     species: str = "Sprague Dawley"
     dose_groups: list[float] = field(default_factory=list)
     dose_unit: str = "mg/kg"
-    n_per_group: int = 5
-    n_control: int = 10
+    # Core animals per treated dose group / in the vehicle control group, per sex —
+    # DERIVED from the study's animal data (methods_extract._extract_core_group_sizes).
+    # None when the data has no animal roster: the prompt then states nothing.
+    n_per_group: int | None = None
+    n_control: int | None = None
     # How many animals per sex per dose for internal dose assessment (biosampling)
     n_biosampling: int = 0
     sexes: list[str] = field(default_factory=list)

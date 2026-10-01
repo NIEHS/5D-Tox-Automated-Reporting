@@ -34,6 +34,7 @@ from __future__ import annotations
 import re
 
 from tables.table_builder_common import (
+    sex_subject,
     js_dose_key,
     mean_se,
     format_mean_se,
@@ -47,7 +48,7 @@ from tables.table_builder_common import (
 # ---------------------------------------------------------------------------
 
 CAPTION_TEMPLATE = (
-    "Summary of Plasma Concentration Data for Male and Female Rats "
+    "Summary of Plasma Concentration Data for {subject} "
     "Administered {compound} for Five Days"
 )
 
@@ -308,7 +309,8 @@ def build_tissue_concentration_table_from_sidecar(
 
     return {
         "title": "Tissue Concentration",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name),
+        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name)
+            .replace("{subject}", sex_subject(serialized)),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Timepoint",

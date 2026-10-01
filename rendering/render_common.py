@@ -420,12 +420,21 @@ def find_apical_section(node: DocNode, data: dict) -> dict | None:
     return None
 
 
-def table_caption(node: DocNode, base_caption: str) -> str:
+def _present_sexes(section: dict) -> list[str]:
+    """Sexes with rows in an apical section's sex-keyed table_data, canonical order."""
+    td = {str(k).strip().title(): v for k, v in ((section or {}).get("table_data") or {}).items()}
+    return [s for s in ("Male", "Female") if td.get(s)]
+
+
+def table_caption(node: DocNode, base_caption: str, sexes: "list[str] | None" = None) -> str:
     """
     Build the plain-text table caption, prefixed with "Table N. " from the
     auto-assigned table_number (document tree position).
 
-    Strips leftover Typst-era placeholder tokens ("{sex}", "{compound}").  Per
+    Resolves leftover Typst-era placeholder tokens: "{sex}" becomes the sexes
+    actually present in the table (`sexes`, e.g. ["Male"] → "Male") — never an
+    assumed sex; with no sex data the token is dropped.  "{compound}" is
+    stripped.  Per
     ADR-0004 amendment (a) the node's own authored `caption` wins over the
     data-overlay base caption, falling back to it when unset.
 
@@ -433,7 +442,11 @@ def table_caption(node: DocNode, base_caption: str) -> str:
     env consumes it raw) is the emitter's concern, which is why this is shared.
     """
     cleaned = (node.caption or base_caption or "")
-    cleaned = cleaned.replace("{sex}", "Male and Female").replace("{compound}", "")
+    if "{sex}" in cleaned or "{compound}" in cleaned:
+        cleaned = cleaned.replace("{sex}", " and ".join(sexes) if sexes else "")
+        # A dropped token leaves a doubled space; tidy only in that case so
+        # every token-free caption stays byte-identical.
+        cleaned = " ".join(cleaned.replace("{compound}", "").split())
     cleaned = cleaned.strip()
     # The display label is scope-aware ("3" in the body, "B-1" in Appendix B —
     # ADR-0025 §5); table_number alone is the fallback for hand-built nodes.
@@ -609,7 +622,8 @@ def incidence_table_plan(node: DocNode, data: dict) -> IncidenceTablePlan | None
             cells.append("0")
         rows.append(cells)
 
-    caption = table_caption(node, section.get("caption", "") or node.title)
+    caption = table_caption(node, section.get("caption", "") or node.title,
+                            sexes=_present_sexes(section))
     return IncidenceTablePlan(
         node.id, caption, doses, dose_unit, rows, section.get("footnotes", []) or []
     )
@@ -724,7 +738,7 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
             built.append(ApicalRow(cells=cells, is_n_row=bool(row.get("is_n_row"))))
         sex_blocks.append(ApicalSexBlock(sex_label=sex_label, rows=built))
 
-    caption = table_caption(node, section.get("caption", ""))
+    caption = table_caption(node, section.get("caption", ""), sexes=_present_sexes(section))
     return ApicalTablePlan(
         node.id, caption, first_col, dose_unit, doses, ncols, sex_blocks,
         section.get("footnotes", []) or [],

@@ -231,8 +231,10 @@ def extract_methods_context(
     ctx.route = study_params.get("route", "gavage")
     ctx.duration_days = study_params.get("duration_days", 5)
     ctx.species = study_params.get("species", "Sprague Dawley")
-    ctx.n_per_group = study_params.get("n_per_group", 5)
-    ctx.n_control = study_params.get("n_control", 10)
+    # Group sizes: an explicit override only; otherwise derived from the animal
+    # data below (never a protocol constant — studies differ, e.g. 4 vs 5).
+    ctx.n_per_group = study_params.get("n_per_group")
+    ctx.n_control = study_params.get("n_control")
 
     # --- Scan fingerprints for platform presence and collect metadata ---
     all_doses: set[float] = set()
@@ -369,6 +371,11 @@ def extract_methods_context(
     # dedicated for internal dose assessment in the 4 and 37 mg/kg groups."
     if session_dir:
         ctx.biosampling_doses = _extract_biosampling_doses(session_dir)
+        n_group, n_ctrl = _extract_core_group_sizes(session_dir)
+        if ctx.n_per_group is None:
+            ctx.n_per_group = n_group
+        if ctx.n_control is None:
+            ctx.n_control = n_ctrl
 
     # --- Pharmacokinetics (for Abstract-Results) ---
     # Aggregate plasma concentrations + half-lives from tissue conc
@@ -394,6 +401,52 @@ def extract_methods_context(
         ctx.genomics_chip = chip
 
     return ctx
+
+
+def _extract_core_group_sizes(session_dir: str) -> tuple[int | None, int | None]:
+    """Core-study animals per treated dose group and in the vehicle control,
+    counted from the session's apical sidecars (per-animal dose + selection).
+
+    Counts DISTINCT core animals per (sex, dose) across all sidecars, then takes
+    the most common count over the treated cells and over the control (dose 0)
+    cells.  Returns (n_per_group, n_control); either is None when the data has
+    no core animals for it.  Biosampling animals are excluded — they are a
+    separate cohort, not part of the core group size."""
+    import os
+    import json
+    from collections import Counter, defaultdict
+
+    files_dir = os.path.join(session_dir, "files")
+    if not os.path.isdir(files_dir):
+        return None, None
+    animals: dict[tuple[str, str], float] = {}
+    for fname in os.listdir(files_dir):
+        if not fname.endswith(".sidecar.json"):
+            continue
+        try:
+            with open(os.path.join(files_dir, fname)) as f:
+                sc = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        sex = str(sc.get("sex") or "")
+        for aid, rec in (sc.get("animals") or {}).items():
+            sel = str(rec.get("selection") or "").lower()
+            if "core" not in sel:
+                continue
+            try:
+                animals[(sex, str(aid))] = float(rec.get("dose"))
+            except (TypeError, ValueError):
+                continue
+    if not animals:
+        return None, None
+    cells: dict[tuple[str, float], int] = defaultdict(int)
+    for (sex, _aid), dose in animals.items():
+        cells[(sex, dose)] += 1
+    treated = Counter(n for (_s, d), n in cells.items() if d != 0)
+    control = Counter(n for (_s, d), n in cells.items() if d == 0)
+    n_group = treated.most_common(1)[0][0] if treated else None
+    n_ctrl = control.most_common(1)[0][0] if control else None
+    return n_group, n_ctrl
 
 
 def _extract_biosampling_doses(session_dir: str) -> list[float]:
