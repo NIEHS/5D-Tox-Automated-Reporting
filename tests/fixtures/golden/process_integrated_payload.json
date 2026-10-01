@@ -243,6 +243,12 @@
         "In male rats, ALT was significantly increased at ≥100 mg/kg with a positive trend. The BMD and BMDL were 18.5 and 12.0 mg/kg, respectively. AST was significantly increased with a positive trend. The BMD and BMDL were 55.0 and 40.0 mg/kg, respectively."
       ],
       "title": "Clinical Pathology"
+    },
+    "internal_dose": {
+      "paragraphs": [
+        "The internal dose (plasma concentration) was not assessed in this study."
+      ],
+      "title": "Internal Dose Assessment"
     }
   }
 }

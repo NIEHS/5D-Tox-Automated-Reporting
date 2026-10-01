@@ -2001,7 +2001,8 @@ def generate_report_body(data: dict, tree: "list | None" = None) -> str:
     `tree` defaults to the global DOCUMENT_TREE; a per-session tree renders that
     session's own structure (ADR-0007 follow-on).
     """
-    nodes = tree if tree is not None else DOCUMENT_TREE
+    from document_model.document_tree import render_nodes
+    nodes = render_nodes(data, tree)
     body_first_id = first_body_node_id(nodes)
     body_chunks: list[str] = []
     # ADR-0014 step 5: the protection wrapper's identity definitions, only when a

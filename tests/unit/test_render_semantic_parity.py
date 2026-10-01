@@ -192,8 +192,16 @@ def test_table_numbers_agree_across_surfaces(session_data, real_session_50469320
         "chemical_name": "Perfluorohexanesulfonamide",
         "casrn": "41997-13-1",
         "dtxsid": "DTXSID50469320",
-        # Feed the SAME genomics entries the LaTeX path resolved, so both number
-        # the identical input (marshal numbers whatever the body carries).
+        # Feed the SAME collected apical platforms AND genomics entries the LaTeX
+        # path resolved, so both number the identical input.  "Not collected"
+        # pruning is per-platform, so the two surfaces must start the genomics
+        # numbering after the same apical tables for the numbers to agree.
+        "apical_sections": [
+            {"platform": s["platform"], "section_title": s.get("title", ""),
+             "dose_unit": "mg/kg", "caption": "", "narrative_paragraphs": [],
+             "table_data": {}, "footnotes": []}
+            for s in (latex_data.get("apical_sections") or []) if s.get("platform")
+        ],
         "genomics_sections": [
             {k: v for k, v in e.items() if k != "table_number"}
             for e in (latex_data.get("genomics_sections") or [])

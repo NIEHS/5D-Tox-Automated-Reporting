@@ -73,6 +73,10 @@
   "breaks": {},
   "casrn": "1-1-1",
   "chemical_name": "Test Article",
+  "collected_platforms": [
+    "Body Weight",
+    "gene_expression"
+  ],
   "document_tree": [
     {
       "id": "title-page",
@@ -353,18 +357,6 @@
               "table_number": 2,
               "title": "Summary of Body Weights",
               "type": "table"
-            },
-            {
-              "id": "table-organ-weight",
-              "level": 0,
-              "orientation": "landscape",
-              "platform": "Organ Weight",
-              "ready_key": "animalCondition",
-              "region": "body",
-              "table_label": "3",
-              "table_number": 3,
-              "title": "Summary of Organ Weights",
-              "type": "table"
             }
           ],
           "id": "animal-condition",
@@ -376,44 +368,6 @@
           "type": "narrative+tables"
         },
         {
-          "children": [
-            {
-              "id": "table-clin-chem",
-              "level": 0,
-              "orientation": "landscape",
-              "platform": "Clinical Chemistry",
-              "ready_key": "clinicalPath",
-              "region": "body",
-              "table_label": "4",
-              "table_number": 4,
-              "title": "Summary of Select Clinical Chemistry Data",
-              "type": "table"
-            },
-            {
-              "id": "table-hematology",
-              "level": 0,
-              "orientation": "landscape",
-              "platform": "Hematology",
-              "ready_key": "clinicalPath",
-              "region": "body",
-              "table_label": "5",
-              "table_number": 5,
-              "title": "Summary of Select Hematology Data",
-              "type": "table"
-            },
-            {
-              "id": "table-hormones",
-              "level": 0,
-              "orientation": "landscape",
-              "platform": "Hormones",
-              "ready_key": "clinicalPath",
-              "region": "body",
-              "table_label": "6",
-              "table_number": 6,
-              "title": "Summary of Select Hormone Data",
-              "type": "table"
-            }
-          ],
           "id": "clinical-path",
           "level": 2,
           "narrative_key": "clinical_pathology",
@@ -423,19 +377,6 @@
           "type": "narrative+tables"
         },
         {
-          "children": [
-            {
-              "id": "table-tissue-conc",
-              "level": 0,
-              "platform": "Tissue Concentration",
-              "ready_key": "internalDose",
-              "region": "body",
-              "table_label": "7",
-              "table_number": 7,
-              "title": "Summary of Plasma Concentration Data",
-              "type": "table"
-            }
-          ],
           "id": "internal-dose",
           "level": 2,
           "narrative_key": "internal_dose",
@@ -451,8 +392,8 @@
           "level": 2,
           "ready_key": "bmdSummary",
           "region": "body",
-          "table_label": "8",
-          "table_number": 8,
+          "table_label": "3",
+          "table_number": 3,
           "title": "Apical Endpoint Benchmark Dose Summary",
           "type": "bmd-summary"
         },
@@ -615,7 +556,7 @@
     {
       "organ": "Liver",
       "sex": "Male",
-      "table_number": 9,
+      "table_number": 4,
       "type": "gene_set"
     }
   ],
@@ -738,44 +679,9 @@
     },
     {
       "label": "3",
-      "ready": false,
-      "scope": null,
-      "table_number": 3,
-      "title": "Summary of Organ Weights"
-    },
-    {
-      "label": "4",
-      "ready": false,
-      "scope": null,
-      "table_number": 4,
-      "title": "Summary of Select Clinical Chemistry Data"
-    },
-    {
-      "label": "5",
-      "ready": false,
-      "scope": null,
-      "table_number": 5,
-      "title": "Summary of Select Hematology Data"
-    },
-    {
-      "label": "6",
-      "ready": false,
-      "scope": null,
-      "table_number": 6,
-      "title": "Summary of Select Hormone Data"
-    },
-    {
-      "label": "7",
-      "ready": false,
-      "scope": null,
-      "table_number": 7,
-      "title": "Summary of Plasma Concentration Data"
-    },
-    {
-      "label": "8",
       "ready": true,
       "scope": null,
-      "table_number": 8,
+      "table_number": 3,
       "title": "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints, Sorted by BMD or LOEL from Low to High"
     },
     {
@@ -786,10 +692,10 @@
       "title": "Animal Numbers and FASTQ Data File Names"
     },
     {
-      "label": "9",
+      "label": "4",
       "ready": false,
       "scope": null,
-      "table_number": 9,
+      "table_number": 4,
       "title": "Top Liver Gene Ontology Biological Process Gene Sets Ranked by Potency of Perturbation, Sorted by Benchmark Dose Median"
     }
   ],

@@ -475,13 +475,32 @@ def marshal_export_data(
         if sample_counts:
             data["sample_counts"] = sample_counts
 
+    # "Not collected" domains (section-level collapse): drop the apical table nodes
+    # whose data domain the study did not collect BEFORE numbering, so they neither
+    # consume a table number nor appear in the List of Tables, and the collected
+    # tables renumber contiguously.  `body["apical_sections"]` already holds ONLY
+    # the collected apical platforms; gene_expression is collected when genomics is
+    # present.  Only once the report has real content — a pure scaffold keeps every
+    # heading-only stub so a fresh session previews its full structure.  The helper
+    # returns the SAME tree (no copy, byte-identical) when nothing is dropped.
+    from document_model.document_tree import compute_table_numbers, prune_uncollected_tables
+    if body.get("apical_sections") or body.get("genomics_sections") or body.get("sections"):
+        _collected = {s["platform"] for s in (body.get("apical_sections") or [])
+                      if s.get("platform")}
+        if body.get("genomics_sections"):
+            _collected.add("gene_expression")
+        # JSON-safe signal for the emitters (render_nodes) to prune + renumber the
+        # same way here — so the body, the List of Tables and the numbers agree.
+        data["collected_platforms"] = sorted(_collected)
+        active_tree = prune_uncollected_tables(active_tree, _collected)
+        tree = active_tree  # overlays + find_node use the pruned tree too
+
     # Assign positional table numbers on the document tree before any overlay
     # reads them.  _overlay_apical_sections resolves each section's table number
     # via _find_table_number(DOCUMENT_TREE, ...), which reads node.table_number;
     # those fields are None until compute_table_numbers() has run.  Computing
     # here (rather than relying on a later call leaking numbers across requests)
     # makes a fresh process produce correct numbers on the first call.
-    from document_model.document_tree import compute_table_numbers
     compute_table_numbers(active_tree)
 
     from rendering.report_data_overlays import (

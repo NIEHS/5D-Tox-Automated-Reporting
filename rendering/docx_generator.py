@@ -2500,7 +2500,8 @@ def generate_docx(data: dict, tree: "list | None" = None) -> bytes:
     Returns:
         The .docx file contents as bytes (ready to write to disk or stream).
     """
-    nodes = tree if tree is not None else DOCUMENT_TREE
+    from document_model.document_tree import render_nodes
+    nodes = render_nodes(data, tree)
     running_header = data.get("running_header") or data.get("title") or "5dToxReport"
     # Optional document-level style block (page geometry + base fonts); absent ⇒
     # the measured reference constants.  Same styles config the per-node layer

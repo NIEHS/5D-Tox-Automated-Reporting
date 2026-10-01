@@ -837,8 +837,27 @@ def load_session_data(
     # the tree sequence (Table 8 → 9, 10, ...).  Same helper the web/marshal path
     # calls, so both surfaces number identically.  Runs after genomics_sections
     # is finalized; a no-op when there are none.
-    from document_model.document_tree import DOCUMENT_TREE, assign_genomics_table_numbers
-    assign_genomics_table_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
+    from document_model.document_tree import (
+        DOCUMENT_TREE, assign_genomics_table_numbers,
+        prune_uncollected_tables, compute_table_numbers,
+    )
+    # "Not collected" domains (section-level collapse): the render tree drops the
+    # apical table nodes whose data domain this study did not collect, so numbering,
+    # the List of Tables and the body stay contiguous.  data["apical_sections"]
+    # already holds only the collected apical platforms; gene_expression is
+    # collected when genomics is present.  The helper returns the SAME global tree
+    # when nothing is dropped (all-present / scaffold), so that path is untouched
+    # and byte-identical; a pruned copy is numbered here (the shared global is never
+    # mutated).  The emitters prefer data["_render_tree"] over their tree param.
+    _collected = {s["platform"] for s in (data.get("apical_sections") or [])
+                  if s.get("platform")}
+    if data.get("genomics_sections"):
+        _collected.add("gene_expression")
+    data["collected_platforms"] = sorted(_collected)  # JSON-safe; emitters re-prune
+    render_tree = prune_uncollected_tables(DOCUMENT_TREE, _collected)
+    if render_tree is not DOCUMENT_TREE:
+        compute_table_numbers(render_tree)
+    assign_genomics_table_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──
     # The view's `charts:` allowlist decides WHICH chart types render (None ⇒
@@ -855,7 +874,7 @@ def load_session_data(
         # tree's figure sequence (ADR-0021 D1).  Same helper the web/marshal
         # path calls, so both surfaces number identically.
         from document_model.document_tree import assign_genomics_figure_numbers
-        assign_genomics_figure_numbers(DOCUMENT_TREE, data.get("genomics_sections"))
+        assign_genomics_figure_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Appendix B: animal identifier roster ──────────────────────────
     animals = _load_animal_identifiers(session_dir)
@@ -935,8 +954,8 @@ def load_session_data(
     # complete.  Also serialize the tree the same way marshal does.
     from document_model.document_tree import serialize_tree
     from rendering.report_data_toc import _build_toc_entries
-    data["document_tree"] = serialize_tree(DOCUMENT_TREE)
-    toc_entries, table_entries, figure_entries = _build_toc_entries(data, tree=DOCUMENT_TREE)
+    data["document_tree"] = serialize_tree(render_tree)
+    toc_entries, table_entries, figure_entries = _build_toc_entries(data, tree=render_tree)
     data["toc_entries"] = toc_entries
     data["table_entries"] = table_entries
     data["figure_entries"] = figure_entries

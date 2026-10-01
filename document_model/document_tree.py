@@ -172,6 +172,69 @@ def _scoped_label(scope: str | None, number: int) -> str:
     return f"{scope}-{number}" if scope else str(number)
 
 
+def prune_uncollected_tables(tree, collected):
+    """Return `tree` with apical `table` nodes whose data domain (`platform`) is
+    NOT in `collected` removed — the section-level collapse for "not collected"
+    domains.  The parent section node stays (it carries a "not evaluated"
+    narrative); only its data-less table children drop, so once the caller numbers
+    the returned tree the numbering, the List of Tables and the body render all
+    stay contiguous.
+
+    Returns the SAME object when nothing is dropped (a fully-collected report, or
+    `collected` falsy) so that path stays byte-identical; otherwise a pruned
+    deepcopy — the input tree is never mutated, so the shared DOCUMENT_TREE is safe
+    to pass.  A node is dropped only when it is a `table` with a `platform` set
+    that is absent from `collected`; platform-less nodes (front matter, the
+    sample-counts table, genomics sections) are always kept."""
+    import copy
+
+    if not collected:
+        return tree
+
+    def _drops(nodes) -> bool:
+        for n in nodes:
+            if n.node_type == "table" and n.platform and n.platform not in collected:
+                return True
+            if n.children and _drops(n.children):
+                return True
+        return False
+
+    if not _drops(tree):
+        return tree
+
+    def _prune(nodes):
+        out = []
+        for n in nodes:
+            if n.node_type == "table" and n.platform and n.platform not in collected:
+                continue
+            if n.children:
+                n.children = _prune(n.children)
+            out.append(n)
+        return out
+
+    return _prune(copy.deepcopy(tree))
+
+
+def render_nodes(data: dict, tree=None):
+    """The node list an emitter walks: the not-collected-pruned + renumbered tree
+    when `data` carries a `collected_platforms` set (from the data layer), else the
+    passed `tree` (or the global DOCUMENT_TREE).
+
+    A study that omitted data domains stamps `data["collected_platforms"]`; this
+    drops the absent-domain table nodes and renumbers on a per-call copy so the
+    body, the List of Tables and the table numbers stay contiguous — identically
+    across every surface — with no shared-tree mutation.  Returns the SAME base
+    object (no copy, byte-identical) when nothing is dropped."""
+    base = tree if tree is not None else DOCUMENT_TREE
+    collected = data.get("collected_platforms")
+    if not collected:
+        return base
+    pruned = prune_uncollected_tables(base, collected)
+    if pruned is not base:
+        compute_table_numbers(pruned)
+    return pruned
+
+
 def compute_table_numbers(tree: list[DocNode] | None = None) -> None:
     """
     Walk the whole tree in document order and assign table_number (and

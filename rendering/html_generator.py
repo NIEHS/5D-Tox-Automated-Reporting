@@ -1719,7 +1719,8 @@ def _generate_html_body(
     tree: "list | None",
 ) -> str:
     """The render body of generate_html, run inside the genomics-index scope."""
-    nodes = tree if tree is not None else DOCUMENT_TREE
+    from document_model.document_tree import render_nodes
+    nodes = render_nodes(data, tree)
     # Fragment path — only emit the requested subtree.  The running header
     # for a fragment is the section's own title.
     if section_filter:

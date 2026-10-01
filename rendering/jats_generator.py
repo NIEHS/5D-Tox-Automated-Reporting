@@ -48,6 +48,15 @@ from document_model.document_tree import (
     compute_table_numbers,
     find_node,
 )
+
+
+def _render_nodes(data: dict):
+    """The tree the JATS/BITS walk uses: the not-collected-pruned + renumbered tree
+    (from data["collected_platforms"]), else the global DOCUMENT_TREE.  Keeps the
+    Bookshelf/JATS surface consistent with the HTML, LaTeX and docx surfaces for
+    studies that omit data domains."""
+    from document_model.document_tree import render_nodes
+    return render_nodes(data, None)
 from rendering.render_common import (
     authored_table_matrix,
     table_caption,
@@ -1033,7 +1042,7 @@ def _build_body(data: dict) -> etree._Element:
     — see the module-level note above.  Front-matter prose is handled in <front>,
     so only region == "body" top-level nodes are walked here."""
     body = E.body()
-    for node in DOCUMENT_TREE:
+    for node in _render_nodes(data):
         if node.region == "body":
             _append_node(body, node, data)
     return body
@@ -1133,7 +1142,7 @@ def _build_front_matter(data: dict) -> etree._Element | None:
     Returns None when nothing has content (front-matter-model requires ≥1 child).
     """
     fm = E("front-matter")
-    for node in DOCUMENT_TREE:
+    for node in _render_nodes(data):
         if node.region != "front" or node.node_type != "front-matter":
             continue
         if node.data_key == "abstract":
@@ -1161,7 +1170,7 @@ def _build_book_body(data: dict) -> etree._Element:
     bp2/bp3/bp4) becomes a <book-part> whose <body> holds that node's rendered
     subtree via the shared _append_node (all table/narrative emit reused)."""
     book_body = E("book-body")
-    for node in DOCUMENT_TREE:
+    for node in _render_nodes(data):
         if node.region != "body":
             continue
         inner = E.body()
@@ -1215,7 +1224,7 @@ def _build_book_back(data: dict) -> etree._Element | None:
     """
     back = E("book-back")
     appendices: list[DocNode] = []
-    for node in DOCUMENT_TREE:
+    for node in _render_nodes(data):
         if node.region != "back":
             continue
         if node.node_type == "appendix":
@@ -1238,7 +1247,7 @@ def generate_bits(data: dict) -> str:
     """Project the report to a BITS <book> XML string (the Bookshelf submission
     format).  Numbering first (positional xref labels), then book-meta +
     front-matter + book-body.  Returns XML decl + BITS 2.0 DOCTYPE + book."""
-    compute_table_numbers()
+    compute_table_numbers(_render_nodes(data))
     # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
     # with the literal "xlink" prefix the BITS/JATS DTD fixes (an auto-assigned
     # ns0 prefix is rejected: "No declaration for attribute href").
@@ -1269,7 +1278,7 @@ def generate_jats(data: dict) -> str:
     DOCUMENT_TREE.  Returns a UTF-8 XML declaration + JATS 1.3 DOCTYPE +
     pretty-printed article.
     """
-    compute_table_numbers()  # positional numbers → xref labels resolve
+    compute_table_numbers(_render_nodes(data))  # positional numbers → xref labels resolve
     # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
     # with the literal "xlink" prefix the JATS DTD fixes (see generate_bits).
     article = etree.Element(

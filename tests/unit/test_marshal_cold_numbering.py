@@ -98,10 +98,13 @@ def test_cold_marshal_numbers_and_orders_multiple_sections(cold_tree):
     )
 
     produced = [(s["title"], s["table_number"]) for s in out["apical_sections"]]
+    # The not-collected domains (Clinical Chemistry, Hormones, Tissue Concentration)
+    # are pruned, so the collected tables renumber CONTIGUOUSLY — Hematology is 4,
+    # not 5 (no gap for the absent Clinical Chemistry slot).
     assert produced == [
         ("Body Weight", 2),
         ("Organ Weight", 3),
-        ("Hematology", 5),
+        ("Hematology", 4),
     ], "Apical sections must be numbered from the tree and sorted in document order."
 
 
@@ -121,7 +124,9 @@ def test_cold_marshal_numbers_genomics_tables_after_apical(cold_tree):
     summary (Table 8), so genomics gene_set tables get 9.. and gene tables
     follow — assigned in RENDER order (all gene_set first, then all gene),
     NOT the interleaved list order."""
-    body = _apical_body("Body Weight")
+    # All apical platforms present (so nothing is not-collected-pruned) → the BMD
+    # summary is Table 8 and genomics continues at 9, as this test documents.
+    body = _apical_body(*EXPECTED_TABLE_NUMBERS)
     # Interleaved delivery order, two organs, gene_set + gene each.
     body["genomics_sections"] = [
         {"type": "gene_set", "organ": "liver", "sex": "male", "gene_sets": [{"rank": 1}]},

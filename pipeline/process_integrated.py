@@ -939,6 +939,34 @@ async def _get_sections(ctx):
         except Exception:
             logger.exception("Internal-dose narrative failed for %s (skipped)", dtxsid)
 
+    # "Not collected" domains: a Results section whose data domains were ALL absent
+    # from the pool gets an explicit, shippable "not evaluated" statement (its table
+    # nodes are pruned at render).  Only for a section that produced no narrative of
+    # its own — a section with real data keeps its findings prose (including the
+    # "no significant effects" wording for collected-but-nonsignificant endpoints).
+    # Gated on the study having SOME collected content (apical platforms or genomics,
+    # read from _meta.source_files — genomics may still be extracting concurrently),
+    # so a pure-empty/scaffold session stays a pending stub rather than asserting
+    # "not evaluated" for everything.
+    _has_content = bool(platform_tables) or (
+        "gene_expression" in integrated.get("_meta", {}).get("source_files", {}))
+    if _has_content:
+        from narrative.unified_narrative import SECTION_DOMAINS, not_evaluated_narrative
+        _collected = set(platform_tables.keys())
+        _section_titles = {
+            "apical": "Animal Condition, Body Weights, and Organ Weights",
+            "clinical_pathology": "Clinical Pathology",
+            "internal_dose": "Internal Dose Assessment",
+        }
+        for _key, _domains in SECTION_DOMAINS.items():
+            if _key in unified_narratives or _collected & _domains:
+                continue
+            _paras = not_evaluated_narrative(_key)
+            if _paras:
+                unified_narratives[_key] = {
+                    "title": _section_titles[_key], "paragraphs": _paras,
+                }
+
     ctx.sections = sections
     ctx.unified_narratives = unified_narratives
 
