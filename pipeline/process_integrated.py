@@ -57,7 +57,7 @@ from bmdx_pipe import (
 from tables.apical_bmds import run_bmds_for_endpoints
 from styling_export.llm_helpers import llm_generate_json_async as _llm_generate_json_async
 
-from pipeline.pool_globals import _session_dir, _pool_fingerprints
+from pipeline.pool_globals import _session_dir
 from pipeline.section_serializers import _build_clinical_obs_section
 from pipeline.content_registry import register_content_kind, run_content_plan
 from pipeline.cache_plumbing import (
@@ -1282,7 +1282,11 @@ async def run_data(ctx) -> None:
 
     # Collect fingerprints as plain dicts for the methods context extractor
     _fps_for_methods = {}
-    session_fps = _pool_fingerprints.get(dtxsid, {})
+    # ensure_fingerprints, not the raw in-memory dict: after a server restart the
+    # in-memory pool is empty until something reloads it, and an empty set here
+    # silently yields protocol-default methods (no sexes, no dose groups).
+    from pipeline.pool_fingerprints import ensure_fingerprints
+    session_fps = ensure_fingerprints(dtxsid)
     for fid, fp in session_fps.items():
         if hasattr(fp, "__dataclass_fields__"):
             _fps_for_methods[fid] = {
