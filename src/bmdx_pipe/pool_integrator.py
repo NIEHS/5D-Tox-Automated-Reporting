@@ -1233,6 +1233,16 @@ def integrate_pool(
             # Don't leave a partial/stale file behind.
             if os.path.exists(genomics_sidecar_path):
                 os.remove(genomics_sidecar_path)
+        # ExportGenomics parses organ/sex from the experiment NAME; correct them
+        # from the annotated metadata (and inherit a single-sex study's sex,
+        # flagged in _meta.inferred) — see genomics_metadata.  Guarded on its own
+        # so a reconcile failure never discards a good sidecar.
+        try:
+            from .genomics_metadata import reconcile_genomics_sidecar
+            reconcile_genomics_sidecar(integrated, genomics_sidecar_path)
+        except Exception as e:
+            logger.warning("Genomics sidecar reconcile failed for %s: %s",
+                           genomics_sidecar_path, e)
 
     # Re-write the JSON with our metadata additions (without _category_lookup)
     with open(out_path, "w", encoding="utf-8") as f:
