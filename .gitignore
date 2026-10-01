@@ -93,3 +93,10 @@ web_wizard/
 # Reference report sources (NIEHS-10 PFHxSAm_Final.docx etc.) used by the docx
 # tooling — large binaries kept out of the public repo.
 examples/
+
+# Raw study inputs (BMDExpress zips, STQ/IAD spreadsheets, converted outputs).
+# Unpublished study data must never be committed — every clone (and GitHub)
+# would carry it. Published reference data lives under tests/fixtures/golden/.
+assets/*.zip
+assets/IAD_*.xlsx
+assets/converted/
