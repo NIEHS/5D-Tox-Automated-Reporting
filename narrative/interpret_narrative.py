@@ -16,7 +16,7 @@ from pathlib import Path
 import requests
 
 from knowledge_base.extract import OllamaEndpoint, LOCAL_OLLAMA
-from styling_export.llm_endpoints import AnthropicEndpoint
+from styling_export.llm_endpoints import AnthropicEndpoint, assert_local_ollama
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +174,7 @@ def synthesize_interpretation(
         },
     }
 
+    assert_local_ollama(endpoint.url, endpoint.model)
     try:
         r = requests.post(
             f"{endpoint.url}/api/generate",
@@ -292,6 +293,8 @@ def generate_narrative(
             },
         }
         try:
+            # Inside the try so `finally` still restores the overridden model.
+            assert_local_ollama(endpoint.url, endpoint.model)
             r = requests.post(
                 f"{endpoint.url}/api/generate",
                 json=payload,
@@ -465,6 +468,7 @@ def run_concordance_analysis(
                 "num_predict": 4096,
             },
         }
+        assert_local_ollama(endpoint.url, endpoint.model)
         try:
             r = requests.post(
                 f"{endpoint.url}/api/generate",

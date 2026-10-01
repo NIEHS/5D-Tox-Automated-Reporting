@@ -21,7 +21,7 @@ from typing import Optional
 
 import requests
 
-from styling_export.llm_endpoints import AnthropicEndpoint, resolve_anthropic_api_key
+from styling_export.llm_endpoints import AnthropicEndpoint, assert_local_ollama, resolve_anthropic_api_key
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,7 @@ class OllamaEndpoint:
     def generate(self, prompt: str, system: str = "",
                  temperature: float = 0.1) -> str:
         """Send a prompt to Ollama and return the response text."""
+        assert_local_ollama(self.url, self.model)
         payload = {
             "model": self.model,
             "prompt": prompt,

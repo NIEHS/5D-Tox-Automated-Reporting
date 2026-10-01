@@ -33,6 +33,14 @@ def _no_proxy_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
+# The builders now refuse to construct a client unless ANTHROPIC_BASE_URL names
+# the walled gateway (egress guard — see test_llm_egress_guard.py), so point
+# every test here at it.  Tests that exercise other base URLs set their own.
+@pytest.fixture(autouse=True)
+def _approved_gateway(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://litellm.toxpipe.niehs.nih.gov")
+
+
 # ---------------------------------------------------------------------------
 # resolve_ca_bundle precedence
 # ---------------------------------------------------------------------------

@@ -1,15 +1,85 @@
 """
 LLM endpoint adapters and credential/model-name resolution.
 
-Holds the Anthropic (Claude) endpoint plus the two single-chokepoint resolvers
-for the API key and the proxy model-name remap.  Extracted from interpret.py so
+Holds the Anthropic (Claude) endpoint, the egress guard that keeps study data
+off publicly hosted models (approved_base_url / assert_local_ollama), and the
+single-chokepoint resolvers for the API key and the proxy model-name remap.  Extracted from interpret.py so
 the endpoint/auth concern is independently testable and importable without
 pulling in the DB, analysis, or narrative layers.
 """
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
+
+
+# ---------------------------------------------------------------------------
+# Egress guard — study data may only reach models inside the NIEHS wall
+# ---------------------------------------------------------------------------
+
+# Hosts an LLM request may be sent to.  Prompts carry study data (BMD values,
+# endpoint results, gene lists), so the ONLY approved destination is the walled
+# NIEHS toxpipe LiteLLM gateway.  Deliberately a code constant, not an env var:
+# widening it must be a reviewed commit, never a shell setting.  There is no
+# opt-out — off the NIEHS network, LLM features simply don't run.
+APPROVED_LLM_HOSTS = frozenset({"litellm.toxpipe.niehs.nih.gov"})
+
+# Loopback names a local Ollama daemon may be reached on (incl. SSH tunnels).
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+# Ollama "cloud" models (tags like ``gpt-oss:120b-cloud``) are proxied by the
+# local daemon to ollama.com — a publicly hosted model behind a localhost URL.
+_OLLAMA_CLOUD_TAG = re.compile(r"[:-]cloud$")
+
+
+class LLMEgressBlocked(RuntimeError):
+    """Raised instead of sending a prompt to an unapproved (public) endpoint."""
+
+
+def approved_base_url() -> str:
+    """Return ANTHROPIC_BASE_URL after checking it names an approved host.
+
+    Fails CLOSED.  Unset/empty is the dangerous case: the Anthropic SDK then
+    silently falls back to the public api.anthropic.com (this happened on an
+    off-network run, 2026-09-21).  Every client builder calls this and passes
+    the result as ``base_url`` explicitly, so the checked value and the one the
+    SDK uses can't diverge.
+    """
+    base = (os.environ.get("ANTHROPIC_BASE_URL") or "").strip()
+    if not base:
+        raise LLMEgressBlocked(
+            "ANTHROPIC_BASE_URL is not set, so the Anthropic SDK would send this "
+            "prompt to the public api.anthropic.com. Study data may only go to the "
+            f"walled NIEHS gateway ({', '.join(sorted(APPROVED_LLM_HOSTS))}); set "
+            "ANTHROPIC_BASE_URL to it (requires the NIEHS network/VPN)."
+        )
+    parsed = urlparse(base)
+    if parsed.scheme != "https" or parsed.hostname not in APPROVED_LLM_HOSTS:
+        raise LLMEgressBlocked(
+            f"ANTHROPIC_BASE_URL={base!r} is not an approved LLM endpoint. Study "
+            f"data may only go to: {', '.join(sorted(APPROVED_LLM_HOSTS))} (https)."
+        )
+    return base
+
+
+def assert_local_ollama(url: str, model: str) -> None:
+    """Refuse an Ollama call unless it stays on this machine.
+
+    Ollama endpoints are local daemons (or SSH tunnels to them), so the URL must
+    be loopback — and the model must not be an Ollama cloud model, which the
+    local daemon forwards to ollama.com.
+    """
+    host = urlparse(url).hostname
+    if host not in _LOOPBACK_HOSTS:
+        raise LLMEgressBlocked(
+            f"Ollama endpoint {url!r} is not a local (loopback) address."
+        )
+    if _OLLAMA_CLOUD_TAG.search(model or ""):
+        raise LLMEgressBlocked(
+            f"Ollama model {model!r} is a cloud model (runs on ollama.com)."
+        )
 
 
 def resolve_anthropic_api_key() -> "str | None":
@@ -59,38 +129,36 @@ def _ssl_context_for_bundle(bundle: str):
     return ssl.create_default_context(cafile=bundle)
 
 
-def build_anthropic_client():
+def build_anthropic_client(timeout: "float | None" = None):
     """Construct a sync anthropic.Anthropic with explicit key + CA verification.
 
+    The base URL is passed explicitly from approved_base_url(), which raises
+    LLMEgressBlocked rather than let the SDK fall back to the public API.
     When a CA bundle resolves, an httpx.Client verifying against it is passed as
     the SDK's http_client so TLS to the proxy verifies against the NIH CA (the
     SDK's default certifi store lacks it → APIConnectionError "Connection
-    error.").  When none resolves, the default client is used (local / non-proxy
-    setups).  Base URL is read by the SDK from ``ANTHROPIC_BASE_URL``
-    automatically.
+    error.").  When none resolves, the default client is used.
     """
     import anthropic
+    kwargs = {"api_key": resolve_anthropic_api_key(), "base_url": approved_base_url()}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
     bundle = resolve_ca_bundle()
     if bundle:
         import httpx
-        return anthropic.Anthropic(
-            api_key=resolve_anthropic_api_key(),
-            http_client=httpx.Client(verify=_ssl_context_for_bundle(bundle)),
-        )
-    return anthropic.Anthropic(api_key=resolve_anthropic_api_key())
+        kwargs["http_client"] = httpx.Client(verify=_ssl_context_for_bundle(bundle))
+    return anthropic.Anthropic(**kwargs)
 
 
 def build_async_anthropic_client():
     """Async counterpart of build_anthropic_client (AsyncAnthropic + AsyncClient)."""
     import anthropic
+    kwargs = {"api_key": resolve_anthropic_api_key(), "base_url": approved_base_url()}
     bundle = resolve_ca_bundle()
     if bundle:
         import httpx
-        return anthropic.AsyncAnthropic(
-            api_key=resolve_anthropic_api_key(),
-            http_client=httpx.AsyncClient(verify=_ssl_context_for_bundle(bundle)),
-        )
-    return anthropic.AsyncAnthropic(api_key=resolve_anthropic_api_key())
+        kwargs["http_client"] = httpx.AsyncClient(verify=_ssl_context_for_bundle(bundle))
+    return anthropic.AsyncAnthropic(**kwargs)
 
 
 def using_proxy() -> bool:
