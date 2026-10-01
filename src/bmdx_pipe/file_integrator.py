@@ -272,6 +272,24 @@ _VOCAB = {
 _llm_cache: dict[str, dict] = {}
 
 
+# Egress guard: prompts may only go to the walled NIEHS toxpipe gateway, never a
+# publicly hosted model.  Mirrors APPROVED_LLM_HOSTS in rlm-bmdx's
+# styling_export/llm_endpoints.py (bmdx-pipe can't import rlm-bmdx) — keep the
+# two in step.  Unset ANTHROPIC_BASE_URL is the dangerous case: the Anthropic SDK
+# then silently falls back to the public api.anthropic.com.
+_APPROVED_LLM_HOSTS = frozenset({"litellm.toxpipe.niehs.nih.gov"})
+
+
+def _approved_llm_base_url() -> "str | None":
+    """ANTHROPIC_BASE_URL if it names an approved https host, else None."""
+    from urllib.parse import urlparse
+    base = (os.environ.get("ANTHROPIC_BASE_URL") or "").strip()
+    parsed = urlparse(base) if base else None
+    if parsed and parsed.scheme == "https" and parsed.hostname in _APPROVED_LLM_HOSTS:
+        return base
+    return None
+
+
 def _deduce_metadata_from_experiments(
     experiment_names: list[str],
     probe_ids_sample: list[str] | None = None,
@@ -354,9 +372,17 @@ def _deduce_metadata_from_experiments(
             prompt += f"Chip/platform info: {chip_summary}\n"
 
     # Call Haiku via the Anthropic API — fast (~200ms) and cheap (~$0.0003)
+    base_url = _approved_llm_base_url()
+    if base_url is None:
+        logger.warning(
+            "LLM metadata deduction skipped: ANTHROPIC_BASE_URL is not the walled "
+            "NIEHS gateway; using regex-based detection instead."
+        )
+        return {}
+
     try:
         import anthropic
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(base_url=base_url)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=512,
