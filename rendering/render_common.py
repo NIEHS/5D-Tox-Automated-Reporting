@@ -1166,6 +1166,64 @@ GENE_TABLE_HEADERS: tuple[str, ...] = (
 # reference column is kept for structural parity, stubbed with an em dash.
 _ENTREZ_STUB = "—"
 
+# Labels for the BMD statistic a GO table is ranked by.
+_STAT_PHRASE = {
+    "median": "Median", "fifth_pct": "5th Percentile", "tenth_pct": "10th Percentile",
+    "mean": "Mean", "minimum": "Minimum", "weighted_mean": "Weighted Mean",
+}
+
+
+def _genomics_display(entry: dict) -> dict | None:
+    """The entry's display settings (stat, BMR, unit, decimals) set by the
+    genomics converter from the analysis's own records, or None for a legacy
+    entry — which keeps the reference NIEHS-10 headers verbatim."""
+    d = entry.get("display")
+    return d if isinstance(d, dict) else None
+
+
+def _bmr_tag(bmr: dict | None) -> str:
+    """"1Std" for 1 standard deviation, "rd25" for 25% relative deviation."""
+    if not bmr:
+        return "1Std"
+    factor = bmr.get("factor")
+    if "relative" in str(bmr.get("type", "")).lower() and factor:
+        return f"rd{round(factor * 100):g}"
+    return f"{factor:g}Std" if factor else "1Std"
+
+
+def _display_is_legacy(d: dict) -> bool:
+    return (_bmr_tag(d.get("bmr")) == "1Std" and d.get("stat", "median") == "median"
+            and d.get("unit", "mg/kg") == "mg/kg")
+
+
+def gene_set_table_headers(entry: dict) -> tuple[str, ...]:
+    """GENE_SET_TABLE_HEADERS, relabelled for the entry's ranking statistic,
+    genomic BMR and dose unit."""
+    d = _genomics_display(entry)
+    if d is None or _display_is_legacy(d):
+        return GENE_SET_TABLE_HEADERS
+    tag, unit = _bmr_tag(d.get("bmr")), d.get("unit") or "mg/kg"
+    phrase = _STAT_PHRASE.get(d.get("stat", "median"), d.get("stat", ""))
+    return (
+        *GENE_SET_TABLE_HEADERS[:4],
+        f"BMD{tag} {phrase} of Gene Set Transcripts ({unit})",
+        f"{phrase} BMDL{tag}–BMDU{tag} ({unit})",
+        *GENE_SET_TABLE_HEADERS[6:],
+    )
+
+
+def gene_table_headers(entry: dict) -> tuple[str, ...]:
+    """GENE_TABLE_HEADERS, relabelled for the entry's genomic BMR and dose unit."""
+    d = _genomics_display(entry)
+    if d is None or _display_is_legacy(d):
+        return GENE_TABLE_HEADERS
+    tag, unit = _bmr_tag(d.get("bmr")), d.get("unit") or "mg/kg"
+    return (
+        *GENE_TABLE_HEADERS[:3],
+        f"BMD{tag} (BMDL{tag}–BMDU{tag}) in {unit}",
+        *GENE_TABLE_HEADERS[4:],
+    )
+
 
 def genomics_role(node: DocNode) -> str:
     """'gene_set' for the Gene Set BMD section node, 'gene' otherwise."""
@@ -1349,18 +1407,19 @@ def _finite_or_none(v):
     return None if (math.isnan(f) or math.isinf(f)) else v
 
 
-def _bmd_range(lo, hi) -> str:
+def _bmd_range(lo, hi, decimals: int = _GENOMICS_DECIMALS, nc_upper: bool = False) -> str:
     """Format a "BMDL–BMDU" range with an en dash, e.g. "0.160–2.885".  Either
     bound missing / non-finite collapses to the single present value (or "—" for
-    none)."""
+    none) — except, with ``nc_upper``, a missing upper bound prints "NC"
+    (non-convergent), as the 2025 reports do: "73.8–NC"."""
     lo = _finite_or_none(lo)
     hi = _finite_or_none(hi)
-    lo_s = format_display_number(lo, _GENOMICS_DECIMALS) if lo is not None else "—"
-    hi_s = format_display_number(hi, _GENOMICS_DECIMALS) if hi is not None else "—"
+    lo_s = format_display_number(lo, decimals) if lo is not None else "—"
+    hi_s = format_display_number(hi, decimals) if hi is not None else "—"
     if lo_s == "—" and hi_s == "—":
         return "—"
     if hi_s == "—":
-        return lo_s
+        return f"{lo_s}–NC" if nc_upper else lo_s
     if lo_s == "—":
         return hi_s
     return f"{lo_s}–{hi_s}"
@@ -1382,6 +1441,9 @@ def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
     if not blocks:
         return None
     ncol = len(GENE_SET_TABLE_HEADERS)
+    d = _genomics_display(entry) or {}
+    dec = d.get("decimals", _GENOMICS_DECIMALS)
+    nc = bool(d)
     out: list[list[str]] = []
     for sex_label, rows in blocks:
         if sex_label:
@@ -1396,8 +1458,8 @@ def gene_set_table_rows(entry: dict) -> list[list[str]] | None:
                 f"{n_bmd}/{n_genes}",
                 pct,
                 genes,
-                str(format_display_number(r.get("bmd"), _GENOMICS_DECIMALS)),
-                _bmd_range(r.get("bmdl"), r.get("bmdu")),
+                str(format_display_number(r.get("bmd"), dec)),
+                _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc),
                 str(r.get("n_up", "")),
                 str(r.get("n_down", "")),
             ])
@@ -1418,13 +1480,16 @@ def gene_table_rows(entry: dict) -> list[list[str]] | None:
     if not blocks:
         return None
     ncol = len(GENE_TABLE_HEADERS)
+    d = _genomics_display(entry) or {}
+    dec = d.get("decimals", _GENOMICS_DECIMALS)
+    nc = bool(d)
     out: list[list[str]] = []
     for sex_label, rows in blocks:
         if sex_label:
             out.append([f"**{sex_label}**"] + [""] * (ncol - 1))
         for r in rows:
-            bmd = format_display_number(r.get("bmd"), _GENOMICS_DECIMALS)
-            rng = _bmd_range(r.get("bmdl"), r.get("bmdu"))
+            bmd = format_display_number(r.get("bmd"), dec)
+            rng = _bmd_range(r.get("bmdl"), r.get("bmdu"), dec, nc)
             bmd_cell = f"{bmd} ({rng})" if bmd != "—" else "—"
             # Reference "Maximum Fold Change" is the MAGNITUDE (always positive,
             # 1 decimal); the sign lives in the Direction column instead.
@@ -1435,8 +1500,8 @@ def gene_table_rows(entry: dict) -> list[list[str]] | None:
                 fc_cell = format_display_number(fc)
             out.append([
                 str(r.get("gene") or r.get("gene_symbol", "")),
-                _ENTREZ_STUB,
-                str(r.get("probe_id", "") or ""),
+                str(r.get("entrez_id") or _ENTREZ_STUB),
+                str(r.get("probe_id", "") or "").replace(",", ", "),
                 bmd_cell,
                 fc_cell,
                 str(r.get("direction", "")).upper(),
@@ -1511,9 +1576,13 @@ def genomics_table_caption(entry: dict) -> str:
     kind = ("Gene Ontology Biological Process Gene Sets"
             if role == "gene_set" else "Genes")
     lead = f"Top {n} " if n else "Top "
+    d = _genomics_display(entry) or {}
+    # Genes are always ranked by their median over probes; gene sets by the
+    # entry's ranking statistic.
+    stat = d.get("stat", "median") if role == "gene_set" else "median"
     descriptive = (
         f"{lead}{organ} {kind} Ranked by Potency of Perturbation, "
-        "Sorted by Benchmark Dose Median"
+        f"Sorted by Benchmark Dose {_STAT_PHRASE.get(stat, stat)}"
     ).replace("  ", " ").strip()
 
     num = entry.get("table_number")

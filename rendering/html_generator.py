@@ -86,8 +86,8 @@ from rendering.render_common import (
     genomics_description_items,
     genomics_chart_caption,
     genomics_table_caption,
-    GENE_SET_TABLE_HEADERS,
-    GENE_TABLE_HEADERS,
+    gene_set_table_headers,
+    gene_table_headers,
     table_caption as _table_caption,
     figure_prefix,
     figure_payload,
@@ -1083,13 +1083,13 @@ def _render_gene_set_table(entry: dict) -> str:
     rows = gene_set_table_rows(entry)
     if rows is None:
         return _pending(f"Top gene sets pending: {entry.get('organ', '')}")
-    body_rows = _emit_genomics_rows(rows, len(GENE_SET_TABLE_HEADERS))
+    body_rows = _emit_genomics_rows(rows, len(gene_set_table_headers(entry)))
     caption = genomics_table_caption(entry)
     cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (
         '<table class="niehstable">'
         f"{cap}"
-        f"{_emit_table_header(list(GENE_SET_TABLE_HEADERS))}"
+        f"{_emit_table_header(list(gene_set_table_headers(entry)))}"
         f"<tbody>{body_rows}</tbody>"
         "</table>"
     )
@@ -1101,13 +1101,13 @@ def _render_gene_table(entry: dict) -> str:
     rows = gene_table_rows(entry)
     if rows is None:
         return _pending(f"Top genes pending: {entry.get('organ', '')}")
-    body_rows = _emit_genomics_rows(rows, len(GENE_TABLE_HEADERS))
+    body_rows = _emit_genomics_rows(rows, len(gene_table_headers(entry)))
     caption = genomics_table_caption(entry)
     cap = f"<caption>{_esc(caption)}</caption>" if caption else ""
     return (
         '<table class="niehstable">'
         f"{cap}"
-        f"{_emit_table_header(list(GENE_TABLE_HEADERS))}"
+        f"{_emit_table_header(list(gene_table_headers(entry)))}"
         f"<tbody>{body_rows}</tbody>"
         "</table>"
     )

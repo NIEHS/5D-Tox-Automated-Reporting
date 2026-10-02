@@ -1079,11 +1079,27 @@ async def _extract_genomics(
     if not ge_result:
         return genomics_sections
 
+    # BMDExpress's own GENE / GO_BP category analyses, when the project carries
+    # them (2025+ analyses): the gene-level Top-10 and the GO direction counts
+    # the published reports print.  Absent ⇒ the per-probe fallbacks below.
+    from genomics.bmdexpress_categories import (
+        category_analyses_by_experiment, gene_level_top_genes,
+        genomic_bmr, go_direction_counts,
+    )
+    cat_by_exp = category_analyses_by_experiment(integrated)
+    chip_species = {
+        e.get("name"): (e.get("chip") or {}).get("species")
+        for e in integrated.get("doseResponseExperiments", []) or []
+        if isinstance(e.get("chip"), dict)
+    }
+
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
         organ = exp.get("organ", "unknown").lower()
         sex = exp.get("sex", "unknown").lower()
         key = f"{organ}_{sex}"
+        exp_cats = cat_by_exp.get(exp.get("name", ""), {})
+        go_dir = go_direction_counts(exp_cats.get("GO_BP", []))
 
         # Sort genes by BMD ascending (lowest = most sensitive)
         genes = sorted(
@@ -1145,8 +1161,11 @@ async def _extract_genomics(
                 member_syms = [
                     s.upper() for s in (g.get("gene_symbols") or "").split(";") if s
                 ]
-                n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
-                n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
+                if g.get("go_id") in go_dir:
+                    n_up, n_down = go_dir[g["go_id"]]
+                else:
+                    n_up = sum(1 for s in member_syms if gene_dir_upper.get(s) == "up")
+                    n_down = sum(1 for s in member_syms if gene_dir_upper.get(s) == "down")
 
                 all_rows.append({
                     "go_id": g["go_id"],
@@ -1175,6 +1194,11 @@ async def _extract_genomics(
                 {"rank": i + 1, **r} for i, r in enumerate(all_rows[:10])
             ]
 
+        gene_level = gene_level_top_genes(
+            exp_cats.get("GENE", []),
+            {g.get("probe_id"): g.get("fold_change") for g in genes if g.get("probe_id")},
+            chip_species.get(exp.get("name")),
+        )
         genomics_sections[key] = {
             "organ": organ,
             "sex": sex,
@@ -1182,10 +1206,16 @@ async def _extract_genomics(
             "total_responsive_genes": len(genes),
             "gene_sets_by_stat": gene_sets_by_stat,
             "gene_sets_chart_by_stat": gene_sets_chart_by_stat,
+            # The order the stats were requested in: the first is the one the
+            # report's GO table ranks by.
+            "stat_order": list(bmd_stats),
+            # The BMR the genomic BMD analysis recorded (labels the tables).
+            "genomic_bmr": genomic_bmr(integrated, exp.get("name", "")),
+            "top_genes_level": "gene" if gene_level else "probe",
             # top_genes: ranked subset (top 10) shown in the gene table.
-            # The reference (Tables 11/12) shows the top 10 genes and carries
-            # the probe id (e.g. "A2M_7932") as its own column.
-            "top_genes": [
+            # Gene level (BMDExpress GENE categories) when the project has them;
+            # else the per-probe fits, carrying the probe id as its own column.
+            "top_genes": gene_level or [
                 {
                     "rank": i + 1,
                     "gene_symbol": g["gene_symbol"],

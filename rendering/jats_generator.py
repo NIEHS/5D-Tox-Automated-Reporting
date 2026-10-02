@@ -82,8 +82,8 @@ from rendering.render_common import (
     genomics_table_caption,
     gene_set_table_rows,
     gene_table_rows,
-    GENE_SET_TABLE_HEADERS,
-    GENE_TABLE_HEADERS,
+    gene_set_table_headers,
+    gene_table_headers,
     resolve_content_items,
     authored_item_paragraphs,
 )
@@ -537,7 +537,7 @@ def _emit_genomics_section(node: DocNode, data: dict) -> list:
                 gene_set_table_rows(entry) if role == "gene_set"
                 else gene_table_rows(entry)
             )
-            headers = GENE_SET_TABLE_HEADERS if role == "gene_set" else GENE_TABLE_HEADERS
+            headers = gene_set_table_headers(entry) if role == "gene_set" else gene_table_headers(entry)
             if rows:
                 organ = (entry.get("organ") or "organ").strip().lower().replace(" ", "-")
                 wrap_id = f"{'gs' if role == 'gene_set' else 'g'}-{organ}"

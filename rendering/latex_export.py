@@ -425,6 +425,7 @@ def _load_genomics_interpretations(
 def _convert_genomics_cache(
     genomics_cache: dict,
     interpretations: dict[tuple[str, str], dict] | None = None,
+    dose_unit: str | None = None,
 ) -> list[dict]:
     """
     Convert the `_cache_genomics_*.json` shape into the list-of-sections
@@ -487,7 +488,12 @@ def _convert_genomics_cache(
             sex_disp = (entry.get("sex") or sex_lower).strip()
             interp_entry = interp.get((organ_lower, sex_lower), {})
 
-            gene_sets = (entry.get("gene_sets_by_stat") or {}).get("median") or []
+            # Rank by the FIRST requested statistic (the run's primary stat:
+            # 5th percentile for the 2025 method), not a fixed "median".
+            gsb = entry.get("gene_sets_by_stat") or {}
+            stat = next((st for st in (entry.get("stat_order") or list(gsb)) if st in gsb),
+                        "median")
+            gene_sets = gsb.get(stat) or []
             gs_block = {"sex": sex_disp, "gene_sets": gene_sets}
             gs_narr = interp_entry.get("gene_set_narrative")
             if gs_narr:
@@ -511,6 +517,20 @@ def _convert_genomics_cache(
         gs_narr_all = [p for b in gene_set_sexes for p in (b.get("narrative") or [])]
         gn_narr_all = [p for b in gene_sexes for p in (b.get("narrative") or [])]
 
+        # Table labels from the analysis's own records.  Sections extracted
+        # before these were recorded (no stat_order) keep the legacy labels.
+        display = None
+        if any_entry.get("stat_order"):
+            gsb = any_entry.get("gene_sets_by_stat") or {}
+            display = {
+                "stat": next((st for st in any_entry["stat_order"] if st in gsb), "median"),
+                "bmr": any_entry.get("genomic_bmr"),
+                "unit": dose_unit or "mg/kg",
+                # Gene-level tables (BMDExpress GENE categories) are the 2025
+                # method, printed to 1 decimal; ADR-0027 profiles will own this.
+                "decimals": 1 if any_entry.get("top_genes_level") == "gene" else 3,
+            }
+
         gene_set_entry = {
             "type": "gene_set",
             "organ": organ_disp,
@@ -518,6 +538,8 @@ def _convert_genomics_cache(
             "sexes": gene_set_sexes,
             "go_descriptions": [],
         }
+        if display:
+            gene_set_entry["display"] = display
         if gs_narr_all:
             gene_set_entry["narrative"] = gs_narr_all
         out.append(gene_set_entry)
@@ -529,6 +551,8 @@ def _convert_genomics_cache(
             "sexes": gene_sexes,
             "gene_descriptions": [],
         }
+        if display:
+            gene_entry["display"] = display
         if gn_narr_all:
             gene_entry["narrative"] = gn_narr_all
         out.append(gene_entry)
@@ -834,7 +858,11 @@ def load_session_data(
         if _ref_paragraphs:
             data["references"] = {"paragraphs": _ref_paragraphs}
 
-        converted = _convert_genomics_cache(genomics_cache, interpretations)
+        _ctx = methods_cache.get("context") if isinstance(methods_cache, dict) else None
+        converted = _convert_genomics_cache(
+            genomics_cache, interpretations,
+            dose_unit=(_ctx or {}).get("dose_unit") if isinstance(_ctx, dict) else None,
+        )
         if converted:
             data["genomics_sections"] = converted
 

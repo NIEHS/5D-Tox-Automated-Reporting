@@ -105,8 +105,8 @@ from rendering.render_common import (
     genomics_description_items,
     genomics_chart_caption,
     genomics_table_caption,
-    GENE_SET_TABLE_HEADERS,
-    GENE_TABLE_HEADERS,
+    gene_set_table_headers,
+    gene_table_headers,
     table_caption as _table_caption,
     figure_prefix,
     figure_payload,
@@ -1102,10 +1102,10 @@ def _render_gene_set_table(entry: dict) -> str:
     if rows is None:
         return f"\\emph{{[Top gene sets pending: {_escape_latex(entry.get('organ', ''))}]}}"
 
-    ncols = len(GENE_SET_TABLE_HEADERS)
+    ncols = len(gene_set_table_headers(entry))
     colspec = "p{0.24\\linewidth} l l p{0.20\\linewidth} r r r r"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(list(GENE_SET_TABLE_HEADERS)), "\\midrule"]
+             _emit_tabular_row(list(gene_set_table_headers(entry))), "\\midrule"]
     for cells in rows:
         first = cells[0] if cells else ""
         if first.startswith("**") and first.endswith("**"):
@@ -1139,10 +1139,10 @@ def _render_gene_table(entry: dict) -> str:
     if rows is None:
         return f"\\emph{{[Top genes pending: {_escape_latex(entry.get('organ', ''))}]}}"
 
-    ncols = len(GENE_TABLE_HEADERS)
+    ncols = len(gene_table_headers(entry))
     colspec = "l l l l r l"
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
-             _emit_tabular_row(list(GENE_TABLE_HEADERS)), "\\midrule"]
+             _emit_tabular_row(list(gene_table_headers(entry))), "\\midrule"]
     for cells in rows:
         first = cells[0] if cells else ""
         if first.startswith("**") and first.endswith("**"):

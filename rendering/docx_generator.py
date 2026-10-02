@@ -65,8 +65,8 @@ from document_model.document_tree import DocNode, first_body_node_id, walk_tree
 from styling_export.freeform_content import pending_note as _freeform_pending_note
 from rendering.render_common import (
     BMD_SUMMARY_HEADERS,
-    GENE_SET_TABLE_HEADERS,
-    GENE_TABLE_HEADERS,
+    gene_set_table_headers,
+    gene_table_headers,
     apical_table_plan,
     appendix_heading_text,
     assert_dispatch_covers,
@@ -1387,7 +1387,7 @@ def _render_gene_set_table(doc: Document, entry: dict) -> None:
     if rows is None:
         _add_pending(doc, f"Top gene sets pending: {entry.get('organ','')}")
         return
-    _booktabs_table(doc, list(GENE_SET_TABLE_HEADERS), rows,
+    _booktabs_table(doc, list(gene_set_table_headers(entry)), rows,
                     caption=genomics_table_caption(entry), merged_label_rows=True)
 
 
@@ -1397,7 +1397,7 @@ def _render_gene_table(doc: Document, entry: dict) -> None:
     if rows is None:
         _add_pending(doc, f"Top genes pending: {entry.get('organ','')}")
         return
-    _booktabs_table(doc, list(GENE_TABLE_HEADERS), rows,
+    _booktabs_table(doc, list(gene_table_headers(entry)), rows,
                     caption=genomics_table_caption(entry), merged_label_rows=True)
 
 
