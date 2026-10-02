@@ -407,7 +407,7 @@ def _extract_animals_from_bm2(
     # Try loading from LMDB cache if not provided
     if bm2_json is None:
         try:
-            import bm2_cache
+            from . import bm2_cache  # package-relative; a bare import always failed
             bm2_json = bm2_cache.get_json(path)
         except Exception:
             pass

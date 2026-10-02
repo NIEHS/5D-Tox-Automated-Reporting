@@ -1326,6 +1326,18 @@ def _extract_chip_info(experiment: dict) -> dict | None:
     return None
 
 
+def _is_transcriptomic_chip(chip_info: dict | None) -> bool:
+    """True for a real expression platform (BioSpyder, Affymetrix, …).
+
+    BMDExpress gives apical/"non-genomic" projects a placeholder chip whose
+    provider and name are "generic"; those (and a missing chip) are False."""
+    if not chip_info:
+        return False
+    provider = str(chip_info.get("provider") or "").strip().lower()
+    name = str(chip_info.get("name") or "").strip().lower()
+    return bool(provider) and provider != "generic" and name != "generic"
+
+
 def fingerprint_bm2(
     file_id: str,
     filename: str,
@@ -1395,7 +1407,7 @@ def fingerprint_bm2(
     # and avoids the expensive Java export on fingerprinting.
     if bm2_json is None:
         try:
-            import bm2_cache
+            from . import bm2_cache  # package-relative; a bare import always failed
             bm2_json = bm2_cache.get_json(path)
         except Exception:
             pass
@@ -1569,6 +1581,16 @@ def fingerprint_bm2(
         # Regex fallback for sex detection
         if not fp.sexes:
             fp.sexes = _detect_sexes_from_bm2_experiments(experiment_names)
+
+    # Content fallback (ADR-0017): a transcriptomics chip identifies a gene-
+    # expression project whatever its file or experiment names say — e.g. the
+    # 2025 DTT projects "108020004_4D_Genomic_Rats.bm2" with experiments
+    # "rat_4D_HE_No0", which no name pattern recognises.  Apical projects carry
+    # BMDExpress's "generic" chip (or none), so they never match.
+    if not fp.platform and not fp.data_type and any(
+        _is_transcriptomic_chip(_extract_chip_info(exp)) for exp in experiments
+    ):
+        fp.data_type = "gene_expression"
 
     # --- Set endpoint names and gene count ---
     if fp.data_type == "gene_expression":
