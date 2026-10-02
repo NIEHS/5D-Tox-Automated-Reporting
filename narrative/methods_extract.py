@@ -173,7 +173,26 @@ def _collect_bm2_analysis_metadata(bm2_json: dict) -> dict:
             parsed = _parse_bm2_analysis_info(notes)
             merged.update(parsed)
 
+    # The GO gene-set filters, from a GO_BP category analysis (the first
+    # category analysis may be a GENE one, which has no gene-set size limits).
+    for ca in bm2_json.get("categoryAnalysisResults", []) or []:
+        if isinstance(ca, dict) and "_GO_BP_" in (ca.get("name") or ""):
+            notes = (ca.get("analysisInfo") or {}).get("notes") or []
+            settings = [n for n in notes if any(k in n for k in _GO_FILTER_NOTE_KEYS)]
+            if settings:
+                merged["go_filter_settings"] = settings
+            break
+
     return merged
+
+
+# The category-analysis note lines that state a GO gene-set filter.
+_GO_FILTER_NOTE_KEYS = (
+    "Remove BMD > Highest Dose", "Remove BMD with R^2", "Remove genes with BMD/BMDL",
+    "Remove genes with BMDU/BMDL", "Identify conflicting probe sets",
+    "Min # of Genes in Gene Set", "Max # of Genes in Gene Set",
+    "Remove Genes With Step Function", "Deduplicate Gene Sets",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -356,14 +375,20 @@ def extract_methods_context(
                 ctx.prefilter_pvalue = meta["prefilter_pvalue"]
             if meta.get("fold_change_filter") is not None and ctx.fold_change_filter is None:
                 ctx.fold_change_filter = meta["fold_change_filter"]
+            if meta.get("go_filter_settings") and not ctx.go_filter_settings:
+                ctx.go_filter_settings = meta["go_filter_settings"]
 
     # --- Build genomics sample counts for Table 1 ---
     # Structure: {organ: {sex: {dose: count}}}
     # Source: gene_expression fingerprints' n_animals_by_dose, grouped by organ and sex
     if ctx.has_gene_expression:
-        ctx.genomics_sample_counts = _build_genomics_sample_counts(
-            fingerprints, ctx.dose_groups,
-        )
+        # The integrated project is the source of truth (one experiment per
+        # organ × sex, its treatments = the samples that entered the BMD
+        # analysis).  File fingerprints are a fallback for sessions without it:
+        # a multi-experiment .bm2 has ONE fingerprint with no organ/sex.
+        ctx.genomics_sample_counts = (
+            _genomics_sample_counts_from_integrated(integrated) if integrated else None
+        ) or _build_genomics_sample_counts(fingerprints, ctx.dose_groups)
 
     # --- Biosampling dose groups (for Abstract-Methods) ---
     # Scan sidecar files for rows where selection contains "biosampling".
@@ -646,6 +671,29 @@ def _extract_genomics_assay(integrated: dict) -> tuple[str | None, str | None]:
         return (None, chip_name or chip_id)
 
     return (None, None)
+
+
+def _genomics_sample_counts_from_integrated(integrated: dict) -> dict | None:
+    """{organ: {sex: {dose: n_samples}}} from the integrated project's
+    gene-expression experiments, organ/sex taken from experimentDescription.
+
+    Returns None if any gene-expression experiment lacks an organ or sex (the
+    caller then falls back to fingerprints rather than printing "Unknown")."""
+    counts: dict[str, dict[str, dict[float, int]]] = {}
+    for exp in integrated.get("doseResponseExperiments", []) or []:
+        desc = exp.get("experimentDescription") or {}
+        if desc.get("dataType") != "gene_expression":
+            continue
+        organ, sex = desc.get("organ"), desc.get("sex")
+        if not organ or not sex:
+            return None
+        by_dose = counts.setdefault(str(organ).capitalize(), {}).setdefault(
+            str(sex).capitalize(), {})
+        for t in exp.get("treatments") or []:
+            if isinstance(t, dict) and t.get("dose") is not None:
+                d = float(t["dose"])
+                by_dose[d] = by_dose.get(d, 0) + 1
+    return counts or None
 
 
 def _build_genomics_sample_counts(

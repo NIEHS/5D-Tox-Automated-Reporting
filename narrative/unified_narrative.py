@@ -322,7 +322,9 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 
             # Find terminal observation for this animal
             terminal_day = None
+            last_day = None
             for obs in animal.get("observations", []):
+                last_day = obs.get("day", "") or last_day
                 if obs.get("terminal"):
                     terminal_day = obs.get("day", "")
                     all_terminal_days.append(terminal_day)
@@ -330,6 +332,9 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 
             animal_records[key].append({
                 "terminal_day": terminal_day,
+                # An animal with NO terminal observation left the study without
+                # a recorded removal weight; its last observed day bounds when.
+                "last_day": last_day,
             })
 
     if not all_terminal_days:
@@ -363,6 +368,11 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
             if td and _day_num(td) < expected_day_num:
                 early_deaths += 1
                 death_days[td] = death_days.get(td, 0) + 1
+            elif not td and rec["last_day"] and _day_num(rec["last_day"]) < expected_day_num:
+                # Never reached the scheduled sacrifice and no removal weight was
+                # recorded: still an early removal.  Its day is unknown, so it is
+                # counted but contributes no "by study day N" evidence.
+                early_deaths += 1
 
         by_dose.setdefault(dose, {})[sex] = {
             "total": total,
@@ -454,7 +464,7 @@ def _animal_condition_opening_template(
     return segs
 
 
-def _animal_condition_death_detail_template(has_latest_day: bool) -> Template:
+def _animal_condition_death_detail_template(has_latest_day: bool, singular: bool = False) -> Template:
     """One per-dose mortality detail.  Dose/unit/count-phrase/study-day are all
     NUMERIC — the `counts` phrase ("3 male rats and 1 female rat") is a count
     aggregation whose refresh just replaces a magnitude.  The trailing study-day
@@ -466,7 +476,8 @@ def _animal_condition_death_detail_template(has_latest_day: bool) -> Template:
         Slot("unit", SlotKind.NUMERIC),
         Literal(" group, "),
         Slot("counts", SlotKind.NUMERIC),
-        Literal(" were found dead or moribund"),
+        # "1 male rat was" / "2 male rats were" / "1 male rat and 1 female rat were"
+        Literal(" was found dead or moribund" if singular else " were found dead or moribund"),
     ]
     if has_latest_day:
         segs += [
@@ -625,8 +636,9 @@ def _build_animal_condition_paragraphs(
             }
             if latest_day_num > 0:
                 detail_binding["latest_day"] = str(latest_day_num)
+            singular = len(sex_counts) == 1 and sex_counts[0].startswith("1 ")
             death_details.append(render(
-                _animal_condition_death_detail_template(latest_day_num > 0),
+                _animal_condition_death_detail_template(latest_day_num > 0, singular),
                 detail_binding,
             ))
 
@@ -775,14 +787,28 @@ def _build_body_weight_paragraphs(
     return [" ".join(significant + ([nd_sentence] if nd_sentence else []))]
 
 
+def _is_numeric_bmd(value) -> bool:
+    """True for a finite positive BMD string ("63", "1.13e+03"); False for the
+    "—" / "ND" / "NVM" / "UREP" markers."""
+    try:
+        f = float(str(value).strip())
+    except (TypeError, ValueError):
+        return False
+    return f > 0 and f != float("inf")
+
+
 def _organ_finding_template(
     organ_name: str,
     wt_type_str: str,
     has_weight_types: bool,
     has_loel: bool,
     part_qualifiers: list[str | None],
+    has_bmd: bool = True,
 ) -> Template:
     """One organ finding as author wording + typed data slots.
+
+    ``has_bmd`` False (no row has a numeric BMD — none modeled, or held back)
+    drops the BMD clause rather than printing "The BMD (BMDL) was — (—)".
 
     Structural facts are baked into Literals — the organ name, the weight-type
     words (``wt_type_str`` and each part's ``(absolute weight)`` qualifier), and
@@ -837,7 +863,9 @@ def _organ_finding_template(
         return out
 
     n = len(part_qualifiers)
-    if n == 1:
+    if not has_bmd:
+        segs += [Literal(".")]
+    elif n == 1:
         segs += [Literal(". The BMD (BMDL) was ")]
         segs += _part_segs(0)
         segs += [Literal(".")]
@@ -993,6 +1021,7 @@ def _build_organ_weight_paragraphs(
             tpl = _organ_finding_template(
                 organ_name, wt_type_str, has_weight_types,
                 min_low_dose is not None, part_qualifiers,
+                has_bmd=any(_is_numeric_bmd(r.bmd_str) for r in group_rows),
             )
             binding = _bind_organ_finding(
                 group_rows, dose_unit, direction, min_low_dose)

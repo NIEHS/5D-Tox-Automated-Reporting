@@ -72,6 +72,7 @@
       "genomics_assay": null,
       "genomics_chip": null,
       "genomics_sample_counts": null,
+      "go_filter_settings": null,
       "has_body_weight": false,
       "has_clin_chem": false,
       "has_clin_path": false,

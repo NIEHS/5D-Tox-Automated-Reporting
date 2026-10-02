@@ -198,6 +198,53 @@ Keys to generate: {subsection_keys}
     return system, user_prompt
 
 
+def _dose_spacing_phrase(ctx: MethodsContext) -> str:
+    """The spacing the dose groups actually have, e.g. "approximately 2-fold
+    spacing between consecutive doses" (a fixed "half-log" was wrong for most
+    studies)."""
+    import statistics
+
+    doses = sorted(d for d in (ctx.dose_groups or []) if d and d > 0)
+    ratios = [b / a for a, b in zip(doses, doses[1:]) if a > 0]
+    if not ratios:
+        return "dose spacing as designed"
+    r = statistics.median(ratios)
+    if abs(r - 10 ** 0.5) < 0.25:
+        return "approximately half-log spacing between consecutive doses"
+    return f"approximately {r:.1f}-fold spacing between consecutive doses"
+
+
+def _genomic_bmr_phrase(ctx: MethodsContext) -> str:
+    """The genomic BMR as recorded in the .bm2 ("25% relative deviation")."""
+    t, f = (ctx.bmr_type or "").lower(), ctx.bmr_factor
+    if "relative" in t and f is not None:
+        return f"{f * 100:g}% relative deviation"
+    if f is not None:
+        return f"{f:g} standard deviation"
+    return ctx.bmr_type or ""
+
+
+def _apical_bmr_phrase(ctx: MethodsContext) -> str:
+    """The apical BMR for the assay families present, from the same per-family
+    defaults tables.apical_bmds applies when a platform records no config."""
+    from tables.apical_bmds import _ASSAY_FAMILY_BMR, _BMR_REL
+
+    present = [name for name, has in (
+        ("body weight", ctx.has_body_weight), ("organ weight", ctx.has_organ_weights),
+        ("clinical chemistry", ctx.has_clin_chem), ("hematology", ctx.has_hematology),
+        ("hormones", ctx.has_hormones),
+    ) if has]
+    by_bmr: dict[str, list[str]] = {}
+    for fam in present:
+        kind, factor = _ASSAY_FAMILY_BMR[fam]
+        label = (f"{factor * 100:g}% relative deviation" if kind == _BMR_REL
+                 else f"{factor:g} standard deviation")
+        by_bmr.setdefault(label, []).append(fam)
+    if len(by_bmr) <= 1:
+        return next(iter(by_bmr), "1 standard deviation")
+    return "; ".join(f"{label} ({', '.join(fams)})" for label, fams in by_bmr.items())
+
+
 def _build_subsection_guidelines(
     ctx: MethodsContext,
     skeleton: list[tuple[str, str, int]],
@@ -238,7 +285,7 @@ def _build_subsection_guidelines(
         ),
         "dose_selection": (
             "One paragraph. Reference LD50 predictions if available, "
-            "explain the dose spacing rationale (half-log dose spacing), "
+            f"explain the dose spacing rationale ({_dose_spacing_phrase(ctx)}), "
             "rationale for top dose selection, and target of no overt systemic toxicity."
         ),
         "chemistry": (
@@ -259,7 +306,8 @@ def _build_subsection_guidelines(
             "cage-side observations included assessment of general appearance, behavior, and respiratory patterns."
         ),
         "body_organ_weights": (
-            f"One paragraph. Body weights recorded on study day 0 and at necropsy. "
+            f"One paragraph. Body weights recorded on study day 0 and at necropsy on study day "
+            f"{ctx.duration_days} (do not state any other necropsy day). "
             f"{'Organ weights: ' + ', '.join(ctx.organ_weight_endpoints[:10]) + '.' if ctx.organ_weight_endpoints else 'Organs were weighed at necropsy.'} "
             f"Absolute and relative (organ-to-body-weight ratio) weights calculated."
         ),
@@ -301,45 +349,60 @@ def _build_subsection_guidelines(
             "from downstream analysis."
         ),
         "txomics_normalization": (
-            "One paragraph. DESeq2 median-of-ratios normalization or TMM normalization. "
-            "Describe the normalization method used for count data."
+            "One paragraph. The current NIEHS TempO-Seq normalization: aligned read counts "
+            "of attenuated probes were readjusted to unattenuated equivalents using the "
+            "platform manifest's attenuation factors; counts were normalized per probe to "
+            "reads per million; a pseudo-count of 1.0 was added and values were "
+            "log2-transformed. Do NOT mention DESeq2, TMM or differential-expression models."
         ),
         "data_analysis": (
             "Brief introductory paragraph: overview of the statistical and dose-response "
             "modeling approaches applied to both apical and transcriptomic endpoints."
         ),
         "stat_analysis": (
-            "One paragraph. Standard NIEHS statistical pipeline: "
-            "Jonckheere trend test for monotonic dose-response, followed by "
-            "Williams test (if monotonic) or Dunnett test (if non-monotonic) for pairwise comparisons. "
-            "Shirley nonparametric test used when data did not meet normality/homogeneity assumptions. "
-            "Dunn test for non-parametric pairwise comparisons. "
-            "Significance threshold: p < 0.05."
+            "One or two paragraphs, the NIEHS method: organ and body weight data "
+            "(approximately normal) were analyzed with the parametric multiple-comparison "
+            "procedures of Williams and Dunnett; clinical pathology data (typically skewed) "
+            "with the nonparametric procedures of Shirley and Dunn. The Jonckheere test "
+            "assessed dose-response trends and selected the trend-sensitive test (Williams or "
+            "Shirley) when significant at p <= 0.01, otherwise Dunnett or Dunn. Values flagged "
+            "by the Dixon and Massey outlier test were examined, and values from animals "
+            "suspected of illness unrelated to exposure or flagged for measurement problems were "
+            "eliminated. NOEL = highest dose without a significant (p <= 0.05) pairwise "
+            "difference from the vehicle control; LOEL = lowest dose with one. Do not mention "
+            "normality or variance-homogeneity tests (Shapiro-Wilk, Levene). Only mention "
+            "clinical pathology if it is in the context."
         ),
         "bmd_apical": (
-            f"One paragraph. Benchmark dose modeling of apical endpoints using "
-            f"{'BMDS ' + ctx.bmds_version if ctx.bmds_version else 'EPA BMDS software'}. "
-            f"{'Models fit: ' + ', '.join(ctx.models_fit) + '. ' if ctx.models_fit else ''}"
-            f"{'BMR: ' + str(ctx.bmr_factor) + ' ' + (ctx.bmr_type or 'standard deviation') + ' from the control mean. ' if ctx.bmr_factor is not None else ''}"
-            f"{'Constant variance assumed. ' if ctx.constant_variance else ''}"
-            f"Model selection by lowest AIC or Laplace model averaging."
+            "One paragraph. Apical BMD modeling used nontransformed individual-animal data. "
+            "Except for body weights, an endpoint was modeled only if it showed a significant "
+            "trend and at least one significant pairwise difference. Modeling used ToxicR "
+            "Laplace model averaging of the Hill, Power, Exponential 3 and Exponential 5 "
+            f"models with constant variance and a benchmark response of {_apical_bmr_phrase(ctx)}. "
+            "Modeled responses were excluded unless R2 > 0.6, BMD/BMDL < 10 and BMD < the "
+            "highest dose; an endpoint meeting the statistical criteria without a viable "
+            "model is reported as having no viable model. The genomic BMR in the context "
+            "does NOT apply to apical endpoints."
         ),
         "bmd_genomics": (
-            f"One paragraph. Benchmark dose modeling of transcriptomic data using "
-            f"{ctx.bmdexpress_version or 'BMDExpress'} with "
-            f"{'BMDS ' + ctx.bmds_version if ctx.bmds_version else 'EPA BMDS'}. "
-            f"{'Pre-filter: ' + ctx.prefilter_method + ' (p < ' + str(ctx.prefilter_pvalue) + ')' if ctx.prefilter_method and ctx.prefilter_pvalue else ''}"
-            f"{'Models fit: ' + ', '.join(ctx.models_fit) + '. ' if ctx.models_fit else ''}"
-            f"Describe gene-level BMD derivation, GO term / pathway enrichment using "
-            f"category analysis, and filtering criteria (goodness-of-fit p > 0.1, "
-            f"BMDU/BMDL ratio ≤ 40, minimum 5%% gene set coverage)."
+            f"One or two paragraphs. Transcriptomic BMD analysis in "
+            f"{ctx.bmdexpress_version or 'BMDExpress 3'}: probes with a zero count in any "
+            f"sample were excluded; a Williams trend prefilter"
+            f"{' (p < ' + str(ctx.prefilter_pvalue) + ')' if ctx.prefilter_pvalue else ''} "
+            f"followed by the Curve Fit Prefilter; BMD modeling with ToxicR Laplace model "
+            f"averaging{' of ' + ', '.join(ctx.models_fit) if ctx.models_fit else ''}"
+            f"{', BMR ' + _genomic_bmr_phrase(ctx) if ctx.bmr_type else ''}, constant variance. "
+            f"GO biological process gene-set analysis with these recorded settings: "
+            f"{'; '.join(ctx.go_filter_settings) if ctx.go_filter_settings else 'not recorded'}. "
+            f"Gene sets were reported when at least 3 genes passed all filters and at least 5% "
+            f"of the set was populated; BMD, BMDL and BMDU at the 5th percentile of the set's "
+            f"gene BMDs were the potency metrics. Individual-gene results were the median over "
+            f"the probes mapped to each gene. Use ONLY these settings; do not invent others."
         ),
         "efdr": (
-            "One paragraph. Empirical false discovery rate estimation by permutation: "
-            "dose labels are randomly shuffled to create null datasets, "
-            "the full BMD analysis pipeline is run on permuted data, "
-            "and the fraction of false positives at each BMD threshold is estimated. "
-            "Reference the number of permutations used."
+            "One or two sentences: empirical false discovery rate results (synthetic null "
+            "data processed with the same parameters) are not included in this report's data "
+            "package. Do not describe a permutation procedure or give rates."
         ),
         "data_accessibility": (
             "One paragraph. Data availability statement: "

@@ -176,6 +176,9 @@ class MethodsContext:
     prefilter_method: str | None = None
     prefilter_pvalue: float | None = None
     fold_change_filter: float | None = None
+    # GO gene-set analysis filter settings, verbatim from the GO_BP category
+    # analysis notes ("Remove BMD with R^2 < Cutoff: 0.6", ...).
+    go_filter_settings: list[str] | None = None
 
     # --- Table 1: sample counts for genomics BMD analysis ---
     # Structure: {organ: {sex: {dose_float: count}}}
