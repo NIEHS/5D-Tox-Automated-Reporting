@@ -17,8 +17,8 @@ Apart from the report publication dates, every statement below comes from the fi
 | 2017-12 | First BMDS 2.7 apical fit report (TPHP) | RR-8 appendix metadata |
 | 2018-03-09 | GO annotation file for Affymetrix GPL1355 created | category-analysis notes |
 | 2018-04-12 | **TPHP genomics** analysed in **BMDExpress 2.20.0148** | RR-8 project timestamps |
-| 2018-11/12 | RR-8 summary tables produced (Table 1–6 PDFs) | PDF metadata |
 | 2018-05-01/02 | Aromatic-phosphate genomics analysed in **BMDExpress 2.20.0151** (EHDP, IDDP, IPP, TCP) | .bm2/JSON timestamps (NIEHS-02 .bm2, 04, 05, 06) |
+| 2018-11/12 | RR-8 summary tables produced (Table 1–6 PDFs) | PDF metadata |
 | 2020-11 → 2021-02 | PFAS study tables generated; TempO-Seq expression files built (BMDExpress 2.30.0485, 2020-11-18) | PDF metadata; expression-file headers |
 | 2021-02-12 | **Shared PFAS project** analysed in **BMDExpress 2.30.0507** (4 chemicals × liver/kidney × sex) | project timestamps (NIEHS-07…10) |
 | 2021-04 → 2021-08 | PFAS report tables and BMDS appendices produced (Parameter workbooks dated 2021-07-28) | docx/xlsx metadata |
