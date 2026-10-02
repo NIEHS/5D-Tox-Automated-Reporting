@@ -1532,6 +1532,42 @@ def _resolve_compound_name(dtxsid: str) -> str:
     return "Test Compound"
 
 
+def _session_view_filters(dtxsid: str):
+    """The process-time allowlists from the session's default view, or None when
+    that view declares no `filters` (⇒ the template's apply).
+
+    Returns (organ_filters, sex_filters, assay_filters, gene_filter,
+    gene_set_filter) in the legacy shapes ProcessContext carries."""
+    from document_model.view_config import DEFAULT_VIEW, load_view
+    from document_model.document_template import resolve_report_allowlist
+
+    try:
+        view = load_view(dtxsid, DEFAULT_VIEW) or {}
+    except Exception:
+        return None
+    if "filters" not in view:
+        return None
+    filters = view.get("filters") or {}
+
+    def _by_area(dim: str) -> dict:
+        return {
+            area: tokens for area in (filters.get(dim) or {})
+            if (tokens := resolve_report_allowlist(filters, dim, area))
+        }
+
+    assays = {}
+    for area, sexmap in (filters.get("assays") or {}).items():
+        assays[area] = sexmap["*"] if set(sexmap) == {"*"} else {
+            s: t for s, t in sexmap.items() if s != "*"}
+    return (
+        _by_area("organs"),
+        _by_area("sex"),
+        assays,
+        resolve_report_allowlist(filters, "genes") or [],
+        resolve_report_allowlist(filters, "gene_sets") or [],
+    )
+
+
 def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext":
     """Parse request params + template filters, load the integrated project, and
     build the ProcessContext threaded through every layer.
@@ -1580,6 +1616,13 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     assay_filters = load_report_assays(ACTIVE_TEMPLATE)
     gene_filter = load_report_genes(ACTIVE_TEMPLATE)
     gene_set_filter = load_report_gene_sets(ACTIVE_TEMPLATE)
+    # A session whose default view declares its own `filters` (the study
+    # overlay, ADR-0027 §1) overrides the template's — the same resolution the
+    # render path (latex_export._resolve_apical_filters) already applies, so a
+    # row the view keeps is never dropped here first.
+    _view = _session_view_filters(dtxsid)
+    if _view is not None:
+        organ_filters, sex_filters, assay_filters, gene_filter, gene_set_filter = _view
 
     # --- Load integrated data (through the injected store) ---
     integrated = store.get_integrated(dtxsid)
