@@ -601,7 +601,7 @@ def load_session_data(
       - data["background"]["paragraphs"]           ← background.json
       - data["abstract"]["sections"]["Background"] ← background.json:abstract_background
       - data["bmd_summary"]["endpoints"]           ← _cache_bmd_summary_*.json:apical
-      - data["summary"]["paragraphs"]              ← _cache_summary_generated.json
+      - data["summary"]["paragraphs"]              ← summary.json (legacy: _cache_summary_generated.json)
       - data["apical_sections"]                    ← _cache_sections_*.json:sections (normalized)
       - data["unified_narratives"]                 ← _cache_sections_*.json:unified_narratives
       - data["genomics_sections"]                  ← _cache_genomics_*.json (converted)
@@ -691,9 +691,14 @@ def load_session_data(
         }
 
     # ── Summary paragraphs ────────────────────────────────────────────
-    summary_cache = _load_json(session_dir / "_cache_summary_generated.json")
-    if isinstance(summary_cache, dict) and summary_cache.get("paragraphs"):
-        data["summary"] = {"paragraphs": summary_cache["paragraphs"]}
+    # summary.json is the section file the Summary generate/save/approve path
+    # writes; _cache_summary_generated.json is a legacy name nothing writes any
+    # more, kept as a fallback so an old session still renders its summary.
+    for summary_name in ("summary.json", "_cache_summary_generated.json"):
+        summary_cache = _load_json(session_dir / summary_name)
+        if isinstance(summary_cache, dict) and summary_cache.get("paragraphs"):
+            data["summary"] = {"paragraphs": summary_cache["paragraphs"]}
+            break
 
     # ── Apical sections + unified narratives ──────────────────────────
     # The sections cache is the filter-AGNOSTIC superset (phase 2).  Apply THIS

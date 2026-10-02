@@ -38,6 +38,7 @@ strictly read-only.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from document_model.document_node import DocNode
@@ -357,6 +358,11 @@ def singleton_section_files(tree: list[DocNode] | None = None) -> tuple[str, ...
     )
 
 
+# A caller-supplied section-key part (bm2_slug, organ, sex) becomes a filename
+# stem under sessions/<id>/, so it may not carry a path separator or a dot.
+_KEY_PART_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
+
+
 def resolve_section_key(
     body: dict, approvable: "frozenset[str] | None" = None,
 ) -> tuple[str | None, str | None]:
@@ -377,12 +383,16 @@ def resolve_section_key(
         slug = body.get("bm2_slug", "")
         if not slug:
             return (None, "bm2_slug is required for bm2 sections")
+        if not _KEY_PART_RE.match(slug):
+            return (None, f"Invalid bm2_slug: {slug[:40]!r}")
         return (f"bm2_{slug}", None)
     if section_type == "genomics":
         organ = body.get("organ", "").lower().replace(" ", "_")
         sex = body.get("sex", "").lower().replace(" ", "_")
         if not organ or not sex:
             return (None, "organ and sex are required for genomics sections")
+        if not (_KEY_PART_RE.match(organ) and _KEY_PART_RE.match(sex)):
+            return (None, "Invalid organ or sex for a genomics section")
         return (f"genomics_{organ}_{sex}", None)
     # A singleton type: its key IS the section_key.
     return (section_type, None)

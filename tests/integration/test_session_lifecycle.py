@@ -174,6 +174,37 @@ class TestSessionApproveUnapprove:
         assert resp.status_code == 200
         assert (sessions_dir / dtxsid / "methods.json").exists()
 
+    def test_approve_materialized_bm2_section_by_slug(self, sessions_dir):
+        """A materialized apical section (bm2_<slug>.json, no .bm2 filename) is
+        approvable via bm2_slug — the body the Sections screen sends."""
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        client = TestClient(app)
+        resp = client.post("/api/session/approve", json={
+            "dtxsid": "DTXSID_TEST",
+            "section_type": "bm2",
+            "bm2_slug": "body-weight",
+            "data": {"title": "Body Weight", "narrative": ["Text."], "approved": False},
+        })
+        assert resp.status_code == 200, resp.text
+        data = json.loads((sessions_dir / "DTXSID_TEST" / "bm2_body-weight.json").read_text())
+        assert data["approved"] is True
+        assert data["narrative"] == ["Text."]
+
+    def test_approve_bm2_rejects_unsafe_slug(self, sessions_dir):
+        from fastapi.testclient import TestClient
+        from web_routes.background_server import app
+
+        client = TestClient(app)
+        resp = client.post("/api/session/approve", json={
+            "dtxsid": "DTXSID_TEST",
+            "section_type": "bm2",
+            "bm2_slug": "../escape",
+            "data": {"narrative": ["x"]},
+        })
+        assert resp.status_code == 400
+
     def test_approve_requires_dtxsid(self, sessions_dir):
         """Missing dtxsid returns 400."""
         from fastapi.testclient import TestClient

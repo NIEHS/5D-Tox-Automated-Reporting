@@ -198,6 +198,11 @@ def test_resolve_section_key_matches_historical_branches():
     ) == ("genomics_liver_male", None)
     assert resolve_section_key({"section_type": "genomics", "organ": "liver"})[0] is None
     assert resolve_section_key({"section_type": "nope"})[0] is None
+    # Key parts become a filename stem — no path separators or dots.
+    assert resolve_section_key({"section_type": "bm2", "bm2_slug": "../../x"})[0] is None
+    assert resolve_section_key(
+        {"section_type": "genomics", "organ": "../liver", "sex": "male"}
+    )[0] is None
 
 
 def test_declared_binding_is_the_kind(tmp_path):

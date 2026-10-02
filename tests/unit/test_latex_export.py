@@ -21,6 +21,7 @@ What this does NOT prove
     zip-format and file-layout level only.
 """
 
+import json
 import zipfile
 from pathlib import Path
 
@@ -320,6 +321,23 @@ def test_load_session_data_returns_scaffold_for_missing_session(tmp_path, monkey
     assert "background" in data
     assert "methods" in data
     assert "abstract" in data
+
+
+def test_load_session_data_reads_summary_section_file(sessions_dir):
+    """The Summary saved by the generate/save/approve path (summary.json) renders;
+    the legacy _cache_summary_generated.json is only a fallback."""
+    sess = sessions_dir / "DTXSID_TEST"
+    sess.mkdir(parents=True)
+    (sess / "summary.json").write_text(json.dumps({"paragraphs": ["Saved summary."]}))
+    (sess / "_cache_summary_generated.json").write_text(
+        json.dumps({"paragraphs": ["Legacy summary."]})
+    )
+    data = load_session_data("DTXSID_TEST")
+    assert data["summary"]["paragraphs"] == ["Saved summary."]
+
+    (sess / "summary.json").unlink()
+    data = load_session_data("DTXSID_TEST")
+    assert data["summary"]["paragraphs"] == ["Legacy summary."]
 
 
 def test_load_session_data_overlays_real_session_when_present(real_session_50469320):

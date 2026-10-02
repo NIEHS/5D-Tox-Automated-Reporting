@@ -911,15 +911,22 @@ async def api_session_approve(request: Request):
     if section_type == "background":
         save_section(dtxsid, "background", data)
     elif section_type == "bm2":
-        # Build the section key from the original .bm2 filename
+        # Section key: the body's bm2_slug — what save-section / unapprove and
+        # the UI send — else (legacy per-.bm2 cards) slugified from the original
+        # .bm2 filename. Sections written by materialize_result_sections carry
+        # no filename, so requiring one made them unapprovable.
         filename = data.get("filename", "")
-        slug = bm2_slug(filename) if filename else ""
-        if not slug:
+        if body.get("bm2_slug"):
+            section_key, err = _resolve_section_key(body)
+            if err:
+                return JSONResponse({"error": err}, status_code=400)
+        elif filename and bm2_slug(filename):
+            section_key = f"bm2_{bm2_slug(filename)}"
+        else:
             return JSONResponse(
-                {"error": "bm2 data must include a filename"},
+                {"error": "bm2 sections need bm2_slug (or data.filename)"},
                 status_code=400,
             )
-        section_key = f"bm2_{slug}"
         save_section(dtxsid, section_key, data)
 
         # Copy the .bm2 file from /tmp into the session's files/ directory
@@ -927,7 +934,7 @@ async def api_session_approve(request: Request):
         # in LMDB via bm2_cache, so no sidecar files need copying.)
         bm2_id = data.get("bm2_id", "")
         upload = _bm2_uploads.get(bm2_id)
-        if upload and os.path.exists(upload["temp_path"]):
+        if filename and upload and os.path.exists(upload["temp_path"]):
             files_dir = d / "files"
             files_dir.mkdir(exist_ok=True)
             src = upload["temp_path"]
