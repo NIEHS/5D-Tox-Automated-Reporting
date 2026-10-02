@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>5dToxReport Headless Guide</title>
+<style>
+  /* Layout: a reference manual — sticky contents rail on wide screens, one
+     readable column of prose with full-width tables and code beneath it. */
+  :root {
+    --bg: #ffffff;
+    --fg: #1d2530;
+    --muted: #5b6573;
+    --line: #dde2e8;
+    --head: #f3f5f8;
+    --accent: #1f5f8b;
+    --accent-soft: #e6f0f7;
+    --code-bg: #f6f8fa;
+    --code-fg: #1d2530;
+    --warn: #9a5b00;
+    --warn-soft: #fdf3e1;
+    --ok: #2e7d5b;
+    --ok-soft: #e5f4ec;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Liberation Sans", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #2c333c; --head: #1c2229;
+      --accent: #7fb6de; --accent-soft: #1b2c3a; --code-bg: #1a1f26; --code-fg: #dfe5ec;
+      --warn: #e2b062; --warn-soft: #2e2618; --ok: #7cc9a3; --ok-soft: #17291f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181d; --fg: #e3e7ec; --muted: #9aa4b1; --line: #2c333c; --head: #1c2229;
+    --accent: #7fb6de; --accent-soft: #1b2c3a; --code-bg: #1a1f26; --code-fg: #dfe5ec;
+    --warn: #e2b062; --warn-soft: #2e2618; --ok: #7cc9a3; --ok-soft: #17291f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.6 var(--font-body); }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  .page { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 72px;
+          display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  @media (min-width: 1000px) { .page { grid-template-columns: 220px minmax(0, 1fr); } }
+
+  /* contents rail */
+  nav.toc { font-size: 0.88rem; }
+  nav.toc summary { cursor: pointer; list-style: none; }
+  nav.toc summary::-webkit-details-marker { display: none; }
+  nav.toc .label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+  nav.toc li { counter-increment: toc; }
+  nav.toc a { display: flex; gap: 8px; padding: 4px 8px; border-radius: 5px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
+  nav.toc a::before { content: counter(toc); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  nav.toc a:hover { background: var(--head); }
+  nav.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
+  @media (min-width: 1000px) {
+    nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; max-height: calc(100vh - 48px); overflow-y: auto; }
+  }
+  @media (max-width: 999px) {
+    nav.toc { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+    nav.toc .label { margin-bottom: 0; }
+    nav.toc .label::after { content: " ▸"; }
+    nav.toc details[open] .label { margin-bottom: 8px; }
+    nav.toc details[open] .label::after { content: " ▾"; }
+    nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  }
+
+  main { min-width: 0; }
+  header.intro { margin-bottom: 8px; }
+  .eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 10px; text-wrap: balance; }
+  h2 { font-size: 1.3rem; line-height: 1.3; margin: 56px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); text-wrap: balance; }
+  h2 .num { color: var(--muted); font-weight: 500; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 1.05rem; margin: 32px 0 8px; }
+  h4 { font-size: 0.95rem; margin: 26px 0 6px; }
+  p, ul, ol.prose { max-width: 75ch; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--muted); font-size: 1.02rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 0.85rem; color: var(--muted); margin: 14px 0 0; }
+  code { font: 0.86em var(--font-mono); background: var(--head); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  ul { padding-left: 1.2em; } li { margin-bottom: 6px; }
+
+  /* two routes */
+  .routes { display: grid; gap: 14px; margin: 26px 0 8px; }
+  .route { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; min-width: 0;
+           display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 22px; align-items: start; }
+  @media (min-width: 760px) { .route { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.6fr); } }
+  .route > div { min-width: 0; }
+  .route .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .route h3 { margin: 4px 0 6px; }
+  .route p { color: var(--muted); font-size: 0.92rem; }
+  .route .code { margin-top: 4px; }
+
+  /* pipeline */
+  .pipeline { list-style: none; margin: 18px 0 8px; padding: 0; display: grid; gap: 0; counter-reset: step; }
+  .pipeline > li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 18px; margin: 0; }
+  .pipeline > li::before { content: ""; position: absolute; left: 21px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+  .pipeline > li:last-child::before { display: none; }
+  .pipeline .dot { width: 44px; height: 34px; border-radius: 17px; display: grid; place-items: center; font-weight: 700; font-size: 0.9rem;
+                   background: var(--accent); color: var(--bg); font-variant-numeric: tabular-nums; position: relative; z-index: 1; }
+  .pipeline li.optional .dot { background: var(--bg); color: var(--accent); border: 2px dashed var(--accent); }
+  .pipeline .body { min-width: 0; padding-top: 4px; }
+  .pipeline .title { font-weight: 650; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .pipeline .desc { color: var(--muted); font-size: 0.92rem; margin: 2px 0 6px; max-width: 75ch; }
+  .pipeline .calls { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; }
+  .pipeline .calls span { color: var(--muted); }
+  .pipeline .calls code { font-size: 0.95em; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+  .chip.phase { background: var(--ok-soft); color: var(--ok); font-family: var(--font-mono); }
+  .chip.opt { background: var(--head); color: var(--muted); }
+  .chip.slow { background: var(--warn-soft); color: var(--warn); }
+  .phases { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+
+  /* code blocks */
+  .code { position: relative; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--code-bg); min-width: 0; }
+  .code .bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 12px; border-bottom: 1px solid var(--line);
+               font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .code button { font: 600 0.75rem var(--font-body); color: var(--accent); background: transparent; border: 1px solid var(--line);
+                 border-radius: 5px; padding: 2px 9px; cursor: pointer; }
+  .code button:hover { background: var(--bg); }
+  .code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: 0.84rem/1.55 var(--font-mono); color: var(--code-fg); tab-size: 4; }
+  .code pre .c { color: var(--muted); }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 11px; border-bottom: 1px solid var(--line); }
+  thead th { background: var(--head); font-weight: 600; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td:first-child { white-space: nowrap; }
+  td.wrap:first-child { white-space: normal; min-width: 14ch; }
+  .yes { color: var(--warn); font-weight: 600; } .no { color: var(--ok); font-weight: 600; }
+
+  /* callouts */
+  .callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--head); border-radius: 0 8px 8px 0;
+             padding: 12px 16px; margin: 16px 0; max-width: 85ch; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout b { color: var(--fg); }
+
+  .tree { font: 0.84rem/1.6 var(--font-mono); }
+  .tree .f { color: var(--fg); } .tree .d { color: var(--muted); }
+
+  footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="toc" aria-label="Contents"><details open>
+  <summary class="label">Contents</summary>
+  <ol>
+    <li><a href="#pipeline">The pipeline at a glance</a></li>
+    <li><a href="#prereqs">Prerequisites</a></li>
+    <li><a href="#inputs">Input files</a></li>
+    <li><a href="#python">Route A — Python</a></li>
+    <li><a href="#http">Route B — HTTP API</a></li>
+    <li><a href="#outputs">Outputs</a></li>
+    <li><a href="#approval">Approval and the publish gate</a></li>
+    <li><a href="#rerun">Re-running and resetting</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+    <li><a href="#gaps">Known gaps</a></li>
+  </ol>
+</details></nav>
+
+<main>
+<header class="intro">
+  <p class="eyebrow">rlm-bmdx · 5dToxReport</p>
+  <h1>Generating reports without the browser</h1>
+  <p class="lede">
+    Two ways to take a 5-day study's data files to a finished NIEHS-format report from the command line.
+    Both run the same workflow core as the web UI (<code>workflow/steps.py</code>, ADR-0014) and read and write
+    the same session folder, <code>sessions/&lt;DTXSID&gt;/</code>. A session built one way can be continued the
+    other way, or opened in the browser.
+  </p>
+  <div class="meta">
+    <span>Updated 2026-10-02</span>
+    <span>Scripts: <code>tooling/generate_report.py</code> · <code>tooling/generate_report_api.sh</code></span>
+    <span>Examples use PFHxSAm (DTXSID50469320, NIEHS Report 10)</span>
+  </div>
+</header>
+
+<div class="routes">
+  <section class="route" aria-labelledby="ra">
+    <div><span class="tag">Route A</span>
+    <h3 id="ra">Python, in-process</h3>
+    <p>One command runs every step and writes the deliverables. No server needed. The only route that builds the LaTeX bundle.</p></div>
+    <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.generate_report DTXSID50469320 \
+    --files /data/pfhxsam/* \
+    --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 \
+    --compound-name PFHxSAm --dose-unit mg/kg \
+    --surfaces docx,html,jats,latex,pdf</pre></div>
+  </section>
+  <section class="route" aria-labelledby="rb">
+    <div><span class="tag">Route B</span>
+    <h3 id="rb">HTTP API, with curl</h3>
+    <p>Drives a running server through the same calls the browser makes, in the same order. Use it against a shared or remote deployment.</p></div>
+    <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>BASE=http://localhost:9000 tooling/generate_report_api.sh \
+    -i DTXSID50469320 -n "Perfluorohexanesulfonamide" \
+    -c 41997-13-1 -u mg/kg -k PFHxSAm \
+    -s docx,jats,pdf -o output/DTXSID50469320 \
+    /data/pfhxsam/*</pre></div>
+  </section>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="pipeline"><span class="num">1</span>The pipeline at a glance</h2>
+<p>
+  Each step is one Python function and one HTTP call. You never set the workflow phase yourself: it is worked out from
+  which files exist on disk. The green chips show the phase each step moves the session into.
+</p>
+
+<ol class="pipeline">
+  <li><div class="dot">1</div><div class="body">
+    <div class="title">Import <span class="chip phase">UPLOADED</span></div>
+    <p class="desc">Puts the input files into <code>sessions/&lt;id&gt;/files/</code>. Long-format NTP tables are converted to the wide pivot plus a per-animal sidecar.</p>
+    <div class="calls"><span>Python</span><code>copy into files/</code><span>HTTP</span><code>POST /api/upload-bm2</code><code>POST /api/upload-csv</code></div>
+  </div></li>
+  <li><div class="dot">2</div><div class="body">
+    <div class="title">Validate <span class="chip phase">VALIDATED</span></div>
+    <p class="desc">Fingerprints every file and cross-checks doses, animals, sexes and coverage; writes <code>validation_report.json</code>. Any error-severity issue gives <code>VALIDATION_ERRORS</code> instead, and integration is blocked.</p>
+    <div class="calls"><span>Python</span><code>validate_step</code><span>HTTP</span><code>POST /api/pool/validate/{id}</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">2b</div><div class="body">
+    <div class="title">Resolve conflicts <span class="chip opt">optional</span></div>
+    <p class="desc">Picks the winning file when two cover the same platform. Without a decision, integration prefers <code>bm2 &gt; txt/csv &gt; xlsx</code>.</p>
+    <div class="calls"><span>Python</span><code>resolve_step</code><span>HTTP</span><code>POST /api/pool/resolve</code></div>
+  </div></li>
+  <li><div class="dot">3</div><div class="body">
+    <div class="title">Confirm metadata</div>
+    <p class="desc">Accepts or overrides each file's detected platform and data type.</p>
+    <div class="calls"><span>Python</span><code>confirm_metadata_step</code><span>HTTP</span><code>POST /api/pool/confirm-metadata/{id}</code></div>
+  </div></li>
+  <li><div class="dot">4</div><div class="body">
+    <div class="title">Integrate <span class="chip phase">INTEGRATED</span></div>
+    <p class="desc">BMDExpress 3 (Java) merges the pool into <code>integrated.json</code>, the single source of truth for every report section.</p>
+    <div class="calls"><span>Python</span><code>integrate_step</code><span>HTTP</span><code>POST /api/pool/integrate/{id}</code></div>
+  </div></li>
+  <li><div class="dot">5</div><div class="body">
+    <div class="title">Approve data <span class="chip phase">APPROVED</span></div>
+    <p class="desc">Builds the per-animal traceability report, <code>animal_report.json</code>: each animal mapped to dose, sex and core or biosampling selection.</p>
+    <div class="calls"><span>Python</span><code>generate_animal_report_step</code><span>HTTP</span><code>POST /api/generate-animal-report/{id}</code></div>
+  </div></li>
+  <li><div class="dot">6</div><div class="body">
+    <div class="title">Process <span class="chip slow">minutes when cold</span></div>
+    <p class="desc">NTP statistics (Williams, Dunnett, Jonckheere), BMDS modelling, genomics, charts, LLM narratives and Materials &amp; Methods. Every layer is cached, so a repeat run takes seconds.</p>
+    <div class="calls"><span>Python</span><code>process_step</code> (async)<span>HTTP</span><code>POST /api/process-integrated/{id}</code></div>
+  </div></li>
+  <li><div class="dot">7</div><div class="body">
+    <div class="title">Materialize result sections</div>
+    <p class="desc">Writes the apical result sections as unapproved <code>bm2_&lt;slug&gt;.json</code> drafts.</p>
+    <div class="calls"><span>Python</span><code>materialize_result_sections</code><span>HTTP</span><code>POST /api/pool/materialize-sections/{id}</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">8</div><div class="body">
+    <div class="title">Background <span class="chip opt">optional</span></div>
+    <p class="desc">LLM Background section built from ATSDR, IRIS and PubChem lookups.</p>
+    <div class="calls"><span>Python</span><code>--background</code><span>HTTP</span><code>POST /api/generate</code> (SSE) + <code>save-section</code></div>
+  </div></li>
+  <li class="optional"><div class="dot">8b</div><div class="body">
+    <div class="title">Summary <span class="chip opt">optional · HTTP only</span></div>
+    <p class="desc">LLM synthesis of the Background, apical results and BMD summary.</p>
+    <div class="calls"><span>HTTP</span><code>POST /api/generate-summary</code> + <code>save-section</code></div>
+  </div></li>
+  <li><div class="dot">9</div><div class="body">
+    <div class="title">Render</div>
+    <p class="desc">Word docx, HTML preview, BITS/JATS XML, Bookshelf-style HTML, Overleaf LaTeX bundle and PDF, all from one document tree.</p>
+    <div class="calls"><span>Python</span><code>render_preview</code><span>HTTP</span><code>POST /api/preview/{id}/materialize</code> + <code>GET …/download</code></div>
+  </div></li>
+</ol>
+
+<p>Check the derived phase at any point:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -s localhost:9000/api/workflow/$ID/state | jq '{phase, legal_actions}'</pre></div>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from workflow.engine import WorkflowEngine
+WorkflowEngine("DTXSID50469320").state().to_dict()</pre></div>
+
+<!-- ============================================================ -->
+<h2 id="prereqs"><span class="num">2</span>Prerequisites</h2>
+<p>Both routes need the same environment, because both run the same pipeline. Route B runs it inside the server process.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Need</th><th>Why</th><th>Where, in the sandbox</th></tr></thead>
+  <tbody>
+    <tr><td>Repo + venv</td><td>All the code. Run everything <b>from the repo root</b>: the knowledge base <code>bmdx.duckdb</code> and the templates are found relative to the current directory.</td><td><code>uv sync</code></td></tr>
+    <tr><td>JDK 21 first on <code>PATH</code></td><td>Integration and statistics call compiled Java helpers (class version 65). On JDK 17 they fail with <code>UnsupportedClassVersionError</code>.</td><td><code>/opt/liberica-jdk-21/bin</code></td></tr>
+    <tr><td><code>BMDX_PROJECT_ROOT</code></td><td>Where the Java bridge finds the BMDExpress-3 jars (<code>$BMDX_PROJECT_ROOT/target/*.jar</code>).</td><td><code>/workspace/BMDExpress-3</code></td></tr>
+    <tr><td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_BASE_URL</code></td><td>LLM narratives, Materials &amp; Methods, Background, Summary.</td><td>toxpipe LiteLLM gateway</td></tr>
+    <tr><td><code>SSL_CERT_FILE</code></td><td>The toxpipe gateway uses the NIH CA chain. The Python SDK reads <code>SSL_CERT_FILE</code>, not <code>NODE_EXTRA_CA_CERTS</code>.</td><td><code>/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt</code></td></tr>
+    <tr><td><code>tect</code> <span class="chip opt">optional</span></td><td>Compiles the LaTeX PDF (Route A <code>pdf</code> surface). Never use plain <code>tectonic</code>.</td><td>baked in</td></tr>
+    <tr><td>LibreOffice <code>docx2pdf</code> <span class="chip opt">optional</span></td><td>PDF over HTTP: <code>GET /Bookshelf/{id}/report.pdf</code>.</td><td>baked in</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>Route A</b> fills in the JDK, <code>BMDX_PROJECT_ROOT</code> and <code>SSL_CERT_FILE</code> defaults itself. Values set in your shell take precedence.</li>
+  <li><b>Route B</b>: start the server with <code>./run-server.sh</code>, which sets the same environment and reads the API key from <code>~/.claude/settings.json</code>.</li>
+</ul>
+<div class="callout warn">
+  <p><b>Data policy.</b> Which data may reach which LLM depends on whether the study is published (the dev/test/prod split).
+  Unpublished study data may only go to the walled toxpipe gateway, never a public model endpoint. The app's egress guard
+  enforces toxpipe-only. Don't work around it by pointing <code>ANTHROPIC_BASE_URL</code> somewhere else.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="inputs"><span class="num">3</span>Input files</h2>
+<p>The same files you would drop on the Upload step.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>File</th><th>Example</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>BMDExpress project</td><td><code>PFHxSAm_Gene_Expression.bm2</code></td><td>Genomic and/or apical BMD results.</td></tr>
+    <tr><td>BMDExpress text exports</td><td><code>Liver_PFHxSAm_Male_GENE_BMD_Results.txt</code>, <code>…_GO_Biological_Process_BMD_Results.txt</code>, <code>…_Expression_Data.txt</code></td><td>Gene-expression tier.</td></tr>
+    <tr><td>NTP long-format tables</td><td><code>body_weight_truth_male.csv</code>, <code>organ_weights_truth_male.csv</code>, <code>clin_chem_truth_female.csv</code></td><td>One row per animal. Converted on import to a wide BMDExpress pivot <code>.txt</code> plus a per-animal <code>.sidecar.json</code>; the original moves to <code>_originals/</code>.</td></tr>
+    <tr><td>Wide pivots + sidecars</td><td><code>body_weight_truth_female.txt</code> + <code>body_weight_truth_female.sidecar.json</code></td><td>The already-converted form. Import both.</td></tr>
+    <tr><td>NTP study workbooks</td><td><code>*.xlsx</code></td><td>Raw study-team data, used to cross-check derived values.</td></tr>
+  </tbody>
+</table></div>
+<p>
+  The platform (Body Weight, Organ Weight, Clinical Chemistry, Hematology, Hormones, Tissue Concentration, Clinical) and
+  data type (<code>tox_study</code>, <code>inferred</code> or <code>gene_expression</code>) are detected from each file's name and
+  contents. Check them at the confirm-metadata step and override any that are wrong.
+</p>
+<p><b>Published CEBS packages.</b> <code>tooling/cebs_to_pool.py</code> converts a CEBS NIEHS data package (Individual Animal workbooks plus expression files) into these inputs:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.cebs_to_pool --package assets/cebs/NIEHS-13 \
+    --prefix 108020004 --out /tmp/niehs13_inputs</pre></div>
+
+<!-- ============================================================ -->
+<h2 id="python"><span class="num">4</span>Route A — Python</h2>
+
+<h3>One command: <code>tooling.generate_report</code></h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>cd /workspace/rlm-bmdx
+python -m tooling.generate_report DTXSID50469320 \
+    --files /data/pfhxsam/*.bm2 /data/pfhxsam/*.txt /data/pfhxsam/*.csv \
+    --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 \
+    --compound-name PFHxSAm --dose-unit mg/kg \
+    --surfaces docx,html,jats,latex,pdf</pre></div>
+<p>
+  It imports the files, runs steps 2–7, then renders. Each step prints its result and wall time. A cold run takes several
+  minutes, most of it BMDS dose-response modelling; a repeat run on the same session takes seconds. Deliverables go to
+  <code>output/&lt;DTXSID&gt;/</code> (or <code>--out</code>):
+</p>
+<div class="code"><div class="bar"><span>output/DTXSID50469320/</span></div><pre class="tree">DTXSID50469320.docx            <span class="c">Word deliverable</span>
+DTXSID50469320.html            <span class="c">HTML preview</span>
+DTXSID50469320.xml             <span class="c">BITS &lt;book&gt; XML, for Bookshelf submission</span>
+DTXSID50469320-overleaf.zip    <span class="c">Overleaf bundle: report.tex + niehs.cls + figures/</span>
+DTXSID50469320.pdf             <span class="c">that bundle compiled locally with tect</span></pre></div>
+
+<h4>Options</h4>
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>DTXSID</code></td><td>Session id; the folder is <code>sessions/&lt;DTXSID&gt;/</code>. Any <code>DTXSID…</code> id of letters, digits, <code>_</code> or <code>-</code>.</td></tr>
+    <tr><td><code>--files F …</code></td><td>Import these files first. Leave it out to use the files already in the session. Adding files to a session that has progressed invalidates its downstream artifacts, as an upload does.</td></tr>
+    <tr><td><code>--name</code>, <code>--casrn</code></td><td>Test-article identity. Falls back to <code>identity.json</code>, then to the PubChem/CTX resolver (needs network).</td></tr>
+    <tr><td><code>--compound-name</code></td><td>Short name for captions and narratives. Default: the identity name.</td></tr>
+    <tr><td><code>--dose-unit</code></td><td>Dose unit for table headers. <b>State it explicitly.</b> If omitted, <code>mg/kg</code> is used and a note says so.</td></tr>
+    <tr><td><code>--metadata FILE</code></td><td>Classification overrides keyed by filename: <code>{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}</code></td></tr>
+    <tr><td><code>--bmd-stats</code>, <code>--go-*</code></td><td>GO gene-set table settings: <code>--bmd-stats median</code>, <code>--go-pct 5</code>, <code>--go-min-genes 20</code>, <code>--go-max-genes 500</code>, <code>--go-min-bmd 3</code> (the UI defaults).</td></tr>
+    <tr><td><code>--reintegrate</code></td><td>Integrate again even though <code>integrated.json</code> exists. Wipes the process caches, so processing starts over. Without it, integration is skipped when <code>integrated.json</code> exists.</td></tr>
+    <tr><td><code>--background</code></td><td>Also generate and save the Background section. <code>--model</code> picks the model.</td></tr>
+    <tr><td><code>--stop-after STEP</code></td><td><code>validate</code>, <code>integrate</code> or <code>process</code>: stop there and render nothing.</td></tr>
+    <tr><td><code>--render-only</code></td><td>Skip the pipeline; render the session as it is on disk.</td></tr>
+    <tr><td><code>--surfaces</code></td><td>Comma list from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>latex</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
+    <tr><td><code>--view NAME</code></td><td>Render a saved report view (its filters and chart selection).</td></tr>
+    <tr><td><code>--strict</code></td><td><code>latex</code>/<code>pdf</code>: refuse to build while any <code>[… pending]</code> placeholder remains.</td></tr>
+    <tr><td><code>--draft</code></td><td>Render even when the publish gate is closed (§7).</td></tr>
+    <tr><td><code>-v</code></td><td>Show pipeline logging, including per-cache provenance events.</td></tr>
+  </tbody>
+</table></div>
+<p>The script exits non-zero with the reason when validation finds errors, a step fails, or the publish gate is closed.</p>
+
+<h4>Recipes</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre><span class="c"># Check the inputs only: validation report and detected classification</span>
+python -m tooling.generate_report DTXSID50469320 --files in/* --stop-after validate
+
+<span class="c"># Already processed (e.g. in the browser): just produce the deliverables</span>
+python -m tooling.generate_report DTXSID50469320 --render-only --surfaces docx,pdf,jats
+
+<span class="c"># Correct a misclassified file, then rebuild from scratch</span>
+python -m tooling.generate_report DTXSID50469320 --metadata fixes.json --reintegrate</pre></div>
+
+<h3>Step by step: calling the workflow core yourself</h3>
+<p>
+  For different wrapping (a batch over many studies, a custom stopping point, extra checks), call the steps directly.
+  This is what <code>generate_report.py</code> does, minus its argument handling. Set up the environment first (§2, or copy
+  <code>_bootstrap_env()</code>): <code>bmdx_pipe</code> reads <code>BMDX_PROJECT_ROOT</code> at import time.
+</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>import asyncio, shutil
+from pathlib import Path
+
+from workflow.store import DiskPoolStore
+from workflow.engine import WorkflowEngine
+from workflow.steps import (
+    validate_step, confirm_metadata_step, integrate_step,
+    generate_animal_report_step, process_step, materialize_result_sections,
+)
+from rendering.preview_surface import render_preview
+
+ID = "DTXSID50469320"
+store = DiskPoolStore()
+
+<span class="c"># 1. Import: copy inputs into files/. Validation's disk scan fingerprints them
+#    (and converts long-format CSVs), so no upload call is needed.</span>
+files = store.session_dir(ID) / "files"
+files.mkdir(parents=True, exist_ok=True)
+for p in Path("/data/pfhxsam").iterdir():
+    shutil.copy2(p, files / p.name)
+
+<span class="c"># 2. Validate: stop on error-severity issues</span>
+report = validate_step(ID, store)
+assert not [i for i in report["issues"] if i.get("severity") == "error"]
+
+<span class="c"># 3. Confirm metadata: {} accepts what was detected.
+#    Keys are file ids from store.get_fingerprints(ID).</span>
+confirm_metadata_step(ID, {}, store)
+
+<span class="c"># 4. Integrate (Java)</span>
+integrate_step(ID, {"name": "Perfluorohexanesulfonamide",
+                    "casrn": "41997-13-1", "dtxsid": ID}, store)
+
+<span class="c"># 5. Approve data: build the animal report</span>
+generate_animal_report_step(ID, store)
+
+<span class="c"># 6. Process (async; minutes when cold)</span>
+payload = asyncio.run(process_step(ID, {
+    "compound_name": "PFHxSAm", "dose_unit": "mg/kg", "bmd_stats": ["median"],
+    "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500, "go_min_bmd": 3,
+}, store))
+
+<span class="c"># 7. Materialize the apical result sections as section files</span>
+materialize_result_sections(ID, store)
+print(WorkflowEngine(ID, store).state().to_dict()["phase"])   <span class="c"># APPROVED</span>
+
+<span class="c"># 9. Render: docx gives bytes; html, jats and bookshelf give str</span>
+Path(f"{ID}.docx").write_bytes(render_preview(ID, surface="docx"))
+Path(f"{ID}.xml").write_text(render_preview(ID, surface="jats"))</pre></div>
+
+<p>The optional Background (step 8) uses the same functions as <code>POST /api/generate</code>:</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from narrative.chem_resolver import ChemicalIdentity
+from narrative.data_gatherer import gather_all
+from narrative.background_writer import generate_background
+
+identity = store.read_json(ID, "identity.json")
+result = generate_background(gather_all(ChemicalIdentity.from_dict(identity)))
+store.save_section(ID, "background", {
+    "paragraphs": result["paragraphs"],
+    "references": result.get("references", []),
+    "citation_report": result.get("citation_report"),
+    "abstract_background": result.get("abstract_background", ""),
+    "approved": False,
+}, archive=False)</pre></div>
+<p>
+  For LaTeX, <code>rendering.latex_export</code> provides <code>load_session_data</code> and <code>build_overleaf_bundle</code>.
+  Its standalone CLI (<code>python -m rendering.latex_export --session --dtxsid ID --out bundle.zip</code>) does not apply a
+  saved view's document tree; <code>generate_report --surfaces latex</code> does.
+</p>
+<p>For an interactive run, <code>notebooks/workflow_walkthrough.ipynb</code> runs steps 2–7 one cell each and prints the derived phase after each.</p>
+
+<!-- ============================================================ -->
+<h2 id="http"><span class="num">5</span>Route B — HTTP API</h2>
+
+<h3>Start the server</h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>./run-server.sh                 <span class="c"># 0.0.0.0:9000; sets the JDK, BMDX_PROJECT_ROOT and LLM env</span>
+./run-server.sh --port 9100     <span class="c"># another port</span></pre></div>
+<p>If the server was started with <code>ALLOWED_USERS=alice,bob</code>, every <code>/api/…</code> request needs <code>?user=alice</code>; for the script, set <code>RLM_USER=alice</code>. Without <code>ALLOWED_USERS</code> the server is open.</p>
+
+<h3>One command: <code>generate_report_api.sh</code></h3>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>BASE=http://localhost:9000 tooling/generate_report_api.sh \
+    -i DTXSID50469320 -n "Perfluorohexanesulfonamide" -c 41997-13-1 -u mg/kg -k PFHxSAm \
+    -s docx,jats,pdf -o output/DTXSID50469320 \
+    /data/pfhxsam/*</pre></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>-i</code></td><td>Session id (required).</td></tr>
+    <tr><td><code>-n</code>, <code>-c</code></td><td>Test-article name and CASRN, sent to integrate.</td></tr>
+    <tr><td><code>-u</code></td><td>Dose unit. Defaults to <code>mg/kg</code> with a printed note.</td></tr>
+    <tr><td><code>-k</code></td><td>Short compound name for captions. Default: <code>-n</code>.</td></tr>
+    <tr><td><code>-b</code></td><td>Also generate the Background section.</td></tr>
+    <tr><td><code>-s</code></td><td>Deliverables from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
+    <tr><td><code>-o</code></td><td>Output directory. Default <code>output/&lt;id&gt;</code>.</td></tr>
+    <tr><td><code>FILE …</code></td><td>Files to upload. Leave out to use the files already in the session.</td></tr>
+  </tbody>
+</table></div>
+<p>It also saves <code>validation_report.json</code> and <code>process_payload.json</code> to the output directory. It needs <code>curl</code> and <code>jq</code>.</p>
+
+<h3>The calls, one by one</h3>
+<p>The examples assume <code>B=http://localhost:9000</code> and <code>ID=DTXSID50469320</code>, plus this helper, which only adds the JSON header:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post() { curl -sS -X POST -H 'Content-Type: application/json' --data "${2:-{\}}" "$B$1"; }</pre></div>
+
+<h4>1 · Upload</h4>
+<p>Multipart field <code>files</code>, repeated for several files. <code>.bm2</code> goes to <code>upload-bm2</code>, everything else to <code>upload-csv</code>. <code>?dtxsid=</code> saves the files into the session and fingerprints them.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sS -F files=@PFHxSAm_Gene_Expression.bm2 "$B/api/upload-bm2?dtxsid=$ID"
+curl -sS -F files=@body_weight_truth_male.csv -F files=@organ_weights_truth_male.csv \
+     "$B/api/upload-csv?dtxsid=$ID"
+curl -sS "$B/api/wizard/$ID/files" | jq      <span class="c"># what is in the pool now</span></pre></div>
+<p><code>POST /api/upload-zip</code> (field <code>file</code>) takes one archive instead. <code>DELETE /api/pool/{id}/files/{filename}</code> removes a file (moved to <code>_removed/</code>, recoverable).</p>
+
+<h4>2 · Validate</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/validate/$ID | jq '{file_count, is_complete,
+    errors: [.issues[] | select(.severity=="error")]}'</pre></div>
+<p>Any <code>error</code> issue sets the phase to <code>VALIDATION_ERRORS</code> and blocks integration; fix the files and validate again. To choose the winner of a platform conflict yourself, record it before integrating:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/resolve '{"dtxsid":"'$ID'","issue_index":3,"chosen_file_id":"&lt;file_id&gt;"}'</pre></div>
+
+<h4>3 · Confirm metadata</h4>
+<p><code>{}</code> accepts everything as detected, the same as clicking through the UI panel unchanged.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sS "$B/api/wizard/$ID/fingerprints" \
+  | jq -r '.fingerprints[] | [.file_id,.filename,.platform,.data_type] | @tsv'
+post /api/pool/confirm-metadata/$ID '{"metadata": {}}'
+
+<span class="c"># override one file:</span>
+post /api/pool/confirm-metadata/$ID \
+  '{"metadata": {"&lt;file_id&gt;": {"platform": "Organ Weight", "data_type": "tox_study"}}}'</pre></div>
+
+<h4>4 · Integrate</h4>
+<p>The identity is saved as <code>identity.json</code>. To fill one in from the DTXSID alone (best-effort, needs network): <code>post /api/resolve '{"identifier": "'$ID'"}'</code>.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/integrate/$ID '{"identity": {"name": "Perfluorohexanesulfonamide",
+  "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' | jq '{experiment_count, bmd_result_count}'</pre></div>
+
+<h4>5 · Approve the data</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/generate-animal-report/$ID | jq '{total_animals, core_count, biosampling_count}'</pre></div>
+
+<h4>6 · Process</h4>
+<p>The request blocks until processing finishes: minutes when cold, seconds when cached. curl has no default timeout; if a proxy sits in front of the server, check its idle timeout. The response includes base64 chart images, so send it to a file. Everything in it is also cached in the session.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/process-integrated/$ID '{"compound_name": "PFHxSAm", "dose_unit": "mg/kg",
+  "bmd_stats": ["median"], "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500,
+  "go_min_bmd": 3}' &gt; process_payload.json</pre></div>
+
+<h4>7 · Materialize result sections</h4>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/pool/materialize-sections/$ID | jq .materialized</pre></div>
+
+<h4>8 · Background <span class="chip opt">optional</span></h4>
+<p><code>POST /api/generate</code> streams Server-Sent Events (<code>progress</code>, then <code>complete</code> or <code>error</code>). Save the result with a second call:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>curl -sSN -X POST -H 'Content-Type: application/json' \
+  --data '{"identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' \
+  "$B/api/generate" \
+| awk '/^event: /{ev=$2} /^data: /{if (ev=="complete") {sub(/^data: /,""); print}}' &gt; bg.json
+
+post /api/session/save-section "$(jq -c --arg d $ID \
+  '{dtxsid: $d, section_type: "background",
+    data: {paragraphs, references, citation_report, abstract_background}}' bg.json)"</pre></div>
+
+<h4>8b · Summary <span class="chip opt">optional</span></h4>
+<p>
+  An LLM synthesis of what the session already holds: the Background, apical result narratives, an approved BMD summary
+  (<code>bmd_summary.json</code>) and any genomics section files. Run it after steps 7 and 8. With none of those present the route
+  returns <code>400 No approved sections found to summarize</code>, so check for <code>.error</code> before saving.
+</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/generate-summary '{"dtxsid": "'$ID'",
+  "identity": {"name": "Perfluorohexanesulfonamide"}}' &gt; summary.json
+post /api/session/save-section "$(jq -c --arg d $ID \
+  '{dtxsid: $d, section_type: "summary", data: {paragraphs, model_used}}' summary.json)"</pre></div>
+<p>There is no Python step function for the Summary. From Route A, start the server and make these two calls.</p>
+
+<h4>Front matter <span class="chip opt">optional</span></h4>
+<p>Authors, contributors and publication details fill the About This Report and Publication Details sections.</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>post /api/document/$ID/front-matter '{"front_matter": {
+  "authors": [{"name": "A. Author", "affiliation": "NIEHS", "role": "Study Scientist"}],
+  "contributors": [],
+  "publication": {"report_number": "NIEHS 14", "report_date": "2026-10"}}}'</pre></div>
+
+<h4>9 · Render and download</h4>
+<p>
+  <code>materialize</code> renders the requested surface, plus the HTML view, into <code>sessions/&lt;id&gt;/preview/default/</code>,
+  first moving the previous set into <code>history/</code>. So <b>download each surface right after materializing it</b>.
+</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>for s in docx jats; do
+  post /api/preview/$ID/materialize '{"surface": "'$s'"}' &gt;/dev/null
+  curl -sSf -OJ "$B/api/preview/$ID/download?surface=$s"     <span class="c"># saves &lt;ID&gt;_preview.docx, …</span>
+done
+curl -sS "$B/api/preview/$ID/view" &gt; preview.html             <span class="c"># the HTML view</span>
+curl -sSf -o report.pdf "$B/Bookshelf/$ID/report.pdf"          <span class="c"># docx converted to PDF on the server</span></pre></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Surface</th><th>Endpoint</th><th>Publish-gated</th></tr></thead>
+  <tbody>
+    <tr><td><code>docx</code></td><td><code>materialize</code> + <code>download?surface=docx</code></td><td class="yes">yes · 409</td></tr>
+    <tr><td><code>html</code></td><td><code>materialize</code> + <code>download?surface=html</code>, or <code>GET …/view</code></td><td>download yes · view no</td></tr>
+    <tr><td><code>jats</code></td><td><code>materialize</code> + <code>download?surface=jats</code> (BITS XML)</td><td class="yes">yes · 409</td></tr>
+    <tr><td><code>bookshelf</code></td><td><code>materialize</code> + <code>download?surface=bookshelf</code>, or <code>GET /Bookshelf/{id}</code></td><td>download yes · page no</td></tr>
+    <tr><td><code>pdf</code></td><td><code>GET /Bookshelf/{id}/report.pdf</code></td><td class="no">no · preview</td></tr>
+    <tr><td><code>latex</code></td><td>Not available per session over HTTP. Use Route A.</td><td>—</td></tr>
+  </tbody>
+</table></div>
+<p>To render a saved view, add <code>"view": "&lt;name&gt;"</code> to the materialize body and <code>&amp;view=&lt;name&gt;</code> to the download URL.</p>
+
+<h4>Status and inspection</h4>
+<div class="tablewrap"><table>
+  <thead><tr><th>Call</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/workflow/{id}/state</code></td><td>Derived phase, legal actions, artifact flags.</td></tr>
+    <tr><td><code>GET /api/workflow/{id}/sections</code></td><td>Every report section with its kind, readiness and approval state.</td></tr>
+    <tr><td><code>GET /api/workflow/{id}/publish-readiness</code></td><td><code>{can_publish, blocking: [...]}</code></td></tr>
+    <tr><td><code>GET /api/session/{id}</code></td><td>All saved section content.</td></tr>
+    <tr><td><code>GET /api/integrated-summary/{id}</code></td><td>Summary of the integrated dataset.</td></tr>
+    <tr><td><code>GET /api/session/{id}/citation-warnings</code></td><td>Unresolved citations in the Background and genomics narratives.</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="outputs"><span class="num">6</span>Outputs</h2>
+<p>What a finished session holds under <code>sessions/&lt;DTXSID&gt;/</code>:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Artifact</th><th>Written by</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>files/</code>, <code>_originals/</code>, <code>_fingerprints.json</code></td><td>Import, validate</td></tr>
+    <tr><td class="wrap"><code>validation_report.json</code>, <code>precedence.json</code></td><td>Validate, resolve</td></tr>
+    <tr><td class="wrap"><code>identity.json</code>, <code>integrated.json</code>, <code>integrated.bm2</code>, <code>genomics.sidecar.json</code></td><td>Integrate</td></tr>
+    <tr><td class="wrap"><code>animal_report.json</code></td><td>Approve data</td></tr>
+    <tr><td class="wrap"><code>_cache_{ntp,bmds,genomics,sections,methods,bmd_summary,charts,interpretation_*}_&lt;hash&gt;.json</code>, <code>references.json</code>, <code>session.duckdb</code>, <code>session_parquet/</code></td><td>Process</td></tr>
+    <tr><td class="wrap"><code>bm2_&lt;slug&gt;.json</code></td><td>Materialize sections</td></tr>
+    <tr><td class="wrap"><code>background.json</code>, <code>summary.json</code>, <code>bmd_summary.json</code>, <code>front_matter.json</code></td><td>Background, Summary, approving the BMD summary, front matter</td></tr>
+    <tr><td class="wrap"><code>preview/&lt;view&gt;/preview.{docx,html,xml}</code>, <code>manifest.json</code>, <code>history/</code></td><td>HTTP materialize</td></tr>
+  </tbody>
+</table></div>
+<p>Route A writes its deliverables only to <code>--out</code> and leaves <code>sessions/&lt;id&gt;/preview/</code> untouched.</p>
+
+<!-- ============================================================ -->
+<h2 id="approval"><span class="num">7</span>Approval and the publish gate</h2>
+<div class="callout">
+  <p><b>A first report needs no approvals.</b> The deliverable renders whatever the session holds. Generated sections render as
+  unapproved drafts; anything not yet produced shows as a visible <code>[… pending]</code> placeholder. <code>--strict</code> refuses
+  a LaTeX build that still has one.</p>
+</div>
+<p>
+  Approval matters once a session is <b>reprocessed</b>. When the data changes, the LLM-written sections are marked
+  <code>stale</code> and block publishing until a person accepts them again. A blocked report gets HTTP 409 from the download route,
+  and Route A refuses to render without <code>--draft</code>.
+</p>
+<p>Accept a section again in Python (the section key is the file stem):</p>
+<div class="code"><div class="bar"><span>python</span><button type="button">Copy</button></div><pre>from workflow.steps import accept_section_step
+accept_section_step(ID, "bm2_body-weight", store)</pre></div>
+<p>Or over HTTP. The approve route re-saves the section's current content with the approval stamp:</p>
+<div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre><span class="c"># a singleton section: background, methods, summary, bmd_summary</span>
+data=$(curl -sS "$B/api/session/$ID" | jq '.background')
+post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
+  '{dtxsid: $d, section_type: "background", data: $x}')"
+
+<span class="c"># an apical result: section_type "bm2" plus the slug (bm2_body-weight.json → body-weight)</span>
+data=$(curl -sS "$B/api/session/$ID" | jq '.bm2_sections["body-weight"]')
+post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
+  '{dtxsid: $d, section_type: "bm2", bm2_slug: "body-weight", data: $x}')"</pre></div>
+<p>Reopen a section with <code>release_section_step</code> or <code>POST /api/session/unapprove</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="rerun"><span class="num">8</span>Re-running, caching and resetting</h2>
+<ul>
+  <li><b>Re-running is cheap.</b> Each processing layer is cached by a hash of its inputs, and content preparation is skipped when nothing it depends on changed. A repeat process on an unchanged session takes seconds.</li>
+  <li><b>Re-integration wipes the process caches</b>, except BMDS, whose hash comes from the data itself; the next process recomputes. Route A skips integration when <code>integrated.json</code> exists unless you pass <code>--reintegrate</code>. Route B always integrates.</li>
+  <li><b>Adding or replacing a file</b> after validation invalidates the validation report, <code>integrated.json</code>, the animal report and the caches. Approved section text is kept but marked <code>stale</code>.</li>
+  <li><b>Reset the pool</b>, keeping identity and sections: <code>POST /api/pool/reset/{id}</code>. <b>Delete the whole session</b>: <code>POST /api/session/reset/{id}</code>. Both are destructive; check the session id first.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="trouble"><span class="num">9</span>Troubleshooting</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>UnsupportedClassVersionError</code> during integrate</td><td>JDK 17 is first on <code>PATH</code>. Put JDK 21 first. <code>run-server.sh</code> and <code>generate_report</code> do this when <code>/opt/liberica-jdk-21</code> exists; otherwise set <code>BMDX_JDK_HOME</code>.</td></tr>
+    <tr><td class="wrap">Integrate fails with a missing class or empty classpath</td><td><code>BMDX_PROJECT_ROOT</code> is unset or wrong. It needs a readable <code>*.jar</code> in <code>$BMDX_PROJECT_ROOT/target/</code>.</td></tr>
+    <tr><td class="wrap">LLM: <code>Could not resolve authentication method</code></td><td><code>ANTHROPIC_API_KEY</code> isn't exported to the Python process. Use <code>run-server.sh</code>, or export the key.</td></tr>
+    <tr><td class="wrap">LLM: <code>Connection error</code> or certificate verify failed</td><td><code>SSL_CERT_FILE</code> doesn't point at the NIH CA bundle, or <code>ANTHROPIC_BASE_URL</code> is exported as an empty string.</td></tr>
+    <tr><td class="wrap"><code>step failed (400): No integrated data found</code></td><td>Process ran before integrate.</td></tr>
+    <tr><td class="wrap"><code>validation found errors</code></td><td>Read the <code>[error]</code> lines (dose mismatch, sex mismatch, unassigned file). Fix the inputs, or correct the classification with <code>--metadata</code>.</td></tr>
+    <tr><td class="wrap">HTTP 409 on download</td><td>The publish gate (§7). Accept the listed sections again.</td></tr>
+    <tr><td class="wrap">HTTP 404 <code>No preview materialized yet</code></td><td>Materialize that surface first. Materializing another surface since then moved it into <code>history/</code>.</td></tr>
+    <tr><td class="wrap">Summary: <code>400 No approved sections found to summarize</code></td><td>The session has no Background, apical narrative, approved BMD summary or genomics section file to summarize. Add one first.</td></tr>
+    <tr><td class="wrap">Background fails or comes back empty</td><td>Some sources (ATSDR, PubChem, IRIS) can't be reached through the sandbox firewall. Run it on the host, or skip it.</td></tr>
+    <tr><td class="wrap">A request hangs, then fails with "no route"</td><td>That is the firewall, not a transient error. Don't retry in a loop.</td></tr>
+  </tbody>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="gaps"><span class="num">10</span>Known gaps</h2>
+<p>As of 2026-10-02:</p>
+<ul>
+  <li><b>Summary is HTTP-only.</b> Generating it needs <code>POST /api/generate-summary</code>; neither script does it, and there is no Python step function.</li>
+  <li><b>Materials &amp; Methods</b> in the deliverable comes from Process (<code>_cache_methods_*</code>). The browser's separate <i>Generate M&amp;M</i> button saves <code>methods.json</code>, which the renderer does not read. Headless runs get M&amp;M from Process automatically.</li>
+  <li><b>LaTeX over HTTP.</b> <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</li>
+  <li><b>Experiment metadata review</b> (<code>GET</code>/<code>POST /api/experiment-metadata/{id}</code>: species, sex and organ per experiment, written back into <code>integrated.json</code>) is not a step in either script. Call it after integrate if experiment descriptions need correcting.</li>
+</ul>
+
+<footer>
+  Source: <code>docs/headless-report-generation.md</code> in the rlm-bmdx repository. Scripts: <code>tooling/generate_report.py</code>,
+  <code>tooling/generate_report_api.sh</code>.
+</footer>
+</main>
+</div>
+
+<script>
+  // Copy buttons: copy the block's text; fall back to selecting it when the clipboard is refused.
+  document.querySelectorAll(".code button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = btn.closest(".code").querySelector("pre");
+      var text = pre.innerText;
+      var done = function (label) { btn.textContent = label; setTimeout(function () { btn.textContent = "Copy"; }, 1400); };
+      var select = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); done("Selected");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, select);
+      } else { select(); }
+    });
+  });
+
+  // Collapse the contents box on narrow screens so the manual itself comes first.
+  if (window.matchMedia("(max-width: 999px)").matches) {
+    var tocDetails = document.querySelector("nav.toc details");
+    if (tocDetails) tocDetails.open = false;
+  }
+
+  // Highlight the contents entry for the section in view.
+  (function () {
+    if (!("IntersectionObserver" in window)) return;
+    var links = {};
+    document.querySelectorAll("nav.toc a").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        Object.values(links).forEach(function (a) { a.classList.remove("active"); });
+        if (links[e.target.id]) links[e.target.id].classList.add("active");
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    document.querySelectorAll("main h2[id]").forEach(function (h) { io.observe(h); });
+  })();
+</script>
+</body>
+</html>

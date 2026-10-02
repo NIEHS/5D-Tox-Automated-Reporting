@@ -11,8 +11,8 @@
 # as a worked example of the API (docs/headless-report-generation.md explains each).
 #
 # Usage:
-#   tooling/generate_report_api.sh -i DTXSID7037717 -n "Bisphenol AF" -c 1478-61-1 \
-#       -u mg/kg [-k BPAF] [-b] [-o output/DTXSID7037717] [-s docx,jats,pdf] FILE...
+#   tooling/generate_report_api.sh -i DTXSID50469320 -n "Perfluorohexanesulfonamide" -c 41997-13-1 \
+#       -u mg/kg [-k PFHxSAm] [-b] [-o output/DTXSID50469320] [-s docx,jats,pdf] FILE...
 #
 #   -i  session id (DTXSID…)              -n  test-article name     -c  CASRN
 #   -u  dose unit (default mg/kg)          -k  short compound name for captions

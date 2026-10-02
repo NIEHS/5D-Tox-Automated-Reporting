@@ -18,12 +18,12 @@ run-server.sh does it, BEFORE any first-party import (bmdx_pipe.java_bridge
 reads BMDX_PROJECT_ROOT at import time). Shell-set values win.
 
 Usage (from the repo root):
-    python -m tooling.generate_report DTXSID7037717 \
-        --files /data/bpaf/*.bm2 /data/bpaf/*.txt \
-        --name "Bisphenol AF" --casrn 1478-61-1 --dose-unit mg/kg
+    python -m tooling.generate_report DTXSID50469320 \
+        --files /data/pfhxsam/*.bm2 /data/pfhxsam/*.txt \
+        --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 --dose-unit mg/kg
 
     # re-render an already-processed session, no pipeline work
-    python -m tooling.generate_report DTXSID7037717 --render-only --surfaces docx,pdf
+    python -m tooling.generate_report DTXSID50469320 --render-only --surfaces docx,pdf
 
 See docs/headless-report-generation.md for the full manual.
 """

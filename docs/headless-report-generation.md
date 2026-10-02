@@ -46,6 +46,7 @@ continued the other way, or opened in the browser.
 | 6 | **Process** | Runs NTP statistics, BMDS modelling, genomics, charts, LLM narratives and Materials & Methods. Takes minutes on a first run | `process_step` (async) | `POST /api/process-integrated/{id}` |
 | 7 | **Materialize sections** | Writes the apical result sections as `bm2_*.json` drafts | `materialize_result_sections` | `POST /api/pool/materialize-sections/{id}` |
 | 8 | Background *(optional)* | LLM Background section, built from ATSDR, IRIS and PubChem lookups | see 4.2 | `POST /api/generate` (SSE) + `POST /api/session/save-section` |
+| 8b | Summary *(optional)* | LLM synthesis of the Background and apical results | — (HTTP only) | `POST /api/generate-summary` + `POST /api/session/save-section` |
 | 9 | **Render** | Builds the docx, HTML, BITS/JATS XML, Bookshelf HTML, LaTeX bundle and PDF | `rendering.preview_surface.render_preview` | `POST /api/preview/{id}/materialize` + `GET …/download` |
 
 You never set the workflow phase yourself. It is worked out from which files
@@ -58,7 +59,7 @@ curl -s localhost:9000/api/workflow/$ID/state | jq '{phase, legal_actions}'
 
 ```python
 from workflow.engine import WorkflowEngine
-WorkflowEngine("DTXSID7037717").state().to_dict()
+WorkflowEngine("DTXSID50469320").state().to_dict()
 ```
 
 ---
@@ -73,7 +74,7 @@ Both routes need the same environment, because both run the same pipeline
 | Repo + venv | All the code | `uv sync`. Run everything **from the repo root**: the knowledge base `bmdx.duckdb` and the templates are found relative to the current directory |
 | **JDK 21** first on `PATH` | Integration and statistics call compiled Java helpers (class version 65). On JDK 17 they fail with `UnsupportedClassVersionError` | `/opt/liberica-jdk-21/bin` in the sandbox |
 | `BMDX_PROJECT_ROOT` | Tells the Java bridge where to find the BMDExpress-3 jars (`$BMDX_PROJECT_ROOT/target/*.jar`) | `/workspace/BMDExpress-3` in the sandbox |
-| `ANTHROPIC_API_KEY` (+ `ANTHROPIC_BASE_URL`) | LLM narratives, Methods, Background | Toxpipe LiteLLM gateway |
+| `ANTHROPIC_API_KEY` (+ `ANTHROPIC_BASE_URL`) | LLM narratives, Methods, Background, Summary | Toxpipe LiteLLM gateway |
 | `SSL_CERT_FILE` | The toxpipe gateway uses the NIH CA chain. The Python SDK reads `SSL_CERT_FILE`, not `NODE_EXTRA_CA_CERTS` | `/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt` |
 | `tect` *(optional)* | Builds the local LaTeX PDF (`pdf` surface in Route A) | Baked into the sandbox. Never use plain `tectonic` |
 | LibreOffice `docx2pdf` *(optional)* | PDF over HTTP (`GET /Bookshelf/{id}/report.pdf`) | Baked into the sandbox |
@@ -100,8 +101,8 @@ These are the same files you would drop on the Upload step:
 
 | File | Example | Notes |
 |------|---------|-------|
-| BMDExpress project | `BPAF_gene_expression_0826.bm2` | Genomic and/or apical BMD results |
-| BMDExpress text exports | `BPAF_Liver_BMDExpress_Individual_Gene_BMD_Results.txt`, `…_GO_Biological_Process_BMD_Results.txt`, `…_Expression_Data.txt` | Gene-expression tier |
+| BMDExpress project | `PFHxSAm_Gene_Expression.bm2` | Genomic and/or apical BMD results |
+| BMDExpress text exports | `Liver_PFHxSAm_Male_GENE_BMD_Results.txt`, `…_GO_Biological_Process_BMD_Results.txt`, `…_Expression_Data.txt` | Gene-expression tier |
 | NTP long-format ("truth") tables | `body_weight_truth_male.csv`, `organ_weights_truth_male.csv`, `clin_chem_truth_female.csv` | One row per animal. Converted on import to a wide BMDExpress pivot `.txt` plus a per-animal `.sidecar.json`. The original moves to `_originals/` |
 | Wide pivots + sidecars | `body_weight_truth_female.txt` + `body_weight_truth_female.sidecar.json` | Already-converted form. Import both |
 | NTP study workbooks | `*.xlsx` | Raw study-team data, used to cross-check derived values |
@@ -128,10 +129,10 @@ python -m tooling.cebs_to_pool --package assets/cebs/NIEHS-13 \
 
 ```bash
 cd /workspace/rlm-bmdx
-python -m tooling.generate_report DTXSID7037717 \
-    --files /data/bpaf/*.bm2 /data/bpaf/*.txt /data/bpaf/*.csv \
-    --name "Bisphenol AF" --casrn 1478-61-1 \
-    --compound-name BPAF --dose-unit mg/kg \
+python -m tooling.generate_report DTXSID50469320 \
+    --files /data/pfhxsam/*.bm2 /data/pfhxsam/*.txt /data/pfhxsam/*.csv \
+    --name "Perfluorohexanesulfonamide" --casrn 41997-13-1 \
+    --compound-name PFHxSAm --dose-unit mg/kg \
     --surfaces docx,html,jats,latex,pdf
 ```
 
@@ -141,12 +142,12 @@ and how long it took. The deliverables are written to `output/<DTXSID>/`
 (change this with `--out`):
 
 ```
-output/DTXSID7037717/
-  DTXSID7037717.docx            Word deliverable
-  DTXSID7037717.html            HTML preview
-  DTXSID7037717.xml             BITS <book> XML (Bookshelf submission)
-  DTXSID7037717-overleaf.zip    Overleaf bundle (report.tex + niehs.cls + figures/)
-  DTXSID7037717.pdf             that bundle compiled locally with tect
+output/DTXSID50469320/
+  DTXSID50469320.docx            Word deliverable
+  DTXSID50469320.html            HTML preview
+  DTXSID50469320.xml             BITS <book> XML (Bookshelf submission)
+  DTXSID50469320-overleaf.zip    Overleaf bundle (report.tex + niehs.cls + figures/)
+  DTXSID50469320.pdf             that bundle compiled locally with tect
 ```
 
 A first ("cold") run takes several minutes; BMDS dose-response modelling
@@ -182,13 +183,13 @@ closed.
 
 ```bash
 # Check the inputs only (validation report and detected classification)
-python -m tooling.generate_report DTXSID7037717 --files in/* --stop-after validate
+python -m tooling.generate_report DTXSID50469320 --files in/* --stop-after validate
 
 # Session already processed (e.g. in the browser): just produce the deliverables
-python -m tooling.generate_report DTXSID7037717 --render-only --surfaces docx,pdf,jats
+python -m tooling.generate_report DTXSID50469320 --render-only --surfaces docx,pdf,jats
 
 # Correct a misclassified file, then rebuild everything from scratch
-python -m tooling.generate_report DTXSID7037717 --metadata fixes.json --reintegrate
+python -m tooling.generate_report DTXSID50469320 --metadata fixes.json --reintegrate
 ```
 
 ### 4.2 Step by step: calling the workflow core yourself
@@ -211,14 +212,14 @@ from workflow.steps import (
 )
 from rendering.preview_surface import render_preview
 
-ID = "DTXSID7037717"
+ID = "DTXSID50469320"
 store = DiskPoolStore()
 
 # 1. Import: copy inputs into files/. Validation's disk scan fingerprints them
 #    (and converts long-format CSVs), so no upload call is needed.
 files = store.session_dir(ID) / "files"
 files.mkdir(parents=True, exist_ok=True)
-for p in Path("/data/bpaf").iterdir():
+for p in Path("/data/pfhxsam").iterdir():
     shutil.copy2(p, files / p.name)
 
 # 2. Validate: stop on error-severity issues
@@ -230,14 +231,14 @@ assert not [i for i in report["issues"] if i.get("severity") == "error"]
 confirm_metadata_step(ID, {}, store)
 
 # 4. Integrate (Java)
-integrate_step(ID, {"name": "Bisphenol AF", "casrn": "1478-61-1", "dtxsid": ID}, store)
+integrate_step(ID, {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "dtxsid": ID}, store)
 
 # 5. Approve data: build the animal report
 generate_animal_report_step(ID, store)
 
 # 6. Process (async; minutes when cold)
 payload = asyncio.run(process_step(ID, {
-    "compound_name": "BPAF", "dose_unit": "mg/kg", "bmd_stats": ["median"],
+    "compound_name": "PFHxSAm", "dose_unit": "mg/kg", "bmd_stats": ["median"],
     "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500, "go_min_bmd": 3,
 }, store))
 
@@ -296,9 +297,9 @@ request needs `?user=alice`. For the script, set `RLM_USER=alice`. Without
 
 ```bash
 BASE=http://localhost:9000 tooling/generate_report_api.sh \
-    -i DTXSID7037717 -n "Bisphenol AF" -c 1478-61-1 -u mg/kg -k BPAF \
-    -s docx,jats,pdf -o output/DTXSID7037717 \
-    /data/bpaf/*
+    -i DTXSID50469320 -n "Perfluorohexanesulfonamide" -c 41997-13-1 -u mg/kg -k PFHxSAm \
+    -s docx,jats,pdf -o output/DTXSID50469320 \
+    /data/pfhxsam/*
 ```
 
 | Flag | Meaning |
@@ -317,7 +318,7 @@ the output directory for inspection. It needs `curl` and `jq`.
 
 ### 5.3 The calls, one by one
 
-All examples assume `B=http://localhost:9000` and `ID=DTXSID7037717`. The
+All examples assume `B=http://localhost:9000` and `ID=DTXSID50469320`. The
 `post` helper below just adds the JSON header:
 
 ```bash
@@ -329,7 +330,7 @@ post() { curl -sS -X POST -H 'Content-Type: application/json' --data "${2:-{\}}"
 `?dtxsid=` saves the files into the session and fingerprints them.
 
 ```bash
-curl -sS -F files=@BPAF_gene_expression_0826.bm2 "$B/api/upload-bm2?dtxsid=$ID"
+curl -sS -F files=@PFHxSAm_Gene_Expression.bm2 "$B/api/upload-bm2?dtxsid=$ID"
 curl -sS -F files=@body_weight_truth_male.csv -F files=@organ_weights_truth_male.csv \
      "$B/api/upload-csv?dtxsid=$ID"
 curl -sS "$B/api/wizard/$ID/files" | jq      # what is in the pool now
@@ -372,7 +373,7 @@ post /api/pool/confirm-metadata/$ID '{"metadata": {"<file_id>": {"platform": "Or
 `identity.json`.
 
 ```bash
-post /api/pool/integrate/$ID '{"identity": {"name": "Bisphenol AF", "casrn": "1478-61-1", "dtxsid": "'$ID'"}}' \
+post /api/pool/integrate/$ID '{"identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' \
   | jq '{experiment_count, bmd_result_count}'
 ```
 
@@ -390,7 +391,7 @@ post /api/generate-animal-report/$ID | jq '{total_animals, core_count, biosampli
 proxy sits in front of the server, check its idle timeout.
 
 ```bash
-post /api/process-integrated/$ID '{"compound_name": "BPAF", "dose_unit": "mg/kg",
+post /api/process-integrated/$ID '{"compound_name": "PFHxSAm", "dose_unit": "mg/kg",
   "bmd_stats": ["median"], "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500,
   "go_min_bmd": 3}' > process_payload.json
 ```
@@ -411,7 +412,7 @@ explicitly:
 
 ```bash
 curl -sSN -X POST -H 'Content-Type: application/json' \
-  --data '{"identity": {"name": "Bisphenol AF", "casrn": "1478-61-1", "dtxsid": "'$ID'"}}' \
+  --data '{"identity": {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1", "dtxsid": "'$ID'"}}' \
   "$B/api/generate" \
 | awk '/^event: /{ev=$2} /^data: /{if (ev=="complete") {sub(/^data: /,""); print}}' > bg.json
 
@@ -419,6 +420,22 @@ post /api/session/save-section "$(jq -c --arg d $ID \
   '{dtxsid: $d, section_type: "background",
     data: {paragraphs, references, citation_report, abstract_background}}' bg.json)"
 ```
+
+**Summary (optional).** The Summary is an LLM synthesis of what the session
+already holds: the Background, the apical result narratives, an approved BMD
+summary (`bmd_summary.json`) and any genomics section files. Run it after
+steps 7–8. If none of those has content, the route returns
+`400 No approved sections found to summarize`, so check for `.error` before
+saving. Like the Background, it is returned by one call and saved by a second:
+
+```bash
+post /api/generate-summary '{"dtxsid": "'$ID'", "identity": {"name": "Perfluorohexanesulfonamide"}}' > summary.json
+post /api/session/save-section "$(jq -c --arg d $ID \
+  '{dtxsid: $d, section_type: "summary", data: {paragraphs, model_used}}' summary.json)"
+```
+
+There is no Python step function for the Summary; its logic lives in the
+route. From Route A, start the server and make these two calls.
 
 **Front matter (optional).** Authors, contributors and publication details
 feed the About This Report and Publication Details sections:
@@ -481,7 +498,7 @@ What a finished session contains under `sessions/<DTXSID>/`:
 | `animal_report.json` | Approve data |
 | `_cache_{ntp,bmds,genomics,sections,methods,bmd_summary,charts,interpretation_*}_<hash>.json`, `references.json`, `session.duckdb`, `session_parquet/` | Process |
 | `bm2_<slug>.json` | Materialize sections |
-| `background.json`, `front_matter.json` | Background / front matter |
+| `background.json`, `summary.json`, `bmd_summary.json`, `front_matter.json` | Background, Summary, approving the BMD summary, front matter |
 | `preview/<view>/preview.{docx,html,xml}`, `manifest.json`, `history/` | HTTP materialize |
 
 Route A writes deliverables only to `--out`. It does not touch
@@ -516,8 +533,14 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   '{dtxsid: $d, section_type: "background", data: $x}')"
 ```
 
-Apical result sections (`bm2_*`) can't be approved over HTTP at the moment; see
-§10. Use `accept_section_step` for them.
+Apical result sections take `section_type: "bm2"` plus the slug from the file
+name (`bm2_body-weight.json` → `body-weight`):
+
+```bash
+data=$(curl -sS "$B/api/session/$ID" | jq '.bm2_sections["body-weight"]')
+post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
+  '{dtxsid: $d, section_type: "bm2", bm2_slug: "body-weight", data: $x}')"
+```
 
 Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
@@ -553,6 +576,7 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 | `validation found errors` | Read the `[error]` lines: dose mismatch, sex mismatch or unassigned file. Fix the inputs, or override the classification with `--metadata` |
 | HTTP 409 on download | Publish gate (§7): accept the listed sections again |
 | HTTP 404 `No preview materialized yet` | Call `POST …/materialize` for that surface first. Materializing another surface since then moved it into `history/` |
+| Summary: `400 No approved sections found to summarize` | The session has no Background, apical narrative, approved BMD summary or genomics section file to summarize. Add one first |
 | Background fails or comes back empty | Some external sources (ATSDR, PubChem, IRIS) can't be reached from the sandbox firewall. Run it on the host, or skip `--background` |
 | A curl request hangs and then fails with "no route" | That's the firewall, not a transient error. Don't retry in a loop |
 
@@ -562,11 +586,8 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
 These hold as of 2026-10-02:
 
-- **Summary section.** `POST /api/generate-summary` plus `save-section` writes
-  `summary.json`. But the session-based renderer (`load_session_data`) reads
-  the Summary only from `_cache_summary_generated.json`, which nothing writes.
-  So a saved Summary does not appear in the docx, HTML, JATS or LaTeX output.
-  Neither script generates it.
+- **Summary is HTTP-only.** Generating it needs `POST /api/generate-summary`
+  (§5.3); neither script does it, and there is no Python step function.
 - **Materials & Methods** in the deliverable comes from Process
   (`_cache_methods_*`). The browser's separate *Generate M&M* button saves
   `methods.json`, which the renderer does not read. Headless runs get M&M from
@@ -575,13 +596,6 @@ These hold as of 2026-10-02:
   `POST /api/compile-pdf` take a full report body assembled by the legacy UI,
   not a session id. There is no "LaTeX for session X" endpoint, and the
   preview's `latex` surface returns 501. Use Route A for LaTeX.
-- **Approving apical result sections over HTTP.** `POST /api/session/approve`
-  with `section_type: "bm2"` works out the section key from `data.filename`.
-  Sections written by *materialize* (`bm2_<slug>.json`) have no `filename`, so
-  the route returns `400 bm2 data must include a filename`. It ignores the
-  `bm2_slug` field the browser sends, so the browser's Approve button on
-  apical results hits the same error. Use `workflow.steps.accept_section_step`
-  (Route A) instead.
 - **Experiment metadata review** (`GET`/`POST /api/experiment-metadata/{id}`:
   species, sex and organ per experiment, written back into `integrated.json`)
   is not a step in either script. Call it after integrate if you need to
