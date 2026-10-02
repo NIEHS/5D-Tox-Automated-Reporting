@@ -55,3 +55,26 @@ def test_generic_chip_project_is_not_gene_expression(tmp_path):
 ])
 def test_is_transcriptomic_chip(chip, expected):
     assert _is_transcriptomic_chip(chip) is expected
+
+
+def test_uncached_unnamed_bm2_is_exported_once_for_content(tmp_path, monkeypatch):
+    """A .bm2 whose filename says nothing (e.g. "BPAF_0826.bm2") and that is not
+    in the cache is deserialized on demand, not rejected as unassigned."""
+    import bmdx_pipe.file_integrator as fi
+    calls = []
+    monkeypatch.setattr(fi, "_export_and_cache_bm2_json",
+                        lambda path: calls.append(path) or _project("BPAF_S1_AA_liver_No0", BIOSPYDER))
+    monkeypatch.setattr("bmdx_pipe.bm2_cache.get_json", lambda path: None)
+    fp = fingerprint_bm2("id", "BPAF_0826.bm2", str(tmp_path / "BPAF_0826.bm2"), "2026-10-02")
+    assert calls == [str(tmp_path / "BPAF_0826.bm2")]
+    assert fp.data_type == "gene_expression"
+
+
+def test_named_bm2_is_not_exported(tmp_path, monkeypatch):
+    """When the filename already classifies the file, no Java export runs."""
+    import bmdx_pipe.file_integrator as fi
+    monkeypatch.setattr(fi, "_export_and_cache_bm2_json",
+                        lambda path: pytest.fail("exported a filename-classified .bm2"))
+    monkeypatch.setattr("bmdx_pipe.bm2_cache.get_json", lambda path: None)
+    fp = fingerprint_bm2("id", "BPAF_gene_expression_0826.bm2", str(tmp_path / "x.bm2"), "2026-10-02")
+    assert fp.data_type == "gene_expression"

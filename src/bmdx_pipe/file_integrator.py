@@ -1338,6 +1338,34 @@ def _is_transcriptomic_chip(chip_info: dict | None) -> bool:
     return bool(provider) and provider != "generic" and name != "generic"
 
 
+def _export_and_cache_bm2_json(path: str) -> dict | None:
+    """Deserialize a .bm2 via the Java ExportBm2 helper and store it in the LMDB
+    cache.  Returns None (and logs) if Java is unavailable or the export fails —
+    the caller then falls back to a partial fingerprint."""
+    import tempfile
+
+    import orjson
+
+    from . import bm2_cache
+    from .apical_report import export_bm2
+
+    tmp_json = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_json = tmp.name
+        export_bm2(path, tmp_json, "NONE")
+        with open(tmp_json, "rb") as f:
+            bm2_json = orjson.loads(f.read())
+        bm2_cache.put_json(path, bm2_json)
+        return bm2_json
+    except Exception as e:
+        logger.warning("Could not export %s for content classification: %s", path, e)
+        return None
+    finally:
+        if tmp_json and os.path.exists(tmp_json):
+            os.unlink(tmp_json)
+
+
 def fingerprint_bm2(
     file_id: str,
     filename: str,
@@ -1411,6 +1439,13 @@ def fingerprint_bm2(
             bm2_json = bm2_cache.get_json(path)
         except Exception:
             pass
+
+    if bm2_json is None and not (fp.platform or fp.data_type):
+        # The filename says nothing about the file's purpose, and only its
+        # content can (ADR-0017).  Pay for the one Java export here rather than
+        # rejecting the file as unassigned; the result is cached, so later
+        # preview/process reads are free.
+        bm2_json = _export_and_cache_bm2_json(path)
 
     if bm2_json is None:
         # No JSON available — return partial fingerprint.  The domain was
