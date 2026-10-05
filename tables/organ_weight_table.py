@@ -42,7 +42,7 @@ from __future__ import annotations
 
 
 from tables.table_builder_common import (
-    sex_subject,
+    apical_caption,
     BMD_DEFINITION,
     significance_explanation,
     SIGNIFICANCE_MARKER_LEGEND,
@@ -72,12 +72,12 @@ from tables.table_builder_common import (
 # and a single sex (the reference's Table 3), _organ_weight_caption swaps in the
 # specific "Summary of {Organ} Weights of {Sex} Rats …" form instead.
 CAPTION_TEMPLATE = (
-    "Summary of Select Organ Weight Data for {subject} "
-    "Administered {compound} for Five Days"
+    "Summary of Select Organ Weight Data for {subject} {treatment}"
 )
 
 
-def _organ_weight_caption(serialized: dict, compound_name: str) -> str:
+def _organ_weight_caption(serialized: dict, compound_name: str,
+                          design: dict | None = None) -> str:
     """Build the organ-weight table caption from what is actually rendered.
 
     Mirrors the reference NIEHS-10: when the table shows exactly ONE organ for
@@ -100,12 +100,9 @@ def _organ_weight_caption(serialized: dict, compound_name: str) -> str:
                 organs.append(token)
 
     if len(organs) == 1 and len(sexes) == 1:
-        return (
-            f"Summary of {organs[0]} Weights of {sexes[0]} Rats "
-            f"Administered {compound_name} for Five Days"
-        )
-    return (CAPTION_TEMPLATE.replace("{compound}", compound_name)
-            .replace("{subject}", sex_subject(serialized)))
+        return apical_caption(f"Summary of {organs[0]} Weights of {{subject}} {{treatment}}",
+                              serialized, compound_name, design)
+    return apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design)
 
 FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean."
@@ -203,6 +200,7 @@ def build_organ_weight_table_from_sidecar(
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
 ) -> dict:
@@ -227,6 +225,8 @@ def build_organ_weight_table_from_sidecar(
                         responsive, trend_marker.
         compound_name:  Full chemical name for the caption.
         dose_unit:      Dose unit string (default "mg/kg").
+        design:         Study design facts (pipeline.study_design) for the caption's
+                        species, verb and duration; None ⇒ the standard design.
 
     Returns:
         Dict matching the Typst apical_sections schema, or empty dict if
@@ -660,7 +660,7 @@ def build_organ_weight_table_from_sidecar(
 
     return {
         "title": "Organ Weight",
-        "caption": _organ_weight_caption(serialized, compound_name),
+        "caption": _organ_weight_caption(serialized, compound_name, design),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",

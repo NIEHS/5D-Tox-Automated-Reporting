@@ -242,7 +242,6 @@ def extract_methods_context(
     ctx.casrn = identity.get("casrn", "")
     ctx.dtxsid = identity.get("dtxsid", "")
 
-    ctx.duration_days = study_params.get("duration_days", 5)
     # Group sizes: an explicit override only; otherwise derived from the animal
     # data below (never a protocol constant — studies differ, e.g. 4 vs 5).
     ctx.n_per_group = study_params.get("n_per_group")
@@ -326,6 +325,10 @@ def extract_methods_context(
     ctx.route = study_params.get("route") or design["route"]
     ctx.species = study_params.get("species") or design["species"] or ctx.species
     ctx.strain = study_params.get("strain") or strain_display(design) or None
+    # Duration: stated > recorded studyDuration > the standard five days
+    # (logged as a fallback like the other design facts).
+    ctx.duration_days = (study_params.get("duration_days") or design["duration_days"]
+                         or ctx.duration_days)
     ctx.design_fallback = [k for k in design["fallback"] if not study_params.get(k)]
 
     # --- Animal report: domain coverage and biosampling count ---

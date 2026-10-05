@@ -62,7 +62,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from tables.table_builder_common import (
-    sex_subject,
+    apical_caption,
     js_dose_key as _js_dose_key,
     mean_se as _mean_se,
     format_mean_se as _format_mean_se,
@@ -83,8 +83,7 @@ from tables.table_builder_common import (
 # The table caption template.  {compound} is replaced with the full
 # chemical name (table_caption name form, never abbreviated).
 CAPTION_TEMPLATE = (
-    "Summary of Body Weights of {subject} "
-    "Administered {compound} for Five Days"
+    "Summary of Body Weights of {subject} {treatment}"
 )
 
 # Fixed footnotes that always appear on body weight tables.
@@ -164,6 +163,7 @@ def build_body_weight_table_from_sidecar(
     bmd_results: dict[str, dict[str, str]] | None = None,
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
@@ -188,6 +188,8 @@ def build_body_weight_table_from_sidecar(
                        (terminal, since BMD wasn't computed from sidecar data).
         compound_name: Full chemical name for the table caption.
         dose_unit:     Dose unit string (default "mg/kg").
+        design:        Study design facts (pipeline.study_design) for the caption's
+                       species, verb and duration; None ⇒ the standard design.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema,
@@ -682,8 +684,7 @@ def build_body_weight_table_from_sidecar(
 
     return {
         "title": "Animal Condition, Body Weights, and Organ Weights",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name)
-            .replace("{subject}", sex_subject(serialized)),
+        "caption": apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Study Day",

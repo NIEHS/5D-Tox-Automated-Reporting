@@ -760,6 +760,10 @@ async def _get_sections(ctx):
     ow_allow = (ctx.organ_filters or {}).get("organ-weight")
     ow_sex_allow = (ctx.sex_filters or {}).get("organ-weight")
     apical_sex_allow = (ctx.sex_filters or {}).get("apical")
+    # Species, verb and duration for the table captions (the render path
+    # recomposes them from the current design, so a cached caption is not stale).
+    from pipeline.study_design import study_design_facts
+    _design = study_design_facts(integrated, dose_unit)
 
     sections_cached = _load_cache(dtxsid, "sections", sections_hash)
     if sections_cached:
@@ -778,7 +782,7 @@ async def _get_sections(ctx):
             None,
             lambda: _build_section_cards(
                 platform_tables, compound_name, dose_unit,
-                dtxsid=dtxsid, imputed_cells=imputed_cells,
+                dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
             ),
         )
         # Clinical obs tables bypass Java integration (categorical data).
@@ -804,6 +808,7 @@ async def _get_sections(ctx):
                     sidecar_paths=tc_sidecar_paths,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
+                    design=_design,
                 )
                 if tc_result and tc_result.get("table_data"):
                     # A paragraph LIST, matching every other card's narrative shape
@@ -845,6 +850,7 @@ async def _get_sections(ctx):
         organ_allowlist=ow_allow,
         ow_sex_allow=ow_sex_allow,
         compound_name=compound_name,
+        design=_design,
     )
 
     # The per-card `narrative` is generated (generic path) from the responsive

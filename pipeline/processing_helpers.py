@@ -350,6 +350,7 @@ def apply_section_filters(
     organ_allowlist: list[str] | None = None,
     ow_sex_allow: list[str] | None = None,
     compound_name: str = "",
+    design: dict | None = None,
 ) -> list[dict]:
     """
     Apply the report-level apical filters to ALREADY-SERIALIZED section cards.
@@ -446,7 +447,7 @@ def apply_section_filters(
         # The Organ Weight caption is derived from what renders — rebuild it from
         # the filtered rows so it agrees with the pruned table.
         if is_ow and (organ_allowlist or ow_sex_allow or sex_allow):
-            card["caption"] = _organ_weight_caption(new_tables, compound_name)
+            card["caption"] = _organ_weight_caption(new_tables, compound_name, design)
         out.append(card)
     return out
 
@@ -512,6 +513,7 @@ def _build_section_cards(
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
     ow_sex_allow: list[str] | None = None,
+    design: dict | None = None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
@@ -557,6 +559,9 @@ def _build_section_cards(
                          leaving every other apical table's sexes intact.
                          Distinct from `sex_allow` (the "apical" area, which
                          prunes ALL cards).  Empty/None ⇒ both sexes.
+        design:          Study design facts (pipeline.study_design) for the
+                         table captions' species, verb and duration; None ⇒ the
+                         standard design.
 
     Returns:
         List of section dicts, each with platform, title, tables_json, narrative.
@@ -632,6 +637,7 @@ def _build_section_cards(
                     bmd_results=bmd_results,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
+                    design=design,
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -695,6 +701,7 @@ def _build_section_cards(
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     imputed_cells=platform_imputed,
+                    design=design,
                 )
 
                 if cp_result.get("table_data"):
@@ -740,6 +747,7 @@ def _build_section_cards(
                     dose_unit=dose_unit,
                     organ_allowlist=organ_allowlist,
                     sex_allow=ow_sex_allow,
+                    design=design,
                 )
 
                 if ow_result and ow_result.get("table_data"):

@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 14  # bumped: significance footnote names the chamber control in a ppm study
+_SECTIONS_CACHE_SCHEMA_VERSION = 15  # bumped: captions state the study's species, verb ("Exposed to") and duration
 
 
 def _fingerprint_files(paths) -> list[list]:

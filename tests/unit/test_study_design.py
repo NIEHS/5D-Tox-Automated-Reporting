@@ -29,10 +29,10 @@ def test_facts_from_recorded_metadata():
 
 
 def test_unrecorded_facts_take_the_standard_design():
-    """Sprague Dawley rats, gavage in corn oil — listed as fallback, not recorded."""
+    """Sprague Dawley rats, gavage in corn oil, five days — listed as fallback, not recorded."""
     f = study_design_facts(_integrated(species="rat"), "mg/kg")
     assert (f["strain"], f["route"], f["vehicle"]) == ("Sprague-Dawley", "gavage", "corn oil")
-    assert sorted(f["fallback"]) == ["route", "strain", "vehicle"]
+    assert sorted(f["fallback"]) == ["duration_days", "route", "strain", "vehicle"]
     assert subject_phrase(f) == "Sprague Dawley rats"
 
 
@@ -133,3 +133,27 @@ def test_assembly_keeps_skeleton_order_and_ignores_llm_for_data_keys():
     assert [s.key for s in sections] == ["study_design", "chemistry", "clinical_obs"]
     assert "Quarantined" not in sections[0].paragraphs[0]
     assert sections[2].paragraphs == ["Observed daily.", "Twice."]
+
+
+def test_duration_recorded_else_standard_five_days():
+    from pipeline.study_design import caption_treatment, duration_phrase
+
+    recorded = study_design_facts(_integrated(studyDuration="28d"), "mg/kg")
+    assert recorded["duration_days"] == 28 and "duration_days" not in recorded["fallback"]
+    assert caption_treatment(recorded, "X") == "Administered X for 28 Days"
+    fallback = study_design_facts(_integrated(), "mg/kg")
+    assert fallback["duration_days"] == 5 and "duration_days" in fallback["fallback"]
+    # An hour-scale study is not given five days.
+    hours = study_design_facts(_integrated(studyDuration="6h"), "mg/kg")
+    assert hours["duration_days"] is None and "duration_days" not in hours["fallback"]
+    assert duration_phrase(1) == "One Day" and duration_phrase(None) == ""
+
+
+def test_apical_caption_for_an_inhalation_study():
+    from tables.table_builder_common import apical_caption
+
+    design = study_design_facts(_integrated(species="rat"), "ppm")
+    cap = apical_caption("Summary of Body Weights of {subject} {treatment}",
+                         {"Female": [{"label": "x"}]}, "1,4-Dichlorobenzene", design)
+    assert cap == ("Summary of Body Weights of Female Rats "
+                   "Exposed to 1,4-Dichlorobenzene for Five Days")

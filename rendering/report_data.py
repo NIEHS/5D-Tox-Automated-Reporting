@@ -246,6 +246,12 @@ def apply_study_design(data: dict, integrated: dict | None,
 
     design = study_design_facts(integrated, dose_unit)
     data["study_design"] = design
+    # Apical table captions already built (the LaTeX path builds them before
+    # this runs) state the study's species, verb and duration.
+    from tables.table_builder_common import refresh_caption_compound
+    for sec in data.get("apical_sections") or []:
+        if isinstance(sec, dict) and sec.get("caption"):
+            sec["caption"] = refresh_caption_compound(sec["caption"], "", design)
     ta = data.get("test_article")
     if isinstance(ta, dict) and ta.get("forms"):
         old_title = data.get("title") or ""

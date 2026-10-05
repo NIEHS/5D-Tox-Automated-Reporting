@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 
 from tables.table_builder_common import (
-    sex_subject,
+    apical_caption,
     js_dose_key,
     mean_se,
     format_mean_se,
@@ -48,8 +48,7 @@ from tables.table_builder_common import (
 # ---------------------------------------------------------------------------
 
 CAPTION_TEMPLATE = (
-    "Summary of Plasma Concentration Data for {subject} "
-    "Administered {compound} for Five Days"
+    "Summary of Plasma Concentration Data for {subject} {treatment}"
 )
 
 
@@ -140,6 +139,7 @@ def build_tissue_concentration_table_from_sidecar(
     sidecar_paths: dict[str, str],
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
 ) -> dict:
     """
     Build NIEHS Table 7 (Tissue Concentration) from sidecar data.
@@ -156,6 +156,8 @@ def build_tissue_concentration_table_from_sidecar(
         sidecar_paths:  {"Male": "/path/to/male.sidecar.json", ...}.
         compound_name:  Full chemical name for the caption.
         dose_unit:      Dose unit string (default "mg/kg").
+        design:         Study design facts (pipeline.study_design) for the caption's
+                        species, verb and duration; None ⇒ the standard design.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema, plus
@@ -309,8 +311,7 @@ def build_tissue_concentration_table_from_sidecar(
 
     return {
         "title": "Tissue Concentration",
-        "caption": CAPTION_TEMPLATE.replace("{compound}", compound_name)
-            .replace("{subject}", sex_subject(serialized)),
+        "caption": apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Timepoint",

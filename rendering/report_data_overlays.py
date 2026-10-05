@@ -328,6 +328,7 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
             caption = refresh_caption_compound(
                 (sec.get("caption") or sec.get("table_caption_template", "")),
                 chemical_name,
+                data.get("study_design"),
             )
 
             apical_entry = {

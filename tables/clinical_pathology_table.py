@@ -32,7 +32,7 @@ pipeline provides significance markers and BMD/BMDL values.
 from __future__ import annotations
 
 from tables.table_builder_common import (
-    sex_subject,
+    apical_caption,
     BMD_DEFINITION,
     significance_explanation,
     SIGNIFICANCE_MARKER_LEGEND,
@@ -58,8 +58,7 @@ from tables.table_builder_common import (
 # Caption template.  {platform} is "Clinical Chemistry", "Hematology", etc.
 # {compound} is the full chemical name.
 CAPTION_TEMPLATE = (
-    "Summary of Select {platform} Data for {subject} "
-    "Administered {compound} for Five Days"
+    "Summary of Select {platform} Data for {subject} {treatment}"
 )
 
 # The data-format footnote differs slightly from body weight — clinical
@@ -94,6 +93,7 @@ def build_clinical_pathology_table_from_sidecar(
     ntp_stats: dict[str, list],
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
     imputed_cells: dict | None = None,
 ) -> dict:
     """
@@ -117,6 +117,8 @@ def build_clinical_pathology_table_from_sidecar(
                         missing_animals_by_dose.
         compound_name:  Full chemical name for the caption.
         dose_unit:      Dose unit string (default "mg/kg").
+        design:         Study design facts (pipeline.study_design) for the caption's
+                        species, verb and duration; None ⇒ the standard design.
         imputed_cells:  {sex: {dose_str: count}} for THIS platform — dose
                         groups whose legacy/inferred file filled missing
                         values with the dose-group mean.  Recorded by the
@@ -387,8 +389,8 @@ def build_clinical_pathology_table_from_sidecar(
     caption_platform = "Hormone" if platform == "Hormones" else platform
     return {
         "title": platform,
-        "caption": CAPTION_TEMPLATE.replace("{platform}", caption_platform).replace("{compound}", compound_name)
-            .replace("{subject}", sex_subject(serialized)),
+        "caption": apical_caption(CAPTION_TEMPLATE.replace("{platform}", caption_platform),
+                                  serialized, compound_name, design),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Endpoint",

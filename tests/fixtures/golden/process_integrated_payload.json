@@ -65,7 +65,8 @@
       "constant_variance": null,
       "design_fallback": [
         "route",
-        "vehicle"
+        "vehicle",
+        "duration_days"
       ],
       "dose_groups": [],
       "dose_unit": "mg/kg",

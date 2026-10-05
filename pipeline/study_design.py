@@ -1,6 +1,6 @@
 """pipeline/study_design.py — the study-design facts the integrated project records.
 
-Species, strain, route of administration and vehicle are study facts.  The
+Species, strain, route of administration, vehicle and duration are study facts.  The
 report states them only when the study's own metadata does: each experiment's
 ``experimentDescription`` (set at integration and reviewed in the metadata
 step).  Nothing is defaulted — a field no experiment records, or one the
@@ -13,7 +13,8 @@ for an unknown fact so callers can drop the clause.
 
 Fallback (decided by the user, 2026-10-05): a fact the metadata does not record
 takes the program's standard design — Sprague Dawley rats, by gavage in corn
-oil — and the facts list it under ``fallback`` so callers can log it.  The
+oil, for five days — and the facts list it under ``fallback`` so callers can
+log it.  The
 route and vehicle fallback follows the dose unit: a concentration in air (ppm)
 means inhalation, never gavage or corn oil; an oral dose (mg/kg) means gavage
 in corn oil; any other unit gets no route fallback.  The dose unit itself is
@@ -22,7 +23,8 @@ resolved by ``resolve_dose_unit``: stated > recorded > mg/kg.
 
 from __future__ import annotations
 
-_FIELDS = ("species", "strain", "articleRoute", "administrationMeans", "articleVehicle")
+_FIELDS = ("species", "strain", "articleRoute", "administrationMeans", "articleVehicle",
+           "studyDuration")
 
 # NIEHS spelling of the controlled-vocabulary strain names.
 _STRAIN_DISPLAY = {"Sprague-Dawley": "Sprague Dawley"}
@@ -55,6 +57,15 @@ _ORAL_DOSE_UNITS = {"mg/kg", "mg/kg/day", "mg/kg bw", "mg/kg body weight"}
 FALLBACK_STRAIN = {"rat": "Sprague-Dawley"}
 FALLBACK_ORAL = {"route": "gavage", "vehicle": "corn oil"}
 FALLBACK_AIR = {"route": "inhaled"}
+FALLBACK_DURATION_DAYS = 5
+
+# What a caller with no integrated project at all (no design to read) assumes:
+# the standard design, so its wording matches the fallback.
+STANDARD_DESIGN = {"species": "rat", "strain": "Sprague-Dawley", "route": "gavage",
+                   "vehicle": "corn oil", "duration_days": FALLBACK_DURATION_DAYS}
+
+_NUMBER_WORDS = ("Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven",
+                 "Eight", "Nine", "Ten")
 
 
 def is_air_concentration(dose_unit: str | None) -> bool:
@@ -73,8 +84,17 @@ def resolve_dose_unit(stated: str | None, recorded: list[str] | None = None) -> 
     return "mg/kg", "fallback"
 
 
+def _duration_days(value: str | None) -> int | None:
+    """Days from a controlled-vocabulary studyDuration ("5d" -> 5); None for an
+    hour-scale or unparseable value."""
+    import re
+
+    m = re.fullmatch(r"\s*(\d+)\s*d(?:ays?)?\s*", value or "", re.I)
+    return int(m.group(1)) if m else None
+
+
 def study_design_facts(integrated: dict | None, dose_unit: str | None = None) -> dict:
-    """{species, strain, route, vehicle, conflicts, fallback} from the
+    """{species, strain, route, vehicle, duration_days, conflicts, fallback} from the
     experiments' recorded metadata.  A field is the value every experiment
     that records it agrees on (disagreements are listed under ``conflicts``);
     a field none records takes the standard-design fallback for ``dose_unit``
@@ -98,6 +118,7 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
         "strain": one["strain"],
         "route": route,
         "vehicle": one["articleVehicle"],
+        "duration_days": _duration_days(one["studyDuration"]),
         "conflicts": conflicts,
         "fallback": [],
     }
@@ -111,6 +132,10 @@ def study_design_facts(integrated: dict | None, dose_unit: str | None = None) ->
     strain = FALLBACK_STRAIN.get(facts["species"] or "")
     if strain:
         standard["strain"] = strain
+    # A recorded duration that is not in days (an hour-scale study) stays
+    # unstated rather than replaced by five days.
+    if not one["studyDuration"]:
+        standard["duration_days"] = FALLBACK_DURATION_DAYS
     for key, value in standard.items():
         if not facts[key] and key not in _conflicting_keys(conflicts):
             facts[key] = value
@@ -122,7 +147,8 @@ def _conflicting_keys(conflicts: list[str]) -> set[str]:
     """The design keys whose recorded values disagree (no fallback over a
     disagreement: that needs a person)."""
     by_field = {"strain": "strain", "articleRoute": "route",
-                "administrationMeans": "route", "articleVehicle": "vehicle"}
+                "administrationMeans": "route", "articleVehicle": "vehicle",
+                "studyDuration": "duration_days"}
     return {by_field[c] for c in conflicts if c in by_field}
 
 
@@ -157,12 +183,35 @@ def strain_display(facts: dict) -> str:
     return _STRAIN_DISPLAY.get(strain, strain)
 
 
-def subject_phrase(facts: dict, capitalize: bool = False) -> str:
-    """"Sprague Dawley rats" / "rats" / "animals" — the study animals, plural."""
+def species_plural(facts: dict, capitalize: bool = False) -> str:
+    """"rats" / "mice" / "animals" (species unrecorded)."""
     species = facts.get("species")
     noun = _SPECIES_PLURAL.get(species, f"{species}s") if species else "animals"
-    if capitalize:
-        noun = noun.title()
+    return noun.title() if capitalize else noun
+
+
+def duration_phrase(days: int | None) -> str:
+    """"Five Days" / "One Day" / "28 Days" (numbers to ten in words, as NIEHS
+    captions print them); "" when the duration is unknown."""
+    if not days:
+        return ""
+    count = _NUMBER_WORDS[days] if days < len(_NUMBER_WORDS) else str(days)
+    return f"{count} {'Day' if days == 1 else 'Days'}"
+
+
+def caption_treatment(facts: dict, compound: str) -> str:
+    """The table-caption treatment clause, as NIEHS prints it: "Administered
+    Triclosan for Five Days", or "Exposed to 1,4-Dichlorobenzene for Five Days"
+    for an inhalation study (NIEHS-13); no "for …" clause when the duration is
+    unknown."""
+    verb = "Exposed to" if facts.get("route") == "inhaled" else "Administered"
+    duration = duration_phrase(facts.get("duration_days"))
+    return f"{verb} {compound}" + (f" for {duration}" if duration else "")
+
+
+def subject_phrase(facts: dict, capitalize: bool = False) -> str:
+    """"Sprague Dawley rats" / "rats" / "animals" — the study animals, plural."""
+    noun = species_plural(facts, capitalize)
     strain = strain_display(facts)
     return f"{strain} {noun}" if strain else noun
 

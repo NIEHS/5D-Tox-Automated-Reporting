@@ -148,13 +148,30 @@ def present_sexes(table_data: dict) -> list[str]:
     return [s for s in ("Male", "Female") if keys.get(s)]
 
 
-def sex_subject(table_data: dict) -> str:
-    """The caption subject for the sexes PRESENT in the table — "Male and Female
-    Rats", "Male Rats", "Female Rats" — or plain "Rats" when the table carries no
-    sex dimension.  Captions must state what the data shows, never a fixed sex.
-    (The species word is still a literal — see the hard-coding audit note.)"""
+def sex_subject(table_data: dict, design: dict | None = None) -> str:
+    """The caption subject for the sexes PRESENT in the table and the study's
+    species — "Male and Female Rats", "Female Mice" — or the bare species when
+    the table carries no sex dimension.  Captions must state what the data
+    shows, never a fixed sex or species.  ``design`` is the study design
+    (pipeline.study_design.study_design_facts); None ⇒ the standard design."""
+    from pipeline.study_design import STANDARD_DESIGN, species_plural
+
+    species = species_plural(STANDARD_DESIGN if design is None else design, capitalize=True)
     sexes = present_sexes(table_data)
-    return f"{' and '.join(sexes)} Rats" if sexes else "Rats"
+    return f"{' and '.join(sexes)} {species}" if sexes else species
+
+
+def apical_caption(template: str, table_data: dict, compound_name: str,
+                   design: dict | None = None) -> str:
+    """Fill an apical caption template's {subject} ("Male Rats") and
+    {treatment} ("Administered Triclosan for Five Days" / "Exposed to … for
+    Five Days") from the table's sexes and the study design (None ⇒ the
+    standard design)."""
+    from pipeline.study_design import STANDARD_DESIGN, caption_treatment
+
+    facts = STANDARD_DESIGN if design is None else design
+    return (template.replace("{subject}", sex_subject(table_data, design))
+            .replace("{treatment}", caption_treatment(facts, compound_name)))
 
 
 def legend_footnote(text: str) -> dict:
@@ -889,25 +906,44 @@ def is_reportable_bmd(bmd_text) -> bool:
 # Caption compound-name refresh
 # ---------------------------------------------------------------------------
 
-# The apical table captions all end in the NIEHS "Administered <compound> for Five
-# Days" segment. The compound name is DATA and the caption is DOCUMENT text — they
-# should be composed at render time, but the section cache bakes the name in at
-# Process time (so a session integrated before its name resolved carries the DTXSID
-# in every caption). This re-interpolates that one segment with the current name so
-# the rendered caption always reflects the resolved compound, regardless of what was
-# cached. Only Organ Weight was previously rebuilt (from filtered rows); this covers
-# the rest (Body Weight, Clinical Chemistry, Hematology, Hormones, Tissue Conc).
-_CAPTION_COMPOUND_RE = re.compile(r"Administered .+? for Five Days")
+# The apical table captions all end in the NIEHS treatment clause "<Species>
+# Administered <compound> for Five Days" (apical_caption).  The compound and the
+# study design are DATA and the caption is DOCUMENT text — they should be composed
+# at render time, but the section cache bakes them in at Process time (so a session
+# integrated before its name resolved carries the DTXSID in every caption, and a
+# design recorded later would not show).  This recomposes that clause with the
+# current name and design so the rendered caption always reflects them, regardless
+# of what was cached.
+_CAPTION_TREATMENT_RE = re.compile(
+    r"(?:(?P<species>\b[A-Z][a-z]+) )?(?P<verb>Administered|Exposed to) "
+    r"(?P<compound>.+?)(?: for (?:[A-Z][a-z]+|\d+) (?:Days?|Hours?))?$")
 
 
-def refresh_caption_compound(caption: str, compound_name: str) -> str:
-    """Replace the compound name in a "…Administered <compound> for Five Days"
-    caption with `compound_name`. No-op when the caption lacks that segment or when
-    `compound_name` is empty (so a caption of another form is left untouched)."""
-    if not caption or not compound_name:
+def refresh_caption_compound(caption: str, compound_name: str,
+                             design: dict | None = None) -> str:
+    """Recompose the trailing "<Species> Administered <compound> for <N> Days"
+    clause of an apical caption: the compound from `compound_name` (kept as
+    cached when empty) and — when `design` is given — the species, verb and
+    duration from the study design.  No-op when the caption lacks the clause
+    (a caption of another form), or when there is neither a name nor a design."""
+    if not caption or not (compound_name or design is not None):
         return caption
-    return _CAPTION_COMPOUND_RE.sub(
-        f"Administered {compound_name} for Five Days", caption)
+    from pipeline.study_design import _SPECIES_PLURAL, caption_treatment, species_plural
+
+    known_species = {n.title() for n in _SPECIES_PLURAL.values()} | {"Animals"}
+
+    def _recompose(m: re.Match) -> str:
+        compound = compound_name or m.group("compound")
+        species = m.group("species")
+        if design is None:
+            verb_clause = m.group(0)[m.start("verb") - m.start():]
+            return ((f"{species} " if species else "")
+                    + verb_clause.replace(m.group("compound"), compound, 1))
+        if species in known_species:
+            species = species_plural(design, capitalize=True)
+        return (f"{species} " if species else "") + caption_treatment(design, compound)
+
+    return _CAPTION_TREATMENT_RE.sub(_recompose, caption, count=1)
 
 
 # ---------------------------------------------------------------------------
