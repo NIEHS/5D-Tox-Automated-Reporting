@@ -53,3 +53,11 @@ def test_bm2_result_uses_stored_r_squared():
     assert _classify_bmd_result(219.18, 89.38, 1.0, 800.0, bsr) == "viable"
     assert _classify_bmd_result(219.18, 89.38, 1.0, 800.0, {"success": None}) == "NVM"
     assert _classify_bmd_result(None, None, 1.0, 800.0, None) == "failure"
+
+
+def test_format_bmd_precision():
+    from bmdx_pipe.apical_report import format_bmd
+    assert format_bmd(191.376, 1) == "191.4"
+    assert format_bmd(0.94, 1) == "0.9"
+    assert format_bmd(0.034, 1) == "0.034"
+    assert format_bmd(63.04) == "63"

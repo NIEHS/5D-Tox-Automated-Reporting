@@ -316,8 +316,10 @@ Rules:
      (e.g. probes like "liver", "kidney", "spleen" → organ: "liver, kidney, spleen").
      If organ names aren't clear from the probes, use null.
 8. Tissue concentration / IVIVE experiments → platform: "Tissue Concentration", provider: "Apical".
-9. Defaults (use these unless evidence suggests otherwise):
-   studyDuration: "5d", articleRoute: "gavage", articleVehicle: "corn oil".
+9. Study design (studyDuration, articleRoute, administrationMeans, articleVehicle,
+   strain): set ONLY from evidence in the signals.  Do NOT assume a protocol
+   default (e.g. a 5-day gavage study in corn oil) — use null when the signals do
+   not say; the report flags missing design facts for the study team.
 10. Data type classification (dataType field):
     - "tox_study" — raw experimental data that may have missing values (dead animals,
       excluded samples).  Used for NTP traditional statistics.

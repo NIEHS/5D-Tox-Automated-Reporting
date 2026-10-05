@@ -617,6 +617,7 @@ def build_table_data(
     bm2_json: dict,
     category_lookup: dict,
     platforms: list[str] | None = None,
+    bmd_decimals: int | None = None,
 ) -> dict[str, list[TableRow]]:
     """
     Build the table data for all endpoints, organized by sex.
@@ -638,6 +639,8 @@ def build_table_data(
                          provided, only experiments whose experimentDescription
                          .platform is in this list are processed.  When None,
                          all experiments are included (backward compat).
+        bmd_decimals:    The report's fixed BMD precision (format_bmd); None
+                         keeps 3 significant figures.
 
     Returns:
         Dict mapping sex label ("Male" / "Female") → list of TableRow.
@@ -789,8 +792,8 @@ def build_table_data(
                 bmd_val = bmd_entry["bmd"]
                 bmdl_val = bmd_entry["bmdl"]
                 if bmd_val is not None and bmdl_val is not None:
-                    bmd_str = _format_bmd(bmd_val)
-                    bmdl_str = _format_bmd(bmdl_val)
+                    bmd_str = format_bmd(bmd_val, bmd_decimals)
+                    bmdl_str = format_bmd(bmdl_val, bmd_decimals)
                 else:
                     bmd_str = "NVM"
                     bmdl_str = "NVM"
@@ -816,8 +819,8 @@ def build_table_data(
                 try:
                     bmd_val = float(cat["bmd"])
                     bmdl_val = float(cat["bmdl"])
-                    bmd_str = _format_bmd(bmd_val)
-                    bmdl_str = _format_bmd(bmdl_val)
+                    bmd_str = format_bmd(bmd_val, bmd_decimals)
+                    bmdl_str = format_bmd(bmdl_val, bmd_decimals)
                     bmd_status = "viable"
                 except (ValueError, KeyError, TypeError):
                     pass
@@ -1085,23 +1088,35 @@ def backfill_missing_doses(
                         row.n_by_dose[dose] = 0
 
 
-def _format_bmd(value: float) -> str:
+def format_bmd(value: float, decimals: int | None = None) -> str:
     """
-    Format a BMD or BMDL value for display in the report table.
+    Format a BMD or BMDL value for display.
 
-    Uses fixed-point notation with 3 significant figures, matching the
-    precision level in NTP reports.
+    ``decimals`` is the report's fixed precision: the 2025 NIEHS reports
+    (NIEHS-12/13) print every BMD to 1 decimal ("437.0", "0.9"), NIEHS-10 to
+    3.  A positive value that would round to zero keeps two significant
+    figures instead ("0.034", not "0.0").  ``None`` keeps the legacy
+    3-significant-figure form ("8.49", "63").
 
     Args:
-        value: BMD or BMDL value (in dose units, e.g., mg/kg).
+        value:    BMD or BMDL value (in dose units, e.g., mg/kg).
+        decimals: Fixed decimal places, or None for 3 significant figures.
 
     Returns:
-        Formatted string, e.g., "8.492" or "0.00679".
+        Formatted string, e.g., "8.5" (decimals=1) or "8.49" (None).
     """
     if value == 0:
         return "0"
-    # Use 3 significant figures
-    return f"{value:.3g}"
+    if decimals is None:
+        return f"{value:.3g}"
+    s = f"{value:.{decimals}f}"
+    if value > 0 and float(s) == 0:
+        return f"{value:.2g}"
+    return s
+
+
+# The table builder's historical name.
+_format_bmd = format_bmd
 
 
 # ---------------------------------------------------------------------------
