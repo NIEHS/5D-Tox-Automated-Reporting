@@ -134,6 +134,18 @@ def test_assemble_numbers_papers_globally_and_rewrites_tokens():
     assert rewritten[1]["organ"] == "kidney" and rewritten[1]["sex"] == "male"
 
 
+def test_assemble_numbers_after_the_background_references():
+    # The Background cites [1]..[3] from its own list; genomics continue at 4.
+    strata = [{
+        "organ": "liver", "sex": "male",
+        "reference_pool": [{"token": "P1", "paper_id": "pa", "title": "Paper A"}],
+        "gene_set_narrative": ["Cites [P1]."], "gene_narrative": [],
+    }]
+    references, rewritten = assemble_report_references(strata, offset=3)
+    assert [r["n"] for r in references] == [4]
+    assert rewritten[0]["gene_set_narrative"] == ["Cites [4]."]
+
+
 def test_assemble_drops_out_of_pool_tokens():
     strata = [{
         "organ": "liver", "sex": "male",

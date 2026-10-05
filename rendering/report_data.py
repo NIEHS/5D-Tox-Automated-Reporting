@@ -383,6 +383,19 @@ def marshal_export_data(
         if _animals:
             data["appendix_animals"] = _animals
             data["appendix_animals_matrix"] = build_animal_roster_matrix(_animals)
+        # Appendix C.1 PCA figure, from the same integrated project.
+        if "appendix_pca_figure" not in data:
+            try:
+                import json as _json_pca
+                from genomics.pca_figure import build_pca_figure
+                _ip = _sdir_roster(_dtxsid_roster) / "integrated.json"
+                _pca = build_pca_figure(_json_pca.loads(_ip.read_text(encoding="utf-8")),
+                                        dose_unit=body.get("dose_unit") or "mg/kg") \
+                    if _ip.exists() else None
+            except Exception:  # noqa: BLE001 — leaves the figure's pending note
+                _pca = None
+            if _pca:
+                data["appendix_pca_figure"] = _pca
 
     # ── BMD Analysis Configuration appendix: the report's provenance record for
     # the benchmark-dose analysis (exact BMDExpress version + settings from each
@@ -451,9 +464,22 @@ def marshal_export_data(
         if dtxsid_for_refs:
             from narrative.references_builder import load_persisted_references
             from pipeline.session_store import SESSIONS_DIR
-            graph_refs = load_persisted_references(SESSIONS_DIR / validate_dtxsid(dtxsid_for_refs))
+            _sdir_refs = SESSIONS_DIR / validate_dtxsid(dtxsid_for_refs)
+            graph_refs = load_persisted_references(_sdir_refs)
             if graph_refs:
-                data["references"] = _ensure_paragraphs(graph_refs)
+                # Numbered after the Background's own references when the list
+                # was assembled with them (references.json background_offset).
+                import json as _json_refs
+                _bg_refs: list = []
+                try:
+                    _offset = _json_refs.loads((_sdir_refs / "references.json").read_text(
+                        encoding="utf-8")).get("background_offset", 0) or 0
+                    if _offset:
+                        _bg_refs = (_json_refs.loads((_sdir_refs / "background.json").read_text(
+                            encoding="utf-8")).get("references") or [])[:_offset]
+                except (OSError, ValueError, AttributeError):
+                    _bg_refs = []
+                data["references"] = _ensure_paragraphs(list(_bg_refs) + graph_refs)
 
     # Materials and Methods — overlay structured or flat content onto
     # the scaffold's full H2/H3 heading hierarchy.

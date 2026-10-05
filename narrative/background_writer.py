@@ -392,6 +392,9 @@ def _format_structured_data(data: BackgroundData) -> str:
             if status == "available":
                 lines.append(f"    [OK] {item}")
                 available_count += 1
+            elif status == "unknown":
+                # Not queried (source unreachable / not gathered): NOT a gap.
+                lines.append(f"    [NOT CHECKED] {item} — do not describe as missing")
             else:
                 lines.append(f"    [MISSING] {item}")
                 lines.append(f"            Impact: {gap['risk_impact']}")

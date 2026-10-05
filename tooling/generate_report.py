@@ -6,7 +6,7 @@ One command that drives the SAME UI-agnostic workflow core the browser drives
 deliverables from the session on disk:
 
     import files → validate → confirm metadata → integrate → animal report
-      → process → materialize result sections → [background] → render
+      → process → materialize result sections → [background] → summary → render
 
 Every step reads and writes `sessions/<DTXSID>/`, so a session produced here is
 indistinguishable from one produced in the browser — you can open it in the web
@@ -82,10 +82,36 @@ def _bootstrap_env() -> None:
         or "/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt"
     if ca and Path(ca).is_file():
         os.environ["SSL_CERT_FILE"] = ca
-        os.environ.setdefault("REQUESTS_CA_BUNDLE", ca)
+        # `requests` (the Background gatherer: PubChem, PubMed, …) must trust the
+        # PUBLIC roots too.  A bundle holding only the NIH CA fails every public
+        # site with CERTIFICATE_VERIFY_FAILED, so give requests a bundle with both.
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", _bundle_with_public_roots(ca))
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         _log("WARNING: ANTHROPIC_API_KEY is not set — LLM narratives will fail")
+
+
+def _bundle_with_public_roots(ca: str) -> str:
+    """A CA bundle trusting the public roots AND `ca`: the system bundle when it
+    already contains `ca` (update-ca-certificates), else certifi + `ca` in a temp
+    file."""
+    import tempfile
+
+    extra = Path(ca).read_text(encoding="utf-8", errors="ignore")
+    system = Path("/etc/ssl/certs/ca-certificates.crt")
+    blocks = [b for b in extra.split("-----END CERTIFICATE-----") if "BEGIN CERTIFICATE" in b]
+    if system.is_file():
+        sys_text = system.read_text(encoding="utf-8", errors="ignore")
+        if all(b.split("-----BEGIN CERTIFICATE-----")[-1].strip() in sys_text for b in blocks):
+            return str(system)
+    try:
+        import certifi
+        public = Path(certifi.where()).read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001 — no public roots available; keep the given bundle
+        return ca
+    out = Path(tempfile.gettempdir()) / "rlm-bmdx-ca-bundle.pem"
+    out.write_text(public + "\n" + extra, encoding="utf-8")
+    return str(out)
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +256,18 @@ def process(dtxsid: str, params: dict, store) -> None:
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
 
 
+def summary(dtxsid: str, store) -> None:
+    """Write the Summary section from the session's results (deterministic; never
+    replaces a summary a person approved or wrote)."""
+    from workflow.steps import materialize_summary
+
+    res = materialize_summary(dtxsid, store)
+    _log(f"  {res['paragraphs']} paragraph(s)" if res["written"]
+         else "  kept the existing summary.json (approved or not generated here)"
+         if (store.session_dir(dtxsid) / "summary.json").exists()
+         else "  nothing to summarize")
+
+
 def background(dtxsid: str, identity: dict, model: str, store) -> None:
     """Generate + save the Background section (LLM over ATSDR/IRIS/PubChem data),
     mirroring POST /api/generate + /api/session/save-section. Saved UNAPPROVED,
@@ -239,12 +277,35 @@ def background(dtxsid: str, identity: dict, model: str, store) -> None:
     from narrative.data_gatherer import gather_all
     from narrative.style_learning import load_style_profile
 
+    if not identity.get("pubchem_cid"):
+        # The gatherer keys PubChem (the main source) on the CID; identity.json
+        # usually holds only name/CASRN.  Resolve once, keeping the given fields.
+        try:
+            from narrative.chem_resolver import resolve_chemical
+            resolved = resolve_chemical(identity.get("casrn") or identity.get("name") or dtxsid,
+                                        "auto", "").to_dict()
+            identity = {**resolved, **{k: v for k, v in identity.items() if v}}
+            _log(f"    resolved PubChem CID {identity.get('pubchem_cid')}")
+        except Exception as e:  # noqa: BLE001 — best-effort, like the UI
+            _log(f"    WARNING: could not resolve {dtxsid} ({e}); PubChem data will be missing")
     bg_data = gather_all(ChemicalIdentity.from_dict(identity), lambda m: _log(f"    {m}"))
+    # The authoritative hazard sources: without them the Background can neither
+    # state the chemical's toxicology nor say what is missing from it.
+    blocked = [src for src in ("ATSDR", "IRIS") if src in bg_data.unreachable_sources]
+    if blocked:
+        _log(f"  WARNING: {', '.join(blocked)} could not be reached — background not "
+             "generated (run where these sources are reachable, e.g. the NIEHS network)")
+        return
     rules = [r["rule"] for r in load_style_profile().get("rules", [])] or None
     result = generate_background(bg_data, model or DEFAULT_CLAUDE_MODEL, rules)
     paragraphs = result.get("paragraphs") or []
     if not paragraphs:
         _log("  WARNING: background generation returned no paragraphs — not saved")
+        return
+    if not result.get("references"):
+        # Prose with no sources behind it (every gatherer source unreachable or
+        # empty) is not a Background — its [n] citations would point nowhere.
+        _log("  WARNING: background has no references (sources unreachable?) — not saved")
         return
     store.save_section(dtxsid, "background", {
         "paragraphs": paragraphs,
@@ -441,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.background:
                 with _Timer("background (LLM)"):
                     background(dtxsid, identity, args.model, store)
+            with _Timer("summary"):
+                summary(dtxsid, store)
             if args.stop_after == "process":
                 return 0
 

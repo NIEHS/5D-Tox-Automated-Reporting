@@ -486,7 +486,17 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
 
     We emit only the heading.  The walker handles children separately
     after this returns.
+
+    Inside an appendix the title carries the appendix's own numbering
+    ("C.1. Gene Expression Quality Control", as in the reference), so the
+    heading is unnumbered — LaTeX would otherwise prefix the body section
+    number ("15.1 C.1. …") — and is added to the contents by hand.
     """
+    if node.appendix_scope and node.level > 0:
+        cmd = _HEADING_BY_LEVEL.get(node.level, r"\paragraph")
+        title = _escape_latex(node.title)
+        toc_level = cmd.lstrip("\\")
+        return f"{cmd}*{{{title}}}\n\\addcontentsline{{toc}}{{{toc_level}}}{{{title}}}"
     return _heading(node.level, node.title)
 
 
@@ -549,7 +559,13 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
         + col_head + "\\endhead\n"
     )
     body = "\n".join(_emit_tabular_row(r) for r in rows)
-    return head + body + "\n\\bottomrule\n\\end{longtable}"
+    # A longtable has no threeparttable notes; footnotes follow it as small text.
+    notes = "".join(
+        "\n\n{\\footnotesize " + _escape_latex(fn.get("text") or "") + "\\par}"
+        for fn in built.get("footnotes") or []
+        if isinstance(fn, dict) and fn.get("text")
+    )
+    return head + body + "\n\\bottomrule\n\\end{longtable}" + notes
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:

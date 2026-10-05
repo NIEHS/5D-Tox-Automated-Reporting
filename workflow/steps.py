@@ -52,6 +52,67 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @step_provenance
+def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
+    """Write the report's Summary section (summary.json) from the session's
+    results — narrative.report_summary, deterministic, the same inputs as the
+    Abstract — as a provisional draft (approved=False, source="generated").
+
+    Never overwrites a Summary a person approved or wrote (or one the LLM route
+    saved): only an absent or previously generated, unapproved summary.json is
+    (re)written.  Returns ``{ok, written: bool, paragraphs: int}``."""
+    import json
+
+    from narrative.report_summary import build_report_summary
+    from pipeline.session_db import _latest_cache
+    from pipeline.session_store import save_section
+    from rendering.render_common import derive_study_sexes
+
+    sdir = store.session_dir(dtxsid)
+    prior_path = sdir / "summary.json"
+    if prior_path.exists():
+        try:
+            prior = json.loads(prior_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            prior = {}
+        if prior.get("approved") or prior.get("source") != "generated":
+            return {"ok": True, "written": False, "paragraphs": 0}
+
+    def _read(name: str) -> dict:
+        try:
+            return json.loads((sdir / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    bmd = _latest_cache(sdir, "bmd_summary") or {}
+    genomics = _latest_cache(sdir, "genomics") or {}
+    methods = (_latest_cache(sdir, "methods") or {}).get("context") or {}
+    sections = (_latest_cache(sdir, "sections") or {}).get("sections") or []
+    integrated = _read("integrated.json")
+    identity = _read("identity.json")
+    stat_order = next((v.get("stat_order") for v in genomics.values()
+                       if isinstance(v, dict) and v.get("stat_order")), None)
+
+    paragraphs = build_report_summary(
+        bmd.get("apical") or [],
+        {k: v for k, v in genomics.items() if isinstance(v, dict)},
+        chemical_name=methods.get("chemical_name") or identity.get("name") or dtxsid,
+        dose_groups=methods.get("dose_groups") or [],
+        dose_unit=methods.get("dose_unit") or "mg/kg",
+        bmd_stat=(stat_order or [None])[0],
+        sexes=derive_study_sexes(integrated),
+        abstract_background=_read("background.json").get("abstract_background", "") or "",
+        apical_evaluated=bool(sections),
+    )
+    if not paragraphs:
+        return {"ok": True, "written": False, "paragraphs": 0}
+    save_section(dtxsid, "summary", {
+        "paragraphs": paragraphs,
+        "source": "generated",
+        "approved": False,
+    }, archive=False)
+    return {"ok": True, "written": True, "paragraphs": len(paragraphs)}
+
+
 def materialize_result_sections(dtxsid: str, store: PoolStore) -> dict:
     """Write the apical result sections from the Process cache to disk as section
     files, so the document surface shows them and the deliverable renders complete.

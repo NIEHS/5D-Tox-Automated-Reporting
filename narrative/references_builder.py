@@ -201,10 +201,14 @@ def _rewrite_paragraph(text: str, token_to_number: dict[str, int]) -> str:
     return re.sub(r" {2,}", " ", out).replace(" .", ".").strip()
 
 
-def assemble_report_references(strata: list[dict]) -> tuple[list[dict], list[dict]]:
+def assemble_report_references(strata: list[dict], offset: int = 0) -> tuple[list[dict], list[dict]]:
     """
     Merge per-stratum citations into ONE report-wide, globally-numbered list and
     rewrite each stratum's inline `[Pn]` tokens to the final `[n]` numbers.
+
+    ``offset`` is the number of references cited before the genomics sections
+    (the Background's own numbered list); genomics numbers start after it, so
+    the report has one References section numbered in document order.
 
     Args:
         strata: Ordered list (document order — the caller sorts by organ then
@@ -247,7 +251,7 @@ def assemble_report_references(strata: list[dict]) -> tuple[list[dict], list[dic
                 continue  # invented / out-of-pool token — dropped on rewrite
             pid = paper["paper_id"]
             if pid not in paper_to_number:
-                n = len(references) + 1
+                n = offset + len(references) + 1
                 paper_to_number[pid] = n
                 references.append(
                     {
@@ -505,7 +509,22 @@ def _load_narrative_overrides(session_dir) -> dict:
     }
 
 
-def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = "") -> dict:
+def background_reference_count(session_dir) -> int:
+    """How many numbered references the session's Background cites ([1]..[B]);
+    the genomics references are numbered after them."""
+    import json
+    from pathlib import Path
+
+    path = Path(session_dir) / "background.json"
+    try:
+        refs = json.loads(path.read_text(encoding="utf-8")).get("references") or []
+    except (OSError, ValueError, AttributeError):
+        return 0
+    return len(refs) if isinstance(refs, list) else 0
+
+
+def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = "",
+                             offset: int = 0) -> dict:
     """Assemble a session's report-wide references from its persisted caches.
 
     Returns ``{"references": [...], "paragraphs": [...], "rewritten": {(organ,
@@ -519,7 +538,7 @@ def build_session_references(session_dir, genomics_cache: dict, dtxsid: str = ""
     strata = collect_reference_strata(session_dir, genomics_cache)
     if not strata:
         return {"references": [], "paragraphs": [], "rewritten": {}, "warnings": []}
-    references, rewritten_list = assemble_report_references(strata)
+    references, rewritten_list = assemble_report_references(strata, offset=offset)
     rewritten = {
         (r["organ"], r["sex"]): {
             "gene_set_narrative": r["gene_set_narrative"],

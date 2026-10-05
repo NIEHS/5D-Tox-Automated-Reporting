@@ -853,17 +853,27 @@ def load_session_data(
         from narrative.references_builder import (
             build_session_references, load_persisted_references,
         )
-        _refs = build_session_references(session_dir, genomics_cache, dtxsid=dtxsid)
+        # The Background's own numbered references come first ([1]..[B]); the
+        # genomics references continue the numbering after them, so the inline
+        # [n] in both sections point into ONE References list.
+        _bg_refs = list(bg.get("references") or []) if isinstance(bg, dict) else []
+        _refs = build_session_references(
+            session_dir, genomics_cache, dtxsid=dtxsid, offset=len(_bg_refs),
+        )
         for (organ_k, sex_k), narrs in _refs["rewritten"].items():
             if (organ_k, sex_k) in interpretations:
                 interpretations[(organ_k, sex_k)] = narrs
         # Prefer the persisted references.json (the SAME artifact the marshal path
-        # reads, so the two paths surface identical citation strings); fall back
-        # to the freshly assembled list when the file is absent (older sessions).
+        # reads, so the two paths surface identical citation strings) when it was
+        # numbered for this Background; else the freshly assembled list.
         _persisted = load_persisted_references(session_dir)
+        _persisted_offset = (_load_json(session_dir / "references.json") or {}).get(
+            "background_offset", 0)
+        if _persisted and _persisted_offset != len(_bg_refs):
+            _persisted = []
         _ref_paragraphs = _persisted or _refs["paragraphs"]
         if _ref_paragraphs:
-            data["references"] = {"paragraphs": _ref_paragraphs}
+            data["references"] = {"paragraphs": _bg_refs + _ref_paragraphs}
 
         _ctx = methods_cache.get("context") if isinstance(methods_cache, dict) else None
         converted = _convert_genomics_cache(
@@ -917,6 +927,17 @@ def load_session_data(
         from document_model.document_tree import assign_genomics_figure_numbers
         assign_genomics_figure_numbers(render_tree, data.get("genomics_sections"))
 
+    # ── Appendix C.1: PCA of the modeled expression data ──────────────
+    try:
+        from genomics.pca_figure import build_pca_figure
+        _pca = build_pca_figure(_load_json(session_dir / "integrated.json") or {},
+                                dose_unit=((methods_cache or {}).get("context") or {}).get("dose_unit")
+                                or "mg/kg")
+    except Exception:  # noqa: BLE001 — a figure failure leaves the pending note
+        _pca = None
+    if _pca:
+        data["appendix_pca_figure"] = _pca
+
     # ── Appendix B: animal identifier roster ──────────────────────────
     animals = _load_animal_identifiers(session_dir)
     if animals:
@@ -953,11 +974,15 @@ def load_session_data(
     # onto data["methods"] above and rendered directly by the M&M nodes).
     from rendering.report_data_overlays import overlay_abstract
     from rendering.render_common import derive_study_sexes
+    # Dose unit and groups from the study (the Methods context), so the abstract
+    # neither assumes mg/kg nor skips the lower limit of extrapolation.
+    _mctx = (methods_cache.get("context") if isinstance(methods_cache, dict) else None) or {}
     overlay_abstract(
         data,
         abstract_background=(bg.get("abstract_background") if isinstance(bg, dict) else "") or "",
         genomics_cache=genomics_cache if isinstance(genomics_cache, dict) else None,
-        dose_unit="mg/kg",
+        dose_unit=_mctx.get("dose_unit") or "mg/kg",
+        dose_groups=_mctx.get("dose_groups") or [],
         # Sexes come from the .bm2 metadata (single source of truth): a sex-less
         # study yields [] → sex-neutral abstract; both-sexes yields Male/Female.
         sexes=derive_study_sexes(_integ),
@@ -1052,6 +1077,64 @@ def _animal_core(animal_id: str) -> str:
 
 
 def _load_animal_identifiers(session_dir: Path) -> list[dict]:
+    """The Appendix B roster: one row per sequenced sample, from the study's
+    gene-expression experiments when integrated.json has them, else the legacy
+    animal_report join (_load_animal_identifiers_from_report)."""
+    rows = _sequenced_samples_from_integrated(session_dir)
+    return rows if rows else _load_animal_identifiers_from_report(session_dir)
+
+
+def _sequenced_samples_from_integrated(session_dir: Path) -> list[dict]:
+    """One roster row per sample of every gene-expression experiment.
+
+    The experiment supplies the tissue (experimentDescription.organ), sex and
+    each sample's dose; the sample name is the expression data's sample id
+    (the FASTQ / library name).  The ANIMAL NUMBER is filled only when the
+    sample name ends in the number of an animal the animal report knows at the
+    same dose (PFHxSAm's "Plate1-111" → animal 111); sample ids such as
+    "S1P3_G06" (plate/well) carry no animal number, and none is invented.
+    """
+    integ = _load_json(session_dir / "integrated.json")
+    if not isinstance(integ, dict):
+        return []
+    report = _load_json(session_dir / "animal_report.json")
+    animals = report.get("animals") if isinstance(report, dict) else None
+    known: dict[str, dict] = {}
+    for rec in (animals or {}).values() if isinstance(animals, dict) else []:
+        if isinstance(rec, dict) and str(rec.get("animal_id", "")).isdigit():
+            known[str(rec["animal_id"])] = rec
+
+    rows: list[dict] = []
+    for exp in integ.get("doseResponseExperiments") or []:
+        desc = exp.get("experimentDescription") or {}
+        if (desc.get("dataType") or "").lower() != "gene_expression":
+            continue
+        organ = str(desc.get("organ") or "").strip()
+        sex = str(desc.get("sex") or "").strip().title()
+        for t in exp.get("treatments") or []:
+            name = str(t.get("name") or "")
+            if not name:
+                continue
+            core = _animal_core(name)
+            animal = known.get(core) if core else None
+            number = core if animal is not None and animal.get("dose") == t.get("dose") else ""
+            rows.append({
+                "animal_number": number,
+                "sex": (animal or {}).get("sex") or sex,
+                "dose": t.get("dose"),
+                "tissue": organ.title(),
+                "fastq_file_id": name,
+            })
+    rows.sort(key=lambda r: (
+        int(r["animal_number"]) if str(r["animal_number"]).isdigit() else 1 << 30,
+        r["tissue"],
+        float(r["dose"]) if isinstance(r["dose"], (int, float)) else 0.0,
+        r["fastq_file_id"],
+    ))
+    return rows
+
+
+def _load_animal_identifiers_from_report(session_dir: Path) -> list[dict]:
     """
     Build the Appendix B FASTQ-mapping roster (reference Table B-1) from
     animal_report.json: one row per (animal x tissue), joining the three id-forms

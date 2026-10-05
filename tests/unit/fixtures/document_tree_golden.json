@@ -463,6 +463,53 @@
   },
   {
     "appendix_letter": "C",
+    "children": [
+      {
+        "children": [
+          {
+            "id": "appendix-c-qc-text",
+            "level": 3,
+            "region": "back",
+            "title": "",
+            "type": "freeform-block"
+          },
+          {
+            "data_key": "appendix_pca_figure",
+            "figure_label": "C-1",
+            "figure_number": 1,
+            "id": "figure-c-pca",
+            "level": 0,
+            "region": "back",
+            "title": "Principal Component Analysis of the Normalized Transcriptomic Data",
+            "type": "figure"
+          }
+        ],
+        "id": "appendix-c-qc",
+        "level": 2,
+        "region": "back",
+        "title": "C.1. Gene Expression Quality Control",
+        "type": "heading-only"
+      },
+      {
+        "children": [
+          {
+            "data_key": "appendix_efdr_figure",
+            "figure_label": "C-2",
+            "figure_number": 2,
+            "id": "figure-c-efdr",
+            "level": 0,
+            "region": "back",
+            "title": "Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination",
+            "type": "figure"
+          }
+        ],
+        "id": "appendix-c-efdr",
+        "level": 2,
+        "region": "back",
+        "title": "C.2. Empirical False Discovery Rate",
+        "type": "heading-only"
+      }
+    ],
     "id": "appendix-c",
     "level": 1,
     "region": "back",

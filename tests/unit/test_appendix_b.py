@@ -137,3 +137,33 @@ def test_appendix_with_freeform_child_emits_heading_only_no_stub():
                              node_type="freeform-block")]
     assert "Appendix body pending" not in latex_appendix(node, {})
     assert "Appendix body pending" not in html_appendix(node, {})
+
+
+def test_roster_without_animal_numbers_drops_the_column_and_says_why():
+    built = build_animal_roster_matrix([
+        {"animal_number": "", "sex": "Male", "dose": 0.0, "tissue": "Liver",
+         "fastq_file_id": "S1P1_F06"},
+    ])
+    assert built["headers"] == list(ANIMAL_ROSTER_HEADERS)[1:]
+    assert built["rows"] == [["Male", "0", "Liver", "S1P1_F06"]]
+    assert "do not link the sequencing sample IDs" in built["footnotes"][0]["text"]
+
+
+def test_roster_from_integrated_gene_expression_experiments(tmp_path):
+    import json
+    from rendering.latex_export import _load_animal_identifiers
+    (tmp_path / "integrated.json").write_text(json.dumps({"doseResponseExperiments": [
+        {"experimentDescription": {"dataType": "gene_expression", "organ": "liver", "sex": "male"},
+         "treatments": [{"name": "Plate1-111", "dose": 0.0}, {"name": "S1P1_A07", "dose": 10.0}]},
+        {"experimentDescription": {"dataType": "tox_study", "organ": "liver"},
+         "treatments": [{"name": "111", "dose": 0.0}]},
+    ]}))
+    (tmp_path / "animal_report.json").write_text(json.dumps({"animals": {
+        "111": {"animal_id": "111", "sex": "Male", "dose": 0.0},
+        "7": {"animal_id": "7", "sex": "Male", "dose": 0.0},
+    }}))
+    rows = _load_animal_identifiers(tmp_path)
+    assert [(r["animal_number"], r["tissue"], r["fastq_file_id"]) for r in rows] == [
+        ("111", "Liver", "Plate1-111"),
+        ("", "Liver", "S1P1_A07"),  # "07" is not animal 7 at dose 10 — no number invented
+    ]

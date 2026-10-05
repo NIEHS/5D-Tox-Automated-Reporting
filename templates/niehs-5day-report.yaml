@@ -302,8 +302,8 @@ document:
   # one .tex + one .html per appendix under templates/freeform/.  Appendices A/F
   # are STUDY-SPECIFIC (a chemical's plasma method, its supplemental files):
   # `session_content` resolves them per study, never from the shared template.  Appendix B renders the data-derived animal
-  # roster (no child).  Appendix C stays a pending stub (its QC/eFDR figures
-  # need transcriptomics data the pipeline does not retain).
+  # roster (no child).  Appendix C carries the PCA figure (computed from the
+  # integrated expression data) and a pending eFDR figure (not ingested yet).
   # Appendix titles carry ONLY the descriptive name — the "Appendix A." letter
   # prefix is assigned positionally by compute_appendix_letters() and composed by
   # the renderers (and drives docx chapter-relative page numbering).  Do NOT bake
@@ -334,6 +334,37 @@ document:
   - id: appendix-c
     type: appendix
     title: Transcriptomic Quality Control and Empirical False Discovery Rate
+    children:
+    # C.1: PCA of the modeled expression matrix, computed from the integrated
+    # gene-expression experiments (genomics/pca_figure.py) — one figure, a row
+    # of three panels per tissue x sex.
+    - id: appendix-c-qc
+      type: heading-only
+      title: C.1. Gene Expression Quality Control
+      children:
+      - id: appendix-c-qc-text
+        type: freeform-block
+        title: ""
+        content_file:
+          latex: freeform/appendix-c.tex
+          html: freeform/appendix-c.html
+      - id: figure-c-pca
+        type: figure
+        subtype: chart
+        title: Principal Component Analysis of the Normalized Transcriptomic Data
+        data_key: appendix_pca_figure
+    # C.2: the empirical FDR comes from a synthetic-null BMDExpress analysis
+    # supplied with the study (e.g. NIEHS-13's *_eFDR_Synthetic_Null_Analysis);
+    # the pipeline does not ingest it yet, so the figure shows its pending note.
+    - id: appendix-c-efdr
+      type: heading-only
+      title: C.2. Empirical False Discovery Rate
+      children:
+      - id: figure-c-efdr
+        type: figure
+        subtype: chart
+        title: Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination
+        data_key: appendix_efdr_figure
   - id: appendix-d
     type: appendix
     title: Benchmark Dose Model Recommendation and Selection Methodologies

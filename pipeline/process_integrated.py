@@ -1827,15 +1827,20 @@ def _persist_references(dtxsid: str, genomics_sections: dict | None) -> None:
     if not genomics_sections:
         return
     try:
-        from narrative.references_builder import build_session_references
+        from narrative.references_builder import (
+            background_reference_count, build_session_references,
+        )
+        # Genomics references are numbered after the Background's own list.
+        offset = background_reference_count(_session_dir(dtxsid))
         refs = build_session_references(
-            _session_dir(dtxsid), genomics_sections, dtxsid=dtxsid,
+            _session_dir(dtxsid), genomics_sections, dtxsid=dtxsid, offset=offset,
         )
         # Write when there is ANYTHING to say: resolved references, or
         # warnings (an all-unresolved run must still surface its warnings).
         if refs["references"] or refs["warnings"]:
             out = _session_dir(dtxsid) / "references.json"
             out.write_text(json.dumps({
+                "background_offset": offset,
                 "references": refs["references"],
                 "paragraphs": refs["paragraphs"],
                 # Machine-readable hazard flags for a future UI: human-edited

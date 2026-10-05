@@ -939,20 +939,32 @@ def build_animal_roster_matrix(animals: list[dict]) -> dict:
     emitter to use a page-breaking longtable: hundreds of rows never fit one
     float page.
     """
+    rows = [
+        [
+            str(r.get("animal_number", "")),
+            str(r.get("sex", "")),
+            _roster_dose(r.get("dose")),
+            str(r.get("tissue", "")),
+            str(r.get("fastq_file_id", "")),
+        ]
+        for r in animals or []
+    ]
+    headers = list(ANIMAL_ROSTER_HEADERS)
+    footnotes: list = []
+    if rows and not any(r[0] for r in rows):
+        # No sample id carries an animal number: drop the empty column and say
+        # why, rather than print a blank or invented one.
+        headers, rows = headers[1:], [r[1:] for r in rows]
+        footnotes.append({
+            "kind": "definition",
+            "text": ("The supplied data do not link the sequencing sample IDs "
+                     "(the sample names in the expression data) to animal numbers."),
+        })
     return {
         "caption": "Animal Numbers and FASTQ Data File Names",
-        "headers": list(ANIMAL_ROSTER_HEADERS),
-        "rows": [
-            [
-                str(r.get("animal_number", "")),
-                str(r.get("sex", "")),
-                _roster_dose(r.get("dose")),
-                str(r.get("tissue", "")),
-                str(r.get("fastq_file_id", "")),
-            ]
-            for r in animals or []
-        ],
-        "footnotes": [],
+        "headers": headers,
+        "rows": rows,
+        "footnotes": footnotes,
         "breakable": True,
     }
 

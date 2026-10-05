@@ -46,7 +46,7 @@ continued the other way, or opened in the browser.
 | 6 | **Process** | Runs NTP statistics, BMDS modelling, genomics, charts, LLM narratives and Materials & Methods. Takes minutes on a first run | `process_step` (async) | `POST /api/process-integrated/{id}` |
 | 7 | **Materialize sections** | Writes the apical result sections as `bm2_*.json` drafts | `materialize_result_sections` | `POST /api/pool/materialize-sections/{id}` |
 | 8 | Background *(optional)* | LLM Background section, built from ATSDR, IRIS and PubChem lookups | see 4.2 | `POST /api/generate` (SSE) + `POST /api/session/save-section` |
-| 8b | Summary *(optional)* | LLM synthesis of the Background and apical results | — (HTTP only) | `POST /api/generate-summary` + `POST /api/session/save-section` |
+| 8b | Summary | Built from the session's results (`narrative.report_summary`, deterministic); never replaces an approved or hand-written summary | `workflow.steps.materialize_summary` (run by `generate_report` after Process/Background) | `POST /api/generate-summary` (LLM variant) + `POST /api/session/save-section` |
 | 9 | **Render** | Builds the docx, HTML, BITS/JATS XML, Bookshelf HTML, LaTeX bundle and PDF | `rendering.preview_surface.render_preview` | `POST /api/preview/{id}/materialize` + `GET …/download` |
 
 You never set the workflow phase yourself. It is worked out from which files
@@ -434,8 +434,10 @@ post /api/session/save-section "$(jq -c --arg d $ID \
   '{dtxsid: $d, section_type: "summary", data: {paragraphs, model_used}}' summary.json)"
 ```
 
-There is no Python step function for the Summary; its logic lives in the
-route. From Route A, start the server and make these two calls.
+Route A writes the Summary itself (`workflow.steps.materialize_summary`):
+built deterministically from the BMD summary, the genomics results and the
+Background's abstract sentence, saved as an unapproved draft. The route above
+is the separate LLM variant. From Route A, start the server and make these two calls.
 
 **Front matter (optional).** Authors, contributors and publication details
 feed the About This Report and Publication Details sections:
@@ -584,10 +586,15 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
 ## 10. Known gaps
 
-These hold as of 2026-10-02:
+These hold as of 2026-10-05:
 
-- **Summary is HTTP-only.** Generating it needs `POST /api/generate-summary`
-  (§5.3); neither script does it, and there is no Python step function.
+- **About This Report** (authors, contributors) is human-set front matter
+  (`front_matter.json`, §5.3); nothing in the data supplies it.
+- **Background** needs ATSDR and IRIS. Where either is unreachable (the sandbox
+  firewall), `--background` saves nothing and says so, rather than writing a
+  Background that reports the unreachable sources as data gaps.
+- **Appendix C.2 (empirical FDR)** needs the study's synthetic-null analysis,
+  which is not ingested; its figure stays pending.
 - **Materials & Methods** in the deliverable comes from Process
   (`_cache_methods_*`). The browser's separate *Generate M&M* button saves
   `methods.json`, which the renderer does not read. Headless runs get M&M from

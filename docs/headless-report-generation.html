@@ -183,7 +183,7 @@
     other way, or opened in the browser.
   </p>
   <div class="meta">
-    <span>Updated 2026-10-02</span>
+    <span>Updated 2026-10-05</span>
     <span>Scripts: <code>tooling/generate_report.py</code> · <code>tooling/generate_report_api.sh</code></span>
     <span>Examples use PFHxSAm (DTXSID50469320, NIEHS Report 10)</span>
   </div>
@@ -266,9 +266,9 @@
     <div class="calls"><span>Python</span><code>--background</code><span>HTTP</span><code>POST /api/generate</code> (SSE) + <code>save-section</code></div>
   </div></li>
   <li class="optional"><div class="dot">8b</div><div class="body">
-    <div class="title">Summary <span class="chip opt">optional · HTTP only</span></div>
-    <p class="desc">LLM synthesis of the Background, apical results and BMD summary.</p>
-    <div class="calls"><span>HTTP</span><code>POST /api/generate-summary</code> + <code>save-section</code></div>
+    <div class="title">Summary <span class="chip opt">deterministic · Route A writes it</span></div>
+    <p class="desc">Built from the session&rsquo;s results (most sensitive apical endpoints, gene sets and genes, point of departure); never replaces an approved or hand-written summary.</p>
+    <div class="calls"><span>Python</span><code>materialize_summary</code><span>HTTP</span><code>POST /api/generate-summary</code> (LLM variant) + <code>save-section</code></div>
   </div></li>
   <li><div class="dot">9</div><div class="body">
     <div class="title">Render</div>
@@ -555,7 +555,7 @@ post /api/session/save-section "$(jq -c --arg d $ID \
   "identity": {"name": "Perfluorohexanesulfonamide"}}' &gt; summary.json
 post /api/session/save-section "$(jq -c --arg d $ID \
   '{dtxsid: $d, section_type: "summary", data: {paragraphs, model_used}}' summary.json)"</pre></div>
-<p>There is no Python step function for the Summary. From Route A, start the server and make these two calls.</p>
+<p>Route A writes the Summary itself (<code>workflow.steps.materialize_summary</code>): built deterministically from the BMD summary, the genomics results and the Background&rsquo;s abstract sentence, saved as an unapproved draft. The calls below are the separate LLM variant.</p>
 
 <h4>Front matter <span class="chip opt">optional</span></h4>
 <p>Authors, contributors and publication details fill the About This Report and Publication Details sections.</p>
@@ -676,9 +676,11 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
 
 <!-- ============================================================ -->
 <h2 id="gaps"><span class="num">10</span>Known gaps</h2>
-<p>As of 2026-10-02:</p>
+<p>As of 2026-10-05:</p>
 <ul>
-  <li><b>Summary is HTTP-only.</b> Generating it needs <code>POST /api/generate-summary</code>; neither script does it, and there is no Python step function.</li>
+  <li><b>About This Report</b> (authors, contributors) is human-set front matter (<code>front_matter.json</code>); nothing in the data supplies it.</li>
+  <li><b>Background</b> needs ATSDR and IRIS. Where either is unreachable (the sandbox firewall), <code>--background</code> saves nothing and says so, rather than writing a Background that reports the unreachable sources as data gaps.</li>
+  <li><b>Appendix C.2 (empirical FDR)</b> needs the study&rsquo;s synthetic-null analysis, which is not ingested; its figure stays pending.</li>
   <li><b>Materials &amp; Methods</b> in the deliverable comes from Process (<code>_cache_methods_*</code>). The browser's separate <i>Generate M&amp;M</i> button saves <code>methods.json</code>, which the renderer does not read. Headless runs get M&amp;M from Process automatically.</li>
   <li><b>LaTeX over HTTP.</b> <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</li>
   <li><b>Experiment metadata review</b> (<code>GET</code>/<code>POST /api/experiment-metadata/{id}</code>: species, sex and organ per experiment, written back into <code>integrated.json</code>) is not a step in either script. Call it after integrate if experiment descriptions need correcting.</li>

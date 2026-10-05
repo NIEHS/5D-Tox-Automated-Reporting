@@ -171,10 +171,11 @@ def test_heading_only_emits_parent_heading(scaffold):
 
 
 def test_appendix_renders_with_pending_placeholder(scaffold):
-    """Appendices render as heading + visible pending placeholder."""
+    """Appendices render as heading + visible pending placeholder (the scaffold
+    has no expression data, so Appendix C's PCA figure is pending)."""
     tex = generate_latex(scaffold)
     assert r"\section{Appendix A. Internal Dose Assessment}" in tex
-    assert "Appendix body pending" in tex
+    assert "[Figure pending: Principal Component Analysis" in tex
 
 
 def test_tables_list_renders_listoftables(scaffold):
@@ -547,3 +548,11 @@ def test_pdflatex_compiles(scaffold, tmp_path):
         if (tmp_path / "report.log").exists()
         else ""
     )
+
+
+def test_appendix_subsections_carry_the_appendix_numbering(scaffold):
+    r"""Appendix C's "C.1."/"C.2." headings are unnumbered by LaTeX (no "15.1
+    C.1.") and still listed in the contents."""
+    tex = generate_latex(scaffold)
+    assert "\\subsection*{C.1. Gene Expression Quality Control}" in tex
+    assert "\\addcontentsline{toc}{subsection}{C.1. Gene Expression Quality Control}" in tex

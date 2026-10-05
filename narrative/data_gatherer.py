@@ -142,6 +142,10 @@ class BackgroundData:
 
     # --- Gathering notes (warnings, gaps, errors) ---
     notes: list[str] = field(default_factory=list)
+    # Sources that could not be QUERIED (network/TLS failure, missing API key) —
+    # as opposed to queried and found nothing.  The gap analysis reports their
+    # items as "unknown", never as missing data.
+    unreachable_sources: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize to JSON-safe dictionary."""
@@ -347,6 +351,7 @@ def gather_ctx_hazard(data: BackgroundData, session: requests.Session) -> None:
         return
     if not api_key:
         data.notes.append("No CTX_API_KEY — skipping CTX Hazard lookup")
+        data.unreachable_sources.append("CTX")
         return
 
     url = f"{CTX_BASE}/hazard/search/by-dtxsid/{dtxsid}"
@@ -450,6 +455,7 @@ def gather_atsdr(data: BackgroundData, session: requests.Session) -> None:
         except (requests.RequestException, ValueError):
             pass
 
+    atsdr_errors = 0
     # Try direct ATSDR ToxFAQs search
     if not atsdr_text:
         search_term = casrn or name
@@ -465,7 +471,7 @@ def gather_atsdr(data: BackgroundData, session: requests.Session) -> None:
                 atsdr_text = _extract_html_text(r.text)
                 atsdr_url = search_url
         except requests.RequestException:
-            pass
+            atsdr_errors += 1
 
     # Try the ATSDR minimal risk levels page for this chemical
     if not atsdr_text:
@@ -479,7 +485,7 @@ def gather_atsdr(data: BackgroundData, session: requests.Session) -> None:
                     atsdr_text = mrl_text
                     atsdr_url = mrl_url
         except requests.RequestException:
-            pass
+            atsdr_errors += 1
 
     if atsdr_text:
         # Store raw text for LLM (capped at 15K chars to fit in prompt)
@@ -490,6 +496,10 @@ def gather_atsdr(data: BackgroundData, session: requests.Session) -> None:
                 "title": f"ATSDR Toxicological Profile for {name or casrn}",
                 "source_type": "government_report",
             })
+    elif atsdr_errors == 2:
+        # Neither ATSDR endpoint answered: the profile's existence is unknown.
+        data.unreachable_sources.append("ATSDR")
+        data.notes.append("ATSDR could not be reached — ToxProfile availability unknown")
     else:
         data.notes.append(
             f"No ATSDR ToxProfile found for {name or casrn}. "
@@ -543,6 +553,9 @@ def gather_iris(data: BackgroundData, session: requests.Session) -> None:
             data.notes.append(f"IRIS lookup returned {r.status_code}")
     except requests.RequestException as e:
         data.notes.append(f"IRIS lookup error: {e}")
+        iris_unreachable = True
+    else:
+        iris_unreachable = False
 
     # Also try the IRIS data via PubChem (PubChem cross-references IRIS)
     if data.identity.pubchem_cid and not data.raw_iris_text:
@@ -560,6 +573,8 @@ def gather_iris(data: BackgroundData, session: requests.Session) -> None:
                     data.raw_iris_text = text[:15000]
         except (requests.RequestException, ValueError):
             pass
+    if iris_unreachable and not data.raw_iris_text:
+        data.unreachable_sources.append("IRIS")
 
 
 # ---------------------------------------------------------------------------
@@ -909,11 +924,18 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
                "TLV data behind paywall — value not programmatically retrievable")
 
     # ---- HAZARD IDENTIFICATION ----
+    unreachable = set(data.unreachable_sources)
+
+    def _unknown(item_sources: set[str], value) -> bool:
+        # Missing only because every source that could supply it was unreachable.
+        return not value and bool(item_sources) and item_sources <= unreachable
+
     _check_gap(gaps, "Hazard Identification", "ATSDR Toxicological Profile",
                data.raw_atsdr_text,
                "No comprehensive federal toxicological profile — ADME, mechanism, "
                "and health effects data may be incomplete or scattered across "
-               "primary literature")
+               "primary literature",
+               unknown=_unknown({"ATSDR"}, data.raw_atsdr_text))
     _check_gap(gaps, "Hazard Identification", "Acute toxicity data",
                data.acute_effects,
                "Cannot characterize acute hazard for emergency response or "
@@ -928,7 +950,8 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
     _check_gap(gaps, "Hazard Identification", "Cancer classification",
                data.cancer_class,
                "No authoritative cancer weight-of-evidence determination — "
-               "carcinogenic potential is uncharacterized")
+               "carcinogenic potential is uncharacterized",
+               unknown=_unknown({"IRIS", "CTX"}, data.cancer_class))
     _check_gap(gaps, "Hazard Identification", "Mechanism of toxicity",
                data.mechanism_summary or data.raw_atsdr_text or data.mechanism_papers,
                "Molecular mechanism unknown — limits mode-of-action-based "
@@ -938,18 +961,22 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
     _check_gap(gaps, "Dose-Response", "EPA IRIS assessment",
                data.raw_iris_text,
                "No EPA IRIS assessment — no peer-reviewed federal dose-response "
-               "values available")
+               "values available",
+               unknown=_unknown({"IRIS"}, data.raw_iris_text))
     _check_gap(gaps, "Dose-Response", "Oral reference dose (RfD)",
                data.iris_rfd,
                "No oral RfD — cannot derive health-based oral exposure limits "
-               "or drinking water guidelines")
+               "or drinking water guidelines",
+               unknown=_unknown({"IRIS", "CTX"}, data.iris_rfd))
     _check_gap(gaps, "Dose-Response", "NOAEL/LOAEL from critical study",
                data.iris_noael,
                "No identified point of departure — benchmark dose modeling "
-               "or read-across may be needed")
+               "or read-across may be needed",
+               unknown=_unknown({"IRIS", "CTX"}, data.iris_noael))
     _check_gap(gaps, "Dose-Response", "Inhalation reference concentration (RfC)",
-               "",  # We don't currently gather RfC — always a gap to flag
-               "No inhalation RfC — cannot derive health-based inhalation limits")
+               "",  # Not gathered: whether an RfC exists is unknown, not a gap
+               "No inhalation RfC — cannot derive health-based inhalation limits",
+               unknown=True)
 
     # ---- RISK CHARACTERIZATION ----
     _check_gap(gaps, "Risk Characterization", "Drinking water MCL/MCLG",
@@ -966,7 +993,7 @@ def build_data_gap_analysis(data: BackgroundData) -> None:
 
 
 def _check_gap(gaps: list[dict], domain: str, item: str,
-               value, missing_impact: str) -> None:
+               value, missing_impact: str, unknown: bool = False) -> None:
     """
     Check whether a data item is available, partial, or missing and append
     the result to the gaps list.
@@ -978,7 +1005,13 @@ def _check_gap(gaps: list[dict], domain: str, item: str,
         value: The actual value — truthy means available, falsy means missing
         missing_impact: What it means for risk assessment if this is missing
     """
-    if value:
+    if unknown:
+        # The only sources for this item could not be queried: say nothing
+        # about whether the data exist.
+        status = "unknown"
+        detail = "Source could not be queried; availability unknown"
+        risk_impact = ""
+    elif value:
         # Data is available — still record it so the analysis is comprehensive
         status = "available"
         detail = "Data obtained from regulatory database"
