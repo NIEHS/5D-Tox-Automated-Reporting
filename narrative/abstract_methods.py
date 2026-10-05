@@ -95,8 +95,13 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     # --- Dose list ---
     n_doses = len(ctx.dose_groups)
     dose_list = _format_dose_list(ctx.dose_groups, ctx.dose_unit)
-    # NIEHS convention: "mg/kg body weight [mg/kg]" on first mention
-    dose_unit_full = f"{ctx.dose_unit} body weight [{ctx.dose_unit}]"
+    # NIEHS convention: "mg/kg body weight [mg/kg]" on first mention of a dose
+    # per body weight; an exposure concentration (ppm) is written as is.
+    from pipeline.study_design import dose_noun, is_air_concentration
+    inhaled = is_air_concentration(ctx.dose_unit)
+    dose_unit_full = (ctx.dose_unit if inhaled
+                      else f"{ctx.dose_unit} body weight [{ctx.dose_unit}]")
+    noun = dose_noun(ctx.dose_unit)
 
     # --- Biosampling sentence (conditional) ---
     biosampling_sentence = ""
@@ -137,14 +142,18 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     paragraph = (
         f"A short-term in vivo biological potency study on {ta_name} in "
         f"adult {sexes_str} {subject} was conducted. "
-        f"{ta_name} was {given + ' ' if given else ''}administered once "
-        f"daily for {duration} consecutive days{' ' + route_clause if route_clause else ''} "
-        f"(study days 0–{last_day}). "
-        f"{ta_name} was administered at {n_doses} doses "
-        f"({dose_list} {dose_unit_full})."
-        f"{biosampling_sentence}"
-        f" On study day {sacrifice_day}, the day after the final dose "
-        f"was administered, animals were euthanized, standard "
+        + (f"Animals were exposed to {ta_name}{' ' + route_clause if route_clause else ''} "
+           f"once daily for {duration} consecutive days (study days 0–{last_day}) "
+           f"at {n_doses} {noun} ({dose_list} {dose_unit_full})."
+           if inhaled else
+           f"{ta_name} was {given + ' ' if given else ''}administered once "
+           f"daily for {duration} consecutive days{' ' + route_clause if route_clause else ''} "
+           f"(study days 0–{last_day}). "
+           f"{ta_name} was administered at {n_doses} {noun} "
+           f"({dose_list} {dose_unit_full}).")
+        + f"{biosampling_sentence}"
+        f" On study day {sacrifice_day}, the day after the final "
+        f"{'exposure' if inhaled else 'dose was administered'}, animals were euthanized, standard "
         f"toxicological measures were assessed{assay_clause}."
         f"{bmd_clause}"
         f" A benchmark response of {bmr_desc} was used to model all "

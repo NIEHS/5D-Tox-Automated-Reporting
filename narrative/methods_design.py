@@ -36,18 +36,24 @@ def _placeholder(items: list[str]) -> str:
 
 
 def _dose_sentence_list(ctx: MethodsContext) -> str:
-    """"0 (vehicle control), 7.8, 15.6, and 31.25 mg/kg" from the dose groups."""
+    """"0 (vehicle control), 7.8, 15.6, and 31.25 mg/kg" from the dose groups
+    ("0 (chamber control), … ppm" for an inhalation study)."""
+    from pipeline.study_design import control_group
+
     doses = sorted(ctx.dose_groups or [])
     if not doses:
         return ""
     labels = [_format_dose_list([d], ctx.dose_unit) for d in doses]
     if doses[0] == 0:
-        labels[0] = "0 (vehicle control)"
+        labels[0] = f"0 ({control_group(ctx.dose_unit)})"
     return f"{_join_oxford(labels)} {ctx.dose_unit}"
 
 
 def build_study_design(ctx: MethodsContext) -> list[str]:
-    from pipeline.study_design import administration_phrase, subject_phrase, vehicle_phrase
+    from pipeline.study_design import (
+        administration_phrase, control_group, dose_noun, exposure_verb, subject_phrase,
+        vehicle_phrase,
+    )
 
     facts = _facts(ctx)
     sex_words = " and ".join(s.lower() for s in ctx.sexes) if ctx.sexes else ""
@@ -60,21 +66,22 @@ def build_study_design(ctx: MethodsContext) -> list[str]:
     sentences = []
     doses = _dose_sentence_list(ctx)
     sentences.append(
-        f"{animals} were administered {chem}{' ' + how if how else ''} once daily "
+        f"{animals} were {exposure_verb(facts)} {chem}{' ' + how if how else ''} once daily "
         f"for {days} consecutive days (study days 0–{days - 1})"
-        + (f" at doses of {doses}." if doses else "."))
+        + (f" at {dose_noun(ctx.dose_unit)} of {doses}." if doses else "."))
     if ctx.n_per_group is not None and ctx.n_control is not None:
         who = f"{sex_words} animals" if sex_words else "animals"
         sentences.append(
             f"There were {ctx.n_per_group} core {who} in each treated group and "
-            f"{ctx.n_control} in the vehicle control group.")
+            f"{ctx.n_control} in the {control_group(ctx.dose_unit)} group.")
     if ctx.biosampling_doses:
         sentences.append(
             "Additional animals in the "
             f"{_format_dose_list(ctx.biosampling_doses, ctx.dose_unit)} {ctx.dose_unit} "
             "groups were dedicated to internal dose assessment.")
     sentences.append(
-        f"Core animals were euthanized on study day {days}, the day after the final dose.")
+        f"Core animals were euthanized on study day {days}, the day after the final "
+        f"{'exposure' if facts.get('route') == 'inhaled' else 'dose'}.")
 
     from pipeline.study_design import missing_design_facts
     missing = [m for m in missing_design_facts(facts) if m != "species"]
@@ -85,6 +92,7 @@ def build_study_design(ctx: MethodsContext) -> list[str]:
 
 def build_dose_selection(ctx: MethodsContext) -> list[str]:
     from narrative.methods_prompt import _dose_spacing_phrase
+    from pipeline.study_design import is_air_concentration
 
     doses = sorted(d for d in ctx.dose_groups or [] if d and d > 0)
     sentences = []
@@ -92,14 +100,16 @@ def build_dose_selection(ctx: MethodsContext) -> list[str]:
         top = _format_dose_list([doses[-1]], ctx.dose_unit)
         low = _format_dose_list([doses[0]], ctx.dose_unit)
         sentences.append(
-            f"The study used {len(doses)} dose levels from {low} to {top} {ctx.dose_unit}, "
+            f"The study used {len(doses)} "
+            f"{'exposure concentrations' if is_air_concentration(ctx.dose_unit) else 'dose levels'} "
+            f"from {low} to {top} {ctx.dose_unit}, "
             f"with {_dose_spacing_phrase(ctx)}.")
     return [" ".join(sentences + [_placeholder(
         ["the rationale for the top dose, the lowest dose and the dose spacing"])])]
 
 
 def build_chemistry(ctx: MethodsContext) -> list[str]:
-    from pipeline.study_design import vehicle_phrase
+    from pipeline.study_design import is_air_concentration, vehicle_phrase
 
     ids = [f"CASRN {ctx.casrn}" if ctx.casrn else "", ctx.dtxsid or ""]
     ids = [i for i in ids if i]
@@ -109,9 +119,15 @@ def build_chemistry(ctx: MethodsContext) -> list[str]:
     if vehicle:
         sentences.append(f"Dose formulations were prepared {vehicle}.")
     missing = ["the test article source and lot", "identity and purity analyses",
-               "storage conditions", "dose formulation analyses"]
-    if not vehicle:
-        missing.insert(3, "the vehicle")
+               "storage conditions"]
+    if is_air_concentration(ctx.dose_unit):
+        # Inhalation: no vehicle or formulations; the atmosphere is generated
+        # and its concentration monitored instead.
+        missing.append("exposure generation and chamber concentration monitoring")
+    else:
+        if not vehicle:
+            missing.append("the vehicle")
+        missing.append("dose formulation analyses")
     return [" ".join(sentences + [_placeholder(missing)])]
 
 

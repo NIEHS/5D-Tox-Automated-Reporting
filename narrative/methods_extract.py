@@ -242,15 +242,6 @@ def extract_methods_context(
     ctx.casrn = identity.get("casrn", "")
     ctx.dtxsid = identity.get("dtxsid", "")
 
-    # --- Study design: the study's recorded metadata (experimentDescription),
-    # with explicit user overrides on top.  No protocol defaults: a fact the
-    # data does not record stays None and the report flags it.
-    from pipeline.study_design import strain_display, study_design_facts
-    design = study_design_facts(integrated)
-    ctx.vehicle = study_params.get("vehicle") or design["vehicle"]
-    ctx.route = study_params.get("route") or design["route"]
-    ctx.species = study_params.get("species") or design["species"]
-    ctx.strain = study_params.get("strain") or strain_display(design) or None
     ctx.duration_days = study_params.get("duration_days", 5)
     # Group sizes: an explicit override only; otherwise derived from the animal
     # data below (never a protocol constant — studies differ, e.g. 4 vs 5).
@@ -260,7 +251,7 @@ def extract_methods_context(
     # --- Scan fingerprints for platform presence and collect metadata ---
     all_doses: set[float] = set()
     all_sexes: set[str] = set()
-    dose_unit_found = None
+    recorded_units: list[str] = []
 
     for fid, fp in fingerprints.items():
         # Support both dict and object-style access
@@ -311,9 +302,9 @@ def extract_methods_context(
             all_sexes.update(sexes)
         du = _get("dose_unit")
         if du:
-            dose_unit_found = du
-        # Species from fingerprints (name-inferred) — only when neither the
-        # recorded metadata nor the user gives one.
+            recorded_units.append(du)
+        # Species from fingerprints (name-inferred) — used below only when
+        # neither the recorded metadata nor the user gives one.
         sp = _get("species")
         if sp and not ctx.species:
             ctx.species = sp
@@ -322,8 +313,20 @@ def extract_methods_context(
         ctx.dose_groups = sorted(all_doses)
     if all_sexes:
         ctx.sexes = sorted(all_sexes)
-    if dose_unit_found:
-        ctx.dose_unit = dose_unit_found
+    # --- Dose unit: stated (study_params) > recorded (fingerprints) > mg/kg ---
+    from pipeline.study_design import resolve_dose_unit, strain_display, study_design_facts
+    ctx.dose_unit, ctx.dose_unit_source = resolve_dose_unit(
+        study_params.get("dose_unit"), recorded_units)
+
+    # --- Study design: the study's recorded metadata (experimentDescription),
+    # explicit overrides on top, the standard-design fallback for what neither
+    # gives (pipeline.study_design; route/vehicle follow the dose unit).
+    design = study_design_facts(integrated, ctx.dose_unit)
+    ctx.vehicle = study_params.get("vehicle") or design["vehicle"]
+    ctx.route = study_params.get("route") or design["route"]
+    ctx.species = study_params.get("species") or design["species"] or ctx.species
+    ctx.strain = study_params.get("strain") or strain_display(design) or None
+    ctx.design_fallback = [k for k in design["fallback"] if not study_params.get(k)]
 
     # --- Animal report: domain coverage and biosampling count ---
     if animal_report:

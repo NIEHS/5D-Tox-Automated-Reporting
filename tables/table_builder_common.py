@@ -68,6 +68,14 @@ SIGNIFICANCE_EXPLANATION = (
 )
 
 
+def significance_explanation(dose_unit: str | None = None) -> str:
+    """SIGNIFICANCE_EXPLANATION naming the study's control group — the
+    chamber control in an inhalation (ppm) study, which has no vehicle."""
+    from pipeline.study_design import control_group
+
+    return SIGNIFICANCE_EXPLANATION.replace("vehicle control", control_group(dose_unit))
+
+
 # ---------------------------------------------------------------------------
 # Typed footnote model
 # ---------------------------------------------------------------------------

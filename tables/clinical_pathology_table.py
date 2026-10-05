@@ -34,7 +34,7 @@ from __future__ import annotations
 from tables.table_builder_common import (
     sex_subject,
     BMD_DEFINITION,
-    SIGNIFICANCE_EXPLANATION,
+    significance_explanation,
     SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
     load_sidecar,
@@ -290,7 +290,7 @@ def build_clinical_pathology_table_from_sidecar(
     #                        authority, new addition — see the imputation
     #                        block below.
     footnotes: list[dict] = [
-        legend_footnote(SIGNIFICANCE_EXPLANATION),
+        legend_footnote(significance_explanation(dose_unit)),
         legend_footnote(SIGNIFICANCE_MARKER_LEGEND),
         definition_footnote(BMD_DEFINITION),
         lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),

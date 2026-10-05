@@ -118,7 +118,7 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     # Design facts the data does not record are stated as such, so the model
     # cannot fill them with protocol defaults (pipeline.study_design).
     _not_recorded = "not recorded in the study data — do not state one"
-    from pipeline.study_design import subject_phrase
+    from pipeline.study_design import control_group, subject_phrase
     _subject = subject_phrase({"species": ctx.species, "strain": ctx.strain})
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
@@ -129,7 +129,7 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
 - Duration: {ctx.duration_days} days
 - Dose groups ({ctx.dose_unit}): {dose_str}
 - Animals per treatment group: {per_group}
-- Animals in vehicle control: {control_n}"""
+- Animals in {control_group(ctx.dose_unit)} group: {control_n}"""
 
     if ctx.n_biosampling > 0:
         context_block += f"\n- Biosampling animals: {ctx.n_biosampling} total"
@@ -213,14 +213,17 @@ def _dose_spacing_phrase(ctx: MethodsContext) -> str:
     studies)."""
     import statistics
 
+    from pipeline.study_design import dose_noun
+
+    between = f"between consecutive {dose_noun(ctx.dose_unit).split()[-1]}"
     doses = sorted(d for d in (ctx.dose_groups or []) if d and d > 0)
     ratios = [b / a for a, b in zip(doses, doses[1:]) if a > 0]
     if not ratios:
         return "dose spacing as designed"
     r = statistics.median(ratios)
     if abs(r - 10 ** 0.5) < 0.25:
-        return "approximately half-log spacing between consecutive doses"
-    return f"approximately {r:.1f}-fold spacing between consecutive doses"
+        return f"approximately half-log spacing {between}"
+    return f"approximately {r:.1f}-fold spacing {between}"
 
 
 def _genomic_bmr_phrase(ctx: MethodsContext) -> str:
@@ -346,7 +349,7 @@ def _build_subsection_guidelines(
             "by the Dixon and Massey outlier test were examined, and values from animals "
             "suspected of illness unrelated to exposure or flagged for measurement problems were "
             "eliminated. NOEL = highest dose without a significant (p <= 0.05) pairwise "
-            "difference from the vehicle control; LOEL = lowest dose with one. Do not mention "
+            "difference from the control group; LOEL = lowest dose with one. Do not mention "
             "normality or variance-homogeneity tests (Shapiro-Wilk, Levene). Only mention "
             "clinical pathology if it is in the context."
         ),

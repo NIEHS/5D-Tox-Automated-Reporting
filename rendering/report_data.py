@@ -237,12 +237,14 @@ def _build_full_title(ta: dict, design: dict | None = None) -> str:
     )
 
 
-def apply_study_design(data: dict, integrated: dict | None) -> None:
+def apply_study_design(data: dict, integrated: dict | None,
+                       dose_unit: str | None = None) -> None:
     """Set the study-design facts the title, running header and cover state
-    (data["study_design"]) from the integrated project's recorded metadata."""
+    (data["study_design"]) from the integrated project's recorded metadata,
+    with the standard-design fallback for ``dose_unit`` (pipeline.study_design)."""
     from pipeline.study_design import study_design_facts
 
-    design = study_design_facts(integrated)
+    design = study_design_facts(integrated, dose_unit)
     data["study_design"] = design
     ta = data.get("test_article")
     if isinstance(ta, dict) and ta.get("forms"):
@@ -406,7 +408,8 @@ def marshal_export_data(
             _animals = []
         if _animals:
             data["appendix_animals"] = _animals
-            data["appendix_animals_matrix"] = build_animal_roster_matrix(_animals)
+            data["appendix_animals_matrix"] = build_animal_roster_matrix(
+                _animals, dose_unit=body.get("dose_unit"))
         # Appendix C.1 PCA figure, from the same integrated project.
         if "appendix_pca_figure" not in data:
             try:
@@ -441,7 +444,7 @@ def marshal_export_data(
         # Title, running header and cover name the animals and route the
         # study records (no protocol defaults).
         if _integ:
-            apply_study_design(data, _integ)
+            apply_study_design(data, _integ, dose_unit=body.get("dose_unit"))
 
     # ── Appendix D-1: the apical BMD acceptance criteria, from the classifier's
     # own constants (independent of the session).

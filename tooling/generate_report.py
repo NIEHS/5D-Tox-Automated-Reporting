@@ -294,6 +294,13 @@ def process(dtxsid: str, params: dict, store) -> None:
     _log(f"  {len(payload.get('sections') or [])} apical section(s), "
          f"{len(payload.get('genomics_sections') or [])} genomics section(s), "
          f"methods={'yes' if payload.get('methods') else 'no'}")
+    ctx = (payload.get("methods") or {}).get("context") or {}
+    if ctx:
+        _log(f"  dose unit: {ctx.get('dose_unit')} ({ctx.get('dose_unit_source', '?')})")
+        if ctx.get("design_fallback"):
+            fb = ", ".join(f"{k}={ctx.get(k)}" for k in ctx["design_fallback"])
+            _log(f"  NOTE: not recorded in the data, standard design used: {fb} "
+                 "(record the real values with --design)")
     mat = materialize_result_sections(dtxsid, store)
     _log(f"  materialized {len(mat.get('materialized', []))} result section file(s)")
 
@@ -437,7 +444,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--compound-name",
                     help="short name used in captions/narratives (default: identity name)")
     ap.add_argument("--dose-unit", default=None,
-                    help="dose unit for table headers (default: mg/kg — state it explicitly)")
+                    help="dose unit, e.g. mg/kg or ppm (default: the unit the data records, "
+                         "else mg/kg — state it explicitly).  A ppm unit also makes the "
+                         "route fallback inhalation instead of gavage in corn oil")
     ap.add_argument("--metadata", type=Path,
                     help="JSON {filename: {platform, data_type}} classification overrides")
     ap.add_argument("--design", type=Path,
@@ -536,12 +545,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.stop_after == "integrate":
                 return 0
 
-            dose_unit = args.dose_unit or "mg/kg"
             if not args.dose_unit:
-                _log("  NOTE: dose unit defaulted to 'mg/kg' — pass --dose-unit to state it")
+                _log("  NOTE: no --dose-unit — using the unit the data records, else mg/kg")
             params = {
                 "compound_name": args.compound_name or identity.get("name") or dtxsid,
-                "dose_unit": dose_unit,
+                "dose_unit": args.dose_unit,
                 "bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()],
                 "go_pct": args.go_pct,
                 "go_min_genes": args.go_min_genes,

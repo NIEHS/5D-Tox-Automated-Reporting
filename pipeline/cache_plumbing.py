@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 13  # bumped: section tables + narratives carry the ToxicR BMD fills
+_SECTIONS_CACHE_SCHEMA_VERSION = 14  # bumped: significance footnote names the chamber control in a ppm study
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -401,7 +401,10 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 # 2: Study Design / Dose Selection / Chemistry built from the data
 #    (narrative.methods_design); species/strain/route/vehicle from the recorded
 #    metadata instead of protocol defaults.
-_METHODS_CACHE_SCHEMA_VERSION = 2
+# 3: standard-design fallback (Sprague Dawley, gavage, corn oil) for unrecorded
+#    facts; an inhalation (ppm) study reads chamber control, exposure
+#    concentrations, no vehicle or formulations.
+_METHODS_CACHE_SCHEMA_VERSION = 3
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:

@@ -167,3 +167,10 @@ def test_roster_from_integrated_gene_expression_experiments(tmp_path):
         ("111", "Liver", "Plate1-111"),
         ("", "Liver", "S1P1_A07"),  # "07" is not animal 7 at dose 10 — no number invented
     ]
+
+
+def test_roster_dose_header_follows_the_report_unit():
+    """An inhalation study's roster says ppm, not the mg/kg default."""
+    built = build_animal_roster_matrix(_ROWS, dose_unit="ppm")
+    assert built["headers"][2] == "Dose (ppm)"
+    assert build_animal_roster_matrix(_ROWS)["headers"][2] == "Dose (mg/kg)"

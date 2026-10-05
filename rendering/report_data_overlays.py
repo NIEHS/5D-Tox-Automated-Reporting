@@ -296,7 +296,7 @@ def _overlay_apical_sections(data: dict, body: dict, tree: "list | None" = None)
             # definition / lettered) with letters assigned.  Copy the list
             # so we don't mutate the cached section.
             footnotes = list(sec.get("footnotes", []))
-            dose_unit = sec.get("dose_unit", "mg/kg")
+            dose_unit = sec.get("dose_unit") or body.get("dose_unit") or "mg/kg"
             table_data = sec.get("table_data", {})
 
             # Build per-sex missing-animal footnotes from table row data.

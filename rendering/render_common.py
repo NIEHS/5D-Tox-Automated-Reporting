@@ -924,7 +924,7 @@ def _roster_dose(dose) -> str:
     return "—"
 
 
-def build_animal_roster_matrix(animals: list[dict]) -> dict:
+def build_animal_roster_matrix(animals: list[dict], dose_unit: str | None = None) -> dict:
     """
     Build the Appendix B animal roster as a generic MATRIX — the ``{caption,
     headers, rows, footnotes}`` shape a ``data-table`` node renders (ADR-0025:
@@ -937,7 +937,8 @@ def build_animal_roster_matrix(animals: list[dict]) -> dict:
     emitter escapes).  Rows arrive already joined + sorted
     (latex_export._load_animal_identifiers).  ``breakable`` tells the LaTeX
     emitter to use a page-breaking longtable: hundreds of rows never fit one
-    float page.
+    float page.  ``dose_unit`` is the report's dose unit for the Dose column
+    header (default mg/kg; an inhalation study's roster reads "Dose (ppm)").
     """
     rows = [
         [
@@ -950,6 +951,8 @@ def build_animal_roster_matrix(animals: list[dict]) -> dict:
         for r in animals or []
     ]
     headers = list(ANIMAL_ROSTER_HEADERS)
+    if dose_unit:
+        headers[2] = f"Dose ({dose_unit})"
     footnotes: list = []
     if rows and not any(r[0] for r in rows):
         # No sample id carries an animal number: drop the empty column and say

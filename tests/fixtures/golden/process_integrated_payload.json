@@ -63,8 +63,13 @@
       "chemical_name": "the test chemical",
       "clin_chem_endpoints": [],
       "constant_variance": null,
+      "design_fallback": [
+        "route",
+        "vehicle"
+      ],
       "dose_groups": [],
       "dose_unit": "mg/kg",
+      "dose_unit_source": "stated",
       "dtxsid": "DTXSID_TEST",
       "duration_days": 5,
       "fold_change_filter": null,
@@ -93,11 +98,11 @@
       "pk_timepoints": [],
       "prefilter_method": null,
       "prefilter_pvalue": null,
-      "route": null,
+      "route": "gavage",
       "sexes": [],
       "species": null,
       "strain": null,
-      "vehicle": null
+      "vehicle": "corn oil"
     },
     "model_used": "claude-sonnet-4-6",
     "section_key": "methods",
@@ -107,7 +112,7 @@
         "key": "study_design",
         "level": 3,
         "paragraphs": [
-          "Animals were administered the test chemical once daily for 5 consecutive days (study days 0–4). Core animals were euthanized on study day 5, the day after the final dose. [Placeholder: strain, route of administration, vehicle, the animal source, age at receipt, quarantine, and the randomization procedure are not in the study data]"
+          "Animals were administered the test chemical by gavage in corn oil once daily for 5 consecutive days (study days 0–4). Core animals were euthanized on study day 5, the day after the final dose. [Placeholder: strain, the animal source, age at receipt, quarantine, and the randomization procedure are not in the study data]"
         ],
         "table": null
       },
@@ -125,7 +130,7 @@
         "key": "chemistry",
         "level": 3,
         "paragraphs": [
-          "The test article was the test chemical (DTXSID_TEST). [Placeholder: the test article source and lot, identity and purity analyses, storage conditions, the vehicle, and dose formulation analyses are not in the study data]"
+          "The test article was the test chemical (DTXSID_TEST). Dose formulations were prepared in corn oil. [Placeholder: the test article source and lot, identity and purity analyses, storage conditions, and dose formulation analyses are not in the study data]"
         ],
         "table": null
       }

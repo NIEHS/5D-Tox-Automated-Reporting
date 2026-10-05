@@ -741,6 +741,12 @@ def load_session_data(
     # selected sexes/assays/organs.  Resolve the view's filters (falling back
     # to the global template for 'default'); {} ⇒ no filtering (full superset).
     _vf = _resolve_apical_filters(dtxsid, view)
+    # The session's dose unit as Process resolved it (stated > recorded > mg/kg),
+    # carried by the Methods context; every table header and caption uses it.
+    _mc = _load_json(_latest(session_dir, "_cache_methods_*.json"))
+    session_dose_unit = (((_mc or {}).get("context") or {}).get("dose_unit")
+                         if isinstance(_mc, dict) else None) or "mg/kg"
+    data["dose_unit"] = session_dose_unit
     sections_path = _latest(session_dir, "_cache_sections_*.json")
     sections_cache = _load_json(sections_path)
     if isinstance(sections_cache, dict):
@@ -763,6 +769,7 @@ def load_session_data(
             _apical = []
             for s in raw_sections:
                 ns = _normalize_apical_section(s)
+                ns.setdefault("dose_unit", session_dose_unit)
                 if ns.get("caption"):
                     ns["caption"] = refresh_caption_compound(ns["caption"], chemical_name)
                 _apical.append(ns)
@@ -948,7 +955,8 @@ def load_session_data(
         # The roster renders through the `data-table` node under Appendix B
         # (ADR-0025): the generic matrix shape at the node's data_key.
         from rendering.render_common import build_animal_roster_matrix
-        data["appendix_animals_matrix"] = build_animal_roster_matrix(animals)
+        data["appendix_animals_matrix"] = build_animal_roster_matrix(
+            animals, dose_unit=session_dose_unit)
 
     # ── Appendix D-2: BMD Analysis Configuration (provenance record) ──
     # The exact BMDExpress/ToxicR settings each analysis ran with, data-derived
@@ -968,7 +976,7 @@ def load_session_data(
     # Title, running header and cover: the animals and route the study records.
     if _integ:
         from rendering.report_data import apply_study_design
-        apply_study_design(data, _integ)
+        apply_study_design(data, _integ, dose_unit=session_dose_unit)
 
     # ── Appendix D-1: apical BMD acceptance criteria (classifier constants) ──
     from rendering.bmd_appendix import build_bmd_acceptance_matrix

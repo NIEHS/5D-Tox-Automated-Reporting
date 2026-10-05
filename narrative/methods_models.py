@@ -94,8 +94,12 @@ class MethodsContext:
     # term ("rat"); strain the display form ("Sprague Dawley").
     species: str | None = None
     strain: str | None = None
+    # Design facts filled from the standard-design fallback, not the data.
+    design_fallback: list[str] = field(default_factory=list)
     dose_groups: list[float] = field(default_factory=list)
     dose_unit: str = "mg/kg"
+    # Where dose_unit came from: "stated", "recorded" or "fallback".
+    dose_unit_source: str = "fallback"
     # Core animals per treated dose group / in the vehicle control group, per sex —
     # DERIVED from the study's animal data (methods_extract._extract_core_group_sizes).
     # None when the data has no animal roster: the prompt then states nothing.

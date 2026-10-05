@@ -5,8 +5,8 @@ from narrative.methods_design import (
 )
 from narrative.methods_models import MethodsContext
 from pipeline.study_design import (
-    administration_phrase, study_design_facts, study_type_label, subject_phrase,
-    vehicle_phrase,
+    administration_phrase, resolve_dose_unit, study_design_facts, study_type_label,
+    subject_phrase, vehicle_phrase,
 )
 from rendering.render_common import scan_pending_markers
 
@@ -28,29 +28,78 @@ def test_facts_from_recorded_metadata():
     assert study_type_label(f) == "Gavage Studies"
 
 
-def test_nothing_defaulted():
-    f = study_design_facts(_integrated(species="rat"))
-    assert f["strain"] is f["route"] is f["vehicle"] is None
-    assert subject_phrase(f) == "rats"
-    assert administration_phrase(f) == vehicle_phrase(f) == study_type_label(f) == ""
+def test_unrecorded_facts_take_the_standard_design():
+    """Sprague Dawley rats, gavage in corn oil — listed as fallback, not recorded."""
+    f = study_design_facts(_integrated(species="rat"), "mg/kg")
+    assert (f["strain"], f["route"], f["vehicle"]) == ("Sprague-Dawley", "gavage", "corn oil")
+    assert sorted(f["fallback"]) == ["route", "strain", "vehicle"]
+    assert subject_phrase(f) == "Sprague Dawley rats"
+
+
+def test_ppm_means_inhalation_not_gavage():
+    f = study_design_facts(_integrated(species="rat"), "ppm")
+    assert f["route"] == "inhaled" and f["vehicle"] is None
+    assert administration_phrase(f) == "by inhalation"
+    assert study_type_label(f) == "Inhalation Studies"
+
+
+def test_recorded_values_win_over_the_fallback():
+    f = study_design_facts(_integrated(species="mouse", administrationMeans="dietary"), "mg/kg")
+    assert f["route"] == "dietary" and f["strain"] is None   # no mouse strain fallback
+    assert "route" not in f["fallback"]
+
+
+def test_unknown_unit_gets_no_route_fallback():
+    f = study_design_facts(_integrated(species="rat"), "µM")
+    assert f["route"] is None and f["vehicle"] is None
     assert subject_phrase(study_design_facts({})) == "animals"
+
+
+def test_dose_unit_resolution():
+    assert resolve_dose_unit("ppm", ["mg/kg"]) == ("ppm", "stated")
+    assert resolve_dose_unit(None, ["ppm", "ppm"]) == ("ppm", "recorded")
+    assert resolve_dose_unit(None, ["ppm", "mg/kg"]) == ("mg/kg", "fallback")
+    assert resolve_dose_unit(None, []) == ("mg/kg", "fallback")
 
 
 def test_disagreeing_experiments_are_not_resolved():
     integ = _integrated(articleVehicle="corn oil")
     integ["doseResponseExperiments"][1]["experimentDescription"]["articleVehicle"] = "water"
-    f = study_design_facts(integ)
-    assert f["vehicle"] is None and f["conflicts"] == ["articleVehicle"]
+    f = study_design_facts(integ, "mg/kg")
+    assert f["vehicle"] is None and f["conflicts"] == ["articleVehicle"]   # no fallback over it
 
 
 def test_oral_alone_does_not_say_how():
-    assert study_design_facts(_integrated(articleRoute="oral"))["route"] is None
+    assert study_design_facts(_integrated(articleRoute="oral"), "µM")["route"] is None
 
 
 def _ctx(**kw):
     return MethodsContext(chemical_name="Triclosan", casrn="3380-34-5", dtxsid="DTXSID5032498",
                           dose_groups=[0, 7.8, 15.6, 31.25], sexes=["Male"],
                           n_per_group=4, n_control=4, species="rat", **kw)
+
+
+def test_inhalation_methods_wording():
+    c = _ctx(strain="Sprague Dawley", route="inhaled", dose_unit="ppm")
+    design = build_study_design(c)[0]
+    assert design.startswith("Male Sprague Dawley rats were exposed to Triclosan by inhalation")
+    assert "exposure concentrations of 0 (chamber control), 7.8, 15.6, and 31.25 ppm" in design
+    assert "after the final exposure" in design
+    assert "exposure concentrations from 7.8 to 31.25 ppm" in build_dose_selection(c)[0]
+    assert "spacing between consecutive concentrations" in build_dose_selection(c)[0]
+    # Inhalation controls breathe clean air: no vehicle, no formulations.
+    assert "in the chamber control group" in design
+    assert "vehicle" not in design
+    chem = build_chemistry(c)[0]
+    assert "vehicle" not in chem and "formulation" not in chem
+    assert "chamber concentration monitoring" in chem
+
+
+def test_significance_footnote_names_the_control_group():
+    from tables.table_builder_common import significance_explanation
+    assert "chamber control group" in significance_explanation("ppm")
+    assert "vehicle" not in significance_explanation("ppm")
+    assert "vehicle control group" in significance_explanation("mg/kg")
 
 
 def test_methods_subsections_state_data_and_flag_the_rest():

@@ -233,6 +233,8 @@ class ProcessContext:
     bmd_divergences: list | None = None
     # Fixed decimals every BMD in the report prints with (report_bmd_decimals).
     bmd_decimals: int | None = None
+    # The dose unit as the caller stated it (None ⇒ recorded or fallback).
+    dose_unit_stated: str | None = None
     chart_images: list | None = None
     llm_gs_by_organ: dict | None = None
     llm_gene_by_organ: dict | None = None
@@ -439,7 +441,7 @@ async def _build_genomics_llm_narratives(ctx):
                     pass
 
             from pipeline.study_design import study_design_facts, subject_phrase
-            _subject = subject_phrase(study_design_facts(ctx.integrated))
+            _subject = subject_phrase(study_design_facts(ctx.integrated, ctx.dose_unit))
 
             async def _one(key, gen_data):
                 """LLM-generate narrative for a single organ×sex."""
@@ -1147,7 +1149,7 @@ async def _get_methods(ctx):
 
     # No protocol defaults: species, strain, route and vehicle come from the
     # study's recorded metadata (extract_methods_context → pipeline.study_design).
-    study_params: dict = {}
+    study_params: dict = {"dose_unit": ctx.dose_unit_stated} if ctx.dose_unit_stated else {}
 
     # Extract structured context from all data sources.
     # Pass session_dir so biosampling dose groups can be scanned
@@ -1307,8 +1309,9 @@ async def run_data(ctx) -> None:
             _fps_for_methods[fid] = fp
     ctx.fps_for_methods = _fps_for_methods
     from pipeline.study_design import study_design_facts
-    ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods,
-                                     study_design_facts(integrated))
+    ctx.methods_hash = _hash_methods(
+        dtxsid, _fps_for_methods,
+        {**study_design_facts(integrated, ctx.dose_unit), "dose_unit": ctx.dose_unit})
 
     # Launch all four concurrently — cached units return instantly,
     # uncached units run in parallel (BMDS in thread pool, genomics
@@ -1603,7 +1606,18 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     # narratives. identity.json is authored at integration and always on disk for a
     # processable session, so the default is now only a last resort.
     compound_name = body.get("compound_name") or _resolve_compound_name(dtxsid)
-    dose_unit = body.get("dose_unit", "mg/kg")
+    # Dose unit: the one the caller states, else the one the data records,
+    # else mg/kg (pipeline.study_design.resolve_dose_unit).  A ppm study must
+    # read ppm everywhere, including render-only paths that see only caches.
+    from pipeline.pool_fingerprints import ensure_fingerprints
+    from pipeline.study_design import resolve_dose_unit
+    dose_unit_stated = body.get("dose_unit") or None
+    _recorded_units = [
+        (fp.get("dose_unit") if isinstance(fp, dict) else getattr(fp, "dose_unit", None))
+        for fp in ensure_fingerprints(dtxsid).values()
+    ]
+    dose_unit, _dose_unit_source = resolve_dose_unit(dose_unit_stated, _recorded_units)
+    logger.info("Dose unit for %s: %s (%s)", dtxsid, dose_unit, _dose_unit_source)
 
     # BMD statistics — array of stat keys, each producing a separate GO table.
     # Accepts both the old single "bmd_stat" and the new "bmd_stats" array.
@@ -1657,6 +1671,7 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
         integrated=integrated,
         compound_name=compound_name,
         dose_unit=dose_unit,
+        dose_unit_stated=dose_unit_stated,
         bmd_stats=bmd_stats,
         bmd_stat=bmd_stat,
         go_pct=go_pct,

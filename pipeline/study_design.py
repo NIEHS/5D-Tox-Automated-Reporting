@@ -10,6 +10,14 @@ assuming the NIEHS 5-day gavage protocol ([[feedback_no_hardcoded_report_facts]]
 ``study_design_facts`` reads the facts; the ``*_phrase`` helpers turn them into
 the wording the title, the Abstract and Materials and Methods use, returning ""
 for an unknown fact so callers can drop the clause.
+
+Fallback (decided by the user, 2026-10-05): a fact the metadata does not record
+takes the program's standard design — Sprague Dawley rats, by gavage in corn
+oil — and the facts list it under ``fallback`` so callers can log it.  The
+route and vehicle fallback follows the dose unit: a concentration in air (ppm)
+means inhalation, never gavage or corn oil; an oral dose (mg/kg) means gavage
+in corn oil; any other unit gets no route fallback.  The dose unit itself is
+resolved by ``resolve_dose_unit``: stated > recorded > mg/kg.
 """
 
 from __future__ import annotations
@@ -38,11 +46,39 @@ _ADMINISTRATION = {
 _MEDIUM_VEHICLES = {"feed", "water", "aerosol", "gas"}
 
 
-def study_design_facts(integrated: dict | None) -> dict:
-    """{species, strain, route, vehicle, conflicts} from the experiments'
-    recorded metadata.  A field is the value every experiment that records it
-    agrees on; None when none records it or they disagree (listed under
-    ``conflicts``)."""
+# Units that are an exposure concentration in air (inhalation studies) and
+# units that are an oral dose per body weight.
+_AIR_CONCENTRATION_UNITS = {"ppm", "ppb", "mg/m3", "mg/m³", "µg/m3", "µg/m³"}
+_ORAL_DOSE_UNITS = {"mg/kg", "mg/kg/day", "mg/kg bw", "mg/kg body weight"}
+
+# The program's standard design, used only for facts the metadata lacks.
+FALLBACK_STRAIN = {"rat": "Sprague-Dawley"}
+FALLBACK_ORAL = {"route": "gavage", "vehicle": "corn oil"}
+FALLBACK_AIR = {"route": "inhaled"}
+
+
+def is_air_concentration(dose_unit: str | None) -> bool:
+    return (dose_unit or "").strip().lower() in {u.lower() for u in _AIR_CONCENTRATION_UNITS}
+
+
+def resolve_dose_unit(stated: str | None, recorded: list[str] | None = None) -> tuple[str, str]:
+    """(unit, source): the unit the user stated (--dose-unit / the UI), else the
+    one unit the data records, else "mg/kg" — source is "stated", "recorded" or
+    "fallback"."""
+    if stated and stated.strip():
+        return stated.strip(), "stated"
+    units = sorted({u.strip() for u in recorded or [] if u and u.strip()})
+    if len(units) == 1:
+        return units[0], "recorded"
+    return "mg/kg", "fallback"
+
+
+def study_design_facts(integrated: dict | None, dose_unit: str | None = None) -> dict:
+    """{species, strain, route, vehicle, conflicts, fallback} from the
+    experiments' recorded metadata.  A field is the value every experiment
+    that records it agrees on (disagreements are listed under ``conflicts``);
+    a field none records takes the standard-design fallback for ``dose_unit``
+    (see the module docstring), listed under ``fallback``."""
     seen: dict[str, set[str]] = {f: set() for f in _FIELDS}
     for exp in (integrated or {}).get("doseResponseExperiments") or []:
         ed = exp.get("experimentDescription") or {}
@@ -57,20 +93,63 @@ def study_design_facts(integrated: dict | None) -> dict:
     route = one["administrationMeans"] or one["articleRoute"]
     if route == "oral":
         route = None
-    return {
+    facts = {
         "species": one["species"],
         "strain": one["strain"],
         "route": route,
         "vehicle": one["articleVehicle"],
         "conflicts": conflicts,
+        "fallback": [],
     }
+    unit = (dose_unit or "").strip().lower()
+    if is_air_concentration(unit):
+        standard = dict(FALLBACK_AIR)
+    elif unit in _ORAL_DOSE_UNITS or not unit:
+        standard = dict(FALLBACK_ORAL)
+    else:
+        standard = {}
+    strain = FALLBACK_STRAIN.get(facts["species"] or "")
+    if strain:
+        standard["strain"] = strain
+    for key, value in standard.items():
+        if not facts[key] and key not in _conflicting_keys(conflicts):
+            facts[key] = value
+            facts["fallback"].append(key)
+    return facts
+
+
+def _conflicting_keys(conflicts: list[str]) -> set[str]:
+    """The design keys whose recorded values disagree (no fallback over a
+    disagreement: that needs a person)."""
+    by_field = {"strain": "strain", "articleRoute": "route",
+                "administrationMeans": "route", "articleVehicle": "vehicle"}
+    return {by_field[c] for c in conflicts if c in by_field}
 
 
 def missing_design_facts(facts: dict) -> list[str]:
-    """Plain names of the design facts the data does not record."""
+    """Plain names of the design facts the data does not record (an
+    inhalation study has no vehicle to record)."""
     names = {"species": "species", "strain": "strain",
              "route": "route of administration", "vehicle": "vehicle"}
+    if facts.get("route") == "inhaled":
+        names.pop("vehicle")
     return [label for key, label in names.items() if not facts.get(key)]
+
+
+def exposure_verb(facts: dict) -> str:
+    """"exposed to" for inhalation, else "administered"."""
+    return "exposed to" if facts.get("route") == "inhaled" else "administered"
+
+
+def control_group(dose_unit: str | None) -> str:
+    """"chamber control" for an air concentration (the controls breathe clean
+    air; there is no vehicle), else "vehicle control"."""
+    return "chamber control" if is_air_concentration(dose_unit) else "vehicle control"
+
+
+def dose_noun(dose_unit: str | None) -> str:
+    """"exposure concentrations" for an air concentration, else "doses"."""
+    return "exposure concentrations" if is_air_concentration(dose_unit) else "doses"
 
 
 def strain_display(facts: dict) -> str:
