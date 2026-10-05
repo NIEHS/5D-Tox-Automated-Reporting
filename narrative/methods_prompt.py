@@ -115,12 +115,17 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     control_n = (_unk if ctx.n_control is None else
                  f"{ctx.n_control}" if sexless else f"{ctx.n_control} {sexes_str}")
 
+    # Design facts the data does not record are stated as such, so the model
+    # cannot fill them with protocol defaults (pipeline.study_design).
+    _not_recorded = "not recorded in the study data — do not state one"
+    from pipeline.study_design import subject_phrase
+    _subject = subject_phrase({"species": ctx.species, "strain": ctx.strain})
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
-- Species: {ctx.species} rats
+- Animals: {_subject if ctx.species else _not_recorded}
 {sex_line}
-- Route of administration: oral {ctx.route}
-- Vehicle: {ctx.vehicle}
+- Route of administration: {ctx.route or _not_recorded}
+- Vehicle: {ctx.vehicle or _not_recorded}
 - Duration: {ctx.duration_days} days
 - Dose groups ({ctx.dose_unit}): {dose_str}
 - Animals per treatment group: {per_group}
@@ -161,8 +166,10 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     if ctx.constant_variance is not None:
         context_block += f"\n- Constant variance: {'yes' if ctx.constant_variance else 'no'}"
 
-    # Build subsection requirements
-    skeleton = build_subsection_skeleton(ctx)
+    # Build subsection requirements.  Study Design, Dose Selection and Chemistry
+    # are built from the data (methods_design), never asked of the model.
+    from narrative.methods_design import DATA_BUILT_KEYS
+    skeleton = [t for t in build_subsection_skeleton(ctx) if t[0] not in DATA_BUILT_KEYS]
     subsection_keys = [key for key, _, _ in skeleton]
 
     # Per-subsection guidance for the LLM
@@ -264,39 +271,7 @@ def _build_subsection_guidelines(
     Returns:
         Formatted string of guidelines.
     """
-    dose_str = ", ".join(str(d) for d in ctx.dose_groups) if ctx.dose_groups else "not specified"
-    sexless = not ctx.sexes
-    sexes_str = " and ".join(ctx.sexes)
-    if ctx.n_per_group is None or ctx.n_control is None:
-        sample_sizes = "group sizes are not available in the data; do not state animal counts"
-    else:
-        sample_sizes = (
-            f"{ctx.n_per_group} per treatment group, {ctx.n_control} vehicle control"
-            if sexless else
-            f"{ctx.n_per_group} {sexes_str} per treatment group, {ctx.n_control} {sexes_str} vehicle control"
-        )
-
     guides: dict[str, str] = {
-        "study_design": (
-            f"One paragraph covering: animal source and quarantine (7 days), "
-            f"randomization by body weight, dose groups ({dose_str} {ctx.dose_unit}), "
-            f"dosing schedule ({ctx.duration_days} consecutive days by oral {ctx.route}), "
-            f"sample sizes ({sample_sizes}), "
-            f"{'biosampling animals for internal dose assessment, ' if ctx.n_biosampling > 0 else ''}"
-            f"necropsy timing (approximately 24 hours after the final dose)."
-        ),
-        "dose_selection": (
-            "One paragraph. Reference LD50 predictions if available, "
-            f"explain the dose spacing rationale ({_dose_spacing_phrase(ctx)}), "
-            "rationale for top dose selection, and target of no overt systemic toxicity."
-        ),
-        "chemistry": (
-            f"First paragraph: {ctx.chemical_name} source (typically synthesized by contract lab or obtained from commercial supplier), "
-            f"lot number (state that lot details are in the full study protocol), "
-            f"identity confirmation methods (IR, NMR, or mass spectrometry), purity (typically >95%%), storage conditions. "
-            f"Second paragraph: dose formulation preparation in {ctx.vehicle}, "
-            f"concentration verification by analytical chemistry, formulation QC analysis."
-        ),
         "clinical_exams": (
             "Brief introductory paragraph describing the scope of clinical examinations "
             "performed during the study: clinical observations, body/organ weight collection, "

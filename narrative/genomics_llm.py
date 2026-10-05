@@ -52,6 +52,8 @@ async def generate_genomics_narrative_async(
     dose_unit: str = "mg/kg",
     force: bool = False,
     model: str = "",
+    subject: str = "",
+    bmd_decimals: int | None = None,
 ) -> dict:
     """
     LLM-generate narrative paragraphs for a single organ × sex.
@@ -67,6 +69,12 @@ async def generate_genomics_narrative_async(
     LLM from scratch, overwriting the stored narrative.  This is the escape
     hatch behind the Regenerate action (see the cache comment below); the
     normal callers leave it False so an existing narrative is reused.
+
+    `subject` names the study animals as the study records them
+    (pipeline.study_design.subject_phrase, e.g. "Sprague Dawley rats");
+    empty ⇒ the prompt says "animals" rather than assuming a strain.
+    `bmd_decimals` is the report's BMD precision (report_bmd_decimals), so a
+    BMD the narrative cites reads as the tables print it.
 
     Returns:
         {
@@ -326,7 +334,7 @@ in square brackets, e.g. "... consistent with Nrf2 pathway activation [P3]."
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
 NIEHS/NTP 5-day study technical report on {compound}.
 
-The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
+The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.
 
 {context_text}{catalogue_block}
@@ -383,7 +391,7 @@ Return ONLY valid JSON, no markdown formatting."""
         prompt = f"""Generate narrative paragraphs for the genomics Results section of an \
 NIEHS/NTP 5-day study technical report on {compound}.
 
-The study examined gene expression in the {organ} of {sex} Sprague Dawley rats.
+The study examined gene expression in the {organ} of {sex} {subject or "animals"}.
 A total of {total_responsive} genes had significant dose-responsive changes.
 
 === GENE SET BENCHMARK DOSE ANALYSIS ===
@@ -410,6 +418,15 @@ Do NOT include table data in the narrative — the tables are presented separate
 {style_rules}
 
 Return ONLY valid JSON, no markdown formatting."""
+
+    # Units and precision as the report prints them (the model otherwise
+    # writes "mg/kg/day" and 3-decimal BMDs next to 1-decimal tables).
+    prompt += (
+        f"\n\nDoses and BMDs are in {dose_unit} exactly (do not write a per-day unit)."
+        + (f" Round any BMD or BMDL you cite to {bmd_decimals} decimal place"
+           f"{'' if bmd_decimals == 1 else 's'}, as the report tables do."
+           if bmd_decimals is not None else "")
+    )
 
     system = (
         "You are a toxicology report writer specializing in NTP/NIEHS-style "

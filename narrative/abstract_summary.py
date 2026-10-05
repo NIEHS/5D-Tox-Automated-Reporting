@@ -39,7 +39,8 @@ shim when assembling the Abstract block.
 from __future__ import annotations
 
 from narrative.narrative_helpers import (
-    _format_dose_value,
+    _format_bmd_value,
+    genomics_bmd_decimals,
     _stat_display_name,
     _picks_above_lle,
     _join_oxford,
@@ -58,6 +59,7 @@ def build_abstract_summary(
     dose_unit: str = "mg/kg",
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
+    bmd_decimals: int | None = None,
 ) -> str:
     """
     Build the Abstract → Summary paragraph.
@@ -86,10 +88,13 @@ def build_abstract_summary(
         dose_unit:          Display unit (default "mg/kg").
         bmd_stat:           Which stat to use for gene sets ("median", "fifth_pct").
         sexes:              Optional sex order (defaults to ["Male", "Female"]).
+        bmd_decimals:       The report's BMD precision (report_bmd_decimals).
 
     Returns:
         Paragraph string, or empty string if no reliable BMDs exist anywhere.
     """
+    if bmd_decimals is None:
+        bmd_decimals = genomics_bmd_decimals(genomics_sections)
     # Iterate the conditions ACTUALLY present (metadata-driven, from derive_study_sexes).
     # Real sexes → per-sex tracks with "in {sex} rats" prose. No sex dimension (explicit
     # []) → one sexless track per genomics sex-token present (e.g. "unknown"), rendered
@@ -137,8 +142,8 @@ def build_abstract_summary(
         candidates.sort(key=lambda x: x["_bmd_float"])
         winner = candidates[0]
         return {
-            "bmd": _format_dose_value(winner.get("bmd")),
-            "bmdl": _format_dose_value(winner.get("bmdl")),
+            "bmd": _format_bmd_value(winner.get("bmd"), bmd_decimals),
+            "bmdl": _format_bmd_value(winner.get("bmdl"), bmd_decimals),
         }
 
     def _lowest_gene(token: str) -> dict | None:
@@ -155,8 +160,8 @@ def build_abstract_summary(
         candidates.sort(key=lambda x: x["_bmd_float"])
         winner = candidates[0]
         return {
-            "bmd": _format_dose_value(winner.get("bmd")),
-            "bmdl": _format_dose_value(winner.get("bmdl")),
+            "bmd": _format_bmd_value(winner.get("bmd"), bmd_decimals),
+            "bmdl": _format_bmd_value(winner.get("bmdl"), bmd_decimals),
         }
 
     def _lowest_apical(label) -> dict | None:
@@ -175,8 +180,8 @@ def build_abstract_summary(
         reliable.sort(key=lambda e: float(e["bmd"]))
         winner = reliable[0]
         return {
-            "bmd": _format_dose_value(winner.get("bmd")),
-            "bmdl": _format_dose_value(winner.get("bmdl")),
+            "bmd": _format_bmd_value(winner.get("bmd"), bmd_decimals),
+            "bmdl": _format_bmd_value(winner.get("bmdl"), bmd_decimals),
         }
 
     # --- Build per-sex sentences ---
@@ -267,6 +272,7 @@ def build_abstract_results(
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
     methods_ctx: dict | None = None,
+    bmd_decimals: int | None = None,
 ) -> str:
     """
     Build the full Abstract → Results paragraph.
@@ -287,6 +293,7 @@ def build_abstract_results(
         methods_ctx:        Optional MethodsContext-as-dict.  When present, its
                             pk_concentrations / pk_half_lives / pk_timepoints fields
                             drive the pharmacokinetics sentence.
+        bmd_decimals:       The report's BMD precision (report_bmd_decimals).
 
     Returns:
         A single paragraph string for the Abstract Results section.
@@ -318,6 +325,7 @@ def build_abstract_results(
             dose_unit=dose_unit,
             bmd_stat=bmd_stat,
             sexes=sexes,
+            bmd_decimals=bmd_decimals,
         )
         if gn:
             parts.append(gn)

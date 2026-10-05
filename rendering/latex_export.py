@@ -526,9 +526,12 @@ def _convert_genomics_cache(
                 "stat": next((st for st in any_entry["stat_order"] if st in gsb), "median"),
                 "bmr": any_entry.get("genomic_bmr"),
                 "unit": dose_unit or "mg/kg",
-                # Gene-level tables (BMDExpress GENE categories) are the 2025
-                # method, printed to 1 decimal; ADR-0027 profiles will own this.
-                "decimals": 1 if any_entry.get("top_genes_level") == "gene" else 3,
+                # The report's one BMD precision (report_bmd_decimals, stamped
+                # by the extraction); an older payload: 1 decimal for the
+                # gene-level (2025) tables, else 3.  ADR-0027 profiles will
+                # own this.
+                "decimals": any_entry.get("bmd_decimals") or (
+                    1 if any_entry.get("top_genes_level") == "gene" else 3),
             }
 
         gene_set_entry = {
@@ -959,9 +962,13 @@ def load_session_data(
         _integ = _json_cfg.loads(_integ_path.read_text(encoding="utf-8")) if _integ_path.exists() else {}
         _cfg_matrix = build_bmd_config_matrix(_integ)
     except Exception:
-        _cfg_matrix = None
+        _integ, _cfg_matrix = {}, None
     if _cfg_matrix:
         data["appendix_bmd_config_matrix"] = _cfg_matrix
+    # Title, running header and cover: the animals and route the study records.
+    if _integ:
+        from rendering.report_data import apply_study_design
+        apply_study_design(data, _integ)
 
     # ── Appendix D-1: apical BMD acceptance criteria (classifier constants) ──
     from rendering.bmd_appendix import build_bmd_acceptance_matrix

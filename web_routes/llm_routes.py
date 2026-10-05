@@ -385,21 +385,11 @@ async def api_generate_methods(request: Request):
             "methods-generator", prompt, system, model=model,
         )
 
-        # --- Assemble into MethodsReport ---
-        skeleton = build_subsection_skeleton(ctx)
-        sections = []
-        for key, heading, level in skeleton:
-            text = subsection_texts.get(key, "")
-            if not text:
-                continue
-            # Split multi-paragraph strings on double newlines
-            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-            sections.append(MethodsSection(
-                heading=heading,
-                level=level,
-                key=key,
-                paragraphs=paragraphs,
-            ))
+        # --- Assemble into MethodsReport: data-built + LLM-written subsections ---
+        from narrative.methods_design import assemble_methods_sections
+        sections = assemble_methods_sections(
+            ctx, build_subsection_skeleton(ctx), subsection_texts,
+        )
 
         # --- Add Table 1 data to the report context ---
         table1 = build_sample_counts_table(ctx)
@@ -789,6 +779,17 @@ async def api_citation_warnings(dtxsid: Dtxsid):
     })
 
 
+
+def _study_subject(dtxsid: str) -> str:
+    """The study animals as the session's integrated project records them
+    ("Sprague Dawley rats"), or "" when there is none to read."""
+    from pipeline.study_design import study_design_facts, subject_phrase
+    try:
+        integrated = load_integrated(dtxsid) if dtxsid else None
+    except Exception:
+        integrated = None
+    return subject_phrase(study_design_facts(integrated)) if integrated else ""
+
 @router.post("/api/generate-genomics-narrative")
 async def api_generate_genomics_narrative(request: Request):
     """
@@ -813,6 +814,7 @@ async def api_generate_genomics_narrative(request: Request):
         total_responsive=body.get("total_responsive_genes", 0),
         dose_unit=body.get("dose_unit", "mg/kg"),
         force=bool(body.get("force", False)),
+        subject=_study_subject(body.get("dtxsid", "")),
         model=body.get("model", ""),
     )
     if "error" in result:
@@ -943,6 +945,8 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
             )
 
     # --- (3) Force-generate each sex of the organ (in parallel) ------------
+    subject = _study_subject(dtxsid)
+
     async def _one(key):
         entry = genomics_cache[key]
         gs_by_stat = entry.get("gene_sets_by_stat") or {}
@@ -958,6 +962,8 @@ async def api_regenerate_genomics_narrative(dtxsid: Dtxsid, request: Request):
                 all_genes=entry.get("all_genes") or [],
                 total_responsive=entry.get("total_responsive_genes", 0),
                 dose_unit=entry.get("dose_unit", "mg/kg"),
+                subject=subject,
+                bmd_decimals=entry.get("bmd_decimals"),
                 force=True,
                 model=model,
             )

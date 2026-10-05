@@ -35,6 +35,8 @@ narrative_helpers — single source of truth for those.
 from __future__ import annotations
 
 from narrative.narrative_helpers import (
+    _format_bmd_value,
+    genomics_bmd_decimals,
     _format_dose_value,
     _format_rat_gene_symbol,
     _stat_display_name,
@@ -53,6 +55,7 @@ from narrative.narrative_helpers import (
 
 def _build_gene_sets_sentence(
     sets: list[dict], sex: str, stat_label: str, dose_unit: str,
+    decimals: int | None = None,
 ) -> str:
     """
     Build one "most sensitive gene sets" sentence for a given sex.
@@ -70,8 +73,8 @@ def _build_gene_sets_sentence(
         return ""
 
     terms = [s.get("go_term", s.get("go_id", "(unknown)")) for s in sets]
-    bmds = [_format_dose_value(s.get("bmd")) for s in sets]
-    bmdls = [_format_dose_value(s.get("bmdl")) for s in sets]
+    bmds = [_format_bmd_value(s.get("bmd"), decimals) for s in sets]
+    bmdls = [_format_bmd_value(s.get("bmdl"), decimals) for s in sets]
 
     plural = len(sets) > 1
     return (
@@ -87,6 +90,7 @@ def _build_gene_sets_sentence(
 
 def _build_top_genes_sentence(
     genes: list[dict], sex: str, direction: str, dose_unit: str,
+    decimals: int | None = None,
 ) -> str:
     """
     Build one "most sensitive up/down-regulated genes" sentence.
@@ -103,7 +107,7 @@ def _build_top_genes_sentence(
 
     symbols = [_format_rat_gene_symbol(g.get("gene_symbol", "")) for g in genes]
     pairs = [
-        f"{_format_dose_value(g.get('bmd'))} ({_format_dose_value(g.get('bmdl'))})"
+        f"{_format_bmd_value(g.get('bmd'), decimals)} ({_format_bmd_value(g.get('bmdl'), decimals)})"
         for g in genes
     ]
 
@@ -126,6 +130,7 @@ def build_abstract_results_genomics(
     n_top_sets: int = 3,
     n_top_genes: int = 8,
     sexes: list[str] | None = None,
+    bmd_decimals: int | None = None,
 ) -> str:
     """
     Build the genomics portion of the Abstract → Results paragraph.
@@ -155,6 +160,8 @@ def build_abstract_results_genomics(
         n_top_sets:        How many top gene sets to list per sex.
         n_top_genes:       How many top up/down-regulated genes per sex.
         sexes:             Sex order (defaults to ["Male", "Female"]).
+        bmd_decimals:      The report's BMD precision (report_bmd_decimals);
+                           None keeps the legacy 3-decimal form.
 
     Returns:
         Paragraph string, or empty string if no genomics data is present.
@@ -163,6 +170,8 @@ def build_abstract_results_genomics(
         return ""
 
     sexes = sexes or ["Male", "Female"]
+    if bmd_decimals is None:
+        bmd_decimals = genomics_bmd_decimals(genomics_sections)
 
     # Lower limit of extrapolation = lowest non-zero dose / 3 (BMDExpress convention)
     nonzero_doses = [d for d in dose_groups if d and d > 0]
@@ -251,7 +260,7 @@ def build_abstract_results_genomics(
             # Top gene sets (above LLE, sorted by BMD ascending)
             sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
             top_sets = _picks_above_lle(sets, lle, n_top_sets)
-            sets_sentence = _build_gene_sets_sentence(top_sets, sex, stat_label, dose_unit)
+            sets_sentence = _build_gene_sets_sentence(top_sets, sex, stat_label, dose_unit, bmd_decimals)
             if sets_sentence:
                 sentences.append(sets_sentence)
 
@@ -262,10 +271,10 @@ def build_abstract_results_genomics(
             up_top = _picks_above_lle(up_genes, lle, n_top_genes)
             down_top = _picks_above_lle(down_genes, lle, n_top_genes)
 
-            up_sentence = _build_top_genes_sentence(up_top, sex, "up", dose_unit)
+            up_sentence = _build_top_genes_sentence(up_top, sex, "up", dose_unit, bmd_decimals)
             if up_sentence:
                 sentences.append(up_sentence)
-            down_sentence = _build_top_genes_sentence(down_top, sex, "down", dose_unit)
+            down_sentence = _build_top_genes_sentence(down_top, sex, "down", dose_unit, bmd_decimals)
             if down_sentence:
                 sentences.append(down_sentence)
 

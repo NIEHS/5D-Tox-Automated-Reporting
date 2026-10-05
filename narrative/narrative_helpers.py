@@ -201,6 +201,38 @@ def _format_dose_value(v) -> str:
     return s if s else "0"
 
 
+def genomics_bmd_decimals(genomics_sections: dict | None) -> int | None:
+    """The report's BMD precision as the genomics extraction stamped it on
+    every section (``bmd_decimals``, from report_bmd_decimals), or None for
+    a payload extracted before the stamp (legacy formatting)."""
+    for sec in (genomics_sections or {}).values():
+        if isinstance(sec, dict) and isinstance(sec.get("bmd_decimals"), int):
+            return sec["bmd_decimals"]
+    return None
+
+
+def _format_bmd_value(v, decimals: int | None = None) -> str:
+    """
+    Format a BMD/BMDL for prose at the report's fixed precision
+    (genomics.bmdexpress_categories.report_bmd_decimals), so the Abstract,
+    Summary and Results print a value exactly as the tables do.  ``None``
+    keeps _format_dose_value's legacy form; a non-numeric value ("NVM",
+    "<0.333") passes through and a missing one prints "—".
+    """
+    if decimals is None:
+        return _format_dose_value(v)
+    if v is None:
+        return "—"
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if math.isnan(f) or math.isinf(f):
+        return "—"
+    from bmdx_pipe.apical_report import format_bmd
+    return format_bmd(f, decimals)
+
+
 def _format_rat_gene_symbol(symbol: str) -> str:
     """
     Convert an uppercase gene symbol (e.g., "PRLR") into NIEHS rat-gene
@@ -328,15 +360,15 @@ def _normalize_organ_name(organ: str) -> str:
     return (organ or "").lower()
 
 
-def _format_paired_bmd_pairs(items: list[dict]) -> str:
+def _format_paired_bmd_pairs(items: list[dict], decimals: int | None = None) -> str:
     """
     Format a list of {bmd, bmdl} entries as a NIEHS-style "BMD (BMDL)"
-    sequence joined with the Oxford comma:
+    sequence joined with the Oxford comma, at the report's BMD precision:
       "0.520 (0.160) and 0.750 (0.186)"
-      "5.725 (1.686), 7.423 (5.757), and 8.417 (7.129)"
+      "5.7 (1.7), 7.4 (5.8), and 8.4 (7.1)"
     """
     pairs = [
-        f"{_format_dose_value(it.get('bmd'))} ({_format_dose_value(it.get('bmdl'))})"
+        f"{_format_bmd_value(it.get('bmd'), decimals)} ({_format_bmd_value(it.get('bmdl'), decimals)})"
         for it in items
     ]
     return _join_oxford(pairs)

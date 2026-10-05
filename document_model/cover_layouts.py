@@ -74,9 +74,11 @@ class CoverLayout:
 # surfaces.  Return UNESCAPED strings; each renderer escapes for its surface.
 # ---------------------------------------------------------------------------
 
-# The default strain form (carries ® — the renderers map it: LaTeX
-# \textregistered, HTML entity).  A report without an explicit strain uses this.
-_DEFAULT_STRAIN = "(Hsd:Sprague Dawley® SD®)"
+# The study animals, route and the supplier strain designation are study facts:
+# the animals and route come from data["study_design"] (the recorded metadata,
+# pipeline.study_design), the supplier designation — e.g. "(Hsd:Sprague Dawley®
+# SD®)", which carries ® (LaTeX \textregistered, HTML entity) — only from the
+# front matter's "strain".  Nothing is defaulted.
 
 
 # Max characters per wrapped title line.  The title renders in ~20pt Arial bold
@@ -115,22 +117,29 @@ def _niehs_title_lines(data: dict, max_chars: int = _TITLE_MAX_CHARS) -> list:
     The NIEHS 5D-Tox report title, WIDTH-WRAPPED into lines (ADR-0010 title-page
     follow-up).  The pinned header line stands alone; the rest of the title —
     "In Vivo Repeat Dose Biological Potency Study of <chemical> (CASRN <casrn>) in
-    Sprague Dawley <strain> Rats (Gavage Studies)" — is greedy-packed to
+    <strain> <designation> <Species> (<Route> Studies)" — is greedy-packed to
     ``max_chars`` so no line overflows the text block and Word never re-wraps a
     line mid-phrase.  The chemical line carries the CASRN in parentheses when
     present.  Emitted as ONE paragraph with soft breaks by the renderer (matching
     the reference), so the wrapped lines have zero inter-line gap.
     """
+    from pipeline.study_design import strain_display, study_type_label, subject_phrase
+
     chemical = data.get("chemical_name", "")
     casrn = data.get("casrn", "")
-    strain = data.get("strain") or _DEFAULT_STRAIN
+    design = data.get("study_design") or {}
+    designation = data.get("strain") or ""
     title_name = chemical + (f" (CASRN {casrn})" if casrn else "")
+    species_only = subject_phrase({"species": design.get("species")}, capitalize=True)
+    study_type = study_type_label(design)
     body = " ".join(seg for seg in (
         "In Vivo Repeat Dose Biological Potency Study of",
         title_name,
-        "in Sprague Dawley",
-        strain,
-        "Rats (Gavage Studies)",
+        "in",
+        strain_display(design),
+        designation,
+        species_only,
+        f"({study_type})" if study_type else "",
     ) if seg.strip())
     return [_TITLE_HEADER, *_wrap_words(body, max_chars)]
 

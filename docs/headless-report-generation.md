@@ -164,6 +164,7 @@ the same session finishes in seconds.
 | `--compound-name` | Short name used in captions and narratives (default: the identity name) |
 | `--dose-unit` | Dose unit for table headers. **State it explicitly.** If you leave it out, the script uses `mg/kg` and prints a note saying so |
 | `--metadata FILE.json` | Classification overrides, keyed by **filename**: `{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}` |
+| `--design FILE.json` | Study-design facts the data does not record, set on every experiment's metadata (as the UI metadata step does): `{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}`. Fields: `species`, `strain`, `articleRoute`, `administrationMeans`, `articleVehicle`, `studyDuration`, controlled vocabulary only. The report states strain, route and vehicle **only** from these recorded values; anything missing appears as a `[Placeholder: …]` in Materials and Methods, which `--strict` refuses to ship |
 | `--bmd-stats`, `--go-pct`, `--go-min-genes`, `--go-max-genes`, `--go-min-bmd` | GO gene-set table settings (UI defaults: `median`, 5, 20, 500, 3) |
 | `--reintegrate` | Run integration again even though `integrated.json` exists. This wipes the process caches, so processing starts from scratch. Without the flag, integration is skipped when `integrated.json` is already there |
 | `--background` | Also generate and save the Background section (LLM over ATSDR, IRIS and PubChem; needs network). `--model` picks the model |

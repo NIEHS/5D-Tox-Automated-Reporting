@@ -229,6 +229,48 @@ def confirm_metadata(dtxsid: str, corrections_path: Path | None, store) -> None:
     _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
 
 
+# The experimentDescription fields --design may set: the study-design facts
+# the report states (pipeline.study_design) and nothing else.
+_DESIGN_FIELDS = ("species", "strain", "articleRoute", "administrationMeans",
+                  "articleVehicle", "studyDuration")
+
+
+def apply_design(dtxsid: str, design_path: Path) -> None:
+    """Record study-design facts the data does not carry (route, vehicle,
+    strain, …) on every experiment, as the UI's metadata step does.  Values
+    must be from the controlled vocabulary; the schema-validating writer
+    rejects anything else before touching disk."""
+    from bmdx_pipe import VOCABULARIES
+    from pipeline.integrated_io import load_integrated, save_integrated
+
+    fields = json.loads(design_path.read_text())
+    unknown = sorted(set(fields) - set(_DESIGN_FIELDS))
+    if unknown:
+        raise SystemExit(f"--design: unsupported field(s) {unknown}; use {list(_DESIGN_FIELDS)}")
+    for key, value in fields.items():
+        vocab = VOCABULARIES.get(key)
+        allowed = ([v for vs in vocab.values() for v in vs] if isinstance(vocab, dict)
+                   else vocab or [])
+        if value is not None and allowed and value not in allowed:
+            raise SystemExit(f"--design: {key}={value!r} is not in the vocabulary {allowed}")
+    integrated = load_integrated(dtxsid)
+    if integrated is None:
+        raise SystemExit("--design needs an integrated session")
+    for exp in integrated.get("doseResponseExperiments", []):
+        exp.setdefault("experimentDescription", {}).update(fields)
+    save_integrated(dtxsid, integrated)
+    # Keep the .bm2 copy in step, as the UI's metadata step does.
+    try:
+        from bmdx_pipe import export_integrated_bm2
+        from pipeline.session_store import session_dir
+        sd = session_dir(dtxsid)
+        export_integrated_bm2(str(sd / "integrated.json"), str(sd / "integrated.bm2"))
+    except Exception as e:  # noqa: BLE001 — the JSON is the source of truth
+        _log(f"  WARNING: integrated.bm2 not re-exported: {e}")
+    _log(f"  study design recorded on {len(integrated.get('doseResponseExperiments', []))} "
+         f"experiment(s): {fields}")
+
+
 def integrate(dtxsid: str, identity: dict, store) -> None:
     from workflow.steps import integrate_step
 
@@ -398,6 +440,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                     help="dose unit for table headers (default: mg/kg — state it explicitly)")
     ap.add_argument("--metadata", type=Path,
                     help="JSON {filename: {platform, data_type}} classification overrides")
+    ap.add_argument("--design", type=Path,
+                    help="JSON of study-design facts the data does not record, applied to "
+                         "every experiment's metadata: species, strain, articleRoute, "
+                         "administrationMeans, articleVehicle, studyDuration "
+                         "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
     ap.add_argument("--bmd-stats", default="median",
                     help="comma list of BMD statistics for GO tables (default: median)")
     ap.add_argument("--go-pct", type=float, default=5)
@@ -436,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
     # Resolve user paths BEFORE chdir: the app is cwd-relative (bmdx.duckdb, templates).
     files = [p.resolve() for p in args.files]
     metadata = args.metadata.resolve() if args.metadata else None
+    design = args.design.resolve() if args.design else None
     out_dir = (args.out.resolve() if args.out else REPO_ROOT / "output" / args.dtxsid)
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -480,6 +528,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 store.write_json(dtxsid, "identity.json", identity)
                 _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
+            if design:
+                with _Timer("study design"):
+                    apply_design(dtxsid, design)
             with _Timer("animal report"):
                 animal_report(dtxsid, store)
             if args.stop_after == "integrate":

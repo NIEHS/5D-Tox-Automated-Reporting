@@ -111,6 +111,7 @@ def build_genomics_body_narratives(
     genomics_sections: dict | None,
     methods_context: dict | None,
     chemical_name: str | None,
+    bmd_decimals: int | None = None,
 ) -> dict[str, dict[str, Any]]:
     """
     Build both Gene Set and Gene BMD body narratives from a genomics
@@ -129,6 +130,7 @@ def build_genomics_body_narratives(
                            findings paragraphs can't be built (no LLE).
         chemical_name:     Used in the gene-set intro's methodology
                            sentence ("…most sensitive to {X} exposure.").
+        bmd_decimals:      The report's BMD precision (report_bmd_decimals).
 
     Returns:
         Dict with up to two top-level keys — `gene_set_narrative` and
@@ -172,6 +174,7 @@ def build_genomics_body_narratives(
         genomics_sections=genomics_sections,
         dose_groups=dose_groups,
         dose_unit=dose_unit,
+        bmd_decimals=bmd_decimals,
     )
     # build_*_body_findings returns {} when dose_groups is empty; we
     # still emit the intro paragraphs so the section isn't entirely
@@ -195,6 +198,7 @@ def build_genomics_body_narratives(
         genomics_sections=genomics_sections,
         dose_groups=dose_groups,
         dose_unit=dose_unit,
+        bmd_decimals=bmd_decimals,
     )
     out["gene_narrative"] = {
         "intros": gn_intros,

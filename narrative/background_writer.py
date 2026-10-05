@@ -3,7 +3,7 @@ LLM-based background section writer for toxicology studies.
 
 Takes a BackgroundData object (from data_gatherer.py) and generates a
 structured 6-paragraph background/introduction section suitable for
-"5 Day Genomic Dose Response in Sprague-Dawley Rats" study reports.
+"5 Day Genomic Dose Response" study reports.
 
 Paragraph structure (matches Scott Auerbach's template):
   1. Chemical identity & uses (CASRN, DTXSID, CID, EC#, class, industrial uses)
@@ -140,7 +140,7 @@ def build_prompt(data: BackgroundData,
     papers_section = _format_mechanism_papers(data, start=len(data.references) + 1)
 
     prompt = f"""You are a senior toxicologist writing a background/introduction section for a
-"5 Day Genomic Dose Response in Sprague-Dawley Rats" study report. Write formal
+"5 Day Genomic Dose Response" study report. Write formal
 scientific prose with inline numbered references in [N] format.
 
 CHEMICAL: {identity.name} (CASRN: {identity.casrn})
@@ -243,7 +243,7 @@ PARAGRAPH 7 — Study Purpose
 - One to two sentences connecting all the above to the specific study
 - Template: "Given the [uses/exposure potential] of [chemical], its
   [key tox effects], and the [identified data gaps], this 5 day genomic
-  dose response study in Sprague-Dawley rats was conducted to
+  dose response study was conducted to
   [characterize gene expression changes / identify molecular targets /
   fill specific knowledge gaps / etc.]."
 

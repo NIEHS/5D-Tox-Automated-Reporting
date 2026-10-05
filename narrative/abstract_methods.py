@@ -75,21 +75,22 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     sexes = [s.lower() for s in ctx.sexes] if ctx.sexes else ["male", "female"]
     sexes_str = " and ".join(sexes)
 
-    # --- Species ("Sprague Dawley (Hsd:Sprague Dawley® SD®)") ---
-    # If the species string contains the strain in parens, use as-is;
-    # otherwise fall back to "Sprague Dawley".
-    species = ctx.species or "Sprague Dawley"
-
-    # --- Vehicle ---
-    vehicle = ctx.vehicle or "corn oil"
+    # --- Animals, route and vehicle: as the study records them ---
+    # (pipeline.study_design via MethodsContext).  An unrecorded fact drops
+    # its clause rather than defaulting to the gavage/corn oil protocol;
+    # Materials and Methods flags it.
+    from pipeline.study_design import administration_phrase, subject_phrase, vehicle_phrase
+    facts = {"species": ctx.species, "strain": ctx.strain,
+             "route": ctx.route, "vehicle": ctx.vehicle}
+    subject = subject_phrase(facts)
+    vehicle = vehicle_phrase(facts)
+    given = f"formulated {vehicle} and" if vehicle else ""
+    route_clause = administration_phrase(facts)
 
     # --- Duration + study days range ---
     duration = ctx.duration_days or 5
     last_day = duration - 1
     sacrifice_day = duration
-
-    # --- Route ---
-    route = ctx.route or "gavage"
 
     # --- Dose list ---
     n_doses = len(ctx.dose_groups)
@@ -135,10 +136,10 @@ def build_abstract_methods(ctx: MethodsContext) -> str:
     # --- Assemble the paragraph ---
     paragraph = (
         f"A short-term in vivo biological potency study on {ta_name} in "
-        f"adult {sexes_str} {species} rats was conducted. "
-        f"{ta_name} was formulated in {vehicle} and administered once "
-        f"daily for {duration} consecutive days by {route} (study days "
-        f"0–{last_day}). "
+        f"adult {sexes_str} {subject} was conducted. "
+        f"{ta_name} was {given + ' ' if given else ''}administered once "
+        f"daily for {duration} consecutive days{' ' + route_clause if route_clause else ''} "
+        f"(study days 0–{last_day}). "
         f"{ta_name} was administered at {n_doses} doses "
         f"({dose_list} {dose_unit_full})."
         f"{biosampling_sentence}"

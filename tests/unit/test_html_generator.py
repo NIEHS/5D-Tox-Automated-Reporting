@@ -87,7 +87,12 @@ def test_title_block_present(scaffold):
     The inner title page reproduces the NIEHS Report 10 (p2) layout:
     series prefix, structured study title (chemical + CASRN, strain,
     Gavage Studies), institutional block, and ISSN — centered, no rule.
+    The animals and route come from the study design, the supplier strain
+    designation from the front matter.
     """
+    scaffold = {**scaffold,
+                "study_design": {"species": "rat", "strain": "Sprague-Dawley", "route": "gavage"},
+                "strain": "(Hsd:Sprague Dawley® SD®)"}
     html = generate_html(scaffold)
     assert 'class="title-block"' in html
     # The title is WIDTH-WRAPPED with <br> soft breaks (cover_layouts._wrap_words),

@@ -40,6 +40,7 @@ continues to expose them with no other change.
 # ---------------------------------------------------------------------------
 
 import asyncio
+import functools
 import hashlib
 import json
 import logging
@@ -230,6 +231,8 @@ class ProcessContext:
     apical_bmd_summary: list | None = None
     apical_bmd_summary_bmds: list | None = None
     bmd_divergences: list | None = None
+    # Fixed decimals every BMD in the report prints with (report_bmd_decimals).
+    bmd_decimals: int | None = None
     chart_images: list | None = None
     llm_gs_by_organ: dict | None = None
     llm_gene_by_organ: dict | None = None
@@ -435,6 +438,9 @@ async def _build_genomics_llm_narratives(ctx):
                 except Exception:
                     pass
 
+            from pipeline.study_design import study_design_facts, subject_phrase
+            _subject = subject_phrase(study_design_facts(ctx.integrated))
+
             async def _one(key, gen_data):
                 """LLM-generate narrative for a single organ×sex."""
                 organ = gen_data.get("organ", "")
@@ -452,6 +458,8 @@ async def _build_genomics_llm_narratives(ctx):
                         all_genes=gen_data.get("all_genes") or [],
                         total_responsive=gen_data.get("total_responsive_genes", 0),
                         dose_unit=dose_unit,
+                        subject=_subject,
+                        bmd_decimals=gen_data.get("bmd_decimals"),
                     )
                 except Exception as e:
                     logger.warning(
@@ -555,6 +563,7 @@ def _build_bmd_summary(ctx):
     divergences: list[dict] = []
     apical_bmd_summary = _build_apical_bmd_summary(
         _tables_for_summary, bmds_results=bmds_results, divergences=divergences,
+        bmd_decimals=ctx.bmd_decimals,
     )
     if divergences:
         _report_bmd_divergences(ctx.dtxsid, divergences)
@@ -678,6 +687,9 @@ async def _build_ntp_stats(ctx):
     integrated = ctx.integrated
     bmd_stat = ctx.bmd_stat
 
+    from genomics.bmdexpress_categories import report_bmd_decimals
+
+    ctx.bmd_decimals = report_bmd_decimals(integrated)
     ntp_hash = _hash_ntp(integrated, bmd_stat)
     ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
 
@@ -695,7 +707,8 @@ async def _build_ntp_stats(ctx):
 
         loop = asyncio.get_running_loop()
         table_data = await loop.run_in_executor(
-            None, build_table_data, apical_integrated, cat_lookup,
+            None, functools.partial(build_table_data, bmd_decimals=ctx.bmd_decimals),
+            apical_integrated, cat_lookup,
         )
 
         source_files = integrated.get("_meta", {}).get("source_files", {})
@@ -1019,7 +1032,8 @@ async def _get_bmds(ctx):
 async def _bmds_then_sections(ctx):
     """BMDS, then the ToxicR fills onto the rows, then the section cards."""
     await _get_bmds(ctx)
-    n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results)
+    n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results,
+                              bmd_decimals=ctx.bmd_decimals)
     if n:
         logger.info("Filled %d bm2-blank apical BMDs from ToxicR", n)
     await _get_sections(ctx)
@@ -1094,7 +1108,6 @@ async def _get_methods(ctx):
 
     from narrative.methods_report import (
         MethodsReport,
-        MethodsSection,
         build_methods_prompt,
         build_subsection_skeleton,
         build_sample_counts_table,
@@ -1132,13 +1145,9 @@ async def _get_methods(ctx):
         except Exception:
             pass
 
-    # Default study params — the NIEHS 5-day gavage protocol
-    study_params = {
-        "vehicle": "corn oil",
-        "route": "gavage",
-        "duration_days": 5,
-        "species": "Sprague Dawley",
-    }
+    # No protocol defaults: species, strain, route and vehicle come from the
+    # study's recorded metadata (extract_methods_context → pipeline.study_design).
+    study_params: dict = {}
 
     # Extract structured context from all data sources.
     # Pass session_dir so biosampling dose groups can be scanned
@@ -1165,20 +1174,12 @@ async def _get_methods(ctx):
         ctx.methods_result = None
         return
 
-    # Assemble into structured sections
-    skeleton = build_subsection_skeleton(methods_ctx)
-    sections = []
-    for key, heading, level in skeleton:
-        text = subsection_texts.get(key, "")
-        if not text:
-            continue
-        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-        sections.append(MethodsSection(
-            heading=heading,
-            level=level,
-            key=key,
-            paragraphs=paragraphs,
-        ))
+    # Assemble into structured sections: the data-built subsections (Study
+    # Design, Dose Selection, Chemistry) plus the LLM-written rest.
+    from narrative.methods_design import assemble_methods_sections
+    sections = assemble_methods_sections(
+        methods_ctx, build_subsection_skeleton(methods_ctx), subsection_texts,
+    )
 
     table1 = build_sample_counts_table(methods_ctx)
     report = MethodsReport(sections=sections, context=methods_ctx)
@@ -1305,7 +1306,9 @@ async def run_data(ctx) -> None:
         else:
             _fps_for_methods[fid] = fp
     ctx.fps_for_methods = _fps_for_methods
-    ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods)
+    from pipeline.study_design import study_design_facts
+    ctx.methods_hash = _hash_methods(dtxsid, _fps_for_methods,
+                                     study_design_facts(integrated))
 
     # Launch all four concurrently — cached units return instantly,
     # uncached units run in parallel (BMDS in thread pool, genomics

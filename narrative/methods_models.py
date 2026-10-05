@@ -88,8 +88,12 @@ class MethodsContext:
     dtxsid: str = ""
 
     # --- Study design (from fingerprints + animal_report) ---
-    # species includes strain when available, e.g. "Hsd:Sprague Dawley® SD®"
-    species: str = "Sprague Dawley"
+    # Species / strain / route / vehicle: from the study's recorded metadata
+    # (pipeline.study_design), never defaulted — None when the data does not
+    # record them, and the report then says so.  species is the vocabulary
+    # term ("rat"); strain the display form ("Sprague Dawley").
+    species: str | None = None
+    strain: str | None = None
     dose_groups: list[float] = field(default_factory=list)
     dose_unit: str = "mg/kg"
     # Core animals per treated dose group / in the vehicle control group, per sex —
@@ -100,8 +104,8 @@ class MethodsContext:
     # How many animals per sex per dose for internal dose assessment (biosampling)
     n_biosampling: int = 0
     sexes: list[str] = field(default_factory=list)
-    vehicle: str = "corn oil"
-    route: str = "gavage"
+    vehicle: str | None = None
+    route: str | None = None
     duration_days: int = 5
 
     # --- Domain presence flags (drive conditional subsections) ---

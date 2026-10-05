@@ -37,14 +37,25 @@ def test_required_assets_dedups_and_includes_default():
 
 def test_title_builder_includes_casrn_and_strain():
     lines = cl.get_cover_layout(None).title_builder(
-        {"chemical_name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1"}
+        {"chemical_name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1",
+         "study_design": {"species": "rat", "strain": "Sprague-Dawley", "route": "gavage"},
+         "strain": "(Hsd:Sprague Dawley® SD®)"}
     )
     # The header line stands alone; the rest is width-wrapped, so assert on the
     # JOINED title (the chemical, its CASRN, and the strain all appear).
     assert lines[0] == "NIEHS Report on the"
     joined = " ".join(lines)
     assert "Perfluorohexanesulfonamide (CASRN 41997-13-1)" in joined
-    assert "Sprague Dawley" in joined and "®" in joined
+    assert "in Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies)" in joined
+
+
+def test_title_builder_states_only_recorded_design():
+    """No strain, route or designation in the data → none in the title."""
+    joined = " ".join(cl.get_cover_layout(None).title_builder(
+        {"chemical_name": "Triclosan", "casrn": "3380-34-5",
+         "study_design": {"species": "rat"}}))
+    assert joined.endswith("Triclosan (CASRN 3380-34-5) in Rats")
+    assert "Sprague" not in joined and "Gavage" not in joined
 
 
 def test_title_builder_wraps_to_width():

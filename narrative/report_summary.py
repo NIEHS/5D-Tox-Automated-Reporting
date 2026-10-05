@@ -24,7 +24,8 @@ from __future__ import annotations
 
 from narrative.abstract_apical import _format_endpoint_phrase
 from narrative.narrative_helpers import (
-    _format_dose_value,
+    genomics_bmd_decimals,
+    _format_bmd_value,
     _is_anomalous_bmd,
     _is_reliable_bmd,
     _join_oxford,
@@ -36,8 +37,9 @@ from narrative.narrative_helpers import (
 _SAME_RANGE_FACTOR = 2.0
 
 
-def _pair(item: dict, dose_unit: str) -> str:
-    return f"{_format_dose_value(item.get('bmd'))} ({_format_dose_value(item.get('bmdl'))}) {dose_unit}"
+def _pair(item: dict, dose_unit: str, decimals: int | None = None) -> str:
+    return (f"{_format_bmd_value(item.get('bmd'), decimals)} "
+            f"({_format_bmd_value(item.get('bmdl'), decimals)}) {dose_unit}")
 
 
 def _phrase(entry: dict) -> str:
@@ -83,16 +85,20 @@ def build_report_summary(
     sexes: list[str] | None = None,
     abstract_background: str = "",
     apical_evaluated: bool | None = None,
+    bmd_decimals: int | None = None,
 ) -> list[str]:
     """The Summary paragraphs (empty when there is nothing to summarize).
 
     ``apical_evaluated`` says whether the study measured apical endpoints at
     all (default: whether the BMD summary has entries) — a study can measure
-    them and still have none with a BMD."""
+    them and still have none with a BMD.  ``bmd_decimals`` is the report's BMD
+    precision (default: the one the genomics extraction stamped)."""
     apical = apical_bmd_summary or []
     if apical_evaluated is None:
         apical_evaluated = bool(apical)
     genomics = genomics_sections or {}
+    if bmd_decimals is None:
+        bmd_decimals = genomics_bmd_decimals(genomics)
     sexes = sexes if sexes is not None else ["Male", "Female"]
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     lle = min(nonzero) / 3.0 if nonzero else 0.0
@@ -151,14 +157,14 @@ def build_report_summary(
                 f"{lead} most sensitive apical endpoint in {sex.lower()} rats was "
                 f"{_phrase(first)}, "
                 f"with an estimated BMD and benchmark dose lower confidence limit (BMDL) "
-                f"of {_pair(first, dose_unit)}.")
+                f"of {_pair(first, dose_unit, bmd_decimals)}.")
             if len(rel) > 1:
                 nxt = rel[1]
                 phrase = _phrase(nxt)
                 sentences.append(
                     f"{phrase[:1].upper()}{phrase[1:]} was the next most sensitive "
                     f"apical endpoint in {sex.lower()} rats, with a BMD (BMDL) of "
-                    f"{_pair(nxt, dose_unit)}.")
+                    f"{_pair(nxt, dose_unit, bmd_decimals)}.")
         paragraphs.append(" ".join(sentences))
 
     # 4. Per organ: most sensitive gene set and gene, by sex.
@@ -172,12 +178,12 @@ def build_report_summary(
             key = f"{organ}_{sex.lower()}"
             gs = _lowest(gene_sets(key), lle)
             if gs:
-                gs_parts.append(f"{_pair(gs, dose_unit)} in {sex.lower()} rats, "
+                gs_parts.append(f"{_pair(gs, dose_unit, bmd_decimals)} in {sex.lower()} rats, "
                                 f"corresponding to {_gene_set_name(gs)}")
             g = _lowest(genes(key), lle)
             if g:
                 gene_parts.append(f"{g.get('gene_symbol', '')} with a BMD (BMDL) of "
-                                  f"{_pair(g, dose_unit)} in {sex.lower()} rats")
+                                  f"{_pair(g, dose_unit, bmd_decimals)} in {sex.lower()} rats")
         sentences = []
         if gs_parts:
             sentences.append(
@@ -200,11 +206,11 @@ def build_report_summary(
             gs = _lowest(gene_sets(key), lle)
             if gs and (best_gs is None or gs["_bmd_float"] < best_gs[0]):
                 best_gs = (gs["_bmd_float"], f"a transcriptional change in the gene set "
-                           f"{_gene_set_name(gs)} in the {organ} with a BMD (BMDL) of {_pair(gs, dose_unit)}")
+                           f"{_gene_set_name(gs)} in the {organ} with a BMD (BMDL) of {_pair(gs, dose_unit, bmd_decimals)}")
             g = _lowest(genes(key), lle)
             if g and (best_gene is None or g["_bmd_float"] < best_gene[0]):
                 best_gene = (g["_bmd_float"], f"a transcriptional change in the gene "
-                             f"{g.get('gene_symbol', '')} in the {organ} with a BMD (BMDL) of {_pair(g, dose_unit)}")
+                             f"{g.get('gene_symbol', '')} in the {organ} with a BMD (BMDL) of {_pair(g, dose_unit, bmd_decimals)}")
         if best_gene:
             cands.append((best_gene[0], "gene", best_gene[1]))
         if best_gs:
@@ -214,7 +220,7 @@ def build_report_summary(
             e = rel[0]
             cands.append((float(e["bmd"]), "apical",
                           f"{_phrase(e)} "
-                          f"with a BMD (BMDL) of {_pair(e, dose_unit)}"))
+                          f"with a BMD (BMDL) of {_pair(e, dose_unit, bmd_decimals)}"))
         if not cands:
             continue
         cands.sort(key=lambda c: c[0])

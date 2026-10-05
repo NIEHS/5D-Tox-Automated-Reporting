@@ -1090,9 +1090,12 @@ async def _extract_genomics(
     # the published reports print.  Absent ⇒ the per-probe fallbacks below.
     from genomics.bmdexpress_categories import (
         category_analyses_by_experiment, gene_level_top_genes,
-        genomic_bmr, go_direction_counts,
+        genomic_bmr, go_direction_counts, report_bmd_decimals,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
+    # Every BMD in the report prints at one precision; stamped on each section
+    # so the narrative builders read it from the payload they already get.
+    bmd_decimals = report_bmd_decimals(integrated)
     chip_species = {
         e.get("name"): (e.get("chip") or {}).get("species")
         for e in integrated.get("doseResponseExperiments", []) or []
@@ -1218,6 +1221,7 @@ async def _extract_genomics(
             # The BMR the genomic BMD analysis recorded (labels the tables).
             "genomic_bmr": genomic_bmr(integrated, exp.get("name", "")),
             "top_genes_level": "gene" if gene_level else "probe",
+            "bmd_decimals": bmd_decimals,
             # top_genes: ranked subset (top 10) shown in the gene table.
             # Gene level (BMDExpress GENE categories) when the project has them;
             # else the per-probe fits, carrying the probe id as its own column.
@@ -1373,7 +1377,8 @@ def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
 
 
 def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
-                          bmds_results: dict | None) -> int:
+                          bmds_results: dict | None,
+                          bmd_decimals: int | None = None) -> int:
     """Write ToxicR fills onto the NTP TableRows themselves (task #34 fill).
 
     Run once per process, after BMDS and before the section tables, narratives
@@ -1382,9 +1387,10 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
     `_cache_bmd_summary` the headless/LaTeX render reads.  A filled row keeps
     its provenance on ``row._bmd_fill`` (source, bmr_config, bmr, model_name),
     which _build_apical_bmd_summary copies onto the summary entry.
+    ``bmd_decimals`` is the report's BMD precision (report_bmd_decimals).
 
     Returns the number of rows filled."""
-    from bmdx_pipe.apical_report import _format_bmd
+    from bmdx_pipe.apical_report import format_bmd
     from tables.apical_bmds import inferred_bmr
 
     if not bmds_results:
@@ -1398,8 +1404,8 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
                     continue
                 if tox.get("status") == "viable":
                     bmdl = _finite_pos_bmd(tox.get("bmdl"))
-                    row.bmd_str = _format_bmd(float(tox["bmd"]))
-                    row.bmdl_str = _format_bmd(bmdl) if bmdl is not None else "—"
+                    row.bmd_str = format_bmd(float(tox["bmd"]), bmd_decimals)
+                    row.bmdl_str = format_bmd(bmdl, bmd_decimals) if bmdl is not None else "—"
                 else:
                     row.bmd_str = row.bmdl_str = tox["status"]
                 row.bmd_status = tox["status"]
@@ -1415,7 +1421,8 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
     return n
 
 
-def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None) -> None:
+def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None,
+                       bmd_decimals: int | None = None) -> None:
     """Reconcile one bm2 apical-summary entry with the ToxicR recompute (task #34).
 
     Stamps provenance on the entry (`source` = bm2|toxicr, `validated` = bool|None);
@@ -1456,9 +1463,11 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
     if tox and tox.get("status") == "viable" and tox_bmd is not None:
         entry["source"] = "toxicr"
         entry["filled"] = True
-        entry["bmd"] = f"{tox_bmd:.3g}"
+        from bmdx_pipe.apical_report import format_bmd
+        entry["bmd"] = format_bmd(tox_bmd, bmd_decimals)
         tox_bmdl = tox.get("bmdl")
-        entry["bmdl"] = f"{float(tox_bmdl):.3g}" if tox_bmdl not in (None, "") else "—"
+        entry["bmdl"] = (format_bmd(float(tox_bmdl), bmd_decimals)
+                         if tox_bmdl not in (None, "") else "—")
         entry["bmd_status"] = "viable"
         if tox.get("model_name"):
             entry["model_name"] = tox["model_name"]
@@ -1479,6 +1488,7 @@ def _build_apical_bmd_summary(
     platform_tables: dict[str, dict[str, list]],
     bmds_results: dict | None = None,
     divergences: list | None = None,
+    bmd_decimals: int | None = None,
 ) -> list[dict]:
     """
     Build the apical BMD summary (Table 8 equivalent) from BMDExpress 3 results.
@@ -1576,7 +1586,7 @@ def _build_apical_bmd_summary(
     # stays byte-identical (the standalone build + the filter-agnostic cache).
     if bmds_results is not None:
         for entry in raw_entries:
-            _merge_toxicr_into(entry, bmds_results, divergences)
+            _merge_toxicr_into(entry, bmds_results, divergences, bmd_decimals)
     for entry in raw_entries:
         entry.pop("_key", None)
 

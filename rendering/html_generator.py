@@ -1147,8 +1147,8 @@ def _render_title_page(node: DocNode, data: dict) -> str:
         NIEHS Report on the
         In Vivo Repeat Dose Biological Potency Study of
         <chemical> (CASRN <casrn>)
-        in Sprague Dawley <strain> Rats
-        (Gavage Studies)
+        in <strain> <designation> <Species>
+        (<Route> Studies)          — from the study design (cover_layouts)
 
         <report number>
         <report date>

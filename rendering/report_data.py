@@ -216,21 +216,45 @@ def _resolve_layout_config(body: dict) -> dict:
     return deep_merge(template_cfg, session_cfg, request_cfg)
 
 
-def _build_full_title(ta: dict) -> str:
+def _build_full_title(ta: dict, design: dict | None = None) -> str:
     """
     Build the report's full title / running header from the test-article forms.
 
-    Fixed NIEHS study-template phrasing ("In Vivo Repeat Dose Biological
-    Potency Study of <name> in Sprague Dawley Rats"), using the running_header
-    name form (the full, never-abbreviated name).  Single-sourced here because
-    marshal_export_data and scaffold_report_data both need the identical title
-    and previously derived it with copy-pasted f-strings.
+    NIEHS study-template phrasing ("In Vivo Repeat Dose Biological Potency
+    Study of <name> in Sprague Dawley Rats"), using the running_header name
+    form (the full, never-abbreviated name).  The animals come from the study's
+    recorded metadata (``design``, pipeline.study_design): "Sprague Dawley
+    Rats" when strain and species are recorded, "Rats" with species only,
+    "Animals" with neither.  Single-sourced here because marshal_export_data,
+    scaffold_report_data and apply_study_design need the identical title.
     """
+    from pipeline.study_design import subject_phrase
+
     running_header_name = ta["forms"]["running_header"]["text"]
     return (
         f"In Vivo Repeat Dose Biological Potency Study of "
-        f"{running_header_name} in Sprague Dawley Rats"
+        f"{running_header_name} in {subject_phrase(design or {}, capitalize=True)}"
     )
+
+
+def apply_study_design(data: dict, integrated: dict | None) -> None:
+    """Set the study-design facts the title, running header and cover state
+    (data["study_design"]) from the integrated project's recorded metadata."""
+    from pipeline.study_design import study_design_facts
+
+    design = study_design_facts(integrated)
+    data["study_design"] = design
+    ta = data.get("test_article")
+    if isinstance(ta, dict) and ta.get("forms"):
+        old_title = data.get("title") or ""
+        title = _build_full_title(ta, design)
+        data["title"] = title
+        data["running_header"] = title
+        # The peer-review boilerplate names the report by its title.
+        pr = data.get("peer_review")
+        if old_title and isinstance(pr, dict) and pr.get("paragraphs"):
+            pr["paragraphs"] = [p.replace(old_title, title) if isinstance(p, str) else p
+                                for p in pr["paragraphs"]]
 
 
 def marshal_export_data(
@@ -411,9 +435,13 @@ def marshal_export_data(
             _integ = _json_cfg.loads(_integ_path.read_text(encoding="utf-8")) if _integ_path.exists() else {}
             _cfg_matrix = build_bmd_config_matrix(_integ)
         except Exception:
-            _cfg_matrix = None
+            _integ, _cfg_matrix = {}, None
         if _cfg_matrix:
             data["appendix_bmd_config_matrix"] = _cfg_matrix
+        # Title, running header and cover name the animals and route the
+        # study records (no protocol defaults).
+        if _integ:
+            apply_study_design(data, _integ)
 
     # ── Appendix D-1: the apical BMD acceptance criteria, from the classifier's
     # own constants (independent of the session).
@@ -996,7 +1024,9 @@ def scaffold_report_data(
         "report_number": ph("NIEHS Report XX"),
         "report_date": ph("Month Year"),
         "issn": "2768-5632",
-        "strain": "(Hsd:Sprague Dawley\u00ae SD\u00ae)",
+        # Supplier strain designation for the cover, e.g. "(Hsd:Sprague
+        # Dawley® SD®)": front matter only — never in the study data.
+        "strain": "",
         "report_series": "NIEHS Report Series",
         # Test article identity with all name forms
         "test_article": ta,

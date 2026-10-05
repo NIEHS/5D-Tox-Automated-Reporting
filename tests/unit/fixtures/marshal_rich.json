@@ -15,7 +15,7 @@
       },
       {
         "label": "Methods",
-        "text": "A short-term in vivo biological potency study on Test Article in adult male and female Sprague Dawley rats was conducted. Test Article was formulated in corn oil and administered once daily for 5 consecutive days by gavage (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. A benchmark response of one standard deviation was used to model all endpoints."
+        "text": "A short-term in vivo biological potency study on Test Article in adult male and female animals was conducted. Test Article was administered once daily for 5 consecutive days (study days 0–4). Test Article was administered at 4 doses (0, 3, 10, and 30 mg/kg body weight [mg/kg]). On study day 5, the day after the final dose was administered, animals were euthanized, standard toxicological measures were assessed. Modeling was conducted to identify the benchmark doses (BMDs) associated with apical toxicological endpoints. A benchmark response of one standard deviation was used to model all endpoints."
       },
       {
         "label": "Results",
@@ -767,7 +767,7 @@
   "overrides": {},
   "peer_review": {
     "paragraphs": [
-      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats was not subjected to further external peer review."
+      "This report was modeled after the NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley (Hsd:Sprague Dawley® SD®) Rats (Gavage Studies) (https://doi.org/10.22427/NTP-RR-8), which was reviewed internally at the National Institute of Environmental Health Sciences and peer reviewed by external experts. Importantly, these reports employ mathematical model-based approaches to identify and report potency of dose-responsive effects and do not attempt more subjective interpretation (i.e., make calls or reach conclusions on hazard). The peer reviewers of the initial 5-day research report determined that the study design, analysis methods, and results presentation were appropriate. The study design, analysis methods, and results presentation employed for this study are identical to those previously reviewed, approved, and reported; therefore, following internal review, the NIEHS Report on the In Vivo Repeat Dose Biological Potency Study of Test Article in Animals was not subjected to further external peer review."
     ]
   },
   "publication_details": {
@@ -791,7 +791,7 @@
   "report_date": "Month 2026",
   "report_number": "DR99",
   "report_series": "NIEHS Report Series",
-  "running_header": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
+  "running_header": "In Vivo Repeat Dose Biological Potency Study of Test Article in Animals",
   "strain": "Wistar",
   "summary": {
     "paragraphs": [
@@ -911,7 +911,7 @@
     "name": "Test Article",
     "pubchem_cid": "999"
   },
-  "title": "In Vivo Repeat Dose Biological Potency Study of Test Article in Sprague Dawley Rats",
+  "title": "In Vivo Repeat Dose Biological Potency Study of Test Article in Animals",
   "toc_entries": [
     {
       "id": "foreword",

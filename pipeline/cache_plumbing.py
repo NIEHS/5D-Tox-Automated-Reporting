@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 5  # bumped: bm2 BMD statuses pass the NIEHS acceptance criteria (bmdx_pipe.bmd_acceptance)
+_NTP_CACHE_SCHEMA_VERSION = 6  # bumped: BMD strings at the report precision (report_bmd_decimals)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -184,10 +184,14 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     bmd_project_schema) force a cache miss even when experiment identity
     is unchanged.
     """
+    from genomics.bmdexpress_categories import report_bmd_decimals
+
     experiments = integrated.get("doseResponseExperiments", [])
     key = json.dumps({
         "schema_version": _NTP_CACHE_SCHEMA_VERSION,
         "bmd_stat": bmd_stat,
+        # The table rows carry formatted BMD strings at the report's precision.
+        "bmd_decimals": report_bmd_decimals(integrated),
         "n_experiments": len(experiments),
         "experiment_names": sorted(e.get("name", "") for e in experiments),
     }, sort_keys=True)
@@ -327,7 +331,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 5  # bumped: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
+_GENOMICS_CACHE_SCHEMA_VERSION = 6  # bumped: sections stamped with bmd_decimals. Was 5: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
 
 # Bump when the chart-rendering algorithm changes (jitter formula,
 # axis configuration, etc.) without changing the underlying gene-set
@@ -393,7 +397,14 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 })
 
 
-def _hash_methods(dtxsid: str, fingerprints: dict) -> str:
+# Bump when the Methods content changes for the same inputs.
+# 2: Study Design / Dose Selection / Chemistry built from the data
+#    (narrative.methods_design); species/strain/route/vehicle from the recorded
+#    metadata instead of protocol defaults.
+_METHODS_CACHE_SCHEMA_VERSION = 2
+
+
+def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:
     """
     Hash inputs for the Materials and Methods section.
 
@@ -425,7 +436,10 @@ def _hash_methods(dtxsid: str, fingerprints: dict) -> str:
             if k not in _METHODS_VOLATILE_FP_FIELDS
         }
     fp_key = json.dumps(stable, sort_keys=True)
-    key = f"methods:{dtxsid}:{fp_key}"
+    # The study-design facts (species, strain, route, vehicle) come from the
+    # integrated project's recorded metadata, which the metadata step can edit.
+    design_key = json.dumps(design or {}, sort_keys=True)
+    key = f"methods:v{_METHODS_CACHE_SCHEMA_VERSION}:{dtxsid}:{fp_key}:{design_key}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 

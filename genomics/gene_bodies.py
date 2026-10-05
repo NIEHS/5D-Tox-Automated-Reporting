@@ -46,6 +46,7 @@ from narrative.narrative_helpers import (
     _join_oxford,
     _format_organ_phrase,
     _format_paired_bmd_pairs,
+    genomics_bmd_decimals,
 )
 
 
@@ -150,6 +151,7 @@ def build_gene_set_body_findings(
     bmd_stat: str | None = None,
     n_top: int = 2,
     sexes: list[str] | None = None,
+    bmd_decimals: int | None = None,
 ) -> dict[str, str]:
     """
     Build the per-organ "findings" paragraphs for the Gene Set BMD
@@ -183,6 +185,8 @@ def build_gene_set_body_findings(
         return {}
 
     sexes = sexes or ["Male", "Female"]
+    if bmd_decimals is None:
+        bmd_decimals = genomics_bmd_decimals(genomics_sections)
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
@@ -264,7 +268,7 @@ def build_gene_set_body_findings(
                     descriptors.append(f"{term} ({go_id})")
                 else:
                     descriptors.append(term)
-            pairs = _format_paired_bmd_pairs(top)
+            pairs = _format_paired_bmd_pairs(top, bmd_decimals)
 
             plural = len(top) > 1
             sentences.append(
@@ -362,6 +366,7 @@ def build_gene_body_findings(
     dose_unit: str = "mg/kg",
     n_top: int = 8,
     sexes: list[str] | None = None,
+    bmd_decimals: int | None = None,
 ) -> dict[str, str]:
     """
     Build the per-organ × per-sex "findings" paragraphs for the Gene BMD
@@ -392,6 +397,8 @@ def build_gene_body_findings(
         return {}
 
     sexes = sexes or ["Male", "Female"]
+    if bmd_decimals is None:
+        bmd_decimals = genomics_bmd_decimals(genomics_sections)
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
@@ -447,7 +454,7 @@ def build_gene_body_findings(
                 if not items:
                     continue
                 symbols = [_format_rat_gene_symbol(g.get("gene_symbol", "")) for g in items]
-                pairs = _format_paired_bmd_pairs(items)
+                pairs = _format_paired_bmd_pairs(items, bmd_decimals)
                 plural = len(items) > 1
 
                 if direction_kind == "upregulated":

@@ -61,6 +61,30 @@ def category_analyses_by_experiment(integrated: dict) -> dict[str, dict[str, lis
     return out
 
 
+# BMD precision.  The 2025 reports (NIEHS-12/13) print every BMD and BMDL to 1
+# decimal — tables, Results, Abstract and Summary alike ("191.4 (127.6)",
+# "6.3 (0.9)"); NIEHS-10 printed 3 ("7.264 (5.024)").  The 2025 method is the
+# one with gene-level (GENE) category analyses, the signal the genomics tables
+# already key their columns on.  ADR-0027 method profiles will own this.
+BMD_DECIMALS_2025 = 1
+BMD_DECIMALS_NIEHS10 = 3
+
+
+def report_bmd_decimals(integrated: dict) -> int:
+    """The fixed number of decimals every BMD in this report prints with: 3
+    when the project has gene-expression experiments analysed without
+    gene-level categories (the NIEHS-10 method), else 1."""
+    has_ge = any(
+        str((e.get("experimentDescription") or {}).get("dataType") or "").lower()
+        == "gene_expression"
+        for e in integrated.get("doseResponseExperiments") or []
+    )
+    if not has_ge:
+        return BMD_DECIMALS_2025
+    gene_level = any("GENE" in kinds for kinds in category_analyses_by_experiment(integrated).values())
+    return BMD_DECIMALS_2025 if gene_level else BMD_DECIMALS_NIEHS10
+
+
 def go_direction_counts(go_items: list[dict]) -> dict[str, tuple[int, int]]:
     """{GO id: (genes up, genes down)} from BMDExpress's adverse-direction counts."""
     out: dict[str, tuple[int, int]] = {}
