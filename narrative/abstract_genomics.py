@@ -55,7 +55,7 @@ from narrative.narrative_helpers import (
 
 def _build_gene_sets_sentence(
     sets: list[dict], sex: str, stat_label: str, dose_unit: str,
-    decimals: int | None = None,
+    decimals: int | None = None, animals: str = "rats",
 ) -> str:
     """
     Build one "most sensitive gene sets" sentence for a given sex.
@@ -79,7 +79,7 @@ def _build_gene_sets_sentence(
     plural = len(sets) > 1
     return (
         f"The most sensitive gene set{'s' if plural else ''} in "
-        f"{sex.lower()} rats for which a reliable estimate of the "
+        f"{sex.lower()} {animals} for which a reliable estimate of the "
         f"BMD could be made {'were' if plural else 'was'} "
         f"{_join_oxford(terms)} with {stat_label} BMD"
         f"{'s' if plural else ''} of {_join_oxford(bmds)} {dose_unit} "
@@ -90,7 +90,7 @@ def _build_gene_sets_sentence(
 
 def _build_top_genes_sentence(
     genes: list[dict], sex: str, direction: str, dose_unit: str,
-    decimals: int | None = None,
+    decimals: int | None = None, animals: str = "rats",
 ) -> str:
     """
     Build one "most sensitive up/down-regulated genes" sentence.
@@ -114,7 +114,7 @@ def _build_top_genes_sentence(
     plural = len(genes) > 1
     return (
         f"The most sensitive {direction}regulated gene"
-        f"{'s' if plural else ''} in {sex.lower()} rats with reliable "
+        f"{'s' if plural else ''} in {sex.lower()} {animals} with reliable "
         f"BMD estimate{'s' if plural else ''} "
         f"{'included' if plural else 'was'} {_join_oxford(symbols)} "
         f"with BMD{'s' if plural else ''} (BMDL{'s' if plural else ''}) "
@@ -131,6 +131,7 @@ def build_abstract_results_genomics(
     n_top_genes: int = 8,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> str:
     """
     Build the genomics portion of the Abstract → Results paragraph.
@@ -162,12 +163,17 @@ def build_abstract_results_genomics(
         sexes:             Sex order (defaults to ["Male", "Female"]).
         bmd_decimals:      The report's BMD precision (report_bmd_decimals);
                            None keeps the legacy 3-decimal form.
+        design:            Study design facts (pipeline.study_design) for the
+                           species; None ⇒ the standard design.
 
     Returns:
         Paragraph string, or empty string if no genomics data is present.
     """
     if not genomics_sections:
         return ""
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
 
     sexes = sexes or ["Male", "Female"]
     if bmd_decimals is None:
@@ -231,7 +237,7 @@ def build_abstract_results_genomics(
                 except (TypeError, ValueError):
                     pass
 
-        sex_phrase = " and ".join(s.lower() for s in sexes) + " rats"
+        sex_phrase = " and ".join(s.lower() for s in sexes) + f" {animals}"
         if below_lle_sets == 0 and below_lle_genes == 0:
             sentences.append(
                 f"In the {organ} of {sex_phrase}, no Gene Ontology "
@@ -260,7 +266,8 @@ def build_abstract_results_genomics(
             # Top gene sets (above LLE, sorted by BMD ascending)
             sets = sec.get("gene_sets_by_stat", {}).get(chosen_stat, [])
             top_sets = _picks_above_lle(sets, lle, n_top_sets)
-            sets_sentence = _build_gene_sets_sentence(top_sets, sex, stat_label, dose_unit, bmd_decimals)
+            sets_sentence = _build_gene_sets_sentence(top_sets, sex, stat_label, dose_unit, bmd_decimals,
+                                                     animals)
             if sets_sentence:
                 sentences.append(sets_sentence)
 
@@ -271,10 +278,11 @@ def build_abstract_results_genomics(
             up_top = _picks_above_lle(up_genes, lle, n_top_genes)
             down_top = _picks_above_lle(down_genes, lle, n_top_genes)
 
-            up_sentence = _build_top_genes_sentence(up_top, sex, "up", dose_unit, bmd_decimals)
+            up_sentence = _build_top_genes_sentence(up_top, sex, "up", dose_unit, bmd_decimals, animals)
             if up_sentence:
                 sentences.append(up_sentence)
-            down_sentence = _build_top_genes_sentence(down_top, sex, "down", dose_unit, bmd_decimals)
+            down_sentence = _build_top_genes_sentence(down_top, sex, "down", dose_unit, bmd_decimals,
+                                                       animals)
             if down_sentence:
                 sentences.append(down_sentence)
 

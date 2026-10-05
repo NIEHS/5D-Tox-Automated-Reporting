@@ -144,6 +144,12 @@ def build_gene_set_body_intro(
     return [p1, p2]
 
 
+def _animals(design: dict | None) -> str:
+    from pipeline.study_design import design_or_standard, species_plural
+
+    return species_plural(design_or_standard(design))
+
+
 def build_gene_set_body_findings(
     genomics_sections: dict,
     dose_groups: list[float],
@@ -152,6 +158,7 @@ def build_gene_set_body_findings(
     n_top: int = 2,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> dict[str, str]:
     """
     Build the per-organ "findings" paragraphs for the Gene Set BMD
@@ -187,6 +194,8 @@ def build_gene_set_body_findings(
     sexes = sexes or ["Male", "Female"]
     if bmd_decimals is None:
         bmd_decimals = genomics_bmd_decimals(genomics_sections)
+    # The species word in the prose (`design` None ⇒ the standard design).
+    animals = _animals(design)
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
@@ -229,7 +238,7 @@ def build_gene_set_body_findings(
                 except (TypeError, ValueError):
                     pass
 
-        sex_phrase = " and ".join(s.lower() for s in sexes) + " rats"
+        sex_phrase = " and ".join(s.lower() for s in sexes) + f" {animals}"
         if below_lle == 0:
             sentences.append(
                 f"No gene sets in the {organ} of {sex_phrase} had "
@@ -251,7 +260,7 @@ def build_gene_set_body_findings(
             top = _picks_above_lle(sets, lle, n_top)
             if not top:
                 sentences.append(
-                    f"In {sex.lower()} rats, no GO biological processes "
+                    f"In {sex.lower()} {animals}, no GO biological processes "
                     f"had a reliable BMD estimate above the lower limit of "
                     f"extrapolation."
                 )
@@ -272,7 +281,7 @@ def build_gene_set_body_findings(
 
             plural = len(top) > 1
             sentences.append(
-                f"In {sex.lower()} rats, the most sensitive GO biological "
+                f"In {sex.lower()} {animals}, the most sensitive GO biological "
                 f"process{'es' if plural else ''} for which a BMD value "
                 f"could be reliably calculated "
                 f"{'were' if plural else 'was'} {_join_oxford(descriptors)} "
@@ -367,6 +376,7 @@ def build_gene_body_findings(
     n_top: int = 8,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> dict[str, str]:
     """
     Build the per-organ × per-sex "findings" paragraphs for the Gene BMD
@@ -399,6 +409,8 @@ def build_gene_body_findings(
     sexes = sexes or ["Male", "Female"]
     if bmd_decimals is None:
         bmd_decimals = genomics_bmd_decimals(genomics_sections)
+    # The species word in the prose (`design` None ⇒ the standard design).
+    animals = _animals(design)
 
     nonzero = [d for d in (dose_groups or []) if d and d > 0]
     if not nonzero:
@@ -426,7 +438,7 @@ def build_gene_body_findings(
                 except (TypeError, ValueError):
                     pass
 
-        sex_phrase = " and ".join(s.lower() for s in sexes) + " rats"
+        sex_phrase = " and ".join(s.lower() for s in sexes) + f" {animals}"
         if below_lle == 0:
             sentences.append(
                 f"No {organ} genes in {sex_phrase} had estimated BMD "
@@ -459,7 +471,7 @@ def build_gene_body_findings(
 
                 if direction_kind == "upregulated":
                     sentences.append(
-                        f"In {sex.lower()} rats, the most sensitive "
+                        f"In {sex.lower()} {animals}, the most sensitive "
                         f"upregulated gene{'s' if plural else ''} with a "
                         f"calculated BMD "
                         f"{'were' if plural else 'was'} "
@@ -472,7 +484,7 @@ def build_gene_body_findings(
                     sentences.append(
                         f"The most sensitive gene{'s' if plural else ''} "
                         f"exhibiting a decrease in expression in "
-                        f"{sex.lower()} rats "
+                        f"{sex.lower()} {animals} "
                         f"{'were' if plural else 'was'} "
                         f"{_join_oxford(symbols)} with BMD"
                         f"{'s' if plural else ''} (BMDL"

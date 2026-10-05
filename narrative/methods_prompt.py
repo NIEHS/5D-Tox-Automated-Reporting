@@ -118,7 +118,7 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     # Design facts the data does not record are stated as such, so the model
     # cannot fill them with protocol defaults (pipeline.study_design).
     _not_recorded = "not recorded in the study data — do not state one"
-    from pipeline.study_design import control_group, subject_phrase
+    from pipeline.study_design import control_group, species_plural, subject_phrase
     _subject = subject_phrase({"species": ctx.species, "strain": ctx.strain})
     context_block = f"""## Study Context
 - Chemical: {ctx.chemical_name} (CASRN: {ctx.casrn}, DTXSID: {ctx.dtxsid})
@@ -180,7 +180,8 @@ def build_methods_prompt(ctx: MethodsContext) -> tuple[str, str]:
     sexless_note = (
         "\n- This study has NO sex dimension: do NOT mention sex anywhere — no "
         "\"male and female\", no per-sex cohorts, no sex-specific normalization or "
-        "analysis. Refer to the animals sex-neutrally (\"rats\", \"animals\")."
+        f"analysis. Refer to the animals sex-neutrally (\"{species_plural({'species': ctx.species})}\", "
+        "\"animals\")."
         if sexless else ""
     )
 

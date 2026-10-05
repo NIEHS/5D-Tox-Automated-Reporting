@@ -650,7 +650,7 @@ def _build_section_cards(
                 # sex_rows because that includes the old pre-sidecar pivot
                 # rows which may have stale responsive=True flags.
                 narrative = generate_platform_narrative(
-                    platform, responsive_rows, compound_name, dose_unit,
+                    platform, responsive_rows, compound_name, dose_unit, design,
                 )
                 sections.append({
                     "platform": platform,
@@ -706,7 +706,7 @@ def _build_section_cards(
 
                 if cp_result.get("table_data"):
                     narrative = generate_platform_narrative(
-                        platform, responsive_rows, compound_name, dose_unit,
+                        platform, responsive_rows, compound_name, dose_unit, design,
                     )
                     sections.append({
                         "platform": platform,
@@ -752,7 +752,7 @@ def _build_section_cards(
 
                 if ow_result and ow_result.get("table_data"):
                     narrative = generate_platform_narrative(
-                        platform, responsive_rows, compound_name, dose_unit,
+                        platform, responsive_rows, compound_name, dose_unit, design,
                     )
                     sections.append({
                         "platform": platform,
@@ -784,7 +784,7 @@ def _build_section_cards(
 
         tables_json = serialize_table_rows(sex_rows)
         narrative = generate_platform_narrative(
-            platform, responsive_rows, compound_name, dose_unit)
+            platform, responsive_rows, compound_name, dose_unit, design)
         sections.append({
             "platform": platform,
             "title": platform,

@@ -146,6 +146,7 @@ def build_apical_bmd_summary_narrative(
     apical_bmd_summary: list[dict],
     compound_name: str,
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
 ) -> list[str]:
     """
     Build the descriptive body narrative for the Apical Endpoint BMD Summary section.
@@ -167,12 +168,17 @@ def build_apical_bmd_summary_narrative(
             platform, bmd, bmdl, direction, loel, noel, anomalous (optional).
         compound_name: Chemical name used in prose (e.g. "PFHxSAm").
         dose_unit: Dose unit string (e.g. "mg/kg").
+        design: Study design facts (pipeline.study_design) for the species;
+            None ⇒ the standard design.
 
     Returns:
         List of paragraph strings ready for display or export.
     """
     if not apical_bmd_summary:
         return []
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
 
     # Canonical readable platform name for prose
     _PLATFORM_PROSE = {
@@ -280,7 +286,7 @@ def build_apical_bmd_summary_narrative(
 
         if not sex_reliable and not sex_urep and not sex_loel:
             sex_sentences.append(
-                f"In {sex.lower()} rats, no apical endpoints showed "
+                f"In {sex.lower()} {animals}, no apical endpoints showed "
                 f"dose-related changes."
             )
             continue
@@ -340,7 +346,7 @@ def build_apical_bmd_summary_narrative(
         if parts:
             body = "; ".join(parts) + "."
             sex_sentences.append(
-                f"In {sex.lower()} rats, {body}"
+                f"In {sex.lower()} {animals}, {body}"
             )
 
     if sex_sentences:
@@ -352,6 +358,7 @@ def build_apical_bmd_summary_narrative(
 def build_abstract_results_apical(
     apical_bmd_summary: list[dict],
     sexes: list[str] | None = None,
+    design: dict | None = None,
 ) -> str:
     """
     Build the apical-findings portion of the Abstract → Results paragraph.
@@ -384,10 +391,15 @@ def build_abstract_results_apical(
                             same structure as data["bmd_summary"]["endpoints"].
         sexes: optional list of sex labels to include (defaults to
                ["Male", "Female"]).  Order is preserved in output.
+        design: Study design facts (pipeline.study_design) for the species;
+                None ⇒ the standard design.
 
     Returns:
         A single paragraph string ready to insert into the Abstract.
     """
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
     if sexes is None:
         sexes = ["Male", "Female"]
 
@@ -440,7 +452,7 @@ def build_abstract_results_apical(
 
         if not sex_entries:
             sentences.append(
-                f"In {sex.lower()} rats, there were no apical endpoints "
+                f"In {sex.lower()} {animals}, there were no apical endpoints "
                 f"for which a BMD value could be reliably estimated."
             )
             continue
@@ -462,7 +474,7 @@ def build_abstract_results_apical(
         # Differentiate "BMD" vs "BMDs" if singular
         plural = len(sex_entries) > 1
         sentences.append(
-            f"In {sex.lower()} rats, the effects included "
+            f"In {sex.lower()} {animals}, the effects included "
             f"significantly {_join_oxford(descriptors)}. "
             f"The BMD{'s' if plural else ''} and benchmark dose lower "
             f"confidence limit{'s' if plural else ''} (BMDL{'s' if plural else ''}) "

@@ -633,7 +633,7 @@ def build_organ_weight_table_from_sidecar(
     footnotes.extend(sa_records)
 
     attr_record, attr_refs = build_attrition_footnote(
-        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit,
+        total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
     )
     if attr_record is not None:
         footnotes.append(attr_record)

@@ -172,6 +172,7 @@ def overlay_abstract(
                 bmd_stat=bmd_stat,
                 methods_ctx=methods_context,
                 sexes=sexes,
+                design=data.get("study_design"),
             )
             if results_text:
                 abstract_updates["Results"] = results_text
@@ -182,6 +183,7 @@ def overlay_abstract(
                 dose_unit=dose_unit,
                 bmd_stat=bmd_stat,
                 sexes=sexes,
+                design=data.get("study_design"),
             )
             if summary_text:
                 abstract_updates["Summary"] = summary_text

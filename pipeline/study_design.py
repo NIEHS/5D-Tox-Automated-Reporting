@@ -183,6 +183,17 @@ def strain_display(facts: dict) -> str:
     return _STRAIN_DISPLAY.get(strain, strain)
 
 
+def design_or_standard(design: dict | None) -> dict:
+    """The design a caller was given, or the standard design when it has none
+    (a caller with no integrated project — its wording matches the fallback)."""
+    return STANDARD_DESIGN if design is None else design
+
+
+def species_singular(facts: dict) -> str:
+    """"rat" / "mouse" / "animal" (species unrecorded)."""
+    return facts.get("species") or "animal"
+
+
 def species_plural(facts: dict, capitalize: bool = False) -> str:
     """"rats" / "mice" / "animals" (species unrecorded)."""
     species = facts.get("species")

@@ -195,6 +195,10 @@ def build_body_weight_table_from_sidecar(
         Dict with keys matching the Typst apical_sections schema,
         identical to build_body_weight_table() output.
     """
+    from pipeline.study_design import design_or_standard, species_plural, species_singular
+
+    _facts = design_or_standard(design)
+    animals, animal = species_plural(_facts), species_singular(_facts)
     if bmd_results is None:
         bmd_results = {}
 
@@ -465,9 +469,9 @@ def build_body_weight_table_from_sidecar(
             fid = f"indiv_death_{sex}_{day}_{count}"
             sex_word = sex.lower()
             if count == 1:
-                text = f"One {sex_word} rat was found dead on study day {day_num}."
+                text = f"One {sex_word} {animal} was found dead on study day {day_num}."
             else:
-                text = f"{count} {sex_word} rats were found dead on study day {day_num}."
+                text = f"{count} {sex_word} {animals} were found dead on study day {day_num}."
             footnotes.append(lettered_footnote(text, fid, target="cells"))
             indiv_fid_by_key[key] = fid
 
@@ -528,7 +532,7 @@ def build_body_weight_table_from_sidecar(
 
         day_num = mass_terminal_day[2:] if mass_terminal_day.upper().startswith("SD") else mass_terminal_day
         footnotes.append(lettered_footnote(
-            f"All {sex_str} {dose_str} {dose_unit} rats were found dead "
+            f"All {sex_str} {dose_str} {dose_unit} {animals} were found dead "
             f"or moribund and euthanized by study day {day_num}.",
             "mass_attrition", target="cells",
         ))

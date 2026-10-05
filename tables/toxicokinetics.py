@@ -221,7 +221,8 @@ def _fmt_dose(d: float) -> str:
     return f"{int(d)}" if float(d).is_integer() else f"{d:g}"
 
 
-def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str = "mg/kg") -> list[str]:
+def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str = "mg/kg",
+                                  design: dict | None = None) -> list[str]:
     """Deterministic Internal Dose Assessment prose grounded in the computed TK.
 
     Follows the reference report's interpretive frame (NIEHS Report 10): what was
@@ -233,11 +234,15 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
     This is the DETERMINISTIC baseline (byte-stable, grounded). It is generated
     content — a human edits it externally after hand-off (ADR-0018); it is never
     auto-blessed as final.
+    `design` is the study design (pipeline.study_design) for the species
+    word; None ⇒ the standard design.
     """
     by_sex = tk.get("by_sex") or {}
     if not by_sex:
         return []
+    from pipeline.study_design import design_or_standard, species_plural
 
+    animals = species_plural(design_or_standard(design))
     paragraphs: list[str] = []
     sexes = [s for s in ("Male", "Female") if s in by_sex]
     any_sex = by_sex[sexes[0]]
@@ -264,8 +269,8 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
         if m is not None and f is not None and m != f:
             higher, lower = ("female", "male") if f > m else ("male", "female")
             paragraphs.append(
-                f"Average plasma concentrations in {higher} rats were higher than "
-                f"those in {lower} rats, indicating a sex difference in internal exposure."
+                f"Average plasma concentrations in {higher} {animals} were higher than "
+                f"those in {lower} {animals}, indicating a sex difference in internal exposure."
             )
 
     # 3. Dose proportionality → ADME inference.
@@ -302,7 +307,7 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
             if th is not None:
                 parts.append(f"{th:.1f} hours at {_fmt_dose(d)} {dose_unit}")
         if parts:
-            hl_bits.append(f"{sex.lower()} rats, {' and '.join(parts)}")
+            hl_bits.append(f"{sex.lower()} {animals}, {' and '.join(parts)}")
     if hl_bits:
         # Was the half-life shorter at the higher dose (clearance induction)?
         induced = any(

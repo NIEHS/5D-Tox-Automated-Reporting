@@ -60,6 +60,7 @@ def build_abstract_summary(
     bmd_stat: str | None = None,
     sexes: list[str] | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> str:
     """
     Build the Abstract → Summary paragraph.
@@ -89,12 +90,17 @@ def build_abstract_summary(
         bmd_stat:           Which stat to use for gene sets ("median", "fifth_pct").
         sexes:              Optional sex order (defaults to ["Male", "Female"]).
         bmd_decimals:       The report's BMD precision (report_bmd_decimals).
+        design:             Study design facts (pipeline.study_design) for the
+                            species; None ⇒ the standard design.
 
     Returns:
         Paragraph string, or empty string if no reliable BMDs exist anywhere.
     """
     if bmd_decimals is None:
         bmd_decimals = genomics_bmd_decimals(genomics_sections)
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
     # Iterate the conditions ACTUALLY present (metadata-driven, from derive_study_sexes).
     # Real sexes → per-sex tracks with "in {sex} rats" prose. No sex dimension (explicit
     # []) → one sexless track per genomics sex-token present (e.g. "unknown"), rendered
@@ -217,7 +223,7 @@ def build_abstract_summary(
             ))
 
         # Sex-neutral phrasing when the study has no sex dimension (sex_label None).
-        in_sex = f" in {sex_label.lower()} rats" if sex_label else ""
+        in_sex = f" in {sex_label.lower()} {animals}" if sex_label else ""
 
         if not category_phrases:
             # Nothing reliable for this track — emit the apical-missing fallback
@@ -238,8 +244,8 @@ def build_abstract_summary(
         # connective; later ones stand alone. Real sex → "in {sex} rats,"; no sex
         # dimension → sex-neutral.
         if sex_label:
-            opener = (f"Taken together, in {sex_label.lower()} rats,"
-                      if not sentences else f"In {sex_label.lower()} rats,")
+            opener = (f"Taken together, in {sex_label.lower()} {animals},"
+                      if not sentences else f"In {sex_label.lower()} {animals},")
         else:
             opener = "Taken together," if not sentences else ""
 
@@ -273,6 +279,7 @@ def build_abstract_results(
     sexes: list[str] | None = None,
     methods_ctx: dict | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> str:
     """
     Build the full Abstract → Results paragraph.
@@ -294,6 +301,8 @@ def build_abstract_results(
                             pk_concentrations / pk_half_lives / pk_timepoints fields
                             drive the pharmacokinetics sentence.
         bmd_decimals:       The report's BMD precision (report_bmd_decimals).
+        design:             Study design facts (pipeline.study_design) for the
+                            species; None ⇒ the standard design.
 
     Returns:
         A single paragraph string for the Abstract Results section.
@@ -301,7 +310,7 @@ def build_abstract_results(
     parts: list[str] = []
 
     if apical_bmd_summary:
-        ap = build_abstract_results_apical(apical_bmd_summary, sexes=sexes)
+        ap = build_abstract_results_apical(apical_bmd_summary, sexes=sexes, design=design)
         if ap:
             parts.append(ap)
 
@@ -314,6 +323,7 @@ def build_abstract_results(
             pk_timepoints=methods_ctx.get("pk_timepoints", []),
             dose_unit=methods_ctx.get("dose_unit", dose_unit),
             sexes=sexes,
+            design=design,
         )
         if pk:
             parts.append(pk)
@@ -326,6 +336,7 @@ def build_abstract_results(
             bmd_stat=bmd_stat,
             sexes=sexes,
             bmd_decimals=bmd_decimals,
+            design=design,
         )
         if gn:
             parts.append(gn)

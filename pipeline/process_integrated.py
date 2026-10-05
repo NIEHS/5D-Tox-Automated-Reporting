@@ -290,14 +290,17 @@ async def _build_apical_bmd_narrative(ctx):
                 methods_result.get("context") if methods_result else None
             ) or {}
             _chem_name = _methods_ctx.get("chemical_name") or compound_name or "the test article"
-            _dur = _methods_ctx.get("study_duration", "subchronic (90-day)")
             _dose_groups = _methods_ctx.get("dose_groups") or []
+            from pipeline.study_design import study_design_facts
+            _design = study_design_facts(ctx.integrated, dose_unit)
+            _days = _methods_ctx.get("duration_days") or _design.get("duration_days")
 
             # Descriptive paragraphs (deterministic, no LLM).
             desc_paras = build_apical_bmd_summary_narrative(
                 apical_bmd_summary,
                 compound_name=_chem_name,
                 dose_unit=dose_unit,
+                design=_design,
             )
 
             # LLM analytical paragraph (async, cached per summary hash).
@@ -309,8 +312,9 @@ async def _build_apical_bmd_narrative(ctx):
                     compound_name=_chem_name,
                     dose_unit=dose_unit,
                     apical_bmd_summary=apical_bmd_summary,
-                    study_duration=_dur,
+                    study_duration=f"{_days}-day" if _days else None,
                     dose_groups=_dose_groups,
+                    design=_design,
                 )
                 llm_paras = llm_result.get("paragraphs", [])
                 if "error" in llm_result:
@@ -876,7 +880,7 @@ async def _get_sections(ctx):
             }
             responsive_rows = {s: rs for s, rs in responsive_rows.items() if rs}
             card["narrative"] = generate_platform_narrative(
-                plat, responsive_rows, compound_name, dose_unit)
+                plat, responsive_rows, compound_name, dose_unit, _design)
 
     # ── Unified cross-platform narratives ─────────────────────────
     # The NIEHS reference report groups narrative prose into two
@@ -920,9 +924,10 @@ async def _get_sections(ctx):
         clinical_obs_incidence=clin_obs_incidence,
         organ_allowlist=ow_allow,
         ow_sex_allowlist=ow_sex_allow,
+        design=_design,
     )
     clin_path_narrative = generate_clinical_pathology_narrative(
-        narr_tables, compound_name, dose_unit,
+        narr_tables, compound_name, dose_unit, design=_design,
     )
 
     unified_narratives = {}
@@ -952,7 +957,7 @@ async def _get_sections(ctx):
             _id_paths = _find_sc(str(_session_dir(dtxsid)), platform="Tissue Concentration")
             if _id_paths:
                 _tk = compute_toxicokinetics(_id_paths)
-                _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit)
+                _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit, _design)
                 if _id_paras:
                     unified_narratives["internal_dose"] = {
                         "title": "Internal Dose Assessment",

@@ -39,19 +39,19 @@ logger = logging.getLogger(__name__)
 
 _APICAL_BMD_SYSTEM = """\
 You are a toxicologist writing narrative text for an NTP (National Toxicology Program) \
-research report on a rodent subchronic toxicity study. \
+research report on a short-term in vivo toxicity study. \
 Your role is to interpret the pattern of apical endpoint benchmark dose (BMD) results \
 in terms of biological significance.
 
 Write in a clear, formal scientific style consistent with NTP report conventions. \
-Use past tense. Refer to animals as "male rats" / "female rats". \
+Use past tense. Refer to the animals by sex and species exactly as the findings do. \
 Do not invent data — work only from the findings provided. \
 Write one or two concise paragraphs (3–5 sentences each).\
 """
 
 _APICAL_BMD_PROMPT = """\
-The following apical endpoint BMD results were obtained in a {duration} study of {compound} \
-administered to rats at doses of {doses} {dose_unit}.
+The following apical endpoint BMD results were obtained in a {duration} study in which \
+{subject} were {verb} {compound} at {dose_noun} of {doses} {dose_unit}.
 
 {findings_block}
 
@@ -78,8 +78,9 @@ async def generate_apical_bmd_narrative_async(
     compound_name: str,
     dose_unit: str,
     apical_bmd_summary: list[dict],
-    study_duration: str = "subchronic (90-day)",
+    study_duration: str | None = None,
     dose_groups: list[float] | None = None,
+    design: dict | None = None,
 ) -> dict:
     """
     LLM-generate a biology-grounded analytical paragraph for the Apical
@@ -98,20 +99,41 @@ async def generate_apical_bmd_narrative_async(
         apical_bmd_summary: Flat list of endpoint dicts from
                             _build_apical_bmd_summary().
         study_duration:     Plain-English study duration for the prompt
-                            (default "subchronic (90-day)").
-        dose_groups:        Non-zero dose levels (mg/kg) — used in the
+                            (e.g. "5-day"); None ⇒ from the design.
+        dose_groups:        Non-zero dose levels — used in the
                             prompt to anchor the LLM on actual study doses.
+        design:             Study design facts (pipeline.study_design) for the
+                            species, verb and duration; None ⇒ the standard
+                            design.
 
     Returns:
         {"paragraphs": [str, ...], "model_used": str}
         or {"error": str} on failure.
     """
-    # --- Cache: keyed on a hash of the BMD summary data ---
-    # The apical BMD summary is deterministic — if the data hasn't changed
-    # (same integration + NTP stats run), reuse the cached paragraph.
+    from pipeline.study_design import (
+        design_or_standard, dose_noun, exposure_verb, species_plural, subject_phrase,
+    )
+
+    facts = design_or_standard(design)
+    animals = species_plural(facts)
+    if not study_duration:
+        days = facts.get("duration_days")
+        study_duration = f"{days}-day" if days else "short-term"
+    study = {
+        "subject": subject_phrase(facts),
+        "verb": exposure_verb(facts),
+        "duration": study_duration,
+        "dose_noun": dose_noun(dose_unit),
+    }
+
+    # --- Cache: keyed on the BMD summary data and the study facts the prompt
+    # states.  The summary is deterministic — if neither changed (same
+    # integration + NTP stats run, same design), reuse the cached paragraph.
     import orjson
     cache_key = hashlib.md5(
-        orjson.dumps(apical_bmd_summary, option=orjson.OPT_SORT_KEYS)
+        orjson.dumps({"summary": apical_bmd_summary, "study": study,
+                      "compound": compound_name, "dose_unit": dose_unit},
+                     option=orjson.OPT_SORT_KEYS)
     ).hexdigest()[:16]
     cache_path = SESSIONS_DIR / validate_dtxsid(dtxsid) / f"_cache_apical_narrative_{cache_key}.json"
 
@@ -131,7 +153,7 @@ async def generate_apical_bmd_narrative_async(
         sex_entries = [e for e in apical_bmd_summary if e.get("sex") == sex]
         if not sex_entries:
             continue
-        lines.append(f"{sex} rats:")
+        lines.append(f"{sex} {animals}:")
         # Group by platform for readability
         by_plat: dict[str, list[dict]] = {}
         for e in sex_entries:
@@ -174,10 +196,10 @@ async def generate_apical_bmd_narrative_async(
 
     prompt = _APICAL_BMD_PROMPT.format(
         compound=compound_name,
-        duration=study_duration,
         doses=dose_str,
         dose_unit=dose_unit,
         findings_block=findings_block,
+        **study,
     )
 
     try:

@@ -435,6 +435,7 @@ def build_attrition_footnote(
     core_n_by_sex_dose: dict[str, dict[float, int]],
     sorted_doses: list[float],
     dose_unit: str = "mg/kg",
+    design: dict | None = None,
 ) -> tuple[dict | None, dict[str, dict[float, str]]]:
     """
     Build a single attrition footnote for whole dose groups with no data.
@@ -451,6 +452,8 @@ def build_attrition_footnote(
         core_n_by_sex_dose:     {sex: {dose: count with usable data}}.
         sorted_doses:           Ordered dose list.
         dose_unit:              Dose unit string for the footnote text.
+        design:                 Study design facts (pipeline.study_design) for
+                                the species word; None ⇒ the standard design.
 
     Returns:
         (footnote_record_or_None, n_row_marker_refs).  The record is a
@@ -478,8 +481,11 @@ def build_attrition_footnote(
         "male and female" if len(dead_sexes) == 2
         else dead_sexes[0].lower()
     )
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
     text = (
-        f"All {sex_str} {dose_str} {dose_unit} rats were found dead "
+        f"All {sex_str} {dose_str} {dose_unit} {animals} were found dead "
         f"or moribund and euthanized by study day 1."
     )
     # Marker on the first attrited (sex, dose) cell — the footnote text

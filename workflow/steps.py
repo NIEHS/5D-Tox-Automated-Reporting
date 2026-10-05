@@ -63,6 +63,7 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
     import json
 
     from narrative.report_summary import build_report_summary
+    from pipeline.study_design import study_design_facts
     from pipeline.session_db import _latest_cache
     from pipeline.session_store import save_section
     from rendering.render_common import derive_study_sexes
@@ -102,6 +103,7 @@ def materialize_summary(dtxsid: str, store: PoolStore) -> dict:
         sexes=derive_study_sexes(integrated),
         abstract_background=_read("background.json").get("abstract_background", "") or "",
         apical_evaluated=bool(sections),
+        design=study_design_facts(integrated, methods.get("dose_unit")),
     )
     if not paragraphs:
         return {"ok": True, "written": False, "paragraphs": 0}

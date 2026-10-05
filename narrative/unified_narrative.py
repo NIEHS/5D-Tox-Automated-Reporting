@@ -403,22 +403,31 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _mortality_sex_subject(mortality: dict) -> str:
-    """The rats-subject phrase for the study's ACTUAL sexes, from the mortality
+def _animals(design: dict | None) -> str:
+    """The study's species plural for prose ("rats", "mice"; "animals" when
+    unrecorded); None ⇒ the standard design."""
+    from pipeline.study_design import design_or_standard, species_plural
+
+    return species_plural(design_or_standard(design))
+
+
+def _mortality_sex_subject(mortality: dict, animals: str = "rats") -> str:
+    """The subject phrase for the study's ACTUAL sexes, from the mortality
     data (`by_dose[dose]` is keyed by sex): "male and female rats" when both are
-    present, "male rats" / "female rats" for a single-sex study, else "rats"."""
+    present, "male rats" / "female rats" for a single-sex study, else "rats".
+    `animals` is the study's species plural (pipeline.study_design)."""
     sexes = {
         str(s).lower()
         for per_sex in (mortality.get("by_dose") or {}).values()
         for s in (per_sex or {})
     }
     if {"male", "female"} <= sexes:
-        return "male and female rats"
+        return f"male and female {animals}"
     if sexes == {"male"}:
-        return "male rats"
+        return f"male {animals}"
     if sexes == {"female"}:
-        return "female rats"
-    return "rats"
+        return f"female {animals}"
+    return animals
 
 
 def _animal_condition_survived_template(subject: str = "male and female rats") -> Template:
@@ -434,7 +443,7 @@ def _animal_condition_survived_template(subject: str = "male and female rats") -
 
 def _animal_condition_opening_template(
     compound_name: str, has_death_day: bool, has_signs: bool,
-    subject: str = "male and female rats",
+    subject: str = "male and female rats", verb: str = "administered",
 ) -> Template:
     """The mortality/toxicity opening sentence.  `compound_name` is baked into a
     Literal — the chemical identity is structural, not a reprocess value.  Dose
@@ -442,9 +451,10 @@ def _animal_condition_opening_template(
     `signs` list is CATEGORICAL — it is data-DERIVED content (finding words), not
     a magnitude, so a change there is a wording concern, not a silent refresh.
     The two clauses are present only when the former `if earliest_death_day` /
-    `if clinical_signs` branches fired."""
+    `if clinical_signs` branches fired.  `verb` is "administered", or "exposed
+    to" for an inhalation study (pipeline.study_design.exposure_verb)."""
     segs: list = [
-        Literal(f"{subject[:1].upper()}{subject[1:]} administered "),
+        Literal(f"{subject[:1].upper()}{subject[1:]} {verb} "),
         Slot("doses", SlotKind.NUMERIC),
         Literal(" "),
         Slot("unit", SlotKind.NUMERIC),
@@ -488,11 +498,11 @@ def _animal_condition_death_detail_template(has_latest_day: bool, singular: bool
     return segs
 
 
-def _animal_condition_surviving_template() -> Template:
+def _animal_condition_surviving_template(animals: str = "rats") -> Template:
     """The surviving-doses closing sentence.  `surv_doses` (the dose list) and
-    `unit` are NUMERIC."""
+    `unit` are NUMERIC; `animals` is the study's species plural."""
     return [
-        Literal("Rats in the "),
+        Literal(f"{animals.capitalize()} in the "),
         Slot("surv_doses", SlotKind.NUMERIC),
         Literal(" "),
         Slot("unit", SlotKind.NUMERIC),
@@ -506,6 +516,7 @@ def _build_animal_condition_paragraphs(
     dose_unit: str,
     mortality: dict,
     clinical_obs_incidence: dict[str, list] | None,
+    design: dict | None = None,
 ) -> list[str]:
     """
     Build the "Animal Condition" paragraph(s) for the apical narrative.
@@ -525,10 +536,18 @@ def _build_animal_condition_paragraphs(
         clinical_obs_incidence: Optional {sex: [IncidenceRow]} from
                                 build_clinical_obs_tables().  Used to list
                                 clinical signs.
+        design:                 Study design facts (pipeline.study_design) for
+                                the species and verb; None ⇒ the standard design.
 
     Returns:
         List of paragraph strings (usually 1-2 paragraphs).
     """
+    from pipeline.study_design import (
+        design_or_standard, exposure_verb, species_plural, species_singular,
+    )
+
+    facts = design_or_standard(design)
+    animals, animal = species_plural(facts), species_singular(facts)
     paragraphs: list[str] = []
 
     if not mortality or not mortality.get("by_dose"):
@@ -555,7 +574,7 @@ def _build_animal_condition_paragraphs(
         # No mortality — brief statement that all survived (template + render;
         # byte-identical to the former f-string).
         paragraphs.append(
-            render(_animal_condition_survived_template(_mortality_sex_subject(mortality)),
+            render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals)),
                    {"expected_day": expected_day})
         )
         return paragraphs
@@ -604,7 +623,7 @@ def _build_animal_condition_paragraphs(
     sentence1 = render(
         _animal_condition_opening_template(
             compound_name, bool(earliest_death_day), bool(clinical_signs),
-            subject=_mortality_sex_subject(mortality)),
+            subject=_mortality_sex_subject(mortality, animals), verb=exposure_verb(facts)),
         opening_binding,
     )
 
@@ -620,7 +639,7 @@ def _build_animal_condition_paragraphs(
             sd = dose_data.get(sex, {})
             n_dead = sd.get("early_deaths", 0)
             if n_dead > 0:
-                sex_counts.append(f"{n_dead} {sex.lower()} {'rat' if n_dead == 1 else 'rats'}")
+                sex_counts.append(f"{n_dead} {sex.lower()} {animal if n_dead == 1 else animals}")
                 for day_str in sd.get("death_days", {}):
                     match = re.search(r"\d+", day_str)
                     if match:
@@ -649,7 +668,7 @@ def _build_animal_condition_paragraphs(
         if surviving_dose_strs:
             surv_list = _oxford_comma(surviving_dose_strs, conjunction="and")
             surviving_sentence = render(
-                _animal_condition_surviving_template(),
+                _animal_condition_surviving_template(animals),
                 {"surv_doses": surv_list, "unit": dose_unit},
             )
 
@@ -663,7 +682,8 @@ def _build_animal_condition_paragraphs(
     return paragraphs
 
 
-def _body_weight_sentence_template(sex_lower: str, has_loel: bool) -> Template:
+def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
+                                   animals: str = "rats") -> Template:
     """The significant-body-weight sentence as author wording + typed data slots.
 
     `sex_lower` is baked into a Literal — a row's sex is structural and never
@@ -676,7 +696,7 @@ def _body_weight_sentence_template(sex_lower: str, has_loel: bool) -> Template:
     segs: list = [
         Literal("Terminal body weight was significantly "),
         Slot("direction", SlotKind.CATEGORICAL),
-        Literal(f" in {sex_lower} rats"),
+        Literal(f" in {sex_lower} {animals}"),
     ]
     if has_loel:
         segs += [
@@ -718,6 +738,7 @@ def _build_body_weight_paragraphs(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
     dose_unit: str,
+    animals: str = "rats",
 ) -> list[str]:
     """
     Build body weight finding paragraphs from the Body Weight platform data.
@@ -759,7 +780,7 @@ def _build_body_weight_paragraphs(
             # data reprocess stay separable (Phase 2, section_template).
             direction = _endpoint_direction(bw_row)
             low_dose = _lowest_sig_dose(bw_row)
-            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None)
+            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals)
             binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
             sex_sentences.append(render(tpl, binding))
         if sex_sentences:
@@ -769,7 +790,7 @@ def _build_body_weight_paragraphs(
             # row (a session carries several — terminal weight, gain, per-study-
             # day weights). Appending one ref per row produced "male rats
             # (Table 2), male rats (Table 2), male rats (Table 2)" (2026-09-24).
-            nd_sexes.append(f"{sex.lower()} rats (Table 2)")
+            nd_sexes.append(f"{sex.lower()} {animals} (Table 2)")
 
     if not significant and not nd_sexes:
         return []
@@ -911,6 +932,7 @@ def _build_organ_weight_paragraphs(
     dose_unit: str,
     organ_allowlist: list[str] | None = None,
     sex_allowlist: list[str] | None = None,
+    animals: str = "rats",
 ) -> list[str]:
     """
     Build organ weight finding paragraphs from the Organ Weight platform data.
@@ -988,7 +1010,7 @@ def _build_organ_weight_paragraphs(
         if not sig_rows:
             # No significant findings for this sex
             paragraphs.append(
-                f"In {sex.lower()} rats at study termination, there were no "
+                f"In {sex.lower()} {animals} at study termination, there were no "
                 f"organ weights that exhibited significant trend and pairwise "
                 f"comparisons."
             )
@@ -1039,7 +1061,7 @@ def _build_organ_weight_paragraphs(
             sex_findings.append(render(tpl, binding))
 
         # Opening line + findings
-        sex_para = f"In {sex.lower()} rats at study termination, "
+        sex_para = f"In {sex.lower()} {animals} at study termination, "
         sex_para += " ".join(sex_findings)
 
         # Non-significant endpoints listed at the end
@@ -1123,6 +1145,7 @@ def _build_sub_platform_paragraphs(
     sex_rows: dict[str, list],
     compound_name: str,
     dose_unit: str,
+    animals: str = "rats",
 ) -> list[str]:
     """
     Build narrative paragraphs for one clinical pathology sub-platform.
@@ -1155,7 +1178,7 @@ def _build_sub_platform_paragraphs(
         if not sig_rows:
             # Nothing significant for this sex in this sub-platform
             paragraphs.append(
-                f"In {sex.lower()} rats, no {sub_platform.lower()} endpoints "
+                f"In {sex.lower()} {animals}, no {sub_platform.lower()} endpoints "
                 f"exhibited significant trend and pairwise comparisons."
             )
             continue
@@ -1171,7 +1194,7 @@ def _build_sub_platform_paragraphs(
             binding = _bind_sub_platform_finding(r, dose_unit, direction, low_dose)
             findings.append(render(tpl, binding))
 
-        sex_para = f"In {sex.lower()} rats, "
+        sex_para = f"In {sex.lower()} {animals}, "
         sex_para += " ".join(findings)
 
         # Non-significant endpoints
@@ -1201,6 +1224,7 @@ def generate_apical_narrative(
     clinical_obs_incidence: dict[str, list] | None = None,
     organ_allowlist: list[str] | None = None,
     ow_sex_allowlist: list[str] | None = None,
+    design: dict | None = None,
 ) -> list[str]:
     """
     Unified "Animal Condition, Body Weights, and Organ Weights" narrative.
@@ -1234,10 +1258,13 @@ def generate_apical_narrative(
                                 findings so the prose shows the same sexes the
                                 Organ Weight table does (which already honors
                                 sex.organ-weight).  Empty/None ⇒ both sexes.
+        design:                 Study design facts (pipeline.study_design) for
+                                the species and verb; None ⇒ the standard design.
 
     Returns:
         List of paragraph strings, ready for display or export.
     """
+    animals = _animals(design)
     paragraphs: list[str] = []
 
     # 1. Animal condition (mortality + clinical signs)
@@ -1245,20 +1272,20 @@ def generate_apical_narrative(
         paragraphs.extend(
             _build_animal_condition_paragraphs(
                 compound_name, dose_unit, sidecar_mortality,
-                clinical_obs_incidence,
+                clinical_obs_incidence, design,
             )
         )
 
     # 2. Body weight findings
     paragraphs.extend(
-        _build_body_weight_paragraphs(platform_tables, compound_name, dose_unit)
+        _build_body_weight_paragraphs(platform_tables, compound_name, dose_unit, animals)
     )
 
     # 3. Organ weight findings
     paragraphs.extend(
         _build_organ_weight_paragraphs(
             platform_tables, compound_name, dose_unit, organ_allowlist,
-            ow_sex_allowlist,
+            ow_sex_allowlist, animals,
         )
     )
 
@@ -1270,6 +1297,7 @@ def generate_platform_narrative(
     sex_rows: dict[str, list],
     compound_name: str,
     dose_unit: str,
+    design: dict | None = None,
 ) -> list[str]:
     """
     Per-platform narrative entry — one platform's {sex -> [TableRow]} at a time.
@@ -1296,41 +1324,45 @@ def generate_platform_narrative(
         sex_rows:      {sex -> [TableRow]} for this one platform.
         compound_name: Chemical name for prose.
         dose_unit:     Dose unit string (e.g., "mg/kg").
+        design:        Study design facts (pipeline.study_design) for the
+                       species; None ⇒ the standard design.
 
     Returns:
         List of paragraph strings (possibly empty).
     """
     if not sex_rows:
         return []
+    animals = _animals(design)
 
     if platform == "Body Weight":
         return _build_body_weight_paragraphs(
-            {"Body Weight": sex_rows}, compound_name, dose_unit)
+            {"Body Weight": sex_rows}, compound_name, dose_unit, animals)
     if platform == "Organ Weight":
         return _build_organ_weight_paragraphs(
-            {"Organ Weight": sex_rows}, compound_name, dose_unit)
+            {"Organ Weight": sex_rows}, compound_name, dose_unit, animals=animals)
     if platform in CLINICAL_PATH_PLATFORMS:
         return _build_sub_platform_paragraphs(
-            platform, sex_rows, compound_name, dose_unit)
+            platform, sex_rows, compound_name, dose_unit, animals)
 
     # Unknown/None platform → auto-detect by row type.  Each builder self-filters
     # (_build_body_weight keeps only body_weight rows; _build_organ_weight keeps
     # only non-body-weight rows), so passing the same mixed sex_rows to both
     # reproduces the old twin's body-then-organ structure.
     out = _build_body_weight_paragraphs(
-        {"Body Weight": sex_rows}, compound_name, dose_unit)
+        {"Body Weight": sex_rows}, compound_name, dose_unit, animals)
     out += _build_organ_weight_paragraphs(
-        {"Organ Weight": sex_rows}, compound_name, dose_unit)
+        {"Organ Weight": sex_rows}, compound_name, dose_unit, animals=animals)
     if out:
         return out
     return _build_sub_platform_paragraphs(
-        platform or "", sex_rows, compound_name, dose_unit)
+        platform or "", sex_rows, compound_name, dose_unit, animals)
 
 
 def generate_clinical_pathology_narrative(
     platform_tables: dict[str, dict[str, list]],
     compound_name: str,
     dose_unit: str,
+    design: dict | None = None,
 ) -> list[str]:
     """
     Unified "Clinical Pathology" narrative.
@@ -1350,10 +1382,13 @@ def generate_clinical_pathology_narrative(
                          entries are used.
         compound_name:   Chemical name for prose (e.g., "PFHxSAm").
         dose_unit:       Dose unit string (e.g., "mg/kg").
+        design:          Study design facts (pipeline.study_design) for the
+                         species; None ⇒ the standard design.
 
     Returns:
         List of paragraph strings, ready for display or export.
     """
+    animals = _animals(design)
     paragraphs: list[str] = []
 
     for sub_platform in CLINICAL_PATH_ORDER:
@@ -1365,7 +1400,7 @@ def generate_clinical_pathology_narrative(
         # doesn't use explicit sub-headers within the Clinical Pathology section,
         # it just transitions between topics.  We add a brief label for clarity.
         sub_paras = _build_sub_platform_paragraphs(
-            sub_platform, sex_rows, compound_name, dose_unit,
+            sub_platform, sex_rows, compound_name, dose_unit, animals,
         )
         paragraphs.extend(sub_paras)
 

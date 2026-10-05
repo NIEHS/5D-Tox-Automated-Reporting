@@ -38,6 +38,7 @@ def build_abstract_results_pk(
     pk_timepoints: list[int],
     dose_unit: str = "mg/kg",
     sexes: list[str] | None = None,
+    design: dict | None = None,
 ) -> str:
     """
     Build the pharmacokinetic portion of the Abstract → Results paragraph.
@@ -68,6 +69,8 @@ def build_abstract_results_pk(
         pk_timepoints:    Sorted list of timepoint hours seen in the data.
         dose_unit:        Display unit (default "mg/kg").
         sexes:            Sex labels (defaults to ["Male", "Female"]).
+        design:           Study design facts (pipeline.study_design) for the
+                          species; None ⇒ the standard design.
 
     Returns:
         A paragraph string, or empty string if data is insufficient.
@@ -139,15 +142,18 @@ def build_abstract_results_pk(
 
     # --- Assemble ---
     # The chemical name appears in the first sentence; subsequent sentences
-    # use "rats" alone since the test article is implicit.
+    # use the species alone since the test article is implicit.
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
     return (
         f"Average {chemical_name} plasma concentrations at "
         f"{tp_phrase} hours postdose were {conc_polarity} in "
-        f"{conc_lower.lower()} rats than in {conc_higher.lower()} rats. "
+        f"{conc_lower.lower()} {animals} than in {conc_higher.lower()} {animals}. "
         f"Half-lives estimated using the two time points were longer in "
-        f"{hl_longer.lower()} rats ({hl_longer_str} hours for the "
+        f"{hl_longer.lower()} {animals} ({hl_longer_str} hours for the "
         f"{dose_list} {dose_unit} groups, respectively) than in "
-        f"{hl_shorter.lower()} rats ({hl_shorter_str} hours for the "
+        f"{hl_shorter.lower()} {animals} ({hl_shorter_str} hours for the "
         f"{dose_list} {dose_unit} groups, respectively)."
     )
 

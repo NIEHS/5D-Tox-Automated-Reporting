@@ -86,13 +86,19 @@ def build_report_summary(
     abstract_background: str = "",
     apical_evaluated: bool | None = None,
     bmd_decimals: int | None = None,
+    design: dict | None = None,
 ) -> list[str]:
     """The Summary paragraphs (empty when there is nothing to summarize).
 
     ``apical_evaluated`` says whether the study measured apical endpoints at
     all (default: whether the BMD summary has entries) — a study can measure
     them and still have none with a BMD.  ``bmd_decimals`` is the report's BMD
-    precision (default: the one the genomics extraction stamped)."""
+    precision (default: the one the genomics extraction stamped).  ``design``
+    is the study design (pipeline.study_design) for the species word; None ⇒
+    the standard design."""
+    from pipeline.study_design import design_or_standard, species_plural
+
+    animals = species_plural(design_or_standard(design))
     apical = apical_bmd_summary or []
     if apical_evaluated is None:
         apical_evaluated = bool(apical)
@@ -133,7 +139,7 @@ def build_report_summary(
             anomalous.setdefault(e.get("sex", ""), []).append(
                 str(e.get("endpoint", "")).lower())
     if anomalous:
-        listed = "; ".join(f"{_join_oxford(names)} in {sex.lower()} rats"
+        listed = "; ".join(f"{_join_oxford(names)} in {sex.lower()} {animals}"
                            for sex, names in anomalous.items())
         paragraphs.append(
             f"A subset of standard toxicological endpoints ({listed}) exhibited "
@@ -148,13 +154,13 @@ def build_report_summary(
         for sex in sexes:
             rel = _reliable_apical(apical, sex)
             if not rel:
-                sentences.append(f"In {sex.lower()} rats, there were no apical endpoints "
+                sentences.append(f"In {sex.lower()} {animals}, there were no apical endpoints "
                                  "for which a BMD value could be reliably estimated.")
                 continue
             first = rel[0]
             lead = "Taking this into account, the" if anomalous and not sentences else "The"
             sentences.append(
-                f"{lead} most sensitive apical endpoint in {sex.lower()} rats was "
+                f"{lead} most sensitive apical endpoint in {sex.lower()} {animals} was "
                 f"{_phrase(first)}, "
                 f"with an estimated BMD and benchmark dose lower confidence limit (BMDL) "
                 f"of {_pair(first, dose_unit, bmd_decimals)}.")
@@ -163,7 +169,7 @@ def build_report_summary(
                 phrase = _phrase(nxt)
                 sentences.append(
                     f"{phrase[:1].upper()}{phrase[1:]} was the next most sensitive "
-                    f"apical endpoint in {sex.lower()} rats, with a BMD (BMDL) of "
+                    f"apical endpoint in {sex.lower()} {animals}, with a BMD (BMDL) of "
                     f"{_pair(nxt, dose_unit, bmd_decimals)}.")
         paragraphs.append(" ".join(sentences))
 
@@ -178,12 +184,12 @@ def build_report_summary(
             key = f"{organ}_{sex.lower()}"
             gs = _lowest(gene_sets(key), lle)
             if gs:
-                gs_parts.append(f"{_pair(gs, dose_unit, bmd_decimals)} in {sex.lower()} rats, "
+                gs_parts.append(f"{_pair(gs, dose_unit, bmd_decimals)} in {sex.lower()} {animals}, "
                                 f"corresponding to {_gene_set_name(gs)}")
             g = _lowest(genes(key), lle)
             if g:
                 gene_parts.append(f"{g.get('gene_symbol', '')} with a BMD (BMDL) of "
-                                  f"{_pair(g, dose_unit, bmd_decimals)} in {sex.lower()} rats")
+                                  f"{_pair(g, dose_unit, bmd_decimals)} in {sex.lower()} {animals}")
         sentences = []
         if gs_parts:
             sentences.append(
@@ -225,7 +231,7 @@ def build_report_summary(
             continue
         cands.sort(key=lambda c: c[0])
         pod_bmd, pod_level, pod_desc = cands[0]
-        s = (f"In {sex.lower()} rats, the most sensitive point of departure with a "
+        s = (f"In {sex.lower()} {animals}, the most sensitive point of departure with a "
              f"reliable estimate was {pod_desc}.")
         for bmd, level, _ in cands[1:]:
             what = {"gene": "Individual gene changes", "gene set": "Gene set changes",

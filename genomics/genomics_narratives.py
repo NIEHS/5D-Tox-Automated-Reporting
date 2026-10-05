@@ -144,7 +144,7 @@ def build_genomics_body_narratives(
         return {}
 
     # Pull study parameters from MethodsContext, with sensible fallbacks.
-    # ge_organs drives the "…in the liver and kidney of rats…" phrase.
+    # ge_organs drives the organ list in the intro phrase.
     ctx = methods_context or {}
     ge_organs = ctx.get("ge_organs") or []
     if not ge_organs:
@@ -160,6 +160,9 @@ def build_genomics_body_narratives(
     dose_unit = ctx.get("dose_unit") or "mg/kg"
     fold_change_filter = ctx.get("fold_change_filter")
     chem_name = chemical_name or ctx.get("chemical_name") or "the test article"
+    # The species the prose names (the Methods context carries the recorded
+    # one); no context ⇒ the standard design.
+    design = {"species": ctx.get("species")} if methods_context else None
 
     out: dict[str, dict[str, Any]] = {}
 
@@ -175,6 +178,7 @@ def build_genomics_body_narratives(
         dose_groups=dose_groups,
         dose_unit=dose_unit,
         bmd_decimals=bmd_decimals,
+        design=design,
     )
     # build_*_body_findings returns {} when dose_groups is empty; we
     # still emit the intro paragraphs so the section isn't entirely
@@ -199,6 +203,7 @@ def build_genomics_body_narratives(
         dose_groups=dose_groups,
         dose_unit=dose_unit,
         bmd_decimals=bmd_decimals,
+        design=design,
     )
     out["gene_narrative"] = {
         "intros": gn_intros,
