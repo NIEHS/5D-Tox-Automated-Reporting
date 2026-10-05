@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 2  # bumped: schema repoints bMDResult refs onto truth siblings
+_NTP_CACHE_SCHEMA_VERSION = 4  # bumped: NTP Williams/Shirley/Dunn statistics + relative organ weights (partitioned with their organ)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -197,7 +197,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 11  # bumped: body-weight no-change sentence names each sex once (was once per body-weight row)
+_SECTIONS_CACHE_SCHEMA_VERSION = 12  # bumped: relative organ-weight rows carry NTP statistics + BMDs
 
 
 def _fingerprint_files(paths) -> list[list]:

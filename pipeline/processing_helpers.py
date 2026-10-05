@@ -246,10 +246,16 @@ def _partition_by_platform(
         sex_probe_platform[(sex, probe_id)] = plat
 
     # Partition: {platform: {sex: [TableRow, ...]}}
+    # A derived relative organ weight ("Liver Relative", built by
+    # build_table_data from the organ-weight experiment) has no probe of its
+    # own in the integrated data; it belongs to its organ's platform.
     platform_tables: dict[str, dict[str, list]] = {}
     for sex, rows in table_data.items():
         for row in rows:
-            plat = sex_probe_platform.get((sex, row.label), "unknown")
+            plat = sex_probe_platform.get((sex, row.label))
+            if plat is None and row.label.endswith(" Relative"):
+                plat = sex_probe_platform.get((sex, row.label[: -len(" Relative")]))
+            plat = plat or "unknown"
             platform_tables.setdefault(plat, {}).setdefault(sex, []).append(row)
 
     return platform_tables
@@ -1289,26 +1295,37 @@ _SUMMARY_LABEL_OVERRIDES = {
     "thyroid stimulating hormone": "Thyroid Stimulating Hormone",
 }
 
-# Organ tokens that, on the Organ Weight platform, name an absolute organ weight.
-_ORGAN_WEIGHT_TOKENS = {"liver", "kidney", "heart", "spleen", "thymus",
-                        "adrenal", "brain", "lung", "testis", "epididymis"}
+_LATERALITY = {"left": "Left", "l": "Left", "right": "Right", "r": "Right"}
 
 
 def _summary_endpoint_label(label: str, platform: str) -> str:
     """Normalize a raw endpoint label to the reference Table 8 phrasing.
 
-    Organ-weight rows carry a bare organ token ("Liver"); the reference names the
-    modeled absolute weight ("Absolute Liver Weight").  Other platforms get a
-    small fixed set of title-case / full-name overrides.  Anything unmatched is
+    Organ-weight rows carry a bare organ token ("Liver", "Kidney-Left") for the
+    absolute weight and "<organ> Relative" for the relative weight; the
+    reference names the weight ("Absolute Liver Weight", "Relative Left Kidney
+    Weight").  Laterality is kept: left and right kidneys are separate
+    endpoints with their own statistics and BMDs.  Other platforms get a small
+    fixed set of title-case / full-name overrides.  Anything unmatched is
     returned unchanged."""
+    import re
     raw = (label or "").strip()
     key = raw.lower()
-    if platform == "Organ Weight":
-        # Strip a laterality suffix ("Kidney-Right" -> "Kidney") for the token
-        # test; the reference reports whole-organ weights.
-        base = raw.split("-")[0].strip()
-        if base.lower() in _ORGAN_WEIGHT_TOKENS:
-            return f"Absolute {base} Weight"
+    if platform == "Organ Weight" and not ("body" in key and ("weight" in key or "wt" in key)):
+        kind = "Absolute"
+        name = raw
+        for suffix in ("Relative", "Absolute"):
+            if name.lower().endswith(" " + suffix.lower()):
+                kind = suffix
+                name = name[: -len(suffix)].strip()
+        name = re.sub(r"\s+(?:Weight|Wt\.?)$", "", name, flags=re.IGNORECASE)
+        organ, _, side = name.partition("-")
+        side = _LATERALITY.get(side.strip().lower(), "")
+        organ = organ.strip()
+        if organ.lower() == "lungs":
+            organ = "Lung"
+        if organ:
+            return f"{kind} {side + ' ' if side else ''}{organ} Weight"
     return _SUMMARY_LABEL_OVERRIDES.get(key, raw)
 
 

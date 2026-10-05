@@ -828,8 +828,8 @@ def bmd_display_from_stats(
     Apply NIEHS business rules to determine BMD/BMDL cell text from NTP stats.
 
     Rules:
-        - If the endpoint is NOT responsive (Jonckheere trend AND Dunnett
-          pairwise not both significant): "ND" (not determined).
+        - If the endpoint is NOT responsive (Jonckheere trend AND pairwise
+          test not both significant): "ND" (not determined).
         - If responsive AND BMDExpress produced a result: show numeric value.
         - If responsive BUT modeling failed: "ND".
 

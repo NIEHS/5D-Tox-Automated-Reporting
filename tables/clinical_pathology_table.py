@@ -12,8 +12,8 @@ endpoints, endpoint rows with mean ± SE and significance markers (*/**),
 and BMD/BMDL columns from the NTP stats pipeline.
 
 Only responsive endpoints are shown — those that passed the NTP gate
-(significant Jonckheere trend p ≤ 0.01 AND at least one significant
-Dunnett pairwise p ≤ 0.05).  The table title includes "Select" to
+(significant Jonckheere trend p ≤ 0.05 AND at least one significant
+Shirley/Dunn pairwise p ≤ 0.05).  The table title includes "Select" to
 indicate this filtering.
 
 NIEHS caption pattern:
@@ -197,7 +197,7 @@ def build_clinical_pathology_table_from_sidecar(
                 bmd_str = stat_row.get("bmd_str", "\u2014")
                 bmdl_str = stat_row.get("bmdl_str", "\u2014")
                 trend_marker = stat_row.get("trend_marker", "")
-                # `responsive` is the Jonckheere+Dunnett gate (see
+                # `responsive` is the Jonckheere+pairwise gate (see
                 # body_weight_table.py docstring at line 49).  Carried into
                 # the row dict so the HTML preview and Typst template can
                 # bold responsive endpoints \u2014 the NIEHS-style visual cue

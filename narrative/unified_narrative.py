@@ -970,6 +970,17 @@ def _build_organ_weight_paragraphs(
         if not organ_rows:
             continue
 
+        # Absolute weights carry the bare organ label ("Liver"), which
+        # _parse_organ_label reads as a generic endpoint.  Once relative
+        # weights ("Liver Relative") sit beside them, name both kinds.
+        has_relative = any(_parse_organ_label(r.label)[1] == "relative" for r in organ_rows)
+
+        def _weight_label(label: str) -> tuple[str, str]:
+            organ_name, wtype = _parse_organ_label(label)
+            if has_relative and wtype == "endpoint":
+                wtype = "absolute"
+            return organ_name, wtype
+
         # Split into significant (responsive with BMD) and non-significant
         sig_rows = [r for r in organ_rows if r.responsive and r.bmd_str != "ND"]
         nonsig_rows = [r for r in organ_rows if not r.responsive or r.bmd_str == "ND"]
@@ -986,7 +997,7 @@ def _build_organ_weight_paragraphs(
         # Group significant rows by organ name to pair absolute/relative
         organ_groups: dict[str, list[TableRow]] = {}
         for r in sig_rows:
-            organ_name, _wtype = _parse_organ_label(r.label)
+            organ_name, _wtype = _weight_label(r.label)
             organ_groups.setdefault(organ_name, []).append(r)
 
         # Build per-organ finding descriptions.  Each finding is a template
@@ -1005,7 +1016,7 @@ def _build_organ_weight_paragraphs(
             min_low_dose = min(low_doses) if low_doses else None
 
             # Determine weight types present (per-part qualifier, or None)
-            weight_types = [_parse_organ_label(r.label)[1] for r in group_rows]
+            weight_types = [_weight_label(r.label)[1] for r in group_rows]
             part_qualifiers = [
                 wt if wt in ("absolute", "relative") else None for wt in weight_types
             ]
@@ -1035,7 +1046,7 @@ def _build_organ_weight_paragraphs(
         if nonsig_rows:
             nonsig_labels = []
             for r in nonsig_rows:
-                organ_name, wtype = _parse_organ_label(r.label)
+                organ_name, wtype = _weight_label(r.label)
                 if wtype in ("absolute", "relative"):
                     nonsig_labels.append(f"{wtype} {organ_name.lower()}")
                 else:

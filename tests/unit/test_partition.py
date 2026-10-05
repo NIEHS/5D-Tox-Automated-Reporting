@@ -133,6 +133,22 @@ class TestPartitionByPlatform:
         assert "Body Weight" in result
         assert "Clinical Chemistry" in result
 
+    def test_derived_relative_weight_follows_its_organ(self):
+        """build_table_data derives "<organ> Relative" rows that have no probe in
+        the integrated data; they belong to the organ's platform."""
+        integrated = {
+            "doseResponseExperiments": [
+                self._make_experiment("organ_weights_truth_male", "Organ Weight",
+                                      ["Liver", "Terminal Body Weight"]),
+            ],
+        }
+        table_data = {
+            "Male": [self._make_table_row("Liver"), self._make_table_row("Liver Relative")],
+        }
+        result = _partition_by_platform(integrated, {}, table_data)
+        assert [r.label for r in result["Organ Weight"]["Male"]] == ["Liver", "Liver Relative"]
+        assert "unknown" not in result
+
     def test_uses_platform_field_not_domain(self):
         """
         The new domain model uses experimentDescription.platform.

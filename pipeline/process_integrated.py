@@ -8,7 +8,7 @@ integrated BMDProject after the pool has been validated and merged:
   POST /api/generate-animal-report/{dtxsid} api_generate_animal_report
 
 api_process_integrated is the "god function" of the codebase — it
-orchestrates NTP statistics (Williams trend, Dunnett's pairwise), BMDS
+orchestrates NTP statistics (Jonckheere; Williams/Dunnett, Shirley/Dunn), BMDS
 modeling (pybmds in a thread pool), section-card assembly per platform,
 LLM-driven methods narrative generation, BMD summary tables, genomics
 extraction with GO enrichment, and adversity signatures.  Each phase
@@ -670,7 +670,7 @@ async def _build_ntp_stats(ctx):
     Layer 1 — NTP stats (depends only on integrated data + bmd_stat).
 
     This is the foundation: category lookup → filter GE experiments →
-    build_table_data (Java Williams/Dunnett/Jonckheere) → partition
+    build_table_data (Jonckheere + Williams/Dunnett/Shirley/Dunn) → partition
     by platform → annotate missing animals.  ~5s on miss.
     """
     dtxsid = ctx.dtxsid

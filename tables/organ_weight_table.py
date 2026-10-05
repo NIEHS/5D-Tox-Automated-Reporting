@@ -19,7 +19,11 @@ Structure:
 
 Business rules:
     - Relative organ weight = (absolute organ weight / terminal body weight) × 1000
-      Computed per-animal from raw sidecar values, then mean ± SE is taken.
+      per animal.  bmdx-pipe's build_table_data derives it as an endpoint of
+      its own ("<organ> Relative"), so the row carries the same statistics
+      (Jonckheere + Williams/Dunnett markers) and BMD as an absolute weight.
+      Without that endpoint the row is computed from raw sidecar values for
+      display only (no markers, BMD "ND").
     - Terminal Body Weight row always shows BMD = "ND" (it's context, not an
       organ endpoint — even though TBW data exists in the pivot, it's not
       a candidate for BMD modeling in the organ weight context).
@@ -179,6 +183,21 @@ def _is_terminal_obs(obs: dict, terminal_day: int | None) -> bool:
 # Main builder
 # ---------------------------------------------------------------------------
 
+def _stat(row, name: str, default=None):
+    """A field of an NTP stats row — a cached dict or a live TableRow."""
+    if isinstance(row, dict):
+        return row.get(name, default)
+    return getattr(row, name, default)
+
+
+def _dose_value(vbd: dict, dose: float):
+    """values_by_dose lookup by float key (live TableRow) or string key (cache)."""
+    val = vbd.get(dose)
+    if val is None:
+        val = vbd.get(str(dose), vbd.get(str(float(dose))))
+    return val
+
+
 def build_organ_weight_table_from_sidecar(
     sidecar_paths: dict[str, str],
     ntp_stats: dict[str, list],
@@ -267,7 +286,12 @@ def build_organ_weight_table_from_sidecar(
             label = stat_row.get("label") if isinstance(stat_row, dict) else stat_row.label
             ntp_by_sex_label[sex][label] = stat_row
             if label != "Terminal Body Weight":
-                organ_token, _wtype = _parse_organ_label(label)
+                organ_token, wtype = _parse_organ_label(label)
+                # "<organ> Relative" rows are the relative-weight statistics of
+                # an organ listed by its absolute label; they fill that organ's
+                # relative row below rather than becoming an organ of their own.
+                if wtype == "relative":
+                    continue
                 if organ_allowed(organ_token, organ_allowlist):
                     all_organs.add(label)
 
@@ -521,32 +545,46 @@ def build_organ_weight_table_from_sidecar(
                 abs_entry["trend_marker"] = organ_trend
             rows.append(abs_entry)
 
-            # Relative weight row — computed from sidecar, no NTP stats
-            # BMD for relative weight is always "ND" unless separately modeled
-            # (BMDExpress models absolute weights, not relative).
+            # Relative weight row — the NTP statistics of "<organ> Relative"
+            # (relative weight per animal, tested like the absolute weight,
+            # with its own BMD inputs) when present; otherwise computed from
+            # the sidecar for display only, with BMD "ND".
+            rel_ntp = sex_ntp.get(f"{organ} Relative")
+            rel_vbd = _stat(rel_ntp, "values_by_dose", {}) if rel_ntp is not None else {}
             rel_values: dict[str, str] = {}
             for dose in sorted_doses:
                 dk = js_dose_key(dose)
+                val = _dose_value(rel_vbd, dose)
                 dose_rel = rel_at_dose.get(dose, [])
-                if dose_rel:
+                if val:
+                    rel_values[dk] = val
+                elif dose_rel:
                     m, s = mean_se(dose_rel)
                     dec = adaptive_decimals(m)
                     rel_values[dk] = format_mean_se(m, s, dec)
                 else:
                     rel_values[dk] = "\u2013"
 
-            # Relative-weight rows are never modeled by BMDExpress (bmd is
-            # always "ND") and have no responsive gate, so emphasize is
-            # always False — set it explicitly for uniformity with the
-            # absolute rows.
-            rows.append({
+            if rel_ntp is not None:
+                rel_bmd = _stat(rel_ntp, "bmd_str") or "\u2014"
+                rel_bmdl = _stat(rel_ntp, "bmdl_str") or "\u2014"
+                rel_responsive = bool(_stat(rel_ntp, "responsive", False))
+            else:
+                rel_bmd = rel_bmdl = "ND"
+                rel_responsive = False
+            rel_entry = {
                 "label": f"{organ} Relative (mg/g)",
                 "doses": sorted_doses,
                 "values": rel_values,
-                "bmd": "ND",
-                "bmdl": "ND",
-                "emphasize": is_reportable_bmd("ND"),
-            })
+                "bmd": rel_bmd,
+                "bmdl": rel_bmdl,
+                "responsive": rel_responsive,
+                "emphasize": rel_responsive or is_reportable_bmd(rel_bmd),
+            }
+            rel_trend = _stat(rel_ntp, "trend_marker", "") if rel_ntp is not None else ""
+            if rel_trend:
+                rel_entry["trend_marker"] = rel_trend
+            rows.append(rel_entry)
 
         serialized[sex] = rows
 

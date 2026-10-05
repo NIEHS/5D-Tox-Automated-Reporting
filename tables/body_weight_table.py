@@ -23,8 +23,8 @@ Structure:
 
 Business rules:
     - An endpoint row appears in the table ONLY if it passes the gatekeeper:
-      significant Jonckheere trend (p ≤ 0.01) AND at least one significant
-      Dunnett pairwise (p ≤ 0.05).  For body weight, BOTH study days appear
+      significant Jonckheere trend (p ≤ 0.05) AND at least one significant
+      Williams/Dunnett pairwise (p ≤ 0.05).  For body weight, BOTH study days appear
       regardless — the gate controls only whether BMD is computed, not row
       inclusion.
     - BMD/BMDL column values:
@@ -46,7 +46,7 @@ Input:
         n_by_dose:          {dose: int}
         bmd_str/bmdl_str:   BMD result string from BMDExpress
         bmd_status:         "viable", "NVM", "NR", "UREP", "failure", or None
-        responsive:         True if Jonckheere + Dunnett both significant
+        responsive:         True if Jonckheere + pairwise both significant
         missing_animals_by_dose: {dose: count} from xlsx comparison
 
 Output:
@@ -622,7 +622,7 @@ def build_body_weight_table_from_sidecar(
             #   (SD0, SD5) from the inferred .bm2 data independently:
             #
             #   - If the statistical gate passes (significant Jonckheere
-            #     trend + Dunnett pairwise) AND BMDExpress modeling
+            #     trend + pairwise) AND BMDExpress modeling
             #     succeeds → numeric BMD/BMDL value
             #   - If the gate doesn't pass OR modeling fails → "ND"
             #     (not determined)
