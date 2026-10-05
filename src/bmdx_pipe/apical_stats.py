@@ -144,8 +144,10 @@ def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str,
 
     Each endpoint dict: {key, doses:[per-animal], Y:[per-animal], models:[int],
     bmr_type:int(1=SD,2=RelDev), bmr_factor:float, is_ncv:bool}. Returns
-    {key: {bmd, bmdl, bmdu, model_name, status, notes}} — SAME shape the old
-    run_bmds_for_endpoints produced, so downstream consumers are unchanged.
+    {key: {bmd, bmdl, bmdu, r_squared, model_name, status, notes}}.  Every
+    completed fit is classified here by bmd_acceptance (viable / NR / NVM, the
+    reason in `notes`), so ToxicR fits and .bm2 results pass the same criteria;
+    an NVM fit keeps its numbers for the engine cross-check.
 
     MUST set -Djava.library.path so ToxicRJNI's System.loadLibrary("DRBMD") resolves
     (BMDX_PROJECT is where libDRBMD.so lives). Raises RuntimeError on process failure.
@@ -167,7 +169,17 @@ def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str,
         raise RuntimeError(
             f"RunApicalBmds failed (exit {proc.returncode}): {proc.stderr}"
         )
-    return _json.loads(proc.stdout)
+    from .bmd_acceptance import classify_from_doses
+
+    results = _json.loads(proc.stdout)
+    doses_by_key = {ep["key"]: ep.get("doses") for ep in endpoints}
+    for key, res in results.items():
+        if res.get("status"):
+            continue  # the fit did not complete (NVM with its reason)
+        res["status"], res["notes"] = classify_from_doses(
+            res.get("bmd"), res.get("bmdl"), res.get("r_squared"),
+            doses_by_key.get(key))
+    return results
 
 
 def _call_java_prefilter(

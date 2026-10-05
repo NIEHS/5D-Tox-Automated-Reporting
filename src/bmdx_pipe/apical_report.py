@@ -330,10 +330,10 @@ class TableRow:
         label:          Display label for the endpoint column
         values_by_dose: Dict mapping dose → formatted string ("mean ± SE**")
         n_by_dose:      Dict mapping dose → sample size (for the n row)
-        bmd_str:        Formatted BMD value, "NVM", "UREP", "—"
-        bmdl_str:       Formatted BMDL value, "NVM", "UREP", "—"
+        bmd_str:        Formatted BMD value, "NVM", "<x" (NR), "—"
+        bmdl_str:       Formatted BMDL value, "NVM", "—"
         trend_marker:   "*" or "**" or "" — for the control column
-        bmd_status:     NIEHS classification: "viable", "NVM", "NR", "UREP",
+        bmd_status:     NIEHS classification: "viable", "NVM", "NR",
                         "failure", or None (not modeled).
         loel:           Lowest observed effect level (mg/kg), or None
         noel:           No observed effect level (mg/kg), or None
@@ -425,72 +425,38 @@ def _adaptive_decimals(*values: float | None, min_dp: int = 1, max_dp: int = 4) 
 def _classify_bmd_result(
     bmd: float | None,
     bmdl: float | None,
-    bmdu: float | None,
     lowest_nonzero_dose: float,
+    highest_dose: float,
     best_stat_result: dict | None,
 ) -> str:
     """
-    Classify a BMD result into NIEHS reference report bins.
+    Classify a BMDExpress bMDResult into the report's BMD statuses.
 
-    The NIEHS 5-day study reports use these classifications for apical
-    endpoint BMDs (see Appendix D, Table D-1 in the reference report):
-
-      - "failure":  Model did not successfully complete.
-      - "NVM":      Nonviable model — completed but failed acceptability.
-      - "NR":       Not reportable — BMD below lower limit of extrapolation
-                    (<1/3 lowest nonzero dose tested).  BMD is reported as
-                    "<1/3 LNZD" and BMDL is not reported.
-      - "UREP":     Unreliable estimate of potency — subject matter expert
-                    review flag.  Triggered by wide confidence interval
-                    (BMDU/BMDL ratio > 40) or other quality concerns.
-      - "viable":   Candidate for recommended model without warning.
+      - "failure":  no model result at all (the endpoint was never modeled).
+      - "NVM":      no viable model — the fit failed, or the model average
+                    fails the NIEHS defined-category filter (R² < 0.6,
+                    BMD/BMDL > 10, BMD > highest dose; see bmd_acceptance).
+      - "NR":       not reportable — BMD below 1/3 of the lowest nonzero dose;
+                    printed as "<LNZD/3" with no BMDL.
+      - "viable":   reported.
 
     Args:
-        bmd:   Best BMD value (None if modeling failed).
-        bmdl:  Best BMDL value (lower confidence limit).
-        bmdu:  Best BMDU value (upper confidence limit).
-        lowest_nonzero_dose: Smallest nonzero dose in the experiment.
-        best_stat_result: The bestStatResult dict from BMDExpress 3,
-                         containing model fit metrics.
+        bmd, bmdl: Best BMD / BMDL (None when NaN or absent).
+        lowest_nonzero_dose, highest_dose: The experiment's dose range.
+        best_stat_result: The bestStatResult dict from BMDExpress 3 (carries
+                          `success` and `rSquared`).
     """
-    # No BMD at all → failure (model didn't produce a result)
-    if bmd is None:
-        return "failure"
+    from .bmd_acceptance import classify
 
-    # Check model fit quality from bestStatResult
-    if best_stat_result:
-        success = best_stat_result.get("success")
-        # BMDExpress 3 serializes success as string "true" or null
-        if success is None or success == "false":
-            return "NVM"
-
-        r_squared = _safe_float(best_stat_result.get("rSquared"))
-        if r_squared is not None and r_squared < 0.1:
-            return "NVM"
-
-    # BMD below lower limit of extrapolation: <1/3 lowest nonzero dose.
-    # Reference report: "BMD values derived from viable models that were
-    # threefold lower than the lowest nonzero dose tested were reported
-    # as <1/3 the lowest nonzero dose tested, and corresponding BMDL
-    # values were not reported."
-    if lowest_nonzero_dose > 0 and bmd < lowest_nonzero_dose / 3:
-        return "NR"
-
-    # Wide confidence interval → unreliable estimate.
-    # Reference report: BMDU/BMDL ratio > 40 is flagged.
-    if bmdl is not None and bmdu is not None and bmdl > 0:
-        ratio = bmdu / bmdl
-        if ratio > 40:
-            return "UREP"
-
-    # Step function check — if BMD lands below the lowest dose, the
-    # model is extrapolating beyond the observed range.
-    if best_stat_result:
-        step_flag = best_stat_result.get("stepWithBMDLessLowest", False)
-        if step_flag:
-            return "UREP"
-
-    return "viable"
+    if best_stat_result is None:
+        return "failure" if bmd is None else classify(
+            bmd, bmdl, None, lowest_nonzero_dose, highest_dose)[0]
+    # BMDExpress 3 serializes success as string "true" or null
+    success = best_stat_result.get("success")
+    if success is None or success in ("false", False):
+        return "NVM"
+    return classify(bmd, bmdl, best_stat_result.get("rSquared"),
+                    lowest_nonzero_dose, highest_dose)[0]
 
 
 def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
@@ -503,14 +469,15 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
     model fit metrics (rSquared, success, confidence bounds).
 
     This function resolves Jackson @ref pointers, extracts BMD values,
-    and classifies each result into NIEHS bins: viable, NVM, NR, UREP,
-    or failure.  The lowest nonzero dose (LNZD) from the parent experiment
-    is used for the NR classification (BMD < LNZD/3).
+    and classifies each result into NIEHS bins: viable, NVM, NR, or
+    failure (see _classify_bmd_result and bmd_acceptance).  The parent
+    experiment's dose range drives the NR (BMD < LNZD/3) and
+    BMD > highest dose rules.
 
     Returns:
         Dict mapping (experiment_name, probe_id) → {
             "bmd": float|None, "bmdl": float|None, "bmdu": float|None,
-            "status": str  # "viable", "NVM", "NR", "UREP", "failure"
+            "status": str  # "viable", "NVM", "NR", "failure"
         }.
     """
     import math
@@ -531,10 +498,9 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
             if pref is not None:
                 ref_to_probe_id[pref] = pr.get("probe", {}).get("id", "")
 
-    # Cache LNZD per experiment (lowest nonzero dose tested).
-    # Used for NR classification: BMD < LNZD/3 means the model is
-    # extrapolating below the observed dose range.
-    lnzd_cache: dict[int, float] = {}
+    # Cache the dose range per experiment: the lowest nonzero dose (NR when
+    # BMD < LNZD/3) and the highest dose (NVM when BMD exceeds it).
+    dose_range_cache: dict[int, tuple[float, float]] = {}
 
     lookup: dict[tuple[str, str], dict] = {}
     for result in bm2_json.get("bMDResult", []):
@@ -543,13 +509,14 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
         if not exp_name:
             continue
 
-        # Compute LNZD for this experiment (cached per @ref)
-        if exp_ref not in lnzd_cache:
+        # Dose range for this experiment (cached per @ref)
+        if exp_ref not in dose_range_cache:
             exp = ref_to_exp.get(exp_ref, {})
             doses = [t["dose"] for t in exp.get("treatments", [])]
             nonzero = [d for d in doses if d > 0]
-            lnzd_cache[exp_ref] = min(nonzero) if nonzero else 0.0
-        lnzd = lnzd_cache[exp_ref]
+            dose_range_cache[exp_ref] = ((min(nonzero), max(nonzero))
+                                         if nonzero else (0.0, 0.0))
+        lnzd, high = dose_range_cache[exp_ref]
 
         for psr in result.get("probeStatResults", []):
             pr_ref = psr.get("probeResponse")
@@ -567,7 +534,7 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
             if isinstance(bsr, int):
                 bsr = None  # unresolved @ref — treat as no info
 
-            status = _classify_bmd_result(bmd, bmdl, bmdu, lnzd, bsr)
+            status = _classify_bmd_result(bmd, bmdl, lnzd, high, bsr)
 
             lookup[(exp_name, probe_id)] = {
                 "bmd": bmd,
@@ -802,11 +769,10 @@ def build_table_data(
         # show the BMDExpress 3 classification if a bMDResult exists,
         # regardless of our stat gate.
         #
-        # NIEHS classification bins (from reference report Appendix D):
+        # NIEHS classification bins (_classify_bmd_result / bmd_acceptance):
         #   "viable" → report BMD and BMDL values
         #   "NR"     → not reportable (BMD < 1/3 LNZD); show "<LNZD/3"
-        #   "NVM"    → nonviable model; show "NVM"
-        #   "UREP"   → unreliable estimate of potency; show "UREP"
+        #   "NVM"    → no viable model; show "NVM"
         #   "failure" → model did not complete; show "NVM"
         #   None     → endpoint not modeled by BMDExpress 3
         bmd_str = "—"
@@ -835,9 +801,6 @@ def build_table_data(
                 lnzd = sorted_doses[1] if len(sorted_doses) > 1 else 0
                 bmd_str = f"<{_format_bmd(lnzd / 3)}"
                 bmdl_str = "—"
-            elif status == "UREP":
-                bmd_str = "UREP"
-                bmdl_str = "UREP"
             elif status == "NVM":
                 bmd_str = "NVM"
                 bmdl_str = "NVM"

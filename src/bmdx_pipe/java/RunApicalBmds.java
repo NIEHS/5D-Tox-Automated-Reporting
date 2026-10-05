@@ -31,8 +31,12 @@
  *     ]
  *   }
  *
- * Output (JSON on stdout): { "<key>": {bmd, bmdl, bmdu, model_name, status, notes}, ... }
- *   status ∈ viable | NR | UREP | NVM   (value-based NIEHS rules; see notes)
+ * Output (JSON on stdout): { "<key>": {bmd, bmdl, bmdu, r_squared, model_name, status, notes}, ... }
+ *   A completed fit has status null: the caller (bmdx_pipe.apical_stats.run_apical_bmds_java)
+ *   classifies it with bmdx_pipe.bmd_acceptance, the one place the report's acceptance
+ *   criteria live.  A fit that could not run or produced no BMD is status "NVM".
+ *   r_squared is BMDExpress's R² of the model average against the dose-group means
+ *   (BMDStatisticsService.calculateRSquared over calculateResiduals).
  */
 
 import java.util.ArrayList;
@@ -47,12 +51,6 @@ import com.sciome.bmdexpress2.mvp.model.stat.ModelAveragingResult;
 import com.sciome.bmdexpress2.util.bmds.BMDSToxicRUtils;
 
 public class RunApicalBmds {
-
-    // NIEHS "not reportable": BMD below 1/3 of the lowest nonzero dose (mirror of
-    // tables/apical_bmds.py _NR_FRACTION — the extrapolation guard).
-    private static final double NR_FRACTION = 1.0 / 3.0;
-    // UREP: unreliable confidence interval (mirror of the pybmds BMDU/BMDL > 40 rule).
-    private static final double UREP_CI_RATIO = 40.0;
 
     public static void main(String[] args) throws Exception {
         // NaN -> JSON null, matching RunPrefilter/IntegrateProject so Python sees null.
@@ -115,25 +113,52 @@ public class RunApicalBmds {
             return failure(mapper, "BMD is NaN or Inf");
         }
 
-        // Value-based NIEHS status (ToxicR MA has no recommender bin — see plan note).
-        double lnzd = lowestNonzeroDose(doses);
-        String status;
-        if (lnzd > 0 && bmd < lnzd * NR_FRACTION) {
-            status = "NR";
-        } else if (bmdl > 0 && !Double.isNaN(bmdu) && bmdu / bmdl > UREP_CI_RATIO) {
-            status = "UREP";
-        } else {
-            status = "viable";
-        }
+        double r2 = rSquared(ma, doses, Y);
 
         ObjectNode r = mapper.createObjectNode();
         r.put("bmd", round3(bmd));
         r.put("bmdl", (Double.isNaN(bmdl) || bmdl <= 0) ? null : (Double) round3(bmdl));
         r.put("bmdu", (Double.isNaN(bmdu) || bmdu <= 0) ? null : (Double) round3(bmdu));
+        r.put("r_squared", Double.isNaN(r2) ? null : (Double) r2);
         r.put("model_name", modelName);
-        r.put("status", status);
+        r.putNull("status");
         r.put("notes", "");
         return r;
+    }
+
+    /**
+     * BMDExpress's R² of a fit: residuals are each dose group's mean response minus the
+     * model-averaged curve at that dose; R² = 1 - SSR / SST, SST over the group means.
+     * Reproduces the rSquared BMDExpress stores on bestStatResult (checked against every
+     * apical endpoint of the NIEHS-13 non-genomic project).  NaN when the means are flat.
+     */
+    private static double rSquared(ModelAveragingResult ma, double[] doses, double[] Y) {
+        List<Double> groupDoses = new ArrayList<>();
+        List<double[]> sums = new ArrayList<>();  // {sum, n} per group
+        for (int i = 0; i < doses.length; i++) {
+            int g = groupDoses.indexOf(doses[i]);
+            if (g < 0) {
+                groupDoses.add(doses[i]);
+                sums.add(new double[] {0, 0});
+                g = groupDoses.size() - 1;
+            }
+            sums.get(g)[0] += Y[i];
+            sums.get(g)[1] += 1;
+        }
+        int k = groupDoses.size();
+        double[] means = new double[k];
+        double avg = 0;
+        for (int g = 0; g < k; g++) {
+            means[g] = sums.get(g)[0] / sums.get(g)[1];
+            avg += means[g] / k;
+        }
+        double ssr = 0, sst = 0;
+        for (int g = 0; g < k; g++) {
+            double res = means[g] - ma.getResponseAt(groupDoses.get(g));
+            ssr += res * res;
+            sst += (means[g] - avg) * (means[g] - avg);
+        }
+        return sst > 0 ? 1 - ssr / sst : Double.NaN;
     }
 
     private static ObjectNode failure(ObjectMapper mapper, String note) {
@@ -170,12 +195,6 @@ public class RunApicalBmds {
     private static boolean allEqual(double[] a) {
         for (int i = 1; i < a.length; i++) if (a[i] != a[0]) return false;
         return true;
-    }
-
-    private static double lowestNonzeroDose(double[] doses) {
-        double min = Double.POSITIVE_INFINITY;
-        for (double d : doses) if (d > 0 && d < min) min = d;
-        return Double.isInfinite(min) ? 0 : min;
     }
 
     private static double round3(double v) {
