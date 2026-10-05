@@ -1272,7 +1272,8 @@ def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
         if not prose:
             _add_pending(doc, f"BMD summary endpoints pending: {node.title}")
         return
-    _booktabs_table(doc, list(BMD_SUMMARY_HEADERS), plan.rows, caption=plan.caption)
+    _booktabs_table(doc, list(BMD_SUMMARY_HEADERS), plan.rows, caption=plan.caption,
+                    footnotes=plan.footnotes)
 
 
 def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:

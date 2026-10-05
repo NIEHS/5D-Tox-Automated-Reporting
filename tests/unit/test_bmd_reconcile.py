@@ -54,7 +54,7 @@ def test_fill_bm2_blank_from_toxicr():
     r = _build_apical_bmd_summary(pt, bmds_results=br, divergences=[])[0]
     assert r["source"] == "toxicr" and r["filled"] is True
     assert r["bmd"] == "27.3"
-    assert r["bmr_config"] == "inferred"  # the flag the #36 gate keys on
+    assert r["bmr_config"] == "inferred"  # footnoted in the rendered summary
     assert r["model_name"] == "Exp 3"
 
 

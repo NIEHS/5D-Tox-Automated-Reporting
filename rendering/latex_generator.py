@@ -860,9 +860,10 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     lines.append("\\end{tabular}")
     tabular = "\n".join(lines)
 
+    notes = _emit_table_footnotes(plan.footnotes)
     block = (
         f"\\begin{{niehstable}}{{{latex_label_key(node.id)}}}{{{plan.caption}}}\n"
-        f"{tabular}\n"
+        f"{tabular}{notes}\n"
         f"\\end{{niehstable}}"
     )
     return f"{heading}\n\n{prose}\n\n{block}".strip()

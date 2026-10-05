@@ -107,7 +107,8 @@ def _format_endpoint_phrase(endpoint: str, direction: str, platform: str) -> str
     suffix = ""
     if platform == "Hormones":
         suffix = " concentration"
-    elif platform == "Organ Weight":
+    elif platform == "Organ Weight" and not endpoint_lower.endswith("weight"):
+        # Summary labels already name the weight ("Absolute Liver Weight").
         suffix = " weight"
 
     return f"{direction_word} {endpoint_lower}{suffix}"

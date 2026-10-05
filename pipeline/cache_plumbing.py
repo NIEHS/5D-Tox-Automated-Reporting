@@ -197,7 +197,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 12  # bumped: relative organ-weight rows carry NTP statistics + BMDs
+_SECTIONS_CACHE_SCHEMA_VERSION = 13  # bumped: section tables + narratives carry the ToxicR BMD fills
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -256,6 +256,7 @@ def _hash_sections(
     dose_unit: str,
     sidecar_hash: str = "",
     imputed_cells=None,
+    bmds_hash: str = "",
 ) -> str:
     """
     Hash inputs that affect section card building.
@@ -273,6 +274,8 @@ def _hash_sections(
         sections stage reads straight off disk (see _hash_sidecars).
       - imputed_cells: the _meta.imputed_cells map the clinical-pathology builder
         uses to footnote imputation-backed BMDs.
+      - bmds_hash: the ToxicR fits, whose fills (fill_rows_from_toxicr) are in
+        the section tables' BMD columns and the narratives' BMD clauses.
 
     A schema_version is folded in so adding/renaming row-dict fields, or the
     filter-agnostic switch itself, forces a miss even when inputs are unchanged.
@@ -285,6 +288,8 @@ def _hash_sections(
         "sidecars": sidecar_hash,
         "imputed_cells": imputed_cells,
     }
+    if bmds_hash:
+        payload["bmds"] = bmds_hash
     key = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
@@ -363,14 +368,18 @@ def _hash_genomics(
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+# Bump when the cached BMD summary's content rules change.
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 3  # bumped: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+
+
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
     """
     Hash inputs for the BMD summary tables.
 
     Depends on NTP stats (apical BMD summary uses platform_tables) and
-    BMDS results (BMDS BMD summary merges pybmds output with TableRows).
+    BMDS results (the ToxicR fills on the rows, and the BMDS summary).
     """
-    key = f"{ntp_hash}:{bmds_hash}"
+    key = f"{ntp_hash}:{bmds_hash}:v{_BMD_SUMMARY_CACHE_SCHEMA_VERSION}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 

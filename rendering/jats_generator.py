@@ -484,6 +484,7 @@ def _emit_bmd_summary(node: DocNode, data: dict) -> list:
     if plan.rows is not None:
         out.append(_table_wrap(
             node.id, plan.caption, list(BMD_SUMMARY_HEADERS), plan.rows,
+            plan.footnotes,
         ))
     elif not out:
         out.append(_todo(node, "bmd-summary endpoints + prose pending"))

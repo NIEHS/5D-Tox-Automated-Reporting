@@ -780,6 +780,23 @@ BMD_SUMMARY_HEADERS: tuple[str, ...] = (
 )
 
 
+# The abbreviation legend under the BMD summary table (every term can appear
+# in its cells).
+BMD_SUMMARY_LEGEND = (
+    "BMD₁Std = benchmark dose corresponding to a benchmark response set "
+    "to one standard deviation from the mean; "
+    "BMDL₁Std = benchmark dose lower confidence limit corresponding to a "
+    "benchmark response set to one standard deviation from the mean; "
+    "LOEL = lowest-observed-effect level; "
+    "NOEL = no-observed-effect level; "
+    "UREP = unreliable estimate of potency — a label based on review of "
+    "BMD modeling results indicating the curve-fit BMD is implausibly far "
+    "below the statistically observed effect threshold; "
+    "NVM = nonviable model, defined as a modeling result that does not "
+    "meet prespecified fit criteria and hence is deemed unreliable."
+)
+
+
 @dataclass(frozen=True)
 class BmdSummaryPlan:
     """
@@ -792,10 +809,64 @@ class BmdSummaryPlan:
         rows:       one cell-string list per endpoint in BMD_SUMMARY_HEADERS
                     order, or None when the session has no endpoints yet (the
                     emitter then shows prose-or-placeholder, no table).
+        footnotes:  typed footnote records under the table: the abbreviation
+                    legend, and a note naming every BMD fit at an inferred BMR.
     """
     caption: str
     paragraphs: list[str]
     rows: list[list[str]] | None
+    footnotes: list = field(default_factory=list)
+
+
+def _bmr_phrase(bmr: dict | None) -> str:
+    """{"type": "SD"|"RD", "factor": f} → "1 standard deviation" / "25% relative deviation"."""
+    if not isinstance(bmr, dict) or bmr.get("factor") is None:
+        return "the assay-family default benchmark response"
+    f = float(bmr["factor"])
+    if bmr.get("type") == "RD":
+        return f"{f * 100:g}% relative deviation"
+    return f"{f:g} standard deviation" + ("" if f == 1 else "s")
+
+
+def inferred_bmr_footnote(endpoints: list[dict]) -> dict | None:
+    """A definition footnote naming the BMDs fit at an INFERRED BMR, or None.
+
+    Such a BMD was not modeled in the BMDExpress project: ToxicR (the engine
+    BMDExpress uses) fit it from the animal data, and because the project
+    records no BMR for its assay the assay-family default was used — an
+    assumption the report states rather than hides."""
+    groups: dict[str, list[str]] = {}
+    for ep in endpoints or []:
+        if not (ep.get("filled") and ep.get("bmr_config") == "inferred"):
+            continue
+        if _finite_float(ep.get("bmd")) is None:
+            continue
+        name = f"{ep.get('endpoint', '')} ({str(ep.get('sex', '')).lower()})".replace(" ()", "")
+        groups.setdefault(_bmr_phrase(ep.get("bmr")), []).append(name)
+    if not groups:
+        return None
+    parts = []
+    for phrase, names in groups.items():
+        listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+        parts.append(f"{listed}: benchmark response of {phrase}")
+    return {
+        "kind": "definition",
+        "text": (
+            "BMDs not modeled in the BMDExpress project were fit from the "
+            "individual animal data with the same model-averaging engine "
+            "(ToxicR). The project records no benchmark response for these "
+            "endpoints, so the default for the assay type was used — "
+            + "; ".join(parts) + "."
+        ),
+    }
+
+
+def _finite_float(v) -> float | None:
+    try:
+        f = float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
 
 
 def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
@@ -824,7 +895,17 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
             for ep in endpoints
         ]
 
-    return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows)
+    footnotes: list = []
+    if endpoints:
+        # The web export passes the legend as plain strings; normalize to
+        # typed records, defaulting to the standard legend.
+        for fn in summary.get("footnotes") or [BMD_SUMMARY_LEGEND]:
+            footnotes.append(fn if isinstance(fn, dict) else {"kind": "definition", "text": str(fn)})
+        note = inferred_bmr_footnote(endpoints)
+        if note:
+            footnotes.append(note)
+
+    return BmdSummaryPlan(table_caption(node, node.title), paragraphs, rows, footnotes)
 
 
 # Column meaning of the Appendix B animal roster (semantic vocabulary shared by

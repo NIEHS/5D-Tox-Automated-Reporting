@@ -84,6 +84,7 @@ from pipeline.processing_helpers import (
     apply_genomics_cutoffs,
     _build_apical_bmd_summary,
     _build_bmds_bmd_summary,
+    fill_rows_from_toxicr,
     _BMD_DIVERGENCE_TOL,
     apply_apical_filters,
     apply_section_filters,
@@ -1015,6 +1016,15 @@ async def _get_bmds(ctx):
     ctx.bmds_results = results
 
 
+async def _bmds_then_sections(ctx):
+    """BMDS, then the ToxicR fills onto the rows, then the section cards."""
+    await _get_bmds(ctx)
+    n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results)
+    if n:
+        logger.info("Filled %d bm2-blank apical BMDs from ToxicR", n)
+    await _get_sections(ctx)
+
+
 async def _get_genomics(ctx):
     """Extract gene expression + GO filtering, or return cached."""
     dtxsid = ctx.dtxsid
@@ -1195,10 +1205,9 @@ async def run_data(ctx) -> None:
 
     Behavior- and perf-preserving carve-out of the block that used to run inline
     in ``run_process`` from ``_build_ntp_stats`` through ``_build_bmd_summary``.
-    The Layer-2 ``asyncio.gather`` is kept intact — ``_get_sections`` and
-    ``_get_methods`` (content producers) stay co-scheduled with the BMDS
-    bottleneck ON PURPOSE, since serializing them behind ~8min BMDS would be a
-    cold-run regression the oracle can't see. Relocating those two into content
+    In Layer 2, ``_get_sections`` runs after BMDS (its tables and narratives
+    carry the ToxicR-filled BMDs); ``_get_methods`` and genomics stay
+    co-scheduled with it. Relocating the content producers into content
     preparation is deferred (Phase D/E). See ADR-0021.
     """
     dtxsid = ctx.dtxsid
@@ -1255,12 +1264,13 @@ async def run_data(ctx) -> None:
         extra_paths=_meta.get("clinical_obs_files", []),
     )
     # Phase 2: filter-agnostic sections cache — no allowlists in the key.
+    ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
     ctx.sections_hash = _hash_sections(
         ctx.ntp_hash, compound_name, dose_unit,
         sidecar_hash=sections_sidecar_hash,
         imputed_cells=_meta.get("imputed_cells"),
+        bmds_hash=ctx.bmds_hash,
     )
-    ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
 
     ge_source = _meta.get("source_files", {}).get("gene_expression")
     ge_filename = ge_source.get("filename", "") if ge_source else ""
@@ -1308,9 +1318,14 @@ async def run_data(ctx) -> None:
     # producers, but they stay in this data-concern gather ON PURPOSE — they
     # overlap the ~8min BMDS bottleneck at zero marginal cost. Splitting them
     # out cleanly is Phase D/E, not this behavior-preserving carve-out.
+    #
+    # Sections wait for BMDS: the ToxicR fills are written onto the TableRows
+    # (fill_rows_from_toxicr) before the section tables and narratives are
+    # built, so Tables 2–7, the narratives and the BMD summary agree.  BMDS is
+    # the ToxicR Java fit now (seconds, not the former ~8 min pybmds run), and
+    # genomics + methods still overlap it.
     await asyncio.gather(
-        _get_sections(ctx),
-        _get_bmds(ctx),
+        _bmds_then_sections(ctx),
         _get_genomics(ctx),
         _get_methods(ctx),
     )

@@ -17,8 +17,8 @@ Fit CONFIG is per-endpoint, matched to the .bm2:
     constant-variance the .bm2 was run with. `parse_bmd_configs(integrated)` extracts a
     {(sex, platform): config} map; only clin_chem / hematology / organ_weight carry one.
   - Config-less platforms (body weight, hormones, clinical observations, tissue conc)
-    are INFERRED per assay family and flagged `bmr_config="inferred"` for data-team
-    verification (an inferred fill is render-gated until per-endpoint approval).
+    are INFERRED per assay family and flagged `bmr_config="inferred"`; the report's
+    BMD summary footnotes every value fit at an inferred BMR.
 
 Model averaging (Laplace, the BMDExpress default) is used because the .bm2's own
 results are model-averaged (`bestStatResult.@type == "modelaveraging"`) — like-for-like.
@@ -159,6 +159,18 @@ def parse_bmd_configs(integrated: dict) -> dict[tuple[str, str], dict]:
     return out
 
 
+def bmr_record(cfg: dict) -> dict:
+    """The BMR a fit config used, as {"type": "SD"|"RD", "factor": float}."""
+    return {"type": "SD" if cfg.get("bmr_type") == _BMR_SD else "RD",
+            "factor": cfg.get("bmr_factor")}
+
+
+def inferred_bmr(platform: str) -> dict:
+    """The BMR an endpoint of `platform` is fit at when the .bm2 records none
+    (the assay-family default), as bmr_record() describes it."""
+    return bmr_record(_config_for("", platform, {}))
+
+
 def _config_for(sex: str, platform: str, configs: dict) -> dict:
     """Resolve the fit config for one endpoint: recorded (from .bm2) if present, else
     INFERRED from the assay family (flagged for data-team verification)."""
@@ -173,7 +185,7 @@ def _config_for(sex: str, platform: str, configs: dict) -> dict:
         "bmr_type": bmr_type,
         "bmr_factor": bmr_factor,
         "is_ncv": False,
-        "bmr_config": "inferred",  # render-gated until per-endpoint approval
+        "bmr_config": "inferred",  # footnoted in the BMD summary
     }
 
 
@@ -192,9 +204,9 @@ def run_bmds_for_endpoints(
     is the {(sex, platform_token): config} map from `parse_bmd_configs`; when a platform
     has no recorded config the fit config is inferred per assay family and flagged.
 
-    Returns {key: {bmd, bmdl, bmdu, model_name, status, notes, bmr_config}} — the same
-    shape the former pybmds path returned, plus `bmr_config` (bm2_config | inferred) for
-    the render gate. Endpoints lacking per-animal data are skipped (nothing to model).
+    Returns {key: {bmd, bmdl, bmdu, model_name, status, notes, bmr_config, bmr}} — the
+    shape the former pybmds path returned, plus `bmr_config` (bm2_config | inferred: was
+    the BMR recorded in the .bm2 or an assay-family default?) and `bmr` (the BMR used). Endpoints lacking per-animal data are skipped (nothing to model).
     """
     configs = configs or {}
     if not endpoint_data:
@@ -210,7 +222,7 @@ def run_bmds_for_endpoints(
         sex = ep.get("sex", "")
         platform = ep.get("platform", "")
         cfg = _config_for(sex, platform, configs)
-        cfg_by_key[ep["key"]] = cfg["bmr_config"]
+        cfg_by_key[ep["key"]] = cfg
         payload.append({
             "key": ep["key"],
             "doses": doses,
@@ -227,10 +239,13 @@ def run_bmds_for_endpoints(
     logger.info("ToxicR modeling %d apical endpoints", len(payload))
     results = run_apical_bmds_java(payload)
 
-    # Stamp the config provenance onto each result so the reconcile/render gate can
-    # tell an inferred-BMR fill (needs approval) from a recorded-config one.
+    # Stamp the config provenance onto each result so the report can say when a
+    # filled BMD used an inferred (assay-family default) BMR.
     for key, res in results.items():
-        res["bmr_config"] = cfg_by_key.get(key, "inferred")
+        cfg = cfg_by_key.get(key) or {}
+        res["bmr_config"] = cfg.get("bmr_config", "inferred")
+        if cfg:
+            res["bmr"] = bmr_record(cfg)
         if res.get("status") == "viable":
             logger.info(
                 "ToxicR %s: BMD=%s BMDL=%s (%s, %s)",

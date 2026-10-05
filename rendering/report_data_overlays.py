@@ -424,19 +424,8 @@ def _overlay_unified_and_bmd(data: dict, body: dict) -> None:
     # with every export.
     bmd_summary = body.get("bmd_summary")
     bmd_endpoints = body.get("bmd_summary_endpoints", [])
-    _bmd_summary_footnotes = [
-        "BMD₁Std = benchmark dose corresponding to a benchmark response set "
-        "to one standard deviation from the mean; "
-        "BMDL₁Std = benchmark dose lower confidence limit corresponding to a "
-        "benchmark response set to one standard deviation from the mean; "
-        "LOEL = lowest-observed-effect level; "
-        "NOEL = no-observed-effect level; "
-        "UREP = unreliable estimate of potency — a label based on review of "
-        "BMD modeling results indicating the curve-fit BMD is implausibly far "
-        "below the statistically observed effect threshold; "
-        "NVM = nonviable model, defined as a modeling result that does not "
-        "meet prespecified fit criteria and hence is deemed unreliable.",
-    ]
+    from rendering.render_common import BMD_SUMMARY_LEGEND
+    _bmd_summary_footnotes = [BMD_SUMMARY_LEGEND]
     if bmd_summary:
         data["bmd_summary"] = dict(bmd_summary)
         if not data["bmd_summary"].get("footnotes"):

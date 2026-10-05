@@ -914,6 +914,7 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
         f"{_emit_table_header(list(BMD_SUMMARY_HEADERS))}"
         f"<tbody>{body_rows}</tbody>"
         "</table>"
+        f"{_emit_table_footnotes(plan.footnotes)}"
     )
     chunks = [c for c in (heading, prose, table) if c]
     return "\n".join(chunks)

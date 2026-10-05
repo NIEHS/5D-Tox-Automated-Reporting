@@ -708,10 +708,17 @@ def load_session_data(
     # ── BMD summary endpoints ─────────────────────────────────────────
     bmd_path = _latest(session_dir, "_cache_bmd_summary_*.json")
     bmd_cache = _load_json(bmd_path)
-    if isinstance(bmd_cache, dict) and bmd_cache.get("apical"):
+    # A processed session with NO summary endpoints replaces the scaffold's
+    # placeholder row too (the section then shows its prose only).
+    if isinstance(bmd_cache, dict) and "apical" in bmd_cache:
+        paragraphs = data.get("bmd_summary", {}).get("paragraphs", [])
+        if not bmd_cache["apical"] and not paragraphs:
+            # Same wording as the abstract's no-endpoint sentence.
+            paragraphs = ["There were no apical endpoints for which a BMD value "
+                          "could be reliably estimated."]
         data["bmd_summary"] = {
-            "paragraphs": data.get("bmd_summary", {}).get("paragraphs", []),
-            "endpoints": bmd_cache["apical"],
+            "paragraphs": paragraphs,
+            "endpoints": bmd_cache["apical"] or [],
         }
 
     # ── Summary paragraphs ────────────────────────────────────────────

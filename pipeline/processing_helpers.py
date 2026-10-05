@@ -1350,6 +1350,71 @@ def _finite_pos_bmd(value) -> float | None:
     return f
 
 
+def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
+    """The ToxicR fit that fills `row`'s BMD, or None.
+
+    A row is filled when it is a BMD candidate (passed the NTP responsive gate,
+    or BMDExpress produced a modeled result for it) but has no usable bm2 BMD
+    (blank / NVM / UREP / NR), and ToxicR fit it viably.  A responsive row that
+    BMDExpress never modeled also takes ToxicR's NVM / UREP classification, so
+    the report says "no viable model" instead of leaving the cell blank."""
+    if not (row.responsive or row.bmd_status not in (None, "failure")):
+        return None
+    if _finite_pos_bmd(row.bmd_str) is not None:
+        return None
+    tox = bmds_results.get(f"{sex}::{row.label}")
+    if not tox:
+        return None
+    if tox.get("status") == "viable" and _finite_pos_bmd(tox.get("bmd")) is not None:
+        return tox
+    if tox.get("status") in ("NVM", "UREP") and row.responsive and row.bmd_status is None:
+        return tox
+    return None
+
+
+def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
+                          bmds_results: dict | None) -> int:
+    """Write ToxicR fills onto the NTP TableRows themselves (task #34 fill).
+
+    Run once per process, after BMDS and before the section tables, narratives
+    and BMD summary are built, so every surface shows the same BMD: the Table
+    2–7 BMD columns, the organ/clinical narratives, the BMD summary, and the
+    `_cache_bmd_summary` the headless/LaTeX render reads.  A filled row keeps
+    its provenance on ``row._bmd_fill`` (source, bmr_config, bmr, model_name),
+    which _build_apical_bmd_summary copies onto the summary entry.
+
+    Returns the number of rows filled."""
+    from bmdx_pipe.apical_report import _format_bmd
+    from tables.apical_bmds import inferred_bmr
+
+    if not bmds_results:
+        return 0
+    n = 0
+    for platform, sex_rows in platform_tables.items():
+        for sex, rows in sex_rows.items():
+            for row in rows:
+                tox = _tox_fill(row, bmds_results, sex)
+                if tox is None:
+                    continue
+                if tox.get("status") == "viable":
+                    bmdl = _finite_pos_bmd(tox.get("bmdl"))
+                    row.bmd_str = _format_bmd(float(tox["bmd"]))
+                    row.bmdl_str = _format_bmd(bmdl) if bmdl is not None else "—"
+                else:
+                    row.bmd_str = row.bmdl_str = tox["status"]
+                row.bmd_status = tox["status"]
+                bmr_config = tox.get("bmr_config") or "inferred"
+                row._bmd_fill = {
+                    "source": "toxicr",
+                    "bmr_config": bmr_config,
+                    "bmr": tox.get("bmr") or (inferred_bmr(platform)
+                                              if bmr_config == "inferred" else None),
+                    "model_name": tox.get("model_name"),
+                }
+                n += 1
+    return n
+
+
 def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None) -> None:
     """Reconcile one bm2 apical-summary entry with the ToxicR recompute (task #34).
 
@@ -1360,6 +1425,10 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
     hard-stop that would halt on a non-empty `divergences` is armed by
     `_BMD_HARD_STOP` (currently off) — until then divergence is flag-only.
     """
+    if entry.get("filled"):
+        # Already a ToxicR value (fill_rows_from_toxicr wrote it onto the row);
+        # there is no bm2 value to cross-check.
+        return
     entry["source"] = "bm2"
     entry["validated"] = None
     tox = bmds_results.get(entry.get("_key"))
@@ -1394,10 +1463,12 @@ def _merge_toxicr_into(entry: dict, bmds_results: dict, divergences: list | None
         if tox.get("model_name"):
             entry["model_name"] = tox["model_name"]
         # How the fit's BMR was chosen: bm2_config (copied from a sibling result's
-        # analysisInfo) or inferred (assay-family default, needs data-team sign-off
-        # before it renders — the task #36 approval gate keys on this).
+        # analysisInfo) or inferred (assay-family default — footnoted in the
+        # rendered BMD summary).
         if tox.get("bmr_config"):
             entry["bmr_config"] = tox["bmr_config"]
+        if tox.get("bmr"):
+            entry["bmr"] = tox["bmr"]
         # This endpoint is now a ToxicR value, not the bm2 anomaly marker.
         entry.pop("anomalous", None)
         entry.pop("bmd_original", None)
@@ -1477,6 +1548,14 @@ def _build_apical_bmd_summary(
                     # Internal ToxicR join key (raw label); stripped after merge.
                     "_key": f"{sex}::{row.label}",
                 })
+                fill = getattr(row, "_bmd_fill", None)
+                if fill:
+                    raw_entries[-1].update({
+                        "source": fill["source"], "filled": True, "validated": None,
+                        "bmr_config": fill["bmr_config"],
+                        **({"bmr": fill["bmr"]} if fill.get("bmr") else {}),
+                        **({"model_name": fill["model_name"]} if fill.get("model_name") else {}),
+                    })
 
     # --- Apply UREP marking ---
     # An endpoint becomes UREP when the BMD parses as a finite number but
