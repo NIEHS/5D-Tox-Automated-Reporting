@@ -17,6 +17,13 @@ Published references: the `*-BMD` summary PDFs, PA06/PA41/PA43, `…BMD,_NOEL_an
 > - The relative-weight ToxicR BMDs reproduce the published values: Liver 191.38/127.62, Kidney-L 219.18/89.38.
 > - Kidney-R relative is published NVM; ToxicR fits it at 339.5/77.0.
 >
+> **Update 2026-10-05: BMD acceptance resolved.** Apical BMDs now pass the NIEHS defined-category filter (`bmdx_pipe.bmd_acceptance`: R² ≥ 0.6 against the dose-group means, BMD/BMDL ≤ 10, BMD ≤ highest dose; else NVM). The R² reproduces BMDExpress's stored `rSquared` on all 36 endpoints of the non-genomic project. Every published outcome in both species is reproduced:
+>
+> - Rat: Kidney-R relative is NVM (R² 0.560) and SDH is NVM (no BMD). The other 7 endpoints are reported.
+> - Mouse: Body Weight Gain is NVM (BMD/BMDL 10.3). A/G ratio is reported at 15.1/2.2; the old BMDU/BMDL > 40 rule would have flagged it UREP.
+>
+> Cholesterol and triglycerides still differ in the session (449/291, 464/289) because no apical `.bm2` was ingested, so clinical chemistry is fit at the inferred 25% RD. Appendix D now states these criteria (Table D-1, built from the classifier's constants) and each analysis's recorded settings (Table D-2), not the BMDS 2.7 rules.
+>
 > The rows below marked *(resolved)* are kept as the 2026-10-02 record.
 
 ## Results at a glance

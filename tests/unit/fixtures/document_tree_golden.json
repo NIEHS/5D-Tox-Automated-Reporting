@@ -525,12 +525,32 @@
         "region": "back",
         "title": "",
         "type": "freeform-block"
+      },
+      {
+        "data_key": "appendix_bmd_acceptance_matrix",
+        "id": "table-d-1",
+        "level": 0,
+        "region": "back",
+        "table_label": "D-1",
+        "table_number": 1,
+        "title": "Benchmark Dose Acceptance Criteria for Apical Endpoints",
+        "type": "data-table"
+      },
+      {
+        "data_key": "appendix_bmd_config_matrix",
+        "id": "table-d-2",
+        "level": 0,
+        "region": "back",
+        "table_label": "D-2",
+        "table_number": 2,
+        "title": "BMDExpress/ToxicR Analysis Configuration",
+        "type": "data-table"
       }
     ],
     "id": "appendix-d",
     "level": 1,
     "region": "back",
-    "title": "Benchmark Dose Model Recommendation and Selection Methodologies",
+    "title": "Benchmark Dose Modeling and Acceptance Criteria",
     "type": "appendix"
   },
   {

@@ -365,9 +365,14 @@ document:
         subtype: chart
         title: Boxplots of the False Positive Gene and Gene Ontology Biological Process Rates for Each Tissue per Sex Combination
         data_key: appendix_efdr_figure
+  # Appendix D: how apical BMDs are accepted. D-1 is built from the classifier's
+  # own thresholds (bmdx_pipe.bmd_acceptance via rendering/bmd_appendix.py), D-2
+  # from each bMDResult.analysisInfo — so neither can describe a method other
+  # than the one the tables were produced with.  (NIEHS Report 10 printed the
+  # BMDS 2.7 model-selection rules here; this pipeline never runs BMDS 2.7.)
   - id: appendix-d
     type: appendix
-    title: Benchmark Dose Model Recommendation and Selection Methodologies
+    title: Benchmark Dose Modeling and Acceptance Criteria
     children:
     - id: appendix-d-body
       type: freeform-block
@@ -375,6 +380,14 @@ document:
       content_file:
         latex: freeform/appendix-d.tex
         html: freeform/appendix-d.html
+    - id: table-d-1
+      type: data-table
+      title: Benchmark Dose Acceptance Criteria for Apical Endpoints
+      data_key: appendix_bmd_acceptance_matrix
+    - id: table-d-2
+      type: data-table
+      title: BMDExpress/ToxicR Analysis Configuration
+      data_key: appendix_bmd_config_matrix
   - id: appendix-e
     type: appendix
     title: Organ Weight Descriptions
@@ -396,22 +409,6 @@ document:
       # list, or authored appendix-f.html/.tex), never shared across chemicals.
       session_content: appendix-f
       missing_content_text: "Supplemental data files are not available for this study."
-  # OPT-IN provenance appendix — ships DORMANT to keep the NIEHS-10 reference at
-  # appendices A–F (adding it here puts a 7th appendix on every report and diverges
-  # from the reference's appendix set). Uncomment to record the EXACT BMDExpress/
-  # ToxicR settings each analysis ran with, tabulated data-derived from
-  # data[appendix_bmd_config_matrix] (built from each bMDResult.analysisInfo by
-  # render_common.build_bmd_config_matrix; the data key is already populated on both
-  # render paths, so uncommenting is all that's needed). Continuous BMD model-
-  # averaging is build-dependent, so recording the version is load-bearing when on.
-  #   - id: appendix-g
-  #     type: appendix
-  #     title: Benchmark Dose Analysis Configuration
-  #     children:
-  #     - id: table-g-1
-  #       type: data-table
-  #       title: BMDExpress/ToxicR Analysis Configuration
-  #       data_key: appendix_bmd_config_matrix
   # ── Freeform AUTHORED content (commented out — feature ships dormant) ──────
   # freeform-page / freeform-block carry content authored HERE (or in an
   # external file), not read from the pipeline.  Uncomment + adapt to insert a
@@ -582,8 +579,9 @@ sex:
 #   - key PRESENT  ⇒ only the listed types render; `[]` renders NONE.
 #
 # The NIEHS reference report carries NO main-body genomics figures (its only
-# figures are Appendix C PCA/boxplots and Appendix D flowcharts, none of which
-# we generate) — so we ship `charts: []` to suppress the UMAP semantic maps and
+# figures are the Appendix C PCA/boxplots, which are appendix nodes, and the
+# Appendix D BMDS flowcharts, which belong to a method this pipeline does not
+# run) — so we ship `charts: []` to suppress the UMAP semantic maps and
 # BMD/cluster scatters.  Set to `[umap, cluster]` to bring them back.
 charts: []
 

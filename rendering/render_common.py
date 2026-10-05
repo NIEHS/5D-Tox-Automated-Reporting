@@ -792,8 +792,8 @@ BMD_SUMMARY_LEGEND = (
     "UREP = unreliable estimate of potency — a label based on review of "
     "BMD modeling results indicating the curve-fit BMD is implausibly far "
     "below the statistically observed effect threshold; "
-    "NVM = nonviable model, defined as a modeling result that does not "
-    "meet prespecified fit criteria and hence is deemed unreliable."
+    "NVM = no viable model: the modeled response did not meet the benchmark "
+    "dose acceptance criteria."
 )
 
 
@@ -1080,6 +1080,10 @@ def build_bmd_config_matrix(integrated: dict) -> dict | None:
             "Constant Variance", "Step-Function Threshold",
         ],
         "rows": rows,
+        # Eight columns of long settings text: compact type and wrapping
+        # LaTeX p-columns (fractions of the line width).
+        "compact": True,
+        "col_widths": [0.19, 0.12, 0.10, 0.12, 0.09, 0.09, 0.08, 0.08],
         "footnotes": [
             "Settings are as recorded in each analysis's benchmark-dose "
             "analysisInfo. Continuous BMD model-averaging results are specific to "

@@ -1595,7 +1595,10 @@ def _freeform_text(node: DocNode) -> str:
     resolved = node.resolved_content or {}
     html = resolved.get("html")
     if html:
-        text = _TAG_RE.sub("", html)
+        import html as _html_mod
+        # Strip tags, then decode entities (&rsquo;, &nbsp;) to the characters
+        # the Word run should hold.
+        text = _html_mod.unescape(_TAG_RE.sub("", html))
         return re.sub(r"\s+\n", "\n", text).strip()
     rep = node.representation or "latex"
     return _freeform_pending_note(rep, "html")

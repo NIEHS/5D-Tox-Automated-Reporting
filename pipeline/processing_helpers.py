@@ -1355,9 +1355,9 @@ def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
 
     A row is filled when it is a BMD candidate (passed the NTP responsive gate,
     or BMDExpress produced a modeled result for it) but has no usable bm2 BMD
-    (blank / NVM / UREP / NR), and ToxicR fit it viably.  A responsive row that
-    BMDExpress never modeled also takes ToxicR's NVM / UREP classification, so
-    the report says "no viable model" instead of leaving the cell blank."""
+    (blank / NVM / NR), and ToxicR fit it viably.  A responsive row that
+    BMDExpress never modeled also takes ToxicR's NVM (bmdx_pipe.bmd_acceptance),
+    so the report says "no viable model" instead of leaving the cell blank."""
     if not (row.responsive or row.bmd_status not in (None, "failure")):
         return None
     if _finite_pos_bmd(row.bmd_str) is not None:
@@ -1367,7 +1367,7 @@ def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
         return None
     if tox.get("status") == "viable" and _finite_pos_bmd(tox.get("bmd")) is not None:
         return tox
-    if tox.get("status") in ("NVM", "UREP") and row.responsive and row.bmd_status is None:
+    if tox.get("status") == "NVM" and row.responsive and row.bmd_status is None:
         return tox
     return None
 

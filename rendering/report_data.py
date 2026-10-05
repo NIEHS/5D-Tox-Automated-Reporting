@@ -415,6 +415,12 @@ def marshal_export_data(
         if _cfg_matrix:
             data["appendix_bmd_config_matrix"] = _cfg_matrix
 
+    # ── Appendix D-1: the apical BMD acceptance criteria, from the classifier's
+    # own constants (independent of the session).
+    if "appendix_bmd_acceptance_matrix" not in data:
+        from rendering.bmd_appendix import build_bmd_acceptance_matrix
+        data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix()
+
     peer_review = body.get("peer_review")
     if peer_review:
         data["peer_review"] = _ensure_paragraphs(peer_review)

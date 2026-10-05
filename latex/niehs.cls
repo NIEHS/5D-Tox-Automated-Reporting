@@ -73,6 +73,11 @@
 % inside it.
 \RequirePackage{longtable}
 
+% array for >{\raggedright\arraybackslash}p{...} columns: a matrix that gives
+% column widths (e.g. the Appendix D tables) wraps its cells ragged-right
+% instead of justifying them across a narrow column.
+\RequirePackage{array}
+
 % --- Figures -------------------------------------------------------------
 % graphicx for \includegraphics{figures/<chart>.png}.  Each genomics chart
 % ships as a PNG (decoded from the session chart cache) in the figures/

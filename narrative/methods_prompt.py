@@ -39,6 +39,8 @@ together) keep working.
 
 from __future__ import annotations
 
+from bmdx_pipe import bmd_acceptance as _acc
+
 from narrative.methods_models import MethodsContext, SUBSECTION_SKELETON
 
 
@@ -379,10 +381,10 @@ def _build_subsection_guidelines(
             "trend and at least one significant pairwise difference. Modeling used ToxicR "
             "Laplace model averaging of the Hill, Power, Exponential 3 and Exponential 5 "
             f"models with constant variance and a benchmark response of {_apical_bmr_phrase(ctx)}. "
-            "Modeled responses were excluded unless R2 > 0.6, BMD/BMDL < 10 and BMD < the "
-            "highest dose; an endpoint meeting the statistical criteria without a viable "
-            "model is reported as having no viable model. The genomic BMR in the context "
-            "does NOT apply to apical endpoints."
+            f"Modeled responses were excluded unless R2 >= {_acc.R2_MIN:g}, BMD/BMDL <= "
+            f"{_acc.BMD_BMDL_MAX:g} and BMD <= the highest dose; an endpoint meeting the "
+            "statistical criteria without a viable model is reported as having no viable "
+            "model. The genomic BMR in the context does NOT apply to apical endpoints."
         ),
         "bmd_genomics": (
             f"One or two paragraphs. Transcriptomic BMD analysis in "

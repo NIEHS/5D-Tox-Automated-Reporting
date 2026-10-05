@@ -531,6 +531,32 @@ def _render_appendix(node: DocNode, data: dict) -> str:
     return f"{heading}\n{scope}\n\n{body}" if scope else f"{heading}\n\n{body}"
 
 
+def _matrix_colspec(built: dict, ncols: int, default: str) -> str:
+    r"""Column spec for a matrix: ``default`` ("l c c …" style, one letter per
+    column), except where the matrix gives ``col_widths`` — fractions of
+    \linewidth, None for a natural-width column — which become wrapping
+    ``p{}`` columns (a matrix with long cell text would otherwise run off the
+    page)."""
+    if not built.get("col_widths"):
+        return default
+    letters = default.split() if " " in default else list(default)
+    widths = list(built["col_widths"])
+    widths += [None] * (ncols - len(widths))
+    return " ".join(
+        f">{{\\raggedright\\arraybackslash}}p{{{w:g}\\linewidth}}" if w
+        else letters[i] if i < len(letters) else "l"
+        for i, w in enumerate(widths[:ncols])
+    )
+
+
+def _compact(built: dict, table: str) -> str:
+    r"""A ``compact`` matrix (many wide columns) sets in \footnotesize with half
+    the usual column gap, so it fits the text width."""
+    if not built.get("compact"):
+        return table
+    return "{\\footnotesize\\setlength{\\tabcolsep}{3pt}\n" + table + "\n}"
+
+
 def _emit_long_matrix(node: DocNode, built: dict) -> str:
     r"""
     EMIT a ``breakable`` matrix (the Appendix B animal roster: hundreds of
@@ -546,7 +572,7 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
     rows = [[str(c) for c in r] for r in built.get("rows", [])]
     ncols = max(len(headers), max((len(r) for r in rows), default=0), 1)
     caption = _table_caption(node, built.get("caption", node.title or ""))
-    colspec = " ".join("l" for _ in range(ncols))
+    colspec = _matrix_colspec(built, ncols, " ".join("l" for _ in range(ncols)))
     header_cells = " & ".join(_escape_latex(h) for h in headers)
     col_head = "\\toprule\n" + header_cells + " \\\\\n\\midrule\n"
     # Inside an appendix the caption takes an empty short form so it stays out
@@ -559,13 +585,17 @@ def _emit_long_matrix(node: DocNode, built: dict) -> str:
         + col_head + "\\endhead\n"
     )
     body = "\n".join(_emit_tabular_row(r) for r in rows)
+    if built.get("col_widths"):
+        # Long identifiers (file and analysis names) may break after an
+        # underscore inside a fixed-width column.
+        body = body.replace("\\_", "\\_\\allowbreak{}")
     # A longtable has no threeparttable notes; footnotes follow it as small text.
     notes = "".join(
         "\n\n{\\footnotesize " + _escape_latex(fn.get("text") or "") + "\\par}"
         for fn in built.get("footnotes") or []
         if isinstance(fn, dict) and fn.get("text")
     )
-    return head + body + "\n\\bottomrule\n\\end{longtable}" + notes
+    return _compact(built, head + body + "\n\\bottomrule\n\\end{longtable}") + notes
 
 
 def _render_tables_list(node: DocNode, data: dict) -> str:
@@ -793,7 +823,7 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
     headers = [str(h) for h in built.get("headers", [])]
     rows = built.get("rows", [])
     ncols = max(len(headers), max((len(r) for r in rows), default=0))
-    colspec = "l" + "c" * (ncols - 1) if ncols > 1 else "l"
+    colspec = _matrix_colspec(built, ncols, "l" + "c" * (ncols - 1) if ncols > 1 else "l")
 
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
              _emit_tabular_row(headers), "\\midrule"]

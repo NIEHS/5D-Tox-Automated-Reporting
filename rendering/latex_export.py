@@ -947,7 +947,7 @@ def load_session_data(
         from rendering.render_common import build_animal_roster_matrix
         data["appendix_animals_matrix"] = build_animal_roster_matrix(animals)
 
-    # ── Appendix G: BMD Analysis Configuration (provenance record) ────
+    # ── Appendix D-2: BMD Analysis Configuration (provenance record) ──
     # The exact BMDExpress/ToxicR settings each analysis ran with, data-derived
     # from integrated.json's bMDResult.analysisInfo. Deterministic, so the version
     # + settings are preserved (not genericized like the Methods prose). Absent key
@@ -962,6 +962,10 @@ def load_session_data(
         _cfg_matrix = None
     if _cfg_matrix:
         data["appendix_bmd_config_matrix"] = _cfg_matrix
+
+    # ── Appendix D-1: apical BMD acceptance criteria (classifier constants) ──
+    from rendering.bmd_appendix import build_bmd_acceptance_matrix
+    data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix()
 
     # ── Abstract (Background + Results + Summary) ─────────────────────
     # Use the SHARED assembler (the same one the web path calls) so both

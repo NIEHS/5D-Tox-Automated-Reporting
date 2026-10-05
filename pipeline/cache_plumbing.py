@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 4  # bumped: NTP Williams/Shirley/Dunn statistics + relative organ weights (partitioned with their organ)
+_NTP_CACHE_SCHEMA_VERSION = 5  # bumped: bm2 BMD statuses pass the NIEHS acceptance criteria (bmdx_pipe.bmd_acceptance)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -167,7 +167,7 @@ _NTP_CACHE_SCHEMA_VERSION = 4  # bumped: NTP Williams/Shirley/Dunn statistics + 
 # is unchanged, because the model that produced them changed.  Because
 # _hash_bmd_summary folds in bmds_hash (and _hash_sections chains ntp_hash),
 # bumping here also cascades the BMD-summary and narrative caches.
-_BMDS_METHOD_VERSION = 1  # initial: pybmds modeling method/settings v1
+_BMDS_METHOD_VERSION = 2  # bumped: ToxicR fits carry R² and are classified by bmdx_pipe.bmd_acceptance (no UREP)
 
 
 def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
