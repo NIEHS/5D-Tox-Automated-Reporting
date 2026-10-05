@@ -6,12 +6,13 @@ section, but parameterized so it can also produce "Clinical Pathology" or any
 other apical endpoint section — just pass --section-title and --table-caption.
 
 This script is the bridge between BMDExpress category analysis results and
-the NTP-standard statistical tests (apical_stats.py).  It:
+the NTP-standard statistical tests (ntp_stats.py).  It:
 
   1. Exports raw dose-response and category analysis data from a .bm2 file
      using the BMDExpress 3 Java CLI
-  2. Runs NTP-standard statistical tests (Jonckheere → Williams/Dunnett)
-     on the raw dose-response data
+  2. Runs NTP-standard statistical tests (Jonckheere → Williams/Dunnett for
+     weights, Shirley/Dunn for clinical pathology) on the raw dose-response
+     data, including relative organ weights derived per animal
   3. Cross-references category analysis results for BMD/BMDL values
   4. Applies the business rule: BMD is only reported if BOTH pairwise
      significance AND trend significance are met
@@ -28,7 +29,7 @@ Per-sex TableRow structure:
     Absolute", "Liver Relative")
   - mean ± SE per dose group (with */** significance markers), plus BMD1Std /
     BMDL1Std; control row carries the trend (Jonckheere) marker, treatment rows
-    the pairwise (Williams/Dunnett) marker; not-significant-both → "ND"; dose
+    the pairwise (Williams/Dunnett or Shirley/Dunn) marker; not-significant-both → "ND"; dose
     groups with no surviving animals → dash + attrition footnote.
 """
 
@@ -354,6 +355,12 @@ class TableRow:
     noel: float | None = None
     direction: str = ""
     responsive: bool = False
+    # Which NTP pairwise test produced the dose-column markers
+    # (williams | dunnett | shirley | dunn | none) and the Jonckheere p-value
+    # behind the control-column marker — so text describing the statistics
+    # can name the test that actually ran.
+    pairwise_method: str = ""
+    trend_p: float | None = None
     # Missing-animal footnote data.  Populated when an xlsx study file
     # provides the authoritative animal roster and some animals are absent
     # from the bm2 data (died before terminal sacrifice).
@@ -572,6 +579,73 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
     return lookup
 
 
+# Experiment-name hints for the statistics family when an experiment carries
+# no recognised platform (older sessions): weights are parametric, clinical
+# pathology nonparametric.
+_PARAMETRIC_NAME_HINTS = ("organ", "weight", "body")
+_NONPARAMETRIC_NAME_HINTS = ("clin", "chem", "hemat", "hormon", "urin", "thyroid")
+
+
+def _stats_family(platform: str | None, exp_name: str) -> str:
+    """The NTP test family (ntp_stats.PARAMETRIC / NONPARAMETRIC) for an
+    experiment: from its platform, else from its name.  An experiment neither
+    names is analysed parametrically, with a warning."""
+    from . import ntp_stats
+    family = ntp_stats.family_for_platform(platform)
+    if family:
+        return family
+    lower = (exp_name or "").lower()
+    if any(h in lower for h in _NONPARAMETRIC_NAME_HINTS):
+        return ntp_stats.NONPARAMETRIC
+    if any(h in lower for h in _PARAMETRIC_NAME_HINTS):
+        return ntp_stats.PARAMETRIC
+    import sys
+    print(f"  WARNING: no statistics family for experiment {exp_name!r} "
+          f"(platform {platform!r}); using the parametric tests "
+          f"(Williams/Dunnett)", file=sys.stderr)
+    return ntp_stats.PARAMETRIC
+
+
+def _is_organ_weight(platform: str | None, exp_name: str) -> bool:
+    if platform:
+        return platform == "Organ Weight"
+    return "organ" in (exp_name or "").lower()
+
+
+def _is_body_weight_label(label: str) -> bool:
+    lower = label.lower()
+    return "body" in lower and ("weight" in lower or "wt" in lower)
+
+
+def _relative_organ_weights(
+    probe_vectors: list[tuple[str, list]],
+) -> list[tuple[str, list]]:
+    """Relative organ weights for one organ-weight experiment:
+    "<organ> Relative" = organ weight / terminal body weight x 1000 (mg/g),
+    per animal (the response vectors share the experiment's animal order).
+
+    Needs a terminal body weight endpoint; an organ that already has a
+    relative endpoint in the data, or is itself one, is left alone."""
+    tbw = next((v for name, v in probe_vectors if _is_body_weight_label(name)), None)
+    if tbw is None:
+        return []
+    names = {name for name, _ in probe_vectors}
+    out = []
+    for name, values in probe_vectors:
+        if _is_body_weight_label(name) or name.lower().endswith("relative"):
+            continue
+        organ = name[: -len("Absolute")].strip() if name.lower().endswith("absolute") else name
+        rel_name = f"{organ} Relative"
+        if rel_name in names:
+            continue
+        rel = []
+        for o, t in zip(values, tbw):
+            ok = all(isinstance(x, (int, float)) and math.isfinite(x) for x in (o, t))
+            rel.append(o / t * 1000.0 if ok and t > 0 else None)
+        out.append((rel_name, rel))
+    return out
+
+
 def build_table_data(
     bm2_json: dict,
     category_lookup: dict,
@@ -580,14 +654,15 @@ def build_table_data(
     """
     Build the table data for all endpoints, organized by sex.
 
-    Three-phase approach:
-      Phase 1: Batch all endpoints into a single Java RunPrefilter call
-               to get Williams/Dunnett p-values (one JVM launch total).
-      Phase 2: For each endpoint, compute Jonckheere in Python, combine
-               with Java pairwise results, apply business rules.
-      BMD lookup: Uses BMDExpress 3 native bMDResult data (bestBMD/bestBMDL)
-               as the primary source, with category_lookup as fallback for
-               genomics endpoints.
+    Statistics follow the NTP procedure (bmdx_pipe.ntp_stats): Jonckheere's
+    trend test selects the pairwise test — Williams or Dunnett for body and
+    organ weights, Shirley or Dunn for clinical pathology — and the family
+    comes from the experiment's platform.  Organ-weight experiments also get
+    relative organ weights (mg organ / g terminal body weight, per animal) as
+    endpoints of their own, with the same statistics and BMD inputs.
+    BMD lookup uses BMDExpress 3 native bMDResult data (bestBMD/bestBMDL) as
+    the primary source, with category_lookup as fallback for genomics
+    endpoints.
 
     Args:
         bm2_json:        Parsed JSON from the .bm2 export.
@@ -602,10 +677,8 @@ def build_table_data(
         Each list is ordered: body weight endpoints first, then organ
         weight endpoints.
     """
-    from .apical_stats import (
-        _call_java_prefilter, _sig_marker, jonckheere_test,
-        ALPHA_STAR, EndpointStats,
-    )
+    from . import ntp_stats
+    from .apical_stats import _sig_marker, ALPHA_STAR
     import math
 
     # Build lookup of BMDExpress 3-native BMD values from bMDResult.
@@ -614,30 +687,20 @@ def build_table_data(
     # analysis (category_lookup) is the fallback for genomics endpoints.
     bmd_result_lookup = _build_bmd_result_lookup(bm2_json)
 
-    # ---- Phase 1: Batch Java prefilter ----
-    # Collect all endpoints across all experiments into a single batch,
-    # so we only launch one JVM for the entire set (~20 endpoints instead
-    # of 20 separate JVM launches = ~15s saved).
-    batch_doses: list[float] = []
-    batch_probe_ids: list[str] = []
-    batch_responses: list[list[float]] = []
-    # Track endpoint metadata for reassembly after Java returns
+    # ---- Collect endpoints ----
     endpoint_meta: list[dict] = []
 
     for exp in bm2_json.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "")
+        desc = exp.get("experimentDescription")
+        exp_platform = desc.get("platform") if isinstance(desc, dict) else None
 
         # --- Platform filter: skip experiments not in the requested platforms ---
-        if platforms is not None:
-            exp_platform = None
-            desc = exp.get("experimentDescription")
-            if isinstance(desc, dict):
-                exp_platform = desc.get("platform")
-            if exp_platform not in platforms:
-                continue
+        if platforms is not None and exp_platform not in platforms:
+            continue
 
+        family = _stats_family(exp_platform, exp_name)
         treatments = exp.get("treatments", [])
-        exp_doses = [t["dose"] for t in treatments]
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
 
         # Determine sex from experiment name
@@ -649,94 +712,39 @@ def build_table_data(
         else:
             sex = "Unknown"
 
-        for pr in exp.get("probeResponses", []):
-            probe_name = pr["probe"]["id"]
-            responses = pr["responses"]
+        probe_vectors = [(pr["probe"]["id"], pr["responses"])
+                         for pr in exp.get("probeResponses", [])]
+        if _is_organ_weight(exp_platform, exp_name):
+            probe_vectors += _relative_organ_weights(probe_vectors)
 
-            # Group responses by dose (raw, unsanitized — keeps None/NaN)
-            groups_by_dose_raw: dict[float, list] = {}
+        for probe_name, responses in probe_vectors:
+            # Group by dose, dropping missing observations (None/NaN).  A dose
+            # whose every value is missing keeps an empty group so the table
+            # still shows the column.
+            groups_by_dose: dict[float, list[float]] = {}
             for i, val in enumerate(responses):
                 dose = treat_doses[i]
-                groups_by_dose_raw.setdefault(dose, []).append(val)
+                group = groups_by_dose.setdefault(dose, [])
+                if val is not None and not (isinstance(val, float) and math.isnan(val)):
+                    group.append(val)
 
             # Skip endpoints without control
-            if 0.0 not in groups_by_dose_raw:
+            if 0.0 not in groups_by_dose:
                 continue
 
-            # Sanitized groups for Python Jonckheere (needs clean values)
-            groups_by_dose = {
-                dose: [v for v in vals
-                       if v is not None
-                       and not (isinstance(v, float) and math.isnan(v))]
-                for dose, vals in groups_by_dose_raw.items()
-            }
-
-            # For Java batching, use the RAW response vector (preserving
-            # the original sample count so all endpoints have the same
-            # number of columns).  Replace None with 0.0 for JSON safety —
-            # None values are exceedingly rare in apical data and would
-            # represent missing observations (dead animals), which don't
-            # meaningfully affect Williams/Dunnett on the remaining groups.
-            flat_responses = [
-                v if v is not None else 0.0
-                for v in responses
-            ]
-
-            batch_key = f"{exp_name}::{probe_name}"
-            batch_probe_ids.append(batch_key)
-            batch_responses.append(flat_responses)
             endpoint_meta.append({
                 "exp_name": exp_name,
                 "probe_name": probe_name,
                 "sex": sex,
+                "family": family,
                 "groups_by_dose": groups_by_dose,
                 "sorted_doses": sorted(groups_by_dose.keys()),
-                "exp_doses": exp_doses,
             })
 
-    # Run Java prefilter — one batch per unique dose design.
-    # Different experiments can have different numbers of treatments/replicates
-    # (e.g., female_hematology has 37 samples, male_hematology has 30).
-    # Group endpoints by their dose vector and batch each group separately.
-    java_results: dict[str, dict] = {}
-    if batch_probe_ids:
-        # Group by dose vector (as tuple for hashability)
-        from collections import defaultdict
-        dose_groups: dict[tuple, list[int]] = defaultdict(list)
-        for idx, meta in enumerate(endpoint_meta):
-            dose_key = tuple(meta["exp_doses"])
-            dose_groups[dose_key].append(idx)
-
-        for dose_key, indices in dose_groups.items():
-            group_doses = list(dose_key)
-            group_ids = [batch_probe_ids[i] for i in indices]
-            group_responses = [batch_responses[i] for i in indices]
-
-            try:
-                # williams_p_cutoff=1.0 → always run Dunnett's for apical
-                # endpoints.  Jonckheere (Python) is the trend gatekeeper
-                # for apical data, not Williams.  With ~20 endpoints,
-                # running Dunnett's on all of them is fast.
-                result = _call_java_prefilter(
-                    doses=group_doses,
-                    probe_ids=group_ids,
-                    responses=group_responses,
-                    num_permutations=1000,
-                    num_threads=4,
-                    dunnett_simulations=15000,
-                    williams_p_cutoff=1.0,
-                )
-                for probe_result in result.get("probes", []):
-                    java_results[probe_result["probe_id"]] = probe_result
-            except (RuntimeError, FileNotFoundError) as e:
-                import sys
-                print(f"  WARNING: Batch Java prefilter failed for "
-                      f"{len(group_ids)} endpoints: {e}", file=sys.stderr)
-
-    # ---- Phase 2: Build EndpointStats from Jonckheere + Java results ----
+    # ---- Per endpoint: NTP statistics, BMD lookup, table row ----
     tables: dict[str, list[TableRow]] = {}
 
-    for i, meta in enumerate(endpoint_meta):
+    for meta in endpoint_meta:
         exp_name = meta["exp_name"]
         probe_name = meta["probe_name"]
         sex = meta["sex"]
@@ -770,26 +778,16 @@ def build_table_data(
             else:
                 se_per_dose[dose] = 0.0
 
-        # Jonckheere trend test (stays in Python — NTP convention)
-        jonck_p, direction = jonckheere_test(groups_by_dose)
+        # Jonckheere trend test + the pairwise test it selects (NTP procedure).
+        # The control column's marker is the trend test; a dose column's
+        # marker is its pairwise test.
+        stats_result = ntp_stats.ntp_pairwise(
+            groups_by_dose, meta["family"], control_dose=control_dose)
+        jonck_p, direction = stats_result.jonckheere_p, stats_result.direction
         jonckheere_sig = jonck_p <= ALPHA_STAR
         trend_marker = _sig_marker(jonck_p)
-
-        # Pairwise p-values from Java batch.
-        # NaN/null p-values (from zero-variance endpoints where Dunnett's
-        # can't compute a test statistic) are treated as non-significant (1.0).
-        batch_key = f"{exp_name}::{probe_name}"
-        java_probe = java_results.get(batch_key)
-
-        pairwise_p: dict[float, float] = {}
-        if java_probe:
-            for dose_str, pval in java_probe.get("dunnett_p", {}).items():
-                if pval is None or (isinstance(pval, str)):
-                    pval = 1.0
-                pairwise_p[float(dose_str)] = float(pval)
-            pairwise_method = "williams" if jonckheere_sig else "dunnett"
-        else:
-            pairwise_method = "none"
+        pairwise_p: dict[float, float] = dict(stats_result.pairwise_p)
+        pairwise_method = stats_result.method
 
         pairwise_marker = {d: _sig_marker(p) for d, p in pairwise_p.items()}
         any_pairwise_sig = any(p <= ALPHA_STAR for p in pairwise_p.values())
@@ -798,7 +796,8 @@ def build_table_data(
         # Look up BMD/BMDL and NIEHS classification status.
         # BMD modeling and statistical significance are INDEPENDENT concerns:
         #   - BMDExpress 3 runs its own prefilter → produces bMDResult
-        #   - Our NTP stats (Jonckheere + Dunnett) → determine LOEL/NOEL
+        #   - Our NTP stats (Jonckheere + Williams/Dunnett/Shirley/Dunn)
+        #     → determine LOEL/NOEL
         # The reference report Table 8 shows both side by side.  We always
         # show the BMDExpress 3 classification if a bMDResult exists,
         # regardless of our stat gate.
@@ -932,6 +931,8 @@ def build_table_data(
             noel=noel,
             direction=dir_str,
             responsive=report_bmd,
+            pairwise_method=pairwise_method,
+            trend_p=jonck_p,
         )
         tables[sex].append(row)
 
@@ -1236,10 +1237,9 @@ def build_table_data_from_bm2(
     print(f"  Category analysis: {len(category_lookup)} endpoints with BMD values")
 
     # Steps 3-5: Build table data (runs stats + cross-references + business rules).
-    # Phase 1 batches all endpoints into a single Java RunPrefilter call
-    # for Williams/Dunnett (BMDExpress-native stats via sciome-commons-math).
-    # Phase 2 runs Jonckheere in Python and combines with Java results.
-    print("  Running NTP statistical tests (Jonckheere + Java Williams/Dunnett)...")
+    # NTP procedure: Jonckheere selects Williams/Dunnett (weights) or
+    # Shirley/Dunn (clinical pathology) — see ntp_stats.
+    print("  Running NTP statistical tests (Jonckheere + Williams/Dunnett/Shirley/Dunn)...")
     table_data = build_table_data(bm2_json, category_lookup)
 
     return table_data, category_lookup, bm2_json

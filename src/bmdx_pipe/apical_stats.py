@@ -2,36 +2,30 @@
 NTP-standard statistical tests for apical and genomic endpoint analysis.
 
 Implements the National Toxicology Program's decision tree for dose-response
-data (body weight, organ weight, gene expression probes, etc.):
+data (body weight, organ weight, gene expression probes, etc.).
 
-  1. Jonckheere's trend test (gatekeeper) — detects monotonic dose-response.
-     Stays in Python because BMDExpress doesn't include Jonckheere (it's an
-     NTP convention, not a BMDExpress feature).
-  2. Williams trend test (BMDExpress-native, via sciome-commons-math JAR) —
-     permutation-based monotonic trend test.  Used as BOTH trend test AND
-     pairwise comparison depending on context.
-  3. Dunnett's test (BMDExpress-native, via sciome-commons-math JAR) —
-     many-to-one pairwise comparisons of each dose group vs control.
-
-The Williams and Dunnett tests call the Java RunPrefilter tool, which uses
-the exact same statistical routines that BMDExpress 3 uses internally
-(WilliamsTrendTestUtil, DunnettsTest from sciome-commons-math).  This
-ensures numerical parity with BMDExpress's own prefilter results.
-
-For apical endpoints, the NTP decision tree applies:
-  - Jonckheere is the trend gatekeeper
-  - If trend significant → Williams for pairwise (from Java)
-  - If trend NOT significant → Dunnett's for pairwise (from Java)
+Apical endpoints follow the NTP procedure, implemented in Python in
+ntp_stats.py:
+  - Jonckheere's trend test selects the pairwise test (p <= 0.01 → the
+    trend-sensitive test)
+  - weights: Williams (trend) or Dunnett; clinical pathology: Shirley (trend)
+    or Dunn
   - Report BMD only if BOTH trend AND pairwise are significant
 
-For genomic probes, the BMDExpress convention applies:
+Genomic probes follow the BMDExpress convention, through the Java
+RunPrefilter tool (the same WilliamsTrendTestUtil / DunnettsTest routines
+BMDExpress 3 uses internally, so prefilter results match BMDExpress):
   - Williams trend test is the gatekeeper (replacing Jonckheere)
   - Dunnett's for pairwise NOEL/LOEL determination
   - Both run in a single Java batch call for efficiency
 
+The apical path no longer uses the Java Dunnett: its p-value is not
+monotone in the effect size (an 8 SD difference returns p ~ 0.44).
+
 Reference:
   NTP Statistical Procedures — https://ntp.niehs.nih.gov/data/research/stats
-  Jonckheere (1954), Williams (1971, 1972), Dunnett (1955)
+  Jonckheere (1954), Williams (1971, 1972), Dunnett (1955), Shirley (1977),
+  Dunn (1964)
 
 Usage:
     from apical_stats import analyze_endpoint, run_java_prefilter
@@ -46,7 +40,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from scipy import stats as sp_stats
+from . import ntp_stats
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +75,7 @@ class EndpointStats:
         jonckheere_p:   P-value from Jonckheere's trend test
         jonckheere_sig: True if Jonckheere p ≤ 0.05
         trend_direction: "UP" or "DOWN" — direction of the detected trend
-        pairwise_method: "williams" or "dunnett" — which pairwise test was used
+        pairwise_method: "williams" | "dunnett" | "shirley" | "dunn" | "none"
         pairwise_p:     Dict mapping dose → p-value from pairwise test
         pairwise_marker: Dict mapping dose → "" or "*" or "**"
         trend_marker:   "" or "*" or "**" — marker for the control row
@@ -114,79 +108,20 @@ class EndpointStats:
 
 def jonckheere_test(groups_by_dose: dict[float, list[float]]) -> tuple[float, str]:
     """
-    Jonckheere-Terpstra test for ordered alternatives.
-
-    Tests the null hypothesis that all group distributions are identical
-    against the alternative that they are monotonically ordered (either
-    increasing or decreasing with dose).
-
-    The test statistic J counts the number of times an observation in a
-    higher-dose group exceeds an observation in a lower-dose group, summed
-    over all pairs of groups.  Under H0, J has a known mean and variance,
-    and the standardized Z is approximately normal for n ≥ 5 per group.
-
-    We run a two-sided test and then report the direction based on whether
-    J exceeds or falls below its expected value.
+    Jonckheere-Terpstra test for ordered alternatives (two-sided, normal
+    approximation with the tie-corrected variance) — ntp_stats.jonckheere.
 
     Args:
-        groups_by_dose: Dict mapping dose → list of response values,
-                        sorted by dose (ascending).  Must include control.
+        groups_by_dose: Dict mapping dose → list of response values.
+                        Missing values and empty groups are left out.
 
     Returns:
-        (p_value, direction) where direction is "UP" or "DOWN".
+        (p_value, direction) where direction is "UP" or "DOWN" ("UP" when
+        there is no trend at all).
     """
-    # Sort doses and exclude empty groups (doses where no observations survived
-    # filtering — e.g. high-dose groups with complete mortality).
-    sorted_doses = sorted(groups_by_dose.keys())
-    ordered_groups = [groups_by_dose[d] for d in sorted_doses if len(groups_by_dose[d]) > 0]
-    k = len(ordered_groups)
-    if k < 2:
-        # Need at least 2 non-empty groups for a trend test
-        return 1.0, "UP"
-
-    # Count the J statistic: for each pair of groups (i < j),
-    # count how many times an observation in group j exceeds one in group i
-    # (with ties contributing 0.5)
-    j_stat = 0.0
-    for i in range(k):
-        for j in range(i + 1, k):
-            for x in ordered_groups[i]:
-                for y in ordered_groups[j]:
-                    if y > x:
-                        j_stat += 1.0
-                    elif y == x:
-                        j_stat += 0.5
-
-    # Compute expected value and variance under H0
-    # n_i = size of group i, N = total observations
-    ns = [len(g) for g in ordered_groups]
-    n_total = sum(ns)
-
-    # E(J) = (N^2 - sum(n_i^2)) / 4
-    sum_ni_sq = sum(ni ** 2 for ni in ns)
-    e_j = (n_total ** 2 - sum_ni_sq) / 4.0
-
-    # Var(J) — formula accounting for ties in the combined sample
-    # First, the tie-free variance:
-    # Var(J) = [N^2(2N+3) - sum(n_i^2(2n_i+3))] / 72
-    var_j_numer = (n_total ** 2 * (2 * n_total + 3)
-                   - sum(ni ** 2 * (2 * ni + 3) for ni in ns))
-    var_j = var_j_numer / 72.0
-
-    if var_j <= 0:
-        # Degenerate case — all groups identical or single observations
-        return 1.0, "UP"
-
-    # Standardized Z (continuity correction of 0.5 for discrete statistic)
-    z = (j_stat - e_j) / math.sqrt(var_j)
-
-    # Two-sided p-value from normal approximation
-    p_value = 2.0 * sp_stats.norm.sf(abs(z))
-
-    # Direction: if J > E(J), the trend is upward (higher doses → higher values)
-    direction = "UP" if z > 0 else "DOWN"
-
-    return p_value, direction
+    _doses, groups = ntp_stats._clean(groups_by_dose)
+    p_value, direction = ntp_stats.jonckheere(groups)
+    return p_value, direction or "UP"
 
 
 # ---------------------------------------------------------------------------
@@ -419,71 +354,6 @@ def run_java_prefilter(
     return result_map
 
 
-def _java_pairwise_for_endpoint(
-    groups_by_dose: dict[float, list[float]],
-    control_dose: float = 0.0,
-) -> tuple[dict[float, float], dict[float, float]]:
-    """
-    Run Java Williams/Dunnett on a single endpoint's dose-response data.
-
-    Constructs the flat dose vector and response matrix from grouped data,
-    calls RunPrefilter, and returns the Dunnett pairwise p-values plus
-    the Williams trend p-value.
-
-    This is used by analyze_endpoint() for per-endpoint stats in the apical
-    pathway.  For batch processing (genomics), use run_java_prefilter().
-
-    Args:
-        groups_by_dose: Dict mapping dose → list of response values.
-        control_dose:   Which dose is the control (default 0.0).
-
-    Returns:
-        (dunnett_pvals, williams_info) where:
-          - dunnett_pvals: Dict mapping treatment dose → p-value
-          - williams_info: Dict with "williams_p" and "williams_adjusted_p"
-    """
-    # Build the flat arrays RunPrefilter expects
-    sorted_doses = sorted(groups_by_dose.keys())
-    doses_flat = []
-    responses_flat = []
-
-    for dose in sorted_doses:
-        for val in groups_by_dose[dose]:
-            doses_flat.append(dose)
-            responses_flat.append(val)
-
-    # Single probe — wrap in a 2D array.
-    # Use williams_p_cutoff=1.0 so Dunnett's always runs: for apical
-    # endpoints, Jonckheere (not Williams) is the trend gatekeeper,
-    # and we need Dunnett's p-values regardless of Williams result.
-    result = _call_java_prefilter(
-        doses=doses_flat,
-        probe_ids=["endpoint"],
-        responses=[responses_flat],
-        num_permutations=1000,
-        num_threads=2,
-        dunnett_simulations=15000,
-        williams_p_cutoff=1.0,
-    )
-
-    probe = result["probes"][0]
-
-    # Convert Dunnett p-values from string-keyed dict to float-keyed.
-    # NaN/null p-values (from zero-variance edge cases) → 1.0 (non-significant).
-    dunnett_pvals = {}
-    for dose_str, pval in probe.get("dunnett_p", {}).items():
-        if pval is None or isinstance(pval, str):
-            pval = 1.0
-        dunnett_pvals[float(dose_str)] = float(pval)
-
-    williams_info = {
-        "williams_p": probe.get("williams_p", 1.0),
-        "williams_adjusted_p": probe.get("williams_adjusted_p", 1.0),
-    }
-
-    return dunnett_pvals, williams_info
-
-
 # ---------------------------------------------------------------------------
 # Significance marker helper
 # ---------------------------------------------------------------------------
@@ -513,6 +383,7 @@ def analyze_endpoint(
     endpoint_name: str,
     groups_by_dose: dict[float, list[float]],
     control_dose: float = 0.0,
+    family: str = ntp_stats.PARAMETRIC,
 ) -> EndpointStats:
     """
     Run the full NTP statistical analysis for one apical endpoint.
@@ -520,8 +391,8 @@ def analyze_endpoint(
     Implements the NTP decision tree:
       1. Compute descriptive stats (n, mean, SE) per dose group
       2. Run Jonckheere's trend test (gatekeeper)
-      3. If trend significant → Williams pairwise test
-         If trend NOT significant → Dunnett's pairwise test
+      3. Jonckheere p <= 0.01 → the trend-sensitive pairwise test (Williams,
+         or Shirley for the nonparametric family); otherwise Dunnett / Dunn
       4. Determine significance markers for each dose group
       5. Determine whether BMD should be reported (both trend + pairwise)
 
@@ -531,6 +402,8 @@ def analyze_endpoint(
         groups_by_dose:  Dict mapping dose (float) → list of response values.
                          Must include the control dose.
         control_dose:    Dose value for the control group (default 0.0).
+        family:          ntp_stats.PARAMETRIC (weights) or NONPARAMETRIC
+                         (clinical pathology).
 
     Returns:
         EndpointStats with all results populated.
@@ -543,8 +416,8 @@ def analyze_endpoint(
 
     # Sanitize groups_by_dose once up front: remove None and NaN values.
     # These represent missing observations from Java BMDExpress serialization
-    # or NaN→null JSON sanitization.  All downstream code (descriptive stats,
-    # Jonckheere, Williams, Dunnett) receives only valid numeric values.
+    # or NaN→null JSON sanitization.  All downstream code (descriptive stats
+    # and the NTP tests) receives only valid numeric values.
     groups_by_dose = {
         dose: [v for v in vals if v is not None and not (isinstance(v, float) and math.isnan(v))]
         for dose, vals in groups_by_dose.items()
@@ -573,57 +446,14 @@ def analyze_endpoint(
         else:
             result.se_per_dose[dose] = 0.0
 
-    # ---- Jonckheere's trend test (gatekeeper) ----
-    jonck_p, direction = jonckheere_test(groups_by_dose)
-    result.jonckheere_p = jonck_p
-    result.jonckheere_sig = jonck_p <= ALPHA_STAR
-    result.trend_direction = direction
-    result.trend_marker = _sig_marker(jonck_p)
-
-    # ---- Pairwise comparisons ----
-    # Exclude dose groups with no valid observations — these represent doses
-    # where all animals died or were sacrificed early (e.g. high-dose groups
-    # in an NTP 28-day study).  The statistical tests require ≥1 observation
-    # per group; empty groups are a normal study design feature, not an error.
-    control_vals = groups_by_dose[control_dose]
-    treatment_groups = {
-        d: groups_by_dose[d] for d in treatment_doses
-        if len(groups_by_dose[d]) > 0
-    }
-
-    if not control_vals or not treatment_groups:
-        # No valid control or no valid treatment groups — can't run pairwise
-        result.pairwise_method = "none"
-        pairwise_p = {}
-    else:
-        # Run BMDExpress-native Williams/Dunnett via Java.
-        # The Java tool runs both tests in a single call.  We use Dunnett's
-        # pairwise p-values for dose-group significance markers (same as NTP
-        # convention), and Williams' trend p-value is available for reference.
-        try:
-            dunnett_pvals, williams_info = _java_pairwise_for_endpoint(
-                groups_by_dose, control_dose
-            )
-
-            if result.jonckheere_sig:
-                # Trend detected — report as "williams" pairwise method
-                # to maintain compatibility with downstream code that checks
-                # the method name.  The actual p-values come from Dunnett's
-                # (which is what BMDExpress uses for NOEL/LOEL).
-                result.pairwise_method = "williams"
-            else:
-                result.pairwise_method = "dunnett"
-
-            pairwise_p = dunnett_pvals
-
-        except (RuntimeError, FileNotFoundError, json.JSONDecodeError) as e:
-            # If Java stats fail (e.g., RunPrefilter not compiled, JVM not
-            # available), fall back gracefully with a warning.
-            print(f"  WARNING: Java prefilter failed for {endpoint_name}: "
-                  f"{e}", file=sys.stderr)
-            result.pairwise_method = "none"
-            pairwise_p = {}
-
+    # ---- Jonckheere trend test + the pairwise test it selects ----
+    ntp = ntp_stats.ntp_pairwise(groups_by_dose, family, control_dose=control_dose)
+    result.jonckheere_p = ntp.jonckheere_p
+    result.jonckheere_sig = ntp.jonckheere_p <= ALPHA_STAR
+    result.trend_direction = ntp.direction or "UP"
+    result.trend_marker = _sig_marker(ntp.jonckheere_p)
+    result.pairwise_method = ntp.method
+    pairwise_p = dict(ntp.pairwise_p)
     result.pairwise_p = pairwise_p
     result.pairwise_marker = {d: _sig_marker(p) for d, p in pairwise_p.items()}
 
@@ -656,9 +486,14 @@ def analyze_all_endpoints(bm2_json: dict) -> list[EndpointStats]:
     """
     all_results = []
 
+    from .apical_report import _stats_family
+
     for exp in bm2_json.get("doseResponseExperiments", []):
         exp_name = exp.get("name", "Unknown")
         treatments = exp.get("treatments", [])
+        desc = exp.get("experimentDescription")
+        family = _stats_family(desc.get("platform") if isinstance(desc, dict) else None,
+                               exp_name)
 
         # Build a mapping from treatment index → dose
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
@@ -674,7 +509,8 @@ def analyze_all_endpoints(bm2_json: dict) -> list[EndpointStats]:
                 groups_by_dose.setdefault(dose, []).append(val)
 
             # Run the full NTP analysis
-            stats = analyze_endpoint(exp_name, probe_name, groups_by_dose)
+            stats = analyze_endpoint(exp_name, probe_name, groups_by_dose,
+                                     family=family)
             all_results.append(stats)
 
     return all_results
