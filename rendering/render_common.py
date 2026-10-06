@@ -40,7 +40,9 @@ from document_model.document_node import DocNode
 # Render-time numeric re-rounding for mean ± SE cells — already the shared
 # formatter both renderers used; the apical extractor applies it once here so
 # both surfaces get identical cell text.
-from tables.table_builder_common import format_mean_se_display, format_display_number
+from tables.table_builder_common import (
+    format_display_number, format_dose_label, format_mean_se_display,
+)
 # The per-node landscape DECISION is format-agnostic (it inspects the node type,
 # the orientation overlay, and the node default) — only the WRAP markup differs.
 # render_capabilities is a clean low-level module that imports nothing from
@@ -869,6 +871,18 @@ def _finite_float(v) -> float | None:
     return f if math.isfinite(f) else None
 
 
+def _dose_cell(value) -> str:
+    """A LOEL/NOEL cell: the dose as the report labels doses ("125", "62.5",
+    "1,000" — format_dose_label), not the stored float ("125.0"); "—" when
+    absent.  A non-numeric value (an upstream label) passes through."""
+    if value is None or value == "":
+        return "—"
+    try:
+        return format_dose_label(float(value))
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
     """
     EXTRACT for the BMD summary: prose + one row per endpoint, format-agnostic.
@@ -888,8 +902,8 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
                 str(ep.get("endpoint", "")),
                 str(ep.get("bmd", "—") or "—"),
                 str(ep.get("bmdl", "—") or "—"),
-                str(ep.get("loel", "—") or "—"),
-                str(ep.get("noel", "—") or "—"),
+                _dose_cell(ep.get("loel")),
+                _dose_cell(ep.get("noel")),
                 str(ep.get("direction", "")),
             ]
             for ep in endpoints

@@ -166,6 +166,9 @@ async def generate_apical_bmd_narrative_async(
                 bmdl_str = e.get("bmdl", "")
                 direction = e.get("direction", "")
                 loel = e.get("loel")
+                if isinstance(loel, (int, float)):
+                    from tables.table_builder_common import format_dose_label
+                    loel = format_dose_label(loel)
                 if bmd_str and str(bmd_str).upper() not in ("UREP", "NVM", ""):
                     try:
                         float(bmd_str)

@@ -86,3 +86,17 @@ def test_responsive_row_bmdexpress_never_modeled_takes_toxicr_nvm():
     node = DocNode(id="bmd-summary", title="BMD Summary", node_type="bmd-summary")
     plan = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}})
     assert endpoints[0]["bmd"] == "NVM" and len(plan.footnotes) == 1
+
+
+def test_loel_noel_print_as_dose_labels():
+    """LOEL/NOEL read as the report labels doses ("250", "62.5", "1,000"), as
+    the published summaries print them — not the stored float ("250.0")."""
+    endpoints = [
+        {"sex": "Male", "endpoint": "Liver", "bmd": "55.1", "bmdl": "30.0",
+         "loel": 250.0, "noel": 62.5, "direction": "UP"},
+        {"sex": "Male", "endpoint": "Kidney", "bmd": "NVM", "bmdl": "NVM",
+         "loel": 1000.0, "noel": None, "direction": "UP"},
+    ]
+    node = DocNode(id="bmd-summary", title="BMD Summary", node_type="bmd-summary")
+    rows = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}}).rows
+    assert [r[4:6] for r in rows] == [["250", "62.5"], ["1,000", "—"]]
