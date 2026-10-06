@@ -31,12 +31,21 @@ KNOWN = {
          ("PA41", "Male", "Cholesterol", 111.0, "pairwise"): ("**", "*")},  # Dunn p = 0.0486
         {("PA41", "Male", "A/G Ratio"), ("PA41", "Female", "A/G Ratio")},   # derived; not computed
     ),
+    "NIEHS-13": (
+        {},
+        {("PA41", "Female", "A/G Ratio"),                                   # derived; not computed
+         # NTP removed outliers (published N below the data's): heart 150 ppm
+         # (animal 403), AST and creatine kinase controls.
+         ("PA06", "Female", "Heart Absolute"), ("PA06", "Female", "Heart Relative"),
+         ("PA41", "Female", "Aspartate Aminotransferase"), ("PA41", "Female", "Creatine Kinase")},
+    ),
 }
-COMPARED = {"NIEHS-10": 640}
+COMPARED = {"NIEHS-10": 640, "NIEHS-13": 252}
 
 # report -> {(sex, endpoint, dose): (published cell, ours)} — the known printed-cell edges
 KNOWN_CELLS = {
     "NIEHS-10": {("Male", "Monocyte count", 0.15): ("0.24 ± 0.09", "0.24 ± 0.10")},  # SE 0.095 (n = 2)
+    "NIEHS-13": {},
 }
 
 
