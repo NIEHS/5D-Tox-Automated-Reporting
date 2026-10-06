@@ -30,3 +30,11 @@ def test_biosampling_cohort_on_request(tmp_path):
     rows = {r.label: r for r in build_clinical_obs_tables([str(path)], include_biosampling=True)["Female"]}
     assert rows["Tremors (Moderate)"].incidence_by_dose[800.0] == "2/4"
     assert "Ataxia (Moderate)" in rows
+
+
+def test_onset_day_is_the_earliest_observation_per_dose(tmp_path):
+    path = tmp_path / "clin.csv"
+    path.write_text(_CSV + "1,800,3,Female,Core Animals,SD2,Tremors,,,Moderate\n"
+                           "1,800,2,Female,Core Animals,SD3,Tremors,,,Moderate\n")
+    row = build_clinical_obs_tables([str(path)])["Female"][0]
+    assert row.onset_day_by_dose == {800.0: 0}

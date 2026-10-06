@@ -31,6 +31,7 @@ Composite finding label format:
 
 import csv
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -59,10 +60,16 @@ class IncidenceRow:
                            Redundant with the denominator in incidence_by_dose,
                            but kept separately so the frontend can access it
                            without parsing the string.
+        onset_day_by_dose: Dict mapping dose (float) to the earliest study day
+                           (int, from "SD0" etc.) any animal in that group showed
+                           the finding — the "Lower row … day of observation
+                           onset" of the NTP I05 summary.  Doses without the
+                           finding, or rows without a parseable day, are absent.
     """
     label: str = ""
     incidence_by_dose: dict[float, str] = field(default_factory=dict)
     total_n_by_dose: dict[float, int] = field(default_factory=dict)
+    onset_day_by_dose: dict[float, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -141,11 +148,13 @@ def parse_clinical_obs_csv(path: str, include_biosampling: bool = False) -> dict
             "animals_by_dose": Dict mapping dose (float) to set(animal_ids)
                                — all animals in each dose group (including
                                those with only "Normal" observations).
+            "onset": Dict mapping composite finding label to {dose: earliest
+                     study day (int) the finding was observed}.
     """
     p = Path(path)
     if not p.exists():
         logger.warning("Clinical obs CSV not found: %s", path)
-        return {"sex": "Unknown", "findings": {}, "animals_by_dose": {}}
+        return {"sex": "Unknown", "findings": {}, "animals_by_dose": {}, "onset": {}}
 
     with open(path, "r", newline="", encoding="utf-8") as f:
         # Skip comment lines (metadata headers like "# Provider: Apical")
@@ -156,7 +165,7 @@ def parse_clinical_obs_csv(path: str, include_biosampling: bool = False) -> dict
             lines.append(line)
 
     if not lines:
-        return {"sex": "Unknown", "findings": {}, "animals_by_dose": {}}
+        return {"sex": "Unknown", "findings": {}, "animals_by_dose": {}, "onset": {}}
 
     reader = csv.DictReader(lines)
 
@@ -171,6 +180,8 @@ def parse_clinical_obs_csv(path: str, include_biosampling: bool = False) -> dict
     findings: dict[str, dict[float, set[str]]] = {}
     # animals_by_dose: {dose: set(animal_ids)} — all animals regardless of finding
     animals_by_dose: dict[float, set[str]] = {}
+    # onset: {composite_label: {dose: earliest study day observed}}
+    onset: dict[str, dict[float, int]] = {}
 
     for row in reader:
         # Extract core columns — strip whitespace from values
@@ -209,12 +220,23 @@ def parse_clinical_obs_csv(path: str, include_biosampling: bool = False) -> dict
 
         # Collapse across days: use a set so each animal counts once
         findings.setdefault(label, {}).setdefault(dose, set()).add(animal_id)
+        day = _study_day(row.get("Observation Day"))
+        if day is not None:
+            by_dose = onset.setdefault(label, {})
+            by_dose[dose] = min(day, by_dose.get(dose, day))
 
     return {
         "sex": sex,
         "findings": findings,
         "animals_by_dose": animals_by_dose,
+        "onset": onset,
     }
+
+
+def _study_day(value: str | None) -> int | None:
+    """"SD0" / "SD 12" / "3" -> the study day number; None when absent."""
+    m = re.search(r"-?\d+", str(value or ""))
+    return int(m.group()) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +286,7 @@ def build_incidence_table(parsed: dict) -> list[IncidenceRow]:
             label=label,
             incidence_by_dose=incidence_by_dose,
             total_n_by_dose=total_n_by_dose,
+            onset_day_by_dose=dict(parsed.get("onset", {}).get(label, {})),
         ))
 
     return rows
@@ -316,6 +339,10 @@ def build_clinical_obs_tables(
             for label, dose_animals in parsed["findings"].items():
                 for dose, aids in dose_animals.items():
                     existing["findings"].setdefault(label, {}).setdefault(dose, set()).update(aids)
+            for label, by_dose in parsed.get("onset", {}).items():
+                merged = existing.setdefault("onset", {}).setdefault(label, {})
+                for dose, day in by_dose.items():
+                    merged[dose] = min(day, merged.get(dose, day))
 
     # Build incidence tables per sex
     result: dict[str, list[IncidenceRow]] = {}
