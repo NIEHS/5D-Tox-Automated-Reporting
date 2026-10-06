@@ -596,7 +596,43 @@ def format_mean_se(mean: float, se: float, decimals: int = 1) -> str:
     Returns:
         Formatted string like "296.5\u00a0±\u00a04.4".
     """
-    return f"{mean:.{decimals}f}\u00a0\u00b1\u00a0{se:.{decimals}f}"
+    return f"{_round_half_up(mean, decimals)}\u00a0\u00b1\u00a0{_round_half_up(se, decimals)}"
+
+
+def _round_half_up(value: float, decimals: int) -> str:
+    """`value` at `decimals` places, halves rounded up as printed tables do.
+    Binary floats miss exact decimal halves — the mean of 1.19, 1.16, 1.14
+    and 1.21 is 1.175 but computes as 1.17499…, which f"{:.2f}" prints as
+    "1.17" — so the value is first settled to 10 significant decimals."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    q = Decimal(1).scaleb(-decimals)
+    return str(Decimal(repr(round(value, 10))).quantize(q, rounding=ROUND_HALF_UP))
+
+
+def format_row_cell(shown, decimals: int | None, stats=None, values=None) -> str:
+    """One mean ± SE cell at its row's precision (tables.display_precision).
+
+    `stats` is the unrounded [mean, se] the statistics carry
+    (TableRow.mean_se_by_dose); `values` the group's individual values when
+    only those are at hand.  The significance marker on the already-formatted
+    cell (`shown`, e.g. "97.30 ± 11.70*") is kept.  A group without a positive
+    SE prints the mean alone, as the statistics step does.  With no precision
+    or no numbers, `shown` is returned as it is.
+    """
+    if decimals is None:
+        return shown
+    if stats and stats[0] is not None:
+        m, s = stats[0], stats[1]
+    elif values:
+        m, s = mean_se(values)
+    else:
+        return shown
+    marker = re.search(r"\*+$", str(shown or "").strip())
+    marker = marker.group() if marker else ""
+    if s is not None and s > 0:
+        return format_mean_se(m, s, decimals) + marker
+    return f"{_round_half_up(m, decimals)}{marker}"
 
 
 def adaptive_decimals(*values: float) -> int:

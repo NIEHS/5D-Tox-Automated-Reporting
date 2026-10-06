@@ -43,15 +43,14 @@ from __future__ import annotations
 from common.animal_selection import is_biosampling
 
 
+from tables.display_precision import row_decimals
 from tables.table_builder_common import (
     apical_caption,
     BMD_DEFINITION,
     significance_explanation,
     SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
-    mean_se,
-    format_mean_se,
-    adaptive_decimals,
+    format_row_cell,
     load_sidecar,
     build_n_row,
     legend_footnote,
@@ -469,13 +468,13 @@ def build_organ_weight_table_from_sidecar(
             dk = js_dose_key(dose)
             dose_tbw_list = tbw_vals_list.get(dose, [])
             if dose_tbw_list:
-                m, s = mean_se(dose_tbw_list)
-                dec = adaptive_decimals(m)
-                tbw_row_vals[dk] = format_mean_se(m, s, dec)
+                tbw_row_vals[dk] = format_row_cell(
+                    "", row_decimals("Terminal Body Weight"), values=dose_tbw_list)
             else:
                 tbw_row_vals[dk] = "\u2013"
         rows.append({
             "label": "Terminal Body Weight (g)",
+            "decimals": row_decimals("Terminal Body Weight"),
             "doses": sorted_doses,
             "values": tbw_row_vals,
             "bmd": "ND",
@@ -497,12 +496,14 @@ def build_organ_weight_table_from_sidecar(
                 organ_bmd = organ_ntp.get("bmd_str", "\u2014")
                 organ_bmdl = organ_ntp.get("bmdl_str", "\u2014")
                 organ_vbd = organ_ntp.get("values_by_dose", {})
+                organ_mse = organ_ntp.get("mean_se_by_dose") or {}
                 organ_trend = organ_ntp.get("trend_marker", "")
                 organ_responsive = organ_ntp.get("responsive", False)
             else:
                 organ_bmd = getattr(organ_ntp, "bmd_str", "\u2014")
                 organ_bmdl = getattr(organ_ntp, "bmdl_str", "\u2014")
                 organ_vbd = getattr(organ_ntp, "values_by_dose", {})
+                organ_mse = getattr(organ_ntp, "mean_se_by_dose", None) or {}
                 organ_trend = getattr(organ_ntp, "trend_marker", "")
                 organ_responsive = getattr(organ_ntp, "responsive", False)
 
@@ -514,13 +515,14 @@ def build_organ_weight_table_from_sidecar(
                 val = organ_vbd.get(dose)
                 if val is None:
                     val = organ_vbd.get(str(dose), organ_vbd.get(str(float(dose))))
-                if val:
-                    abs_values[dk] = val
-                elif abs_at_dose.get(dose):
-                    # Fall back to computing from sidecar
-                    m, s = mean_se(abs_at_dose[dose])
-                    dec = adaptive_decimals(m)
-                    abs_values[dk] = format_mean_se(m, s, dec)
+                # Organ weights print at one precision per row (the
+                # published convention, tables.display_precision): from the
+                # unrounded statistics, else the sidecar values, keeping the
+                # NTP string's significance marker.
+                if val or abs_at_dose.get(dose):
+                    abs_values[dk] = format_row_cell(
+                        val or "", row_decimals(f"{organ} Absolute"),
+                        stats=_dose_value(organ_mse, dose), values=abs_at_dose.get(dose))
                 else:
                     abs_values[dk] = "\u2013"
 
@@ -534,6 +536,7 @@ def build_organ_weight_table_from_sidecar(
             # responsive gate OR BMDExpress produced a reportable BMD.
             abs_entry = {
                 "label": f"{organ} Absolute (g)",
+                "decimals": row_decimals(f"{organ} Absolute"),
                 "doses": sorted_doses,
                 "values": abs_values,
                 "bmd": bmd_text,
@@ -553,17 +556,16 @@ def build_organ_weight_table_from_sidecar(
             # the sidecar for display only, with BMD "ND".
             rel_ntp = sex_ntp.get(f"{organ} Relative")
             rel_vbd = _stat(rel_ntp, "values_by_dose", {}) if rel_ntp is not None else {}
+            rel_mse = (_stat(rel_ntp, "mean_se_by_dose", None) or {}) if rel_ntp is not None else {}
             rel_values: dict[str, str] = {}
             for dose in sorted_doses:
                 dk = js_dose_key(dose)
                 val = _dose_value(rel_vbd, dose)
                 dose_rel = rel_at_dose.get(dose, [])
-                if val:
-                    rel_values[dk] = val
-                elif dose_rel:
-                    m, s = mean_se(dose_rel)
-                    dec = adaptive_decimals(m)
-                    rel_values[dk] = format_mean_se(m, s, dec)
+                if val or dose_rel:
+                    rel_values[dk] = format_row_cell(
+                        val or "", row_decimals(f"{organ} Relative"),
+                        stats=_dose_value(rel_mse, dose), values=dose_rel)
                 else:
                     rel_values[dk] = "\u2013"
 
@@ -576,6 +578,7 @@ def build_organ_weight_table_from_sidecar(
                 rel_responsive = False
             rel_entry = {
                 "label": f"{organ} Relative (mg/g)",
+                "decimals": row_decimals(f"{organ} Relative"),
                 "doses": sorted_doses,
                 "values": rel_values,
                 "bmd": rel_bmd,

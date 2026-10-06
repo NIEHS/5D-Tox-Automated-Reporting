@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 6  # bumped: BMD strings at the report precision (report_bmd_decimals)
+_NTP_CACHE_SCHEMA_VERSION = 7  # bumped: rows carry the unrounded mean/SE (mean_se_by_dose)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 18  # bumped: attrition footnote day from the sidecar (was a fixed "study day 1")
+_SECTIONS_CACHE_SCHEMA_VERSION = 20  # bumped: mean ± SE at one precision per row (endpoint convention), halves rounded up
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -481,7 +481,8 @@ def _serialize_platform_tables(platform_tables: dict[str, dict[str, list]]) -> d
                 # asdict() handles all dataclass fields
                 d = asdict(row)
                 # Float keys → string keys for JSON roundtrip
-                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose"):
+                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose",
+                         "mean_se_by_dose"):
                     if d.get(fk_field):
                         d[fk_field] = {str(k): v for k, v in d[fk_field].items()}
                 # Coerce numpy scalar types to native Python types so orjson
@@ -527,7 +528,8 @@ def _deserialize_platform_tables(data: dict) -> dict[str, dict[str, list]]:
                 # Pop _bmds_input before constructing TableRow (not a field)
                 bmds_input = d.pop("_bmds_input", None)
                 # String keys → float keys
-                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose"):
+                for fk_field in ("values_by_dose", "n_by_dose", "missing_animals_by_dose",
+                         "mean_se_by_dose"):
                     if d.get(fk_field):
                         d[fk_field] = {float(k): v for k, v in d[fk_field].items()}
                 # Filter to known fields only (forward compat)

@@ -36,8 +36,12 @@ def test_organ_table_relative_row_uses_ntp_statistics():
     rows = {r["label"]: r for r in out["table_data"]["Male"]}
     assert "Liver Relative Absolute (g)" not in rows
     rel = rows["Liver Relative (mg/g)"]
-    assert rel["values"]["0"] == "40.0 ± 0.5**"
-    assert rel["values"]["4"] == "47.0 ± 0.6**"
+    # Markers come from the NTP statistics; the numbers are the animals' own,
+    # at the organ-weight precision (2 decimals) — NIEHS-10 prints the male
+    # control relative liver weight as "36.88 ± 0.52**".
+    assert rel["values"]["0"] == "36.88\u00a0±\u00a00.52**"
+    assert rel["values"]["4"].endswith("**")
+    assert rel["decimals"] == 2
     assert rel["bmd"] == "1.9" and rel["responsive"] and rel["emphasize"]
     assert rel["trend_marker"] == "**"
 

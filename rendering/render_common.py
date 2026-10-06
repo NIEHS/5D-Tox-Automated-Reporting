@@ -725,13 +725,16 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
             values = row.get("values", []) or []
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
-            # Re-round each mean ± SE cell to a uniform, magnitude-appropriate
-            # precision at render time (format_mean_se_display leaves n counts,
-            # incidence, and NA/ND/— sentinels untouched).  bmd/bmdl are not
+            # Re-round each mean ± SE cell at render time: at the row's own
+            # precision when the table builder stamped one (the endpoint's
+            # published convention — tables.display_precision), else by the
+            # cell's magnitude.  format_mean_se_display leaves n counts,
+            # incidence, and NA/ND/— sentinels untouched; bmd/bmdl are not
             # mean ± SE pairs and pass through unchanged.
+            decimals = row.get("decimals")
             cells = [
                 str(label),
-                *[format_mean_se_display(str(v)) for v in values],
+                *[format_mean_se_display(str(v), decimals) for v in values],
                 str(bmd),
                 str(bmdl),
             ]

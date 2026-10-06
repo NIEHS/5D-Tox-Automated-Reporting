@@ -61,6 +61,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from tables.display_precision import row_decimals
 from tables.table_builder_common import (
     apical_caption,
     js_dose_key as _js_dose_key,
@@ -79,6 +80,10 @@ from tables.table_builder_common import (
 # ---------------------------------------------------------------------------
 # Constants — NIEHS Table 2 fixed text
 # ---------------------------------------------------------------------------
+
+# Body weights print at one decimal in every NTP summary
+# (tables.display_precision.PUBLISHED_DECIMALS["body weight"]).
+_BW_DECIMALS = row_decimals("Body Weight")
 
 # The table caption template.  {compound} is replaced with the full
 # chemical name (table_caption name form, never abbreviated).
@@ -650,7 +655,7 @@ def build_body_weight_table_from_sidecar(
 
                 if animals_at_dose:
                     mean, se = _mean_se(animals_at_dose)
-                    values[dk] = _format_mean_se(mean, se)
+                    values[dk] = _format_mean_se(mean, se, _BW_DECIMALS)
                 else:
                     # No surviving animals at this dose for this day.
                     # Show dash (–) matching NIEHS convention.
@@ -674,6 +679,7 @@ def build_body_weight_table_from_sidecar(
                 "bmd": bmd_text,
                 "bmdl": bmdl_text,
                 "emphasize": is_reportable_bmd(bmd_text),
+                "decimals": _BW_DECIMALS,
             }
             if row_marker_refs:
                 entry["marker_refs"] = row_marker_refs

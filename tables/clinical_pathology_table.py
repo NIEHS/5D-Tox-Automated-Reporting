@@ -31,8 +31,11 @@ pipeline provides significance markers and BMD/BMDL values.
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+from tables.display_precision import recorded_decimals, row_decimals
 from tables.table_builder_common import (
     apical_caption,
+    format_row_cell,
     BMD_DEFINITION,
     significance_explanation,
     SIGNIFICANCE_MARKER_LEGEND,
@@ -86,6 +89,8 @@ FOOTNOTE_STAT_METHOD_CLINICAL = (
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
+
+
 
 def build_clinical_pathology_table_from_sidecar(
     platform: str,
@@ -175,6 +180,18 @@ def build_clinical_pathology_table_from_sidecar(
     # regardless of the statistical gate.
     serialized: dict[str, list[dict]] = {}
 
+    # How precisely each endpoint's individual values are recorded (Core
+    # Animals), for endpoints the published precision convention lacks.
+    raw_by_endpoint: dict[str, list] = {}
+    for sc in sidecar_data.values():
+        for rec in sc.get("animals", {}).values():
+            if is_biosampling(rec.get("selection")):
+                continue
+            for obs in rec.get("observations", []):
+                raw_by_endpoint.setdefault(str(obs.get("endpoint", "")).strip().lower(), []).append(
+                    obs.get("value"))
+    recorded_by_endpoint = {ep: recorded_decimals(vals) for ep, vals in raw_by_endpoint.items()}
+
     for sex in ("Male", "Female"):
         sex_stats = ntp_stats.get(sex, [])
         if not sex_stats:
@@ -231,6 +248,13 @@ def build_clinical_pathology_table_from_sidecar(
             # values_by_dose keys may be floats (TableRow objects from the
             # pipeline) or strings (dicts from the NTP stats cache).  Try
             # both: float first (live TableRow), then string (cached dict).
+            # One precision for the whole row — the endpoint's (published
+            # convention, else how precisely its values are recorded) — with
+            # each cell formatted from the unrounded mean/SE when the stats
+            # carry them (tables.display_precision).
+            decimals = row_decimals(label, recorded_by_endpoint.get(str(label).strip().lower()))
+            mse = (stat_row.get("mean_se_by_dose") if isinstance(stat_row, dict)
+                   else getattr(stat_row, "mean_se_by_dose", None)) or {}
             values: dict[str, str] = {}
             for dose in sorted_doses:
                 dk = js_dose_key(dose)
@@ -239,7 +263,11 @@ def build_clinical_pathology_table_from_sidecar(
                 if val is None:
                     # Try string key (NTP cache JSON uses string keys)
                     val = vbd.get(str(dose), vbd.get(str(float(dose))))
-                values[dk] = val if val is not None else "\u2013"
+                stats = mse.get(dose) or mse.get(str(dose)) or mse.get(str(float(dose)))
+                if val is None:
+                    values[dk] = "\u2013"
+                else:
+                    values[dk] = format_row_cell(str(val), decimals, stats=stats)
 
             # Row emphasis (bold) rule.  A row is emphasized when EITHER:
             #   - it passed the NTP statistical gate (`responsive`), OR
@@ -263,6 +291,8 @@ def build_clinical_pathology_table_from_sidecar(
                 "responsive": bool(responsive),
                 "emphasize": emphasize,
             }
+            if decimals is not None:
+                entry["decimals"] = decimals
             if trend_marker:
                 entry["trend_marker"] = trend_marker
 
