@@ -2,6 +2,12 @@
 """tooling/bookshelf_harvest.py — mirror the published NIEHS 5-day reports
 (RR-8, NIEHS-02 … NIEHS-13) from NCBI Bookshelf as a reference set.
 
+SUPERSEDED for the reference set: NCBI's litarch source bundles
+(ftp.ncbi.nlm.nih.gov/pub/litarch/<book>_<NBK>.tar.gz — BITS XML, PDF, images,
+supplementary files) are now in assets/cebs/_bookshelf/<REPORT>/ and
+tooling/bookshelf_breakdown.py breaks them down.  This scraper remains for a
+book with no litarch bundle.
+
 RUN THIS ON THE HOST.  From the sandbox every Bookshelf page (and E-utilities
 for db=books) answers with Google's reCAPTCHA "Checking your browser" page.
 Standard library only, so any python3 (>= 3.8) runs it from the repo root:
