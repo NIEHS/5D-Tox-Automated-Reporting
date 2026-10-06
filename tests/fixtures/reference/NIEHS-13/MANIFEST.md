@@ -23,6 +23,8 @@ Session-level comparison of the whole report: `assets/cebs/NIEHS-13-comparison.m
   bmdx-pipe's ExportBm2 (`assets/cebs/bm2json.sh`; needs Java, so tests read
   the JSON).  The project also carries NIEHS-12's (108020006/7) analyses.
 
+- **Body Weight Gain**: the Mean Body Weight Summary's gain row —
+  `tests/unit/test_reference_body_weight_gain.py`.
 - **Genomics**: the Top 10 GO Biological Process gene sets and Top 10 genes for
   all five tissues, and the most potent GO set per tissue —
   `tests/unit/test_reference_genomics.py` runs the report's own table code on
@@ -48,6 +50,7 @@ Session-level comparison of the whole report: `assets/cebs/NIEHS-13-comparison.m
 | `108020004_Individual_Animal_Hematology_Data_Rats.xlsx` | 18,680 | `7237e28baa2d78fd` |
 | `108020004_Individual_Animal_Organ_Weight_Data_Rats.xlsx` | 6,909 | `33518352fea28adb` |
 | `108020004_Individual_Animal_Removal_Reasons_Data_Rats.xlsx` | 6,552 | `a7467517f8464edd` |
+| `108020004_Mean_Body_Weight_Summary_Rats.pdf` | 87,337 | `4bbff660009191f1` |
 | `108020004_Most_Potent_GO_Biological_Process_In_Each_Tissue_Rats.pdf` | 50,061 | `32b8516b356b62d8` |
 | `108020004_PA06_Organ_Weights_Summary_Rats.pdf` | 64,203 | `191948f4942d5ef1` |
 | `108020004_PA41_Clinical_Chemistry_Summary_Rats.pdf` | 153,927 | `0216f061153116e9` |

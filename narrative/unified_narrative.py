@@ -784,7 +784,8 @@ def _build_animal_condition_paragraphs(
 
 
 def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
-                                   animals: str = "rats") -> Template:
+                                   animals: str = "rats",
+                                   subject: str = "Terminal body weight") -> Template:
     """The significant-body-weight sentence as author wording + typed data slots.
 
     `sex_lower` is baked into a Literal — a row's sex is structural and never
@@ -792,10 +793,12 @@ def _body_weight_sentence_template(sex_lower: str, has_loel: bool,
     reprocess flip means the author's wording may contradict the data → Phase 3
     review flag); the BMD/BMDL magnitudes are NUMERIC (silent-refresh-safe).  The
     LOEL clause is present only when a pairwise-significant dose exists, matching
-    the former `if low_dose is not None` branch exactly.
+    the former `if low_dose is not None` branch exactly.  `subject` names the
+    row ("Terminal body weight"; "Body weight gain" for the derived endpoint) —
+    structural, like the sex.
     """
     segs: list = [
-        Literal("Terminal body weight was significantly "),
+        Literal(f"{subject} was significantly "),
         Slot("direction", SlotKind.CATEGORICAL),
         Literal(f" in {sex_lower} {animals}"),
     ]
@@ -881,7 +884,9 @@ def _build_body_weight_paragraphs(
             # data reprocess stay separable (Phase 2, section_template).
             direction = _endpoint_direction(bw_row)
             low_dose = _lowest_sig_dose(bw_row)
-            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals)
+            subject = ("Body weight gain" if bw_row.label == "Body Weight Gain"
+                       else "Terminal body weight")
+            tpl = _body_weight_sentence_template(sex.lower(), low_dose is not None, animals, subject)
             binding = _bind_body_weight(bw_row, dose_unit, direction, low_dose)
             sex_sentences.append(render(tpl, binding))
         if sex_sentences:

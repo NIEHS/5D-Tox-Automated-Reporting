@@ -632,12 +632,19 @@ def _build_section_cards(
                                 "bmdl": row.bmdl_str if row.bmdl_str else "ND",
                             }
 
+                # The derived "Body Weight Gain" endpoint's statistics, per sex
+                # (bmdx-pipe derives it at ingest), for the table's gain row.
+                from tables.body_weight_table import BODY_WEIGHT_GAIN
+                gain_rows = {sex: r for sex, rows in sex_rows.items()
+                             for r in rows if r.label == BODY_WEIGHT_GAIN}
+
                 bw_result = build_body_weight_table_from_sidecar(
                     sidecar_paths,
                     bmd_results=bmd_results,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     design=design,
+                    gain_rows=gain_rows,
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -1546,8 +1553,11 @@ def _build_apical_bmd_summary(
                 # Body-weight endpoints are context only, never apical BMD
                 # candidates — the reference omits Terminal Body Weight and the
                 # per-study-day body-weight rows from Table 8 even though the
-                # terminal-day decrease is statistically responsive.
-                if platform == "Body Weight" or row.label == "Terminal Body Weight":
+                # terminal-day decrease is statistically responsive.  The one
+                # exception is the derived Body Weight Gain, which the NIEHS
+                # summaries list and model (NIEHS-10 male, NIEHS-13 mouse).
+                if row.label == "Terminal Body Weight" or (
+                        platform == "Body Weight" and row.label != "Body Weight Gain"):
                     continue
                 raw_entries.append({
                     "endpoint": _summary_endpoint_label(row.label, platform),

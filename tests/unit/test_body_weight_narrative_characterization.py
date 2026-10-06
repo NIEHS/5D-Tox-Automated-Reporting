@@ -84,3 +84,11 @@ def test_mixed_sexes_significant_then_no_change_sentence():
         "and 22.8 mg/kg/day, respectively. No significant changes in terminal "
         "body weight for female rats (Table 2) occurred with exposure to PFHxSAm."
     ]
+
+
+def test_gain_row_is_named_as_gain():
+    # The derived Body Weight Gain row is not "terminal body weight".
+    gain = _row("Body Weight Gain", "11.8", "6.0", {0.0: "14.5", 12.0: "21.8*", 37.0: "15.3"})
+    out = _build_body_weight_paragraphs({"Body Weight": {"Male": [gain]}}, "PFHxSAm", "mg/kg")
+    assert out[0].startswith("Body weight gain was significantly ")
+    assert "Terminal body weight" not in out[0]

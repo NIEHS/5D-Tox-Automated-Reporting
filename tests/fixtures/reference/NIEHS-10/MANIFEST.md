@@ -19,6 +19,8 @@ significance markers, tissue concentrations).  `report_values.json` holds the
 few values only the report text states (plasma half-lives).
 The BMD/BMDL/LOEL/NOEL summary (`…LOEL_and_NOEL_Summary….docx`) is the
 oracle for LOEL/NOEL (`tests/unit/test_reference_bmd_summary.py`).
+The Mean Body Weight Summary (`…Mean_Body_Weight_Summary.docx`) is the oracle for
+Body Weight Gain (`tests/unit/test_reference_body_weight_gain.py`).
 
 It is **not** a reference for BMDs or genomics: the published apical BMDs came
 from modified EPA BMDS 2.7 and the genomics from a BMDExpress 2.30 project
@@ -39,7 +41,9 @@ fingerprinting → sidecars).
 | `C20022-01_Individual_Animal_Hormone_Data.xlsx` | 8,157 | `ec9fce4bc7569da8` |
 | `C20022-01_Individual_Animal_Organ_Weight_Data.xlsx` | 10,360 | `e1bce1c28a6a5c51` |
 | `C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx` | 5,711 | `51dbb9a9a860beb9` |
+| `C20022-01_Mean_Body_Weight_Summary.docx` | 15,262 | `834f42152fb972db` |
 | `C20022-01_PA06_–_Organ_Weights_Summary.pdf` | 98,234 | `31b778cddb67c35f` |
 | `C20022-01_PA41_–_Clinical_Chemistry_Summary.pdf` | 312,847 | `a2f1a420dec8884b` |
 | `C20022-01_PA43_–_Hematology_Summary.pdf` | 345,880 | `df3f16d3cd9004d5` |
 | `C20022-01_PA48_-_Summary_of_Tissue_Concentration.pdf` | 32,726 | `61e6161326ab6a6c` |
+| `report_values.json` | 307 | `ff9c03aecdf66fdc` |

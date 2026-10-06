@@ -126,10 +126,6 @@ def test_niehs13_rat_loel_and_noel_reproduced(reference_session):
     assert got == {label: (_printed(loel), _printed(noel)) for label, (_, _, loel, noel) in published.items()}
 
 
-# NIEHS-10 endpoints the published summary lists that we do not compute.
-NIEHS10_NOT_COMPUTED = {("Male", "Body Weight Gain")}   # derived endpoint (terminal − initial)
-
-
 def _niehs10_published() -> dict[tuple[str, str], tuple[str, str]]:
     """{(sex, endpoint): (LOEL, NOEL)} from the published summary table."""
     doc = docx.Document(next((REFERENCE_DIR / "NIEHS-10").glob("*LOEL_and_NOEL_Summary*.docx")))
@@ -149,9 +145,6 @@ def test_niehs10_loel_and_noel_reproduced(reference_session):
     assert len(published) == 23
     got, expected = {}, {}
     for (sex, label), (loel, noel) in published.items():
-        if (sex, label) in NIEHS10_NOT_COMPUTED:
-            assert not [r for r in rows[sex] if _key(r) == _key(label)], label  # still not computed
-            continue
         row = rows[sex][_match(label, rows[sex])]
         got[(sex, label)] = (_dose_cell(row.loel), _dose_cell(row.noel))
         expected[(sex, label)] = (_printed(loel), _printed(noel))

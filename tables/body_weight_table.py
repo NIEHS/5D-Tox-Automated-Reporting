@@ -12,6 +12,9 @@ Structure:
         n       — sample sizes per dose group (superscript markers for attrition)
         0       — baseline body weights (study day 0)
         5       — terminal body weights (study day 5)
+        Body Weight Gain — per animal, terminal minus baseline weight, with the
+                  NTP markers and BMD of the derived endpoint (the 2025 reports'
+                  "Summary of Body Weights and Body Weight Gain"; NIEHS-13)
     Footnotes:
         BMD/BMDL definition line (always present, above the lettered footnotes)
         (a) Data format: "Data are displayed as mean ± standard error of the mean;
@@ -56,6 +59,7 @@ Output:
 
 from __future__ import annotations
 import json
+import re
 import math
 import os
 from collections import defaultdict
@@ -64,6 +68,8 @@ from dataclasses import dataclass, field
 from tables.display_precision import row_decimals
 from tables.table_builder_common import (
     apical_caption,
+    legend_footnote,
+    significance_explanation,
     js_dose_key as _js_dose_key,
     mean_se as _mean_se,
     format_mean_se as _format_mean_se,
@@ -84,12 +90,21 @@ from tables.table_builder_common import (
 # Body weights print at one decimal in every NTP summary
 # (tables.display_precision.PUBLISHED_DECIMALS["body weight"]).
 _BW_DECIMALS = row_decimals("Body Weight")
+_GAIN_DECIMALS = row_decimals("Body Weight Gain")
 
 # The table caption template.  {compound} is replaced with the full
 # chemical name (table_caption name form, never abbreviated).
 CAPTION_TEMPLATE = (
     "Summary of Body Weights of {subject} {treatment}"
 )
+# With the gain row (NIEHS-13 Table 2).
+CAPTION_TEMPLATE_WITH_GAIN = (
+    "Summary of Body Weights and Body Weight Gain of {subject} {treatment}"
+)
+
+# The derived endpoint's label — the pivot row bmdx-pipe writes
+# (pool_integrator._body_weight_gain) and the row this table prints.
+BODY_WEIGHT_GAIN = "Body Weight Gain"
 
 # Fixed footnotes that always appear on body weight tables.
 # These correspond to the superscript a,b markers on the "Study Day"
@@ -169,6 +184,7 @@ def build_body_weight_table_from_sidecar(
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
     design: dict | None = None,
+    gain_rows: dict | None = None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
@@ -195,6 +211,10 @@ def build_body_weight_table_from_sidecar(
         dose_unit:     Dose unit string (default "mg/kg").
         design:        Study design facts (pipeline.study_design) for the caption's
                        species, verb and duration; None ⇒ the standard design.
+        gain_rows:     {sex: TableRow} of the derived "Body Weight Gain" endpoint
+                       (bmdx_pipe.build_table_data) — its * / ** markers and, when
+                       the statistical gate passed, its BMD.  The gain VALUES are
+                       computed here from the Core Animals, like the other rows.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema,
@@ -219,6 +239,9 @@ def build_body_weight_table_from_sidecar(
 
     # {sex: {day: {dose: [value, ...]}}} — raw values for stats computation
     raw_values: dict[str, dict[str, dict[float, list[float]]]] = {}
+    # {sex: {animal: (dose, {day: weight})}} — pairs a Core animal's own
+    # baseline and terminal weights for the gain row
+    per_animal: dict[str, dict[str, tuple[float, dict[str, float]]]] = {}
 
     # {sex: {dose: {count_died: int, terminal_day: str}}} — attrition data
     # for footnote generation.  We track how many animals at each dose had
@@ -320,6 +343,7 @@ def build_body_weight_table_from_sidecar(
                     # animal still counts for attrition tracking above.
                     continue
                 sex_vals.setdefault(day, {}).setdefault(dose, []).append(fval)
+                per_animal.setdefault(sex, {}).setdefault(aid, (dose, {}))[1][day] = fval
 
         raw_values[sex] = sex_vals
         attrition_by_sex_dose[sex] = attrition
@@ -685,7 +709,18 @@ def build_body_weight_table_from_sidecar(
                 entry["marker_refs"] = row_marker_refs
             rows.append(entry)
 
+        gain = _gain_row(per_animal.get(sex, {}), display_days, sorted_doses,
+                         (gain_rows or {}).get(sex))
+        if gain:
+            rows.append(gain)
+
         serialized[sex] = rows
+
+    has_gain = any(r.get("label") == BODY_WEIGHT_GAIN for rows in serialized.values() for r in rows)
+    if has_gain:
+        # The gain row carries * / ** markers — explain them (as the organ
+        # weight and clinical pathology tables do).
+        footnotes.insert(1, legend_footnote(significance_explanation(dose_unit)))
 
     # Assign letters to the lettered footnotes and derive every row's
     # `markers` dict from its `marker_refs` — see the typed footnote
@@ -694,7 +729,8 @@ def build_body_weight_table_from_sidecar(
 
     return {
         "title": "Animal Condition, Body Weights, and Organ Weights",
-        "caption": apical_caption(CAPTION_TEMPLATE, serialized, compound_name, design),
+        "caption": apical_caption(CAPTION_TEMPLATE_WITH_GAIN if has_gain else CAPTION_TEMPLATE,
+                                  serialized, compound_name, design),
         "compound": compound_name,
         "dose_unit": dose_unit,
         "first_col_header": "Study Day",
@@ -708,3 +744,43 @@ def build_body_weight_table_from_sidecar(
 
 
 # find_sidecar_paths is imported from table_builder_common.py.
+
+
+def _gain_row(animals: dict, display_days: list[str], doses: list[float], stats) -> dict | None:
+    """The "Body Weight Gain" row: per Core animal, its terminal minus its
+    baseline weight (animals weighed on both days), mean ± SE per dose; the
+    * / ** marker of the derived endpoint's NTP statistics (``stats``, a
+    bmdx_pipe TableRow); its BMD/BMDL when the statistical gate passed, else
+    ND.  None when no animal has both weights — or when the session has no
+    statistics for the endpoint (ingested before bmdx-pipe derived it): an
+    unmarked row would read as "no significant change"."""
+    if stats is None:
+        return None
+    first, last = display_days[0], display_days[-1]
+    by_dose: dict[float, list[float]] = {}
+    for dose, days in animals.values():
+        if first in days and last in days and first != last:
+            by_dose.setdefault(dose, []).append(days[last] - days[first])
+    if not by_dose:
+        return None
+    values: dict[str, str] = {}
+    for dose in doses:
+        vals = by_dose.get(dose, [])
+        if not vals:
+            values[_js_dose_key(dose)] = "\u2013"
+            continue
+        mean, se = _mean_se(vals)
+        cell = stats.values_by_dose.get(dose, "") or ""
+        marker = re.search(r"\*+$", cell)
+        values[_js_dose_key(dose)] = _format_mean_se(mean, se, _GAIN_DECIMALS) + (marker.group(0) if marker else "")
+    bmd = (stats.bmd_str or "ND") if stats.responsive else "ND"
+    bmdl = (stats.bmdl_str or "ND") if stats.responsive else "ND"
+    return {
+        "label": BODY_WEIGHT_GAIN,
+        "doses": doses,
+        "values": values,
+        "bmd": bmd,
+        "bmdl": bmdl,
+        "emphasize": is_reportable_bmd(bmd),
+        "decimals": _GAIN_DECIMALS,
+    }

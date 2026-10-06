@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 24  # bumped: NOEL ND when not determined (NIEHS summaries)
+_SECTIONS_CACHE_SCHEMA_VERSION = 25  # bumped: body weight table gains the Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -373,7 +373,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 4  # bumped: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 5  # bumped: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:
