@@ -158,6 +158,9 @@ def reference_session(tmp_path, monkeypatch):
         session = reference_session("NIEHS-10", "DTXSID50469320")
         sidecars = find_sidecar_paths(str(session), "Tissue Concentration")
 
+    `study` limits it to one study's workbooks by their study-number prefix
+    (a report with a rat and a mouse study: "108020006").
+
     Returns the session directory.
     """
     from pipeline.pool_fingerprints import ensure_fingerprints
@@ -168,10 +171,10 @@ def reference_session(tmp_path, monkeypatch):
     _clear_server_state()
 
     def build(report: str, dtxsid: str, *, with_workbooks: bool = False,
-              units: bool = True) -> Path:
+              units: bool = True, study: str = "") -> Path:
         files = sessions_path / dtxsid / "files"
         files.mkdir(parents=True, exist_ok=True)
-        for xlsx in sorted((REFERENCE_DIR / report).glob("*Individual_Animal_*.xlsx")):
+        for xlsx in sorted((REFERENCE_DIR / report).glob(f"{study}*Individual_Animal_*.xlsx")):
             summary = convert_workbook(str(xlsx), str(files))
             assert summary["status"] in ("ok", "skipped"), summary
             if with_workbooks:

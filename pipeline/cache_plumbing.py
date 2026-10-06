@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 25  # bumped: body weight table gains the Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 26  # bumped: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:

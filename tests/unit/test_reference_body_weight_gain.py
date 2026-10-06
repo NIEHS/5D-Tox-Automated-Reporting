@@ -31,10 +31,8 @@ NB = " ± "
 def _ours(reference_session, report, dtxsid) -> dict[str, list[str]]:
     """{sex: [gain cell per dose]} from our body weight table — printed cells."""
     session = reference_session(report, dtxsid)
-    stats = _table_rows(session)
-    gain_rows = {sex: rows[BODY_WEIGHT_GAIN] for sex, rows in stats.items() if BODY_WEIGHT_GAIN in rows}
     table = build_body_weight_table_from_sidecar(find_sidecar_paths(str(session), "Body Weight"),
-                                                 gain_rows=gain_rows)
+                                                 stats_rows=_table_rows(session))
     assert "Body Weight Gain" in table["caption"]
     out = {}
     for sex, rows in table["table_data"].items():

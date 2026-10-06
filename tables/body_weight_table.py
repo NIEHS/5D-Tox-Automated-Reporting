@@ -180,11 +180,10 @@ def _detect_terminal_day(observations: list[dict]) -> str | None:
 
 def build_body_weight_table_from_sidecar(
     sidecar_paths: dict[str, str],
-    bmd_results: dict[str, dict[str, str]] | None = None,
+    stats_rows: dict[str, dict] | None = None,
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
     design: dict | None = None,
-    gain_rows: dict | None = None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
@@ -202,19 +201,19 @@ def build_body_weight_table_from_sidecar(
         sidecar_paths: {"Male": "/path/to/male.sidecar.json",
                         "Female": "/path/to/female.sidecar.json"}
                        One or both sexes may be present.
-        bmd_results:   Optional BMD/BMDL values from the pipeline, keyed by
-                       study day label: {"SD5": {"bmd": "123.4", "bmdl": "56.7"},
-                       "SD0": {"bmd": "NA", "bmdl": "NA"}}.
-                       If None, all BMD cells show "NA" (baseline) or "ND"
-                       (terminal, since BMD wasn't computed from sidecar data).
+        stats_rows:    {sex: {label: TableRow}} — the NTP statistics
+                       (bmdx_pipe.build_table_data) of each body weight pivot
+                       row: the study days ("SD0" … "SD5") and the derived
+                       "Body Weight Gain".  A row's * / ** markers come from it;
+                       so does its BMD/BMDL when the statistical gate passed
+                       (else ND); and an intermediate study day is shown only
+                       when its row is responsive (see _display_days).  The
+                       VALUES are computed here from the Core Animals.  None ⇒
+                       first and last day, unmarked, BMD ND, no gain row.
         compound_name: Full chemical name for the table caption.
         dose_unit:     Dose unit string (default "mg/kg").
         design:        Study design facts (pipeline.study_design) for the caption's
                        species, verb and duration; None ⇒ the standard design.
-        gain_rows:     {sex: TableRow} of the derived "Body Weight Gain" endpoint
-                       (bmdx_pipe.build_table_data) — its * / ** markers and, when
-                       the statistical gate passed, its BMD.  The gain VALUES are
-                       computed here from the Core Animals, like the other rows.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema,
@@ -224,8 +223,7 @@ def build_body_weight_table_from_sidecar(
 
     _facts = design_or_standard(design)
     animals, animal = species_plural(_facts), species_singular(_facts)
-    if bmd_results is None:
-        bmd_results = {}
+    stats_rows = stats_rows or {}
 
     # ── Load sidecars and extract per-dose-group stats ───────────────────
     # For each sex, group Core Animals by dose and study day, then compute
@@ -566,12 +564,8 @@ def build_body_weight_table_from_sidecar(
             "mass_attrition", target="cells",
         ))
 
-    # ── Determine which study days to show as TABLE ROWS ────────────────
-    # Only the baseline (SD0) and terminal (SD5) study days appear as data
-    # rows in the NIEHS Table 2.  Intermediate days (SD1 for moribund/dead
-    # animals) are captured in the attrition footnotes but do NOT get their
-    # own row.  The reference Table 2 has exactly: n, 0, 5 — nothing else.
-    display_days = ["SD0", expected_terminal_day]
+    # ── Which study days are TABLE ROWS: per sex, see _display_days ─────
+    first_day = "SD0"
 
     # ── Build the complete row grid per sex ──────────────────────────────
     # Python builds every row the table will contain — including the `n`
@@ -598,6 +592,8 @@ def build_body_weight_table_from_sidecar(
         if not sex_vals:
             continue
 
+        sex_stats = stats_rows.get(sex, {})
+        display_days = _display_days(first_day, expected_terminal_day, sex_stats)
         sex_n_marker_refs = n_row_marker_refs.get(sex, {})
         sex_dash_marker_refs = dash_marker_refs.get(sex, {})
         rows: list[dict] = []
@@ -651,26 +647,11 @@ def build_body_weight_table_from_sidecar(
             label = _study_day_label(day)
             is_baseline = (label == "0")
 
-            # BMD/BMDL business rules:
-            #   All data rows (baseline and terminal) show the pipeline's
-            #   BMD result.  The pipeline runs NTP stats on each probe
-            #   (SD0, SD5) from the inferred .bm2 data independently:
-            #
-            #   - If the statistical gate passes (significant Jonckheere
-            #     trend + pairwise) AND BMDExpress modeling
-            #     succeeds → numeric BMD/BMDL value
-            #   - If the gate doesn't pass OR modeling fails → "ND"
-            #     (not determined)
-            #
-            #   The NIEHS reference shows ND for both day 0 and day 5
-            #   body weights because the gate didn't pass in that study.
-            #   With different data (e.g., a compound that causes
-            #   immediate weight loss), day 0 could show a numeric BMD.
-            #   The inferred .bm2 is the source of truth for BMD values.
-            day_bmd = bmd_results.get(day, {})
-            bmd_text = day_bmd.get("bmd", "ND")
-            bmdl_text = day_bmd.get("bmdl", "ND")
-
+            # BMD/BMDL: the day's own NTP statistics — its modeled value when
+            # the statistical gate (significant trend + pairwise) passed, ND
+            # otherwise; same rule as the gain row.
+            day_stats = sex_stats.get(day)
+            bmd_text, bmdl_text = _bmd_cells(day_stats)
             values: dict[str, str] = {}
             row_marker_refs: dict[str, str] = {}
             for dose in sorted_doses:
@@ -679,7 +660,7 @@ def build_body_weight_table_from_sidecar(
 
                 if animals_at_dose:
                     mean, se = _mean_se(animals_at_dose)
-                    values[dk] = _format_mean_se(mean, se, _BW_DECIMALS)
+                    values[dk] = _format_mean_se(mean, se, _BW_DECIMALS) + _marker(day_stats, dose)
                 else:
                     # No surviving animals at this dose for this day.
                     # Show dash (–) matching NIEHS convention.
@@ -690,12 +671,10 @@ def build_body_weight_table_from_sidecar(
                     if ref:
                         row_marker_refs[dk] = ref
 
-            # Row emphasis (bold).  Body weight's sidecar builder runs no
-            # NTP gate, so there is no `responsive` flag to OR in — a study-
-            # day row is emphasized purely when its BMD column holds a real
-            # modeled value (is_reportable_bmd).  The n-row is built above
-            # with bmd "NA" and gets no `emphasize` key at all, so it never
-            # bolds.
+            # Row emphasis (bold): a study-day row is emphasized when its BMD
+            # column holds a real modeled value (is_reportable_bmd).  The
+            # n-row is built above with bmd "NA" and gets no `emphasize` key
+            # at all, so it never bolds.
             entry = {
                 "label": label,
                 "doses": sorted_doses,
@@ -709,17 +688,19 @@ def build_body_weight_table_from_sidecar(
                 entry["marker_refs"] = row_marker_refs
             rows.append(entry)
 
-        gain = _gain_row(per_animal.get(sex, {}), display_days, sorted_doses,
-                         (gain_rows or {}).get(sex))
+        gain = _gain_row(per_animal.get(sex, {}), (first_day, expected_terminal_day), sorted_doses,
+                         sex_stats.get(BODY_WEIGHT_GAIN))
         if gain:
             rows.append(gain)
 
         serialized[sex] = rows
 
     has_gain = any(r.get("label") == BODY_WEIGHT_GAIN for rows in serialized.values() for r in rows)
-    if has_gain:
-        # The gain row carries * / ** markers — explain them (as the organ
-        # weight and clinical pathology tables do).
+    if has_gain or any("*" in v for rows in serialized.values() for r in rows
+                       for v in r["values"].values()):
+        # The gain and study-day rows carry * / ** markers — explain them (as
+        # the organ weight and clinical pathology tables do).  With a gain row
+        # the legend stays even when nothing is significant, as published.
         footnotes.insert(1, legend_footnote(significance_explanation(dose_unit)))
 
     # Assign letters to the lettered footnotes and derive every row's
@@ -746,7 +727,45 @@ def build_body_weight_table_from_sidecar(
 # find_sidecar_paths is imported from table_builder_common.py.
 
 
-def _gain_row(animals: dict, display_days: list[str], doses: list[float], stats) -> dict | None:
+def _day_number(label: str) -> int | None:
+    m = re.fullmatch(r"SD(\d+)", label or "", re.I)
+    return int(m.group(1)) if m else None
+
+
+def _display_days(first: str, last: str, sex_stats: dict) -> list[str]:
+    """The study days a sex's table shows: the first and last day, plus every
+    day between them whose statistics are responsive (significant trend AND a
+    significant pairwise test).
+
+    The published tables follow exactly this: NIEHS-12 prints rats' day 4 and
+    mice's days 2–4 (responsive) but not the days with a trend alone (rats
+    1–3, mouse 1); NIEHS-13, and every earlier report, has no responsive
+    intermediate day and prints the first and last only.  The rule is the
+    one the reports' BMD data files use for an endpoint, so every
+    intermediate row printed is one that was modeled."""
+    lo, hi = _day_number(first), _day_number(last)
+    middle = sorted((d for d, r in sex_stats.items()
+                     if (n := _day_number(d)) is not None and lo is not None and hi is not None
+                     and lo < n < hi and getattr(r, "responsive", False)),
+                    key=_day_number)
+    return [first, *middle, last] if first != last else [first]
+
+
+def _marker(stats, dose: float) -> str:
+    """The * / ** of a dose cell in a row's NTP statistics ("" if none)."""
+    cell = (stats.values_by_dose.get(dose, "") or "") if stats is not None else ""
+    m = re.search(r"\*+$", cell)
+    return m.group(0) if m else ""
+
+
+def _bmd_cells(stats) -> tuple[str, str]:
+    """BMD/BMDL cells: the modeled values when the statistical gate passed, else ND."""
+    if stats is None or not stats.responsive:
+        return "ND", "ND"
+    return stats.bmd_str or "ND", stats.bmdl_str or "ND"
+
+
+def _gain_row(animals: dict, span: tuple[str, str], doses: list[float], stats) -> dict | None:
     """The "Body Weight Gain" row: per Core animal, its terminal minus its
     baseline weight (animals weighed on both days), mean ± SE per dose; the
     * / ** marker of the derived endpoint's NTP statistics (``stats``, a
@@ -756,7 +775,7 @@ def _gain_row(animals: dict, display_days: list[str], doses: list[float], stats)
     unmarked row would read as "no significant change"."""
     if stats is None:
         return None
-    first, last = display_days[0], display_days[-1]
+    first, last = span
     by_dose: dict[float, list[float]] = {}
     for dose, days in animals.values():
         if first in days and last in days and first != last:
@@ -770,11 +789,8 @@ def _gain_row(animals: dict, display_days: list[str], doses: list[float], stats)
             values[_js_dose_key(dose)] = "\u2013"
             continue
         mean, se = _mean_se(vals)
-        cell = stats.values_by_dose.get(dose, "") or ""
-        marker = re.search(r"\*+$", cell)
-        values[_js_dose_key(dose)] = _format_mean_se(mean, se, _GAIN_DECIMALS) + (marker.group(0) if marker else "")
-    bmd = (stats.bmd_str or "ND") if stats.responsive else "ND"
-    bmdl = (stats.bmdl_str or "ND") if stats.responsive else "ND"
+        values[_js_dose_key(dose)] = _format_mean_se(mean, se, _GAIN_DECIMALS) + _marker(stats, dose)
+    bmd, bmdl = _bmd_cells(stats)
     return {
         "label": BODY_WEIGHT_GAIN,
         "doses": doses,

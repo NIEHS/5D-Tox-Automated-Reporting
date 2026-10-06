@@ -627,11 +627,13 @@ def _round_half_up(value: float, decimals: int) -> str:
     """`value` at `decimals` places, halves rounded up as printed tables do.
     Binary floats miss exact decimal halves — the mean of 1.19, 1.16, 1.14
     and 1.21 is 1.175 but computes as 1.17499…, which f"{:.2f}" prints as
-    "1.17" — so the value is first settled to 10 significant decimals."""
+    "1.17" — so the value is first settled to 10 significant decimals.  A
+    value that rounds to zero prints unsigned: a mean gain of -0.04 g is
+    "0.0", as NIEHS-12 prints it, not "-0.0"."""
     from decimal import ROUND_HALF_UP, Decimal
 
-    q = Decimal(1).scaleb(-decimals)
-    return str(Decimal(repr(round(value, 10))).quantize(q, rounding=ROUND_HALF_UP))
+    q = Decimal(repr(round(value, 10))).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+    return str(q.copy_abs() if q == 0 else q)
 
 
 def format_row_cell(shown, decimals: int | None, stats=None, values=None) -> str:

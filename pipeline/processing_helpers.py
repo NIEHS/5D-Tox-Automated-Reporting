@@ -618,33 +618,17 @@ def _build_section_cards(
             sidecar_paths = find_sidecar_paths(session_dir, platform="Body Weight")
 
             if sidecar_paths:
-                # Extract BMD/BMDL results from the pipeline's TableRow data
-                # so the sidecar builder can display them in the BMD columns.
-                # The pipeline computes BMD from the pivoted data — we just
-                # carry those results through to the sidecar-built table.
-                bmd_results: dict[str, dict[str, str]] = {}
-                for sex, rows in responsive_rows.items():
-                    for row in rows:
-                        # row.label is "SD0", "SD5", etc.
-                        if row.label not in bmd_results:
-                            bmd_results[row.label] = {
-                                "bmd": row.bmd_str if row.bmd_str else "ND",
-                                "bmdl": row.bmdl_str if row.bmdl_str else "ND",
-                            }
-
-                # The derived "Body Weight Gain" endpoint's statistics, per sex
-                # (bmdx-pipe derives it at ingest), for the table's gain row.
-                from tables.body_weight_table import BODY_WEIGHT_GAIN
-                gain_rows = {sex: r for sex, rows in sex_rows.items()
-                             for r in rows if r.label == BODY_WEIGHT_GAIN}
+                # Each sex's NTP statistics per pivot row (the study days and
+                # the derived "Body Weight Gain"): markers, BMD/BMDL and which
+                # intermediate days are shown come from these, per sex.
+                stats_rows = {sex: {r.label: r for r in rows} for sex, rows in sex_rows.items()}
 
                 bw_result = build_body_weight_table_from_sidecar(
                     sidecar_paths,
-                    bmd_results=bmd_results,
+                    stats_rows=stats_rows,
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     design=design,
-                    gain_rows=gain_rows,
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -653,9 +637,7 @@ def _build_section_cards(
                 # format expected by the UI.
                 # Pass only responsive rows to the narrative generator.
                 # When empty (gate didn't pass), it produces "no significant
-                # changes" text — which is correct.  DO NOT fall back to
-                # sex_rows because that includes the old pre-sidecar pivot
-                # rows which may have stale responsive=True flags.
+                # changes" text — which is correct.
                 narrative = generate_platform_narrative(
                     platform, responsive_rows, compound_name, dose_unit, design,
                 )
