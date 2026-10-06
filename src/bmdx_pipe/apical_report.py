@@ -338,6 +338,8 @@ class TableRow:
         loel:           Lowest observed effect level (mg/kg), or None
         noel:           No observed effect level (mg/kg), or None
         direction:      "UP" or "DOWN" — direction of change vs control
+        mean_se_by_dose: Dict mapping dose → [mean, se] unrounded (se None for
+                        n = 1) — the numbers values_by_dose was formatted from.
         responsive:     True if both Jonckheere trend AND Dunnett pairwise tests
                         are significant (p ≤ 0.05).  Used to filter main body
                         tables (Tables 2-7) per NIEHS business rule: only
@@ -367,6 +369,11 @@ class TableRow:
     # Maps dose → number of animals in the xlsx roster that have no data
     # for this endpoint.  Empty dict means no missing animals.
     missing_animals_by_dose: dict[float, int] = field(default_factory=dict)
+    # The unrounded statistics behind values_by_dose: dose -> [mean, se] (se
+    # None for a single animal; absent when the group has no data).  Lets a
+    # report print each row at the endpoint's own precision instead of the
+    # magnitude-based one baked into values_by_dose.
+    mean_se_by_dose: dict[float, list] = field(default_factory=dict)
 
 
 def _safe_float(val) -> float | None:
@@ -828,12 +835,15 @@ def build_table_data(
         # Build the formatted values for each dose group
         values_by_dose = {}
         n_by_dose = {}
+        mean_se_by_dose = {}
 
         for dose in sorted_doses:
             n = n_per_dose[dose]
             mean = mean_per_dose[dose]
             se = se_per_dose[dose]
             n_by_dose[dose] = n
+            if mean is not None:
+                mean_se_by_dose[dose] = [float(mean), float(se) if se is not None else None]
 
             # Format: "mean ± SE" with significance marker
             if dose == control_dose:
@@ -899,6 +909,7 @@ def build_table_data(
             responsive=report_bmd,
             pairwise_method=pairwise_method,
             trend_p=jonck_p,
+            mean_se_by_dose=mean_se_by_dose,
         )
         tables[sex].append(row)
 
