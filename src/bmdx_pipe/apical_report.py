@@ -489,45 +489,59 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
     """
     import math
 
-    # Build @ref → object lookups for experiments and probeResponses.
-    # Jackson serialization uses integer @ref/@id pairs for object identity.
-    ref_to_exp_name: dict[int, str] = {}
-    ref_to_probe_id: dict[int, str] = {}
-    # Also need @ref → experiment for LNZD calculation
-    ref_to_exp: dict[int, dict] = {}
+    # Resolve Jackson object identity.  Each object is serialized inline the
+    # first time it appears, carrying its id as "@ref", and as that bare
+    # integer afterwards.  An experiment usually appears first in
+    # doseResponseExperiments, but a project can also carry BMD results for
+    # experiments it does not list (the NIEHS-13 non-genomic project holds
+    # NIEHS-12's analyses), which are then inline inside the bMDResult.
+    exps: dict[int, dict] = {}
+    probes: dict[int, dict] = {}       # probeResponse objects
+    probe_objs: dict[int, dict] = {}   # their Probe objects (shared across experiments)
+
+    def _register_exp(exp: dict) -> None:
+        if exp.get("@ref") is not None:
+            exps[exp["@ref"]] = exp
+        for pr in exp.get("probeResponses", []) or []:
+            if isinstance(pr, dict) and pr.get("@ref") is not None:
+                probes[pr["@ref"]] = pr
+                _resolve(pr.get("probe"), probe_objs)
+
+    def _resolve(obj, table: dict[int, dict], register=None) -> dict | None:
+        if isinstance(obj, dict):
+            if register:
+                register(obj)
+            elif obj.get("@ref") is not None:
+                table[obj["@ref"]] = obj
+            return obj
+        return table.get(obj) if isinstance(obj, int) else None
+
     for exp in bm2_json.get("doseResponseExperiments", []):
-        ref = exp.get("@ref")
-        if ref is not None:
-            ref_to_exp_name[ref] = exp["name"]
-            ref_to_exp[ref] = exp
-        for pr in exp.get("probeResponses", []):
-            pref = pr.get("@ref")
-            if pref is not None:
-                ref_to_probe_id[pref] = pr.get("probe", {}).get("id", "")
+        _register_exp(exp)
 
     # Cache the dose range per experiment: the lowest nonzero dose (NR when
     # BMD < LNZD/3) and the highest dose (NVM when BMD exceeds it).
-    dose_range_cache: dict[int, tuple[float, float]] = {}
+    dose_range_cache: dict[str, tuple[float, float]] = {}
 
     lookup: dict[tuple[str, str], dict] = {}
     for result in bm2_json.get("bMDResult", []):
-        exp_ref = result.get("doseResponseExperiment")
-        exp_name = ref_to_exp_name.get(exp_ref, "")
+        exp = _resolve(result.get("doseResponseExperiment"), exps, _register_exp)
+        exp_name = (exp or {}).get("name", "")
         if not exp_name:
             continue
 
-        # Dose range for this experiment (cached per @ref)
-        if exp_ref not in dose_range_cache:
-            exp = ref_to_exp.get(exp_ref, {})
-            doses = [t["dose"] for t in exp.get("treatments", [])]
+        # Dose range for this experiment (cached per name)
+        if exp_name not in dose_range_cache:
+            doses = [t["dose"] for t in exp.get("treatments", []) if isinstance(t, dict)]
             nonzero = [d for d in doses if d > 0]
-            dose_range_cache[exp_ref] = ((min(nonzero), max(nonzero))
-                                         if nonzero else (0.0, 0.0))
-        lnzd, high = dose_range_cache[exp_ref]
+            dose_range_cache[exp_name] = ((min(nonzero), max(nonzero))
+                                          if nonzero else (0.0, 0.0))
+        lnzd, high = dose_range_cache[exp_name]
 
         for psr in result.get("probeStatResults", []):
-            pr_ref = psr.get("probeResponse")
-            probe_id = ref_to_probe_id.get(pr_ref, "")
+            pr = _resolve(psr.get("probeResponse"), probes)
+            probe = _resolve((pr or {}).get("probe"), probe_objs)
+            probe_id = (probe or {}).get("id", "")
             if not probe_id:
                 continue
 

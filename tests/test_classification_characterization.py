@@ -14,7 +14,7 @@ top dose groups died out — producing a spurious dose_mismatch ERROR. ADR-0017 
 make the xlsx classify as `tox_study` (from its own "Key to Column Labels" content),
 at which point THESE expected values change in a controlled, reviewable way.
 
-Driven over the real golden fixture in the sibling rlm-bmdx repo.
+Driven over the given-PFHxSAm regression fixture in the sibling rlm-bmdx repo.
 """
 
 import os
@@ -30,10 +30,10 @@ from bmdx_pipe.file_integrator import (
     validate_pool,
 )
 
-# The golden fixture lives in the sibling repo; skip cleanly if it's absent.
-_GOLDEN = Path("/workspace/rlm-bmdx/tests/fixtures/golden/DTXSID50469320/files")
+# The fixture lives in the sibling repo; skip cleanly if it's absent.
+_GOLDEN = Path("/workspace/rlm-bmdx/tests/fixtures/regression/given-pfhxsam-2026/files")
 pytestmark = pytest.mark.skipif(
-    not _GOLDEN.exists(), reason="rlm-bmdx golden fixture not present"
+    not _GOLDEN.exists(), reason="rlm-bmdx given-PFHxSAm regression fixture not present"
 )
 
 

@@ -61,3 +61,29 @@ def test_format_bmd_precision():
     assert format_bmd(0.94, 1) == "0.9"
     assert format_bmd(0.034, 1) == "0.034"
     assert format_bmd(63.04) == "63"
+
+
+def test_bmd_lookup_resolves_inline_and_referenced_jackson_objects():
+    # Jackson writes each object inline on first sight (its id as "@ref") and
+    # as the bare id afterwards.  The NIEHS-13 non-genomic project carries BMD
+    # results for experiments it does not list — inline inside the bMDResult.
+    from bmdx_pipe.apical_report import _build_bmd_result_lookup
+
+    probe = {"@ref": 9, "id": "Liver Weight Relative"}
+    listed = {"@ref": 1, "name": "rat", "treatments": [{"dose": d} for d in RAT_DOSES],
+              "probeResponses": [{"@ref": 2, "probe": probe}]}
+    bsr = {"success": "true", "rSquared": 0.99}
+    project = {
+        "doseResponseExperiments": [listed],
+        "bMDResult": [
+            {"doseResponseExperiment": {"@ref": 5, "name": "other", "treatments": [{"dose": 0}, {"dose": 10}],
+                                        "probeResponses": [{"@ref": 6, "probe": {"@ref": 7, "id": "SD2"}}]},
+             "probeStatResults": [{"probeResponse": 6, "bestBMD": 5.0, "bestBMDL": 2.0, "bestStatResult": bsr}]},
+            {"doseResponseExperiment": 1,
+             "probeStatResults": [{"probeResponse": 2, "bestBMD": 191.38, "bestBMDL": 127.62,
+                                   "bestStatResult": bsr}]},
+        ],
+    }
+    lookup = _build_bmd_result_lookup(project)
+    assert lookup[("rat", "Liver Weight Relative")]["status"] == "viable"
+    assert lookup[("other", "SD2")]["bmd"] == 5.0
