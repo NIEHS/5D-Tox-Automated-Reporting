@@ -978,7 +978,7 @@ def scaffold_report_data(
         "paragraphs": [],
         "endpoints": [
             # One placeholder row so the heading and table structure appear
-            {"sex": "Male", "endpoint": "—", "bmd": None, "bmdl": None, "loel": None, "noel": None, "direction": "—"},
+            {"sex": "Male", "endpoint": "—", "bmd": None, "bmdl": None, "loel": "—", "noel": "—", "direction": "—"},
         ],
     }
 

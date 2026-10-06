@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 7  # bumped: rows carry the unrounded mean/SE (mean_se_by_dose)
+_NTP_CACHE_SCHEMA_VERSION = 8  # bumped: NOEL None (ND) when no LOEL or no dose below it. Was 7: rows carry the unrounded mean/SE (mean_se_by_dose)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 23  # bumped: total protein and nRBC print 2 decimals (PA41/PA43 convention)
+_SECTIONS_CACHE_SCHEMA_VERSION = 24  # bumped: NOEL ND when not determined (NIEHS summaries)
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -373,7 +373,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 3  # bumped: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 4  # bumped: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:

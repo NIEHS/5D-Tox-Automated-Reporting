@@ -875,12 +875,20 @@ def _finite_float(v) -> float | None:
     return f if math.isfinite(f) else None
 
 
+# A LOEL/NOEL that statistics did not determine (no significant dose group;
+# no tested dose below the LOEL) — printed and defined as NIEHS does.
+NOT_DETERMINED = "ND"
+ND_DEFINITION = ("ND = not determined: no dose group differed significantly from "
+                 "the control (LOEL), or no dose below the LOEL was tested (NOEL).")
+
+
 def _dose_cell(value) -> str:
     """A LOEL/NOEL cell: the dose as the report labels doses ("125", "62.5",
-    "1,000" — format_dose_label), not the stored float ("125.0"); "—" when
-    absent.  A non-numeric value (an upstream label) passes through."""
+    "1,000" — format_dose_label), not the stored float ("125.0"); "ND" when
+    not determined (None).  A non-numeric value (an upstream label) passes
+    through."""
     if value is None or value == "":
-        return "—"
+        return NOT_DETERMINED
     try:
         return format_dose_label(float(value))
     except (TypeError, ValueError):
@@ -919,6 +927,8 @@ def bmd_summary_plan(node: DocNode, data: dict) -> BmdSummaryPlan:
         # typed records, defaulting to the standard legend.
         for fn in summary.get("footnotes") or [BMD_SUMMARY_LEGEND]:
             footnotes.append(fn if isinstance(fn, dict) else {"kind": "definition", "text": str(fn)})
+        if any(NOT_DETERMINED in r[4:6] for r in rows or []):
+            footnotes.append({"kind": "definition", "text": ND_DEFINITION})
         note = inferred_bmr_footnote(endpoints)
         if note:
             footnotes.append(note)

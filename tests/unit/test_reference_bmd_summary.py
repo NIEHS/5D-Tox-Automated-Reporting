@@ -1,4 +1,4 @@
-"""NIEHS-13's published apical BMD/BMDL/LOEL/NOEL summary, reproduced.
+"""The published apical BMD/BMDL/LOEL/NOEL summaries, reproduced.
 
 Oracle: the published "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints"
 (rat, 108020004) in the CEBS package.
@@ -15,6 +15,12 @@ Oracle: the published "BMD, BMDL, LOEL, and NOEL Summary for Apical Endpoints"
   _read_pivot, standing in for Java's IntegrateProject import; checked against
   the Java-built integrated.json of the NIEHS-13 session (same experiment
   names, platforms, doses, endpoints and responses on all four platforms).
+- NIEHS-10 LOEL/NOEL, the same way, against its published summary (CEBS
+  C20022-01 …LOEL_and_NOEL_Summary….docx, both sexes, hormones included).  Its
+  BMDs came from modified BMDS 2.7 (not in the fixture), so only LOEL/NOEL.
+
+LOEL/NOEL are compared as the report prints them (render_common._dose_cell):
+"ND" — not determined — when there is no LOEL, or no tested dose below it.
 """
 
 import json
@@ -22,10 +28,11 @@ import math
 import re
 from pathlib import Path
 
+import docx
 import pypdf
-import pytest
 from bmdx_pipe.apical_report import _build_bmd_result_lookup, build_table_data, format_bmd
 
+from rendering.render_common import _dose_cell
 from tests.conftest import REFERENCE_DIR
 
 D = REFERENCE_DIR / "NIEHS-13"
@@ -97,18 +104,55 @@ def test_niehs13_rat_bmd_and_bmdl_reproduced():
             assert (format_bmd(r["bmd"], 1), format_bmd(r["bmdl"], 1)) == (bmd, bmdl), (label, r)
 
 
-@pytest.fixture
-def table_rows(reference_session):
-    session = reference_session("NIEHS-13", "DTXSID1020431")
+def _table_rows(session) -> dict:
+    """{sex: {endpoint: TableRow}} from build_table_data over the session's pivots."""
     project = {"doseResponseExperiments": [_read_pivot(p) for p in sorted((session / "files").glob("*.txt"))],
                "bMDResult": []}
-    return {row.label: row for row in build_table_data(project, {})["Female"]}
+    return {sex: {row.label: row for row in rows} for sex, rows in build_table_data(project, {}).items()}
 
 
-def test_niehs13_rat_loel_and_noel_reproduced(table_rows):
+def _printed(value: str) -> str:
+    """A published LOEL/NOEL cell ("111.0", "0.15", "ND") as our report prints it."""
+    return value if value == "ND" else _dose_cell(float(value))
+
+
+def test_niehs13_rat_loel_and_noel_reproduced(reference_session):
+    rows = _table_rows(reference_session("NIEHS-13", "DTXSID1020431"))["Female"]
     published = _published()
     got = {}
-    for label, (_bmd, _bmdl, loel, noel) in published.items():
-        row = table_rows[_match(label, table_rows)]
-        got[label] = (row.loel, row.noel)
-    assert got == {label: (float(loel), float(noel)) for label, (_, _, loel, noel) in published.items()}
+    for label in published:
+        row = rows[_match(label, rows)]
+        got[label] = (_dose_cell(row.loel), _dose_cell(row.noel))
+    assert got == {label: (_printed(loel), _printed(noel)) for label, (_, _, loel, noel) in published.items()}
+
+
+# NIEHS-10 endpoints the published summary lists that we do not compute.
+NIEHS10_NOT_COMPUTED = {("Male", "Body Weight Gain")}   # derived endpoint (terminal − initial)
+
+
+def _niehs10_published() -> dict[tuple[str, str], tuple[str, str]]:
+    """{(sex, endpoint): (LOEL, NOEL)} from the published summary table."""
+    doc = docx.Document(next((REFERENCE_DIR / "NIEHS-10").glob("*LOEL_and_NOEL_Summary*.docx")))
+    out, sex = {}, None
+    for row in doc.tables[0].rows[1:]:
+        cells = [c.text.strip() for c in row.cells]
+        if cells[0] in ("Male", "Female"):
+            sex = cells[0]
+            continue
+        out[(sex, cells[0])] = (cells[3], cells[4])
+    return out
+
+
+def test_niehs10_loel_and_noel_reproduced(reference_session):
+    rows = _table_rows(reference_session("NIEHS-10", "DTXSID50469320"))
+    published = _niehs10_published()
+    assert len(published) == 23
+    got, expected = {}, {}
+    for (sex, label), (loel, noel) in published.items():
+        if (sex, label) in NIEHS10_NOT_COMPUTED:
+            assert not [r for r in rows[sex] if _key(r) == _key(label)], label  # still not computed
+            continue
+        row = rows[sex][_match(label, rows[sex])]
+        got[(sex, label)] = (_dose_cell(row.loel), _dose_cell(row.noel))
+        expected[(sex, label)] = (_printed(loel), _printed(noel))
+    assert got == expected

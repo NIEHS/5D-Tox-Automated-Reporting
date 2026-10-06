@@ -98,5 +98,7 @@ def test_loel_noel_print_as_dose_labels():
          "loel": 1000.0, "noel": None, "direction": "UP"},
     ]
     node = DocNode(id="bmd-summary", title="BMD Summary", node_type="bmd-summary")
-    rows = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}}).rows
-    assert [r[4:6] for r in rows] == [["250", "62.5"], ["1,000", "—"]]
+    plan = bmd_summary_plan(node, {"bmd_summary": {"endpoints": endpoints}})
+    # A NOEL statistics did not determine prints "ND", defined under the table.
+    assert [r[4:6] for r in plan.rows] == [["250", "62.5"], ["1,000", "ND"]]
+    assert any(f["text"].startswith("ND = not determined") for f in plan.footnotes)
