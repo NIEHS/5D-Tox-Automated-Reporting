@@ -31,7 +31,7 @@ def test_top_genes_are_gene_level_filtered_and_ranked_by_median():
     assert [g["gene_symbol"] for g in top] == ["Cyp2b2", "Cyp2b1", "Car3"]
     assert top[1]["entrez_id"] == "24300"
     assert top[1]["probe_id"] == "CYP2B1_32451,CYP2B2_32473"
-    assert top[1]["fold_change"] == (303.0 + 87.1) / 2      # median over the gene's probes
+    assert top[1]["fold_change"] == (303.0 + 87.1) / 2      # mean over the gene's probes
     assert top[2]["direction"] == "down" and top[2]["fold_change"] == -2.3
     assert [g["rank"] for g in top] == [1, 2, 3]
 

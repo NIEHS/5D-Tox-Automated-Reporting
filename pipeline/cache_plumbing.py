@@ -331,7 +331,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
 # Bump this when the genomics cache schema changes (new fields added/removed).
 # Changing this constant forces all existing caches to be regenerated on the
 # next reprocess, even when the input data and filter parameters are identical.
-_GENOMICS_CACHE_SCHEMA_VERSION = 6  # bumped: sections stamped with bmd_decimals. Was 5: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
+_GENOMICS_CACHE_SCHEMA_VERSION = 7  # bumped: gene-level fold change = mean over probes (published NIEHS-13); species via chip @ref. Was 6: sections stamped with bmd_decimals. Was 5: extraction reads the genomics sidecar (ADR-0016 Phase D); key folds in the sidecar signature
 
 # Bump when the chart-rendering algorithm changes (jitter formula,
 # axis configuration, etc.) without changing the underlying gene-set

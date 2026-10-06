@@ -97,6 +97,23 @@ def go_direction_counts(go_items: list[dict]) -> dict[str, tuple[int, int]]:
     return out
 
 
+def chip_species_by_experiment(integrated: dict) -> dict[str, str | None]:
+    """{experiment name: its chip's species}.  Jackson writes a shared chip
+    inline on the first experiment that uses it and as a bare @ref id on the
+    rest — both are resolved (reading only the inline ones left every later
+    experiment without a species)."""
+    exps = integrated.get("doseResponseExperiments", []) or []
+    chips = {c["@ref"]: c for c in (e.get("chip") for e in exps)
+             if isinstance(c, dict) and c.get("@ref") is not None}
+    out: dict[str, str | None] = {}
+    for e in exps:
+        chip = e.get("chip")
+        chip = chip if isinstance(chip, dict) else chips.get(chip) if isinstance(chip, int) else None
+        if chip:
+            out[e.get("name")] = chip.get("species")
+    return out
+
+
 def _display_symbol(symbol: str, species: str | None) -> str:
     """BMDExpress stores symbols lower-case.  Rodent symbols are written with an
     initial capital (Cyp2b1); human symbols are upper case (CYP2B6)."""
@@ -115,8 +132,11 @@ def gene_level_top_genes(
     ranked by BMD median across the gene's probes.
 
     ``probe_fold_change`` maps probe id → that probe's signed maximum fold
-    change; a gene's fold change is the median magnitude over its probes,
-    signed by the gene's direction."""
+    change; a gene's fold change is the MEAN magnitude over its probes, signed
+    by the gene's direction — the published NIEHS-13 tables (Cyp4a2, three
+    probes 2.30/3.48/3.45, prints 3.1; the median would be 3.4).  BMDExpress's
+    own GENE fold-change fields are empty in these projects.  (The BMD stays
+    the median — bmdMedian — as the table title says.)"""
     rows = []
     for r in gene_items:
         if (r.get("genesThatPassedAllFilters") or 0) < 1:
@@ -129,7 +149,7 @@ def gene_level_top_genes(
         direction = "up" if up and not down else "down" if down and not up else "conflict"
         probes = [p for p in str(r.get("probeIds") or "").split(",") if p]
         fcs = [abs(probe_fold_change[p]) for p in probes if _float(probe_fold_change.get(p)) is not None]
-        fc = statistics.median(fcs) if fcs else None
+        fc = statistics.fmean(fcs) if fcs else None
         if fc is not None and direction == "down":
             fc = -fc
         rows.append({

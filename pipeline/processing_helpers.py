@@ -1097,18 +1097,14 @@ async def _extract_genomics(
     # them (2025+ analyses): the gene-level Top-10 and the GO direction counts
     # the published reports print.  Absent ⇒ the per-probe fallbacks below.
     from genomics.bmdexpress_categories import (
-        category_analyses_by_experiment, gene_level_top_genes,
+        category_analyses_by_experiment, chip_species_by_experiment, gene_level_top_genes,
         genomic_bmr, go_direction_counts, report_bmd_decimals,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
     # Every BMD in the report prints at one precision; stamped on each section
     # so the narrative builders read it from the payload they already get.
     bmd_decimals = report_bmd_decimals(integrated)
-    chip_species = {
-        e.get("name"): (e.get("chip") or {}).get("species")
-        for e in integrated.get("doseResponseExperiments", []) or []
-        if isinstance(e.get("chip"), dict)
-    }
+    chip_species = chip_species_by_experiment(integrated)
 
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
