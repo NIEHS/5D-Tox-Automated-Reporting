@@ -14,7 +14,7 @@ import pytest
 
 from tables.toxicokinetics import compute_toxicokinetics, _half_life
 
-_GOLDEN = Path(__file__).parents[1] / "fixtures" / "golden" / "DTXSID50469320" / "files"
+_GOLDEN = Path(__file__).parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026" / "files"
 # The live session copy is the working data; prefer the golden fixture, fall back
 # to the live session if the fixture lacks the tissue-conc sidecars.
 _LIVE = Path("sessions/DTXSID50469320/files")

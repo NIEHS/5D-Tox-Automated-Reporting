@@ -38,7 +38,7 @@ class TestPoolIntegrate:
             },
         }
 
-    def test_integrate_returns_200(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_returns_200(self, given_pfhxsam, mock_bmdx_pipe):
         """
         Given a validated session with fingerprints and coverage matrix,
         integration should succeed and return 200.
@@ -61,7 +61,7 @@ class TestPoolIntegrate:
         )
         assert resp.status_code == 200, f"Integrate failed: {resp.text}"
 
-    def test_integrate_caches_in_memory(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_caches_in_memory(self, given_pfhxsam, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool dict.
 
         Note: integrated.json is written by bmdx_pipe.integrate_pool() itself
@@ -84,7 +84,7 @@ class TestPoolIntegrate:
         cached = pool_orchestrator._integrated_pool["DTXSID50469320"]
         assert "doseResponseExperiments" in cached
 
-    def test_integrate_populates_memory(self, golden_50469320, mock_bmdx_pipe):
+    def test_integrate_populates_memory(self, given_pfhxsam, mock_bmdx_pipe):
         """Integration should cache the result in _integrated_pool."""
         from fastapi.testclient import TestClient
         from web_routes.background_server import app

@@ -13,7 +13,7 @@ import pytest
 
 from tooling.cebs_to_pool import convert_workbook, key_sheet_sex, workbook_stem
 
-GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "golden" / "DTXSID50469320"
+GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026"
 
 
 @pytest.mark.skipif(not (GOLDEN / "files").exists(), reason="golden fixture not present")

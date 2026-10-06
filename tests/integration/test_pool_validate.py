@@ -5,7 +5,7 @@ This is the highest-ROI test for the domain model refactor: it verifies that
 fingerprinting produces the new platform/data_type fields (not the old
 monolithic domain strings) and that the coverage matrix uses compound keys.
 
-Uses real golden session data (12 txt/csv files across 6 platforms) and
+Uses the given-PFHxSAm regression session (12 txt/csv files across 6 platforms) and
 exercises the real fingerprint_file() function (pure Python for txt/csv).
 Only Java-dependent functions need mocking.
 """
@@ -15,9 +15,9 @@ import json
 import pytest
 
 
-# The expected platforms in the DTXSID50469320 golden session.
+# The expected platforms in the given-PFHxSAm regression session (DTXSID50469320).
 # These must match what fingerprint_file() produces from the txt/csv files.
-# The golden data has 7 file groups: body_weight, clin_chem, clinical_obs,
+# The regression data has 7 file groups: body_weight, clin_chem, clinical_obs,
 # hematology, hormones, organ_weights, tissue_conc — covering all 6 apical
 # platforms plus Clinical Observations.
 EXPECTED_PLATFORMS = {
@@ -34,9 +34,9 @@ EXPECTED_PLATFORMS = {
 class TestPoolValidate:
     """POST /api/pool/validate/{dtxsid} — full fingerprint + cross-validation."""
 
-    def test_validates_golden_session(self, golden_50469320):
+    def test_validates_regression_session(self, given_pfhxsam):
         """
-        Given the golden DTXSID50469320 session with 12 txt/csv files,
+        Given the given-PFHxSAm regression session with 12 txt/csv files,
         validation should return a report with correct file_count and
         platform/data_type fields on every fingerprint.
         """
@@ -52,7 +52,7 @@ class TestPoolValidate:
         # The session should have data files (txt/csv, possibly split by sex)
         assert report["file_count"] > 0, "No files fingerprinted"
 
-    def test_fingerprints_have_platform_and_data_type(self, golden_50469320):
+    def test_fingerprints_have_platform_and_data_type(self, given_pfhxsam):
         """
         Every fingerprint must have 'platform' and 'data_type' fields —
         this is the core assertion for the domain model refactor.  The old
@@ -97,9 +97,9 @@ class TestPoolValidate:
                 f"Fingerprint {file_id} ({fp.get('filename')}) has empty platform"
             )
 
-    def test_expected_platforms_covered(self, golden_50469320):
+    def test_expected_platforms_covered(self, given_pfhxsam):
         """
-        The golden session spans 6 platforms.  After validation, all
+        The regression session spans 6 platforms.  After validation, all
         expected platforms should appear in at least one fingerprint.
         """
         from fastapi.testclient import TestClient
@@ -124,7 +124,7 @@ class TestPoolValidate:
             f"Found: {platforms_found}"
         )
 
-    def test_validation_report_persisted(self, golden_50469320):
+    def test_validation_report_persisted(self, given_pfhxsam):
         """
         Validation should write validation_report.json to the session dir.
         """
@@ -136,7 +136,7 @@ class TestPoolValidate:
         assert resp.status_code == 200
 
         # Check the report was persisted to disk
-        report_path = golden_50469320 / "validation_report.json"
+        report_path = given_pfhxsam / "validation_report.json"
         assert report_path.exists(), "validation_report.json not written"
 
         persisted = json.loads(report_path.read_text())

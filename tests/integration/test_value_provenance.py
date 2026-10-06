@@ -2,7 +2,7 @@
 Integration tests for value-level xlsx↔derived-CSV provenance cross-validation
 (pipeline/value_validation.py, wired into workflow.steps.validate_step).
 
-The golden DTXSID50469320 fixture ships BOTH the original NTP study xlsx and the
+The given-PFHxSAm regression fixture ships BOTH the original NTP study xlsx and the
 derived tox_study CSV + sidecars for all six apical platforms, so it's a real
 lossless oracle. These pin:
   A. lossless — the reference session produces NO value-provenance error;
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 # The value-provenance issue types are prefixed "value_" so they never blur with
-# validate_pool's STRUCTURAL dose_mismatch/animal_count_mismatch (which the golden
+# validate_pool's STRUCTURAL dose_mismatch/animal_count_mismatch (which the given-PFHxSAm
 # session already emits — the xlsx and txt legitimately differ on dose groups
 # because the txt excludes dead animals). We assert only on OUR channel.
 _VALUE_ERROR_TYPES = {
@@ -39,7 +39,7 @@ def _validate(dtxsid="DTXSID50469320"):
 
 @pytest.mark.integration
 class TestValueProvenance:
-    def test_reference_session_is_lossless(self, golden_50469320):
+    def test_reference_session_is_lossless(self, given_pfhxsam):
         """The derived CSV faithfully reproduces the source xlsx — no value error."""
         report = _validate()
         value_errors = [
@@ -54,9 +54,9 @@ class TestValueProvenance:
         assert not [i for i in report["issues"]
                     if i["issue_type"] == "unverified_derived_data"]
 
-    def test_corrupted_value_blocks_integration(self, golden_50469320):
+    def test_corrupted_value_blocks_integration(self, given_pfhxsam):
         """Changing a sidecar value that diverges from the xlsx → blocking error."""
-        sc_path = golden_50469320 / "files" / "body_weight_truth_male.sidecar.json"
+        sc_path = given_pfhxsam / "files" / "body_weight_truth_male.sidecar.json"
         sc = json.loads(sc_path.read_text())
         # animal 101 SD5 body weight: 300.3 → 999.9
         obs = sc["animals"]["101"]["observations"]
@@ -81,9 +81,9 @@ class TestValueProvenance:
         artifacts = WorkflowEngine("DTXSID50469320", DiskPoolStore()).gather_artifacts()
         assert artifacts["hasValidationErrors"] is True
 
-    def test_deleted_observation_flags_missing(self, golden_50469320):
+    def test_deleted_observation_flags_missing(self, given_pfhxsam):
         """Dropping a measurement from the CSV sidecar → missing_in_csv error."""
-        sc_path = golden_50469320 / "files" / "body_weight_truth_male.sidecar.json"
+        sc_path = given_pfhxsam / "files" / "body_weight_truth_male.sidecar.json"
         sc = json.loads(sc_path.read_text())
         obs = sc["animals"]["101"]["observations"]
         sc["animals"]["101"]["observations"] = [o for o in obs if o["day"] != "SD5"]
@@ -93,10 +93,10 @@ class TestValueProvenance:
         missing = [i for i in report["issues"] if i["issue_type"] == "value_missing_in_csv"]
         assert missing and missing[0]["severity"] == "error"
 
-    def test_no_xlsx_warns_but_does_not_block(self, golden_50469320):
+    def test_no_xlsx_warns_but_does_not_block(self, given_pfhxsam):
         """A derived platform with no original study xlsx → warning, not error."""
         # Remove the Body Weight study xlsx so its tox_study CSV is unverified.
-        bw_xlsx = golden_50469320 / "files" / "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
+        bw_xlsx = given_pfhxsam / "files" / "C20022-01_Individual_Animal_Body_Weight_Data.xlsx"
         assert bw_xlsx.exists()
         bw_xlsx.unlink()
 
@@ -116,8 +116,8 @@ class TestExtractXlsxValueMap:
     def test_extracts_keyed_values(self):
         from bmdx_pipe import extract_xlsx_value_map
         # Fixture path is repo-relative; resolve from this test file.
-        xlsx = (Path(__file__).parents[1] / "fixtures" / "golden"
-                / "DTXSID50469320" / "files"
+        xlsx = (Path(__file__).parents[1] / "fixtures" / "regression"
+                / "given-pfhxsam-2026" / "files"
                 / "C20022-01_Individual_Animal_Body_Weight_Data.xlsx")
         xm = extract_xlsx_value_map(str(xlsx))
         rec = xm[("Male", "101", "Body Weight", "SD5")]

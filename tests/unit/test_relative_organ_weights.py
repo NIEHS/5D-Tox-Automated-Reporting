@@ -17,7 +17,7 @@ from narrative.unified_narrative import _build_organ_weight_paragraphs
 from pipeline.processing_helpers import _summary_endpoint_label
 from tables.organ_weight_table import build_organ_weight_table_from_sidecar
 
-_FILES = Path(__file__).resolve().parents[1] / "fixtures/golden/DTXSID50469320/files"
+_FILES = Path(__file__).resolve().parents[1] / "fixtures/regression/given-pfhxsam-2026/files"
 
 
 def _row(label, vals, bmd="—", resp=True, trend="**"):

@@ -342,7 +342,7 @@ def test_load_session_data_reads_summary_section_file(sessions_dir):
 
 def test_load_session_data_overlays_real_session_when_present(real_session_50469320):
     """
-    DTXSID50469320 is the golden session shipped in this repo.  Loading
+    DTXSID50469320 is the processed PFHxSAm session (local only).  Loading
     it must overlay real content — verify a few high-signal markers.
     """
     data = load_session_data(

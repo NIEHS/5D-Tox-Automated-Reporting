@@ -1,7 +1,7 @@
 """
 test_full_pipeline.py — End-to-end smoke test for the domain model refactor.
 
-Walks through the complete pipeline using golden DTXSID50469320 session data:
+Walks through the complete pipeline using the given-PFHxSAm regression session (DTXSID50469320):
   1. Session load — discovers pending files
   2. Validate — fingerprints all files, checks platform/data_type fields
   3. Integrate — merges into unified BMDProject (mocked)
@@ -53,10 +53,10 @@ def _make_table_data():
 
 @pytest.mark.e2e
 class TestFullPipeline:
-    """Walk through the complete pipeline with golden session data."""
+    """Walk through the complete pipeline with the given-PFHxSAm regression session."""
 
     def test_upload_validate_integrate_process_approve_restore(
-        self, golden_50469320, mock_bmdx_pipe,
+        self, given_pfhxsam, mock_bmdx_pipe,
     ):
         """
         End-to-end: session load → validate → integrate → process → approve
@@ -77,7 +77,7 @@ class TestFullPipeline:
         assert data["exists"] is True
         # Golden session has data files that should show up as pending
         pending = data.get("pending_files", [])
-        assert len(pending) > 0, "No pending files found in golden session"
+        assert len(pending) > 0, "No pending files found in the regression session"
 
         # ── Step 2: Validate ──────────────────────────────────────────
         resp = client.post(f"/api/pool/validate/{dtxsid}")
@@ -124,7 +124,7 @@ class TestFullPipeline:
             "data": {"paragraphs": ["Test background paragraph."]},
         })
         assert resp.status_code == 200
-        assert (golden_50469320 / "background.json").exists()
+        assert (given_pfhxsam / "background.json").exists()
 
         # ── Step 6: Clear in-memory state and restore from disk ───────
         pool_orchestrator._pool_fingerprints.clear()

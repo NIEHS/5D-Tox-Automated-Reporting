@@ -14,7 +14,7 @@ import pytest
 
 @pytest.mark.integration
 class TestWizardRoutes:
-    def test_files_lists_uploaded_study_files(self, golden_50469320):
+    def test_files_lists_uploaded_study_files(self, given_pfhxsam):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
@@ -23,7 +23,7 @@ class TestWizardRoutes:
         assert resp.status_code == 200, resp.text
         body = resp.json()
 
-        # The golden fixture ships a populated files/ dir.
+        # The regression fixture ships a populated files/ dir.
         assert body["count"] > 0
         assert body["count"] == len(body["files"])
         # Every entry has a name + size, and the known bm2 is present.
@@ -43,15 +43,15 @@ class TestWizardRoutes:
         body = resp.json()
         assert body == {"files": [], "count": 0}
 
-    def test_integrated_tree_slim_structure(self, golden_50469320):
+    def test_integrated_tree_slim_structure(self, given_pfhxsam):
         import json
 
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 
-        # The tree endpoint needs integrated.json; the base golden fixture ships
+        # The tree endpoint needs integrated.json; the base regression fixture ships
         # files+validation but not integration, so synthesize a minimal one.
-        (golden_50469320 / "integrated.json").write_text(
+        (given_pfhxsam / "integrated.json").write_text(
             json.dumps(
                 {
                     "name": "integrated",
@@ -102,7 +102,7 @@ class TestWizardRoutes:
         # The heavy numeric `responses` arrays must NOT be shipped.
         assert "responses" not in json.dumps(body)
 
-    def test_fingerprints_returns_classification_rows(self, golden_50469320):
+    def test_fingerprints_returns_classification_rows(self, given_pfhxsam):
         from fastapi.testclient import TestClient
         from web_routes.background_server import app
 

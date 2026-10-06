@@ -23,7 +23,7 @@ from tables.toxicokinetics import build_internal_dose_narrative, compute_toxicok
 from tables.units import display_unit
 from tooling.cebs_to_pool import convert_workbook
 
-GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "golden" / "DTXSID50469320" / "files"
+GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026" / "files"
 TISSUE_XLSX = "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
 CHEM = "Perfluorohexanesulfonamide"
 

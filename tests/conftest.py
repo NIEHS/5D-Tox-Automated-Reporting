@@ -35,6 +35,10 @@ if str(PROJECT_ROOT) not in sys.path:
 # Path to golden fixture data (real session data snapshotted for tests)
 # ---------------------------------------------------------------------------
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "golden"
+# The supplied PFHxSAm package (2026 re-analysis) — a regression fixture, not a reference.
+GIVEN_PFHXSAM_DIR = Path(__file__).parent / "fixtures" / "regression" / "given-pfhxsam-2026"
+# Published CEBS packages (subsets, original file names) + their published tables.
+REFERENCE_DIR = Path(__file__).parent / "fixtures" / "reference"
 
 
 # ---------------------------------------------------------------------------
@@ -140,19 +144,23 @@ def client(sessions_dir):
 
 
 @pytest.fixture
-def golden_50469320(tmp_path, monkeypatch):
+def given_pfhxsam(tmp_path, monkeypatch):
     """
-    Copy the DTXSID50469320 golden session into a fresh tmp_path.
+    Copy the given-PFHxSAm regression session (as DTXSID50469320) into a
+    fresh tmp_path.
 
     This session has 12 txt/csv data files across 6 platforms, sidecars,
     fingerprints, and a validation report.  It represents a session that
-    has been through the upload + validate + confirm metadata flow.
+    has been through the upload + validate + confirm metadata flow.  It is a
+    REGRESSION fixture for the workflow plumbing — its inputs are a 2026
+    re-analysis, not the analysis behind any published report (see its
+    README.md); conformance to a published report uses tests/fixtures/reference/.
 
     Returns the session directory path.
     """
     sessions_path = tmp_path / "sessions"
     dest = sessions_path / "DTXSID50469320"
-    shutil.copytree(FIXTURES_DIR / "DTXSID50469320", dest)
+    shutil.copytree(GIVEN_PFHXSAM_DIR, dest)
     _patch_sessions_dir(monkeypatch, sessions_path)
     _clear_server_state()
     return dest

@@ -1,6 +1,6 @@
 """
 Characterization of the INFERRED-pivot ↔ tox_study/anchor numerical relationship
-on the golden DTXSID50469320 pool. Pre-work for ADR-0017 Increment D (derive a
+on the given-PFHxSAm regression pool (DTXSID50469320). Pre-work for ADR-0017 Increment D (derive a
 derived file's dataType from its numerical match to the xlsx anchor).
 
 These tests PIN CURRENT REALITY so the D-scope decision rests on measured data,
@@ -11,7 +11,7 @@ IS), not a spec (they do not assert what SHOULD be).
 
   (1) DOSE-GROUP DROP — a whole (or partial) dead-out dose group is REMOVED from
       the inferred pivot (e.g. 333/1000 mg/kg, all animals died). Surviving-animal
-      cells are byte-identical to truth. This is what the PFHxSAm golden pool
+      cells are byte-identical to truth. This is what the given-PFHxSAm pool
       exercises at the PIVOT-TXT layer, and it is what THIS test measures.
 
   (2) CELL IMPUTATION — an INDIVIDUAL missing cell (a dead animal / lost sample
@@ -42,11 +42,11 @@ from pathlib import Path
 
 import pytest
 
-_GOLDEN = Path(__file__).parents[1] / "fixtures" / "golden" / "DTXSID50469320"
+_GOLDEN = Path(__file__).parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026"
 _FILES = _GOLDEN / "files"
 
 pytestmark = pytest.mark.skipif(
-    not _FILES.exists(), reason="golden DTXSID50469320 fixture not present"
+    not _FILES.exists(), reason="given-PFHxSAm regression fixture not present"
 )
 
 

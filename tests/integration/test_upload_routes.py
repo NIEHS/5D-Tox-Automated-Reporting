@@ -88,7 +88,7 @@ class TestUploadCsv:
 class TestPreview:
     """GET /api/preview/{file_id} — preview uploaded file content."""
 
-    def test_preview_returns_content_for_data_upload(self, golden_50469320, mock_bmdx_pipe):
+    def test_preview_returns_content_for_data_upload(self, given_pfhxsam, mock_bmdx_pipe):
         """
         After session load re-registers files, preview should return content.
         """
@@ -103,7 +103,7 @@ class TestPreview:
         pending = data.get("pending_files", [])
 
         if not pending:
-            pytest.skip("No pending files found in golden session")
+            pytest.skip("No pending files found in the regression session")
 
         # Preview the first pending file
         file_id = pending[0]["id"]
