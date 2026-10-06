@@ -1,13 +1,14 @@
 # RR-8: NTP Research Report on In Vivo Repeat Dose Biological Potency Study of Triphenyl Phosphate (CAS No. 115-86-6) in Male Sprague Dawley Rats (Hsd: Sprague Dawley SD) (Gavage Studies)
 
 Source: https://cebs.niehs.nih.gov/cebs/data/publication/RR-8 (DOI 10.22427/NTP-DATA-RR-8); GEO GSE121134
-Downloaded 2026-10-01: 22 of 22 listed files
+Downloaded 2026-10-01: 22 of 22 listed files; 2026-10-06: 9 more from the study page (see "Study data")
 
 ## Key facts
 
 - Triphenyl phosphate (TPHP), study C11042, male Sprague Dawley rats, gavage, 0–881 mg/kg (6 groups, 20 animals). NTP Research Report 8, the first report in the series. GEO GSE121134.
 - Package layout: one 'Benchmark Dose Analysis' section mixing apical and genomic files, plus 'Summary Tables' numbered Table 1–6 (not NTP I04/PA41 codes); Table 6 is a Top-20 GO BP table.
 - Genomics: Affymetrix Rat 230 2.0 microarray (GPL1355, 31,099 probe sets), 20 CEL files, Partek batch correction. BMDExpress 2.20.0148 run 2018-04-12: Williams p<0.05 with 100 permutations, no MTC, fold ≥1.5 → 8 models lowest AIC, BMR factor 1 → GO BP (plain + deduplicated) and individual-gene categories (p≥0.1, BMDU/BMDL≤40). bm2 and JSON agree. Exports include individual PROBE-SET BMDs.
+- Apical individual-animal data exist, but only on the CEBS study page, not the data page (see "Study data"). 30 animals = 6 groups × 5, all Core: no Selection column, no Biosampling cohort. The workbooks say `Concentration` where later packages say `Dose`; there is no `Sex` column, and the Key sheet title says "(Male)".
 - Apical: modified BMDS v2.7.0, already with high-dose dropping (refits with 0–3 top doses removed); Model Parameters workbook (single sheet, 22 datasets × models), fit reports (2017-12 .doc appendix and 2018-07 docx). No BMDS code package or ReadMe yet.
 
 ## Package issues
@@ -47,3 +48,22 @@ Downloaded 2026-10-01: 22 of 22 listed files
 | Table 4 - Hormone and Enzymes Summary | `C11042_Table_4_-_Hormone_and_Enzymes_Summary.pdf` | 107 KB | 1 pp; Table 4. Hormone and Enzymes Summary  / Endpoint 0 mg/kg  / N = 5  / 55 mg/kg  / N = 5  |
 | Table 5 - BMD, NOEL and LOEL Summary for Apical Endpoints | `C11042_Table_5_-_BMD_NOEL_and_LOEL_Summary_for_Apical_Endpoints.pdf` | 21 KB | 1 pp; Table 5. BMD, NOEL, and LOEL Summary for Apical Endpoints, Sorted by LOEL or BMDL from  / Low to High  / Table Number Endpoint NOEL (mg/kg) LOEL (mg/k |
 | Table 6 - Top 20 GO Biological Process Gene Sets | `C11042_Table6_Top_20_GO_Biological_Process_Gene_Sets.pdf` | 96 KB | 3 pp; Table 6. Top 20 GO Biological Process Gene Sets Ranked by Potency of Perturbation (Sorted by BMD Median)  / Category   / Name  / Input  / Genes/Platfo |
+
+## Study data (CEBS study page)
+
+The data page above does not list these. They are on the study page that the publication page links as "Data":
+https://cebs.niehs.nih.gov/cebs/study/002-02974-0002-0000-6 (via https://cebs.niehs.nih.gov/cebs/publication/RR-8).
+That page also re-serves Table 1–5 as `C10674_Table_N_….pdf` (NIEHS-02's study number), byte-identical to the
+`C11042_Table_N_-_….pdf` above, and Table 6 as `C11042_Table_6_…` (= `C11042_Table6_…`). Those copies were not stored again.
+
+| item | file | size | contents |
+|---|---|---|---|
+| I04 Mean Body Weights and Survival | `C11042_I04_Mean_Body_Weights_and_Survival.pdf` | 53 KB | 4 pp; NTP I04 Mean Body Weight Summary |
+| I05 Clinical Observations Summary | `I05_-_Clinical_Observations_Summary.pdf` | 31 KB | 3 pp; NTP I05 (served without the study prefix) |
+| PA06 Organ Weights Summary | `C11042_PA06_Organ_Weights_Summary.pdf` | 75 KB | 3 pp; NTP PA06 |
+| PA41 Clinical Chemistry Summary | `C11042_PA41_Clinical_Chemistry_Summary.pdf` | 166 KB | 6 pp; NTP PA41 |
+| R07 Hormone Summary | `C11042_R07_Hormone_Summary.pdf` | 69 KB | 4 pp; NTP R07 |
+| Individual Animal Body Weight Data | `C11042_Individual_Animal_Body_Weight_Data.xlsx` | 11 KB | 60 rows, 30 animals; SD0 + SD4 (Terminal Flag on SD4) |
+| Individual Animal Clinical Chemistry Data | `C11042_Individual_Animal_Clinical_Chemistry_Data.xlsx` | 13 KB | 30 animals; 12 analytes |
+| Individual Animal Hormone Data | `C11042_Individual_Animal_Hormone_Data.xlsx` | 11 KB | 30 animals; cholinesterase, total thyroxine |
+| Individual Animal Organ Weight Data | `C11042_Individual_Animal_Organ_Weight_Data.xlsx` | 11 KB | 30 animals; brain, liver, terminal body weight |

@@ -6,7 +6,9 @@ Per-package details are in `<report>/MANIFEST.md`. Dates come from inside the fi
 timestamps, Office/PDF metadata, zip entry times). The report publication pages (niehs.nih.gov) are firewalled,
 so the publication dates below are approximate.
 
-**Coverage:** all 12 packages complete (635 files).
+**Coverage:** all 12 packages complete (644 files): the 635 linked from the data pages, plus 9 RR-8 files (individual-animal
+workbooks and NTP I04/I05/PA06/PA41/R07 tables) that only RR-8's CEBS *study* page links. Checked 2026-10-06: the NIEHS-02…10
+study pages carry only byte-identical copies of data-page files, and NIEHS-12/13 have no study page.
 Apart from the report publication dates, every statement below comes from the files themselves.
 
 ## Timeline
