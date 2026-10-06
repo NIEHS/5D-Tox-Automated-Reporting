@@ -173,6 +173,12 @@ def control_group(dose_unit: str | None) -> str:
     return "chamber control" if is_air_concentration(dose_unit) else "vehicle control"
 
 
+def after_administration(facts: dict) -> str:
+    """"postexposure" for an inhalation study, else "postdose" — the word NTP
+    puts after a sampling time ("2 hours postdose")."""
+    return "postexposure" if facts.get("route") == "inhaled" else "postdose"
+
+
 def dose_noun(dose_unit: str | None) -> str:
     """"exposure concentrations" for an air concentration, else "doses"."""
     return "exposure concentrations" if is_air_concentration(dose_unit) else "doses"

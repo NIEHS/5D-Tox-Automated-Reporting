@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 20  # bumped: mean ± SE at one precision per row (endpoint convention), halves rounded up
+_SECTIONS_CACHE_SCHEMA_VERSION = 21  # bumped: tissue-concentration timepoints say "postexposure" for inhalation
 
 
 def _fingerprint_files(paths) -> list[list]:

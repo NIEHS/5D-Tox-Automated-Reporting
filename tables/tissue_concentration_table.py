@@ -58,13 +58,14 @@ CAPTION_TEMPLATE = (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _parse_timepoint(endpoint_name: str) -> str | None:
+def _parse_timepoint(endpoint_name: str, after: str = "postdose") -> str | None:
     """
     Extract the timepoint label from a tissue concentration endpoint name.
 
     NTP endpoint names follow the pattern:
         "Plasma {N} Hour {Chemical} Concentration"
-    We extract "{N} h postdose" as the display label.
+    We extract "{N} h postdose" as the display label ("{N} h postexposure"
+    for an inhalation study — `after`, pipeline.study_design.after_administration).
 
     Also filters out LOQ columns (endpoint names ending in "LOQ").
 
@@ -83,7 +84,7 @@ def _parse_timepoint(endpoint_name: str) -> str | None:
     m = re.search(r"Plasma\s+(\d+)\s+Hour", endpoint_name, re.IGNORECASE)
     if m:
         hours = m.group(1)
-        return f"{hours} h postdose"
+        return f"{hours} h {after}"
 
     # Fallback: use the endpoint name as-is if it contains "Concentration"
     if "Concentration" in endpoint_name:
@@ -159,13 +160,17 @@ def build_tissue_concentration_table_from_sidecar(
         compound_name:  Full chemical name for the caption.
         dose_unit:      Dose unit string (default "mg/kg").
         design:         Study design facts (pipeline.study_design) for the caption's
-                        species, verb and duration; None ⇒ the standard design.
+                        species, verb and duration, and the timepoint word (postdose/
+                        postexposure); None ⇒ the standard design.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema, plus
         table_type="pharmacokinetic" flag for specialized Typst rendering.
         Returns empty dict if no tissue concentration data found.
     """
+    from pipeline.study_design import after_administration, design_or_standard
+
+    _after = after_administration(design_or_standard(design))
     # ── Load sidecars ─────────────────────────────────────────────────────
     sidecar_data: dict[str, dict] = {}
     for sex, sc_path in sidecar_paths.items():
@@ -213,7 +218,7 @@ def build_tissue_concentration_table_from_sidecar(
             for obs in rec.get("observations", []):
                 ep_name = obs.get("endpoint", "")
                 obs_day = obs.get("day", "")
-                timepoint = _parse_timepoint(ep_name)
+                timepoint = _parse_timepoint(ep_name, _after)
                 if timepoint is None:
                     continue
 

@@ -60,3 +60,19 @@ def test_footnote_names_the_species():
 def test_unrecorded_species_reads_animals():
     ab = build_abstract_results_apical(_APICAL, sexes=["Female"], design={"species": None})
     assert "In female animals," in ab
+
+
+def test_sampling_time_word_follows_the_route():
+    from narrative.abstract_pk import build_abstract_results_pk
+    from tables.tissue_concentration_table import _parse_timepoint
+
+    ep = "Plasma 2 Hour Chemical Concentration"
+    assert _parse_timepoint(ep) == "2 h postdose"
+    assert _parse_timepoint(ep, "postexposure") == "2 h postexposure"
+
+    conc = {"Male": {4: {2: 10.0, 24: 2.0}}, "Female": {4: {2: 20.0, 24: 5.0}}}
+    half = {"Male": {4: 40.1}, "Female": {4: 78.2}}
+    oral = build_abstract_results_pk("X", conc, half, [2, 24])
+    inhaled = build_abstract_results_pk("X", conc, half, [2, 24], design=INHALED_RATS)
+    assert "2 and 24 hours postdose" in oral
+    assert "2 and 24 hours postexposure" in inhaled and "postdose" not in inhaled

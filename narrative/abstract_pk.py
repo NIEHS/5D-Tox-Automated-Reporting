@@ -70,7 +70,8 @@ def build_abstract_results_pk(
         dose_unit:        Display unit (default "mg/kg").
         sexes:            Sex labels (defaults to ["Male", "Female"]).
         design:           Study design facts (pipeline.study_design) for the
-                          species; None ⇒ the standard design.
+                          species and the timepoint word ("postexposure" for
+                          inhalation); None ⇒ the standard design.
 
     Returns:
         A paragraph string, or empty string if data is insufficient.
@@ -107,7 +108,8 @@ def build_abstract_results_pk(
         conc_lower, conc_higher = sex_b, sex_a
         conc_polarity = "lower"  # phrasing always uses "lower"
 
-    # --- Timepoints sentence ("at 2 and 24 hours postdose") ---
+    # --- Timepoints sentence ("at 2 and 24 hours postdose"; "postexposure"
+    # for an inhalation study) ---
     tp_phrase = _join_oxford([str(t) for t in pk_timepoints])
 
     # --- Half-life comparison ---
@@ -143,12 +145,13 @@ def build_abstract_results_pk(
     # --- Assemble ---
     # The chemical name appears in the first sentence; subsequent sentences
     # use the species alone since the test article is implicit.
-    from pipeline.study_design import design_or_standard, species_plural
+    from pipeline.study_design import after_administration, design_or_standard, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    facts = design_or_standard(design)
+    animals = species_plural(facts)
     return (
         f"Average {chemical_name} plasma concentrations at "
-        f"{tp_phrase} hours postdose were {conc_polarity} in "
+        f"{tp_phrase} hours {after_administration(facts)} were {conc_polarity} in "
         f"{conc_lower.lower()} {animals} than in {conc_higher.lower()} {animals}. "
         f"Half-lives estimated using the two time points were longer in "
         f"{hl_longer.lower()} {animals} ({hl_longer_str} hours for the "
