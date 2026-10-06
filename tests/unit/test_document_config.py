@@ -280,11 +280,14 @@ def isolated_template(tmp_path, monkeypatch):
 
 def test_default_save_preserves_sibling_blocks(isolated_template):
     tmp_templates, _ = isolated_template
+    path = tmp_templates / f"{ACTIVE_TEMPLATE}.yaml"
+    siblings = [k for k in yaml.safe_load(path.read_text()) if k != "document"]
+    assert siblings  # the template carries sibling blocks (charts, layout, ...)
     dc.save_default_document_yaml(_reorder_body_yaml())
-    raw = yaml.safe_load((tmp_templates / f"{ACTIVE_TEMPLATE}.yaml").read_text())
-    # document rewritten; organs/assays/charts siblings preserved.
+    raw = yaml.safe_load(path.read_text())
+    # document rewritten; every sibling block preserved.
     assert "document" in raw
-    for sibling in ("organs", "assays", "charts"):
+    for sibling in siblings:
         assert sibling in raw, f"{sibling} sibling block was dropped"
 
 

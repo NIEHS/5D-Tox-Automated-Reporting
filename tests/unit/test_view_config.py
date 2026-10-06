@@ -42,11 +42,14 @@ class TestViewStore:
         assert vc.load_view("DTXSID_V", "nope") == {}
 
     def test_resolve_default_falls_back_to_global_template(self, sessions_dir):
-        # 'default' with no file resolves to the global template's filters.
+        # 'default' with no file (and no study overlay) resolves to the global
+        # template's filters — which select nothing: study selections live in
+        # templates/studies/<dtxsid>/view.yaml (test_study_overlay).
+        from document_model.document_template import load_report_filters
+        from document_model.document_tree import ACTIVE_TEMPLATE
         resolved = vc.resolve_view_filters("DTXSID_V", "default")
-        assert "filters" in resolved
-        # the active template ships organs/sex/assays blocks
-        assert set(resolved["filters"]) & {"organs", "sex", "assays"}
+        assert resolved == load_report_filters(ACTIVE_TEMPLATE)
+        assert resolved["filters"] == {}
 
     def test_resolve_view_own_filters_win(self, sessions_dir):
         vc.save_view("DTXSID_V", "custom",

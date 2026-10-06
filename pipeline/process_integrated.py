@@ -1565,16 +1565,17 @@ def _resolve_compound_name(dtxsid: str) -> str:
 
 
 def _session_view_filters(dtxsid: str):
-    """The process-time allowlists from the session's default view, or None when
-    that view declares no `filters` (⇒ the template's apply).
+    """The process-time allowlists from the session's default view or, failing
+    that, the study overlay (view_config.effective_view); None when neither
+    declares `filters` (⇒ the template's apply).
 
     Returns (organ_filters, sex_filters, assay_filters, gene_filter,
     gene_set_filter) in the legacy shapes ProcessContext carries."""
-    from document_model.view_config import DEFAULT_VIEW, load_view
+    from document_model.view_config import DEFAULT_VIEW, effective_view
     from document_model.document_template import resolve_report_allowlist
 
     try:
-        view = load_view(dtxsid, DEFAULT_VIEW) or {}
+        view = effective_view(dtxsid, DEFAULT_VIEW) or {}
     except Exception:
         return None
     if "filters" not in view:
@@ -1659,10 +1660,10 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     assay_filters = load_report_assays(ACTIVE_TEMPLATE)
     gene_filter = load_report_genes(ACTIVE_TEMPLATE)
     gene_set_filter = load_report_gene_sets(ACTIVE_TEMPLATE)
-    # A session whose default view declares its own `filters` (the study
-    # overlay, ADR-0027 §1) overrides the template's — the same resolution the
-    # render path (latex_export._resolve_apical_filters) already applies, so a
-    # row the view keeps is never dropped here first.
+    # A session's default view or its study overlay (templates/studies/<dtxsid>/
+    # view.yaml, ADR-0027 §1) that declares `filters` overrides the template's —
+    # the same resolution the render path (view_config.resolve_view_filters)
+    # applies, so a row the view keeps is never dropped here first.
     _view = _session_view_filters(dtxsid)
     if _view is not None:
         organ_filters, sex_filters, assay_filters, gene_filter, gene_set_filter = _view

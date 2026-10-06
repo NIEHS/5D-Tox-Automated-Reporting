@@ -25,8 +25,14 @@ Storage: ``sessions/<dtxsid>/views/<name>.yaml``.  Each file is a mapping:
     charts:     [types] | null             # optional — closed-vocab enable list
     methods:    { ... }                    # optional — reserved for phase 4
 
-The ``default`` view reproduces today's behavior: absent ⇒ the global
-template's structure + filters.  Back-compat: a legacy single
+Filter resolution, most specific first (``resolve_view_filters``):
+  1. the session's view file (``sessions/<dtxsid>/views/<name>.yaml``);
+  2. the study overlay ``templates/studies/<dtxsid>/view.yaml`` — a study's
+     version-controlled selections (ADR-0027 §1), e.g. NIEHS-10's "Select"
+     endpoints and its liver-only, male-only Table 3;
+  3. the shared template, which selects nothing (every organ, sex and
+     endpoint), so a new study is never filtered by another study's choices.
+A layer counts when it declares ``filters`` or ``charts``.  Back-compat: a legacy single
 ``sessions/<dtxsid>/document.yaml`` (document_config) is surfaced as the
 ``default`` view's structure when no views/ dir exists.
 
@@ -161,27 +167,60 @@ def delete_view(dtxsid: str, name: str) -> bool:
     return True
 
 
+def study_view_path(dtxsid: str) -> Path:
+    """The study overlay: ``templates/studies/<dtxsid>/view.yaml`` (may not exist)."""
+    from document_model.document_template import TEMPLATES_DIR
+    return TEMPLATES_DIR / "studies" / validate_dtxsid(dtxsid) / "view.yaml"
+
+
+def load_study_view(dtxsid: str) -> dict:
+    """The study overlay's mapping (``{filters?, charts?}``), its filters in the
+    canonical shape; ``{}`` when the study has none."""
+    path = study_view_path(dtxsid)
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must be a YAML mapping, got {type(data).__name__}")
+    if "filters" in data:
+        from document_model.document_template import normalize_filters_block
+        data = {**data, "filters": normalize_filters_block(data.get("filters"))}
+    return data
+
+
+def effective_view(dtxsid: str, name: str = DEFAULT_VIEW) -> dict | None:
+    """The view layer whose ``filters``/``charts`` apply: the session's view
+    file, else the study overlay; None when neither declares them (⇒ the
+    shared template's)."""
+    view = load_view(dtxsid, name) if name else {}
+    if "filters" in view or "charts" in view:
+        return view
+    study = load_study_view(dtxsid)
+    if "filters" in study or "charts" in study:
+        return study
+    return None
+
+
 def resolve_view_filters(dtxsid: str, name: str) -> dict:
     """
     The canonical ``{dimension: {area: {sex: [tokens]}}}`` filters + ``charts``
     for a view, ready for the render path.
 
-    Resolution: a view's own ``filters``/``charts`` win; otherwise fall back
-    to the GLOBAL template's filters (document_template.load_report_filters) —
-    so ``default`` (and any view that doesn't override filters) reproduces
-    today's output.
+    Resolution (module docstring): the session's view, else the study overlay,
+    else the shared template's filters (document_template.load_report_filters).
+    Within the chosen layer an absent ``charts`` falls back to the template's.
     """
     from document_model.document_tree import ACTIVE_TEMPLATE
     from document_model.document_template import load_report_filters
 
-    view = load_view(dtxsid, name) if name else {}
-    if "filters" in view or "charts" in view:
-        return {
-            "filters": view.get("filters") or {},
-            "charts": view.get("charts"),
-        }
-    # No view-level filter override → the global template's filters.
-    return load_report_filters(ACTIVE_TEMPLATE)
+    template = load_report_filters(ACTIVE_TEMPLATE)
+    view = effective_view(dtxsid, name)
+    if view is None:
+        return template
+    return {
+        "filters": view.get("filters") or {},
+        "charts": view["charts"] if "charts" in view else template.get("charts"),
+    }
 
 
 def build_view_tree(dtxsid: str, name: str):
