@@ -7,15 +7,12 @@ for every study.
 """
 
 import json
-import shutil
-from pathlib import Path
 
 import openpyxl
-import pytest
-from bmdx_pipe.file_integrator import TIER_XLSX
 
 from pipeline.sidecar_units import stamp_sidecar_units
 from rendering.render_common import scan_pending_markers
+from tables.table_builder_common import find_sidecar_paths, load_sidecar
 from tables.tissue_concentration_table import (
     _parse_timepoint, build_tissue_concentration_table_from_sidecar,
 )
@@ -23,8 +20,6 @@ from tables.toxicokinetics import build_internal_dose_narrative, compute_toxicok
 from tables.units import display_unit
 from tooling.cebs_to_pool import convert_workbook
 
-GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026" / "files"
-TISSUE_XLSX = "C20022-01_Individual_Animal_Tissue_Concentration_Data.xlsx"
 CHEM = "Perfluorohexanesulfonamide"
 
 
@@ -38,25 +33,30 @@ def test_detection_limit_columns_are_not_timepoints():
     assert _parse_timepoint(f"Plasma 2 Hour {CHEM} LOD") is None
 
 
-@pytest.mark.skipif(not (GOLDEN / TISSUE_XLSX).exists(), reason="golden fixture not present")
-def test_niehs10_unit_comes_from_the_study_workbook(tmp_path):
-    session = tmp_path / "s"
-    (session / "files").mkdir(parents=True)
-    for name in (TISSUE_XLSX, "tissue_conc_truth_male.sidecar.json",
-                 "tissue_conc_truth_female.sidecar.json"):
-        shutil.copy2(GOLDEN / name, session / "files" / name)
-    paths = {s: str(session / "files" / f"tissue_conc_truth_{s.lower()}.sidecar.json")
-             for s in ("Male", "Female")}
+def test_niehs10_unit_reaches_the_sidecar_at_ingest(reference_session):
+    # cebs_to_pool's .units.json companion → the pool's ingest → the sidecar.
+    session = reference_session("NIEHS-10", "DTXSID50469320")
+    sc = load_sidecar(find_sidecar_paths(str(session), "Tissue Concentration")["Male"])
+    assert sc["units"][f"Plasma 2 Hour {CHEM} Concentration"] == "ug/ml"
+    ow = load_sidecar(find_sidecar_paths(str(session), "Organ Weight")["Male"])
+    assert ow["units"]["Liver"] == "grams"
 
-    # Before integration stamps the units: the table says the unit is unrecorded.
+
+def test_niehs10_unit_comes_from_the_study_workbook_at_integration(reference_session):
+    # A pool of unit-less truth CSVs plus the original study workbooks (what a
+    # customer supplies): integration stamps the units from the workbook.
+    from pipeline.pool_fingerprints import ensure_fingerprints
+
+    session = reference_session("NIEHS-10", "DTXSID50469320", with_workbooks=True, units=False)
+    paths = find_sidecar_paths(str(session), "Tissue Concentration")
+
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
     assert scan_pending_markers(tc["footnotes"][0]) == [
         "[Placeholder: concentration unit not recorded in the data]"]
     assert compute_toxicokinetics(paths)["unit"] is None
 
-    fps = {"x": {"tier": TIER_XLSX, "is_study_file": True,
-                 "platform": "Tissue Concentration", "filename": TISSUE_XLSX}}
-    assert len(stamp_sidecar_units(fps, session)) == 2
+    fps = ensure_fingerprints("DTXSID50469320")
+    assert stamp_sidecar_units(fps, session)  # every platform with a workbook
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
     assert tc["footnotes"][0].endswith("plasma concentration data are presented in µg/mL.")
     tk = compute_toxicokinetics(paths)

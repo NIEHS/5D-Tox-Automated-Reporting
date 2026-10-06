@@ -1,8 +1,9 @@
 """tooling.cebs_to_pool — CEBS Individual Animal workbooks → pool truth CSVs.
 
-The reference session's truth CSVs were hand-built from the NIEHS-10 workbooks;
-the converter must regenerate them byte-for-byte, so a CEBS package ingests the
-same way the reference did.  The 2025 (DTT) schema has no Sex column; the sex is
+The supplied PFHxSAm package's truth CSVs were hand-built from the NIEHS-10
+workbooks; the converter must regenerate them byte-for-byte from the published
+CEBS workbooks (tests/fixtures/reference/NIEHS-10), so a CEBS package ingests
+the same way the supplied one did.  The 2025 (DTT) schema has no Sex column; the sex is
 filled from the Key sheet's study title, and an ambiguous title is refused.
 """
 
@@ -13,22 +14,21 @@ import pytest
 
 from tooling.cebs_to_pool import convert_workbook, key_sheet_sex, workbook_stem
 
-GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026"
+from tests.conftest import GIVEN_PFHXSAM_DIR, REFERENCE_DIR
 
 
-@pytest.mark.skipif(not (GOLDEN / "files").exists(), reason="golden fixture not present")
 def test_reference_workbooks_regenerate_truth_csvs_byte_for_byte(tmp_path):
     written = []
-    for xlsx in sorted((GOLDEN / "files").glob("*Individual_Animal_*.xlsx")):
+    for xlsx in sorted((REFERENCE_DIR / "NIEHS-10").glob("*Individual_Animal_*.xlsx")):
         summary = convert_workbook(str(xlsx), str(tmp_path))
         assert summary["status"] == "ok", summary
         assert summary["sex_filled"] is None  # NIEHS-10 workbooks carry a Sex column
         written += summary["written"]
     assert len(written) == 14
     for name in written:
-        ref = GOLDEN / "_originals" / name
+        ref = GIVEN_PFHXSAM_DIR / "_originals" / name
         if not ref.exists():  # clinical obs CSVs stay in files/ (never pivoted)
-            ref = GOLDEN / "files" / name
+            ref = GIVEN_PFHXSAM_DIR / "files" / name
         assert (tmp_path / name).read_bytes() == ref.read_bytes(), name
 
 

@@ -144,6 +144,48 @@ def client(sessions_dir):
 
 
 @pytest.fixture
+def reference_session(tmp_path, monkeypatch):
+    """
+    Factory: build a session from a published CEBS package in
+    tests/fixtures/reference/<report>/ through the real ingest path.
+
+    Each Individual Animal workbook goes through tooling.cebs_to_pool (truth
+    CSV per sex + its .units.json companion) into sessions/<dtxsid>/files/,
+    then pool fingerprinting converts the CSVs to pivots + sidecars exactly as
+    an upload does.  `with_workbooks=True` also places the workbooks in the
+    pool (the source-of-truth xlsx a customer may supply alongside the CSVs).
+
+        session = reference_session("NIEHS-10", "DTXSID50469320")
+        sidecars = find_sidecar_paths(str(session), "Tissue Concentration")
+
+    Returns the session directory.
+    """
+    from pipeline.pool_fingerprints import ensure_fingerprints
+    from tooling.cebs_to_pool import convert_workbook
+
+    sessions_path = tmp_path / "sessions"
+    _patch_sessions_dir(monkeypatch, sessions_path)
+    _clear_server_state()
+
+    def build(report: str, dtxsid: str, *, with_workbooks: bool = False,
+              units: bool = True) -> Path:
+        files = sessions_path / dtxsid / "files"
+        files.mkdir(parents=True, exist_ok=True)
+        for xlsx in sorted((REFERENCE_DIR / report).glob("*Individual_Animal_*.xlsx")):
+            summary = convert_workbook(str(xlsx), str(files))
+            assert summary["status"] in ("ok", "skipped"), summary
+            if with_workbooks:
+                shutil.copy2(xlsx, files / xlsx.name)
+        if not units:
+            for companion in files.glob("*.units.json"):
+                companion.unlink()
+        ensure_fingerprints(dtxsid, force=True)
+        return sessions_path / dtxsid
+
+    return build
+
+
+@pytest.fixture
 def given_pfhxsam(tmp_path, monkeypatch):
     """
     Copy the given-PFHxSAm regression session (as DTXSID50469320) into a

@@ -7,35 +7,31 @@ per-animal plasma data. This is the byte-verifiable guarantee that lets the
 narrative be built on trusted numbers.
 """
 
+import json
 import math
-from pathlib import Path
 
 import pytest
 
 from tables.toxicokinetics import compute_toxicokinetics, _half_life
+from tests.conftest import REFERENCE_DIR
 
-_GOLDEN = Path(__file__).parents[1] / "fixtures" / "regression" / "given-pfhxsam-2026" / "files"
-# The live session copy is the working data; prefer the golden fixture, fall back
-# to the live session if the fixture lacks the tissue-conc sidecars.
-_LIVE = Path("sessions/DTXSID50469320/files")
-
-
-def _sidecar_paths() -> dict[str, str] | None:
-    for base in (_GOLDEN, _LIVE):
-        m = base / "tissue_conc_truth_male.sidecar.json"
-        f = base / "tissue_conc_truth_female.sidecar.json"
-        if m.exists() and f.exists():
-            return {"Male": str(m), "Female": str(f)}
-    return None
-
-
-# Published NIEHS Report 10 half-lives (hours), by (sex, dose mg/kg).
+# Published NIEHS Report 10 half-lives (hours), by (sex, dose mg/kg) — the
+# report text (p. 30), carried in the reference fixture.
 _PUBLISHED = {
-    ("Male", 4.0): 40.1,
-    ("Male", 37.0): 15.1,
-    ("Female", 4.0): 78.2,
-    ("Female", 37.0): 25.6,
+    (sex, float(dose)): hl
+    for sex, by_dose in json.loads(
+        (REFERENCE_DIR / "NIEHS-10" / "report_values.json").read_text()
+    )["plasma_half_life_hours"].items()
+    for dose, hl in by_dose.items()
 }
+
+
+@pytest.fixture
+def plasma_sidecars(reference_session):
+    """NIEHS-10's plasma sidecars, ingested from the published CEBS workbook."""
+    from tables.table_builder_common import find_sidecar_paths
+    session = reference_session("NIEHS-10", "DTXSID50469320")
+    return find_sidecar_paths(str(session), "Tissue Concentration")
 
 
 def test_half_life_formula_matches_first_order():
@@ -52,20 +48,18 @@ def test_half_life_none_when_not_declining():
     assert _half_life(30.0, 20.0, 0.0) is None
 
 
-@pytest.mark.skipif(_sidecar_paths() is None, reason="tissue-conc sidecars not present")
-def test_reproduces_published_half_lives():
-    tk = compute_toxicokinetics(_sidecar_paths())
+def test_reproduces_published_half_lives(plasma_sidecars):
+    tk = compute_toxicokinetics(plasma_sidecars)
+    assert tk["unit"] == "µg/mL"  # the CEBS Key sheet's "ug/ml"
     for (sex, dose), pub in _PUBLISHED.items():
         th = tk["by_sex"][sex]["half_life"][dose]
         assert th is not None, f"{sex} {dose}: no half-life computed"
-        # ≤0.6 h tolerance — the only slack is rounding in the published
-        # SEM-rounded inputs; the method itself is exact.
-        assert abs(th - pub) < 0.6, f"{sex} {dose}: computed {th:.1f} vs published {pub}"
+        # Exact at the published precision (one decimal), from the CEBS workbook.
+        assert round(th, 1) == pub, f"{sex} {dose}: computed {th:.3f} vs published {pub}"
 
 
-@pytest.mark.skipif(_sidecar_paths() is None, reason="tissue-conc sidecars not present")
-def test_bioaccumulation_flag_tracks_24h_threshold():
-    tk = compute_toxicokinetics(_sidecar_paths())
+def test_bioaccumulation_flag_tracks_24h_threshold(plasma_sidecars):
+    tk = compute_toxicokinetics(plasma_sidecars)
     bysex = tk["by_sex"]
     # 4 mg/kg groups (78.2 h, 40.1 h) are >24 h → flagged; Male 37 (15.1 h) is not.
     assert bysex["Female"]["bioaccumulative"][4.0] is True
@@ -73,9 +67,8 @@ def test_bioaccumulation_flag_tracks_24h_threshold():
     assert bysex["Male"]["bioaccumulative"][37.0] is False
 
 
-@pytest.mark.skipif(_sidecar_paths() is None, reason="tissue-conc sidecars not present")
-def test_dose_proportionality_is_sub_proportional():
-    tk = compute_toxicokinetics(_sidecar_paths())
+def test_dose_proportionality_is_sub_proportional(plasma_sidecars):
+    tk = compute_toxicokinetics(plasma_sidecars)
     # 9.25x dose (4→37) yields much smaller concentration ratios → sub-proportional.
     male = tk["dose_proportionality"]["Male"]
     for h, dp in male.items():
@@ -89,10 +82,9 @@ def test_empty_when_no_data():
     assert compute_toxicokinetics({}) == {"by_sex": {}, "dose_proportionality": {}, "unit": None}
 
 
-@pytest.mark.skipif(_sidecar_paths() is None, reason="tissue-conc sidecars not present")
-def test_narrative_is_grounded_in_computed_numbers():
+def test_narrative_is_grounded_in_computed_numbers(plasma_sidecars):
     from tables.toxicokinetics import build_internal_dose_narrative
-    tk = compute_toxicokinetics(_sidecar_paths())
+    tk = compute_toxicokinetics(plasma_sidecars)
     paras = build_internal_dose_narrative(tk, "PFHxSAm", "mg/kg")
     text = " ".join(paras).lower()
     assert len(paras) >= 3
