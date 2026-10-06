@@ -85,7 +85,8 @@ def test_dose_proportionality_is_sub_proportional():
 
 
 def test_empty_when_no_data():
-    assert compute_toxicokinetics({}) == {"by_sex": {}, "dose_proportionality": {}, "unit": "ng/mL"}
+    # No data, no unit — never a default.
+    assert compute_toxicokinetics({}) == {"by_sex": {}, "dose_proportionality": {}, "unit": None}
 
 
 @pytest.mark.skipif(_sidecar_paths() is None, reason="tissue-conc sidecars not present")

@@ -438,7 +438,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("dtxsid", help="session id (folder under sessions/)")
     ap.add_argument("--files", nargs="+", type=Path, default=[],
                     help="input files to import into sessions/<id>/files/ first "
-                         "(.bm2, .txt/.csv, .xlsx, .sidecar.json)")
+                         "(.bm2, .txt/.csv, .xlsx, .sidecar.json, and a truth CSV's "
+                         ".units.json companion from tooling.cebs_to_pool)")
     ap.add_argument("--name", help="test-article name (else identity.json, else resolved)")
     ap.add_argument("--casrn", help="test-article CASRN")
     ap.add_argument("--compound-name",

@@ -36,6 +36,7 @@ from common.animal_selection import is_biosampling
 import math
 
 from tables.table_builder_common import load_sidecar, mean_se
+from tables.units import recorded_units
 from tables.tissue_concentration_table import _find_loq_value, _parse_timepoint
 
 # t_half above this (hours) is flagged as a screening-level bioaccumulation signal.
@@ -109,7 +110,7 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
             sex: {
               "timepoints": [hour, ...],             # ascending
               "doses": [dose, ...],                  # ascending
-              "means": {dose: {hour: mean_conc}},    # ng/mL group means
+              "means": {dose: {hour: mean_conc}},    # group means, in "unit"
               "n": {dose: n_biosampling},
               "half_life": {dose: t_half_h | None},  # ke-derived, group means
               "ke": {dose: ke_per_h | None},
@@ -119,18 +120,20 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
           "dose_proportionality": {
             sex: {hour: {"conc_ratio": r, "dose_ratio": d, "sub_proportional": bool}}
           },
-          "unit": "ng/mL",
+          "unit": "µg/mL" | ... | None,   # as the data record it; None = not recorded
         }
     Returns {"by_sex": {}} when no usable plasma data is present.
     """
     by_sex: dict[str, dict] = {}
     dose_prop: dict[str, dict] = {}
+    units: set[str] = set()
 
     for sex, path in sidecar_paths.items():
         try:
             sidecar = load_sidecar(path)
         except Exception:
             continue
+        units.update(recorded_units([sidecar], lambda ep: _parse_timepoint(ep) is not None).values())
         conc = _extract_group_conc(sidecar)
         if not conc:
             continue
@@ -212,7 +215,9 @@ def compute_toxicokinetics(sidecar_paths: dict[str, str]) -> dict:
             if per_tp:
                 dose_prop[sex] = per_tp
 
-    return {"by_sex": by_sex, "dose_proportionality": dose_prop, "unit": "ng/mL"}
+    # One recorded unit, or None (unrecorded, or timepoints in different units).
+    unit = next(iter(units)) if len(units) == 1 else None
+    return {"by_sex": by_sex, "dose_proportionality": dose_prop, "unit": unit}
 
 
 # ---------------------------------------------------------------------------
@@ -244,13 +249,15 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
         return []
     from pipeline.study_design import design_or_standard, species_plural
 
-    animals = species_plural(design_or_standard(design))
+    facts = design_or_standard(design)
+    animals = species_plural(facts)
     paragraphs: list[str] = []
     sexes = [s for s in ("Male", "Female") if s in by_sex]
     any_sex = by_sex[sexes[0]]
     hours = any_sex.get("timepoints") or []
     doses = any_sex.get("doses") or []
-    unit = tk.get("unit", "ng/mL")
+    unit = tk.get("unit")  # None: not recorded — the table footnote flags it
+    final = "exposure" if facts.get("route") == "inhaled" else "dose"
 
     # 1. What was measured.
     if hours and doses:
@@ -258,9 +265,10 @@ def build_internal_dose_narrative(tk: dict, compound_name: str, dose_unit: str =
         dgs = " and ".join(f"{_fmt_dose(d)} {dose_unit}" for d in doses)
         paragraphs.append(
             f"Plasma concentrations of {compound_name} were measured in biosampling "
-            f"animals at {hrs} hours following the final dose in the {dgs} dose groups. "
-            f"Average plasma concentrations (in {unit}) are summarized in the "
-            f"accompanying table."
+            f"animals at {hrs} hours following the final {final} in the {dgs} "
+            f"{'exposure' if final == 'exposure' else 'dose'} groups. "
+            f"Average plasma concentrations{f' (in {unit})' if unit else ''} are "
+            f"summarized in the accompanying table."
         )
 
     # 2. Sex difference in exposure (compare the highest-dose early-timepoint mean).

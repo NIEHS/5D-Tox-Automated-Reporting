@@ -23,7 +23,8 @@ Structure:
         2 h postdose — mean ± SE of plasma concentration
         24 h postdose — mean ± SE of plasma concentration
 
-    Values are in ng/mL (or whatever the concentration unit is).
+    Values are in the concentration unit the data record (the sidecar's
+    "units", from the study workbook's Key sheet — ng/mL, µg/mL, ...).
 
 The sidecar provides raw per-animal concentration values and LOQ data.
 No NTP stats are used — this is purely descriptive statistics.
@@ -43,6 +44,7 @@ from tables.table_builder_common import (
     load_sidecar,
 )
 from tables.display_precision import TISSUE_CONCENTRATION_SIG_FIGS
+from tables.units import UNIT_NOT_RECORDED, recorded_units
 
 
 # ---------------------------------------------------------------------------
@@ -67,17 +69,18 @@ def _parse_timepoint(endpoint_name: str, after: str = "postdose") -> str | None:
     We extract "{N} h postdose" as the display label ("{N} h postexposure"
     for an inhalation study — `after`, pipeline.study_design.after_administration).
 
-    Also filters out LOQ columns (endpoint names ending in "LOQ").
+    Also filters out the detection-limit columns (names ending in "LOQ" or
+    "LOD" — NIEHS-07 and -09 record both).
 
     Args:
         endpoint_name: Full endpoint name from the CSV/sidecar.
 
     Returns:
-        Timepoint label like "2 h postdose" or None if this is an LOQ column
-        or doesn't match the expected pattern.
+        Timepoint label like "2 h postdose" or None if this is an LOQ/LOD
+        column or doesn't match the expected pattern.
     """
-    # Skip LOQ columns — they contain detection limit values, not measurements
-    if endpoint_name.strip().upper().endswith("LOQ"):
+    # Skip LOQ/LOD columns — they contain detection limit values, not measurements
+    if endpoint_name.strip().upper().endswith(("LOQ", "LOD")):
         return None
 
     # Match "Plasma {N} Hour" pattern (case-insensitive)
@@ -256,6 +259,19 @@ def build_tissue_concentration_table_from_sidecar(
         return int(m.group(1)) if m else 999
     all_timepoints.sort(key=_tp_sort_key)
 
+    # ── Concentration unit, as the data record it ────────────────────────
+    # One unit for the whole table goes in the footnote (the NIEHS form); if
+    # timepoints were recorded in different units, each row label states its own.
+    ep_units = recorded_units(sidecar_data.values(), lambda ep: _parse_timepoint(ep) is not None)
+    tp_units: dict[str, set[str]] = {}
+    for ep, unit in ep_units.items():
+        tp_units.setdefault(_parse_timepoint(ep, _after), set()).add(unit)
+    table_units = set().union(*tp_units.values()) if tp_units else set()
+
+    def _row_label(tp: str) -> str:
+        units = tp_units.get(tp, set())
+        return f"{tp} ({next(iter(units))})" if len(table_units) > 1 and len(units) == 1 else tp
+
     # ── Build the table rows ──────────────────────────────────────────────
     serialized: dict[str, list[dict]] = {}
 
@@ -297,7 +313,7 @@ def build_tissue_concentration_table_from_sidecar(
                     values[dk] = "\u2013"
 
             rows.append({
-                "label": tp,
+                "label": _row_label(tp),
                 "doses": sorted_doses,
                 "values": values,
                 # The renderer re-rounds every mean ± SE cell; this keeps it at
@@ -313,9 +329,15 @@ def build_tissue_concentration_table_from_sidecar(
     # ── Footnotes ─────────────────────────────────────────────────────────
     # Tissue concentration tables typically have minimal footnotes:
     # data format and concentration unit.
+    if len(table_units) == 1:
+        unit_clause = f"; plasma concentration data are presented in {next(iter(table_units))}."
+    elif table_units:
+        unit_clause = "; units are given with each timepoint."
+    else:
+        unit_clause = "; plasma concentration data are presented in " + \
+            UNIT_NOT_RECORDED.format(what="concentration") + "."
     footnotes = [
-        "Data are displayed as mean \u00b1 standard error of the mean; "
-        "plasma concentration data are presented in ng/mL.",
+        "Data are displayed as mean \u00b1 standard error of the mean" + unit_clause,
     ]
 
     return {

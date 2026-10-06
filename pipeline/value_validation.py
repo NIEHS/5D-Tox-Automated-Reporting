@@ -138,6 +138,22 @@ def _compare_platform(platform, xmap, smap, files_involved) -> list[ValidationIs
     return issues
 
 
+def study_workbooks(fps, session_dir) -> dict[str, tuple[str, str]]:
+    """{platform: (path, file_id)} of the pool's ORIGINAL study xlsx files —
+    identified by internal structure (fp.is_study_file), not extension."""
+    out: dict[str, tuple[str, str]] = {}
+    for fid, fp in fps.items():
+        if _fp_get(fp, "tier") != TIER_XLSX:
+            continue
+        if not _fp_get(fp, "is_study_file"):
+            continue
+        platform = _fp_get(fp, "platform")
+        filename = _fp_get(fp, "filename", "")
+        if platform and filename:
+            out[platform] = (str(Path(session_dir) / "files" / filename), fid)
+    return out
+
+
 def check_value_provenance(dtxsid, fps, coverage_matrix, session_dir) -> list[dict]:
     """Value-level xlsx↔derived-CSV cross-check for a session.
 
@@ -154,16 +170,7 @@ def check_value_provenance(dtxsid, fps, coverage_matrix, session_dir) -> list[di
     issues: list[ValidationIssue] = []
 
     # platform -> (xlsx_path, xlsx_file_id), only for ORIGINAL study xlsx files.
-    study_xlsx: dict[str, tuple[str, str]] = {}
-    for fid, fp in fps.items():
-        if _fp_get(fp, "tier") != TIER_XLSX:
-            continue
-        if not _fp_get(fp, "is_study_file"):
-            continue
-        platform = _fp_get(fp, "platform")
-        filename = _fp_get(fp, "filename", "")
-        if platform and filename:
-            study_xlsx[platform] = (str(session_dir / "files" / filename), fid)
+    study_xlsx = study_workbooks(fps, session_dir)
 
     # platforms that have a derived tox_study CSV (via the coverage matrix).
     tox_study_platforms: set[str] = set()

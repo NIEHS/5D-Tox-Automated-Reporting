@@ -119,8 +119,19 @@ def fingerprint_and_store(
         platform = fp.platform or "Unknown"
         data_type = fp.data_type or "tox_study"
 
+        # The CSV's headers carry no units; a companion "<stem>.units.json"
+        # ({column: unit}, written by tooling.cebs_to_pool from the workbook's
+        # Key sheet) supplies them for the sidecar.
+        units_path = Path(path).with_suffix(".units.json")
+        units = None
+        if units_path.exists():
+            try:
+                units = json.loads(units_path.read_text())
+            except (OSError, ValueError):
+                logger.warning("Unreadable units file %s — units not recorded", units_path.name)
+
         wide_files = tox_study_csv_to_pivot_txt(
-            path, str(files_dir), platform, data_type,
+            path, str(files_dir), platform, data_type, units=units,
         )
 
         if wide_files:
@@ -137,6 +148,8 @@ def fingerprint_and_store(
             if original_path.exists() and original_path.parent == files_dir:
                 original_path.rename(originals_dir / original_path.name)
                 logger.info("Moved original %s → _originals/", filename)
+                if units_path.exists():
+                    units_path.rename(originals_dir / units_path.name)
 
             # Fingerprint each wide-format output and store in the pool.
             # The original long-format file is NOT added to the pool.

@@ -11,6 +11,11 @@ reference set's truth CSVs are exactly the workbook `Data` sheet split by sex �
 `tests/unit/test_cebs_to_pool.py` pins that by regenerating them byte-for-byte
 from the reference workbooks.
 
+The `Data` headers carry no units; the Key sheet states them per column, and
+they differ by study (plasma ng/ml in NIEHS-07 – -09, ug/ml in NIEHS-10).  Each
+CSV gets a companion `<stem>_truth_<sex>.units.json` ({column: unit},
+bmdx_pipe.key_sheet_units) that the pool's ingest records in the sidecar.
+
 The 2025 (DTT) workbooks changed the schema: the `Data` sheet has NO `Sex`
 column (the studies are single-sex) and says `Study Number` instead of
 `NTP Study Number`.  The sex is stated only in the Key sheet's study title
@@ -44,6 +49,7 @@ import re
 from pathlib import Path
 
 import openpyxl
+from bmdx_pipe import key_sheet_units
 
 # Individual-animal workbook → truth-CSV stem (the pool's filename patterns:
 # bmdx_pipe.file_integrator._PLATFORM_PATTERNS).  Order matters: "Clinical
@@ -128,6 +134,8 @@ def convert_workbook(path: str, out_dir: str) -> dict:
     for r in body:
         by_sex.setdefault(_cell(r[sex_idx]).strip().lower(), []).append(r)
 
+    units = {col: u for col, u in key_sheet_units(path).items() if col in header}
+
     written = []
     for sex, sex_rows in sorted(by_sex.items()):
         out = os.path.join(out_dir, f"{stem}_truth_{sex}.csv")
@@ -137,8 +145,10 @@ def convert_workbook(path: str, out_dir: str) -> dict:
             for r in sex_rows:
                 w.writerow([_cell(c) for c in r[:len(header)]])
         written.append(os.path.basename(out))
+        if units:
+            Path(out).with_suffix(".units.json").write_text(json.dumps(units, indent=2) + "\n")
     return {"file": name, "status": "ok", "written": written, "notes": notes,
-            "sex_filled": filled}
+            "sex_filled": filled, "units": len(units)}
 
 
 def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> dict:
