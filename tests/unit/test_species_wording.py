@@ -29,13 +29,17 @@ def _deaths():
 
 
 def test_animal_condition_names_species_and_inhalation_verb():
-    text = _build_animal_condition_paragraphs("DCB", "ppm", _deaths(), None, INHALED_RATS)[0]
+    from bmdx_pipe.clinical_observations import IncidenceRow
+
+    signs = {"Female": [IncidenceRow(label="Tremors", incidence_by_dose={0.0: "0/5", 800.0: "2/5"},
+                                     onset_day_by_dose={800.0: 0})]}
+    text = _build_animal_condition_paragraphs("DCB", "ppm", _deaths(), signs, INHALED_RATS)[0]
     assert text.startswith("Female rats exposed to 800 ppm of DCB")
-    mice = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), None, MICE)[0]
+    mice = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), signs, MICE)[0]
     assert mice.startswith("Female mice administered 800 mg/kg of X")
     assert "1 female mouse" in mice and "rat" not in mice
     # No design → the standard design's wording, unchanged.
-    std = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), None)[0]
+    std = _build_animal_condition_paragraphs("X", "mg/kg", _deaths(), signs)[0]
     assert std.startswith("Female rats administered")
 
 

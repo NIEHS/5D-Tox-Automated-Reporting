@@ -435,35 +435,76 @@ def _mortality_sex_subject(mortality: dict, animals: str = "rats") -> str:
     return animals
 
 
-def _animal_condition_survived_template(subject: str = "male and female rats") -> Template:
+def _animal_condition_survived_template(subject: str = "male and female rats",
+                                        observed: bool = True) -> Template:
     """The all-survived brief statement.  `expected_day` (the terminal study day,
     e.g. "SD5") is NUMERIC — a day identifier that just refreshes.  `subject` is the
-    study's sex phrase (_mortality_sex_subject) — structural, baked as a Literal."""
+    study's sex phrase (_mortality_sex_subject) — structural, baked as a Literal.
+    "without signs of overt toxicity" only when clinical observations were
+    recorded (`observed`) — absent data is not evidence of no signs."""
     return [
         Literal(f"All {subject} survived to study termination ("),
         Slot("expected_day", SlotKind.NUMERIC),
-        Literal(") without signs of overt toxicity."),
+        Literal(") without signs of overt toxicity." if observed else ")."),
     ]
 
 
 def _animal_condition_survived_with_signs_template(
     subject: str, verb: str, compound_name: str, signs_subject: str,
+    has_onset: bool = False,
 ) -> Template:
     """All animals survived, but some treated groups showed clinical signs —
     the all-survived statement without its "without signs of overt toxicity"
-    claim, then which groups showed what.  `expected_day`/`doses`/`unit` are
-    NUMERIC; the `signs` list is CATEGORICAL (finding words)."""
-    return [
+    claim, then which groups showed what and from which study day.
+    `expected_day`/`doses`/`unit`/`onset_day` are NUMERIC; the `signs` list is
+    CATEGORICAL (finding words)."""
+    segs: list = [
         Literal(f"All {subject} survived to study termination ("),
         Slot("expected_day", SlotKind.NUMERIC),
         Literal(f"). {signs_subject[:1].upper()}{signs_subject[1:]} {verb} "),
         Slot("doses", SlotKind.NUMERIC),
         Literal(" "),
         Slot("unit", SlotKind.NUMERIC),
-        Literal(f" of {compound_name} exhibited clinical signs, which included "),
+    ]
+    if has_onset:
+        segs += [
+            Literal(f" of {compound_name} began exhibiting clinical signs on study day "),
+            Slot("onset_day", SlotKind.NUMERIC),
+        ]
+    else:
+        segs += [Literal(f" of {compound_name} exhibited clinical signs")]
+    segs += [
+        Literal(", which included "),
         Slot("signs", SlotKind.CATEGORICAL),
         Literal("."),
     ]
+    return segs
+
+
+def _signs_at_doses(clinical_obs_incidence: dict[str, list] | None,
+                    doses: list[float]) -> tuple[list[str], int | None]:
+    """(findings, onset day) of the clinical signs seen in the given dose
+    groups: the findings in incidence order, and the earliest study day any of
+    them was observed there (IncidenceRow.onset_day_by_dose; None when the
+    observations record no day)."""
+    findings: list[str] = []
+    onset: int | None = None
+    wanted = set(doses)
+    for _sex, rows in (clinical_obs_incidence or {}).items():
+        for row in rows:
+            hit = [d for d, cell in (getattr(row, "incidence_by_dose", None) or {}).items()
+                   if d in wanted and str(cell).split("/")[0].strip() not in ("", "0")]
+            if not hit:
+                continue
+            label = str(getattr(row, "label", row)).lower()
+            if label not in findings:
+                findings.append(label)
+            onsets = getattr(row, "onset_day_by_dose", None) or {}
+            for d in hit:
+                day = onsets.get(d)
+                if day is not None and (onset is None or day < onset):
+                    onset = day
+    return findings, onset
 
 
 def _treated_signs(clinical_obs_incidence: dict[str, list] | None
@@ -489,17 +530,18 @@ def _treated_signs(clinical_obs_incidence: dict[str, list] | None
 
 
 def _animal_condition_opening_template(
-    compound_name: str, has_death_day: bool, has_signs: bool,
+    compound_name: str, has_onset: bool,
     subject: str = "male and female rats", verb: str = "administered",
 ) -> Template:
-    """The mortality/toxicity opening sentence.  `compound_name` is baked into a
-    Literal — the chemical identity is structural, not a reprocess value.  Dose
-    magnitudes/unit/study-day are NUMERIC (silent-refresh-safe); the clinical
-    `signs` list is CATEGORICAL — it is data-DERIVED content (finding words), not
-    a magnitude, so a change there is a wording concern, not a silent refresh.
-    The two clauses are present only when the former `if earliest_death_day` /
-    `if clinical_signs` branches fired.  `verb` is "administered", or "exposed
-    to" for an inhalation study (pipeline.study_design.exposure_verb)."""
+    """The clinical-signs opening sentence for the groups with deaths: what
+    signs they showed and the study day the first appeared.  `compound_name` is
+    baked into a Literal — the chemical identity is structural, not a reprocess
+    value.  Dose magnitudes/unit/onset day are NUMERIC (silent-refresh-safe);
+    the `signs` list is CATEGORICAL — it is data-DERIVED content (finding
+    words), not a magnitude, so a change there is a wording concern, not a
+    silent refresh.  The onset clause is present only when the clinical
+    observations record a day.  `verb` is "administered", or "exposed to" for
+    an inhalation study (pipeline.study_design.exposure_verb)."""
     segs: list = [
         Literal(f"{subject[:1].upper()}{subject[1:]} {verb} "),
         Slot("doses", SlotKind.NUMERIC),
@@ -507,17 +549,18 @@ def _animal_condition_opening_template(
         Slot("unit", SlotKind.NUMERIC),
         Literal(f" of {compound_name}"),
     ]
-    if has_death_day:
+    if has_onset:
         segs += [
             Literal(" began exhibiting signs of overt toxicity on study day "),
-            Slot("death_day", SlotKind.NUMERIC),
+            Slot("onset_day", SlotKind.NUMERIC),
         ]
-    if has_signs:
-        segs += [
-            Literal(", which included "),
-            Slot("signs", SlotKind.CATEGORICAL),
-        ]
-    segs += [Literal(".")]
+    else:
+        segs += [Literal(" exhibited signs of overt toxicity")]
+    segs += [
+        Literal(", which included "),
+        Slot("signs", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
     return segs
 
 
@@ -545,16 +588,19 @@ def _animal_condition_death_detail_template(has_latest_day: bool, singular: bool
     return segs
 
 
-def _animal_condition_surviving_template(animals: str = "rats") -> Template:
+def _animal_condition_surviving_template(animals: str = "rats",
+                                         observed: bool = True) -> Template:
     """The surviving-doses closing sentence.  `surv_doses` (the dose list) and
-    `unit` are NUMERIC; `animals` is the study's species plural."""
+    `unit` are NUMERIC; `animals` is the study's species plural.  The "no signs"
+    claim is made only when clinical observations were recorded (`observed`)."""
     return [
         Literal(f"{animals.capitalize()} in the "),
         Slot("surv_doses", SlotKind.NUMERIC),
         Literal(" "),
         Slot("unit", SlotKind.NUMERIC),
         Literal(" groups did not exhibit signs of overt toxicity, and all "
-                "survived to study termination."),
+                "survived to study termination." if observed else
+                " groups all survived to study termination."),
     ]
 
 
@@ -582,7 +628,10 @@ def _build_animal_condition_paragraphs(
         mortality:              Output from extract_mortality().
         clinical_obs_incidence: Optional {sex: [IncidenceRow]} from
                                 build_clinical_obs_tables().  Used to list
-                                clinical signs.
+                                clinical signs and their onset.  None means
+                                no clinical observations were recorded, so
+                                nothing is said about signs; {} means they
+                                were recorded and all normal.
         design:                 Study design facts (pipeline.study_design) for
                                 the species and verb; None ⇒ the standard design.
 
@@ -624,20 +673,27 @@ def _build_animal_condition_paragraphs(
             # claim "without signs of overt toxicity" over the incidence data.
             signs_subject = _mortality_sex_subject(
                 {"by_dose": {0: {s: {} for s in sign_sexes}}}, animals)
+            _, onset_day = _signs_at_doses(clinical_obs_incidence, sign_doses)
+            binding = {
+                "expected_day": expected_day,
+                "doses": _oxford_comma([_fmt_dose(d) for d in sign_doses], conjunction="and"),
+                "unit": dose_unit,
+                "signs": _oxford_comma(sign_findings[:5], conjunction="and"),
+            }
+            if onset_day is not None:
+                binding["onset_day"] = str(onset_day)
             paragraphs.append(render(
                 _animal_condition_survived_with_signs_template(
                     _mortality_sex_subject(mortality, animals), exposure_verb(facts),
-                    compound_name, signs_subject),
-                {"expected_day": expected_day,
-                 "doses": _oxford_comma([_fmt_dose(d) for d in sign_doses], conjunction="and"),
-                 "unit": dose_unit,
-                 "signs": _oxford_comma(sign_findings[:5], conjunction="and")},
+                    compound_name, signs_subject, onset_day is not None),
+                binding,
             ))
             return paragraphs
         # No mortality and no signs — brief statement that all survived
         # (template + render; byte-identical to the former f-string).
         paragraphs.append(
-            render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals)),
+            render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals),
+                                                       observed=clinical_obs_incidence is not None),
                    {"expected_day": expected_day})
         )
         return paragraphs
@@ -648,47 +704,28 @@ def _build_animal_condition_paragraphs(
     death_dose_strs = [_fmt_dose(d) for d in death_doses]
     dose_list_str = _oxford_comma(death_dose_strs, conjunction="and")
 
-    # Earliest study day any death occurred (across all affected doses)
-    earliest_death_day: str | None = None
-    earliest_day_num = 999
-    for dose in death_doses:
-        for sex_data in by_dose[dose].values():
-            for day_str in sex_data.get("death_days", {}):
-                match = re.search(r"\d+", day_str)
-                if match:
-                    dnum = int(match.group())
-                    if dnum < earliest_day_num:
-                        earliest_day_num = dnum
-                        earliest_death_day = day_str
+    # Clinical signs seen in the groups with deaths, and the study day the
+    # first appeared (the clinical observations' onset, never a death day).
+    clinical_signs, onset_day = _signs_at_doses(clinical_obs_incidence, death_doses)
 
-    # Clinical signs from incidence data (if available)
-    clinical_signs: list[str] = []
-    if clinical_obs_incidence:
-        # Collect unique finding labels across both sexes, up to 5 for brevity
-        seen: set[str] = set()
-        for _sex, rows in clinical_obs_incidence.items():
-            for row in rows:
-                # IncidenceRow.label looks like "Discharge — Eye, Bilateral, Red"
-                # We want the primary finding (before the comma detail)
-                label = row.label if hasattr(row, "label") else str(row)
-                if label not in seen:
-                    seen.add(label)
-                    clinical_signs.append(label.lower())
-
-    # Build the opening sentence as a template (author wording Literals + live
-    # data Slots) then render — byte-identical to the former "".join(parts).
-    opening_binding = {"doses": dose_list_str, "unit": dose_unit}
-    if earliest_death_day:
-        opening_binding["death_day"] = str(earliest_day_num)
+    # The opening sentence (template + render) — only when the clinical
+    # observations record signs in those groups; without them the death
+    # details stand alone rather than assert signs nobody recorded.
+    sentence1 = ""
     if clinical_signs:
-        # Limit to first 5 signs to keep prose manageable
-        opening_binding["signs"] = _oxford_comma(clinical_signs[:5], conjunction="and")
-    sentence1 = render(
-        _animal_condition_opening_template(
-            compound_name, bool(earliest_death_day), bool(clinical_signs),
-            subject=_mortality_sex_subject(mortality, animals), verb=exposure_verb(facts)),
-        opening_binding,
-    )
+        opening_binding = {
+            "doses": dose_list_str, "unit": dose_unit,
+            # Limit to the first 5 signs to keep the prose manageable
+            "signs": _oxford_comma(clinical_signs[:5], conjunction="and"),
+        }
+        if onset_day is not None:
+            opening_binding["onset_day"] = str(onset_day)
+        sentence1 = render(
+            _animal_condition_opening_template(
+                compound_name, onset_day is not None,
+                subject=_mortality_sex_subject(mortality, animals), verb=exposure_verb(facts)),
+            opening_binding,
+        )
 
     # Per-dose mortality details: "In the 1000 mg/kg group, 5 male rats
     # and 5 female rats were found dead or moribund..."
@@ -731,12 +768,13 @@ def _build_animal_condition_paragraphs(
         if surviving_dose_strs:
             surv_list = _oxford_comma(surviving_dose_strs, conjunction="and")
             surviving_sentence = render(
-                _animal_condition_surviving_template(animals),
+                _animal_condition_surviving_template(
+                    animals, observed=clinical_obs_incidence is not None),
                 {"surv_doses": surv_list, "unit": dose_unit},
             )
 
     # Combine into the paragraph
-    para_parts = [sentence1]
+    para_parts = [sentence1] if sentence1 else []
     para_parts.extend(death_details)
     if surviving_sentence:
         para_parts.append(surviving_sentence)

@@ -1,5 +1,5 @@
 """Animal condition: the biosampling cohort is not mortality, and clinical
-signs are never contradicted.
+signs are never contradicted or invented.
 
 NIEHS-13 removes its "Biosample Animals" on SD4 by schedule; counting them
 as early deaths made every concentration, the control included, "begin
@@ -51,5 +51,33 @@ def test_survivors_with_clinical_signs_are_not_called_sign_free(tmp_path):
     assert text == ("All female rats survived to study termination (SD5). Female rats "
                     "exposed to 800 ppm of DCB exhibited clinical signs, which included "
                     "tremors (moderate).")
-    quiet = _build_animal_condition_paragraphs("DCB", "ppm", m, None, INHALED_RATS)[0]
+    quiet = _build_animal_condition_paragraphs("DCB", "ppm", m, {}, INHALED_RATS)[0]
     assert quiet.endswith("without signs of overt toxicity.")
+    # No clinical observations recorded: no claim either way.
+    unobserved = _build_animal_condition_paragraphs("DCB", "ppm", m, None, INHALED_RATS)[0]
+    assert unobserved == "All female rats survived to study termination (SD5)."
+
+
+def _with_deaths(tmp_path):
+    m = extract_mortality(_sidecar(tmp_path))
+    m["by_dose"][800.0]["Female"].update(early_deaths=1, death_days={"SD3": 1})
+    m["all_survived_doses"] = [0.0]
+    return m
+
+
+def test_signs_onset_comes_from_the_observations_not_the_deaths(tmp_path):
+    inc = {"Female": [IncidenceRow(label="Tremors (Moderate)",
+                                   incidence_by_dose={0.0: "0/2", 800.0: "2/2"},
+                                   onset_day_by_dose={800.0: 0})]}
+    text = _build_animal_condition_paragraphs("DCB", "ppm", _with_deaths(tmp_path), inc,
+                                              INHALED_RATS)[0]
+    assert text.startswith("Female rats exposed to 800 ppm of DCB began exhibiting signs "
+                           "of overt toxicity on study day 0, which included tremors")
+    assert "by study day 3" in text
+
+
+def test_no_observations_no_signs_sentence(tmp_path):
+    text = _build_animal_condition_paragraphs("DCB", "ppm", _with_deaths(tmp_path), None,
+                                              INHALED_RATS)[0]
+    assert "signs" not in text
+    assert text.startswith("In the 800 ppm group, 1 female rat was found dead or moribund")

@@ -8,6 +8,11 @@ Branches covered: no mortality data (empty), the all-survived brief statement, t
 full mortality paragraph with clinical signs, the same without signs, and the edge
 case where there is no earliest-death day / no latest-day clause / no surviving
 sentence.
+
+Revised 2026-10-06: the signs sentence states the clinical observations' onset day
+(IncidenceRow.onset_day_by_dose) and the findings seen in the groups with deaths,
+never the first death day; with no clinical observations recorded (None) nothing
+is said about signs either way (no sentence fragment, no "did not exhibit signs").
 """
 
 from bmdx_pipe.clinical_observations import IncidenceRow
@@ -45,9 +50,15 @@ _MORT_FULL = {
 }
 
 _SIGNS = {
-    "Male": [IncidenceRow(label="Discharge — Eye, Bilateral, Red"),
-             IncidenceRow(label="Lethargy")],
-    "Female": [IncidenceRow(label="Discharge — Eye, Bilateral, Red")],
+    "Male": [IncidenceRow(label="Discharge — Eye, Bilateral, Red",
+                          incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "2/5", 1000.0: "4/5"},
+                          onset_day_by_dose={333.0: 1, 1000.0: 0}),
+             IncidenceRow(label="Lethargy",
+                          incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "0/5", 1000.0: "3/5"},
+                          onset_day_by_dose={1000.0: 0})],
+    "Female": [IncidenceRow(label="Discharge — Eye, Bilateral, Red",
+                            incidence_by_dose={0.0: "0/5", 50.0: "0/5", 333.0: "0/5", 1000.0: "2/5"},
+                            onset_day_by_dose={1000.0: 0})],
 }
 
 _MORT_EDGE = {
@@ -67,10 +78,15 @@ def test_no_mortality_data_returns_empty():
 
 
 def test_all_survived_brief_statement():
-    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, None)
+    # Clinical observations recorded, all normal.
+    out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, {})
     assert out == [
         "All male and female rats survived to study termination (SD5) without "
         "signs of overt toxicity."
+    ]
+    # None recorded: survival only.
+    assert _build_animal_condition_paragraphs(CN, UNIT, _MORT_ALL_SURVIVED, None) == [
+        "All male and female rats survived to study termination (SD5)."
     ]
 
 
@@ -88,14 +104,14 @@ def test_full_mortality_with_clinical_signs():
 
 
 def test_full_mortality_without_signs():
+    # No clinical observations recorded: the death details stand alone.
     out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_FULL, None)
     assert out == [
-        "Male and female rats administered 333 and 1000 mg/kg of PFHxSAm began "
-        "exhibiting signs of overt toxicity on study day 0. In the 333 mg/kg "
+        "In the 333 mg/kg "
         "group, 3 male rats and 1 female rat were found dead or moribund by "
         "study day 2. In the 1000 mg/kg group, 5 male rats and 5 female rats "
-        "were found dead or moribund. Rats in the 50 mg/kg groups did not "
-        "exhibit signs of overt toxicity, and all survived to study termination."
+        "were found dead or moribund. Rats in the 50 mg/kg groups all survived "
+        "to study termination."
     ]
 
 
@@ -105,6 +121,5 @@ def test_edge_no_earliest_no_latest_no_surviving():
     # surviving sentence.
     out = _build_animal_condition_paragraphs(CN, UNIT, _MORT_EDGE, None)
     assert out == [
-        "Male and female rats administered 1000 mg/kg of PFHxSAm. In the 1000 "
-        "mg/kg group, 2 male rats were found dead or moribund."
+        "In the 1000 mg/kg group, 2 male rats were found dead or moribund."
     ]
