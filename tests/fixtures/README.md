@@ -9,8 +9,9 @@ Three kinds, kept apart so a test's oracle is never mistaken for a reference:
 | `golden/` | self-snapshots (`process_integrated_payload.json`, `DTXSID70191136`) frozen from our own output. | our own earlier output |
 
 - `reference/NIEHS-13/` — rat study 108020004, the BMDExpress 3.20 analysis
-  the pipeline targets: summary tables + the apical BMD summary.  Genomics not
-  covered yet.
+  the pipeline targets: summary tables, the apical BMD summary, and the
+  genomics Top-10 GO / genes / most-potent tables (from a slim extract of the
+  genomic project — `tooling/slim_genomics_extract.py`).
 - `reference/NIEHS-10/` — PFHxSAm, study C20022-01: summary tables, plasma
   concentrations and half-lives, hormones.  Not a BMD/genomics reference (BMDS
   2.7 / BMDExpress 2.30).

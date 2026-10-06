@@ -23,14 +23,22 @@ Session-level comparison of the whole report: `assets/cebs/NIEHS-13-comparison.m
   bmdx-pipe's ExportBm2 (`assets/cebs/bm2json.sh`; needs Java, so tests read
   the JSON).  The project also carries NIEHS-12's (108020006/7) analyses.
 
-**Not covered yet: genomics.**  The GO and gene tables come from the
-genomic project's category analyses (`108020004_4D_Genomic_Rats.bm2`, 9.8 MB;
-55 MB as JSON; Java to read) — too large / not offline for this fixture.  The
-session comparison reproduces the Top-10 GO tables (40/40 GO IDs, BMD, BMDL,
-BMDU); a test for it needs a decision on how to carry that project.
+- **Genomics**: the Top 10 GO Biological Process gene sets and Top 10 genes for
+  all five tissues, and the most potent GO set per tissue —
+  `tests/unit/test_reference_genomics.py` runs the report's own table code on
+  `108020004_4D_Genomic_Rats.slim.json.gz`, the part of the genomic project
+  those tables read (`tooling/slim_genomics_extract.py`: the ExportGenomics GO
+  categories and gene fits, BMDExpress's GO_BP/GENE category analyses, the BMR
+  notes; values copied, inputs' checksums inside).  The full project
+  (`108020004_4D_Genomic_Rats.bm2`, 9.8 MB, sha256 `f5a180b98a603d84…`; 55 MB as
+  JSON; Java to read) is not in the fixture.  Two ovary files are swapped in
+  the CEBS package ("…Top_10_Genes_…_Ovary" holds the ovary GO table,
+  "…Top_10_GO_…_Lung_Ovary" the ovary genes table); the test identifies each
+  table by its content.
 
 | file | bytes | sha256 (first 16) |
 |---|---:|---|
+| `108020004_4D_Genomic_Rats.slim.json.gz` | 471,657 | `ea61e95c674ab496` |
 | `108020004_4D_NonGenomic_Rats.bm2` | 137,432 | `7e04d1e6c3260c6b` |
 | `108020004_4D_NonGenomic_Rats.bm2.json` | 545,177 | `18cdecc04083957a` |
 | `108020004_BMD,_NOEL_and_LOEL_Summary_for_Apical_Endpoints_Rats.pdf` | 176,770 | `85a2aa1c54f13ae5` |
@@ -40,6 +48,17 @@ BMDU); a test for it needs a decision on how to carry that project.
 | `108020004_Individual_Animal_Hematology_Data_Rats.xlsx` | 18,680 | `7237e28baa2d78fd` |
 | `108020004_Individual_Animal_Organ_Weight_Data_Rats.xlsx` | 6,909 | `33518352fea28adb` |
 | `108020004_Individual_Animal_Removal_Reasons_Data_Rats.xlsx` | 6,552 | `a7467517f8464edd` |
+| `108020004_Most_Potent_GO_Biological_Process_In_Each_Tissue_Rats.pdf` | 50,061 | `32b8516b356b62d8` |
 | `108020004_PA06_Organ_Weights_Summary_Rats.pdf` | 64,203 | `191948f4942d5ef1` |
 | `108020004_PA41_Clinical_Chemistry_Summary_Rats.pdf` | 153,927 | `0216f061153116e9` |
 | `108020004_PA43_Hematology_Summary_Rats.pdf` | 76,774 | `d7d2e9b8a4e08db0` |
+| `108020004_Top_10_GO_Biological_Process_Gene_Sets_Heart_Rats.pdf` | 149,380 | `615d40bab09ad760` |
+| `108020004_Top_10_GO_Biological_Process_Gene_Sets_Kidney_Rats.pdf` | 152,389 | `94d9faf6c4858596` |
+| `108020004_Top_10_GO_Biological_Process_Gene_Sets_Liver_Rats.pdf` | 135,957 | `e31d0e96df9f6280` |
+| `108020004_Top_10_GO_Biological_Process_Gene_Sets_Lung_Ovary_Rats.pdf` | 263,908 | `90c1f92700091f0b` |
+| `108020004_Top_10_GO_Biological_Process_Gene_Sets_Lung_Rats.pdf` | 150,702 | `e9e4f223584f6ef9` |
+| `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Heart_Rats.pdf` | 264,639 | `8bdfa4d651889d68` |
+| `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Kidney_Rats.pdf` | 294,268 | `28e0a103e714053e` |
+| `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Liver_Rats.pdf` | 255,424 | `0da64dbaf09a5ab7` |
+| `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Lung_Rats.pdf` | 203,098 | `40bd7c145efc3d3a` |
+| `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Ovary_Rats.pdf` | 148,280 | `69b1adda6f5a733f` |
