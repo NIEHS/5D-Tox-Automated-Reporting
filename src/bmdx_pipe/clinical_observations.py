@@ -112,7 +112,7 @@ def _build_finding_label(observation: str, site: str, modifier: str, severity: s
 # CSV parsing
 # ---------------------------------------------------------------------------
 
-def parse_clinical_obs_csv(path: str) -> dict:
+def parse_clinical_obs_csv(path: str, include_biosampling: bool = False) -> dict:
     """
     Parse a clinical observation CSV into structured per-dose-per-animal data.
 
@@ -121,8 +121,16 @@ def parse_clinical_obs_csv(path: str) -> dict:
     are collapsed across days: if animal 201 shows "Hunched" on SD1 and SD3,
     it counts as one occurrence for the incidence table.
 
+    Only the Core cohort is counted unless ``include_biosampling``: the
+    internal-dose animals ("Biosampling Animals" / "Biosample Animals" in the
+    Selection column) are a separate cohort, and the NTP I05 summary reports
+    them separately — pooling them into the core counts changes both the
+    denominators and which findings appear.  A CSV with no Selection column
+    is all core.
+
     Args:
         path: Absolute path to the clinical observation CSV file.
+        include_biosampling: Also count the biosampling cohort.
 
     Returns:
         Dict with keys:
@@ -175,6 +183,8 @@ def parse_clinical_obs_csv(path: str) -> dict:
         severity = row.get("Severity", "").strip()
 
         if not concentration or not animal_id:
+            continue
+        if not include_biosampling and "biosamp" in (row.get("Selection") or "").lower():
             continue
 
         try:
@@ -263,7 +273,9 @@ def build_incidence_table(parsed: dict) -> list[IncidenceRow]:
 # Public API — build incidence tables from multiple CSV files
 # ---------------------------------------------------------------------------
 
-def build_clinical_obs_tables(csv_paths: list[str]) -> dict[str, list[IncidenceRow]]:
+def build_clinical_obs_tables(
+    csv_paths: list[str], include_biosampling: bool = False,
+) -> dict[str, list[IncidenceRow]]:
     """
     Build incidence tables from one or more clinical observation CSV files.
 
@@ -276,6 +288,9 @@ def build_clinical_obs_tables(csv_paths: list[str]) -> dict[str, list[IncidenceR
 
     Args:
         csv_paths: List of absolute paths to clinical observation CSV files.
+        include_biosampling: Also count the biosampling (internal-dose)
+                             cohort; by default only Core animals count
+                             (see parse_clinical_obs_csv).
 
     Returns:
         Dict mapping sex label ("Male", "Female") to list of IncidenceRow.
@@ -285,7 +300,7 @@ def build_clinical_obs_tables(csv_paths: list[str]) -> dict[str, list[IncidenceR
     parsed_by_sex: dict[str, dict] = {}
 
     for path in csv_paths:
-        parsed = parse_clinical_obs_csv(path)
+        parsed = parse_clinical_obs_csv(path, include_biosampling)
         sex = parsed["sex"]
 
         if sex not in parsed_by_sex:
