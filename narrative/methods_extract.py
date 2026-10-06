@@ -54,6 +54,8 @@ so existing call sites (llm_routes, process_integrated) keep working.
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+
 import logging
 import re
 
@@ -225,7 +227,7 @@ def extract_methods_context(
         bm2_jsons:     Optional dict of {file_id: bm2_json_dict} for extracting BMDExpress
                        analysis metadata from analysisInfo.notes.
         session_dir:   Optional path to the session directory.  Used to scan sidecar files
-                       for biosampling dose groups (animals with selection="biosampling").
+                       for biosampling dose groups (biosampling-cohort animals).
         integrated:    Optional integrated BMDProject dict.  Used to extract the genomics
                        assay/chip from doseResponseExperiments[].chip — e.g., chip name
                        containing "S1500" identifies TempO-Seq.
@@ -400,7 +402,7 @@ def extract_methods_context(
         ) or _build_genomics_sample_counts(fingerprints, ctx.dose_groups)
 
     # --- Biosampling dose groups (for Abstract-Methods) ---
-    # Scan sidecar files for rows where selection contains "biosampling".
+    # Scan sidecar files for biosampling-cohort animals (common.animal_selection).
     # The reference report writes: "Blood was collected from animals
     # dedicated for internal dose assessment in the 4 and 37 mg/kg groups."
     if session_dir:
@@ -489,7 +491,8 @@ def _extract_biosampling_doses(session_dir: str) -> list[float]:
     the set of dose groups they belong to.
 
     Biosampling animals are tagged in sidecar data via the per-animal
-    `selection` field containing "biosampling".  Usually only 2 of the
+    `selection` field ("Biosampling Animals" / "Biosample Animals" —
+    common.animal_selection.is_biosampling).  Usually only 2 of the
     study's 10 doses have biosampling animals (the two chosen for
     pharmacokinetic/internal dose assessment).
 
@@ -515,7 +518,7 @@ def _extract_biosampling_doses(session_dir: str) -> list[float]:
 
         for _aid, rec in sc.get("animals", {}).items():
             selection = str(rec.get("selection", ""))
-            if "biosampling" in selection.lower():
+            if is_biosampling(selection):
                 dose = rec.get("dose")
                 if dose is not None:
                     try:
@@ -582,7 +585,7 @@ def _extract_pk_data(session_dir: str) -> tuple[dict, dict, list[int]]:
 
         for _aid, rec in sc.get("animals", {}).items():
             selection = str(rec.get("selection", ""))
-            if "biosampling" not in selection.lower():
+            if not is_biosampling(selection):
                 continue
             dose = rec.get("dose")
             if dose is None:

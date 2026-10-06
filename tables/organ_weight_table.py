@@ -40,6 +40,8 @@ Footnotes:
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+
 
 from tables.table_builder_common import (
     apical_caption,
@@ -156,7 +158,7 @@ def _study_terminal_day(sc: dict) -> int | None:
     sidecars) — callers then skip day-filtering (backward-compatible)."""
     latest: int | None = None
     for rec in sc.get("animals", {}).values():
-        if "biosampling" in rec.get("selection", "").lower():
+        if is_biosampling(rec.get("selection", "")):
             continue
         for obs in rec.get("observations", []):
             d = _parse_study_day(obs.get("day"))
@@ -315,7 +317,7 @@ def build_organ_weight_table_from_sidecar(
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             # Only Core Animals contribute to organ weight stats
-            if "biosampling" in selection.lower():
+            if is_biosampling(selection):
                 continue
 
             dose = rec["dose"]
@@ -379,7 +381,7 @@ def build_organ_weight_table_from_sidecar(
         terminal_day = _study_terminal_day(sc)
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
-            if "biosampling" in selection.lower():
+            if is_biosampling(selection):
                 continue
             dose = rec["dose"]
             for obs in rec.get("observations", []):

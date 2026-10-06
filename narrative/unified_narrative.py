@@ -33,6 +33,7 @@ import re
 from collections import Counter
 
 from bmdx_pipe import TableRow
+from common.animal_selection import is_biosampling
 
 from narrative.section_template import (
     Literal,
@@ -272,7 +273,9 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
 
     Animals whose terminal observation falls before the expected terminal day
     (the most common terminal day across the study, usually the last study day
-    like SD5) are counted as early deaths.  For example, an animal with
+    like SD5) are counted as early deaths.  Only the Core cohort counts: the
+    biosampling (internal-dose) animals are removed on their own schedule
+    (e.g. SD4 in NIEHS-13), which is not mortality.  For example, an animal with
     terminal=true on SD0 when the expected day is SD5 means it was "found dead
     on study day 0".
 
@@ -316,6 +319,8 @@ def extract_mortality(sidecar_paths: dict[str, str]) -> dict:
             continue
 
         for _animal_id, animal in sc.get("animals", {}).items():
+            if is_biosampling(animal.get("selection")):
+                continue
             dose = float(animal.get("dose", 0.0))
             key = (dose, sex)
             animal_records.setdefault(key, [])
@@ -439,6 +444,48 @@ def _animal_condition_survived_template(subject: str = "male and female rats") -
         Slot("expected_day", SlotKind.NUMERIC),
         Literal(") without signs of overt toxicity."),
     ]
+
+
+def _animal_condition_survived_with_signs_template(
+    subject: str, verb: str, compound_name: str, signs_subject: str,
+) -> Template:
+    """All animals survived, but some treated groups showed clinical signs —
+    the all-survived statement without its "without signs of overt toxicity"
+    claim, then which groups showed what.  `expected_day`/`doses`/`unit` are
+    NUMERIC; the `signs` list is CATEGORICAL (finding words)."""
+    return [
+        Literal(f"All {subject} survived to study termination ("),
+        Slot("expected_day", SlotKind.NUMERIC),
+        Literal(f"). {signs_subject[:1].upper()}{signs_subject[1:]} {verb} "),
+        Slot("doses", SlotKind.NUMERIC),
+        Literal(" "),
+        Slot("unit", SlotKind.NUMERIC),
+        Literal(f" of {compound_name} exhibited clinical signs, which included "),
+        Slot("signs", SlotKind.CATEGORICAL),
+        Literal("."),
+    ]
+
+
+def _treated_signs(clinical_obs_incidence: dict[str, list] | None
+                   ) -> tuple[list[float], list[str], list[str]]:
+    """(doses, sexes, findings) of the clinical signs seen in TREATED groups
+    (dose > 0, incidence n > 0), from the Core-cohort incidence tables."""
+    doses: set[float] = set()
+    sexes: list[str] = []
+    findings: list[str] = []
+    for sex, rows in (clinical_obs_incidence or {}).items():
+        for row in rows:
+            hit = [d for d, cell in (getattr(row, "incidence_by_dose", None) or {}).items()
+                   if d and d > 0 and str(cell).split("/")[0].strip() not in ("", "0")]
+            if not hit:
+                continue
+            doses.update(hit)
+            if sex not in sexes:
+                sexes.append(sex)
+            label = str(getattr(row, "label", row)).lower()
+            if label not in findings:
+                findings.append(label)
+    return sorted(doses), sexes, findings
 
 
 def _animal_condition_opening_template(
@@ -571,8 +618,24 @@ def _build_animal_condition_paragraphs(
             death_doses.append(dose)
 
     if not death_doses:
-        # No mortality — brief statement that all survived (template + render;
-        # byte-identical to the former f-string).
+        sign_doses, sign_sexes, sign_findings = _treated_signs(clinical_obs_incidence)
+        if sign_findings:
+            # Everyone survived, but treated groups showed clinical signs: never
+            # claim "without signs of overt toxicity" over the incidence data.
+            signs_subject = _mortality_sex_subject(
+                {"by_dose": {0: {s: {} for s in sign_sexes}}}, animals)
+            paragraphs.append(render(
+                _animal_condition_survived_with_signs_template(
+                    _mortality_sex_subject(mortality, animals), exposure_verb(facts),
+                    compound_name, signs_subject),
+                {"expected_day": expected_day,
+                 "doses": _oxford_comma([_fmt_dose(d) for d in sign_doses], conjunction="and"),
+                 "unit": dose_unit,
+                 "signs": _oxford_comma(sign_findings[:5], conjunction="and")},
+            ))
+            return paragraphs
+        # No mortality and no signs — brief statement that all survived
+        # (template + render; byte-identical to the former f-string).
         paragraphs.append(
             render(_animal_condition_survived_template(_mortality_sex_subject(mortality, animals)),
                    {"expected_day": expected_day})

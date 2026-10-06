@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 16  # bumped: narratives name the study's species (no fixed "rats")
+_SECTIONS_CACHE_SCHEMA_VERSION = 17  # bumped: clinical-observation incidence counts the Core cohort only
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -404,7 +404,9 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 # 3: standard-design fallback (Sprague Dawley, gavage, corn oil) for unrecorded
 #    facts; an inhalation (ppm) study reads chamber control, exposure
 #    concentrations, no vehicle or formulations.
-_METHODS_CACHE_SCHEMA_VERSION = 3
+# 4: the biosampling cohort is recognized in either CEBS spelling ("Biosample
+#    Animals" in NIEHS-07/-12/-13), so its doses reach Study Design.
+_METHODS_CACHE_SCHEMA_VERSION = 4
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:

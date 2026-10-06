@@ -16,6 +16,8 @@ the per-platform builders.  body_weight_table.py now imports from here too.
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+
 import json
 import math
 import os
@@ -329,7 +331,7 @@ def detect_core_animal_availability(
             # "Unknown" means the CSV had no Selection column — those are
             # implicitly Core Animals (e.g. a Hormones CSV with no
             # Biosampling cohort provides no Selection column).
-            if "biosampling" in selection.lower():
+            if is_biosampling(selection):
                 continue
             dose = rec["dose"]
             dose_all.setdefault(dose, set()).add(aid)

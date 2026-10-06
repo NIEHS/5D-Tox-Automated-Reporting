@@ -31,6 +31,8 @@ authored split.
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+
 import math
 
 from tables.table_builder_common import load_sidecar, mean_se
@@ -57,7 +59,7 @@ def _extract_group_conc(sidecar: dict) -> dict[str, dict[float, list[float]]]:
     """
     out: dict[str, dict[float, list[float]]] = {}
     for rec in (sidecar.get("animals") or {}).values():
-        if "biosampling" not in (rec.get("selection", "") or "").lower():
+        if not is_biosampling(rec.get("selection", "") or ""):
             continue
         dose = rec.get("dose")
         if dose is None:

@@ -31,6 +31,8 @@ No NTP stats are used — this is purely descriptive statistics.
 
 from __future__ import annotations
 
+from common.animal_selection import is_biosampling
+
 import re
 
 from tables.table_builder_common import (
@@ -192,7 +194,7 @@ def build_tissue_concentration_table_from_sidecar(
         for aid, rec in sc.get("animals", {}).items():
             selection = rec.get("selection", "Unknown")
             # Only Biosampling Animals for tissue concentration
-            if "biosampling" not in selection.lower():
+            if not is_biosampling(selection):
                 continue
 
             dose = rec["dose"]
