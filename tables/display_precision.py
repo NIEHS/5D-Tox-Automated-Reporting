@@ -35,6 +35,7 @@ PUBLISHED_DECIMALS: dict[str, int] = {
     "globulin": 2,
     "glucose": 1,
     "sorbitol dehydrogenase": 1,
+    "total protein": 2,      # recorded to 1 decimal, printed to 2
     "triglycerides": 1,
     "urea nitrogen": 1,
     # Hematology
@@ -50,6 +51,8 @@ PUBLISHED_DECIMALS: dict[str, int] = {
     "mean cell hgb concentration": 1,
     "monocyte count": 2,
     "neutrophil count": 2,
+    "nrbc": 2,               # "Nucleated Red Blood Cells"; recorded to 1, printed "0.00 ± 0.00"
+    "nucleated red blood cells": 2,
     "platelet count": 0,
     # Hormones
     "free thyroxine": 3,

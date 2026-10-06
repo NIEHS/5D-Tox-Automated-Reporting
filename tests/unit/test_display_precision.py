@@ -26,7 +26,9 @@ def test_unlisted_endpoint_takes_its_recorded_precision():
     # they are not in the table; NIEHS-13 records them to 4 decimals.
     assert recorded_decimals(["0.235", "0.2241", "NA", None, "0.25"]) == 4
     assert row_decimals("Reticulocyte count", 4) == 4
-    assert row_decimals("Total protein", 0) == 1     # at least one decimal
+    # Total protein is recorded to 1 decimal but printed to 2 (every PA41).
+    assert row_decimals("Total protein", 1) == 2
+    assert row_decimals("Creatine kinase", 0) == 1   # at least one decimal
     assert row_decimals("Mystery") is None
 
 

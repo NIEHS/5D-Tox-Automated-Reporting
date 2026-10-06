@@ -16,7 +16,11 @@ individual-animal data.  This tool:
      NTP staff edited (an excluded outlier) is reported as unmatched instead of
      silently compared on different data;
   4. runs bmdx_pipe.ntp_stats on the matched data (Williams/Dunnett for organ
-     weights, Shirley/Dunn for clinical pathology) and compares markers.
+     weights, Shirley/Dunn for clinical pathology) and compares markers;
+  5. formats our mean ± SE at the precision the table builders print
+     (tables.display_precision: the endpoint's convention, "<organ> Absolute"
+     for organ weights, else the recorded precision) and compares it with the
+     published cell ("published_cell" / "ours_cell").
 
 Usage:
     python -m tooling.ntp_stats_conformance assets/cebs/NIEHS-13 assets/cebs/NIEHS-10 ...
@@ -38,6 +42,9 @@ from pathlib import Path
 import pypdf
 
 from bmdx_pipe import ntp_stats
+
+from tables.display_precision import recorded_decimals, row_decimals
+from tables.table_builder_common import format_mean_se, mean_se
 from tooling.cebs_to_pool import convert_workbook
 
 # Published table → (data truth-CSV stem, test family)
@@ -168,6 +175,20 @@ def load_endpoints(csv_path: str, selection: str, phase_day: str | None) -> dict
     return out
 
 
+def recorded_precision(csv_path: str) -> dict[str, int | None]:
+    """{endpoint column: decimals its values are recorded with} for a truth CSV."""
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rd = list(csv.DictReader(f))
+    return {c: recorded_decimals(r.get(c) for r in rd) for c in (rd[0].keys() if rd else [])}
+
+
+def precision_label(kind: str, endpoint: str) -> str:
+    """The label the table builder hands display_precision.row_decimals."""
+    if kind == "PA06" and endpoint != "Terminal Body Weight" and not endpoint.endswith(" Relative"):
+        return f"{endpoint} Absolute"
+    return endpoint
+
+
 def _tokens(label: str) -> set[str]:
     t = label.lower().replace("r.", "right ").replace("l.", "left ")
     return {w.rstrip("s") for w in re.findall(r"[a-z0-9]+", t)}
@@ -247,15 +268,23 @@ def compare_package(package: str, work: str) -> list[dict]:
             data = endpoints[hits[0]]
             doses = sorted(row["cells"])
             res = ntp_stats.ntp_pairwise({d: data.get(d, []) for d in doses}, family)
+            dec = row_decimals(precision_label(table["kind"], hits[0]),
+                               recorded_precision(csv_path).get(hits[0]))
             for d in doses:
                 pub = row["cells"][d][3]
                 ours = (ntp_stats.sig_marker(res.jonckheere_p) if d == doses[0]
                         else ntp_stats.sig_marker(res.pairwise_p.get(d, 1.0)))
+                mean_s, se_s, n, _ = row["cells"][d]
+                pub_cell = ours_cell = None
+                if se_s and n >= 2 and dec is not None:  # one animal prints no SE
+                    pub_cell = f"{mean_s} ± {se_s}"
+                    ours_cell = format_mean_se(*mean_se(data[d]), dec).replace("\u00a0", " ")
                 cells.append({**base, "status": "compared", "endpoint": hits[0],
                               "dose": d, "column": "trend" if d == doses[0] else "pairwise",
                               "method": res.method, "jonckheere_p": res.jonckheere_p,
                               "p": None if d == doses[0] else res.pairwise_p.get(d),
-                              "published": pub, "ours": ours})
+                              "published": pub, "ours": ours,
+                              "published_cell": pub_cell, "ours_cell": ours_cell})
     return cells
 
 

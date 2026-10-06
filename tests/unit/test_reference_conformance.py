@@ -1,16 +1,22 @@
-"""Our statistics against the significance markers NIEHS published.
+"""Our statistics and printed cells against the summary tables NIEHS published.
 
 Each reference fixture (tests/fixtures/reference/<report>/) is a subset of a
 published CEBS package: the Individual Animal workbooks and the PA06/PA41/PA43
 summaries NTP computed from them.  tooling.ntp_stats_conformance converts the
 workbooks, matches each published row to our data by VALUE (every dose group's
-N and mean at the published precision) and compares the * / ** markers.
+N and mean at the published precision) and compares the * / ** markers and the
+printed "mean ± SE" (at the precision our table builders use).
 
 A RATCHET in both directions: a new disagreement fails, and so does a known one
 that starts agreeing (then shrink the list).  Every known disagreement is a
 p-value within ~0.001 of 0.01 or 0.05 (assets/cebs/NTP-STATS-CONFORMANCE.md).
 Unmatched rows are rows our data cannot reproduce — NTP's outlier removals and
 derived endpoints we do not compute.
+
+Printed cells: across NIEHS-07 – -13, 3594 of 3598 published cells print
+exactly as ours.  The 4 that do not are SEs on an exact decimal half that NTP
+rounds sometimes up, sometimes down (no single rounding rule — half-up on the
+decimal value or on the binary float — reproduces all of them).
 """
 
 import pytest
@@ -28,6 +34,11 @@ KNOWN = {
 }
 COMPARED = {"NIEHS-10": 640}
 
+# report -> {(sex, endpoint, dose): (published cell, ours)} — the known printed-cell edges
+KNOWN_CELLS = {
+    "NIEHS-10": {("Male", "Monocyte count", 0.15): ("0.24 ± 0.09", "0.24 ± 0.10")},  # SE 0.095 (n = 2)
+}
+
 
 @pytest.mark.parametrize("report", sorted(KNOWN))
 def test_published_significance_markers(report, tmp_path):
@@ -41,3 +52,12 @@ def test_published_significance_markers(report, tmp_path):
     assert len(compared) == COMPARED[report]
     assert disagree == known_disagree
     assert unmatched == known_unmatched
+
+
+@pytest.mark.parametrize("report", sorted(KNOWN_CELLS))
+def test_published_cells_print_as_ours(report, tmp_path):
+    cells = [c for c in compare_package(str(REFERENCE_DIR / report), str(tmp_path))
+             if c["status"] == "compared" and c["published_cell"]]
+    differ = {(c["sex"], c["endpoint"], c["dose"]): (c["published_cell"], c["ours_cell"])
+              for c in cells if c["published_cell"] != c["ours_cell"]}
+    assert differ == KNOWN_CELLS[report]
