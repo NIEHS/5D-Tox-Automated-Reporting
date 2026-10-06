@@ -30,7 +30,8 @@ def test_gain_is_last_minus_first_day_for_core_animals(tmp_path):
                   "S,4,4,Male,Core Animals,270.0,SD1,Yes\n")
     gain = rows["Body Weight Gain"]
     assert float(gain["1"]) == 14.5 and float(gain["2"]) == 15.6
-    assert gain["3"] == "NaN" and gain["4"] == "NaN"
+    assert "3" not in gain                     # Biosampling: not in the pivot at all
+    assert gain["4"] == "NaN"
     assert "SD0" in rows and "SD5" in rows   # the day rows are unchanged
 
 

@@ -285,6 +285,8 @@ def xlsx_to_pivot_txt(
     data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]] = {}
     animal_dose_map: dict[str, float] = {}
     animal_sex_map: dict[str, str] = {}
+    cohorts: dict[str, dict[str, dict]] = {}   # {sex: {animal: {"selection"}}} for _keep_core_animals
+    selection_idx = None
 
     standard_cols = {
         "NTP Study Number", "Concentration", "Animal ID", "Sex",
@@ -294,6 +296,7 @@ def xlsx_to_pivot_txt(
     for row_idx, row in enumerate(data_sheet.iter_rows(values_only=True)):
         if row_idx == 0:
             headers = [str(c) if c is not None else "" for c in row]
+            selection_idx = headers.index("Selection") if "Selection" in headers else None
             continue
 
         if row[1] is None or row[2] is None:
@@ -308,6 +311,8 @@ def xlsx_to_pivot_txt(
         sex = str(row[3]).strip().title() if row[3] is not None else "Unknown"
         animal_dose_map[animal_id] = dose
         animal_sex_map[animal_id] = sex
+        if selection_idx is not None and selection_idx < len(row) and row[selection_idx]:
+            cohorts.setdefault(sex, {})[animal_id] = {"selection": str(row[selection_idx])}
 
         for col_idx in range(4, len(headers)):
             col_name = headers[col_idx].strip()
@@ -328,6 +333,7 @@ def xlsx_to_pivot_txt(
 
     wb.close()
 
+    _keep_core_animals(data_by_sex_endpoint, cohorts)
     if not data_by_sex_endpoint:
         return []
 
@@ -448,11 +454,10 @@ def _study_day_number(label: str) -> int | None:
 
 def _body_weight_gain(
     data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]],
-    sidecar_animals: dict[str, dict[str, dict]],
-    cohort_known: bool,
 ) -> dict[tuple[str, str], dict[str, float]]:
     """{(sex, "Body Weight Gain"): {animal: last-day weight - first-day weight}}
-    for the Core Animals weighed on both the study's first and last day."""
+    for the animals weighed on both the study's first and last day (the
+    pivot's animals — Core only once _keep_core_animals has run)."""
     days = sorted({ep for (_s, ep) in data_by_sex_endpoint if _study_day_number(ep) is not None},
                   key=_study_day_number)
     if len(days) < 2:
@@ -462,15 +467,41 @@ def _body_weight_gain(
     for sex in {s for (s, _ep) in data_by_sex_endpoint}:
         start = data_by_sex_endpoint.get((sex, first), {})
         end = data_by_sex_endpoint.get((sex, last), {})
-        gains = {}
-        for aid in start.keys() & end.keys():
-            selection = sidecar_animals.get(sex, {}).get(aid, {}).get("selection", "")
-            if cohort_known and "core" not in str(selection).lower():
-                continue
-            gains[aid] = round(end[aid] - start[aid], 6)
+        gains = {aid: round(end[aid] - start[aid], 6) for aid in start.keys() & end.keys()}
         if gains:
             out[(sex, _BODY_WEIGHT_GAIN)] = gains
     return out
+
+
+def _keep_core_animals(
+    data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]],
+    sidecar_animals: dict[str, dict[str, dict]],
+) -> int:
+    """Drop every non-Core animal from the pivot values when the file marks a
+    Core cohort; returns how many animals were dropped.
+
+    NTP files tag each animal's Selection: "Core Animals" (the scheduled-
+    sacrifice cohort) or the internal-dose cohort ("Biosampling Animals" /
+    "Biosample Animals"), weighed and observed on its own schedule.  Every
+    published summary counts Core animals only — the body weight n of
+    NIEHS-07 … 13 equals the Core count per dose (NIEHS-12 mice, 250 ppm:
+    8 Core → n = 8), the 3 internal-dose animals per group excluded — so the
+    values that feed statistics and BMD modeling are Core only.  The sidecar
+    keeps every animal (attrition, mortality footnotes).  A file that marks no
+    Core animal at all (Tissue Concentration: internal-dose animals only) or
+    has no Selection column is left as is."""
+    core = {(sex, aid) for sex, animals in sidecar_animals.items()
+            for aid, rec in animals.items() if "core" in str(rec.get("selection", "")).lower()}
+    if not core:
+        return 0
+    dropped = set()
+    for (sex, endpoint), vals in list(data_by_sex_endpoint.items()):
+        for aid in [a for a in vals if (sex, a) not in core]:
+            dropped.add((sex, aid))
+            del vals[aid]
+        if not vals:
+            del data_by_sex_endpoint[(sex, endpoint)]
+    return len(dropped)
 
 
 def tox_study_csv_to_pivot_txt(
@@ -728,18 +759,22 @@ def tox_study_csv_to_pivot_txt(
     if not data_by_sex_endpoint:
         return []
 
+    dropped = _keep_core_animals(data_by_sex_endpoint, sidecar_animals)
+    if dropped:
+        logger.info("%s: %d non-Core animal(s) kept out of the pivot (sidecar keeps them)",
+                    os.path.basename(path), dropped)
+    if not data_by_sex_endpoint:
+        return []
+
     # Body Weight Gain — a derived endpoint NIEHS reports and models (the
     # BMD/LOEL/NOEL summaries; its own BMDExpress input in NIEHS-13): per
-    # animal, the last study day's weight minus the first's (SD0 -> SD5),
-    # Core Animals only.  NIEHS-13's mouse "Body Weight Gain" input holds
-    # exactly the Core animals weighed on both days; Biosampling animals,
-    # which NIEHS-10 also weighed on SD0 and SD5, are excluded.  Written as a
-    # pivot row so integration, statistics and BMD modeling treat it like any
-    # other endpoint.  (A file without a Selection column counts every animal.)
+    # animal, the last study day's weight minus the first's (SD0 -> SD5).
+    # NIEHS-13's mouse "Body Weight Gain" input holds exactly the Core animals
+    # weighed on both days — the pivot's animals after _keep_core_animals.
+    # Written as a pivot row so integration, statistics and BMD modeling
+    # treat it like any other endpoint.
     if platform == "Body Weight" and has_obs_day and len(endpoint_cols) == 1:
-        gain = _body_weight_gain(data_by_sex_endpoint, sidecar_animals,
-                                 cohort_known=selection_col is not None)
-        data_by_sex_endpoint.update(gain)
+        data_by_sex_endpoint.update(_body_weight_gain(data_by_sex_endpoint))
 
     # Build BMDExpress experiment name prefix from platform
     prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, platform.replace(" ", ""))
