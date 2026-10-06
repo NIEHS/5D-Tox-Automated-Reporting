@@ -437,6 +437,42 @@ def _explanation_unit(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+_BODY_WEIGHT_GAIN = "Body Weight Gain"
+
+
+def _study_day_number(label: str) -> int | None:
+    """"SD5" -> 5; None for anything else."""
+    m = re.fullmatch(r"SD(\d+)", label or "")
+    return int(m.group(1)) if m else None
+
+
+def _body_weight_gain(
+    data_by_sex_endpoint: dict[tuple[str, str], dict[str, float]],
+    sidecar_animals: dict[str, dict[str, dict]],
+    cohort_known: bool,
+) -> dict[tuple[str, str], dict[str, float]]:
+    """{(sex, "Body Weight Gain"): {animal: last-day weight - first-day weight}}
+    for the Core Animals weighed on both the study's first and last day."""
+    days = sorted({ep for (_s, ep) in data_by_sex_endpoint if _study_day_number(ep) is not None},
+                  key=_study_day_number)
+    if len(days) < 2:
+        return {}
+    first, last = days[0], days[-1]
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    for sex in {s for (s, _ep) in data_by_sex_endpoint}:
+        start = data_by_sex_endpoint.get((sex, first), {})
+        end = data_by_sex_endpoint.get((sex, last), {})
+        gains = {}
+        for aid in start.keys() & end.keys():
+            selection = sidecar_animals.get(sex, {}).get(aid, {}).get("selection", "")
+            if cohort_known and "core" not in str(selection).lower():
+                continue
+            gains[aid] = round(end[aid] - start[aid], 6)
+        if gains:
+            out[(sex, _BODY_WEIGHT_GAIN)] = gains
+    return out
+
+
 def tox_study_csv_to_pivot_txt(
     path: str,
     output_dir: str,
@@ -691,6 +727,19 @@ def tox_study_csv_to_pivot_txt(
 
     if not data_by_sex_endpoint:
         return []
+
+    # Body Weight Gain — a derived endpoint NIEHS reports and models (the
+    # BMD/LOEL/NOEL summaries; its own BMDExpress input in NIEHS-13): per
+    # animal, the last study day's weight minus the first's (SD0 -> SD5),
+    # Core Animals only.  NIEHS-13's mouse "Body Weight Gain" input holds
+    # exactly the Core animals weighed on both days; Biosampling animals,
+    # which NIEHS-10 also weighed on SD0 and SD5, are excluded.  Written as a
+    # pivot row so integration, statistics and BMD modeling treat it like any
+    # other endpoint.  (A file without a Selection column counts every animal.)
+    if platform == "Body Weight" and has_obs_day and len(endpoint_cols) == 1:
+        gain = _body_weight_gain(data_by_sex_endpoint, sidecar_animals,
+                                 cohort_known=selection_col is not None)
+        data_by_sex_endpoint.update(gain)
 
     # Build BMDExpress experiment name prefix from platform
     prefix = _PLATFORM_TO_BM2_PREFIX.get(platform, platform.replace(" ", ""))
