@@ -17,6 +17,8 @@ Individual Animal workbooks are the study's inputs, and the PA06/PA41/PA43/PA48
 summaries are what NTP computed from those same animals (means, SEM, N,
 significance markers, tissue concentrations).  `report_values.json` holds the
 few values only the report text states (plasma half-lives).
+The BMD/BMDL/LOEL/NOEL summary (`…LOEL_and_NOEL_Summary….docx`) is the
+oracle for LOEL/NOEL (`tests/unit/test_reference_bmd_summary.py`).
 
 It is **not** a reference for BMDs or genomics: the published apical BMDs came
 from modified EPA BMDS 2.7 and the genomics from a BMDExpress 2.30 project
@@ -29,6 +31,7 @@ fingerprinting → sidecars).
 
 | file | bytes | sha256 (first 16) |
 |---|---:|---|
+| `C20022-01_BMD_BMDL_LOEL_and_NOEL_Summary_for_Apical_Endpoints_Sorted_by_BMD_LOEL_from_Low_to_High.docx` | 15,813 | `ffd11b3152216be8` |
 | `C20022-01_Individual_Animal_Body_Weight_Data.xlsx` | 12,751 | `a6b949e1c942d702` |
 | `C20022-01_Individual_Animal_Clinical_Chemistry_Data.xlsx` | 14,176 | `e5e16e035858833d` |
 | `C20022-01_Individual_Animal_Clinical_Observations_Data.xlsx` | 25,387 | `11ed5a211d2e9602` |
