@@ -39,10 +39,10 @@ from tables.table_builder_common import (
     apical_caption,
     js_dose_key,
     mean_se,
-    format_mean_se,
-    adaptive_decimals,
+    format_mean_se_sig,
     load_sidecar,
 )
+from tables.display_precision import TISSUE_CONCENTRATION_SIG_FIGS
 
 
 # ---------------------------------------------------------------------------
@@ -292,8 +292,7 @@ def build_tissue_concentration_table_from_sidecar(
                 vals = dose_vals.get(dose, [])
                 if vals:
                     m, s = mean_se(vals)
-                    dec = adaptive_decimals(m)
-                    values[dk] = format_mean_se(m, s, dec)
+                    values[dk] = format_mean_se_sig(m, s, TISSUE_CONCENTRATION_SIG_FIGS)
                 else:
                     values[dk] = "\u2013"
 
@@ -301,6 +300,9 @@ def build_tissue_concentration_table_from_sidecar(
                 "label": tp,
                 "doses": sorted_doses,
                 "values": values,
+                # The renderer re-rounds every mean ± SE cell; this keeps it at
+                # the published 3 significant figures (display_precision).
+                "sig_figs": TISSUE_CONCENTRATION_SIG_FIGS,
             })
 
         serialized[sex] = rows

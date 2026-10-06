@@ -36,3 +36,18 @@ def test_cell_formats_from_unrounded_stats_and_keeps_marker():
     assert format_row_cell("", 2, values=[0.6, 0.64]) == "0.62 ± 0.02"
     assert format_row_cell("5.0", 1, stats=[5.0, None]) == "5.0"
     assert format_row_cell("as is", None, stats=[1.0, 0.1]) == "as is"
+
+
+def test_tissue_concentration_prints_three_significant_figures():
+    # Published PA48 cells (NIEHS-08/-10/-12): mean and SE rounded independently.
+    from tables.table_builder_common import format_mean_se_display, format_mean_se_sig
+
+    nb = " ± "
+    assert format_mean_se_sig(33.833, 4.4333) == f"33.8{nb}4.43"
+    assert format_mean_se_sig(137.2, 10.64) == f"137{nb}10.6"
+    assert format_mean_se_sig(49.997, 19.41) == f"50.0{nb}19.4"
+    assert format_mean_se_sig(19473, 700.2) == f"19500{nb}700"
+    assert format_mean_se_sig(0.03051, 0.006472) == f"0.0305{nb}0.00647"
+    assert format_mean_se_sig(31.9, 3.09) == f"31.9{nb}3.09"
+    # The render-time re-round keeps a builder's sig-fig cell as it is.
+    assert format_mean_se_display(f"33.8{nb}4.43", None, 3) == f"33.8{nb}4.43"

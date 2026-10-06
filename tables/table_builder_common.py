@@ -599,6 +599,30 @@ def format_mean_se(mean: float, se: float, decimals: int = 1) -> str:
     return f"{_round_half_up(mean, decimals)}\u00a0\u00b1\u00a0{_round_half_up(se, decimals)}"
 
 
+def format_mean_se_sig(mean: float, se: float, sig_figs: int = 3) -> str:
+    """Mean ± SE with each number at `sig_figs` significant figures, rounded
+    independently ("33.8 ± 4.43", "137 ± 10.6") — the NIEHS tissue-concentration
+    style (tables.display_precision.TISSUE_CONCENTRATION_SIG_FIGS)."""
+    return (f"{_round_sig_half_up(mean, sig_figs)}\u00a0\u00b1\u00a0"
+            f"{_round_sig_half_up(se, sig_figs)}")
+
+
+def _round_sig_half_up(value: float, sig_figs: int) -> str:
+    """`value` at `sig_figs` significant figures, halves rounded up, written
+    positionally: trailing zeros kept ("50.0", "0.630") and no exponent for
+    large values ("19500", "700").  Zero prints as "0"."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    d = Decimal(f"{value:.12g}")  # settle binary noise, as _round_half_up does
+    if d == 0:
+        return "0"
+    exp = d.adjusted() - sig_figs + 1
+    q = d.quantize(Decimal(1).scaleb(exp), rounding=ROUND_HALF_UP)
+    if q.adjusted() > d.adjusted():  # rounded up a decade: 99.96 -> 100, not 100.0
+        q = q.quantize(Decimal(1).scaleb(exp + 1), rounding=ROUND_HALF_UP)
+    return str(int(q)) if q == q.to_integral_value() and q.as_tuple().exponent >= 0 else f"{q:f}"
+
+
 def _round_half_up(value: float, decimals: int) -> str:
     """`value` at `decimals` places, halves rounded up as printed tables do.
     Binary floats miss exact decimal halves — the mean of 1.19, 1.16, 1.14
@@ -738,7 +762,7 @@ _MEAN_SE_RE = re.compile(
 )
 
 
-def format_mean_se_display(cell, decimals: int | None = None):
+def format_mean_se_display(cell, decimals: int | None = None, sig_figs: int | None = None):
     """
     Re-round a pre-formatted "mean ± SE" table cell for display.
 
@@ -764,6 +788,8 @@ def format_mean_se_display(cell, decimals: int | None = None):
                   adaptive_decimals(), reproducing the NIEHS reference rule
                   (≥100 → 1, ≥1 → 2, ≥0.01 → 3, else 4).  Pass an explicit
                   value to force a fixed precision for one call.
+        sig_figs: Significant figures for mean and SE each (overrides
+                  `decimals`) — the tissue-concentration convention.
 
     Returns:
         The reformatted "mean ± SE" string (non-breaking spaces around ±, with
@@ -781,6 +807,8 @@ def format_mean_se_display(cell, decimals: int | None = None):
     mean = float(match.group("mean").replace("−", "-"))
     se = float(match.group("se"))
     marker = match.group("marker") or ""
+    if sig_figs is not None:
+        return format_mean_se_sig(mean, se, sig_figs) + marker
     chosen = decimals if decimals is not None else adaptive_decimals(mean)
     # Reuse format_mean_se for the canonical non-breaking-space style, then
     # re-attach the significance marker directly after the SE (no space).
