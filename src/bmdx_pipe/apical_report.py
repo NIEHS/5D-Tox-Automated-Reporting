@@ -336,7 +336,8 @@ class TableRow:
         bmd_status:     NIEHS classification: "viable", "NVM", "NR",
                         "failure", or None (not modeled).
         loel:           Lowest observed effect level (mg/kg), or None
-        noel:           No observed effect level (mg/kg), or None
+        noel:           No observed effect level (mg/kg), or None (not
+                        determined: no LOEL, or no tested dose below it)
         direction:      "UP" or "DOWN" — direction of change vs control
         mean_se_by_dose: Dict mapping dose → [mean, se] unrounded (se None for
                         n = 1) — the numbers values_by_dose was formatted from.
@@ -886,6 +887,10 @@ def build_table_data(
         # NOEL: highest dose NOT showing a significant pairwise difference.
         #   Per NIEHS: "the highest dose not showing a significant (p ≤ 0.05)
         #   pairwise difference relative to the vehicle control group."
+        #   None ("ND", not determined) when there is no LOEL, or no tested
+        #   dose below it — the published summaries (NIEHS-10: female MCH
+        #   LOEL 0.15 / NOEL ND; erythrocyte count ND / ND), never the
+        #   control or the highest dose.
         # Direction: UP or DOWN based on Jonckheere trend direction.
         loel = None
         noel = None
@@ -894,12 +899,9 @@ def build_table_data(
                 if loel is None or d < loel:
                     loel = d
         if loel is not None:
-            # NOEL = highest dose below LOEL that is not significant
+            # NOEL = highest tested dose below the LOEL (none were significant)
             candidates = [d for d in treatment_doses if d < loel]
-            noel = max(candidates) if candidates else control_dose
-        else:
-            # No significant pairwise → NOEL is the highest dose tested
-            noel = max(treatment_doses) if treatment_doses else None
+            noel = max(candidates) if candidates else None
 
         # Direction from Jonckheere: "UP" or "DOWN" string.
         # Only show direction when the Jonckheere trend test is significant,
