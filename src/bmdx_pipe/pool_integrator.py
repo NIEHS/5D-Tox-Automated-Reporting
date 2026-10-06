@@ -43,6 +43,7 @@ import json
 import logging
 import math
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -384,11 +385,64 @@ def xlsx_to_pivot_txt(
     return output_paths
 
 
+def key_sheet_units(path: str) -> dict[str, str]:
+    """
+    {endpoint column label: measurement unit} from an NTP Individual Animal
+    workbook's "Key to Column Labels" sheet.
+
+    The Data sheet's headers carry no units ("Albumin", "Plasma 2 Hour X
+    Concentration"); the Key sheet explains each column and states the unit in
+    one of two forms, which vary by platform and by study:
+      "Albumin in g/dL", "Heart weight in grams"           → trailing " in <unit>"
+      "Concentration of X in plasma 2 hours post-dosing (ug/ml)" → trailing "(<unit>)"
+    The unit is copied as written (display normalisation is the report's job).
+    A column whose explanation states neither form — or a multi-word phrase
+    that cannot be told from prose — is left out rather than guessed.
+    Metadata columns (_META_COLS) are skipped.
+    """
+    try:
+        import openpyxl
+        # Not read_only: CEBS workbooks declare a stale sheet dimension (A1),
+        # which read-only mode trusts and so yields no rows.
+        wb = openpyxl.load_workbook(path, data_only=True)
+    except Exception as e:
+        logger.warning("Could not open xlsx %s: %s", path, e)
+        return {}
+    try:
+        name = "Key to Column Labels"
+        ws = wb[name] if name in wb.sheetnames else wb[wb.sheetnames[0]]
+        units: dict[str, str] = {}
+        for row in ws.iter_rows(values_only=True):
+            if len(row) < 2 or row[0] is None or row[1] is None:
+                continue
+            label, text = str(row[0]).strip(), str(row[1]).strip()
+            if not label or label.lower() in _META_COLS or label == "Column Label":
+                continue
+            unit = _explanation_unit(text)
+            if unit:
+                units[label] = unit
+        return units
+    finally:
+        wb.close()
+
+
+def _explanation_unit(text: str) -> str | None:
+    """The unit a Key-sheet explanation states, or None (see key_sheet_units)."""
+    m = re.search(r"\(([^()]+)\)\s*$", text)
+    if m:
+        unit = m.group(1).strip()
+        # "(SD = Study day; )" and other parenthetical prose are not units.
+        return unit if re.fullmatch(r"[^\s=;,]+", unit) else None
+    m = re.search(r"\sin\s+([^\s]+)\s*$", text)
+    return m.group(1) if m else None
+
+
 def tox_study_csv_to_pivot_txt(
     path: str,
     output_dir: str,
     platform: str,
     data_type: str,
+    units: dict[str, str] | None = None,
 ) -> list[str]:
     """
     Convert a long-format _tox_study CSV file into tab-delimited pivot files
@@ -421,6 +475,10 @@ def tox_study_csv_to_pivot_txt(
         output_dir: Directory to write the pivot .txt files.
         platform:   Apical platform name (e.g., "Body Weight") from fingerprint.
         data_type:  Data type (e.g., "tox_study") from fingerprint.
+        units:      {endpoint column: unit} the CSV itself cannot carry (its
+                    headers are the workbook's unit-less Data-sheet labels) —
+                    e.g. key_sheet_units() of the source workbook.  Recorded in
+                    each sidecar as "units" for the endpoints this file has.
 
     Returns:
         List of paths to the generated pivot .txt files.
@@ -733,6 +791,12 @@ def tox_study_csv_to_pivot_txt(
                 "sex": sex,
                 "animals": dict(sidecar_animals[sex]),
             }
+            # Measurement units, when the caller knows them — only for this
+            # file's endpoint columns.  Absent ⇒ the unit was not recorded.
+            file_units = {header[i]: units[header[i]]
+                          for i in endpoint_cols if units and header[i] in units}
+            if file_units:
+                sidecar_data["units"] = file_units
             import json as json_mod
             with open(sidecar_path, "w") as sf:
                 json_mod.dump(sidecar_data, sf, indent=2)

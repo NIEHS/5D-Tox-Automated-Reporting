@@ -31,6 +31,7 @@ from .pool_integrator import (
     export_integrated_bm2,
     tox_study_csv_to_pivot_txt,
     extract_xlsx_value_map,
+    key_sheet_units,
 )
 
 # ── Statistical analysis & table generation ───────────────────────────────
