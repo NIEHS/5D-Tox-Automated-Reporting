@@ -432,12 +432,31 @@ def build_sample_availability_footnotes(
     return footnotes, n_row_marker_refs
 
 
+def _latest_observation_day(sidecar_data: dict[str, dict] | None,
+                            groups: list[tuple[str, float]]) -> int | None:
+    """The latest study day ("SD3" -> 3) any Core Animal in the given
+    (sex, dose) groups has an observation recorded on — when the last of them
+    was removed.  None when the sidecars record no day for them."""
+    wanted = set(groups)
+    latest: int | None = None
+    for sex, sc in (sidecar_data or {}).items():
+        for rec in (sc or {}).get("animals", {}).values():
+            if is_biosampling(rec.get("selection")) or (sex, rec.get("dose")) not in wanted:
+                continue
+            for obs in rec.get("observations", []):
+                m = re.search(r"-?\d+", str(obs.get("day") or ""))
+                if m and (latest is None or int(m.group()) > latest):
+                    latest = int(m.group())
+    return latest
+
+
 def build_attrition_footnote(
     total_core_by_sex_dose: dict[str, dict[float, int]],
     core_n_by_sex_dose: dict[str, dict[float, int]],
     sorted_doses: list[float],
     dose_unit: str = "mg/kg",
     design: dict | None = None,
+    sidecar_data: dict[str, dict] | None = None,
 ) -> tuple[dict | None, dict[str, dict[float, str]]]:
     """
     Build a single attrition footnote for whole dose groups with no data.
@@ -456,6 +475,11 @@ def build_attrition_footnote(
         dose_unit:              Dose unit string for the footnote text.
         design:                 Study design facts (pipeline.study_design) for
                                 the species word; None ⇒ the standard design.
+        sidecar_data:           {sex: parsed sidecar} the counts came from; the
+                                attrited groups' Core Animals' latest recorded
+                                observation day is the "by study day N" in the
+                                text.  No day recorded (or no sidecars) ⇒ "before
+                                study termination" — the day is never assumed.
 
     Returns:
         (footnote_record_or_None, n_row_marker_refs).  The record is a
@@ -486,9 +510,12 @@ def build_attrition_footnote(
     from pipeline.study_design import design_or_standard, species_plural
 
     animals = species_plural(design_or_standard(design))
+    removal_day = _latest_observation_day(sidecar_data, dead)
+    when = (f"by study day {removal_day}" if removal_day is not None
+            else "before study termination")
     text = (
         f"All {sex_str} {dose_str} {dose_unit} {animals} were found dead "
-        f"or moribund and euthanized by study day 1."
+        f"or moribund and euthanized {when}."
     )
     # Marker on the first attrited (sex, dose) cell — the footnote text
     # names every affected group, so one marker introduces it.

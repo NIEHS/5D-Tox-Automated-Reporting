@@ -320,6 +320,7 @@ def build_clinical_pathology_table_from_sidecar(
 
     attr_record, attr_refs = build_attrition_footnote(
         total_core_by_sex_dose, core_n_by_sex_dose, sorted_doses, dose_unit, design,
+        sidecar_data,
     )
     if attr_record is not None:
         footnotes.append(attr_record)
