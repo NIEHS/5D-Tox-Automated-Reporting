@@ -60,6 +60,7 @@
   nav.toc li { counter-increment: toc; }
   nav.toc a { display: flex; gap: 8px; padding: 4px 8px; border-radius: 5px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
   nav.toc a::before { content: counter(toc); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  nav.toc li.appendix a::before { content: "A"; }
   nav.toc a:hover { background: var(--head); }
   nav.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
   @media (min-width: 1000px) {
@@ -169,6 +170,7 @@
     <li><a href="#rerun">Re-running and resetting</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
     <li><a href="#gaps">Known gaps</a></li>
+    <li class="appendix"><a href="#appendix-a">What comes from the data</a></li>
   </ol>
 </details></nav>
 
@@ -360,7 +362,9 @@ DTXSID50469320.pdf             <span class="c">that bundle compiled locally with
     <tr><td><code>--compound-name</code></td><td>Short name for captions and narratives. Default: the identity name.</td></tr>
     <tr><td><code>--dose-unit</code></td><td>The study's dose unit, used on every surface: table headers, Methods, Abstract, Summary, the Appendix B roster and the LLM narratives. <b>State it explicitly.</b> If omitted, the unit the data records is used, else <code>mg/kg</code>, and the log says which. A concentration in air (<code>ppm</code>, <code>ppb</code>, <code>mg/m3</code>) makes it an inhalation study: “exposed to … by inhalation”, “exposure concentrations”, “chamber control”, title “(Inhalation Studies)”, no vehicle or dose formulations.</td></tr>
     <tr><td><code>--metadata FILE</code></td><td>Classification overrides keyed by filename: <code>{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}</code></td></tr>
-    <tr><td><code>--design FILE</code></td><td>Study-design facts the data does not record, set on every experiment (as the UI metadata step does): <code>{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}</code>. Fields: species, strain, articleRoute, administrationMeans, articleVehicle, studyDuration (controlled vocabulary). A fact the metadata does not record takes the standard design as a <b>fallback</b>: Sprague Dawley rats for five days (<code>studyDuration</code>, e.g. <code>"28d"</code>, overrides it), by gavage in corn oil for an oral (mg/kg) unit, by inhalation for an air concentration (ppm), no route fallback for other units. These facts also set the apical table captions: “…of Male Rats Administered X for Five Days”, or “Exposed to X” for inhalation. The log prints <code>NOTE: not recorded in the data, standard design used: …</code>; record the real values with <code>--design</code> whenever they differ. Recorded values that disagree across experiments get no fallback. Facts the data never holds (animal source, quarantine, test-article lot and purity, dose rationale) are a <code>[Placeholder: …]</code> in Materials and Methods, which <code>--strict</code> refuses to ship.</td></tr>
+    <tr><td><code>--design FILE</code></td><td>Study-design facts the data does not record, set on every experiment (as the UI metadata step does) and kept in <code>sessions/&lt;id&gt;/study_design.json</code>, so every later integration (<code>--reintegrate</code>) puts them back: <code>{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}</code>. Fields: species, strain, articleRoute, administrationMeans, articleVehicle, studyDuration (controlled vocabulary). A fact the metadata does not record takes the standard design as a <b>fallback</b>: Sprague Dawley rats for five days (<code>studyDuration</code>, e.g. <code>"28d"</code>, overrides it), by gavage in corn oil for an oral (mg/kg) unit, by inhalation for an air concentration (ppm), no route fallback for other units. These facts also set the apical table captions: “…of Male Rats Administered X for Five Days”, or “Exposed to X” for inhalation. The log prints <code>NOTE: not recorded in the data, standard design used: …</code>; record the real values with <code>--design</code> whenever they differ. Recorded values that disagree across experiments get no fallback. Facts the data never holds (animal source, quarantine, test-article lot and purity, dose rationale) are a <code>[Placeholder: …]</code> in Materials and Methods, which <code>--strict</code> refuses to ship.</td></tr>
+    <tr><td><code>--front-matter FILE</code></td><td>Front matter, as the Configure screen saves it to <code>front_matter.json</code>: <code>authors</code>, <code>contributors</code>, <code>publication</code> (<code>report_number</code>, <code>doi</code>, <code>report_date</code>) and <code>strain_designation</code>, the supplier designation the title prints after the strain, e.g. <code>{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}</code>. Keys the file gives replace the saved ones.</td></tr>
+    <tr><td><code>--method-profile NAME</code></td><td>The analysis method profile (<code>profiles/&lt;name&gt;.yaml</code>, ADR-0027). <code>NAME</code> fixes the study on that profile; <code>newest</code> makes it track the newest profile, which is also the default for a study with no pin. A change of profile recomputes. The log prints the profile, unimplemented settings (<code>NOTE</code>) and every setting a <code>.bm2</code> records differently (<code>WARNING</code>).</td></tr>
     <tr><td><code>--bmd-stats</code>, <code>--go-*</code></td><td>GO gene-set table settings: <code>--bmd-stats median</code>, <code>--go-pct 5</code>, <code>--go-min-genes 20</code>, <code>--go-max-genes 500</code>, <code>--go-min-bmd 3</code> (the UI defaults).</td></tr>
     <tr><td><code>--reintegrate</code></td><td>Integrate again even though <code>integrated.json</code> exists. Wipes the process caches, so processing starts over. Without it, integration is skipped when <code>integrated.json</code> exists.</td></tr>
     <tr><td><code>--background</code></td><td>Also generate and save the Background section. <code>--model</code> picks the model.</td></tr>
@@ -677,7 +681,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
 
 <!-- ============================================================ -->
 <h2 id="gaps"><span class="num">10</span>Known gaps</h2>
-<p>As of 2026-10-05:</p>
+<p>As of 2026-10-05. <a href="#appendix-a">Appendix A.3</a> lists every place the report still lacks data, with what would close it.</p>
 <ul>
   <li><b>About This Report</b> (authors, contributors) is human-set front matter (<code>front_matter.json</code>); nothing in the data supplies it.</li>
   <li><b>Background</b> needs ATSDR and IRIS. Where either is unreachable (the sandbox firewall), <code>--background</code> saves nothing and says so, rather than writing a Background that reports the unreachable sources as data gaps.</li>
@@ -686,6 +690,123 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   <li><b>LaTeX over HTTP.</b> <code>POST /api/export-overleaf-bundle</code> and <code>POST /api/compile-pdf</code> take a full report body assembled by the legacy UI, not a session id, and the preview's <code>latex</code> surface returns 501. Use Route A for LaTeX.</li>
   <li><b>Experiment metadata review</b> (<code>GET</code>/<code>POST /api/experiment-metadata/{id}</code>: species, sex and organ per experiment, written back into <code>integrated.json</code>) is not a step in either script. Call it after integrate if experiment descriptions need correcting.</li>
 </ul>
+
+<!-- ============================================================ -->
+<h2 id="appendix-a"><span class="num">A</span>What in the report comes from the data</h2>
+<p>This appendix says where each part of a report comes from, what the pipeline does when the data doesn't say, and where it still falls short. It holds as of 2026-10-07.</p>
+<h3>A.1 The rules</h3>
+<ul>
+  <li><b>The integrated dataset is the source of truth.</b> Every number and study fact in the report is read from <code>integrated.json</code> (the BMDExpress project that Integrate builds) and its sidecars, the per-animal files that keep what the pivot drops: cohort (Core or Biosample), observation day, terminal flag and units. Nothing reads the raw <code>.bm2</code>, <code>.txt</code> or <code>.xlsx</code> uploads directly.</li>
+  <li><b>The document tree sets the structure.</b> Headings, their order and the table and figure numbers come from the template (<code>templates/niehs-5day-report.yaml</code>) and a study's overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>). Numbers are given by position, never typed in.</li>
+  <li><b>The method profile sets how the data is analysed.</b> The statistical tests, thresholds, BMD acceptance criteria, internal-dose rules, GO ranking and number formats come from the study's pinned profile (<code>profiles/*.yaml</code>, ADR-0027). The footnotes, Methods text and Appendix D that describe the method are generated from those same settings, so the text can't claim a test that didn't run.</li>
+  <li><b>A fact the data doesn't hold is never invented.</b> It takes one of three forms:<ul><li>a <b>logged fallback</b> (the standard design, the dose unit, an inferred BMR), printed as a <code>NOTE</code> and, for the BMR, footnoted in the report;</li><li>a visible <b>placeholder</b> (<code>[Placeholder: …]</code>, <code>[… pending]</code>) that <code>--strict</code> refuses to ship;</li><li>"not evaluated", for a data domain the study didn't collect.</li></ul></li>
+  <li><b>People supply what no file records.</b> That covers <code>--design</code>, front matter, experiment-metadata approval and section approval. Each is kept in the session and re-applied when integration runs again.</li>
+</ul>
+<h3>A.2 Where each part of the report comes from</h3>
+<p><b>Kinds of source:</b></p>
+<ul>
+  <li><b>Data:</b> computed from the integrated dataset.</li>
+  <li><b>Profile:</b> the method profile.</li>
+  <li><b>Stated:</b> given by a person.</li>
+  <li><b>LLM:</b> written by a model from the data, through the NIEHS gateway only.</li>
+  <li><b>Fixed:</b> NIEHS boilerplate.</li>
+</ul>
+<div class="tablewrap"><table>
+  <thead><tr><th>Report part</th><th>Source</th><th>How it's derived</th><th>When the data doesn't say</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">Title: chemical, CASRN</td><td>Data / stated</td><td><code>identity.json</code> (<code>--name</code>, <code>--casrn</code>, or the resolver)</td><td>—</td></tr>
+    <tr><td class="wrap">Title: strain, species, route ("Gavage Studies")</td><td>Data / stated</td><td>The experiments' metadata (<code>study_design_facts</code>)</td><td>The standard design, logged</td></tr>
+    <tr><td class="wrap">Title: supplier designation "(Hsd:…)"</td><td>Stated</td><td><code>front_matter.json</code> <code>strain_designation</code></td><td>Left out</td></tr>
+    <tr><td class="wrap">Report number, date, DOI</td><td>Stated</td><td><code>front_matter.json</code> <code>publication</code></td><td>"to be assigned" placeholders</td></tr>
+    <tr><td class="wrap">Foreword, Peer Review, Acknowledgments</td><td>Fixed</td><td>Template</td><td>—</td></tr>
+    <tr><td class="wrap">About This Report</td><td>Stated</td><td><code>front_matter.json</code> authors and contributors</td><td>Pending</td></tr>
+    <tr><td class="wrap">Abstract: Methods, Results, Summary</td><td>Data</td><td>Built from the BMD summary, the genomics results and the design facts, without a model</td><td>Paragraphs drop out for absent data</td></tr>
+    <tr><td class="wrap">Abstract: Background, Background section</td><td>LLM</td><td>ATSDR, IRIS and PubChem lookups (<code>--background</code>)</td><td>Nothing is saved when a source is unreachable</td></tr>
+    <tr><td class="wrap">Methods: Study Design, Dose Selection, Chemistry</td><td>Data</td><td>Group sizes (Core cohort), doses, dose unit, design facts, identity</td><td><code>[Placeholder: …]</code> for the source, age, quarantine, randomization, dose rationale, lot and purity</td></tr>
+    <tr><td class="wrap">Methods: Statistical Analysis, apical BMD</td><td>LLM from profile</td><td>The prompt is built from the profile's test families, alphas, BMR and acceptance criteria</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: transcriptomic BMD</td><td>LLM</td><td>The prompt carries the <code>.bm2</code>'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters)</td><td>"not recorded"</td></tr>
+    <tr><td class="wrap">Methods: clinical exams, organ and clin-path endpoints</td><td>LLM</td><td>The prompt lists the endpoints in the data</td><td>—</td></tr>
+    <tr><td class="wrap">Methods: other subsections</td><td>LLM</td><td>Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility</td><td>— (see gap G13)</td></tr>
+    <tr><td class="wrap">Sample counts table</td><td>Data</td><td>Animal report and expression samples per organ, sex and dose</td><td>Omitted without expression data</td></tr>
+    <tr><td class="wrap">Results: body, organ weight, clinical pathology tables</td><td>Data + profile</td><td>Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook</td><td>A domain that isn't collected reads "not evaluated"</td></tr>
+    <tr><td class="wrap">Results: Animal Condition, Clinical Pathology narratives</td><td>Data</td><td>Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model</td><td>—</td></tr>
+    <tr><td class="wrap">Results: Internal Dose table and narrative</td><td>Data + profile</td><td>The BD share, ½-LOD, Dixon outlier test, test family and significant figures come from the profile; units come from the lab workbook</td><td>Omitted without concentration data</td></tr>
+    <tr><td class="wrap">Apical BMD summary</td><td>Data + profile</td><td><code>.bm2</code> results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics</td><td>The BMR is inferred from the profile and footnoted; NOEL is "ND"</td></tr>
+    <tr><td class="wrap">Apical BMD analytical paragraph</td><td>LLM</td><td>The summary rows</td><td>—</td></tr>
+    <tr><td class="wrap">Gene set and gene BMD tables</td><td>Data + profile</td><td>BMDExpress gene-level and GO analyses from the <code>.bm2</code>; ranking statistic and cutoffs from the profile; fold change is the mean over probes</td><td>—</td></tr>
+    <tr><td class="wrap">Gene set and gene narratives, References</td><td>LLM + knowledge base</td><td>Grounded in <code>bmdx.duckdb</code>; may cite only the papers it is given</td><td>—</td></tr>
+    <tr><td class="wrap">Summary</td><td>Data</td><td>Built from the same inputs as the Abstract, without a model</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix A (internal dose method), F (supplemental files)</td><td>Stated</td><td>Study overlay HTML/TeX (PFHxSAm only)</td><td>Pending</td></tr>
+    <tr><td class="wrap">Appendix B animal roster</td><td>Data</td><td>Animal report joined to the FASTQ sample names</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix C.1 PCA</td><td>Data</td><td>Integrated expression matrix</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix C.2 eFDR</td><td>—</td><td>Not ingested</td><td>Pending figure</td></tr>
+    <tr><td class="wrap">Appendix D acceptance table, configuration table</td><td>Profile, data</td><td>Profile criteria; the <code>.bm2</code> analyses' recorded configuration</td><td>—</td></tr>
+    <tr><td class="wrap">Appendix D, C and E prose</td><td>Fixed</td><td>Shared freeform files</td><td>—</td></tr>
+  </tbody>
+</table></div>
+<p><b>Precedence when sources disagree:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Fact</th><th>Precedence (strongest first)</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">Dose unit</td><td><code>--dose-unit</code> (stated) &gt; the one unit the data records &gt; <code>mg/kg</code> (logged)</td></tr>
+    <tr><td class="wrap">Design facts</td><td>Experiment metadata, including the <code>--design</code> facts re-applied at each integration &gt; the standard design (logged). Recorded values that disagree get no fallback</td></tr>
+    <tr><td class="wrap">Experiment organ and sex</td><td>Approved metadata (<code>metadata_approved.json</code>) &gt; inference from names and the LLM</td></tr>
+    <tr><td class="wrap">Method setting</td><td>Request (CLI or UI) &gt; study overlay <code>methods:</code> &gt; pinned profile &gt; built-in default. Each value carries its source</td></tr>
+    <tr><td class="wrap">Apical BMR</td><td>Recorded in the <code>.bm2</code> &gt; the profile's <code>bmr_when_unrecorded</code> (footnoted as inferred)</td></tr>
+    <tr><td class="wrap"><code>.bm2</code> setting vs profile</td><td>Neither wins. A disagreement is a <code>method_mismatch</code> warning</td></tr>
+  </tbody>
+</table></div>
+<h3>A.3 Gap analysis</h3>
+<p><b>Status values:</b></p>
+<ul>
+  <li><b>Input:</b> no file the pipeline receives carries the fact, so a person or a new data source must supply it.</li>
+  <li><b>Wiring:</b> the data exists but doesn't reach the report.</li>
+  <li><b>Text:</b> fixed wording that should come from the profile or the data.</li>
+  <li><b>Structure:</b> a section NIEHS publishes that the template lacks.</li>
+</ul>
+<p><b>Input gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G1</td><td>Strain, route, vehicle and duration aren't in the BMDExpress project or the STQ weight extracts</td><td>The standard design (logged), or <code>--design</code>. BPAF and Triclosan were stated as the standard design on 2026-10-07</td><td>Ingest the study's protocol record (CEBS study metadata or the source-of-truth <code>.xlsx</code> Key sheet)</td></tr>
+    <tr><td class="wrap">G2</td><td>Animal source, age, quarantine, randomization, dose rationale, test-article lot and purity, formulation analyses</td><td><code>[Placeholder]</code> in Methods; <code>--strict</code> blocks</td><td>A study-facts input, or text authored in Word (ADR-0018)</td></tr>
+    <tr><td class="wrap">G3</td><td>Supplier strain designation</td><td>Front matter only; the title leaves it out if unset</td><td>The same protocol record as G1</td></tr>
+    <tr><td class="wrap">G4</td><td>eFDR (synthetic-null analysis)</td><td>Appendix C.2 is pending; Methods says it isn't included</td><td>Ingest the synthetic-null BMDExpress results</td></tr>
+    <tr><td class="wrap">G5</td><td>Theoretical inhaled dose (inhalation studies)</td><td>Rows normalized by inhaled dose aren't built</td><td>A file recording the inhaled-dose calculation</td></tr>
+    <tr><td class="wrap">G6</td><td>Authors, report number, DOI, Background sources</td><td>Front matter and <code>--background</code> on the host</td><td>Human input; host network</td></tr>
+  </tbody>
+</table></div>
+<p><b>Wiring gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G7</td><td>Experiment metadata (organ, sex, species)</td><td>Inferred from experiment names (LLM) unless approved; the source-of-truth <code>.xlsx</code> is primary only for classification</td><td>Read the workbook's Key and Data sheets first (ADR-0017/0019)</td></tr>
+    <tr><td class="wrap">G8</td><td>Multi-species studies (NIEHS-13: rats and mice)</td><td>One gene-expression <code>.bm2</code> per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only</td><td>Key genomics by species and keep every expression project</td></tr>
+    <tr><td class="wrap">G9</td><td>Animal report counts NIEHS-13's biosample animals as Core</td><td>The animal report's Core count is too high; the tables use the right cohort</td><td>Use the cohort rule the tables use</td></tr>
+    <tr><td class="wrap">G10</td><td>The UI's Process step sends <code>mg/kg</code> when no unit is set</td><td>Hides the recorded-unit and logged fallback</td><td>Send nothing and let the server resolve it</td></tr>
+    <tr><td class="wrap">G11</td><td>Apical outlier exclusion (NIEHS staff judgement)</td><td>Not represented; the profile says <code>outliers: null</code></td><td>A per-study exclusion list in the overlay</td></tr>
+    <tr><td class="wrap">G12</td><td>NIEHS-10's apical engine (BMDS 2.7) and <code>all_endpoints</code></td><td>Listed as profile deviations; the substitute runs</td><td>Implement, or accept as recorded</td></tr>
+  </tbody>
+</table></div>
+<p><b>Text gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G13</td><td>Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text</td><td>The LLM writes plausible, older-era protocol text</td><td>Move the guides into the profile, or build them from data</td></tr>
+    <tr><td class="wrap">G14</td><td>The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes"</td><td>Can disagree with the profile's GO ranking</td><td>Generate from the profile, as the statistics guide is</td></tr>
+    <tr><td class="wrap">G15</td><td>Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose</td><td>Fixed text</td><td>Generate from the profile and the recorded configuration</td></tr>
+    <tr><td class="wrap">G16</td><td>Appendix E describes liver, kidney and heart whatever was weighed</td><td>Can describe organs the study didn't weigh, and miss ones it did</td><td>Select descriptions by the organs in the data</td></tr>
+    <tr><td class="wrap">G17</td><td>Peer Review says the design and methods are identical to those reviewed</td><td>Not checked</td><td>Compare the pinned profile with the reviewed one</td></tr>
+    <tr><td class="wrap">G18</td><td>The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type</td><td>Both are built from the design facts but drop these parts</td><td>Build both from the cover title, with the sexes in the data</td></tr>
+  </tbody>
+</table></div>
+<p><b>Structure gaps</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap">G19</td><td>NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
+  </tbody>
+</table></div>
 
 <footer>
   Source: <code>docs/headless-report-generation.md</code> in the rlm-bmdx repository. Scripts: <code>tooling/generate_report.py</code>,
