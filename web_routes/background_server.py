@@ -527,6 +527,18 @@ async def no_cache_dev_assets(request: Request, call_next):
 # under web/ is retired — the SPA now owns the root. Guarded so the server still
 # starts before the frontend has been built.
 _wizard_dir = Path(__file__).parent.parent / "web_wizard"
+# The command-line manual (docs/headless-report-generation.html), re-read each
+# call so an edited manual shows without a restart.
+_MANUAL = Path(__file__).resolve().parent.parent / "docs" / "headless-report-generation.html"
+
+
+@app.get("/manual")
+async def _manual():
+    if not _MANUAL.exists():
+        return JSONResponse({"error": "manual not found"}, status_code=404)
+    return HTMLResponse(_MANUAL.read_text(encoding="utf-8"))
+
+
 if _wizard_dir.exists():
     def _index_response() -> HTMLResponse:
         # Re-read each call so a rebuilt bundle is picked up without a restart.
