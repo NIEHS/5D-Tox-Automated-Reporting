@@ -60,7 +60,7 @@
   nav.toc li { counter-increment: toc; }
   nav.toc a { display: flex; gap: 8px; padding: 4px 8px; border-radius: 5px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
   nav.toc a::before { content: counter(toc); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.4em; }
-  nav.toc li.appendix a::before { content: "A"; }
+  nav.toc li.appendix a::before { content: attr(data-letter); }
   nav.toc a:hover { background: var(--head); }
   nav.toc a.active { background: var(--accent-soft); border-left-color: var(--accent); }
   @media (min-width: 1000px) {
@@ -171,7 +171,8 @@
     <li><a href="#rerun">Re-running and resetting</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
     <li><a href="#gaps">Known gaps</a></li>
-    <li class="appendix"><a href="#appendix-a">What comes from the data</a></li>
+    <li class="appendix"><a href="#appendix-a" data-letter="A">What in the report comes from the data</a></li>
+    <li class="appendix"><a href="#appendix-b" data-letter="B">The YAML files and what they can do</a></li>
   </ol>
 </details></nav>
 
@@ -807,7 +808,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
 <ul>
   <li><b>No model involved.</b> These are assembled from the numbers above, so they can't disagree with the tables:<ul><li>the Abstract (except its Background sentence);</li><li>the Summary;</li><li>the Animal Condition, Clinical Pathology and Internal Dose narratives;</li><li>Methods' Study Design, Dose Selection and Chemistry;</li><li>the genomics intros and per-organ findings.</li></ul></li>
   <li><b>"Most sensitive" lists</b> in the Abstract and Summary take reliable BMDs only:<ul><li>the BMD must be viable and not NVM;</li><li>it must be at or above the lower limit of extrapolation (⅓ of the lowest nonzero dose);</li><li>it must not be anomalous: a BMD below NOEL/10, or LOEL/10 without a NOEL, is left out.</li></ul></li>
-  <li><b>LLM-written prose</b> <span class="chip yaml">template.yaml</span> <span class="chip yaml">profile.yaml</span> is given only the session's numbers, and only through the NIEHS gateway. Genomics narratives may cite only the papers the knowledge base supplies. That prose covers:<ul><li>the apical BMD paragraph;</li><li>the genomics narratives;</li><li>the remaining Methods subsections, whose list and headings come from the template; the Statistical Analysis and apical BMD prompts are built from the profile;</li><li>the Background.</li></ul></li>
+  <li><b>LLM-written prose</b> <span class="chip yaml">template.yaml</span> <span class="chip yaml">profile.yaml</span> is given only the session's numbers, and only through the NIEHS gateway. Genomics narratives may cite only the papers the knowledge base supplies. That prose covers:<ul><li>the apical BMD paragraph;</li><li>the genomics narratives;</li><li>the remaining Methods subsections. The template places them and gives their headings; which subsections exist, and when each applies, is fixed in code (<code>SUBSECTION_SKELETON</code>). The Statistical Analysis and apical BMD prompts are built from the profile;</li><li>the Background.</li></ul></li>
 </ul>
 <h3>A.3 Where each part of the report comes from</h3>
 <p>Every row's place and heading come from <code>template.yaml</code>. The YAML column names the files that also shape its content (see the labels in A.2).</p>
@@ -834,7 +835,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
     <tr><td class="wrap">Methods: Statistical Analysis, apical BMD</td><td>LLM from profile</td><td>The prompt is built from the profile's test families, alphas, BMR and acceptance criteria</td><td>—</td><td><code>profile.yaml</code></td></tr>
     <tr><td class="wrap">Methods: transcriptomic BMD</td><td>LLM</td><td>The prompt carries the <code>.bm2</code>'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters)</td><td>"not recorded"</td><td>—</td></tr>
     <tr><td class="wrap">Methods: clinical exams, organ and clin-path endpoints</td><td>LLM</td><td>The prompt lists the endpoints in the data</td><td>—</td><td>—</td></tr>
-    <tr><td class="wrap">Methods: other subsections</td><td>LLM</td><td>Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility</td><td>— (see gap G14)</td><td><code>template.yaml</code> (list, headings)</td></tr>
+    <tr><td class="wrap">Methods: other subsections</td><td>LLM</td><td>Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility</td><td>— (see gap G14)</td><td><code>template.yaml</code> (placement, headings)</td></tr>
     <tr><td class="wrap">Sample counts table</td><td>Data</td><td>Animal report and expression samples per organ, sex and dose</td><td>Omitted without expression data</td><td>—</td></tr>
     <tr><td class="wrap">Results: body, organ weight, clinical pathology tables</td><td>Data + profile</td><td>Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook</td><td>A domain that isn't collected reads "not evaluated"</td><td><code>profile.yaml</code>, <code>view.yaml</code></td></tr>
     <tr><td class="wrap">Results: Animal Condition, Clinical Pathology narratives</td><td>Data</td><td>Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model</td><td>—</td><td><code>view.yaml</code></td></tr>
@@ -910,18 +911,242 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
     <tr><td class="wrap">G18</td><td>The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10)</td><td>Fixed in code, not the profile</td><td>Read them from the profile, as the acceptance criteria are</td></tr>
     <tr><td class="wrap">G19</td><td>BMD precision (1 or 3 decimals) is inferred from whether the <code>.bm2</code> has gene-level analyses</td><td>A data heuristic standing in for a method setting</td><td>A profile setting</td></tr>
     <tr><td class="wrap">G20</td><td>The transcriptomics Methods guides name TempO-Seq and the S1500+ platform</td><td>Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip</td><td>Build the guides from the detected assay</td></tr>
-    <tr><td class="wrap">G21</td><td>Peer Review says the design and methods are identical to those reviewed</td><td>Not checked</td><td>Compare the pinned profile with the reviewed one</td></tr>
-    <tr><td class="wrap">G22</td><td>The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type</td><td>Both are built from the design facts but drop these parts</td><td>Build both from the cover title, with the sexes in the data</td></tr>
+    <tr><td class="wrap">G21</td><td>The set of Methods subsections, and when each applies, is fixed in code (<code>narrative/methods_models.SUBSECTION_SKELETON</code>)</td><td>A template node can place or retitle a subsection but not add one the LLM writes</td><td>Derive the list from the template's <code>methods_key</code> nodes</td></tr>
+    <tr><td class="wrap">G22</td><td>Peer Review says the design and methods are identical to those reviewed</td><td>Not checked</td><td>Compare the pinned profile with the reviewed one</td></tr>
+    <tr><td class="wrap">G23</td><td>The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type</td><td>Both are built from the design facts but drop these parts</td><td>Build both from the cover title, with the sexes in the data</td></tr>
   </tbody>
 </table></div>
 <p><b>Structure gaps</b></p>
 <div class="tablewrap"><table>
   <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
   <tbody>
-    <tr><td class="wrap">G23</td><td>NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
-    <tr><td class="wrap">G24</td><td>Genomics organs are ordered liver, kidney, then alphabetical</td><td>NIEHS-10's order, fixed in code; another study's published order may differ</td><td>Order by the template or the study overlay</td></tr>
+    <tr><td class="wrap">G24</td><td>NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
+    <tr><td class="wrap">G25</td><td>Genomics organs are ordered liver, kidney, then alphabetical</td><td>NIEHS-10's order, fixed in code; another study's published order may differ</td><td>Order by the template or the study overlay</td></tr>
   </tbody>
 </table></div>
+<!-- ============================================================ -->
+<h2 id="appendix-b"><span class="num">B</span>The YAML files and what they can do</h2>
+<p>Appendix A says which parts of a report each YAML file sets. This appendix covers the files themselves: where they live, what each key can do, how they combine, and how they are checked. It holds as of 2026-10-07.</p>
+<h3>B.1 The files</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>File</th><th>Scope</th><th>Edited with</th><th>Takes effect</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>templates/niehs-5day-report.yaml</code>: the <b>report template</b></td><td>Every report</td><td>A text editor, or the default-template routes (<code>POST /api/document-config-default</code>, <code>/api/report-filters-default</code>, <code>/api/layout-style-default</code>)</td><td>Saving through a route rebuilds the tree at once. A hand edit to <code>document:</code> needs a server restart; the other blocks are read at each render</td></tr>
+    <tr><td class="wrap"><code>templates/studies/&lt;id&gt;/view.yaml</code>: the <b>study overlay</b></td><td>One study, version-controlled</td><td>A text editor</td><td>The next render; its <code>methods:</code> block, the next Process</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code>: a <b>saved view</b></td><td>One session</td><td>The Configure screen, <code>POST /api/views/{id}/{name}</code></td><td>The next render, with no reprocessing</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/document.yaml</code>: the session's <b>structure</b></td><td>One session</td><td>The Configure structure editor, <code>POST /api/document-config/{id}</code></td><td>The next render</td></tr>
+    <tr><td class="wrap"><code>sessions/&lt;id&gt;/styles.yaml</code>: the session's <b>layout styles</b></td><td>One session</td><td><code>POST /api/layout-style/{id}</code></td><td>The next render</td></tr>
+    <tr><td class="wrap"><code>profiles/&lt;name&gt;.yaml</code>: a <b>method profile</b></td><td>Every study pinned to it</td><td>A new file; profiles are never edited</td><td>The next Process of a study pinned to it, or tracking the newest</td></tr>
+    <tr><td class="wrap"><code>vocab/&lt;name&gt;.yaml</code>: a <b>style vocabulary</b></td><td>Word output that opts in</td><td><code>docx_style_extract --emit-vocabulary</code> (generated layer) and by hand (curated layer)</td><td>The next docx render</td></tr>
+  </tbody>
+</table></div>
+<p><b>History.</b></p>
+<ul>
+  <li>Every save through a route archives the previous file under <code>sessions/&lt;id&gt;/history/</code>, so a structure, style or view edit can be undone.</li>
+  <li>The template and the profiles are in git.</li>
+  <li>A route save of the template rewrites only its <code>document:</code> block. That drops the file's comments, so review the diff before committing.</li>
+</ul>
+<h3>B.2 The report template</h3>
+<p><b>Top-level keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>What it sets</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>document</code></td><td>The structure: three region containers (<code>front</code>, <code>body</code>, <code>back</code>), each with <code>children</code> node entries</td></tr>
+    <tr><td class="wrap"><code>organs</code>, <code>sex</code>, <code>assays</code>, <code>genes</code>, <code>gene_sets</code></td><td>Shared selections. The shipped template sets none, so every study is reported in full; a study's choices go in its overlay (B.3)</td></tr>
+    <tr><td class="wrap"><code>charts</code></td><td>The genomics chart types to draw. The shipped <code>[]</code> draws none, as the NIEHS report has none</td></tr>
+    <tr><td class="wrap"><code>chart_style</code></td><td>Chart styling, merged in four layers: built-in, then <code>defaults</code>, then <code>types.&lt;type&gt;</code>, then <code>instances."&lt;organ&gt;|&lt;sex&gt;|&lt;type&gt;"</code>. Keys follow <code>genomics/chart_style.STYLE_KEY_SCHEMA</code>: size, colours, palette, marker, legend, margins and axes</td></tr>
+    <tr><td class="wrap"><code>chart_types</code></td><td>New chart types declared without code (below)</td></tr>
+    <tr><td class="wrap"><code>styles</code></td><td>Typography and page flow for every surface, merged in three layers: <code>defaults</code>, then <code>types.&lt;content-type&gt;</code>, then <code>instances.&lt;node-id&gt;</code></td></tr>
+  </tbody>
+</table></div>
+<p><b>Regions.</b> A region (<code>front</code>, <code>body</code>, <code>back</code>) maps directly to BITS <code>&lt;front-matter&gt;</code>, <code>&lt;book-body&gt;</code> and <code>&lt;book-back&gt;</code>. It also switches page numbering from roman to arabic. Every node inherits its container's region.</p>
+<p><b>Node entries.</b> Each entry needs <code>id</code> and <code>title</code>, plus <code>type</code> or an explicit <code>role</code> + <code>binding</code> pair that names a preset. Other keys:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>type</code></td><td>The component (list below)</td></tr>
+    <tr><td class="wrap"><code>title</code></td><td>The heading, or the table or figure title. <code>""</code> gives an untitled block</td></tr>
+    <tr><td class="wrap"><code>data_key</code></td><td>The key in the render data the node shows (<code>methods</code>, <code>bmd_summary</code>, <code>genomics_sections</code>, <code>appendix_animals_matrix</code>, …)</td></tr>
+    <tr><td class="wrap"><code>platform</code></td><td>For apical tables: the platform whose section the table shows (<code>Body Weight</code>, <code>Clinical Chemistry</code>, …)</td></tr>
+    <tr><td class="wrap"><code>narrative_key</code></td><td>The narrative a <code>narrative+tables</code> or genomics node shows above its tables</td></tr>
+    <tr><td class="wrap"><code>methods_key</code></td><td>For a Methods subsection: which subsection's prose it shows (<code>study_design</code>, <code>stat_analysis</code>, …). It must be a key the Methods writer produces</td></tr>
+    <tr><td class="wrap"><code>ready_key</code></td><td>The navigation flag that enables the section in the browser</td></tr>
+    <tr><td class="wrap"><code>requires_platform</code></td><td>A data gate: one platform, or a list of which any one is enough. Without it, the node renders its <code>not_collected_text</code></td></tr>
+    <tr><td class="wrap"><code>not_collected_text</code></td><td>What a gated node says instead (default: "&lt;title&gt; was not evaluated in this study.")</td></tr>
+    <tr><td class="wrap"><code>orientation</code></td><td><code>landscape</code> or <code>portrait</code> for a table or figure. A per-session override in the UI wins</td></tr>
+    <tr><td class="wrap"><code>caption</code></td><td>A caption paragraph for a table or figure. It overrides the caption built from the data</td></tr>
+    <tr><td class="wrap"><code>subtype</code></td><td>The cover or title-page layout (<code>niehs-5d-tox</code>), or a figure's kind (<code>chart</code>, <code>logo</code>)</td></tr>
+    <tr><td class="wrap"><code>content</code>, <code>content_file</code>, <code>representation</code></td><td>Authored content, for freeform nodes (below)</td></tr>
+    <tr><td class="wrap"><code>session_content</code>, <code>missing_content_text</code></td><td>Per-study authored content, looked up in <code>sessions/&lt;id&gt;/authored/</code> then <code>templates/studies/&lt;id&gt;/</code>. Without it, <code>missing_content_text</code> is shown, or a pending placeholder if that is unset</td></tr>
+    <tr><td class="wrap"><code>content_items</code></td><td>Ordered blocks inside one component (text, table, chart), each addressable as <code>&lt;node-id&gt;::&lt;item-id&gt;</code></td></tr>
+    <tr><td class="wrap"><code>children</code></td><td>Nested nodes</td></tr>
+  </tbody>
+</table></div>
+<p><b>Computed, never written:</b></p>
+<ul>
+  <li>the heading level;</li>
+  <li>table and figure numbers, counted by position (per appendix inside an appendix: "B-1");</li>
+  <li>appendix letters, counted in order;</li>
+  <li>the region.</li>
+</ul>
+<p><b>Node types</b> (<code>document_model/render_capabilities.COMPONENT_CATALOG</code>; the second column is what each needs):</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Type</th><th>Needs</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>cover</code>, <code>title-page</code></td><td>—</td><td>Fixed pages laid out from the identity, design and front matter</td></tr>
+    <tr><td class="wrap"><code>toc</code>, <code>tables-list</code>, <code>figures-list</code></td><td>—</td><td>Generated lists</td></tr>
+    <tr><td class="wrap"><code>heading-only</code></td><td>—</td><td>A heading whose children carry the content; may nest</td></tr>
+    <tr><td class="wrap"><code>page-break</code></td><td>—</td><td>A forced page break</td></tr>
+    <tr><td class="wrap"><code>front-matter</code></td><td><code>data_key</code></td><td>Front-matter prose (foreword, abstract, …)</td></tr>
+    <tr><td class="wrap"><code>narrative</code></td><td><code>data_key</code></td><td>A prose section</td></tr>
+    <tr><td class="wrap"><code>narrative+tables</code></td><td>—</td><td>A narrative (<code>narrative_key</code>) with child <code>table</code> nodes</td></tr>
+    <tr><td class="wrap"><code>table</code>, <code>incidence-table</code></td><td><code>platform</code></td><td>An apical table built from the data</td></tr>
+    <tr><td class="wrap"><code>sample-counts-table</code>, <code>data-table</code></td><td><code>data_key</code></td><td>A table built from a prepared matrix</td></tr>
+    <tr><td class="wrap"><code>bmd-summary</code></td><td><code>data_key</code></td><td>The apical BMD summary</td></tr>
+    <tr><td class="wrap"><code>genomics-section</code></td><td><code>data_key</code>, <code>narrative_key</code></td><td>One gene set or gene section per organ</td></tr>
+    <tr><td class="wrap"><code>figure</code></td><td>—</td><td>A figure (<code>subtype: chart</code> for a data figure)</td></tr>
+    <tr><td class="wrap"><code>appendix</code></td><td>—</td><td>An appendix; holds sections, tables, figures and authored content</td></tr>
+    <tr><td class="wrap"><code>freeform-page</code>, <code>freeform-block</code>, <code>authored-table</code></td><td>—</td><td>Authored content: a page of its own, an inline block, or a table with supplied markup</td></tr>
+    <tr><td class="wrap"><code>supplementary-material</code></td><td>—</td><td>A supplied data file (<code>content_file</code>)</td></tr>
+  </tbody>
+</table></div>
+<p><b>Authored content</b> goes in freeform nodes:</p>
+<ul>
+  <li>Give exactly one source:<ul><li>inline <code>content</code> with a <code>representation</code> (<code>latex</code> or <code>html</code>);</li><li><code>content_file</code> (a path under <code>templates/</code>) with a <code>representation</code> (<code>latex</code>, <code>html</code> or <code>docx</code>; a <code>.docx</code> is converted at load);</li><li>or <code>content: {latex: …, html: …}</code> with no representation, when the two surfaces need different markup.</li></ul></li>
+  <li>A single-surface node shows a short pending note on the other surface.</li>
+  <li>Appendix C, D and E use this mechanism. Their text is in <code>templates/freeform/</code>.</li>
+</ul>
+<p><b>Data-driven chart types</b> (<code>chart_types</code>):</p>
+<ul>
+  <li>Required keys:<ul><li><code>trace</code>: <code>scatter</code>, <code>bar</code> or <code>line</code>;</li><li><code>x</code> and <code>y</code>: GO table columns.</li></ul></li>
+  <li>Optional keys:<ul><li><code>color</code>: one trace per distinct value;</li><li><code>size</code>;</li><li><code>sort: {by, dir}</code>;</li><li><code>limit</code>;</li><li><code>axes</code>: titles and types per axis;</li><li><code>layout</code>;</li><li><code>caption</code>.</li></ul></li>
+  <li>Available columns are <code>bmd</code>, <code>bmdl</code>, <code>direction</code>, <code>fishers_p</code>, <code>go_id</code>, <code>go_term</code>, <code>n_down</code>, <code>n_genes</code>, <code>n_genes_with_bmd</code>, <code>n_up</code> and <code>rank</code>.</li>
+  <li>Titles may use <code>${dose_unit}</code>, and captions <code>{organ_title}</code> and <code>{sex_title}</code>.</li>
+  <li>The built-in <code>umap</code> and <code>cluster</code> types can't be redeclared.</li>
+  <li>A declared type is drawn only when it is listed in <code>charts</code>.</li>
+</ul>
+<p><b>Layout styles</b> (<code>styles</code>) keys:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Values</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>font_family</code></td><td><code>serif</code>, <code>sans</code>, <code>mono</code></td></tr>
+    <tr><td class="wrap"><code>font_size</code></td><td>A length, e.g. <code>11pt</code> (pt, mm, cm, in, em, ex)</td></tr>
+    <tr><td class="wrap"><code>line_height</code></td><td>A number, e.g. <code>1.4</code></td></tr>
+    <tr><td class="wrap"><code>weight</code></td><td><code>normal</code>, <code>bold</code></td></tr>
+    <tr><td class="wrap"><code>style</code></td><td><code>normal</code>, <code>italic</code></td></tr>
+    <tr><td class="wrap"><code>color</code></td><td><code>#rgb</code> or <code>#rrggbb</code></td></tr>
+    <tr><td class="wrap"><code>align</code></td><td><code>left</code>, <code>right</code>, <code>center</code>, <code>justify</code></td></tr>
+    <tr><td class="wrap"><code>space_before</code>, <code>space_after</code>, <code>first_line_indent</code></td><td>A length</td></tr>
+    <tr><td class="wrap"><code>break_before</code>, <code>break_after</code></td><td><code>auto</code>, <code>page</code></td></tr>
+    <tr><td class="wrap"><code>keep_together</code></td><td><code>true</code>, <code>false</code></td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>Breaks on every surface.</b> Word gets <code>pageBreakBefore</code>, LaTeX <code>\clearpage</code>, and HTML <code>break-before: page</code>.</li>
+  <li><b>The shipped breaks</b> reproduce NIEHS-10's pagination: front-matter pages, Results, Summary, References, three tables and every appendix.</li>
+  <li><b>Precedence:</b> the template, then the session's <code>styles.yaml</code>, then the request.</li>
+</ul>
+<h3>B.3 Study overlays and saved views</h3>
+<p>A study overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>) and a saved view (<code>sessions/&lt;id&gt;/views/&lt;name&gt;.yaml</code>) share one format:</p>
+<div class="code"><div class="bar"><span>yaml</span><button type="button">Copy</button></div><pre>document: [ …node entries… ]   # saved views only: this view's own structure
+filters:
+  organs:    {genomics: [liver, kidney], organ-weight: [liver]}
+  sex:       {organ-weight: [male]}
+  assays:
+    clinical-chemistry: {male: [cholesterol], female: ["aspartate aminotransferase"]}
+    hematology: ["neutrophil count"]          # a flat list = both sexes
+  genes:     [egr1, ddit4]
+  gene_sets: ["GO:1902893", "cell division"]
+charts: [umap, cluster]        # or [] for none; leave out to use the template's
+methods:                       # study overlay only: method overrides (B.4)
+  apical: {statistics: {alpha: 0.05}}</pre></div>
+<p><b>Selection axes</b>, all optional:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Axis</th><th>Areas</th><th>Matching</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>organs</code></td><td><code>genomics</code> (sections, charts, narratives, gene tables), <code>organ-weight</code> (the table and its narrative)</td><td>By component: <code>kidney</code> matches "Kidney-Left" and "R. Kidney"</td></tr>
+    <tr><td class="wrap"><code>sex</code></td><td><code>apical</code> (every apical table's columns, the BMD summary, the narratives), <code>genomics</code> (whole sections), <code>organ-weight</code> (the organ weight table only)</td><td>Exact: <code>male</code>, <code>female</code></td></tr>
+    <tr><td class="wrap"><code>assays</code></td><td><code>clinical-chemistry</code>, <code>hematology</code>, <code>hormones</code></td><td>By component on the endpoint label: <code>count</code> keeps every "… count" row. Use several words to narrow it ("total thyroxine")</td></tr>
+    <tr><td class="wrap"><code>genes</code></td><td>—</td><td>Gene symbols</td></tr>
+    <tr><td class="wrap"><code>gene_sets</code></td><td>—</td><td>A GO accession or a word of the term: <code>division</code> keeps "cell division"</td></tr>
+  </tbody>
+</table></div>
+<p><b>How values work:</b></p>
+<ul>
+  <li>Any area's value may be a flat list (both sexes) or <code>{male: […], female: […]}</code>.</li>
+  <li>A missing axis or area, or an empty list, means no selection.</li>
+  <li>An unknown area is a load error.</li>
+</ul>
+<p><b>Which file applies:</b></p>
+<ul>
+  <li><b>Filters and charts:</b> the session's saved view wins, then the study overlay, then the template. A layer counts when it states <code>filters</code> or <code>charts</code>.</li>
+  <li><b>Structure:</b> a saved view's <code>document:</code>, then the session's <code>document.yaml</code> (only when the session has no views), then the template.</li>
+  <li><b>Methods:</b> the overlay's <code>methods:</code> block applies when processing.</li>
+</ul>
+<p>Selections are a projection at render time. The statistics and BMDs are computed over everything, so switching or adding a view never reprocesses. NIEHS-10's overlay is the worked example: the liver-only, male-only organ weight table and the hand-picked "Select" endpoints of its published Tables 4–6.</p>
+<h3>B.4 Method profiles</h3>
+<p>A profile (<code>profiles/&lt;name&gt;.yaml</code>) states the whole analysis method.</p>
+<p><b>Identity keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>name</code></td><td>The profile's name</td></tr>
+    <tr><td class="wrap"><code>series</code></td><td>Its series: <code>ntp-5day</code></td></tr>
+    <tr><td class="wrap"><code>effective</code></td><td>The year it takes effect: <code>"2025"</code></td></tr>
+    <tr><td class="wrap"><code>reference</code></td><td>The published report whose data its tests reproduce</td></tr>
+    <tr><td class="wrap"><code>description</code></td><td>A short description</td></tr>
+  </tbody>
+</table></div>
+<p><b>Method keys:</b></p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Key</th><th>Values (registered implementations)</th></tr></thead>
+  <tbody>
+    <tr><td class="wrap"><code>apical.statistics.trend_test</code></td><td><code>jonckheere</code></td></tr>
+    <tr><td class="wrap"><code>apical.statistics.trend_select_p</code>, <code>alpha</code>, <code>alpha_strong</code></td><td>Probabilities</td></tr>
+    <tr><td class="wrap"><code>apical.statistics.min_group_n</code></td><td>A whole number</td></tr>
+    <tr><td class="wrap"><code>apical.statistics.pairwise.&lt;platform&gt;</code></td><td><code>williams_or_dunnett</code>, <code>shirley_or_dunn</code>, <code>none</code></td></tr>
+    <tr><td class="wrap"><code>apical.statistics.outliers</code></td><td><code>{test: dixon_r10, alpha}</code> or null</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.engine</code></td><td><code>toxicr_model_average</code>; <code>bmds_2_7_high_dose_drop</code> is registered but not implemented</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.eligibility</code></td><td><code>trend_and_pairwise</code>; <code>all_endpoints</code> is registered but not implemented</td></tr>
+    <tr><td class="wrap"><code>apical.bmd.bmr_when_unrecorded.&lt;platform or default&gt;</code></td><td><code>{type: sd | rel_dev, factor}</code></td></tr>
+    <tr><td class="wrap"><code>apical.bmd.acceptance</code></td><td><code>r2_min</code>, <code>bmd_bmdl_max</code>, <code>bmd_above_highest_dose</code> (<code>nvm</code>, <code>keep</code>), <code>not_reportable_fraction</code></td></tr>
+    <tr><td class="wrap"><code>internal_dose.pairwise</code></td><td>As for apical pairwise</td></tr>
+    <tr><td class="wrap"><code>internal_dose.below_limit</code></td><td><code>half_limit</code></td></tr>
+    <tr><td class="wrap"><code>internal_dose.bd_if_detected_share_at_most</code></td><td>A probability</td></tr>
+    <tr><td class="wrap"><code>internal_dose.outliers</code></td><td>As for apical outliers</td></tr>
+    <tr><td class="wrap"><code>internal_dose.sig_figs</code></td><td>A whole number</td></tr>
+    <tr><td class="wrap"><code>genomics.go_ranking</code></td><td>A list from <code>fifth_pct</code>, <code>tenth_pct</code>, <code>median</code>, <code>mean</code>, <code>minimum</code>, <code>weighted_mean</code>, <code>lower95</code>, <code>upper95</code></td></tr>
+    <tr><td class="wrap"><code>genomics.go_display</code></td><td><code>{pct, min_genes, max_genes, min_bmd}</code></td></tr>
+    <tr><td class="wrap"><code>genomics.recorded.bmr</code></td><td>What a genomic <code>.bm2</code> should record: <code>{type, factor}</code></td></tr>
+    <tr><td class="wrap"><code>genomics.recorded.model_selection</code></td><td><code>model_average</code>, <code>lowest_aic</code></td></tr>
+  </tbody>
+</table></div>
+<p><b>Rules:</b></p>
+<ul>
+  <li><b>The schema is closed.</b><ul><li>An unknown key, a missing key or an unregistered value fails at load.</li><li>A profile must state every key. <code>null</code> means "to confirm" and resolves to the built-in default, reported as such.</li><li>A registered value the tool doesn't implement runs the default and is listed as a deviation (e.g. <code>ntp-5day-2021</code>'s BMDS 2.7 engine).</li></ul></li>
+  <li><b>Profiles are immutable.</b> A study pins a profile by name and content hash (<code>sessions/&lt;id&gt;/method_profile.json</code>), and an edited profile fails the pin check. A revised method is a new file.<ul><li>A study that tracks its series moves to the newest file automatically.</li><li><code>--method-profile NAME</code> fixes a study on one profile.</li></ul></li>
+  <li><b>Layers.</b> The built-in default, then the profile, then the study overlay's <code>methods:</code> block, then the request (CLI or UI). A study overlay or request may state any subset of keys. Every resolved value carries its source.</li>
+  <li><b>Text follows the profile.</b> Footnotes, the Methods statistics and BMD text, and Appendix D-1 are generated from the resolved values.</li>
+</ul>
+<p>The shipped profiles are <code>ntp-5day-2025</code> (NIEHS-12/13, the reference NIEHS-13) and <code>ntp-5day-2021</code> (NIEHS-07 to -10, the reference NIEHS-10).</p>
+<h3>B.5 Style vocabularies</h3>
+<p><code>vocab/&lt;name&gt;.yaml</code> maps the report's semantic roles (report title, section heading, table title, …) to Word paragraph styles. It has two layers:</p>
+<ul>
+  <li><code>ntp-report-generated.yaml</code> is extracted from a reference <code>.docx</code> and never hand-edited;</li>
+  <li><code>ntp-report.yaml</code> extends it with stable role names.</li>
+</ul>
+<p>A render uses a vocabulary only when the render data names one (<code>vocabulary</code>); otherwise Word output uses its built-in styling.</p>
+<h3>B.6 What YAML can't change yet</h3>
+<p>These are fixed in code; Appendix A.4 tracks each one:</p>
+<ul>
+  <li>the boilerplate text: Foreword, Peer Review, Acknowledgments;</li>
+  <li>the set of Methods subsections and their LLM instructions;</li>
+  <li>table captions and the wording of the prose built from the data;</li>
+  <li>endpoint decimals;</li>
+  <li>the "most sensitive" lower limit and anomaly ratio;</li>
+  <li>BMD precision;</li>
+  <li>the genomics organ order.</li>
+</ul>
 
 <footer>
   Source: <code>docs/headless-report-generation.md</code> in the rlm-bmdx repository. Scripts: <code>tooling/generate_report.py</code>,

@@ -31,6 +31,7 @@ continued the other way, or opened in the browser.
 9. [Troubleshooting](#9-troubleshooting)
 10. [Known gaps](#10-known-gaps)
 - [Appendix A. What in the report comes from the data](#appendix-a-what-in-the-report-comes-from-the-data)
+- [Appendix B. The YAML files and what they can do](#appendix-b-the-yaml-files-and-what-they-can-do)
 
 ---
 
@@ -965,9 +966,10 @@ The rules come from the profile's `internal_dose` settings [`profile.yaml`], exc
   knowledge base supplies. That prose covers:
   - the apical BMD paragraph;
   - the genomics narratives;
-  - the remaining Methods subsections, whose list and headings come from the
-    template; the Statistical Analysis and apical BMD prompts are built from
-    the profile;
+  - the remaining Methods subsections. The template places them and gives
+    their headings; which subsections exist, and when each applies, is fixed
+    in code (`SUBSECTION_SKELETON`). The Statistical Analysis and apical BMD
+    prompts are built from the profile;
   - the Background.
 
 ### A.3 Where each part of the report comes from
@@ -997,7 +999,7 @@ names the files that also shape its content (see the labels in A.2).
 | Methods: Statistical Analysis, apical BMD | LLM from profile | The prompt is built from the profile's test families, alphas, BMR and acceptance criteria | — | `profile.yaml` |
 | Methods: transcriptomic BMD | LLM | The prompt carries the `.bm2`'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters) | "not recorded" | — |
 | Methods: clinical exams, organ and clin-path endpoints | LLM | The prompt lists the endpoints in the data | — | — |
-| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G14) | `template.yaml` (list, headings) |
+| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G14) | `template.yaml` (placement, headings) |
 | Sample counts table | Data | Animal report and expression samples per organ, sex and dose | Omitted without expression data | — |
 | Results: body, organ weight, clinical pathology tables | Data + profile | Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook | A domain that isn't collected reads "not evaluated" | `profile.yaml`, `view.yaml` |
 | Results: Animal Condition, Clinical Pathology narratives | Data | Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model | — | `view.yaml` |
@@ -1070,12 +1072,296 @@ names the files that also shape its content (see the labels in A.2).
 | G18 | The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10) | Fixed in code, not the profile | Read them from the profile, as the acceptance criteria are |
 | G19 | BMD precision (1 or 3 decimals) is inferred from whether the `.bm2` has gene-level analyses | A data heuristic standing in for a method setting | A profile setting |
 | G20 | The transcriptomics Methods guides name TempO-Seq and the S1500+ platform | Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip | Build the guides from the detected assay |
-| G21 | Peer Review says the design and methods are identical to those reviewed | Not checked | Compare the pinned profile with the reviewed one |
-| G22 | The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type | Both are built from the design facts but drop these parts | Build both from the cover title, with the sexes in the data |
+| G21 | The set of Methods subsections, and when each applies, is fixed in code (`narrative/methods_models.SUBSECTION_SKELETON`) | A template node can place or retitle a subsection but not add one the LLM writes | Derive the list from the template's `methods_key` nodes |
+| G22 | Peer Review says the design and methods are identical to those reviewed | Not checked | Compare the pinned profile with the reviewed one |
+| G23 | The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type | Both are built from the design facts but drop these parts | Build both from the cover title, with the sexes in the data |
 
 **Structure gaps**
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G23 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
-| G24 | Genomics organs are ordered liver, kidney, then alphabetical | NIEHS-10's order, fixed in code; another study's published order may differ | Order by the template or the study overlay |
+| G24 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
+| G25 | Genomics organs are ordered liver, kidney, then alphabetical | NIEHS-10's order, fixed in code; another study's published order may differ | Order by the template or the study overlay |
+
+---
+
+## Appendix B. The YAML files and what they can do
+
+Appendix A says which parts of a report each YAML file sets. This appendix
+covers the files themselves: where they live, what each key can do, how they
+combine, and how they are checked. It holds as of 2026-10-07.
+
+### B.1 The files
+
+| File | Scope | Edited with | Takes effect |
+|---|---|---|---|
+| `templates/niehs-5day-report.yaml`: the **report template** | Every report | A text editor, or the default-template routes (`POST /api/document-config-default`, `/api/report-filters-default`, `/api/layout-style-default`) | Saving through a route rebuilds the tree at once. A hand edit to `document:` needs a server restart; the other blocks are read at each render |
+| `templates/studies/<id>/view.yaml`: the **study overlay** | One study, version-controlled | A text editor | The next render; its `methods:` block, the next Process |
+| `sessions/<id>/views/<name>.yaml`: a **saved view** | One session | The Configure screen, `POST /api/views/{id}/{name}` | The next render, with no reprocessing |
+| `sessions/<id>/document.yaml`: the session's **structure** | One session | The Configure structure editor, `POST /api/document-config/{id}` | The next render |
+| `sessions/<id>/styles.yaml`: the session's **layout styles** | One session | `POST /api/layout-style/{id}` | The next render |
+| `profiles/<name>.yaml`: a **method profile** | Every study pinned to it | A new file; profiles are never edited | The next Process of a study pinned to it, or tracking the newest |
+| `vocab/<name>.yaml`: a **style vocabulary** | Word output that opts in | `docx_style_extract --emit-vocabulary` (generated layer) and by hand (curated layer) | The next docx render |
+
+**History.**
+
+- Every save through a route archives the previous file under
+  `sessions/<id>/history/`, so a structure, style or view edit can be undone.
+- The template and the profiles are in git.
+- A route save of the template rewrites only its `document:` block. That
+  drops the file's comments, so review the diff before committing.
+
+### B.2 The report template
+
+**Top-level keys:**
+
+| Key | What it sets |
+|---|---|
+| `document` | The structure: three region containers (`front`, `body`, `back`), each with `children` node entries |
+| `organs`, `sex`, `assays`, `genes`, `gene_sets` | Shared selections. The shipped template sets none, so every study is reported in full; a study's choices go in its overlay (B.3) |
+| `charts` | The genomics chart types to draw. The shipped `[]` draws none, as the NIEHS report has none |
+| `chart_style` | Chart styling, merged in four layers: built-in, then `defaults`, then `types.<type>`, then `instances."<organ>\|<sex>\|<type>"`. Keys follow `genomics/chart_style.STYLE_KEY_SCHEMA`: size, colours, palette, marker, legend, margins and axes |
+| `chart_types` | New chart types declared without code (below) |
+| `styles` | Typography and page flow for every surface, merged in three layers: `defaults`, then `types.<content-type>`, then `instances.<node-id>` |
+
+**Regions.** A region (`front`, `body`, `back`) maps directly to BITS
+`<front-matter>`, `<book-body>` and `<book-back>`. It also switches page
+numbering from roman to arabic. Every node inherits its container's region.
+
+**Node entries.** Each entry needs `id` and `title`, plus `type` or an
+explicit `role` + `binding` pair that names a preset. Other keys:
+
+| Key | Meaning |
+|---|---|
+| `type` | The component (list below) |
+| `title` | The heading, or the table or figure title. `""` gives an untitled block |
+| `data_key` | The key in the render data the node shows (`methods`, `bmd_summary`, `genomics_sections`, `appendix_animals_matrix`, …) |
+| `platform` | For apical tables: the platform whose section the table shows (`Body Weight`, `Clinical Chemistry`, …) |
+| `narrative_key` | The narrative a `narrative+tables` or genomics node shows above its tables |
+| `methods_key` | For a Methods subsection: which subsection's prose it shows (`study_design`, `stat_analysis`, …). It must be a key the Methods writer produces |
+| `ready_key` | The navigation flag that enables the section in the browser |
+| `requires_platform` | A data gate: one platform, or a list of which any one is enough. Without it, the node renders its `not_collected_text` |
+| `not_collected_text` | What a gated node says instead (default: "<title> was not evaluated in this study.") |
+| `orientation` | `landscape` or `portrait` for a table or figure. A per-session override in the UI wins |
+| `caption` | A caption paragraph for a table or figure. It overrides the caption built from the data |
+| `subtype` | The cover or title-page layout (`niehs-5d-tox`), or a figure's kind (`chart`, `logo`) |
+| `content`, `content_file`, `representation` | Authored content, for freeform nodes (below) |
+| `session_content`, `missing_content_text` | Per-study authored content, looked up in `sessions/<id>/authored/` then `templates/studies/<id>/`. Without it, `missing_content_text` is shown, or a pending placeholder if that is unset |
+| `content_items` | Ordered blocks inside one component (text, table, chart), each addressable as `<node-id>::<item-id>` |
+| `children` | Nested nodes |
+
+**Computed, never written:**
+
+- the heading level;
+- table and figure numbers, counted by position (per appendix inside an
+  appendix: "B-1");
+- appendix letters, counted in order;
+- the region.
+
+**Node types** (`document_model/render_capabilities.COMPONENT_CATALOG`; the
+second column is what each needs):
+
+| Type | Needs | What it is |
+|---|---|---|
+| `cover`, `title-page` | — | Fixed pages laid out from the identity, design and front matter |
+| `toc`, `tables-list`, `figures-list` | — | Generated lists |
+| `heading-only` | — | A heading whose children carry the content; may nest |
+| `page-break` | — | A forced page break |
+| `front-matter` | `data_key` | Front-matter prose (foreword, abstract, …) |
+| `narrative` | `data_key` | A prose section |
+| `narrative+tables` | — | A narrative (`narrative_key`) with child `table` nodes |
+| `table`, `incidence-table` | `platform` | An apical table built from the data |
+| `sample-counts-table`, `data-table` | `data_key` | A table built from a prepared matrix |
+| `bmd-summary` | `data_key` | The apical BMD summary |
+| `genomics-section` | `data_key`, `narrative_key` | One gene set or gene section per organ |
+| `figure` | — | A figure (`subtype: chart` for a data figure) |
+| `appendix` | — | An appendix; holds sections, tables, figures and authored content |
+| `freeform-page`, `freeform-block`, `authored-table` | — | Authored content: a page of its own, an inline block, or a table with supplied markup |
+| `supplementary-material` | — | A supplied data file (`content_file`) |
+
+**Authored content** goes in freeform nodes:
+
+- Give exactly one source:
+  - inline `content` with a `representation` (`latex` or `html`);
+  - `content_file` (a path under `templates/`) with a `representation`
+    (`latex`, `html` or `docx`; a `.docx` is converted at load);
+  - or `content: {latex: …, html: …}` with no representation, when the two
+    surfaces need different markup.
+- A single-surface node shows a short pending note on the other surface.
+- Appendix C, D and E use this mechanism. Their text is in
+  `templates/freeform/`.
+
+**Data-driven chart types** (`chart_types`):
+
+- Required keys:
+  - `trace`: `scatter`, `bar` or `line`;
+  - `x` and `y`: GO table columns.
+- Optional keys:
+  - `color`: one trace per distinct value;
+  - `size`;
+  - `sort: {by, dir}`;
+  - `limit`;
+  - `axes`: titles and types per axis;
+  - `layout`;
+  - `caption`.
+- Available columns are `bmd`, `bmdl`, `direction`, `fishers_p`, `go_id`,
+  `go_term`, `n_down`, `n_genes`, `n_genes_with_bmd`, `n_up` and `rank`.
+- Titles may use `${dose_unit}`, and captions `{organ_title}` and
+  `{sex_title}`.
+- The built-in `umap` and `cluster` types can't be redeclared.
+- A declared type is drawn only when it is listed in `charts`.
+
+**Layout styles** (`styles`) keys:
+
+| Key | Values |
+|---|---|
+| `font_family` | `serif`, `sans`, `mono` |
+| `font_size` | A length, e.g. `11pt` (pt, mm, cm, in, em, ex) |
+| `line_height` | A number, e.g. `1.4` |
+| `weight` | `normal`, `bold` |
+| `style` | `normal`, `italic` |
+| `color` | `#rgb` or `#rrggbb` |
+| `align` | `left`, `right`, `center`, `justify` |
+| `space_before`, `space_after`, `first_line_indent` | A length |
+| `break_before`, `break_after` | `auto`, `page` |
+| `keep_together` | `true`, `false` |
+
+- **Breaks on every surface.** Word gets `pageBreakBefore`, LaTeX
+  `\clearpage`, and HTML `break-before: page`.
+- **The shipped breaks** reproduce NIEHS-10's pagination: front-matter pages,
+  Results, Summary, References, three tables and every appendix.
+- **Precedence:** the template, then the session's `styles.yaml`, then the
+  request.
+
+### B.3 Study overlays and saved views
+
+A study overlay (`templates/studies/<id>/view.yaml`) and a saved view
+(`sessions/<id>/views/<name>.yaml`) share one format:
+
+```yaml
+document: [ …node entries… ]   # saved views only: this view's own structure
+filters:
+  organs:    {genomics: [liver, kidney], organ-weight: [liver]}
+  sex:       {organ-weight: [male]}
+  assays:
+    clinical-chemistry: {male: [cholesterol], female: ["aspartate aminotransferase"]}
+    hematology: ["neutrophil count"]          # a flat list = both sexes
+  genes:     [egr1, ddit4]
+  gene_sets: ["GO:1902893", "cell division"]
+charts: [umap, cluster]        # or [] for none; leave out to use the template's
+methods:                       # study overlay only: method overrides (B.4)
+  apical: {statistics: {alpha: 0.05}}
+```
+
+**Selection axes**, all optional:
+
+| Axis | Areas | Matching |
+|---|---|---|
+| `organs` | `genomics` (sections, charts, narratives, gene tables), `organ-weight` (the table and its narrative) | By component: `kidney` matches "Kidney-Left" and "R. Kidney" |
+| `sex` | `apical` (every apical table's columns, the BMD summary, the narratives), `genomics` (whole sections), `organ-weight` (the organ weight table only) | Exact: `male`, `female` |
+| `assays` | `clinical-chemistry`, `hematology`, `hormones` | By component on the endpoint label: `count` keeps every "… count" row. Use several words to narrow it ("total thyroxine") |
+| `genes` | — | Gene symbols |
+| `gene_sets` | — | A GO accession or a word of the term: `division` keeps "cell division" |
+
+**How values work:**
+
+- Any area's value may be a flat list (both sexes) or `{male: […], female: […]}`.
+- A missing axis or area, or an empty list, means no selection.
+- An unknown area is a load error.
+
+**Which file applies:**
+
+- **Filters and charts:** the session's saved view wins, then the study overlay,
+  then the template. A layer counts when it states `filters` or `charts`.
+- **Structure:** a saved view's `document:`, then the session's
+  `document.yaml` (only when the session has no views), then the template.
+- **Methods:** the overlay's `methods:` block applies when processing.
+
+Selections are a projection at render time. The statistics and BMDs are
+computed over everything, so switching or adding a view never reprocesses.
+NIEHS-10's overlay is the worked example: the liver-only, male-only organ
+weight table and the hand-picked "Select" endpoints of its published Tables
+4–6.
+
+### B.4 Method profiles
+
+A profile (`profiles/<name>.yaml`) states the whole analysis method.
+
+**Identity keys:**
+
+| Key | Meaning |
+|---|---|
+| `name` | The profile's name |
+| `series` | Its series: `ntp-5day` |
+| `effective` | The year it takes effect: `"2025"` |
+| `reference` | The published report whose data its tests reproduce |
+| `description` | A short description |
+
+**Method keys:**
+
+| Key | Values (registered implementations) |
+|---|---|
+| `apical.statistics.trend_test` | `jonckheere` |
+| `apical.statistics.trend_select_p`, `alpha`, `alpha_strong` | Probabilities |
+| `apical.statistics.min_group_n` | A whole number |
+| `apical.statistics.pairwise.<platform>` | `williams_or_dunnett`, `shirley_or_dunn`, `none` |
+| `apical.statistics.outliers` | `{test: dixon_r10, alpha}` or null |
+| `apical.bmd.engine` | `toxicr_model_average`; `bmds_2_7_high_dose_drop` is registered but not implemented |
+| `apical.bmd.eligibility` | `trend_and_pairwise`; `all_endpoints` is registered but not implemented |
+| `apical.bmd.bmr_when_unrecorded.<platform or default>` | `{type: sd \| rel_dev, factor}` |
+| `apical.bmd.acceptance` | `r2_min`, `bmd_bmdl_max`, `bmd_above_highest_dose` (`nvm`, `keep`), `not_reportable_fraction` |
+| `internal_dose.pairwise` | As for apical pairwise |
+| `internal_dose.below_limit` | `half_limit` |
+| `internal_dose.bd_if_detected_share_at_most` | A probability |
+| `internal_dose.outliers` | As for apical outliers |
+| `internal_dose.sig_figs` | A whole number |
+| `genomics.go_ranking` | A list from `fifth_pct`, `tenth_pct`, `median`, `mean`, `minimum`, `weighted_mean`, `lower95`, `upper95` |
+| `genomics.go_display` | `{pct, min_genes, max_genes, min_bmd}` |
+| `genomics.recorded.bmr` | What a genomic `.bm2` should record: `{type, factor}` |
+| `genomics.recorded.model_selection` | `model_average`, `lowest_aic` |
+
+**Rules:**
+
+- **The schema is closed.**
+  - An unknown key, a missing key or an unregistered value fails at load.
+  - A profile must state every key. `null` means "to confirm" and resolves to
+    the built-in default, reported as such.
+  - A registered value the tool doesn't implement runs the default and is
+    listed as a deviation (e.g. `ntp-5day-2021`'s BMDS 2.7 engine).
+- **Profiles are immutable.** A study pins a profile by name and content hash
+  (`sessions/<id>/method_profile.json`), and an edited profile fails the pin
+  check. A revised method is a new file.
+  - A study that tracks its series moves to the newest file automatically.
+  - `--method-profile NAME` fixes a study on one profile.
+- **Layers.** The built-in default, then the profile, then the study overlay's
+  `methods:` block, then the request (CLI or UI). A study overlay or request
+  may state any subset of keys. Every resolved value carries its source.
+- **Text follows the profile.** Footnotes, the Methods statistics and BMD
+  text, and Appendix D-1 are generated from the resolved values.
+
+The shipped profiles are `ntp-5day-2025` (NIEHS-12/13, the reference
+NIEHS-13) and `ntp-5day-2021` (NIEHS-07 to -10, the reference NIEHS-10).
+
+### B.5 Style vocabularies
+
+`vocab/<name>.yaml` maps the report's semantic roles (report title, section
+heading, table title, …) to Word paragraph styles. It has two layers:
+
+- `ntp-report-generated.yaml` is extracted from a reference `.docx` and never
+  hand-edited;
+- `ntp-report.yaml` extends it with stable role names.
+
+A render uses a vocabulary only when the render data names one
+(`vocabulary`); otherwise Word output uses its built-in styling.
+
+### B.6 What YAML can't change yet
+
+These are fixed in code; Appendix A.4 tracks each one:
+
+- the boilerplate text: Foreword, Peer Review, Acknowledgments;
+- the set of Methods subsections and their LLM instructions;
+- table captions and the wording of the prose built from the data;
+- endpoint decimals;
+- the "most sensitive" lower limit and anomaly ratio;
+- BMD precision;
+- the genomics organ order.
