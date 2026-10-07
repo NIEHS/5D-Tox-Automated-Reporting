@@ -652,9 +652,9 @@ holds as of 2026-10-07.
   and units. Nothing reads the raw `.bm2`, `.txt` or `.xlsx` uploads directly.
 - **The document tree sets the structure.** Headings, their order and the
   table and figure numbers come from the template
-  (`templates/niehs-5day-report.yaml`) and a study's overlay
-  (`templates/studies/<id>/view.yaml`). Numbers are given by position, never
-  typed in.
+  (`templates/niehs-5day-report.yaml`), or from a saved view's own structure.
+  A study's overlay (`templates/studies/<id>/view.yaml`) selects what is
+  shown. Numbers are given by position, never typed in.
 - **The method profile sets how the data is analysed.** The statistical
   tests, thresholds, BMD acceptance criteria, internal-dose rules, GO ranking
   and number formats come from the study's pinned profile (`profiles/*.yaml`,
@@ -677,6 +677,18 @@ holds as of 2026-10-07.
 Each fact below is worked out from the files at the step named. Where a rule
 is a method setting, the setting's name in the profile is given, with its
 `ntp-5day-2025` value.
+
+**YAML labels.** An item set by a YAML file carries a label naming the file:
+
+| Label | File | What it sets |
+|---|---|---|
+| `template.yaml` | `templates/niehs-5day-report.yaml`, the report type | Sections, their order and headings, the Methods subsections, which data each section shows, the appendix text files it names, page breaks (`styles`), and charts (`charts`, `chart_style`, `chart_types`) |
+| `view.yaml` | A study overlay, `templates/studies/<id>/view.yaml`, or a saved view, `sessions/<id>/views/<name>.yaml` | Selections (`filters`: organs, sex, assays, genes, gene sets); a saved view can also carry its own structure; an overlay's `methods:` block overrides profile settings for that study |
+| `profile.yaml` | The pinned method profile, `profiles/<name>.yaml` | Statistical tests and thresholds, BMD engine, eligibility, BMR fallback and acceptance, internal-dose rules, GO ranking and display, the settings expected in a `.bm2` |
+
+An item without a label is computed from the data or fixed in code. Stated
+facts (`study_design.json`, `front_matter.json`) are JSON, not YAML. A.4 lists
+the code-fixed settings that belong in a YAML file.
 
 **Files (Validate, Integrate)**
 
@@ -752,7 +764,7 @@ is a method setting, the setting's name in the profile is given, with its
     (mg/g), per animal.
   - Body weight gain = last-day weight − first-day weight, per animal.
   - Both get full statistics, LOEL and NOEL, and BMDs.
-- **Statistics** follow the profile's `apical.statistics`:
+- **Statistics** [`profile.yaml`] follow the profile's `apical.statistics`:
   - A Jonckheere trend test runs on every endpoint.
   - When its p ≤ `trend_select_p` (0.01), the trend-sensitive pairwise test
     runs: Williams for weights, Shirley for clinical pathology.
@@ -762,12 +774,12 @@ is a method setting, the setting's name in the profile is given, with its
   - Markers are `*` at p ≤ `alpha` (0.05) and `**` at p ≤ `alpha_strong`
     (0.01).
   - The footnote naming the tests is built from the family that ran.
-- **LOEL** is the lowest dose with a significant pairwise difference from
-  control.
+- **LOEL** [`profile.yaml`] is the lowest dose with a significant pairwise difference from
+  control, at `alpha`.
 - **NOEL** is the highest tested dose below the LOEL. It is "ND" when there is
   no LOEL or no dose below it, never the control or the top dose.
 - **Direction** (up or down) is shown only when the trend test is significant.
-- **Which rows appear.** Every measured endpoint appears in the tables,
+- **Which rows appear.** Every measured endpoint the selections [`view.yaml`] keep appears in the tables,
   whether or not it is significant. N rows count Core animals. The row rules
   per table are:
   - **Body weights:** the first and last day, plus any day between that is
@@ -789,16 +801,16 @@ is a method setting, the setting's name in the profile is given, with its
 
 **Apical BMDs (Process)**
 
-- **Where a BMD comes from.**
+- **Where a BMD comes from.** [`profile.yaml`]
   - The `.bm2`'s BMDExpress results are used where they exist.
   - An endpoint the `.bm2` didn't model is fitted with ToxicR Laplace model
     averaging (`apical.bmd.engine`) and marked as filled.
   - Where both exist they must agree, or processing stops.
-- **Eligibility.** A BMD is reported only for an endpoint with a significant
+- **Eligibility.** [`profile.yaml`] A BMD is reported only for an endpoint with a significant
   trend and a significant pairwise test (`eligibility: trend_and_pairwise`).
-- **BMR.** The BMR is the one the `.bm2` analysis records. Where it records
+- **BMR.** [`profile.yaml`] The BMR is the one the `.bm2` analysis records. Where it records
   none, `bmr_when_unrecorded` (1 SD) is used and footnoted as inferred.
-- **Acceptance** (`acceptance`) applies to every BMD, whatever its source.
+- **Acceptance** [`profile.yaml`] (`acceptance`) applies to every BMD, whatever its source.
   Appendix D-1 prints these values:
   - R² < 0.6, BMD/BMDL > 10, or a BMD above the highest dose → "NVM" (no
     viable model);
@@ -808,7 +820,7 @@ is a method setting, the setting's name in the profile is given, with its
 
 **Internal dose (Process)**
 
-The rules come from the profile's `internal_dose` settings:
+The rules come from the profile's `internal_dose` settings [`profile.yaml`], except for the plasma concentration table and the toxicokinetics:
 
 - Tables are built by study day, from biosample animals.
 - A group with ≤ 20 % of values detected prints "BD"
@@ -839,13 +851,14 @@ The rules come from the profile's `internal_dose` settings:
 
 **Transcriptomics (Integrate, Process)**
 
-- **Experiments.** Organ and sex come from each experiment's metadata:
-  approved metadata, else inferred.
+- **Experiments.** [`view.yaml`] Organ and sex come from each experiment's metadata:
+  approved metadata, else inferred. A view's `organs` and `sex` selections
+  choose which organ × sex sections show.
 - **Assay.** The assay (TempO-Seq, Affymetrix, Illumina) is read from the
   chip.
 - **Sample counts.** The sample-counts table counts each experiment's samples
   per organ, sex and dose.
-- **GO tables:**
+- **GO tables** [`profile.yaml`]:
   - They come from the `.bm2`'s GO category analyses.
   - They are ranked by `genomics.go_ranking` (5th percentile, then median).
   - They are cut by `go_display`: top 5 %, 20 to 500 genes, BMD ≥ 3.
@@ -854,7 +867,7 @@ The rules come from the profile's `internal_dose` settings:
   analysis, sorted by BMD. Fold change is the mean over each gene's probes.
 - **Methods.** The transcriptomic Methods prompt takes the analysis settings
   the `.bm2` records: version, prefilter, models, BMR and GO filters.
-- **Mismatch check.** At integration these recorded settings are compared with
+- **Mismatch check.** [`profile.yaml`] At integration these recorded settings are compared with
   `genomics.recorded` (BMR 25 % relative deviation, model averaging). A
   disagreement is a `method_mismatch` warning; neither side wins.
 - **Appendix C.1 PCA** is drawn per tissue and sex from the integrated
@@ -869,7 +882,7 @@ The rules come from the profile's `internal_dose` settings:
     the ranked tables, using the reliability rules below;
   - the LLM interpretation per organ and sex, grounded in the knowledge base
     (`bmdx.duckdb`).
-- **Charts.** The UMAP and cluster charts are off: the template's `charts: []`
+- **Charts.** [`template.yaml`] [`view.yaml`] The UMAP and cluster charts are off: the template's `charts: []`
   matches the NIEHS report, which has no main-body genomics figures. Turned
   on, clusters are labelled with the study's own GO terms, or with Enrichr
   terms only if `BMDX_ALLOW_ENRICHR=1`. New chart types can be declared in the
@@ -881,15 +894,15 @@ The rules come from the profile's `internal_dose` settings:
 
 **What appears, and where (render)**
 
-- **Sections follow the data.** The template lists every possible section.
+- **Sections follow the data.** [`template.yaml`] The template lists every possible section, in order, with its heading and the data it shows.
   Each one renders with what the session has:
   - a platform the study didn't measure reads "not evaluated";
   - content not yet produced is a visible `[… pending]`;
   - a genomics section appears for each organ the expression data has.
-- **Numbering and captions.** Tables and figures are numbered by their
-  position in the tree, and appendix tables per appendix ("Table B-1").
+- **Numbering and captions.** [`template.yaml`] Tables and figures are numbered by their
+  position in the template's tree, and appendix tables per appendix ("Table B-1").
   Captions are built from the design facts and the sexes in the data.
-- **Views narrow the report without recomputing.** A study overlay
+- **Views narrow the report without recomputing.** [`view.yaml`] A study overlay
   (`templates/studies/<id>/view.yaml`) or a saved view selects what is shown,
   and changes neither the data nor the statistics. NIEHS-10's overlay, for
   instance, keeps the liver-only, male-only organ weight table and the
@@ -897,10 +910,16 @@ The rules come from the profile's `internal_dose` settings:
   study is reported in full unless its overlay says otherwise. The axes are:
   - `organs` (per area: genomics, organ weight);
   - `sex` (apical, genomics);
-  - `assays` (clinical chemistry, hematology; hormones always in full);
+  - `assays` (clinical chemistry, hematology, hormones; per sex if needed);
   - `genes`;
   - `gene_sets`;
   - `charts`.
+- **Page breaks and appendix text.** [`template.yaml`] The template's `styles` block sets
+  where pages break, matching NIEHS-10. Appendix C, D and E prose comes from
+  the files the template names (`templates/freeform/appendix-{c,d,e}.*`).
+  Appendix A and F come from the study's own files
+  (`templates/studies/<id>/appendix-{a,f}.*`), so no other study inherits
+  them.
 
 **The animal report and Appendix B (Approve data)**
 
@@ -920,7 +939,7 @@ The rules come from the profile's `internal_dose` settings:
   APPROVED`) is derived from which artifacts exist, never set.
 - **Caches.** Every cache is keyed by a hash of its inputs: the data, the view
   and the method signature. A change recomputes only what depends on it.
-- **Stale sections.** When the data changes under an approved section, the
+- **Stale sections.** [`template.yaml`] When the data changes under an approved section, the
   section is kept but marked `stale`, and it blocks publishing until accepted
   again (§7). The list of sections that need approval is itself derived from
   the document tree.
@@ -941,15 +960,20 @@ The rules come from the profile's `internal_dose` settings:
     nonzero dose);
   - it must not be anomalous: a BMD below NOEL/10, or LOEL/10 without a NOEL,
     is left out.
-- **LLM-written prose** is given only the session's numbers, and only through
+- **LLM-written prose** [`template.yaml`] [`profile.yaml`] is given only the session's numbers, and only through
   the NIEHS gateway. Genomics narratives may cite only the papers the
   knowledge base supplies. That prose covers:
   - the apical BMD paragraph;
   - the genomics narratives;
-  - the remaining Methods subsections;
+  - the remaining Methods subsections, whose list and headings come from the
+    template; the Statistical Analysis and apical BMD prompts are built from
+    the profile;
   - the Background.
 
 ### A.3 Where each part of the report comes from
+
+Every row's place and heading come from `template.yaml`. The YAML column
+names the files that also shape its content (see the labels in A.2).
 
 **Kinds of source:**
 
@@ -959,38 +983,38 @@ The rules come from the profile's `internal_dose` settings:
 - **LLM:** written by a model from the data, through the NIEHS gateway only.
 - **Fixed:** NIEHS boilerplate.
 
-| Report part | Source | How it's derived | When the data doesn't say |
-|---|---|---|---|
-| Title: chemical, CASRN | Data / stated | `identity.json` (`--name`, `--casrn`, or the resolver) | — |
-| Title: strain, species, route ("Gavage Studies") | Data / stated | The experiments' metadata (`study_design_facts`) | The standard design, logged |
-| Title: supplier designation "(Hsd:…)" | Stated | `front_matter.json` `strain_designation` | Left out |
-| Report number, date, DOI | Stated | `front_matter.json` `publication` | "to be assigned" placeholders |
-| Foreword, Peer Review, Acknowledgments | Fixed | Template | — |
-| About This Report | Stated | `front_matter.json` authors and contributors | Pending |
-| Abstract: Methods, Results, Summary | Data | Built from the BMD summary, the genomics results and the design facts, without a model | Paragraphs drop out for absent data |
-| Abstract: Background, Background section | LLM | ATSDR, IRIS and PubChem lookups (`--background`) | Nothing is saved when a source is unreachable |
-| Methods: Study Design, Dose Selection, Chemistry | Data | Group sizes (Core cohort), doses, dose unit, design facts, identity | `[Placeholder: …]` for the source, age, quarantine, randomization, dose rationale, lot and purity |
-| Methods: Statistical Analysis, apical BMD | LLM from profile | The prompt is built from the profile's test families, alphas, BMR and acceptance criteria | — |
-| Methods: transcriptomic BMD | LLM | The prompt carries the `.bm2`'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters) | "not recorded" |
-| Methods: clinical exams, organ and clin-path endpoints | LLM | The prompt lists the endpoints in the data | — |
-| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G14) |
-| Sample counts table | Data | Animal report and expression samples per organ, sex and dose | Omitted without expression data |
-| Results: body, organ weight, clinical pathology tables | Data + profile | Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook | A domain that isn't collected reads "not evaluated" |
-| Results: Animal Condition, Clinical Pathology narratives | Data | Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model | — |
-| Results: Internal Dose table and narrative | Data + profile | The BD share, ½-LOD, Dixon outlier test, test family and significant figures come from the profile; units come from the lab workbook | Omitted without concentration data |
-| Apical BMD summary | Data + profile | `.bm2` results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics | The BMR is inferred from the profile and footnoted; NOEL is "ND" |
-| Apical BMD analytical paragraph | LLM | The summary rows | — |
-| Gene set and gene BMD tables | Data + profile | BMDExpress gene-level and GO analyses from the `.bm2`; ranking statistic and cutoffs from the profile; fold change is the mean over probes | — |
-| Gene set and gene narratives | Data, then LLM + knowledge base | Intro and per-organ findings built from the ranked tables; then the per-organ, per-sex interpretation grounded in `bmdx.duckdb` | Findings drop out without dose groups |
-| References | Knowledge base, Background sources | The papers the narratives actually cite; `citation_check` drops citations to anything not given | — |
-| Genomics charts | Data | UMAP and cluster charts from the GO tables; off in the shipped template (`charts: []`) | — |
-| Summary | Data | Built from the same inputs as the Abstract, without a model | — |
-| Appendix A (internal dose method), F (supplemental files) | Stated | Study overlay HTML/TeX (PFHxSAm only) | Pending |
-| Appendix B animal roster | Data | Animal report joined to the FASTQ sample names | — |
-| Appendix C.1 PCA | Data | Integrated expression matrix | — |
-| Appendix C.2 eFDR | — | Not ingested | Pending figure |
-| Appendix D acceptance table, configuration table | Profile, data | Profile criteria; the `.bm2` analyses' recorded configuration | — |
-| Appendix D, C and E prose | Fixed | Shared freeform files | — |
+| Report part | Source | How it's derived | When the data doesn't say | YAML |
+|---|---|---|---|---|
+| Title: chemical, CASRN | Data / stated | `identity.json` (`--name`, `--casrn`, or the resolver) | — | — |
+| Title: strain, species, route ("Gavage Studies") | Data / stated | The experiments' metadata (`study_design_facts`) | The standard design, logged | — |
+| Title: supplier designation "(Hsd:…)" | Stated | `front_matter.json` `strain_designation` | Left out | — |
+| Report number, date, DOI | Stated | `front_matter.json` `publication` | "to be assigned" placeholders | — |
+| Foreword, Peer Review, Acknowledgments | Fixed | Boilerplate in code (`rendering/report_data.py`) | — | — |
+| About This Report | Stated | `front_matter.json` authors and contributors | Pending | — |
+| Abstract: Methods, Results, Summary | Data | Built from the BMD summary, the genomics results and the design facts, without a model | Paragraphs drop out for absent data | — |
+| Abstract: Background, Background section | LLM | ATSDR, IRIS and PubChem lookups (`--background`) | Nothing is saved when a source is unreachable | — |
+| Methods: Study Design, Dose Selection, Chemistry | Data | Group sizes (Core cohort), doses, dose unit, design facts, identity | `[Placeholder: …]` for the source, age, quarantine, randomization, dose rationale, lot and purity | — |
+| Methods: Statistical Analysis, apical BMD | LLM from profile | The prompt is built from the profile's test families, alphas, BMR and acceptance criteria | — | `profile.yaml` |
+| Methods: transcriptomic BMD | LLM | The prompt carries the `.bm2`'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters) | "not recorded" | — |
+| Methods: clinical exams, organ and clin-path endpoints | LLM | The prompt lists the endpoints in the data | — | — |
+| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G14) | `template.yaml` (list, headings) |
+| Sample counts table | Data | Animal report and expression samples per organ, sex and dose | Omitted without expression data | — |
+| Results: body, organ weight, clinical pathology tables | Data + profile | Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook | A domain that isn't collected reads "not evaluated" | `profile.yaml`, `view.yaml` |
+| Results: Animal Condition, Clinical Pathology narratives | Data | Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model | — | `view.yaml` |
+| Results: Internal Dose table and narrative | Data + profile | The BD share, ½-LOD, Dixon outlier test, test family and significant figures come from the profile; units come from the lab workbook | Omitted without concentration data | `profile.yaml` |
+| Apical BMD summary | Data + profile | `.bm2` results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics | The BMR is inferred from the profile and footnoted; NOEL is "ND" | `profile.yaml`, `view.yaml` |
+| Apical BMD analytical paragraph | LLM | The summary rows | — | — |
+| Gene set and gene BMD tables | Data + profile | BMDExpress gene-level and GO analyses from the `.bm2`; ranking statistic and cutoffs from the profile; fold change is the mean over probes | — | `profile.yaml`, `view.yaml` |
+| Gene set and gene narratives | Data, then LLM + knowledge base | Intro and per-organ findings built from the ranked tables; then the per-organ, per-sex interpretation grounded in `bmdx.duckdb` | Findings drop out without dose groups | `view.yaml` |
+| References | Knowledge base, Background sources | The papers the narratives actually cite; `citation_check` drops citations to anything not given | — | — |
+| Genomics charts | Data | UMAP and cluster charts from the GO tables; off in the shipped template (`charts: []`) | — | `template.yaml`, `view.yaml` |
+| Summary | Data | Built from the same inputs as the Abstract, without a model | — | — |
+| Appendix A (internal dose method), F (supplemental files) | Stated | Study overlay HTML/TeX (PFHxSAm only) | Pending | — (study files) |
+| Appendix B animal roster | Data | Animal report joined to the FASTQ sample names | — | — |
+| Appendix C.1 PCA | Data | Integrated expression matrix | — | — |
+| Appendix C.2 eFDR | — | Not ingested | Pending figure | — |
+| Appendix D acceptance table, configuration table | Profile, data | Profile criteria; the `.bm2` analyses' recorded configuration | — | `profile.yaml` |
+| Appendix D, C and E prose | Fixed | Shared freeform files | — | `template.yaml` (names the files) |
 
 **Precedence when sources disagree:**
 
