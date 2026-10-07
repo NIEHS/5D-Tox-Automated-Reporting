@@ -15,7 +15,8 @@
 #       -u mg/kg [-k PFHxSAm] [-b] [-o output/DTXSID50469320] [-s docx,jats,pdf] FILE...
 #
 #   -i  session id (DTXSID…)              -n  test-article name     -c  CASRN
-#   -u  dose unit (default mg/kg)          -k  short compound name for captions
+#   -u  dose unit (default: the unit the data records, else mg/kg)
+#   -k  short compound name for captions
 #   -b  also generate the Background section (LLM + ATSDR/IRIS/PubChem lookups)
 #   -s  deliverables: comma list of docx,html,jats,bookshelf,pdf (default docx,html)
 #   -o  output dir (default output/<id>)
@@ -31,7 +32,7 @@ while getopts "i:n:c:u:k:bs:o:h" opt; do
   case $opt in
     i) ID=$OPTARG ;; n) NAME=$OPTARG ;; c) CASRN=$OPTARG ;; u) UNIT=$OPTARG ;;
     k) SHORT=$OPTARG ;; b) BG=true ;; s) SURFACES=$OPTARG ;; o) OUT=$OPTARG ;;
-    h|*) sed -n '2,26p' "$0"; exit 1 ;;
+    h|*) sed -n '2,27p' "$0"; exit 1 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -39,7 +40,7 @@ shift $((OPTIND - 1))
 OUT="${OUT:-output/$ID}"
 mkdir -p "$OUT"
 if [[ -z "$UNIT" ]]; then
-  UNIT="mg/kg"; echo "NOTE: dose unit defaulted to 'mg/kg' — pass -u to state it"
+  echo "NOTE: no -u — the server uses the unit the data records, else mg/kg; pass -u to state it"
 fi
 
 # Append ?user= for the ALLOWED_USERS gate (& when the path already has a query).
@@ -106,9 +107,10 @@ post "/api/generate-animal-report/$ID" \
 
 # --- 6. Process (long: stats + BMDS + genomics + narratives) --------------
 step "process (minutes when cold)"
+# The GO ranking and cutoffs are the study's method profile's (ADR-0027); the
+# server resolves them, and the dose unit when -u is not given.
 params=$(jq -nc --arg k "${SHORT:-$NAME}" --arg u "$UNIT" \
-  '{compound_name: $k, dose_unit: $u, bmd_stats: ["median"],
-    go_pct: 5, go_min_genes: 20, go_max_genes: 500, go_min_bmd: 3}')
+  '{compound_name: $k} + (if $u == "" then {} else {dose_unit: $u} end)')
 post "/api/process-integrated/$ID" "$params" > "$OUT/process_payload.json"
 jq -r '"  \(.sections|length) apical, \(.genomics_sections|length) genomics section(s)"' \
    "$OUT/process_payload.json"

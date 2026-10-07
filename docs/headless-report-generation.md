@@ -247,10 +247,10 @@ integrate_step(ID, {"name": "Perfluorohexanesulfonamide", "casrn": "41997-13-1",
 # 5. Approve data: build the animal report
 generate_animal_report_step(ID, store)
 
-# 6. Process (async; minutes when cold)
+# 6. Process (async; minutes when cold).  The GO ranking and cutoffs come from
+#    the study's method profile; add bmd_stats / go_* keys only to override it.
 payload = asyncio.run(process_step(ID, {
-    "compound_name": "PFHxSAm", "dose_unit": "mg/kg", "bmd_stats": ["median"],
-    "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500, "go_min_bmd": 3,
+    "compound_name": "PFHxSAm", "dose_unit": "mg/kg",
 }, store))
 
 # 7. Materialize the apical result sections as section files
@@ -317,7 +317,7 @@ BASE=http://localhost:9000 tooling/generate_report_api.sh \
 |------|---------|
 | `-i` | Session id (required) |
 | `-n`, `-c` | Test-article name and CASRN (sent to integrate) |
-| `-u` | Dose unit (defaults to `mg/kg`, with a printed note) |
+| `-u` | Dose unit. Leave it out and the server uses the unit the data records, else `mg/kg`; the script prints a note |
 | `-k` | Short compound name for captions (default: `-n`) |
 | `-b` | Also generate the Background section |
 | `-s` | Deliverables from `docx, html, jats, bookshelf, pdf` (default `docx,html`) |
@@ -402,10 +402,14 @@ post /api/generate-animal-report/$ID | jq '{total_animals, core_count, biosampli
 proxy sits in front of the server, check its idle timeout.
 
 ```bash
-post /api/process-integrated/$ID '{"compound_name": "PFHxSAm", "dose_unit": "mg/kg",
-  "bmd_stats": ["median"], "go_pct": 5, "go_min_genes": 20, "go_max_genes": 500,
-  "go_min_bmd": 3}' > process_payload.json
+post /api/process-integrated/$ID '{"compound_name": "PFHxSAm", "dose_unit": "mg/kg"}' \
+  > process_payload.json
 ```
+
+The server takes the GO ranking and cutoffs from the study's method profile.
+Send `bmd_stats`, `go_pct`, `go_min_genes`, `go_max_genes` or `go_min_bmd`
+only to override it for this run. Leave out `dose_unit` and the server uses
+the unit the data records, else `mg/kg`.
 
 The response is large: it includes base64 chart PNGs, which is why it goes
 straight to a file. Every result in it is also cached in the session, so you
@@ -567,13 +571,20 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 - **Re-running is cheap.** Each processing layer is cached by a hash of its
   inputs. A repeat `process` on an unchanged session takes seconds.
   Content preparation is skipped entirely when nothing it depends on changed.
-- **Re-integration wipes the process caches**, except the BMDS cache, whose
-  hash is based on the data itself. The next process then recomputes. Route A
-  skips integration when `integrated.json` exists unless you pass
-  `--reintegrate`. Route B always integrates.
+- **Re-integration wipes every process cache**, BMDS included, so the next
+  process recomputes from scratch. Route A skips integration when
+  `integrated.json` exists unless you pass `--reintegrate`. Route B always
+  integrates. Integration puts back what people stated: the approved
+  experiment metadata (`metadata_approved.json`) and the `--design` facts
+  (`study_design.json`). It also re-pins the method profile when the study
+  tracks the newest one.
 - **Adding or replacing a file** after validation invalidates the downstream
-  artifacts (validation report, `integrated.json`, animal report, caches).
-  Approved section text is kept but marked `stale`.
+  artifacts (validation report, `integrated.json`, animal report, caches),
+  except the BMDS cache, whose hash is based on the data itself. Approved
+  section text is kept but marked `stale`.
+- **Changing the method profile** (`--method-profile`, or a newer profile for
+  a study that tracks the newest) changes the NTP, BMDS, sections and Methods
+  cache keys, so the next process recomputes them.
 - **Reset the pool** but keep identity and sections: `POST /api/pool/reset/{id}`.
   **Delete the whole session:** `POST /api/session/reset/{id}`. Both are
   destructive, so check the session id first.
@@ -600,7 +611,7 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
 ## 10. Known gaps
 
-These hold as of 2026-10-05. Appendix A.3 lists every place the report still
+These hold as of 2026-10-05. Appendix A.4 lists every place the report still
 lacks data, with what would close it.
 
 - **About This Report** (authors, contributors) is human-set front matter
@@ -627,9 +638,10 @@ lacks data, with what would close it.
 
 ## Appendix A. What in the report comes from the data
 
-This appendix says where each part of a report comes from, what the pipeline
-does when the data doesn't say, and where it still falls short. It holds as of
-2026-10-07.
+This appendix sets out everything in a report that is driven by the data:
+the rules (A.1), how each fact is worked out from the files (A.2), where each
+part of the report comes from (A.3), and where it still falls short (A.4). It
+holds as of 2026-10-07.
 
 ### A.1 The rules
 
@@ -660,7 +672,197 @@ does when the data doesn't say, and where it still falls short. It holds as of
   matter, experiment-metadata approval and section approval. Each is kept in
   the session and re-applied when integration runs again.
 
-### A.2 Where each part of the report comes from
+### A.2 How the data is read
+
+Each fact below is worked out from the files at the step named. Where a rule
+is a method setting, the setting's name in the profile is given, with its
+`ntp-5day-2025` value.
+
+**Files (Validate, Integrate)**
+
+- **What a file is.** Each file gets a platform (Body Weight, Organ Weight,
+  Clinical Chemistry, Hematology, Hormones, tissue concentration, clinical
+  observations) and a data type (`tox_study`, `inferred` or
+  `gene_expression`). Confirm metadata (`--metadata`) can override either.
+  They are detected differently:
+  - a `.bm2` from its content and chip (ADR-0017);
+  - a text or CSV file's platform from NTP naming patterns in its file name,
+    e.g. `organ_weights_truth_male.txt`.
+- **Cross-checks.** Validation compares the files with each other: dose
+  groups, sexes, animals and coverage per platform. When two files cover the
+  same data, it asks which one wins. A truth CSV derived from a study workbook
+  is checked value by value against that workbook.
+- **Long tables become a pivot plus a sidecar.** A one-row-per-animal table
+  becomes the BMDExpress pivot (`.txt`) that Integrate needs, plus a
+  `.sidecar.json`. The sidecar keeps what the pivot drops: each animal's
+  cohort, observation day, terminal flag and raw value.
+- **Units.** Units come from the study workbook's "Key to Column Labels"
+  sheet, or from the `.units.json` that `cebs_to_pool` writes. Where both give
+  one, the workbook wins. A unit stated nowhere is left unrecorded and
+  flagged, never assumed. Studies differ: NIEHS-07 to -09 report plasma in
+  ng/mL, NIEHS-10 in µg/mL.
+
+**The study (Integrate, then every step)**
+
+- **Identity.** Name, CASRN and DTXSID come from `identity.json`. The short
+  name in captions comes from `--compound-name`.
+- **Doses and sexes** are read from the files: every file's dose groups and
+  sexes, and the animal report's dose groups.
+- **Cohorts.** Each animal's Selection says which cohort it belongs to:
+  - "Core Animals" are the cohort that every table, statistic and group size
+    is built from.
+  - "Biosampling Animals" (NIEHS-10) and "Biosample Animals" (NIEHS-07, -12,
+    -13) are the internal-dose cohort. Both spellings count.
+  - A study whose files mark no cohort (NIEHS-02 to -06, RR-8) treats every
+    animal as Core.
+  - A database export that marks "Original Animals" uses those, as published.
+- **Group sizes** for Methods and the N rows:
+  - Distinct Core animals are counted per sex and dose across all sidecars.
+  - The group size is the most common count over the treated groups. The
+    control size is the most common count over the control groups.
+  - Doses with biosampling animals are listed separately ("Additional animals
+    in the … groups").
+- **Design facts.** Species, strain, route, vehicle and duration come from
+  each experiment's `experimentDescription`, and every experiment that records
+  one must agree. Integration fills these from the stated design
+  (`study_design.json`) or approved metadata, else infers them. A fact still
+  missing falls back to the standard design, and the fallback is logged.
+  Values that disagree get no fallback. The standard design is:
+  - Sprague Dawley rats for five days;
+  - by gavage in corn oil for an oral unit (mg/kg);
+  - by inhalation for an air concentration (ppm, ppb, mg/m³).
+- **Dose unit.** The stated unit wins, else the one unit the data records,
+  else mg/kg (logged). An air-concentration unit changes the wording
+  throughout:
+  - "exposed to" and "by inhalation";
+  - "exposure concentrations";
+  - "chamber control";
+  - "postexposure";
+  - "(Inhalation Studies)";
+  - no vehicle or dose formulations.
+- **Wording from the design.** Captions are built from these facts, e.g.
+  "Summary of Body Weights of Male Rats Administered Triclosan for Five Days".
+  So are the title's animals and study type, and the Methods animals sentence.
+  Durations up to ten print in words.
+
+**Apical endpoints (Process)**
+
+- **Derived endpoints:**
+  - Relative organ weight = organ weight ÷ terminal body weight × 1000
+    (mg/g), per animal.
+  - Body weight gain = last-day weight − first-day weight, per animal.
+  - Both get full statistics, LOEL and NOEL, and BMDs.
+- **Statistics** follow the profile's `apical.statistics`:
+  - A Jonckheere trend test runs on every endpoint.
+  - When its p ≤ `trend_select_p` (0.01), the trend-sensitive pairwise test
+    runs: Williams for weights, Shirley for clinical pathology.
+  - Otherwise Dunnett runs for weights and Dunn for clinical pathology
+    (`pairwise` per platform).
+  - Groups smaller than `min_group_n` (2) are left out.
+  - Markers are `*` at p ≤ `alpha` (0.05) and `**` at p ≤ `alpha_strong`
+    (0.01).
+  - The footnote naming the tests is built from the family that ran.
+- **LOEL** is the lowest dose with a significant pairwise difference from
+  control.
+- **NOEL** is the highest tested dose below the LOEL. It is "ND" when there is
+  no LOEL or no dose below it, never the control or the top dose.
+- **Direction** (up or down) is shown only when the trend test is significant.
+- **Which rows appear.** Every measured endpoint appears in the tables,
+  whether or not it is significant. N rows count Core animals.
+- **Attrition.** An animal whose terminal flag falls before the scheduled
+  sacrifice is attrition. Attrition footnotes give the day from the data.
+  Mortality counts Core deaths only, so scheduled biosample sacrifices aren't
+  counted as deaths.
+- **Clinical observations.** Incidence counts Core animals. The onset of signs
+  is the first day they were recorded. Without clinical-observation data the
+  narrative says nothing about overt toxicity.
+- **Decimals.** Every mean ± SE in a row prints at one precision, chosen by
+  the endpoint. The precision NIEHS's published summary tables use comes
+  first; an endpoint they don't list uses the precision its values are
+  recorded with (at least one decimal).
+
+**Apical BMDs (Process)**
+
+- **Where a BMD comes from.**
+  - The `.bm2`'s BMDExpress results are used where they exist.
+  - An endpoint the `.bm2` didn't model is fitted with ToxicR Laplace model
+    averaging (`apical.bmd.engine`) and marked as filled.
+  - Where both exist they must agree, or processing stops.
+- **Eligibility.** A BMD is reported only for an endpoint with a significant
+  trend and a significant pairwise test (`eligibility: trend_and_pairwise`).
+- **BMR.** The BMR is the one the `.bm2` analysis records. Where it records
+  none, `bmr_when_unrecorded` (1 SD) is used and footnoted as inferred.
+- **Acceptance** (`acceptance`) applies to every BMD, whatever its source.
+  Appendix D-1 prints these values:
+  - R² < 0.6, BMD/BMDL > 10, or a BMD above the highest dose → "NVM" (no
+    viable model);
+  - a BMD below ⅓ of the lowest nonzero dose → "<LNZD/3".
+- **Precision.** BMDs print at one precision report-wide: 3 decimals for the
+  NIEHS-10 method (gene expression without gene-level analysis), else 1.
+
+**Internal dose (Process)**
+
+The rules come from the profile's `internal_dose` settings:
+
+- Tables are built by study day, from biosample animals.
+- A group with ≤ 20 % of values detected prints "BD"
+  (`bd_if_detected_share_at_most`). Otherwise values below the limit count as
+  half the limit (`below_limit: half_limit`).
+- Outliers are removed by the Dixon r10 test at α = 0.01 (`outliers`).
+- Pairwise markers use Shirley or Dunn, and only when the control has a mean.
+- Values print to 3 significant figures (`sig_figs`). Normalized rows divide
+  each animal's concentration by its group's nominal dose or exposure
+  concentration.
+- **Plasma half-lives** use the two-point formula t½ = ln 2 · Δt / ln(C₁/C₂).
+  They are computed only with exactly two time points and a falling
+  concentration.
+
+**Transcriptomics (Integrate, Process)**
+
+- **Experiments.** Organ and sex come from each experiment's metadata:
+  approved metadata, else inferred.
+- **Assay.** The assay (TempO-Seq, Affymetrix, Illumina) is read from the
+  chip.
+- **Sample counts.** The sample-counts table counts each experiment's samples
+  per organ, sex and dose.
+- **GO tables:**
+  - They come from the `.bm2`'s GO category analyses.
+  - They are ranked by `genomics.go_ranking` (5th percentile, then median).
+  - They are cut by `go_display`: top 5 %, 20 to 500 genes, BMD ≥ 3.
+  - Up and down counts come from the genes' directions.
+- **Gene tables.** The top genes come from BMDExpress's gene-level (GENE)
+  analysis, sorted by BMD. Fold change is the mean over each gene's probes.
+- **Methods.** The transcriptomic Methods prompt takes the analysis settings
+  the `.bm2` records: version, prefilter, models, BMR and GO filters.
+- **Mismatch check.** At integration these recorded settings are compared with
+  `genomics.recorded` (BMR 25 % relative deviation, model averaging). A
+  disagreement is a `method_mismatch` warning; neither side wins.
+- **Appendix C.1 PCA** is computed from the integrated expression matrix.
+
+**Prose built from the data (Process)**
+
+- **No model involved.** These are assembled from the numbers above, so they
+  can't disagree with the tables:
+  - the Abstract (except its Background sentence);
+  - the Summary;
+  - the Animal Condition, Clinical Pathology and Internal Dose narratives;
+  - Methods' Study Design, Dose Selection and Chemistry.
+- **"Most sensitive" lists** in the Abstract and Summary take reliable BMDs
+  only:
+  - the BMD must be viable and not NVM;
+  - it must be at or above the lower limit of extrapolation (⅓ of the lowest
+    nonzero dose);
+  - it must not be anomalous: a BMD below NOEL/10, or LOEL/10 without a NOEL,
+    is left out.
+- **LLM-written prose** is given only the session's numbers, and only through
+  the NIEHS gateway. Genomics narratives may cite only the papers the
+  knowledge base supplies. That prose covers:
+  - the apical BMD paragraph;
+  - the genomics narratives;
+  - the remaining Methods subsections;
+  - the Background.
+
+### A.3 Where each part of the report comes from
 
 **Kinds of source:**
 
@@ -684,7 +886,7 @@ does when the data doesn't say, and where it still falls short. It holds as of
 | Methods: Statistical Analysis, apical BMD | LLM from profile | The prompt is built from the profile's test families, alphas, BMR and acceptance criteria | — |
 | Methods: transcriptomic BMD | LLM | The prompt carries the `.bm2`'s recorded settings (BMDExpress version, prefilter, models, BMR, GO filters) | "not recorded" |
 | Methods: clinical exams, organ and clin-path endpoints | LLM | The prompt lists the endpoints in the data | — |
-| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G13) |
+| Methods: other subsections | LLM | Fixed guides: sample collection, RNA, sequencing, QC, normalization, internal dose, data accessibility | — (see gap G14) |
 | Sample counts table | Data | Animal report and expression samples per organ, sex and dose | Omitted without expression data |
 | Results: body, organ weight, clinical pathology tables | Data + profile | Mean ± SE per group; markers from the profile's tests; decimals per endpoint; caption from sexes, species, route and duration; units from the study workbook | A domain that isn't collected reads "not evaluated" |
 | Results: Animal Condition, Clinical Pathology narratives | Data | Built from the tables, mortality by cohort, and clinical-sign incidence and onset, without a model | — |
@@ -712,7 +914,7 @@ does when the data doesn't say, and where it still falls short. It holds as of
 | Apical BMR | Recorded in the `.bm2` > the profile's `bmr_when_unrecorded` (footnoted as inferred) |
 | `.bm2` setting vs profile | Neither wins. A disagreement is a `method_mismatch` warning |
 
-### A.3 Gap analysis
+### A.4 Gap analysis
 
 **Status values:**
 
@@ -740,22 +942,26 @@ does when the data doesn't say, and where it still falls short. It holds as of
 | G8 | Multi-species studies (NIEHS-13: rats and mice) | One gene-expression `.bm2` per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only | Key genomics by species and keep every expression project |
 | G9 | Animal report counts NIEHS-13's biosample animals as Core | The animal report's Core count is too high; the tables use the right cohort | Use the cohort rule the tables use |
 | G10 | The UI's Process step sends `mg/kg` when no unit is set | Hides the recorded-unit and logged fallback | Send nothing and let the server resolve it |
-| G11 | Apical outlier exclusion (NIEHS staff judgement) | Not represented; the profile says `outliers: null` | A per-study exclusion list in the overlay |
-| G12 | NIEHS-10's apical engine (BMDS 2.7) and `all_endpoints` | Listed as profile deviations; the substitute runs | Implement, or accept as recorded |
+| G11 | A text or CSV file's platform is read from its file name | A file not named to NTP conventions is unassigned or misclassified until overridden | Classify by content (endpoint names), as `.bm2` files are |
+| G12 | Apical outlier exclusion (NIEHS staff judgement) | Not represented; the profile says `outliers: null` | A per-study exclusion list in the overlay |
+| G13 | NIEHS-10's apical engine (BMDS 2.7) and `all_endpoints` | Listed as profile deviations; the substitute runs | Implement, or accept as recorded |
 
 **Text gaps**
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G13 | Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text | The LLM writes plausible, older-era protocol text | Move the guides into the profile, or build them from data |
-| G14 | The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes" | Can disagree with the profile's GO ranking | Generate from the profile, as the statistics guide is |
-| G15 | Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text | Generate from the profile and the recorded configuration |
-| G16 | Appendix E describes liver, kidney and heart whatever was weighed | Can describe organs the study didn't weigh, and miss ones it did | Select descriptions by the organs in the data |
-| G17 | Peer Review says the design and methods are identical to those reviewed | Not checked | Compare the pinned profile with the reviewed one |
-| G18 | The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type | Both are built from the design facts but drop these parts | Build both from the cover title, with the sexes in the data |
+| G14 | Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text | The LLM writes plausible, older-era protocol text | Move the guides into the profile, or build them from data |
+| G15 | The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes" | Can disagree with the profile's GO ranking | Generate from the profile, as the statistics guide is |
+| G16 | Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text | Generate from the profile and the recorded configuration |
+| G17 | Appendix E describes liver, kidney and heart whatever was weighed | Can describe organs the study didn't weigh, and miss ones it did | Select descriptions by the organs in the data |
+| G18 | The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10) | Fixed in code, not the profile | Read them from the profile, as the acceptance criteria are |
+| G19 | BMD precision (1 or 3 decimals) is inferred from whether the `.bm2` has gene-level analyses | A data heuristic standing in for a method setting | A profile setting |
+| G20 | The transcriptomics Methods guides name TempO-Seq and the S1500+ platform | Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip | Build the guides from the detected assay |
+| G21 | Peer Review says the design and methods are identical to those reviewed | Not checked | Compare the pinned profile with the reviewed one |
+| G22 | The title doesn't name the sex of a one-sex study (NIEHS: "Male Sprague Dawley … Rats"), and Peer Review names the study by its short title, without the CASRN, designation and study type | Both are built from the design facts but drop these parts | Build both from the cover title, with the sexes in the data |
 
 **Structure gaps**
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G19 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
+| G23 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
