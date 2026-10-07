@@ -192,6 +192,12 @@ def _williams_stat(means: np.ndarray, n: np.ndarray) -> np.ndarray:
 
 
 def _null_p(observed: float, ns: tuple[int, ...], df: float) -> float:
+    if len(ns) == 2:
+        # One treatment group: the statistic is the plain standardized
+        # difference, exactly normal (df = inf) or Student t — no simulation
+        # noise at the 0.05 boundary (NIEHS-13 Table 19, 1 ppm: p = 0.0495).
+        dist = sp_stats.norm if math.isinf(df) else sp_stats.t(df)
+        return float(dist.sf(observed))
     null = _williams_null(ns, float(df))
     return float((np.count_nonzero(null >= observed) + 1) / (null.size + 1))
 
