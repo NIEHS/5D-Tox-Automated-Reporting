@@ -240,8 +240,9 @@ def enrich_clusters(
     Each gene_set dict must have: go_id, go_term, genes (semicolon-separated),
     bmd (float).  The clusters dict maps go_id → cluster_id (int).
 
-    Falls back to listing our own GO terms if Enrichr is unreachable or
-    a cluster has fewer than 3 genes.
+    Falls back to listing our own GO terms if Enrichr is off (the egress
+    gate, knowledge_base.enrichr_client — it is unless BMDX_ALLOW_ENRICHR=1),
+    unreachable, or a cluster has fewer than 3 genes.
 
     Args:
         gene_sets: GO category dicts with go_id, go_term, genes, bmd
@@ -318,7 +319,17 @@ def enrich_clusters(
             row["n_down"] = sum(1 for s in cluster_genes if _gene_dir.get(s) == "down")
         return row
 
-    # Attempt Enrichr enrichment per cluster
+    # Attempt Enrichr enrichment per cluster — only when the egress gate allows
+    # it (knowledge_base.enrichr_client: a public service; off unless
+    # BMDX_ALLOW_ENRICHR=1).  Otherwise every cluster takes the internal GO terms.
+    from knowledge_base.enrichr_client import enrichr_allowed
+    if not enrichr_allowed():
+        logger.info("Enrichr off (%s not set): cluster labels from internal GO terms",
+                    "BMDX_ALLOW_ENRICHR")
+        return [_internal_summary(cid, by_cluster.get(cid, []),
+                                  set().union(*(go_id_to_genes.get(gs.get("go_id", ""), set())
+                                                for gs in by_cluster.get(cid, []))))
+                for cid in ranked_clusters]
     cluster_summary = []
     try:
         import time as _time

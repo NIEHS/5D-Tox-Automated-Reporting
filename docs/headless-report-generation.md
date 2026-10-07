@@ -76,6 +76,7 @@ Both routes need the same environment, because both run the same pipeline
 | `BMDX_PROJECT_ROOT` | Tells the Java bridge where to find the BMDExpress-3 jars (`$BMDX_PROJECT_ROOT/target/*.jar`) | `/workspace/BMDExpress-3` in the sandbox |
 | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_BASE_URL`) | LLM narratives, Methods, Background, Summary | Toxpipe LiteLLM gateway |
 | `SSL_CERT_FILE` | The toxpipe gateway uses the NIH CA chain. The Python SDK reads `SSL_CERT_FILE`, not `NODE_EXTRA_CA_CERTS` | `/usr/local/share/ca-certificates/extra/nih-ca-bundle.crt` |
+| `BMDX_ALLOW_ENRICHR=1` *(optional, published data only)* | Labels the genomics cluster chart with Enrichr terms. Enrichr is a **public** service, so this sends each cluster's gene list off the NIEHS network. Off by default: clusters are labelled with the study's own GO terms. Never set it for an unpublished study | Unset |
 | `tect` *(optional)* | Builds the local LaTeX PDF (`pdf` surface in Route A) | Baked into the sandbox. Never use plain `tectonic` |
 | LibreOffice `docx2pdf` *(optional)* | PDF over HTTP (`GET /Bookshelf/{id}/report.pdf`) | Baked into the sandbox |
 

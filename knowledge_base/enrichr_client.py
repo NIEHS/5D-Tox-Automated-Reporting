@@ -25,6 +25,7 @@ Usage:
 
 import json
 import logging
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -36,6 +37,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
+# Egress gate.  Enrichr is a PUBLIC web service: every call sends a gene list
+# derived from the study (a genomics cluster's genes) off the NIEHS network.
+# Study data must not leave for public services (the LLM egress guard's rule,
+# styling_export/llm_endpoints), and a session carries no "published" flag to
+# tell an unpublished study (BPAF, Triclosan) from a published one — so the
+# client fails CLOSED: it refuses unless BMDX_ALLOW_ENRICHR=1 is set, which
+# a dev run on published data (dev = published data only) may do.
+ALLOW_ENV = "BMDX_ALLOW_ENRICHR"
+
+
+class EnrichrDisabled(RuntimeError):
+    """Enrichr calls are off (BMDX_ALLOW_ENRICHR is not set)."""
+
+
+def enrichr_allowed() -> bool:
+    return os.environ.get(ALLOW_ENV, "").strip().lower() in ("1", "true", "yes")
+
 
 # Enrichr REST API base URL (Ma'ayan Lab, Mount Sinai)
 ENRICHR_BASE = "https://maayanlab.cloud/Enrichr"
@@ -106,6 +125,8 @@ def enrichr_submit(gene_symbols: list[str], description: str) -> int:
         RuntimeError: if Enrichr rejects the submission
         urllib.error.URLError: on network failure
     """
+    if not enrichr_allowed():
+        raise EnrichrDisabled(f"Enrichr is a public service; set {ALLOW_ENV}=1 to send gene lists to it")
     boundary = uuid.uuid4().hex
 
     # Build multipart body — two fields: 'list' and 'description'

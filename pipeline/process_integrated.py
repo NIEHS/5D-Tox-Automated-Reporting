@@ -634,6 +634,7 @@ async def _build_charts(ctx):
         # applied after the genomics cache read), but the charts render from the
         # cutoff-FILTERED gene sets — so the GO cutoffs must be folded into the
         # chart key directly, else changing a cutoff would serve stale charts.
+        from knowledge_base.enrichr_client import enrichr_allowed
         charts_hash = hashlib.sha256(
             json.dumps({
                 "genomics_hash": genomics_hash,
@@ -642,6 +643,9 @@ async def _build_charts(ctx):
                 "chart_types": _chart_types_fingerprint(chart_types_reg),
                 "go_cutoffs": [ctx.go_pct, ctx.go_min_genes,
                                ctx.go_max_genes, ctx.go_min_bmd],
+                # Cluster labels come from Enrichr or internal GO terms by the
+                # egress gate — a switched gate must not serve the other's charts.
+                "enrichr": enrichr_allowed(),
             }, sort_keys=True, default=str).encode()
         ).hexdigest()[:16]
         charts_cached = _load_cache(dtxsid, "charts", charts_hash)
