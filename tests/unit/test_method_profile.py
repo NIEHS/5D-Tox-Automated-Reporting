@@ -73,8 +73,9 @@ def test_pin_is_explicit_and_a_changed_profile_is_refused(tmp_path, monkeypatch)
 
     pin = mp.ensure_pin("DTXSIDX")
     assert pin["name"] == "ntp-5day-2025" and pin["pinned_by"] == "default"
-    assert mp.pin_profile("DTXSIDX", "ntp-5day-2025")["pinned_by"] == "user"   # confirmed
-    assert mp.read_pin("DTXSIDX")["pinned_by"] == "user"
+    assert mp.pin_mode(pin) == mp.TRACK                                        # the default
+    fixed = mp.pin_profile("DTXSIDX", "ntp-5day-2025")                         # the user fixes it
+    assert (fixed["pinned_by"], mp.pin_mode(fixed)) == ("user", mp.FIXED)
     assert mp.ensure_pin("DTXSIDX")["pinned_by"] == "user"                     # never downgraded
     mp.pin_profile("DTXSIDX", "ntp-5day-2021")
     assert mp.read_pin("DTXSIDX")["name"] == "ntp-5day-2021"
@@ -147,3 +148,54 @@ def test_integration_pins_and_flags_recorded_disagreements(tmp_path, monkeypatch
     kinds = [i["issue_type"] for i in store.report["issues"]]
     assert kinds == ["roster_subset", "method_mismatch"]
     assert store.report["issues"][1]["details"]["setting"] == "genomics.recorded.bmr"
+
+
+def _profiles_with(tmp_path, monkeypatch, *extra_effective):
+    """A profiles dir holding the shipped profiles plus copies of
+    ntp-5day-2025 renamed to newer effective dates."""
+    import shutil
+    pdir = tmp_path / "profiles"
+    shutil.copytree(mp.PROFILES_DIR, pdir)
+    for eff in extra_effective:
+        doc = yaml.safe_load((pdir / "ntp-5day-2025.yaml").read_text())
+        doc["name"], doc["effective"] = f"ntp-5day-{eff}", eff
+        (pdir / f"ntp-5day-{eff}.yaml").write_text(yaml.safe_dump(doc))
+    monkeypatch.setattr(mp, "PROFILES_DIR", pdir)
+    return pdir
+
+
+def test_tracking_is_the_default_and_follows_a_newer_profile(tmp_path, monkeypatch):
+    import common.paths
+
+    monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path / "sessions")
+    (tmp_path / "sessions" / "DTXSIDX").mkdir(parents=True)
+    pdir = _profiles_with(tmp_path, monkeypatch)
+    pin = mp.ensure_pin("DTXSIDX")
+    assert (pin["name"], mp.pin_mode(pin)) == ("ntp-5day-2025", mp.TRACK)
+
+    doc = yaml.safe_load((pdir / "ntp-5day-2025.yaml").read_text())
+    doc["name"], doc["effective"] = "ntp-5day-2027", "2027"
+    (pdir / "ntp-5day-2027.yaml").write_text(yaml.safe_dump(doc))
+    moved = mp.ensure_pin("DTXSIDX")
+    assert (moved["name"], mp.pin_mode(moved)) == ("ntp-5day-2027", mp.TRACK)
+    assert mp.session_method("DTXSIDX").profile == "ntp-5day-2027"
+    archived = list((tmp_path / "sessions" / "DTXSIDX" / "history" / "_method_profile").glob("*"))
+    assert [p.name.endswith("ntp-5day-2025.json") for p in archived] == [True]
+
+
+def test_a_fixed_pin_stays_and_newest_switches_back_to_tracking(tmp_path, monkeypatch):
+    import common.paths
+
+    monkeypatch.setattr(common.paths, "SESSIONS_DIR", tmp_path / "sessions")
+    (tmp_path / "sessions" / "DTXSIDX").mkdir(parents=True)
+    _profiles_with(tmp_path, monkeypatch, "2027")
+    pin = mp.pin_profile("DTXSIDX", "ntp-5day-2025")
+    assert (pin["name"], mp.pin_mode(pin), pin["pinned_by"]) == ("ntp-5day-2025", mp.FIXED, "user")
+    assert mp.ensure_pin("DTXSIDX")["name"] == "ntp-5day-2025"            # not moved
+    pin = mp.pin_profile("DTXSIDX", mp.NEWEST)
+    assert (pin["name"], mp.pin_mode(pin)) == ("ntp-5day-2027", mp.TRACK)
+
+
+def test_pins_written_before_modes_keep_their_meaning():
+    assert mp.pin_mode({"name": "x", "pinned_by": "user"}) == mp.FIXED
+    assert mp.pin_mode({"name": "x", "pinned_by": "default"}) == mp.TRACK

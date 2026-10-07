@@ -518,44 +518,78 @@ def read_pin(dtxsid: str) -> dict | None:
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-def pin_profile(dtxsid: str, name: str, *, by: str = "user") -> dict:
-    """Pin `name` for the study (re-pinning is explicit; the previous pin is
-    kept under history/_method_profile/).  `by` is "user" or "default"."""
+TRACK = "track"      # follow the newest profile of the series (the default)
+FIXED = "fixed"      # stay on the named profile until re-pinned
+NEWEST = "newest"    # the --method-profile value that selects TRACK
+
+
+def pin_mode(pin: dict) -> str:
+    """A pin's mode.  Pins written before modes existed: a user's choice is
+    FIXED, an automatic default TRACKs."""
+    return pin.get("mode") or (FIXED if pin.get("pinned_by") == "user" else TRACK)
+
+
+def _write_pin(dtxsid: str, name: str, *, by: str, mode: str, series: str) -> dict:
+    """Write the pin (the previous one, when it named another profile or hash,
+    is kept under history/_method_profile/)."""
     path = profile_path(name)
     load_profile(name)                                   # validate before pinning
-    pin = {"name": name, "hash": content_hash(path),
+    pin = {"name": name, "hash": content_hash(path), "mode": mode, "series": series,
            "pinned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "pinned_by": by}
     target = pin_path(dtxsid)
     if target.is_file():
         old = json.loads(target.read_text())
-        if old.get("name") == name and old.get("hash") == pin["hash"]:
-            if old.get("pinned_by") == by or by == "default":
-                return old
-            # A user confirming the default pin: same method, now their choice.
-            target.write_text(json.dumps(pin, indent=2) + "\n")
-            logger.info("Method profile %s for %s confirmed by %s", name, dtxsid, by)
-            return pin
-        hist = target.parent / "history" / "_method_profile"
-        hist.mkdir(parents=True, exist_ok=True)
-        stamp = (old.get("pinned_at") or "unknown").replace(":", "")
-        (hist / f"{stamp}-{old.get('name')}.json").write_text(json.dumps(old, indent=2))
-        logger.info("Method profile for %s re-pinned: %s → %s", dtxsid, old.get("name"), name)
+        same_method = old.get("name") == name and old.get("hash") == pin["hash"]
+        if same_method and pin_mode(old) == mode and (old.get("pinned_by") == by or by == "default"):
+            return old
+        if not same_method:
+            hist = target.parent / "history" / "_method_profile"
+            hist.mkdir(parents=True, exist_ok=True)
+            stamp = (old.get("pinned_at") or "unknown").replace(":", "")
+            (hist / f"{stamp}-{old.get('name')}.json").write_text(json.dumps(old, indent=2))
+            logger.warning("Method profile for %s: %s → %s (%s)", dtxsid, old.get("name"), name,
+                           "tracking the newest" if mode == TRACK else "re-pinned")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(pin, indent=2) + "\n")
     return pin
 
 
+def pin_profile(dtxsid: str, name: str, *, by: str = "user") -> dict:
+    """Pin the study to `name`.  `name` == "newest" makes the pin TRACK the
+    newest profile of the series; any other name FIXES the study on that
+    profile until it is re-pinned.  `by` is "user" or "default"."""
+    if name == NEWEST:
+        return track_newest(dtxsid, by=by)
+    return _write_pin(dtxsid, name, by=by, mode=FIXED, series=load_profile(name)["series"])
+
+
+def track_newest(dtxsid: str, *, series: str | None = None, by: str = "user") -> dict:
+    """Pin the study to the newest profile of `series` (its current series, else
+    the default) and keep it there as profiles are added."""
+    pin = read_pin(dtxsid) or {}
+    series = series or pin.get("series") or DEFAULT_SERIES
+    return _write_pin(dtxsid, newest_profile(series), by=by, mode=TRACK, series=series)
+
+
 def ensure_pin(dtxsid: str) -> dict:
-    """The study's pin, pinning the newest profile of the series when there is
-    none (logged as a default — choosing a method is a human decision)."""
+    """The study's pin, made current: a study with none TRACKS the newest
+    profile (the default — logged); a TRACK pin moves to a newer profile when
+    one has been added (archived and logged; the caches recompute); a FIXED pin
+    is left alone.  Called at integration and before every Process run."""
     pin = read_pin(dtxsid)
-    if pin:
-        return pin
-    name = newest_profile()
-    logger.warning("No method profile pinned for %s; pinned the newest, %s "
-                   "(re-pin with generate_report --method-profile)", dtxsid, name)
-    return pin_profile(dtxsid, name, by="default")
+    if not pin:
+        name = newest_profile()
+        logger.warning("No method profile pinned for %s; it tracks the newest, %s "
+                       "(fix one with generate_report --method-profile NAME)", dtxsid, name)
+        return _write_pin(dtxsid, name, by="default", mode=TRACK, series=DEFAULT_SERIES)
+    if pin_mode(pin) == TRACK:
+        series = pin.get("series") or DEFAULT_SERIES
+        newest = newest_profile(series)
+        if newest != pin.get("name"):
+            return _write_pin(dtxsid, newest, by=pin.get("pinned_by", "default"),
+                              mode=TRACK, series=series)
+    return pin
 
 
 def study_overlay(dtxsid: str) -> dict | None:

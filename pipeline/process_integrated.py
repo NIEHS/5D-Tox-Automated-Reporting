@@ -1600,8 +1600,9 @@ def _resolve_request_method(dtxsid: str, body: dict):
     """The study's method with what the Process request states explicitly on
     top (source "request"): `bmd_stats` / `bmd_stat` → the GO ranking; any
     `go_*` cutoff → the GO display cutoffs (unnamed ones keep the profile's)."""
-    from pipeline.method_profile import session_method
+    from pipeline.method_profile import ensure_pin, session_method
 
+    ensure_pin(dtxsid)        # a study tracking the newest profile moves to it first
     method = session_method(dtxsid)
     genomics: dict = {}
     stats = body.get("bmd_stats")

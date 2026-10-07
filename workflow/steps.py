@@ -519,7 +519,7 @@ def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> di
     analysis setting that disagrees with it as a `method_mismatch` warning in
     the validation report (ADR-0027 §5).  Returns {profile, pinned_by,
     deviations, mismatches}."""
-    from pipeline.method_profile import ensure_pin, recorded_mismatches, session_method
+    from pipeline.method_profile import ensure_pin, pin_mode, recorded_mismatches, session_method
 
     pin = ensure_pin(dtxsid)
     method = session_method(dtxsid)
@@ -533,7 +533,7 @@ def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> di
                    for m in mismatches]
         report["issues"] = issues
         store.write_json(dtxsid, "validation_report.json", report)
-    return {"profile": pin["name"], "pinned_by": pin["pinned_by"],
+    return {"profile": pin["name"], "pinned_by": pin["pinned_by"], "mode": pin_mode(pin),
             "deviations": list(method.deviations), "mismatches": [m["message"] for m in mismatches]}
 
 

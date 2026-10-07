@@ -96,6 +96,11 @@ Each resolved value is a `(value, source)` pair, where source is `default`, `pro
 - Processing reads only the pinned profile, never "latest".
 - Re-pinning is an explicit act, recorded in the report's history (ADR-0020). Through currency (ADR-0015) it marks the derived content stale, so the next Process run recomputes.
 - **Choosing a default for a new study is a human decision.** The UI proposes the newest profile for the series. The integrated data's own recorded settings (§5) can suggest a better match.
+- **Amendment (2026-10-07, user decision): tracking the newest is the default.** A pin has a mode:
+  - `track` (the default for a study with no pin, and `--method-profile newest`) moves to the newest profile of its series when one is added. The move is a pin change like any other: the previous pin is archived, the move is logged, and the caches recompute. The pin file always names the exact profile and hash that ran.
+  - `fixed` (`--method-profile NAME`) stays on the named profile until it is re-pinned. Use it for a report that must keep reproducing its method, such as a published reference.
+
+  Profiles stay immutable either way: tracking follows a NEW profile file; it never follows edits to one.
 
 ### 4. Generated text comes from the resolved settings, not from literals
 

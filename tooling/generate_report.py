@@ -283,11 +283,14 @@ def method_profile(dtxsid: str, name: str | None) -> None:
     """Pin `name` when given (a re-pin is logged and recomputes), then say which
     method the study runs under and anything it cannot do as stated."""
     from pipeline.integrated_io import load_integrated
-    from pipeline.method_profile import ensure_pin, pin_profile, recorded_mismatches, session_method
+    from pipeline.method_profile import (TRACK, ensure_pin, pin_mode, pin_profile,
+                                         recorded_mismatches, session_method)
 
     pin = pin_profile(dtxsid, name, by="user") if name else ensure_pin(dtxsid)
     method = session_method(dtxsid)
-    _log(f"  method profile: {pin['name']} (pinned by {pin['pinned_by']}, {pin['pinned_at']})")
+    how = ("tracks the newest" if pin_mode(pin) == TRACK else "fixed")
+    _log(f"  method profile: {pin['name']} ({how}; pinned by {pin['pinned_by']}, "
+         f"{pin['pinned_at']})")
     for deviation in method.deviations:
         _log(f"  NOTE: {deviation}")
     for mismatch in recorded_mismatches(load_integrated(dtxsid) or {}, method):
@@ -471,9 +474,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "administrationMeans, articleVehicle, studyDuration "
                          "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
     ap.add_argument("--method-profile",
-                    help="pin this analysis method profile (profiles/<name>.yaml, ADR-0027) "
-                         "for the study; re-pinning recomputes.  Default: the study's pin, "
-                         "else the newest profile, pinned at integration")
+                    help="fix the study on this analysis method profile (profiles/<name>.yaml, "
+                         "ADR-0027), or 'newest' to track the newest profile as profiles are "
+                         "added.  Default: the study's pin; a study with none tracks the "
+                         "newest.  A change of profile recomputes")
     ap.add_argument("--bmd-stats", default=None,
                     help="comma list of BMD statistics for the GO tables, overriding the "
                          "method profile's GO ranking for this run")
