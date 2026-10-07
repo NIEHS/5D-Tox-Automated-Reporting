@@ -12,12 +12,15 @@ output in ```json ... ``` blocks even when instructed not to.
 
 import asyncio
 import json
+import logging
 import re
 from typing import Any
 
 # AnthropicEndpoint wraps the Claude API — provides a simple
 # `generate(prompt, system=...)` interface that returns raw text.
 from narrative.interpret import AnthropicEndpoint
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +80,14 @@ def llm_generate_json(
     Returns:
         Parsed JSON (dict or list) from the LLM response.
 
+    A reply that isn't valid JSON gets ONE retry: the same request with the
+    parse error appended.  The request must differ — the LiteLLM proxy caches
+    responses, so an identical retry returns the same malformed text (NIEHS-13's
+    heart genomics narrative failed this way on every re-run).
+
     Raises:
         ValueError:  If the LLM returns an empty response.
-        json.JSONDecodeError: If the response isn't valid JSON after fence stripping.
+        json.JSONDecodeError: If the retry isn't valid JSON either.
     """
     endpoint = AnthropicEndpoint(
         name=name,
@@ -90,7 +98,16 @@ def llm_generate_json(
     response = endpoint.generate(prompt, system=system)
     if not response:
         raise ValueError(f"LLM '{name}' returned empty response")
-    return json.loads(strip_markdown_fences(response))
+    try:
+        return json.loads(strip_markdown_fences(response))
+    except json.JSONDecodeError as e:
+        logger.warning("LLM '%s' returned invalid JSON (%s) — retrying once", name, e)
+        retry = (f"{prompt}\n\nYour previous reply was not valid JSON ({e}). Reply again "
+                 "with ONLY the JSON object — escape every double quote inside strings.")
+        response = endpoint.generate(retry, system=system)
+        if not response:
+            raise ValueError(f"LLM '{name}' returned empty response") from e
+        return json.loads(strip_markdown_fences(response))
 
 
 # ---------------------------------------------------------------------------
