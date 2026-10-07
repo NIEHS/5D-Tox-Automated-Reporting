@@ -119,8 +119,14 @@ these pool inputs:
 
 ```bash
 python -m tooling.cebs_to_pool --package assets/cebs/NIEHS-13 \
-    --prefix 108020004 --out /tmp/niehs13_inputs
+    --prefix 108020004 --out /tmp/niehs13_inputs \
+    --bundle assets/cebs/_bookshelf/NIEHS-13
 ```
+
+`--bundle` also converts the workbooks of the report's Bookshelf bundle.
+NIEHS-12 and -13 publish their blood and tissue concentrations only there, as
+the lab's results workbook. The sheet for the package's species is the one
+converted.
 
 ---
 
