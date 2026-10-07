@@ -436,6 +436,7 @@ def _classify_bmd_result(
     lowest_nonzero_dose: float,
     highest_dose: float,
     best_stat_result: dict | None,
+    criteria=None,
 ) -> str:
     """
     Classify a BMDExpress bMDResult into the report's BMD statuses.
@@ -454,20 +455,21 @@ def _classify_bmd_result(
         best_stat_result: The bestStatResult dict from BMDExpress 3 (carries
                           `success` and `rSquared`).
     """
-    from .bmd_acceptance import classify
+    from .bmd_acceptance import DEFAULT_CRITERIA, classify
 
+    criteria = criteria or DEFAULT_CRITERIA
     if best_stat_result is None:
         return "failure" if bmd is None else classify(
-            bmd, bmdl, None, lowest_nonzero_dose, highest_dose)[0]
+            bmd, bmdl, None, lowest_nonzero_dose, highest_dose, criteria)[0]
     # BMDExpress 3 serializes success as string "true" or null
     success = best_stat_result.get("success")
     if success is None or success in ("false", False):
         return "NVM"
     return classify(bmd, bmdl, best_stat_result.get("rSquared"),
-                    lowest_nonzero_dose, highest_dose)[0]
+                    lowest_nonzero_dose, highest_dose, criteria)[0]
 
 
-def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
+def _build_bmd_result_lookup(bm2_json: dict, criteria=None) -> dict[tuple[str, str], dict]:
     """
     Build a lookup of BMD/BMDL values and NIEHS classification from
     BMDExpress 3 native bMDResult data.
@@ -556,7 +558,7 @@ def _build_bmd_result_lookup(bm2_json: dict) -> dict[tuple[str, str], dict]:
             if isinstance(bsr, int):
                 bsr = None  # unresolved @ref — treat as no info
 
-            status = _classify_bmd_result(bmd, bmdl, lnzd, high, bsr)
+            status = _classify_bmd_result(bmd, bmdl, lnzd, high, bsr, criteria)
 
             lookup[(exp_name, probe_id)] = {
                 "bmd": bmd,
@@ -575,12 +577,12 @@ _PARAMETRIC_NAME_HINTS = ("organ", "weight", "body")
 _NONPARAMETRIC_NAME_HINTS = ("clin", "chem", "hemat", "hormon", "urin", "thyroid")
 
 
-def _stats_family(platform: str | None, exp_name: str) -> str:
+def _stats_family(platform: str | None, exp_name: str, method=None) -> str:
     """The NTP test family (ntp_stats.PARAMETRIC / NONPARAMETRIC) for an
     experiment: from its platform, else from its name.  An experiment neither
     names is analysed parametrically, with a warning."""
     from . import ntp_stats
-    family = ntp_stats.family_for_platform(platform)
+    family = (method or ntp_stats.DEFAULT_METHOD).family(platform)
     if family:
         return family
     lower = (exp_name or "").lower()
@@ -640,6 +642,8 @@ def build_table_data(
     category_lookup: dict,
     platforms: list[str] | None = None,
     bmd_decimals: int | None = None,
+    stats_method=None,
+    criteria=None,
 ) -> dict[str, list[TableRow]]:
     """
     Build the table data for all endpoints, organized by sex.
@@ -663,6 +667,11 @@ def build_table_data(
                          all experiments are included (backward compat).
         bmd_decimals:    The report's fixed BMD precision (format_bmd); None
                          keeps 3 significant figures.
+        stats_method:    ntp_stats.StatsMethod — test family per platform,
+                         thresholds (the caller's method profile); None ⇒
+                         the NTP defaults.
+        criteria:        bmd_acceptance.Criteria for classifying BMDs; None ⇒
+                         the NIEHS-12/13 filter.
 
     Returns:
         Dict mapping sex label ("Male" / "Female") → list of TableRow.
@@ -670,14 +679,17 @@ def build_table_data(
         weight endpoints.
     """
     from . import ntp_stats
-    from .apical_stats import _sig_marker, ALPHA_STAR
     import math
+
+    method = stats_method or ntp_stats.DEFAULT_METHOD
+    alpha = method.alpha
+    sig_marker = method.marker
 
     # Build lookup of BMDExpress 3-native BMD values from bMDResult.
     # This is the primary BMD source for apical endpoints (body weight,
     # organ weight, clinical chemistry, hematology, hormones).  Category
     # analysis (category_lookup) is the fallback for genomics endpoints.
-    bmd_result_lookup = _build_bmd_result_lookup(bm2_json)
+    bmd_result_lookup = _build_bmd_result_lookup(bm2_json, criteria)
 
     # ---- Collect endpoints ----
     endpoint_meta: list[dict] = []
@@ -691,7 +703,7 @@ def build_table_data(
         if platforms is not None and exp_platform not in platforms:
             continue
 
-        family = _stats_family(exp_platform, exp_name)
+        family = _stats_family(exp_platform, exp_name, method)
         treatments = exp.get("treatments", [])
         treat_doses = {i: t["dose"] for i, t in enumerate(treatments)}
 
@@ -774,15 +786,15 @@ def build_table_data(
         # The control column's marker is the trend test; a dose column's
         # marker is its pairwise test.
         stats_result = ntp_stats.ntp_pairwise(
-            groups_by_dose, meta["family"], control_dose=control_dose)
+            groups_by_dose, meta["family"], control_dose=control_dose, method=method)
         jonck_p, direction = stats_result.jonckheere_p, stats_result.direction
-        jonckheere_sig = jonck_p <= ALPHA_STAR
-        trend_marker = _sig_marker(jonck_p)
+        jonckheere_sig = jonck_p <= alpha
+        trend_marker = sig_marker(jonck_p)
         pairwise_p: dict[float, float] = dict(stats_result.pairwise_p)
         pairwise_method = stats_result.method
 
-        pairwise_marker = {d: _sig_marker(p) for d, p in pairwise_p.items()}
-        any_pairwise_sig = any(p <= ALPHA_STAR for p in pairwise_p.values())
+        pairwise_marker = {d: sig_marker(p) for d, p in pairwise_p.items()}
+        any_pairwise_sig = any(p <= alpha for p in pairwise_p.values())
         report_bmd = jonckheere_sig and any_pairwise_sig
 
         # Look up BMD/BMDL and NIEHS classification status.
@@ -895,7 +907,7 @@ def build_table_data(
         loel = None
         noel = None
         for d in treatment_doses:
-            if pairwise_p.get(d, 1.0) <= ALPHA_STAR:
+            if pairwise_p.get(d, 1.0) <= alpha:
                 if loel is None or d < loel:
                     loel = d
         if loel is not None:

@@ -134,7 +134,8 @@ from .java_bridge import build_classpath as _build_classpath
 from .java_bridge import BMDX_PROJECT as _BMDX_PROJECT
 
 
-def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str, dict]:
+def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900,
+                         criteria=None) -> dict[str, dict]:
     """Fit apical continuous BMDs via the BMDExpress ToxicR engine (RunApicalBmds).
 
     The Java/ToxicR replacement for the Python pybmds recompute: pipes per-endpoint
@@ -147,7 +148,8 @@ def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str,
     {key: {bmd, bmdl, bmdu, r_squared, model_name, status, notes}}.  Every
     completed fit is classified here by bmd_acceptance (viable / NR / NVM, the
     reason in `notes`), so ToxicR fits and .bm2 results pass the same criteria;
-    an NVM fit keeps its numbers for the engine cross-check.
+    an NVM fit keeps its numbers for the engine cross-check.  `criteria`
+    (bmd_acceptance.Criteria) is the caller's method; None ⇒ the defaults.
 
     MUST set -Djava.library.path so ToxicRJNI's System.loadLibrary("DRBMD") resolves
     (BMDX_PROJECT is where libDRBMD.so lives). Raises RuntimeError on process failure.
@@ -169,7 +171,7 @@ def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str,
         raise RuntimeError(
             f"RunApicalBmds failed (exit {proc.returncode}): {proc.stderr}"
         )
-    from .bmd_acceptance import classify_from_doses
+    from .bmd_acceptance import DEFAULT_CRITERIA, classify_from_doses
 
     results = _json.loads(proc.stdout)
     doses_by_key = {ep["key"]: ep.get("doses") for ep in endpoints}
@@ -178,7 +180,7 @@ def run_apical_bmds_java(endpoints: list[dict], timeout: int = 900) -> dict[str,
             continue  # the fit did not complete (NVM with its reason)
         res["status"], res["notes"] = classify_from_doses(
             res.get("bmd"), res.get("bmdl"), res.get("r_squared"),
-            doses_by_key.get(key))
+            doses_by_key.get(key), criteria or DEFAULT_CRITERIA)
     return results
 
 

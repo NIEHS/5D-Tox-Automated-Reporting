@@ -29,10 +29,25 @@ methods appendix can state them from the same values the classifier applies.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 R2_MIN = 0.6
 BMD_BMDL_MAX = 10.0
 NR_FRACTION = 1.0 / 3.0
+
+
+@dataclass(frozen=True)
+class Criteria:
+    """The acceptance criteria, as an argument: the caller's method (rlm-bmdx
+    resolves it from the study's method profile, ADR-0027).  Defaults are the
+    NIEHS-12/13 filter above."""
+    r2_min: float = R2_MIN
+    bmd_bmdl_max: float = BMD_BMDL_MAX
+    max_dose: bool = True            # BMD > highest dose ⇒ NVM
+    nr_fraction: float = NR_FRACTION
+
+
+DEFAULT_CRITERIA = Criteria()
 
 
 def _finite(x) -> float | None:
@@ -64,6 +79,7 @@ def classify(
     r2,
     lowest_nonzero_dose: float,
     highest_dose: float,
+    criteria: Criteria = DEFAULT_CRITERIA,
 ) -> tuple[str, str]:
     """(status, reason) of one modeled apical response.
 
@@ -74,22 +90,23 @@ def classify(
     if bmd_f is None:
         return "NVM", "no BMD"
     r2_f = _finite(r2)
-    if r2_f is not None and r2_f < R2_MIN:
-        return "NVM", f"R² {r2_f:.3f} < {R2_MIN:g}"
+    if r2_f is not None and r2_f < criteria.r2_min:
+        return "NVM", f"R² {r2_f:.3f} < {criteria.r2_min:g}"
     bmdl_f = _finite(bmdl)
-    if bmdl_f is not None and bmdl_f > 0 and bmd_f / bmdl_f > BMD_BMDL_MAX:
-        return "NVM", f"BMD/BMDL {bmd_f / bmdl_f:.1f} > {BMD_BMDL_MAX:g}"
-    if highest_dose > 0 and bmd_f > highest_dose:
+    if bmdl_f is not None and bmdl_f > 0 and bmd_f / bmdl_f > criteria.bmd_bmdl_max:
+        return "NVM", f"BMD/BMDL {bmd_f / bmdl_f:.1f} > {criteria.bmd_bmdl_max:g}"
+    if criteria.max_dose and highest_dose > 0 and bmd_f > highest_dose:
         return "NVM", f"BMD {bmd_f:.3g} > highest dose {highest_dose:g}"
-    if lowest_nonzero_dose > 0 and bmd_f < lowest_nonzero_dose * NR_FRACTION:
-        return "NR", f"BMD {bmd_f:.3g} < lowest nonzero dose/3"
+    if lowest_nonzero_dose > 0 and bmd_f < lowest_nonzero_dose * criteria.nr_fraction:
+        return "NR", f"BMD {bmd_f:.3g} < lowest nonzero dose × {criteria.nr_fraction:.3g}"
     return "viable", ""
 
 
-def classify_from_doses(bmd, bmdl, r2, doses) -> tuple[str, str]:
+def classify_from_doses(bmd, bmdl, r2, doses,
+                        criteria: Criteria = DEFAULT_CRITERIA) -> tuple[str, str]:
     """classify() with the dose range taken from the per-animal (or per-group)
     dose list."""
     nonzero = [float(d) for d in doses or [] if float(d) > 0]
     return classify(bmd, bmdl, r2,
                     min(nonzero) if nonzero else 0.0,
-                    max(nonzero) if nonzero else 0.0)
+                    max(nonzero) if nonzero else 0.0, criteria)

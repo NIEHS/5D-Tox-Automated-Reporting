@@ -72,6 +72,32 @@ _N_SIM = 200_000
 _TREND_TEST_SIDES = 2
 
 
+@dataclass(frozen=True)
+class StatsMethod:
+    """The method settings of the NTP procedure, as arguments.
+
+    A report's analysis method is chosen by its caller (rlm-bmdx resolves it
+    from the study's pinned method profile, ADR-0027) and passed in; this
+    package never reads profiles.  The defaults are the NTP procedure every
+    published 5-day report states (NIEHS-02 … 13)."""
+    families: tuple = tuple(sorted(PLATFORM_FAMILY.items()))   # ((platform, family), ...)
+    trend_select_p: float = TREND_TEST_SELECT_P
+    alpha: float = ALPHA_STAR              # *, and the step-down's stopping level
+    alpha_strong: float = ALPHA_DSTAR      # **
+    min_group_n: int = MIN_GROUP_N
+
+    def family(self, platform: str | None) -> str | None:
+        return dict(self.families).get((platform or "").strip())
+
+    def marker(self, p: float | None) -> str:
+        if p is None or not math.isfinite(p):
+            return ""
+        return "**" if p <= self.alpha_strong else "*" if p <= self.alpha else ""
+
+
+DEFAULT_METHOD = StatsMethod()
+
+
 @dataclass
 class PairwiseResult:
     """The NTP statistics for one endpoint.
@@ -101,16 +127,17 @@ def sig_marker(p: float | None) -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _clean(groups_by_dose: dict) -> tuple[list[float], list[np.ndarray]]:
+def _clean(groups_by_dose: dict, min_group_n: int = MIN_GROUP_N
+           ) -> tuple[list[float], list[np.ndarray]]:
     """Sorted doses and finite-value arrays, dropping empty groups and
-    treatment groups smaller than MIN_GROUP_N (the first, control, group is
+    treatment groups smaller than `min_group_n` (the first, control, group is
     kept with any non-zero size)."""
     doses, arrays = [], []
     for d in sorted(groups_by_dose):
         a = np.asarray([v for v in groups_by_dose[d]
                         if v is not None and isinstance(v, (int, float)) and math.isfinite(v)],
                        dtype=float)
-        if a.size >= (1 if not doses else MIN_GROUP_N):
+        if a.size >= (1 if not doses else min_group_n):
             doses.append(float(d))
             arrays.append(a)
     return doses, arrays
@@ -206,7 +233,7 @@ def _null_p(observed: float, ns: tuple[int, ...], df: float) -> float:
 # Williams (parametric, step-down)
 # ---------------------------------------------------------------------------
 
-def williams(groups: list[np.ndarray], direction: str) -> dict[int, float]:
+def williams(groups: list[np.ndarray], direction: str, alpha: float = ALPHA_STAR) -> dict[int, float]:
     """Williams' step-down test of each treatment group (index >= 1) against
     the control (index 0), in the trend `direction`.
 
@@ -233,7 +260,7 @@ def williams(groups: list[np.ndarray], direction: str) -> dict[int, float]:
             t = stat / math.sqrt(s2 * (1 / n[i] + 1 / n[0]))
             p = min(1.0, _TREND_TEST_SIDES * _null_p(t, tuple(int(x) for x in n[: i + 1]), df))
         out[i] = p
-        if p > ALPHA_STAR:
+        if p > alpha:
             break
     return out
 
@@ -242,7 +269,7 @@ def williams(groups: list[np.ndarray], direction: str) -> dict[int, float]:
 # Shirley (nonparametric, step-down, Williams 1986 modification)
 # ---------------------------------------------------------------------------
 
-def shirley(groups: list[np.ndarray], direction: str) -> dict[int, float]:
+def shirley(groups: list[np.ndarray], direction: str, alpha: float = ALPHA_STAR) -> dict[int, float]:
     """Shirley's nonparametric step-down test with Williams' (1986)
     modification: at step i the observations of groups 0..i are re-ranked,
     the top group's mean rank is the isotonic estimate over groups 1..i, and
@@ -265,7 +292,7 @@ def shirley(groups: list[np.ndarray], direction: str) -> dict[int, float]:
             t = stat / math.sqrt(var * (1 / n[i] + 1 / n[0]))
             p = min(1.0, _TREND_TEST_SIDES * _null_p(t, tuple(int(x) for x in n), math.inf))
         out[i] = p
-        if p > ALPHA_STAR:
+        if p > alpha:
             break
     return out
 
@@ -313,25 +340,27 @@ def dunn(groups: list[np.ndarray]) -> dict[int, float]:
 # ---------------------------------------------------------------------------
 
 def ntp_pairwise(groups_by_dose: dict, family: str = PARAMETRIC,
-                 control_dose: float = 0.0) -> PairwiseResult:
+                 control_dose: float = 0.0,
+                 method: StatsMethod = DEFAULT_METHOD) -> PairwiseResult:
     """Jonckheere trend + the NTP-selected pairwise test for one endpoint.
 
     `family` is PARAMETRIC (Williams/Dunnett — body and organ weights) or
     NONPARAMETRIC (Shirley/Dunn — clinical pathology).  Groups with no finite
     values (e.g. every animal died), and treatment groups of fewer than
-    MIN_GROUP_N animals, are left out of every test."""
-    doses, groups = _clean(groups_by_dose)
+    `method.min_group_n` animals, are left out of every test."""
+    doses, groups = _clean(groups_by_dose, method.min_group_n)
     result = PairwiseResult()
     if not doses or doses[0] != float(control_dose) or len(groups) < 2:
         return result
     result.jonckheere_p, result.direction = jonckheere(groups)
 
-    trend = result.jonckheere_p <= TREND_TEST_SELECT_P and result.direction in ("UP", "DOWN")
+    trend = (result.jonckheere_p <= method.trend_select_p
+             and result.direction in ("UP", "DOWN"))
     if family == NONPARAMETRIC:
         result.method = "shirley" if trend else "dunn"
-        p = shirley(groups, result.direction) if trend else dunn(groups)
+        p = shirley(groups, result.direction, method.alpha) if trend else dunn(groups)
     else:
         result.method = "williams" if trend else "dunnett"
-        p = williams(groups, result.direction) if trend else dunnett(groups)
+        p = williams(groups, result.direction, method.alpha) if trend else dunnett(groups)
     result.pairwise_p = {doses[i]: v for i, v in p.items()}
     return result
