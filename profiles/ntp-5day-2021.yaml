@@ -1,0 +1,63 @@
+# Method profile ntp-5day-2021 — ADR-0027.
+#
+# The analysis method of the NIEHS 5-day reports of 2021–2023 (NIEHS Reports
+# 07 – 10): BMDExpress 2.30 genomics, apical BMDs from modified BMDS 2.7 with
+# high-dose dropping.  Reference: NIEHS-10 (PFHxSAm, NBK589955).
+#
+# IMMUTABLE once a report references it.  `null` = not settled by a published
+# report ("to confirm"); it resolves to the built-in default and is reported.
+#
+# Conformance record (accepted deviations):
+# - apical BMDs: modified BMDS 2.7 with high-dose dropping is not an engine
+#   this tool has; processing under this profile uses ToxicR model averaging
+#   and says so (decided 2026-10-01: validate apical BMDs with BMDS 2.7 later).
+# - eligibility "all_endpoints" (every endpoint modelled) likewise is not
+#   implemented; the trend-and-pairwise gate is used, and said so.
+name: ntp-5day-2021
+series: ntp-5day
+effective: "2021"
+reference: NIEHS-10      # tests/fixtures/reference/NIEHS-10
+description: >-
+  NIEHS 5-day studies analysed with BMDExpress 2.30 and modified BMDS 2.7
+  (NIEHS Reports 07 to 10).
+
+apical:
+  statistics:
+    # tests/unit/test_reference_conformance.py (NIEHS-10 PA06/41/43); the same
+    # procedure reproduces NIEHS-07 to 09 (assets/cebs/NTP-STATS-CONFORMANCE.md).
+    trend_test: jonckheere
+    trend_select_p: 0.01
+    alpha: 0.05
+    alpha_strong: 0.01
+    min_group_n: 2
+    pairwise:
+      Body Weight: williams_or_dunnett
+      Organ Weight: williams_or_dunnett
+      Clinical Chemistry: shirley_or_dunn
+      Hematology: shirley_or_dunn
+      Hormones: shirley_or_dunn
+      Urinalysis: shirley_or_dunn
+    outliers: null
+  bmd:
+    engine: bmds_2_7_high_dose_drop
+    eligibility: all_endpoints
+    bmr_when_unrecorded:
+      default: {type: sd, factor: 1.0}
+    acceptance: null      # the BMDS 2.7 acceptance rules — to confirm
+
+internal_dose:
+  # Plasma concentrations at hours after dosing (NIEHS-10 Table 7, reproduced
+  # exactly by tests/unit/test_tissue_concentration_precision.py): no
+  # statistics; values below the limit at half the limit.
+  pairwise: none
+  below_limit: half_limit
+  bd_if_detected_share_at_most: null
+  outliers: null
+  sig_figs: 3
+
+genomics:
+  go_ranking: null
+  go_display: null
+  recorded:
+    bmr: {type: sd, factor: 1.0}
+    model_selection: lowest_aic

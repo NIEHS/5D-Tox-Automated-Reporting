@@ -1,0 +1,71 @@
+# Method profile ntp-5day-2025 — ADR-0027.
+#
+# The analysis method of the NIEHS 5-day reports built on BMDExpress 3.20 /
+# ToxicR model averaging: NIEHS Report 12 (1,2-dichlorobenzene) and Report 13
+# (1,4-dichlorobenzene), studies of 2024–2025, published 2026.
+#
+# IMMUTABLE once a report references it (sessions/<id>/method_profile.json pins
+# it by content hash).  A revised method is a new file.  `null` = not settled by
+# a published report ("to confirm"); it resolves to the built-in default and is
+# reported as such.  Every value below is reproduced by a reference test.
+name: ntp-5day-2025
+series: ntp-5day
+effective: "2025"
+reference: NIEHS-13      # tests/fixtures/reference/NIEHS-13 (+ NIEHS-12)
+description: >-
+  NIEHS 5-day studies analysed with BMDExpress 3.20 and ToxicR model averaging
+  (NIEHS Reports 12 and 13).
+
+apical:
+  statistics:
+    # Jonckheere trend; it selects the trend-sensitive pairwise test when
+    # p <= trend_select_p.  Markers * / ** at alpha / alpha_strong.
+    # tests/unit/test_reference_conformance.py (NIEHS-12/13 PA06/41/43).
+    trend_test: jonckheere
+    trend_select_p: 0.01
+    alpha: 0.05
+    alpha_strong: 0.01
+    min_group_n: 2
+    pairwise:
+      Body Weight: williams_or_dunnett
+      Organ Weight: williams_or_dunnett
+      Clinical Chemistry: shirley_or_dunn
+      Hematology: shirley_or_dunn
+      Hormones: shirley_or_dunn
+      Urinalysis: shirley_or_dunn
+    # Published tables leave out values NIEHS staff judged outliers (Dixon and
+    # Massey flags, examined case by case); not automated.
+    outliers: null
+  bmd:
+    engine: toxicr_model_average
+    # A BMD is reported for an endpoint with a significant trend AND a
+    # significant pairwise test.
+    eligibility: trend_and_pairwise
+    # Used only when the analysis records no BMR (else the recorded one wins).
+    bmr_when_unrecorded:
+      default: {type: sd, factor: 1.0}
+    # The BMDExpress defined-category filter of NIEHS-12/13 Materials and
+    # Methods; tests/unit/test_reference_bmd_summary.py (every NVM reproduced).
+    acceptance:
+      r2_min: 0.6
+      bmd_bmdl_max: 10.0
+      bmd_above_highest_dose: nvm
+      not_reportable_fraction: 0.3333333333333333   # BMD < lowest nonzero dose x this
+
+internal_dose:
+  # Blood and tissue concentrations by study day (NIEHS-12 Tables 18/19,
+  # NIEHS-13 Tables 19/20); tests/unit/test_reference_internal_concentration.py.
+  pairwise: shirley_or_dunn
+  below_limit: half_limit
+  bd_if_detected_share_at_most: 0.2
+  outliers: {test: dixon_r10, alpha: 0.01}
+  sig_figs: 3
+
+genomics:
+  # GO tables ranked by the first statistic; tests/unit/test_reference_genomics.py.
+  go_ranking: [fifth_pct, median]
+  go_display: {pct: 5, min_genes: 20, max_genes: 500, min_bmd: 3}
+  # What the genomic .bm2 analyses should record (checked at integration).
+  recorded:
+    bmr: {type: rel_dev, factor: 0.25}
+    model_selection: model_average
