@@ -1,6 +1,6 @@
 # ADR-0027 implementation plan — method profiles
 
-Date: 2026-10-07.  ADR: `docs/adr/0027-pinned-method-profiles.md` (Proposed).
+Date: 2026-10-07.  ADR: `docs/adr/0027-pinned-method-profiles.md` (Accepted).  **Status: steps 0, 1, 2, 4, 5 done (2026-10-07).**
 
 ## Where we start
 

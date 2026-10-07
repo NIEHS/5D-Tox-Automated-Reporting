@@ -279,6 +279,21 @@ def integrate(dtxsid: str, identity: dict, store) -> None:
          f"{summary.get('bmd_result_count')} BMD results")
 
 
+def method_profile(dtxsid: str, name: str | None) -> None:
+    """Pin `name` when given (a re-pin is logged and recomputes), then say which
+    method the study runs under and anything it cannot do as stated."""
+    from pipeline.integrated_io import load_integrated
+    from pipeline.method_profile import ensure_pin, pin_profile, recorded_mismatches, session_method
+
+    pin = pin_profile(dtxsid, name, by="user") if name else ensure_pin(dtxsid)
+    method = session_method(dtxsid)
+    _log(f"  method profile: {pin['name']} (pinned by {pin['pinned_by']}, {pin['pinned_at']})")
+    for deviation in method.deviations:
+        _log(f"  NOTE: {deviation}")
+    for mismatch in recorded_mismatches(load_integrated(dtxsid) or {}, method):
+        _log(f"  WARNING: {mismatch['message']}")
+
+
 def animal_report(dtxsid: str, store) -> None:
     from workflow.steps import generate_animal_report_step
 
@@ -455,12 +470,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "every experiment's metadata: species, strain, articleRoute, "
                          "administrationMeans, articleVehicle, studyDuration "
                          "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
-    ap.add_argument("--bmd-stats", default="median",
-                    help="comma list of BMD statistics for GO tables (default: median)")
-    ap.add_argument("--go-pct", type=float, default=5)
-    ap.add_argument("--go-min-genes", type=int, default=20)
-    ap.add_argument("--go-max-genes", type=int, default=500)
-    ap.add_argument("--go-min-bmd", type=float, default=3)
+    ap.add_argument("--method-profile",
+                    help="pin this analysis method profile (profiles/<name>.yaml, ADR-0027) "
+                         "for the study; re-pinning recomputes.  Default: the study's pin, "
+                         "else the newest profile, pinned at integration")
+    ap.add_argument("--bmd-stats", default=None,
+                    help="comma list of BMD statistics for the GO tables, overriding the "
+                         "method profile's GO ranking for this run")
+    ap.add_argument("--go-pct", type=float, default=None,
+                    help="GO display cutoffs, overriding the method profile's for this run")
+    ap.add_argument("--go-min-genes", type=int, default=None)
+    ap.add_argument("--go-max-genes", type=int, default=None)
+    ap.add_argument("--go-min-bmd", type=float, default=None)
     ap.add_argument("--reintegrate", action="store_true",
                     help="re-run integration even if integrated.json exists "
                          "(wipes process caches → full recompute)")
@@ -541,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
             if design:
                 with _Timer("study design"):
                     apply_design(dtxsid, design)
+            method_profile(dtxsid, args.method_profile)
             with _Timer("animal report"):
                 animal_report(dtxsid, store)
             if args.stop_after == "integrate":
@@ -548,14 +570,15 @@ def main(argv: list[str] | None = None) -> int:
 
             if not args.dose_unit:
                 _log("  NOTE: no --dose-unit — using the unit the data records, else mg/kg")
+            # The GO ranking and cutoffs are the method profile's; only what
+            # the command line states overrides it (source "request").
             params = {
                 "compound_name": args.compound_name or identity.get("name") or dtxsid,
                 "dose_unit": args.dose_unit,
-                "bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()],
-                "go_pct": args.go_pct,
-                "go_min_genes": args.go_min_genes,
-                "go_max_genes": args.go_max_genes,
-                "go_min_bmd": args.go_min_bmd,
+                **({"bmd_stats": [s.strip() for s in args.bmd_stats.split(",") if s.strip()]}
+                   if args.bmd_stats else {}),
+                **{k: getattr(args, k) for k in ("go_pct", "go_min_genes", "go_max_genes",
+                                                 "go_min_bmd") if getattr(args, k) is not None},
             }
             with _Timer("process (stats + BMDS + genomics + narratives; minutes when cold)"):
                 process(dtxsid, params, store)

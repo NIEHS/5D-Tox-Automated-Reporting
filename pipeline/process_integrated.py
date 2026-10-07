@@ -234,6 +234,9 @@ class ProcessContext:
     bmd_divergences: list | None = None
     # Fixed decimals every BMD in the report prints with (report_bmd_decimals).
     bmd_decimals: int | None = None
+    # The study's resolved analysis method (pipeline.method_profile, ADR-0027);
+    # None only in test scaffolds, which then get the session's (or newest) method.
+    method: object | None = None
     # The dose unit as the caller stated it (None ⇒ recorded or fallback).
     dose_unit_stated: str | None = None
     chart_images: list | None = None
@@ -701,7 +704,7 @@ async def _build_ntp_stats(ctx):
     from genomics.bmdexpress_categories import report_bmd_decimals
 
     ctx.bmd_decimals = report_bmd_decimals(integrated)
-    ntp_hash = _hash_ntp(integrated, bmd_stat)
+    ntp_hash = _hash_ntp(integrated, bmd_stat, _method(ctx).signature())
     ntp_cached = _load_cache(dtxsid, "ntp", ntp_hash)
 
     if ntp_cached:
@@ -718,7 +721,9 @@ async def _build_ntp_stats(ctx):
 
         loop = asyncio.get_running_loop()
         table_data = await loop.run_in_executor(
-            None, functools.partial(build_table_data, bmd_decimals=ctx.bmd_decimals),
+            None, functools.partial(build_table_data, bmd_decimals=ctx.bmd_decimals,
+                                    stats_method=_method(ctx).stats_method(),
+                                    criteria=_method(ctx).acceptance_criteria()),
             apical_integrated, cat_lookup,
         )
 
@@ -792,6 +797,7 @@ async def _get_sections(ctx):
             lambda: _build_section_cards(
                 platform_tables, compound_name, dose_unit,
                 dtxsid=dtxsid, imputed_cells=imputed_cells, design=_design,
+                method=_method(ctx),
             ),
         )
         # Clinical obs tables bypass Java integration (categorical data).
@@ -818,6 +824,7 @@ async def _get_sections(ctx):
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     design=_design,
+                    method=_method(ctx),
                 )
                 if tc_result and tc_result.get("table_data"):
                     # A paragraph LIST, matching every other card's narrative shape
@@ -1048,7 +1055,8 @@ async def _get_bmds(ctx):
 
     loop = asyncio.get_running_loop()
     results = await loop.run_in_executor(
-        None, run_bmds_for_endpoints, bmds_inputs, configs,
+        None, functools.partial(run_bmds_for_endpoints, method=_method(ctx)),
+        bmds_inputs, configs,
     )
     _save_cache(dtxsid, "bmds", bmds_hash, results)
     ctx.bmds_results = results
@@ -1058,7 +1066,7 @@ async def _bmds_then_sections(ctx):
     """BMDS, then the ToxicR fills onto the rows, then the section cards."""
     await _get_bmds(ctx)
     n = fill_rows_from_toxicr(ctx.platform_tables, ctx.bmds_results,
-                              bmd_decimals=ctx.bmd_decimals)
+                              bmd_decimals=ctx.bmd_decimals, method=_method(ctx))
     if n:
         logger.info("Filled %d bm2-blank apical BMDs from ToxicR", n)
     await _get_sections(ctx)
@@ -1186,6 +1194,7 @@ async def _get_methods(ctx):
         bm2_jsons=bm2_jsons,
         session_dir=str(_session_dir(dtxsid)),
         integrated=integrated,
+        method=_method(ctx),
     )
 
     # Build and call the LLM
@@ -1290,7 +1299,8 @@ async def run_data(ctx) -> None:
         extra_paths=_meta.get("clinical_obs_files", []),
     )
     # Phase 2: filter-agnostic sections cache — no allowlists in the key.
-    ctx.bmds_hash = _hash_bmds(ctx.bmds_inputs) if ctx.bmds_inputs else "empty"
+    ctx.bmds_hash = (_hash_bmds(ctx.bmds_inputs, _method(ctx).signature())
+                     if ctx.bmds_inputs else "empty")
     ctx.sections_hash = _hash_sections(
         ctx.ntp_hash, compound_name, dose_unit,
         sidecar_hash=sections_sidecar_hash,
@@ -1334,7 +1344,8 @@ async def run_data(ctx) -> None:
     from pipeline.study_design import study_design_facts
     ctx.methods_hash = _hash_methods(
         dtxsid, _fps_for_methods,
-        {**study_design_facts(integrated, ctx.dose_unit), "dose_unit": ctx.dose_unit})
+        {**study_design_facts(integrated, ctx.dose_unit), "dose_unit": ctx.dose_unit,
+         "method": _method(ctx).signature()})
 
     # Launch all four concurrently — cached units return instantly,
     # uncached units run in parallel (BMDS in thread pool, genomics
@@ -1576,6 +1587,35 @@ def _resolve_compound_name(dtxsid: str) -> str:
     return "Test Compound"
 
 
+def _method(ctx):
+    """The context's resolved method; a scaffold context without one gets the
+    session's (its pin, else the newest profile)."""
+    if ctx.method is None:
+        from pipeline.method_profile import session_method
+        ctx.method = session_method(ctx.dtxsid)
+    return ctx.method
+
+
+def _resolve_request_method(dtxsid: str, body: dict):
+    """The study's method with what the Process request states explicitly on
+    top (source "request"): `bmd_stats` / `bmd_stat` → the GO ranking; any
+    `go_*` cutoff → the GO display cutoffs (unnamed ones keep the profile's)."""
+    from pipeline.method_profile import session_method
+
+    method = session_method(dtxsid)
+    genomics: dict = {}
+    stats = body.get("bmd_stats")
+    if isinstance(stats, list) and stats:
+        genomics["go_ranking"] = list(stats)
+    elif body.get("bmd_stat"):
+        genomics["go_ranking"] = [body["bmd_stat"]]
+    given = {k[3:]: body[k] for k in ("go_pct", "go_min_genes", "go_max_genes", "go_min_bmd")
+             if body.get(k) is not None}
+    if given:
+        genomics["go_display"] = {**method.get("genomics.go_display"), **given}
+    return session_method(dtxsid, {"genomics": genomics}) if genomics else method
+
+
 def _session_view_filters(dtxsid: str):
     """The process-time allowlists from the session's default view or, failing
     that, the study overlay (view_config.effective_view); None when neither
@@ -1643,18 +1683,18 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
     dose_unit, _dose_unit_source = resolve_dose_unit(dose_unit_stated, _recorded_units)
     logger.info("Dose unit for %s: %s (%s)", dtxsid, dose_unit, _dose_unit_source)
 
-    # BMD statistics — array of stat keys, each producing a separate GO table.
-    # Accepts both the old single "bmd_stat" and the new "bmd_stats" array.
-    bmd_stats_raw = body.get("bmd_stats", None)
-    bmd_stats = bmd_stats_raw if bmd_stats_raw and isinstance(bmd_stats_raw, list) \
-        else [body.get("bmd_stat", "median")]
+    # The study's analysis method (ADR-0027): its pinned profile, its study
+    # overlay, then what THIS request states explicitly.  The GO ranking
+    # statistics (each its own GO table, the first the primary) and the GO
+    # display cutoffs come from it; a request that names them overrides.
+    method = _resolve_request_method(dtxsid, body)
+    for deviation in method.deviations:
+        logger.warning("Method for %s: %s", dtxsid, deviation)
+    bmd_stats = list(method.get("genomics.go_ranking"))
     bmd_stat = bmd_stats[0]  # primary stat for category lookup
-
-    # GO category filter cutoffs from the Settings panel
-    go_pct = body.get("go_pct", 5)
-    go_min_genes = body.get("go_min_genes", 20)
-    go_max_genes = body.get("go_max_genes", 500)
-    go_min_bmd = body.get("go_min_bmd", 3)
+    _go = method.get("genomics.go_display")
+    go_pct, go_min_genes = _go["pct"], _go["min_genes"]
+    go_max_genes, go_min_bmd = _go["max_genes"], _go["min_bmd"]
 
     # Per-area organ allowlist from the active template's `organs:` block
     # ({area: [tokens]}; {} ⇒ no filtering).  Loaded from the template like the
@@ -1707,6 +1747,7 @@ def _build_process_context(dtxsid: str, params: dict, store) -> "ProcessContext"
         assay_filters=assay_filters,
         gene_filter=gene_filter,
         gene_set_filter=gene_set_filter,
+        method=method,
     )
 
     # --- Migrate old monolithic cache files ---

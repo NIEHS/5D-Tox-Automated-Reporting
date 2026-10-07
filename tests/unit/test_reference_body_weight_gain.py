@@ -23,7 +23,11 @@ import pypdf
 from tables.body_weight_table import BODY_WEIGHT_GAIN, build_body_weight_table_from_sidecar
 from tables.table_builder_common import find_sidecar_paths
 from tests.conftest import REFERENCE_DIR
+from pipeline.method_profile import resolve
 from tests.unit.test_reference_bmd_summary import _table_rows
+
+# The method profile each report is the reference for (ADR-0027 §6).
+PROFILE = {"NIEHS-10": "ntp-5day-2021", "NIEHS-13": "ntp-5day-2025"}
 
 NB = " ± "
 
@@ -32,7 +36,8 @@ def _ours(reference_session, report, dtxsid) -> dict[str, list[str]]:
     """{sex: [gain cell per dose]} from our body weight table — printed cells."""
     session = reference_session(report, dtxsid)
     table = build_body_weight_table_from_sidecar(find_sidecar_paths(str(session), "Body Weight"),
-                                                 stats_rows=_table_rows(session))
+                                                 stats_rows=_table_rows(session, PROFILE[report]),
+                                                 method=resolve(PROFILE[report]))
     assert "Body Weight Gain" in table["caption"]
     out = {}
     for sex, rows in table["table_data"].items():

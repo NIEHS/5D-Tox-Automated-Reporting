@@ -978,9 +978,11 @@ def load_session_data(
         from rendering.report_data import apply_study_design
         apply_study_design(data, _integ, dose_unit=session_dose_unit)
 
-    # ── Appendix D-1: apical BMD acceptance criteria (classifier constants) ──
+    # ── Appendix D-1: apical BMD acceptance criteria (the method profile's) ──
+    from pipeline.method_profile import session_method
     from rendering.bmd_appendix import build_bmd_acceptance_matrix
-    data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix()
+    data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix(
+        session_method(session_dir.name))
 
     # ── Abstract (Background + Results + Summary) ─────────────────────
     # Use the SHARED assembler (the same one the web path calls) so both

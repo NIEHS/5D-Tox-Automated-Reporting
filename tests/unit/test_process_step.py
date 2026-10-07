@@ -82,7 +82,7 @@ async def test_process_step_returns_twelve_key_payload_without_fastapi(
     )
 
     assert set(payload) == _TWELVE_KEYS
-    assert payload["bmd_stats"] == ["median"]  # default when unspecified
+    assert payload["bmd_stats"] == ["fifth_pct", "median"]  # the method profile's GO ranking
 
 
 @pytest.mark.asyncio

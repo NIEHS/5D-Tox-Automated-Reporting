@@ -113,10 +113,6 @@ FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean; "
     "body weight data are presented in grams."
 )
-FOOTNOTE_STAT_METHOD = (
-    "Statistical analysis performed by the Jonckheere (trend) "
-    "and Williams or Dunnett (pairwise) tests."
-)
 
 
 # BMD_DEFINITION is imported from table_builder_common.py.
@@ -178,12 +174,23 @@ def _detect_terminal_day(observations: list[dict]) -> str | None:
     return None
 
 
+
+def _resolved(method):
+    """The study's method, or the newest profile's for a caller with none
+    (pipeline.method_profile; reported as a deviation there)."""
+    if method is not None:
+        return method
+    from pipeline.method_profile import session_method
+    return session_method(None)
+
+
 def build_body_weight_table_from_sidecar(
     sidecar_paths: dict[str, str],
     stats_rows: dict[str, dict] | None = None,
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
     design: dict | None = None,
+    method=None,
 ) -> dict:
     """
     Build NIEHS Table 2 (Body Weights) directly from sidecar JSON files.
@@ -401,8 +408,14 @@ def build_body_weight_table_from_sidecar(
     footnotes: list[dict] = [
         definition_footnote(BMD_DEFINITION),
         lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format", target="header"),
-        lettered_footnote(FOOTNOTE_STAT_METHOD, "stat_method", target="header"),
     ]
+    # The statistical-method footnote names the tests the study's method
+    # profile ran for body weights (ADR-0027).
+    from pipeline.method_profile import statistics_sentence
+    _method = _resolved(method)
+    _stat_text = statistics_sentence(_method, _method.pairwise("Body Weight"))
+    if _stat_text:
+        footnotes.append(lettered_footnote(_stat_text, "stat_method", target="header"))
 
     # Footnote IDs to superscript on cells, keyed by location.  Two marker
     # placements (per the NIEHS reference):

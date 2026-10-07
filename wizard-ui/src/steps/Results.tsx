@@ -39,11 +39,7 @@ export function Results({
         const p = await api.process(dtxsid, {
           compound_name: compound,
           dose_unit: doseUnit,
-          bmd_stats: ["median"],
-          go_pct: 5,
-          go_min_genes: 20,
-          go_max_genes: 500,
-          go_min_bmd: 3,
+          // GO ranking + cutoffs: the study's method profile (server-resolved).
         });
         setProcessResult({ ...p, dose_unit: doseUnit });
       } catch (e) {

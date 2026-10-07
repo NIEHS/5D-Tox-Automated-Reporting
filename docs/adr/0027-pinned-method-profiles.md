@@ -1,6 +1,6 @@
 # 0027 — Analysis methods are versioned profiles, pinned per study and checked against a published report
 
-- **Status:** Proposed (2026-10-02). Nothing is implemented yet; the implementation order is at the end.
+- **Status:** Accepted (2026-10-07). Steps 0–6 implemented — see "Implementation status" at the end and `docs/plans/adr-0027-implementation.md`.
 - **Deciders:** Dan Svoboda
 - **Related:**
   - [ADR-0003](0003-document-component-model.md): document structure is already declarative YAML. This ADR keeps the method out of it.
@@ -152,3 +152,27 @@ Each step is a separate change, verified against the golden oracle.
 4. Pin a profile per session at integration (`method_profile.json`), with the currency hook.
 5. `.bm2` `analysisInfo` vs profile check at ingest.
 6. NIEHS-13 conformance fixture, then the statistics implementations (correct Dunnett, Williams, Shirley, Dunn, outliers, relative-weight statistics) registered and referenced by `ntp-5day-2025`.
+
+## Implementation status (2026-10-07)
+
+- **Profiles:** `profiles/ntp-5day-2025.yaml` (reference NIEHS-13, with NIEHS-12) and `profiles/ntp-5day-2021.yaml` (reference NIEHS-10). `dtt-2026-02` is not written: there is no reference report.
+- **Loader and resolver:** `pipeline/method_profile.py`. The schema is closed, implementations are registered, every value carries its source, and pins are immutable. The study overlay is the `methods:` block of `templates/studies/<dtxsid>/view.yaml`. A Process request's explicit GO settings are the top layer, with source `request`.
+- **bmdx-pipe receives values, never profiles:** `ntp_stats.StatsMethod` and `bmd_acceptance.Criteria`.
+- **Consumers moved behind the resolver:**
+  - apical statistics (test family per platform, trend-selection p, alphas, minimum group size);
+  - BMD acceptance (the `.bm2` classification and the ToxicR fills);
+  - the apical BMR when none is recorded. `_ASSAY_FAMILY_BMR` is removed; its clinical chemistry 25% RD was the DTT value, not 2025's 1 SD;
+  - internal-dose rules and significant figures;
+  - GO ranking and display cutoffs. The UI and CLI no longer hard-code `median` / 5 / 20 / 500 / 3.
+- **§4 Text from settings:**
+  - table statistics footnotes and marker legends;
+  - the concentration table's BD, half-LOD and outlier footnotes;
+  - the Materials and Methods statistics and apical BMD guidance. Outlier exclusion is described only when the profile performs it;
+  - Appendix D-1.
+- **§3 Pin:** `sessions/<id>/method_profile.json` is written at integration. `generate_report --method-profile` pins or re-pins. The resolved settings' signature keys the NTP, BMDS and methods caches, so a re-pin recomputes.
+- **§5 Check:** `recorded_mismatches` compares each `.bm2` `analysisInfo` with the pinned profile. Each disagreement is a `method_mismatch` warning in the validation report.
+- **§6 Conformance:** the reference tests run each published report under its own profile. NIEHS-02 predates both profiles and runs on the built-in defaults.
+- **Not moved (one implementation, the same in both published eras):**
+  - per-endpoint display precision (`tables/display_precision.py`);
+  - the body weight intermediate-day rule.
+- **Not done:** a profile picker in the UI (CLI only); automated apical outlier exclusion (`outliers: null` in both profiles).

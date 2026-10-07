@@ -209,6 +209,7 @@ def extract_methods_context(
     bm2_jsons: dict | None = None,
     session_dir: str | None = None,
     integrated: dict | None = None,
+    method=None,
 ) -> MethodsContext:
     """
     Build a MethodsContext from all available data sources.
@@ -231,11 +232,16 @@ def extract_methods_context(
         integrated:    Optional integrated BMDProject dict.  Used to extract the genomics
                        assay/chip from doseResponseExperiments[].chip — e.g., chip name
                        containing "S1500" identifies TempO-Seq.
+        method:        The study's resolved method (pipeline.method_profile); its
+                       settings travel on the context for the methods prose.
 
     Returns:
         Populated MethodsContext with all available study metadata.
     """
     ctx = MethodsContext()
+    if method is not None:
+        ctx.method_profile = method.profile
+        ctx.method_settings = dict(method.values)
     study_params = study_params or {}
     bm2_jsons = bm2_jsons or {}
 

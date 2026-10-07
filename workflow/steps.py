@@ -481,6 +481,10 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # re-extracts from the new sidecar on next process. (invalidate_pool_artifacts
     # DOES delete the sidecar, because that path tears down integrated.json too.)
 
+    # The study's analysis method (ADR-0027): pin the newest profile when the
+    # study has none, and check what the .bm2 analyses record against it.
+    method_summary = _pin_and_check_method(dtxsid, integrated, store)
+
     # Build the lightweight summary (see the route docstring for why).
     meta = integrated.get("_meta", {})
     experiments = integrated.get("doseResponseExperiments", [])
@@ -499,6 +503,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
         "experiment_count": len(experiments),
         "bmd_result_count": len(integrated.get("bMDResult", [])),
         "category_analysis_count": len(integrated.get("categoryAnalysisResults", [])),
+        "method": method_summary,
         "experiments": [
             {
                 "name": exp.get("name", ""),
@@ -507,6 +512,29 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             for exp in experiments
         ],
     }
+
+
+def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> dict:
+    """Pin a method profile if the study has none, and report every recorded
+    analysis setting that disagrees with it as a `method_mismatch` warning in
+    the validation report (ADR-0027 §5).  Returns {profile, pinned_by,
+    deviations, mismatches}."""
+    from pipeline.method_profile import ensure_pin, recorded_mismatches, session_method
+
+    pin = ensure_pin(dtxsid)
+    method = session_method(dtxsid)
+    mismatches = recorded_mismatches(integrated, method)
+    report = store.read_json(dtxsid, "validation_report.json")
+    if isinstance(report, dict):
+        issues = [i for i in report.get("issues", []) if i.get("issue_type") != "method_mismatch"]
+        issues += [{"severity": "warning", "platform": None, "issue_type": "method_mismatch",
+                    "message": m["message"], "files_involved": [], "suggested_precedence": None,
+                    "details": {k: m[k] for k in ("analysis", "setting", "recorded", "profile")}}
+                   for m in mismatches]
+        report["issues"] = issues
+        store.write_json(dtxsid, "validation_report.json", report)
+    return {"profile": pin["name"], "pinned_by": pin["pinned_by"],
+            "deviations": list(method.deviations), "mismatches": [m["message"] for m in mismatches]}
 
 
 # ---------------------------------------------------------------------------

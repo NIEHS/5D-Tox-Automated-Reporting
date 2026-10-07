@@ -406,6 +406,40 @@ class MethodSettings:
         return table.get((platform or "").strip()) or table["default"]
 
 
+# ---------------------------------------------------------------------------
+# Method text (ADR-0027 §4): what the report says comes from what ran
+# ---------------------------------------------------------------------------
+
+_TREND_TEXT = {"jonckheere": "Jonckheere"}
+_PAIRWISE_TEXT = {"williams_or_dunnett": "Williams or Dunnett", "shirley_or_dunn": "Shirley or Dunn"}
+_PAIRWISE_PROCEDURES = {
+    "williams_or_dunnett": ("parametric", "Williams and Dunnett", "Williams", "Dunnett"),
+    "shirley_or_dunn": ("nonparametric", "Shirley and Dunn", "Shirley", "Dunn"),
+}
+
+
+def statistics_sentence(method: MethodSettings, pairwise_impl: str | None) -> str | None:
+    """"Statistical analysis performed by the Jonckheere (trend) and Williams
+    or Dunnett (pairwise) tests." for a pairwise implementation; None when it
+    runs no statistics."""
+    pairwise = _PAIRWISE_TEXT.get(pairwise_impl or "")
+    if not pairwise:
+        return None
+    trend = _TREND_TEXT[method.get("apical.statistics.trend_test")]
+    return f"Statistical analysis performed by the {trend} (trend) and {pairwise} (pairwise) tests."
+
+
+def marker_legend(method: MethodSettings) -> str:
+    """"*Statistically significant at p ≤ 0.05; **p ≤ 0.01." at the method's alphas."""
+    a, a2 = method.get("apical.statistics.alpha"), method.get("apical.statistics.alpha_strong")
+    return f"*Statistically significant at p \u2264 {a:g}; **p \u2264 {a2:g}."
+
+
+def pairwise_procedures(pairwise_impl: str) -> tuple[str, str, str, str] | None:
+    """(kind, "Williams and Dunnett", trend-sensitive test, the other) — for prose."""
+    return _PAIRWISE_PROCEDURES.get(pairwise_impl)
+
+
 def family_of(pairwise_impl: str | None) -> str | None:
     """bmdx-pipe family ("parametric" / "nonparametric") of a pairwise name."""
     return _FAMILY.get(pairwise_impl or "")
@@ -550,3 +584,65 @@ def session_method(dtxsid: str | None, request: dict | None = None) -> MethodSet
     if not pin:
         settings.deviations.append(f"no profile pinned; the newest, {name}, is used")
     return settings
+
+
+# ---------------------------------------------------------------------------
+# Recorded settings vs the profile (ADR-0027 §5)
+# ---------------------------------------------------------------------------
+
+def _recorded_model_selection(notes: list[str]) -> str | None:
+    if any(n.startswith("Model Averaging Method") for n in notes):
+        return "model_average"
+    if any(n.startswith("Best Model Selection") or "Lowest AIC" in n for n in notes):
+        return "lowest_aic"
+    return None
+
+
+def recorded_mismatches(integrated: dict, method: MethodSettings) -> list[dict]:
+    """Where an analysis we pass through (each .bm2 bMDResult's own
+    analysisInfo) disagrees with the pinned profile: the genomic BMR and model
+    selection (genomics.recorded.*) and the apical BMR.  Neither side wins —
+    each disagreement is reported for a human."""
+    from tables.apical_bmds import _BMR_REL, _BMR_SD, _parse_notes, _sex_platform_from_source
+
+    bmr_type_of = {_BMR_SD: "sd", _BMR_REL: "rel_dev"}
+    out: list[dict] = []
+    for result in integrated.get("bMDResult") or []:
+        if not isinstance(result, dict):
+            continue
+        notes = (result.get("analysisInfo") or {}).get("notes") or []
+        cfg = _parse_notes(notes)
+        name = result.get("name") or cfg["data_source"] or "?"
+        recorded_bmr = ({"type": bmr_type_of[cfg["bmr_type"]], "factor": cfg["bmr_factor"]}
+                        if cfg["bmr_type"] in bmr_type_of and cfg["bmr_factor"] is not None else None)
+        apical = _sex_platform_from_source(cfg["data_source"]) is not None
+        if apical:
+            expected = {"bmr": method.bmr_when_unrecorded(cfg["data_source"].split("_", 1)[-1])}
+            path = "apical.bmd.bmr_when_unrecorded"
+        else:
+            expected = {"bmr": method.get("genomics.recorded.bmr"),
+                        "model_selection": method.get("genomics.recorded.model_selection")}
+            path = "genomics.recorded"
+        recorded = {"bmr": recorded_bmr, "model_selection": _recorded_model_selection(notes)}
+        for key, want in expected.items():
+            got = recorded.get(key)
+            if want is None or got is None:
+                continue
+            if key == "bmr" and (got["type"], float(got["factor"])) == (want["type"], float(want["factor"])):
+                continue
+            if key != "bmr" and got == want:
+                continue
+            out.append({
+                "analysis": name, "setting": f"{path}.{key}" if key != "bmr" or not apical else path,
+                "recorded": got, "profile": want,
+                "message": (f"{name}: the analysis records {key.replace('_', ' ')} {_show(got)}; "
+                            f"method profile {method.profile} expects {_show(want)}"),
+            })
+    return out
+
+
+def _show(v) -> str:
+    if isinstance(v, dict) and "type" in v:
+        return (f"{float(v['factor']) * 100:g}% relative deviation" if v["type"] == "rel_dev"
+                else f"{float(v['factor']):g} SD")
+    return str(v).replace("_", " ")

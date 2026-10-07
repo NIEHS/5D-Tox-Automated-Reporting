@@ -32,6 +32,8 @@ import docx
 import pypdf
 from bmdx_pipe.apical_report import _build_bmd_result_lookup, build_table_data, format_bmd
 
+from pipeline.method_profile import resolve
+
 from rendering.render_common import _dose_cell
 from tests.conftest import REFERENCE_DIR
 
@@ -91,7 +93,8 @@ def test_niehs13_rat_bmd_and_bmdl_reproduced():
     assert len(published) == 9
 
     project = json.loads((D / "108020004_4D_NonGenomic_Rats.bm2.json").read_text())
-    ours = {probe: r for (exp, probe), r in _build_bmd_result_lookup(project).items()
+    criteria = resolve("ntp-5day-2025").acceptance_criteria()       # the profile under test
+    ours = {probe: r for (exp, probe), r in _build_bmd_result_lookup(project, criteria).items()
             if exp == EXPERIMENT}
     assert len(ours) == 9
 
@@ -104,11 +107,16 @@ def test_niehs13_rat_bmd_and_bmdl_reproduced():
             assert (format_bmd(r["bmd"], 1), format_bmd(r["bmdl"], 1)) == (bmd, bmdl), (label, r)
 
 
-def _table_rows(session) -> dict:
-    """{sex: {endpoint: TableRow}} from build_table_data over the session's pivots."""
+def _table_rows(session, profile: str | None) -> dict:
+    """{sex: {endpoint: TableRow}} from build_table_data over the session's pivots,
+    under the method profile the report is the reference for (None: a report
+    no profile covers — the built-in NTP defaults)."""
     project = {"doseResponseExperiments": [_read_pivot(p) for p in sorted((session / "files").glob("*.txt"))],
                "bMDResult": []}
-    return {sex: {row.label: row for row in rows} for sex, rows in build_table_data(project, {}).items()}
+    method = resolve(profile) if profile else None
+    rows = build_table_data(project, {}, stats_method=method and method.stats_method(),
+                            criteria=method and method.acceptance_criteria())
+    return {sex: {row.label: row for row in rows} for sex, rows in rows.items()}
 
 
 def _printed(value: str) -> str:
@@ -117,7 +125,7 @@ def _printed(value: str) -> str:
 
 
 def test_niehs13_rat_loel_and_noel_reproduced(reference_session):
-    rows = _table_rows(reference_session("NIEHS-13", "DTXSID1020431"))["Female"]
+    rows = _table_rows(reference_session("NIEHS-13", "DTXSID1020431"), "ntp-5day-2025")["Female"]
     published = _published()
     got = {}
     for label in published:
@@ -140,7 +148,7 @@ def _niehs10_published() -> dict[tuple[str, str], tuple[str, str]]:
 
 
 def test_niehs10_loel_and_noel_reproduced(reference_session):
-    rows = _table_rows(reference_session("NIEHS-10", "DTXSID50469320"))
+    rows = _table_rows(reference_session("NIEHS-10", "DTXSID50469320"), "ntp-5day-2021")
     published = _niehs10_published()
     assert len(published) == 23
     got, expected = {}, {}

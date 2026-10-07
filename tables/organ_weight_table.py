@@ -48,7 +48,6 @@ from tables.table_builder_common import (
     apical_caption,
     BMD_DEFINITION,
     significance_explanation,
-    SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
     format_row_cell,
     load_sidecar,
@@ -107,12 +106,6 @@ def _organ_weight_caption(serialized: dict, compound_name: str,
 
 FOOTNOTE_DATA_FORMAT = (
     "Data are displayed as mean \u00b1 standard error of the mean."
-)
-
-# Organ weight uses parametric methods (Williams/Dunnett), same as body weight.
-FOOTNOTE_STAT_METHOD_ORGAN = (
-    "Statistical analysis performed by the Jonckheere (trend) "
-    "and Williams or Dunnett (pairwise) tests."
 )
 
 # Additional organ-weight-specific footnotes from the NIEHS reference:
@@ -204,6 +197,7 @@ def build_organ_weight_table_from_sidecar(
     design: dict | None = None,
     organ_allowlist: list[str] | None = None,
     sex_allow: list[str] | None = None,
+    method=None,
 ) -> dict:
     """
     Build NIEHS Table 3 (Organ Weights) from sidecar + NTP stats.
@@ -616,14 +610,20 @@ def build_organ_weight_table_from_sidecar(
     #
     # Provenance: every organ-weight footnote is Canonical — anchored in
     # NIEHS Report 10 Table 3, with the reference PDF as the authority.
+    # The marker legend and the statistical-method footnote are written from
+    # the study's method profile — the tests that ran for organ weights.
+    from pipeline.method_profile import marker_legend, session_method, statistics_sentence
+    method = method if method is not None else session_method(None)
     footnotes: list[dict] = [
         legend_footnote(significance_explanation(dose_unit)),
-        legend_footnote(SIGNIFICANCE_MARKER_LEGEND),
+        legend_footnote(marker_legend(method)),
         definition_footnote(BMD_DEFINITION),
         lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
-        lettered_footnote(FOOTNOTE_STAT_METHOD_ORGAN, "stat_method"),
-        lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT, "relative_weight"),
     ]
+    stat_text = statistics_sentence(method, method.pairwise("Organ Weight"))
+    if stat_text:
+        footnotes.append(lettered_footnote(stat_text, "stat_method"))
+    footnotes.append(lettered_footnote(FOOTNOTE_RELATIVE_WEIGHT, "relative_weight"))
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # Same detection and footnote-building as clinical pathology; see

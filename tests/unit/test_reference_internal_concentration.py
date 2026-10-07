@@ -18,6 +18,7 @@ import re
 
 import pytest
 
+from pipeline.method_profile import resolve
 from tables.table_builder_common import find_sidecar_paths
 from tables.tissue_concentration_table import build_tissue_concentration_table_from_sidecar
 from tests.conftest import REFERENCE_DIR
@@ -65,7 +66,7 @@ def test_concentration_table_matches_published(reference_session, report, study,
 
     built = build_tissue_concentration_table_from_sidecar(
         find_sidecar_paths(str(session), "Tissue Concentration"), "X", "ppm",
-        {"species": species})
+        {"species": species}, method=resolve("ntp-5day-2025"))
     rows = built["table_data"]["Female"]
     published = json.loads((REFERENCE_DIR / report / table).read_text())
     doses = [h.split()[0] for h in published["header"][0][1:]]

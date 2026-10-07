@@ -452,11 +452,13 @@ def marshal_export_data(
         if _integ:
             apply_study_design(data, _integ, dose_unit=body.get("dose_unit"))
 
-    # ── Appendix D-1: the apical BMD acceptance criteria, from the classifier's
-    # own constants (independent of the session).
+    # ── Appendix D-1: the apical BMD acceptance criteria of the study's method
+    # profile — the criteria its BMDs were classified with.
     if "appendix_bmd_acceptance_matrix" not in data:
+        from pipeline.method_profile import session_method
         from rendering.bmd_appendix import build_bmd_acceptance_matrix
-        data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix()
+        data["appendix_bmd_acceptance_matrix"] = build_bmd_acceptance_matrix(
+            session_method(body.get("dtxsid") or None))
 
     peer_review = body.get("peer_review")
     if peer_review:

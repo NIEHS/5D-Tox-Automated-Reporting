@@ -40,24 +40,11 @@ BMD_DEFINITION = (
     "NA = not applicable; ND = not determined."
 )
 
-# Fixed footnote about the statistical method used for NTP studies.
-# Lettered as (b) in most tables (body weight, organ weight, clinical path).
-FOOTNOTE_STAT_METHOD = (
-    "Statistical analysis performed by the Jonckheere (trend) "
-    "and Williams or Dunnett (pairwise) tests."
-)
-
 # Significance-marker text.  The `*` / `**` markers themselves are baked
 # into the mean ± SE cell strings upstream by bmdx-pipe's build_table_data;
-# these two strings are the legend that explains them.  Consolidated here
-# (the per-builder copies in clinical_pathology_table.py and
-# organ_weight_table.py drifted into three slightly different wordings).
-# No test name is mentioned — the specific test (Williams/Dunnett vs
-# Shirley/Dunn) is already named in each table's statistical-method
-# footnote, and clinical pathology does not use Dunnett's.
-SIGNIFICANCE_MARKER_LEGEND = (
-    "*Statistically significant at p ≤ 0.05; **p ≤ 0.01."
-)
+# the legend explaining them, and each table's statistical-method footnote,
+# are written from the study's method profile (pipeline.method_profile
+# marker_legend / statistics_sentence, ADR-0027) so they name what ran.
 
 # The semantics paragraph: what a marker on a dosed-group cell means
 # versus a marker on the vehicle-control cell.  Applies to every apical
@@ -602,7 +589,7 @@ def format_mean_se(mean: float, se: float, decimals: int = 1) -> str:
 def format_mean_se_sig(mean: float, se: float, sig_figs: int = 3) -> str:
     """Mean ± SE with each number at `sig_figs` significant figures, rounded
     independently ("33.8 ± 4.43", "137 ± 10.6") — the NIEHS tissue-concentration
-    style (tables.display_precision.TISSUE_CONCENTRATION_SIG_FIGS)."""
+    style (the method profile's internal_dose.sig_figs)."""
     return (f"{_round_sig_half_up(mean, sig_figs)}\u00a0\u00b1\u00a0"
             f"{_round_sig_half_up(se, sig_figs)}")
 

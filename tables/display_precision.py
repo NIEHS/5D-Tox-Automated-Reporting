@@ -69,12 +69,10 @@ PUBLISHED_DECIMALS: dict[str, int] = {
 # Organ weights (absolute g, relative mg/g) print 2 decimals in every report.
 ORGAN_WEIGHT_DECIMALS = 2
 
-# Tissue (plasma/blood/organ) concentrations print mean and SE each at 3
-# significant figures, independently, in every PA48 summary (NIEHS-07 – -13):
-# "33.8 ± 4.43", "137 ± 10.6", "50.0 ± 19.4", "0.0305 ± 0.00647",
-# "19500 ± 700".  Concentrations span orders of magnitude within one row, so a
-# fixed decimal count cannot reproduce them.
-TISSUE_CONCENTRATION_SIG_FIGS = 3
+# Tissue (plasma/blood/organ) concentrations print mean and SE each at a
+# number of significant figures, independently — 3 in every PA48 summary
+# (NIEHS-07 – -13): "33.8 ± 4.43", "137 ± 10.6", "0.0305 ± 0.00647".  The
+# count is the method profile's internal_dose.sig_figs (ADR-0027).
 
 
 def endpoint_key(label: str) -> str:

@@ -19,6 +19,7 @@ import pytest
 from tables.body_weight_table import build_body_weight_table_from_sidecar
 from tables.table_builder_common import find_sidecar_paths
 from tests.conftest import REFERENCE_DIR
+from pipeline.method_profile import resolve
 from tests.unit.test_reference_bmd_summary import _table_rows
 
 NB = "\u00a0±\u00a0"   # our cells use no-break spaces
@@ -44,9 +45,12 @@ def _published(pdf) -> dict[str, list[str]]:
     return out
 
 
-def _ours(session) -> dict[str, list[str]]:
-    table = build_body_weight_table_from_sidecar(find_sidecar_paths(str(session), "Body Weight"),
-                                                 stats_rows=_table_rows(session))
+def _ours(session, profile: str | None) -> dict[str, list[str]]:
+    """Our body weight cells under `profile` (None: NIEHS-02, which predates
+    the profiles — the built-in defaults)."""
+    table = build_body_weight_table_from_sidecar(
+        find_sidecar_paths(str(session), "Body Weight"), stats_rows=_table_rows(session, profile),
+        method=resolve(profile) if profile else None)
     [rows] = table["table_data"].values()
     return {r["label"]: [r["values"][k] for k in sorted(r["values"], key=float)]
             for r in rows if not r.get("is_n_row")}
@@ -62,7 +66,7 @@ def test_rows_and_cells_match_the_published_summary(reference_session, report, s
     assert list(published) == days + ["Body Weight Gain"]
     session = reference_session(report, "DTXSID6020430" if report == "NIEHS-12" else "DTXSID1020431",
                                 study=study)
-    ours = _ours(session)
+    ours = _ours(session, "ntp-5day-2025")
     for (s, row, i), (theirs, mine) in _UNREPRODUCIBLE.items():
         if s == study:
             assert (published[row][i], ours[row][i]) == (theirs, mine)
@@ -85,6 +89,6 @@ def test_niehs02_database_export_body_weights(reference_session):
                     f"{a}{NB}{b}{mk}" for a, b, mk in re.findall(r"([\d.]+)\s*±\s*([\d.]+)\s*(\**)", line))
     assert {k: len(v) for k, v in published.items()} == {"0": 6, "4": 6}
     session = reference_session("NIEHS-02", "DTXSID9000002")
-    ours = _ours(session)
+    ours = _ours(session, None)
     assert {day: ours[day] for day in published} == published
 

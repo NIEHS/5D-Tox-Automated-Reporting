@@ -43,9 +43,11 @@
   ],
   "apical_bmd_summary_bmds": [],
   "bmd_stat_labels": {
+    "fifth_pct": "5th %ile",
     "median": "Median"
   },
   "bmd_stats": [
+    "fifth_pct",
     "median"
   ],
   "chart_images": null,
@@ -89,6 +91,54 @@
       "has_tissue_conc": false,
       "hematology_endpoints": [],
       "hormone_endpoints": [],
+      "method_profile": "ntp-5day-2025",
+      "method_settings": {
+        "apical.bmd.acceptance.bmd_above_highest_dose": "nvm",
+        "apical.bmd.acceptance.bmd_bmdl_max": 10.0,
+        "apical.bmd.acceptance.not_reportable_fraction": 0.3333333333333333,
+        "apical.bmd.acceptance.r2_min": 0.6,
+        "apical.bmd.bmr_when_unrecorded.default": {
+          "factor": 1.0,
+          "type": "sd"
+        },
+        "apical.bmd.eligibility": "trend_and_pairwise",
+        "apical.bmd.engine": "toxicr_model_average",
+        "apical.statistics.alpha": 0.05,
+        "apical.statistics.alpha_strong": 0.01,
+        "apical.statistics.min_group_n": 2,
+        "apical.statistics.outliers": null,
+        "apical.statistics.pairwise.Body Weight": "williams_or_dunnett",
+        "apical.statistics.pairwise.Clinical Chemistry": "shirley_or_dunn",
+        "apical.statistics.pairwise.Hematology": "shirley_or_dunn",
+        "apical.statistics.pairwise.Hormones": "shirley_or_dunn",
+        "apical.statistics.pairwise.Organ Weight": "williams_or_dunnett",
+        "apical.statistics.pairwise.Urinalysis": "shirley_or_dunn",
+        "apical.statistics.trend_select_p": 0.01,
+        "apical.statistics.trend_test": "jonckheere",
+        "genomics.go_display": {
+          "max_genes": 500,
+          "min_bmd": 3,
+          "min_genes": 20,
+          "pct": 5
+        },
+        "genomics.go_ranking": [
+          "fifth_pct",
+          "median"
+        ],
+        "genomics.recorded.bmr": {
+          "factor": 0.25,
+          "type": "rel_dev"
+        },
+        "genomics.recorded.model_selection": "model_average",
+        "internal_dose.bd_if_detected_share_at_most": 0.2,
+        "internal_dose.below_limit": "half_limit",
+        "internal_dose.outliers": {
+          "alpha": 0.01,
+          "test": "dixon_r10"
+        },
+        "internal_dose.pairwise": "shirley_or_dunn",
+        "internal_dose.sig_figs": 3
+      },
       "models_fit": null,
       "n_biosampling": 0,
       "n_control": null,

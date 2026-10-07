@@ -12,6 +12,7 @@ import re
 import pypdf
 
 from document_model.document_node import DocNode
+from pipeline.method_profile import resolve
 from rendering.render_common import apical_table_plan
 from rendering.report_data import normalize_apical_section_for_render
 from tables.table_builder_common import find_sidecar_paths
@@ -43,7 +44,8 @@ def test_niehs10_table7_cells_match_published(reference_session):
 
     session = reference_session("NIEHS-10", "DTXSID50469320")
     paths = find_sidecar_paths(str(session), "Tissue Concentration")
-    tc = build_tissue_concentration_table_from_sidecar(paths, compound_name="PFHxSAm")
+    tc = build_tissue_concentration_table_from_sidecar(paths, compound_name="PFHxSAm",
+                                                       method=resolve("ntp-5day-2021"))
     section = normalize_apical_section_for_render({
         "platform": "Tissue Concentration", "title": "Tissue Concentration",
         "tables_json": tc["table_data"], "caption": tc["caption"],

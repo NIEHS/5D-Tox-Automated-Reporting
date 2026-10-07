@@ -193,6 +193,12 @@ class MethodsContext:
     # Built from animal_report or gene_expression fingerprints
     genomics_sample_counts: dict | None = None
 
+    # --- The analysis method (pipeline.method_profile, ADR-0027) ---
+    # The resolved settings ({dotted path: value}) of the study's method
+    # profile; the statistics and BMD paragraphs are written from them.
+    method_profile: str = ""
+    method_settings: dict | None = None
+
     def to_dict(self) -> dict:
         """Serialize for JSON persistence.  Converts dataclass to a plain dict."""
         d = {}

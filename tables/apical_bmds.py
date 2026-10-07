@@ -123,20 +123,10 @@ def _sex_platform_from_source(data_source: str) -> tuple[str, str] | None:
     return (sex, _canon_platform(rest))
 
 
-# Assay-family BMR fallback for a platform with NO recorded .bm2 config. In practice
-# every BMD-modeled apical platform in a real .bm2 carries a config (Clinical Chemistry
-# → REL/0.25; Organ/Body Weight, Hematology, Hormones → SD/1.0), so this only fires for
-# a genuinely config-less platform (an unmodeled incidence/PK platform), whose result is
-# then flagged `inferred` for data-team verification.
-_ASSAY_FAMILY_BMR: dict[str, tuple[int, float]] = {
-    "clinical chemistry": (_BMR_REL, 0.25),
-    "hormones": (_BMR_SD, 1.0),
-    "hematology": (_BMR_SD, 1.0),
-    "organ weight": (_BMR_SD, 1.0),
-    "body weight": (_BMR_SD, 1.0),
-    "clinical observations": (_BMR_SD, 1.0),
-    "tissue concentration": (_BMR_REL, 0.25),
-}
+# The BMR for a platform with NO recorded .bm2 config comes from the study's method
+# profile (apical.bmd.bmr_when_unrecorded, ADR-0027) — 1 SD for every family in
+# ntp-5day-2025.  A fit at such a BMR is flagged `inferred` and footnoted.
+_PROFILE_BMR_TYPE = {"sd": _BMR_SD, "rel_dev": _BMR_REL}
 
 
 def parse_bmd_configs(integrated: dict) -> dict[tuple[str, str], dict]:
@@ -165,21 +155,21 @@ def bmr_record(cfg: dict) -> dict:
             "factor": cfg.get("bmr_factor")}
 
 
-def inferred_bmr(platform: str) -> dict:
+def inferred_bmr(platform: str, method) -> dict:
     """The BMR an endpoint of `platform` is fit at when the .bm2 records none
-    (the assay-family default), as bmr_record() describes it."""
-    return bmr_record(_config_for("", platform, {}))
+    (the method profile's), as bmr_record() describes it."""
+    return bmr_record(_config_for("", platform, {}, method))
 
 
-def _config_for(sex: str, platform: str, configs: dict) -> dict:
+def _config_for(sex: str, platform: str, configs: dict, method) -> dict:
     """Resolve the fit config for one endpoint: recorded (from .bm2) if present, else
-    INFERRED from the assay family (flagged for data-team verification)."""
+    INFERRED from the method profile (`method`, pipeline.method_profile.MethodSettings),
+    flagged for data-team verification."""
     recorded = configs.get((sex, _canon_platform(platform)))
     if recorded is not None:
         return recorded
-    # No recorded config → infer per assay family.
-    fam = _ASSAY_FAMILY_BMR.get(platform.strip().lower())
-    bmr_type, bmr_factor = fam if fam else (_BMR_SD, 1.0)
+    bmr = method.bmr_when_unrecorded(platform)
+    bmr_type, bmr_factor = _PROFILE_BMR_TYPE[bmr["type"]], float(bmr["factor"])
     return {
         "models": _DEFAULT_MODELS,
         "bmr_type": bmr_type,
@@ -196,13 +186,17 @@ def _config_for(sex: str, platform: str, configs: dict) -> dict:
 def run_bmds_for_endpoints(
     endpoint_data: list[dict],
     configs: dict[tuple[str, str], dict] | None = None,
+    *,
+    method,
 ) -> dict[str, dict]:
     """Fit apical BMDs for a batch of endpoints via the ToxicR Java engine.
 
     `endpoint_data` is the list of enriched `_bmds_input` dicts (each carries per-animal
     `Y` + `doses_per_animal`, plus `sex`, `endpoint`, and the summary stats). `configs`
     is the {(sex, platform_token): config} map from `parse_bmd_configs`; when a platform
-    has no recorded config the fit config is inferred per assay family and flagged.
+    has no recorded config the fit config is inferred from `method` (the study's
+    resolved method profile) and flagged; `method` also supplies the acceptance
+    criteria each fit is classified by.
 
     Returns {key: {bmd, bmdl, bmdu, model_name, status, notes, bmr_config, bmr}} — the
     shape the former pybmds path returned, plus `bmr_config` (bm2_config | inferred: was
@@ -221,7 +215,7 @@ def run_bmds_for_endpoints(
             continue  # no per-animal data for this endpoint — cannot ToxicR-fit
         sex = ep.get("sex", "")
         platform = ep.get("platform", "")
-        cfg = _config_for(sex, platform, configs)
+        cfg = _config_for(sex, platform, configs, method)
         cfg_by_key[ep["key"]] = cfg
         payload.append({
             "key": ep["key"],
@@ -237,7 +231,7 @@ def run_bmds_for_endpoints(
         return {}
 
     logger.info("ToxicR modeling %d apical endpoints", len(payload))
-    results = run_apical_bmds_java(payload)
+    results = run_apical_bmds_java(payload, criteria=method.acceptance_criteria())
 
     # Stamp the config provenance onto each result so the report can say when a
     # filled BMD used an inferred (assay-family default) BMR.

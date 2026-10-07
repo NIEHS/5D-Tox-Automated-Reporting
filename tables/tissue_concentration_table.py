@@ -44,7 +44,6 @@ from tables.table_builder_common import (
     format_mean_se_sig,
     load_sidecar,
 )
-from tables.display_precision import TISSUE_CONCENTRATION_SIG_FIGS
 from tables.units import UNIT_NOT_RECORDED, recorded_units
 
 
@@ -147,6 +146,7 @@ def build_tissue_concentration_table_from_sidecar(
     compound_name: str = "Chemical",
     dose_unit: str = "mg/kg",
     design: dict | None = None,
+    method=None,
 ) -> dict:
     """
     Build NIEHS Table 7 (Tissue Concentration) from sidecar data.
@@ -166,13 +166,21 @@ def build_tissue_concentration_table_from_sidecar(
         design:         Study design facts (pipeline.study_design) for the caption's
                         species, verb and duration, and the timepoint word (postdose/
                         postexposure); None ⇒ the standard design.
+        method:         The study's resolved method (pipeline.method_profile):
+                        internal_dose.* — significant figures, and for the
+                        study-day layout the BD, outlier and statistics rules.
+                        None ⇒ the newest profile.
 
     Returns:
         Dict with keys matching the Typst apical_sections schema, plus
         table_type="pharmacokinetic" flag for specialized Typst rendering.
         Returns empty dict if no tissue concentration data found.
     """
+    from pipeline.method_profile import session_method
     from pipeline.study_design import after_administration, design_or_standard
+
+    method = method if method is not None else session_method(None)
+    sig_figs = method.get("internal_dose.sig_figs")
 
     _after = after_administration(design_or_standard(design))
     # ── Load sidecars ─────────────────────────────────────────────────────
@@ -188,7 +196,7 @@ def build_tissue_concentration_table_from_sidecar(
     from tables.blood_tissue_concentration_table import build_day_layout_table, is_day_layout
 
     if is_day_layout(sidecar_data.values()):
-        return build_day_layout_table(sidecar_data, compound_name, dose_unit, design)
+        return build_day_layout_table(sidecar_data, compound_name, dose_unit, design, method)
 
     # ── Extract per-timepoint, per-dose concentration values ──────────────
     # Only Biosampling Animals.  Group by (sex, timepoint, dose).
@@ -316,7 +324,7 @@ def build_tissue_concentration_table_from_sidecar(
                 vals = dose_vals.get(dose, [])
                 if vals:
                     m, s = mean_se(vals)
-                    values[dk] = format_mean_se_sig(m, s, TISSUE_CONCENTRATION_SIG_FIGS)
+                    values[dk] = format_mean_se_sig(m, s, sig_figs)
                 else:
                     values[dk] = "\u2013"
 
@@ -326,7 +334,7 @@ def build_tissue_concentration_table_from_sidecar(
                 "values": values,
                 # The renderer re-rounds every mean ± SE cell; this keeps it at
                 # the published 3 significant figures (display_precision).
-                "sig_figs": TISSUE_CONCENTRATION_SIG_FIGS,
+                "sig_figs": sig_figs,
             })
 
         serialized[sex] = rows

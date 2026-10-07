@@ -38,7 +38,6 @@ from tables.table_builder_common import (
     format_row_cell,
     BMD_DEFINITION,
     significance_explanation,
-    SIGNIFICANCE_MARKER_LEGEND,
     js_dose_key,
     load_sidecar,
     build_n_row,
@@ -75,10 +74,6 @@ FOOTNOTE_DATA_FORMAT = (
 # weight.  The NIEHS reference explains: "Clinical pathology data, which
 # typically have skewed distributions, were analyzed using the nonparametric
 # multiple comparison methods of Shirley and Dunn."
-FOOTNOTE_STAT_METHOD_CLINICAL = (
-    "Statistical analysis performed by the Jonckheere (trend) "
-    "and Shirley or Dunn (pairwise) tests."
-)
 
 # The significance-marker text (SIGNIFICANCE_EXPLANATION + the */** legend)
 # is shared across every apical table and lives in table_builder_common -
@@ -100,6 +95,7 @@ def build_clinical_pathology_table_from_sidecar(
     dose_unit: str = "mg/kg",
     design: dict | None = None,
     imputed_cells: dict | None = None,
+    method=None,
 ) -> dict:
     """
     Build a clinical pathology table (Tables 4/5/6) from sidecar + NTP stats.
@@ -321,13 +317,19 @@ def build_clinical_pathology_table_from_sidecar(
     #                        modeling of clinical-pathology endpoints).  Same
     #                        authority, new addition — see the imputation
     #                        block below.
+    # The marker legend and the statistical-method footnote are written from
+    # the study's method profile — the tests that ran for this platform.
+    from pipeline.method_profile import marker_legend, session_method, statistics_sentence
+    method = method if method is not None else session_method(None)
     footnotes: list[dict] = [
         legend_footnote(significance_explanation(dose_unit)),
-        legend_footnote(SIGNIFICANCE_MARKER_LEGEND),
+        legend_footnote(marker_legend(method)),
         definition_footnote(BMD_DEFINITION),
         lettered_footnote(FOOTNOTE_DATA_FORMAT, "data_format"),
-        lettered_footnote(FOOTNOTE_STAT_METHOD_CLINICAL, "stat_method"),
     ]
+    stat_text = statistics_sentence(method, method.pairwise(platform))
+    if stat_text:
+        footnotes.append(lettered_footnote(stat_text, "stat_method"))
 
     # ── Sample-availability + attrition footnotes (shared helpers) ────────
     # [Canonical] — both anchored in NIEHS Report 10.  The detection and

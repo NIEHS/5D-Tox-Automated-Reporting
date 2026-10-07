@@ -21,8 +21,18 @@ decimal value or on the binary float — reproduces all of them).
 
 import pytest
 
+from pipeline.method_profile import resolve
 from tests.conftest import REFERENCE_DIR
 from tooling.ntp_stats_conformance import compare_package
+
+# Each report is tested under the method profile it is the reference for
+# (ADR-0027 §6).  NIEHS-02 predates both profiles: the built-in defaults.
+PROFILE = {"NIEHS-02": None, "NIEHS-10": "ntp-5day-2021", "NIEHS-13": "ntp-5day-2025"}
+
+
+def _compare(report, tmp_path):
+    method = resolve(PROFILE[report]) if PROFILE[report] else None
+    return compare_package(str(REFERENCE_DIR / report), str(tmp_path), method)
 
 # report -> ({(table, sex, label, dose, column): (published, ours)}, {unmatched (table, sex, label)})
 KNOWN = {
@@ -57,7 +67,7 @@ KNOWN_CELLS = {
 
 @pytest.mark.parametrize("report", sorted(KNOWN))
 def test_published_significance_markers(report, tmp_path):
-    cells = compare_package(str(REFERENCE_DIR / report), str(tmp_path))
+    cells = _compare(report, tmp_path)
     compared = [c for c in cells if c["status"] == "compared"]
     disagree = {(c["table"], c["sex"], c["label"], c["dose"], c["column"]): (c["published"], c["ours"])
                 for c in compared if c["published"] != c["ours"]}
@@ -71,7 +81,7 @@ def test_published_significance_markers(report, tmp_path):
 
 @pytest.mark.parametrize("report", sorted(KNOWN_CELLS))
 def test_published_cells_print_as_ours(report, tmp_path):
-    cells = [c for c in compare_package(str(REFERENCE_DIR / report), str(tmp_path))
+    cells = [c for c in _compare(report, tmp_path)
              if c["status"] == "compared" and c["published_cell"]]
     differ = {(c["sex"], c["endpoint"], c["dose"]): (c["published_cell"], c["ours_cell"])
               for c in cells if c["published_cell"] != c["ours_cell"]}

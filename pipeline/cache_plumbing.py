@@ -170,7 +170,7 @@ _NTP_CACHE_SCHEMA_VERSION = 9  # bumped: internal-dose (Tissue Concentration) ex
 _BMDS_METHOD_VERSION = 2  # bumped: ToxicR fits carry R² and are classified by bmdx_pipe.bmd_acceptance (no UREP)
 
 
-def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
+def _hash_ntp(integrated: dict, bmd_stat: str, method_sig: str = "") -> str:
     """
     Hash inputs that affect NTP stats computation.
 
@@ -183,6 +183,9 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
     dict is normalized at load time (e.g. the bMDResult repointing in
     bmd_project_schema) force a cache miss even when experiment identity
     is unchanged.
+
+    `method_sig` (MethodSettings.signature, ADR-0027) is folded in: a re-pinned
+    method profile or a changed study overlay makes the tables stale.
     """
     from genomics.bmdexpress_categories import report_bmd_decimals
 
@@ -194,6 +197,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
         "bmd_decimals": report_bmd_decimals(integrated),
         "n_experiments": len(experiments),
         "experiment_names": sorted(e.get("name", "") for e in experiments),
+        "method": method_sig,
     }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
@@ -298,7 +302,7 @@ def _hash_sections(
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
-def _hash_bmds(bmds_inputs: list[dict]) -> str:
+def _hash_bmds(bmds_inputs: list[dict], method_sig: str = "") -> str:
     """
     Hash the raw dose-response data for BMDS modeling.
 
@@ -310,6 +314,8 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
     algorithm/settings (which does NOT touch the dose-response numbers) still
     forces a cache miss — otherwise recomputing BMDs with a new method on
     identical data would collide with the old hash and serve stale results.
+    `method_sig` does the same for the study's method profile (the BMR when
+    none is recorded, the acceptance criteria).
     """
     # Sort by endpoint key for deterministic hashing
     content = []
@@ -323,6 +329,7 @@ def _hash_bmds(bmds_inputs: list[dict]) -> str:
         })
     key = json.dumps({
         "method_version": _BMDS_METHOD_VERSION,
+        "method": method_sig,
         "content": content,
     }, sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]

@@ -55,8 +55,8 @@ Rules (the published tables' footnotes):
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
-from tables.display_precision import TISSUE_CONCENTRATION_SIG_FIGS
 from tables.table_builder_common import (
     apical_caption,
     definition_footnote,
@@ -79,10 +79,41 @@ _NUMBER = re.compile(r"^-?\d*\.?\d+(?:[eE][-+]?\d+)?$")
 BD = "BD"
 NOT_APPLICABLE = "−"     # − (minus sign), as published
 NOT_SAMPLED = "–"        # –
-DETECTED_SHARE = 0.20         # BD unless MORE than 20% of values are above the LOD
+# Dixon's r10 critical values (Dixon and Massey), one-sided α → {group size: value}.
+DIXON_R10_CRITICAL = {
+    0.10: {3: 0.886, 4: 0.679, 5: 0.557, 6: 0.482, 7: 0.434},
+    0.05: {3: 0.941, 4: 0.765, 5: 0.642, 6: 0.560, 7: 0.507},
+    0.01: {3: 0.988, 4: 0.889, 5: 0.780, 6: 0.698, 7: 0.637},
+    0.005: {3: 0.994, 4: 0.926, 5: 0.821, 6: 0.740, 7: 0.680},
+}
 
-# Dixon's r10 critical values, one-sided α = 0.01 (Dixon and Massey), by group size.
-DIXON_R10_CRITICAL = {3: 0.988, 4: 0.889, 5: 0.780, 6: 0.698, 7: 0.637}
+
+@dataclass(frozen=True)
+class Rules:
+    """The internal-dose rules of the study's method profile (internal_dose.*,
+    ADR-0027): the values the module docstring describes for ntp-5day-2025."""
+    sig_figs: int
+    bd_share: float | None            # BD unless MORE than this share is detected; None: no BD
+    dixon: dict | None                # {group size: critical value}; None: no outlier test
+    pairwise: str                     # "shirley_or_dunn" | "williams_or_dunnett" | "none"
+    stats: object                     # bmdx_pipe.ntp_stats.StatsMethod (thresholds)
+
+    @classmethod
+    def from_method(cls, method) -> "Rules":
+        outliers = method.get("internal_dose.outliers")
+        dixon = None
+        if outliers:
+            dixon = DIXON_R10_CRITICAL.get(outliers["alpha"])
+            if dixon is None:
+                from pipeline.method_profile import MethodProfileError
+                raise MethodProfileError(
+                    f"internal_dose.outliers.alpha {outliers['alpha']}: Dixon r10 critical "
+                    f"values are tabulated for {sorted(DIXON_R10_CRITICAL)}")
+        return cls(sig_figs=method.get("internal_dose.sig_figs"),
+                   bd_share=method.get("internal_dose.bd_if_detected_share_at_most"),
+                   dixon=dixon,
+                   pairwise=method.get("internal_dose.pairwise"),
+                   stats=method.internal_dose_stats_method())
 
 
 def is_day_layout(sidecars) -> bool:
@@ -147,9 +178,9 @@ def _samples(sidecar: dict) -> tuple[dict, dict, list[str], dict]:
     return by_day, n, matrices, endpoint_of
 
 
-def _dixon_outlier(values: list[float]) -> int | None:
+def _dixon_outlier(values: list[float], critical: dict | None) -> int | None:
     """Index of the value Dixon's r10 test flags at either end, or None."""
-    crit = DIXON_R10_CRITICAL.get(len(values))
+    crit = (critical or {}).get(len(values))
     order = sorted(range(len(values)), key=values.__getitem__)
     spread = values[order[-1]] - values[order[0]]
     if crit is None or spread <= 0:
@@ -161,20 +192,20 @@ def _dixon_outlier(values: list[float]) -> int | None:
     return order[-1] if high >= low else order[0]
 
 
-def _group_values(samples: list[tuple]) -> tuple[list[float] | None, int]:
+def _group_values(samples: list[tuple], rules: Rules) -> tuple[list[float] | None, int]:
     """(the values a group's mean is computed from, or None when it is BD;
     the number of outliers left out)."""
     filled = [(v if v is not None else float(lim) / 2, v is not None) for v, lim in samples]
-    out = _dixon_outlier([v for v, _ in filled])
+    out = _dixon_outlier([v for v, _ in filled], rules.dixon)
     kept = [x for i, x in enumerate(filled) if i != out]
-    if sum(det for _, det in kept) <= DETECTED_SHARE * len(kept):
+    if rules.bd_share is not None and sum(det for _, det in kept) <= rules.bd_share * len(kept):
         return None, int(out is not None)
     return [v for v, _ in kept], int(out is not None)
 
 
-def _fmt(values: list[float]) -> str:
+def _fmt(values: list[float], sig_figs: int) -> str:
     m, s = mean_se(values)
-    return format_mean_se_sig(m, s, TISSUE_CONCENTRATION_SIG_FIGS)
+    return format_mean_se_sig(m, s, sig_figs)
 
 
 def _dose_label(dose: float, dose_unit: str) -> str:
@@ -182,16 +213,21 @@ def _dose_label(dose: float, dose_unit: str) -> str:
 
 
 def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
-                           dose_unit: str, design: dict | None) -> dict:
-    """The study-day concentration table (module docstring) from {sex: sidecar}."""
-    from bmdx_pipe.ntp_stats import NONPARAMETRIC, ntp_pairwise, sig_marker
+                           dose_unit: str, design: dict | None, method) -> dict:
+    """The study-day concentration table (module docstring) from {sex: sidecar},
+    under the study's resolved method (pipeline.method_profile.MethodSettings)."""
+    from bmdx_pipe.ntp_stats import ntp_pairwise
+    from pipeline.method_profile import family_of, marker_legend, statistics_sentence
+
+    rules = Rules.from_method(method)
+    family = family_of(rules.pairwise)
 
     units = recorded_units(sidecar_data.values(), lambda ep: bool(_CONC.match(ep)))
     serialized: dict[str, list[dict]] = {}
     all_matrices: list[str] = []
     limits: dict[str, set[str]] = {}
     n_notes: list[str] = []
-    any_marker = any_bd = control_bd = any_stats = any_normalized = False
+    any_marker = any_bd = control_bd = any_stats = any_normalized = any_outlier = False
 
     for sex in ("Male", "Female"):
         sc = sidecar_data.get(sex)
@@ -220,8 +256,10 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                     samples = groups.get(d, {}).get(matrix, [])
                     for _, lim in samples:
                         limits.setdefault(matrix, set()).add(lim)
-                    values_by_dose[d], outliers = _group_values(samples) if samples else ([], 0)
+                    values_by_dose[d], outliers = (_group_values(samples, rules) if samples
+                                                   else ([], 0))
                     short = len(samples) - outliers
+                    any_outlier = any_outlier or bool(outliers)
                     if short < n_by_day[day].get(d, 0):
                         why = (" One animal was identified as an outlier and thus excluded from "
                                "analysis." if outliers else " No sample was received for "
@@ -230,12 +268,12 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                                        f"n = {short} for {matrix.lower()}.{why}")
 
                 markers: dict[float, str] = {}
-                if control is not None and values_by_dose.get(control):
+                if family and control is not None and values_by_dose.get(control):
                     tested = {d: v for d, v in values_by_dose.items() if v}
-                    result = ntp_pairwise(tested, NONPARAMETRIC, control_dose=control)
+                    result = ntp_pairwise(tested, family, control_dose=control, method=rules.stats)
                     any_stats = True
-                    markers[control] = sig_marker(result.jonckheere_p)
-                    markers.update({d: sig_marker(p) for d, p in result.pairwise_p.items()})
+                    markers[control] = rules.stats.marker(result.jonckheere_p)
+                    markers.update({d: rules.stats.marker(p) for d, p in result.pairwise_p.items()})
                 elif control is not None and values_by_dose.get(control) is None:
                     control_bd = True
 
@@ -249,18 +287,19 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
                     elif not v:
                         cells[dk] = NOT_SAMPLED
                     else:
-                        cells[dk] = _fmt(v) + markers.get(d, "")
+                        cells[dk] = _fmt(v, rules.sig_figs) + markers.get(d, "")
                         any_marker = any_marker or bool(markers.get(d))
                     if d == control:
                         normalized[dk] = NOT_APPLICABLE
                     else:
-                        normalized[dk] = cells[dk] if not v else _fmt([x / d for x in v])
+                        normalized[dk] = cells[dk] if not v else _fmt([x / d for x in v],
+                                                                      rules.sig_figs)
                 row(matrix, is_heading=True)
-                row(f"{matrix} concentration ({unit})", cells, sig_figs=TISSUE_CONCENTRATION_SIG_FIGS)
+                row(f"{matrix} concentration ({unit})", cells, sig_figs=rules.sig_figs)
                 if any(d != control for d in doses):
                     any_normalized = True
                     row(f"Normalized {matrix.lower()} concentration [({unit})/{dose_unit}]",
-                        normalized, sig_figs=TISSUE_CONCENTRATION_SIG_FIGS)
+                        normalized, sig_figs=rules.sig_figs)
         serialized[sex] = rows
 
     if not serialized:
@@ -272,27 +311,34 @@ def build_day_layout_table(sidecar_data: dict[str, dict], compound_name: str,
             f"Statistical significance for an exposed group indicates a significant pairwise "
             f"test compared to the 0 {dose_unit} group. Statistical significance for the "
             f"0 {dose_unit} group indicates a significant trend test."))
-        footnotes.append(legend_footnote("*Statistically significant at p ≤ 0.05; **p ≤ 0.01."))
+        footnotes.append(legend_footnote(marker_legend(method)))
+    share = f"{rules.bd_share:.0%}" if rules.bd_share is not None else None
     if any_bd:
         footnotes.append(definition_footnote(
-            "BD = below detection; group did not have more than 20% of its values above the "
-            "limit of detection (LOD)."))
+            f"BD = below detection; group did not have more than {share} of its values above "
+            "the limit of detection (LOD)."))
     footnotes.append(lettered_footnote("Data are presented as mean ± standard error.", "data_format"))
     lod_text = "; ".join(
         f"LOD for {m.lower()} = {' or '.join(sorted(limits[m]))} "
         f"{units.get(_endpoint_unit_key(sidecar_data, m), '') or ''}".rstrip()
         for m in sorted(limits, key=_matrix_order))
+    substitution = ("one-half of the LOD was substituted for values below the LOD"
+                    if share is None else
+                    f"If over {share} of the animals in a group were above the limit of detection "
+                    "(LOD), one-half of the LOD was substituted for values below the LOD")
     footnotes.append(lettered_footnote(
-        "If over 20% of the animals in a group were above the limit of detection (LOD), "
-        f"one-half of the LOD was substituted for values below the LOD. {lod_text}.", "lod_rule"))
-    if any_stats:
+        f"{substitution[0].upper()}{substitution[1:]}. {lod_text}.", "lod_rule"))
+    if any_outlier:
         footnotes.append(lettered_footnote(
-            "Statistical analysis performed by the Jonckheere (trend) and the Shirley or Dunn "
-            "(pairwise) tests.", "stats_method"))
+            "Values identified by the outlier test of Dixon and Massey were excluded from "
+            "analysis.", "outliers"))
+    if any_stats:
+        footnotes.append(lettered_footnote(statistics_sentence(method, rules.pairwise),
+                                           "stats_method"))
     if control_bd:
         footnotes.append(lettered_footnote(
-            f"When the 0 {dose_unit} group did not have over 20% of its values above the LOD, "
-            "no mean or standard error was calculated, and no statistical analysis was "
+            f"When the 0 {dose_unit} group did not have over {share} of its values above the "
+            "LOD, no mean or standard error was calculated, and no statistical analysis was "
             "performed.", "control_bd"))
     if any_normalized:
         footnotes.append(lettered_footnote(

@@ -538,9 +538,12 @@ def _build_section_cards(
     sex_allow: list[str] | None = None,
     ow_sex_allow: list[str] | None = None,
     design: dict | None = None,
+    method=None,
 ) -> list[dict]:
     """
     Build the UI section cards array: one per platform that has data.
+    ``method`` is the study's resolved method (pipeline.method_profile): the
+    tables' statistical-method footnotes and marker legends name it.
 
     For each platform, serializes TableRow objects to JSON-friendly dicts
     and generates an auto-written results narrative.
@@ -653,6 +656,7 @@ def _build_section_cards(
                     compound_name=compound_name,
                     dose_unit=dose_unit,
                     design=design,
+                    method=method,
                 )
 
                 # The sidecar builder returns a full apical_sections entry
@@ -715,6 +719,7 @@ def _build_section_cards(
                     dose_unit=dose_unit,
                     imputed_cells=platform_imputed,
                     design=design,
+                    method=method,
                 )
 
                 if cp_result.get("table_data"):
@@ -761,6 +766,7 @@ def _build_section_cards(
                     organ_allowlist=organ_allowlist,
                     sex_allow=ow_sex_allow,
                     design=design,
+                    method=method,
                 )
 
                 if ow_result and ow_result.get("table_data"):
@@ -1395,7 +1401,8 @@ def _tox_fill(row, bmds_results: dict, sex: str) -> dict | None:
 
 def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
                           bmds_results: dict | None,
-                          bmd_decimals: int | None = None) -> int:
+                          bmd_decimals: int | None = None,
+                          method=None) -> int:
     """Write ToxicR fills onto the NTP TableRows themselves (task #34 fill).
 
     Run once per process, after BMDS and before the section tables, narratives
@@ -1406,9 +1413,16 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
     which _build_apical_bmd_summary copies onto the summary entry.
     ``bmd_decimals`` is the report's BMD precision (report_bmd_decimals).
 
+    ``method`` is the study's resolved method (the BMR an unrecorded fit used);
+    None ⇒ the newest profile.
+
     Returns the number of rows filled."""
     from bmdx_pipe.apical_report import format_bmd
     from tables.apical_bmds import inferred_bmr
+
+    if method is None:
+        from pipeline.method_profile import session_method
+        method = session_method(None)
 
     if not bmds_results:
         return 0
@@ -1430,7 +1444,7 @@ def fill_rows_from_toxicr(platform_tables: dict[str, dict[str, list]],
                 row._bmd_fill = {
                     "source": "toxicr",
                     "bmr_config": bmr_config,
-                    "bmr": tox.get("bmr") or (inferred_bmr(platform)
+                    "bmr": tox.get("bmr") or (inferred_bmr(platform, method)
                                               if bmr_config == "inferred" else None),
                     "model_name": tox.get("model_name"),
                 }

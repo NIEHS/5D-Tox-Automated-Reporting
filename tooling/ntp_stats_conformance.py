@@ -47,11 +47,11 @@ from tables.display_precision import recorded_decimals, row_decimals
 from tables.table_builder_common import format_mean_se, mean_se
 from tooling.cebs_to_pool import convert_workbook
 
-# Published table → (data truth-CSV stem, test family)
+# Published table → (data truth-CSV stem, test family, platform)
 _TABLE_KIND = {
-    "PA06": ("organ_weights", ntp_stats.PARAMETRIC),
-    "PA41": ("clin_chem", ntp_stats.NONPARAMETRIC),
-    "PA43": ("hematology", ntp_stats.NONPARAMETRIC),
+    "PA06": ("organ_weights", ntp_stats.PARAMETRIC, "Organ Weight"),
+    "PA41": ("clin_chem", ntp_stats.NONPARAMETRIC, "Clinical Chemistry"),
+    "PA43": ("hematology", ntp_stats.NONPARAMETRIC, "Hematology"),
 }
 
 # "mean ± SE (N) marker"; a group of one animal prints "mean (N)" with no SE.
@@ -240,7 +240,13 @@ def convert_package(package: str, work: str) -> dict[str, str]:
     return dirs
 
 
-def compare_package(package: str, work: str) -> list[dict]:
+def compare_package(package: str, work: str, method=None) -> list[dict]:
+    """Every published marker and cell of a package against ours.  `method`
+    (pipeline.method_profile.MethodSettings) is the method profile to test —
+    its test family per platform and thresholds; None ⇒ the NTP defaults."""
+    from pipeline.method_profile import family_of
+
+    stats_method = method.stats_method() if method is not None else ntp_stats.DEFAULT_METHOD
     dirs = convert_package(package, work)
     cells: list[dict] = []
     pdfs = [p for p in glob.glob(os.path.join(package, "*.pdf"))
@@ -253,7 +259,9 @@ def compare_package(package: str, work: str) -> list[dict]:
             continue
         if table["kind"] not in _TABLE_KIND or not table["study"]:
             continue
-        stem, family = _TABLE_KIND[table["kind"]]
+        stem, family, platform = _TABLE_KIND[table["kind"]]
+        if method is not None:
+            family = family_of(method.pairwise(platform))
         study_dir = dirs.get(table["study"]) or dirs.get(table["study"].replace("-", ""))
         if not study_dir:
             continue
@@ -273,13 +281,14 @@ def compare_package(package: str, work: str) -> list[dict]:
             hits.sort(key=lambda ep: -_name_score(row["label"], ep))
             data = endpoints[hits[0]]
             doses = sorted(row["cells"])
-            res = ntp_stats.ntp_pairwise({d: data.get(d, []) for d in doses}, family)
+            res = ntp_stats.ntp_pairwise({d: data.get(d, []) for d in doses}, family,
+                                         method=stats_method)
             dec = row_decimals(precision_label(table["kind"], hits[0]),
                                recorded_precision(csv_path).get(hits[0]))
             for d in doses:
                 pub = row["cells"][d][3]
-                ours = (ntp_stats.sig_marker(res.jonckheere_p) if d == doses[0]
-                        else ntp_stats.sig_marker(res.pairwise_p.get(d, 1.0)))
+                ours = (stats_method.marker(res.jonckheere_p) if d == doses[0]
+                        else stats_method.marker(res.pairwise_p.get(d, 1.0)))
                 mean_s, se_s, n, _ = row["cells"][d]
                 pub_cell = ours_cell = None
                 if se_s and n >= 2 and dec is not None:  # one animal prints no SE

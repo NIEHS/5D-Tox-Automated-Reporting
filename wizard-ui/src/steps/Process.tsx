@@ -19,11 +19,8 @@ export function Process({ dtxsid, next, back, processResult, setProcessResult }:
       const p = await api.process(dtxsid, {
         compound_name: compound.trim() || dtxsid,
         dose_unit: doseUnit.trim() || "mg/kg",
-        bmd_stats: ["median"],
-        go_pct: 5,
-        go_min_genes: 20,
-        go_max_genes: 500,
-        go_min_bmd: 3,
+        // The GO ranking statistics and cutoffs are the study's method
+        // profile's (ADR-0027); the server resolves them.
       });
       // Echo the entered dose unit onto the payload (run_process doesn't return
       // it) so the Results tables can label dose columns. Held in App memory —
