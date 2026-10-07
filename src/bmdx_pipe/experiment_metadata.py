@@ -298,6 +298,10 @@ Rules:
    map it to the vocabulary term.  If nothing fits, use null.
 2. For gene expression experiments (many probes with gene-like names), infer the organ
    from the experiment name if present (e.g. "Kidney_..." → organ: "kidney").
+   NIEHS transcriptomics projects name experiments by a two-letter TISSUE code
+   ("rat_4D_HE_No0", "mouse_2D_LU"): HE = heart, KI = kidney, LI = liver,
+   LU = lung, OV = ovary.  "HE" is heart tissue, not hematology — a gene
+   expression experiment is "blood" only when its name says blood.
 3. The test article identity is provided separately — do NOT include testArticle in your output.
    It will be attached automatically in post-processing (same for all experiments).
 4. If the study is clearly in vivo (animal data), set subjectType to "in vivo".
@@ -523,6 +527,7 @@ def infer_experiment_metadata(
             logger.warning("Skipping non-dict description for '%s'", exp_name)
             continue
         validated_desc = _validate_description(desc)
+        _drop_unsupported_blood(exp_name, validated_desc)
 
         # Attach testArticle (not LLM-generated — same for all experiments)
         if test_article_block:
@@ -544,6 +549,22 @@ def infer_experiment_metadata(
     )
 
     return validated
+
+
+def _drop_unsupported_blood(exp_name: str, desc: dict) -> None:
+    """Clear organ "blood" on a gene-expression experiment whose name does not
+    say blood.
+
+    "Blood" is the organ of the clinical pathology domains (rule 7); on a
+    transcriptomics experiment it has come from reading a tissue code as a
+    domain — NIEHS-13's "rat_4D_HE_No0" (heart) was inferred as blood.  An
+    empty organ goes to the metadata review as a gap; a wrong one passes it."""
+    if (desc.get("dataType") == "gene_expression"
+            and str(desc.get("organ") or "").lower() == "blood"
+            and "blood" not in exp_name.lower()):
+        logger.warning("%s: organ 'blood' not supported by the experiment name — left unset "
+                       "for review", exp_name)
+        desc["organ"] = None
 
 
 # Fields that are study-level properties — same across all experiments in a
