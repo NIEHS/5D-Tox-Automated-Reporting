@@ -73,6 +73,9 @@ def test_pin_is_explicit_and_a_changed_profile_is_refused(tmp_path, monkeypatch)
 
     pin = mp.ensure_pin("DTXSIDX")
     assert pin["name"] == "ntp-5day-2025" and pin["pinned_by"] == "default"
+    assert mp.pin_profile("DTXSIDX", "ntp-5day-2025")["pinned_by"] == "user"   # confirmed
+    assert mp.read_pin("DTXSIDX")["pinned_by"] == "user"
+    assert mp.ensure_pin("DTXSIDX")["pinned_by"] == "user"                     # never downgraded
     mp.pin_profile("DTXSIDX", "ntp-5day-2021")
     assert mp.read_pin("DTXSIDX")["name"] == "ntp-5day-2021"
     assert list((tmp_path / "DTXSIDX" / "history" / "_method_profile").glob("*.json"))

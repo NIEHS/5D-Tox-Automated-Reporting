@@ -530,7 +530,12 @@ def pin_profile(dtxsid: str, name: str, *, by: str = "user") -> dict:
     if target.is_file():
         old = json.loads(target.read_text())
         if old.get("name") == name and old.get("hash") == pin["hash"]:
-            return old
+            if old.get("pinned_by") == by or by == "default":
+                return old
+            # A user confirming the default pin: same method, now their choice.
+            target.write_text(json.dumps(pin, indent=2) + "\n")
+            logger.info("Method profile %s for %s confirmed by %s", name, dtxsid, by)
+            return pin
         hist = target.parent / "history" / "_method_profile"
         hist.mkdir(parents=True, exist_ok=True)
         stamp = (old.get("pinned_at") or "unknown").replace(":", "")
