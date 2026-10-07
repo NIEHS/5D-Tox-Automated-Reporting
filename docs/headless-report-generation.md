@@ -768,7 +768,13 @@ is a method setting, the setting's name in the profile is given, with its
   no LOEL or no dose below it, never the control or the top dose.
 - **Direction** (up or down) is shown only when the trend test is significant.
 - **Which rows appear.** Every measured endpoint appears in the tables,
-  whether or not it is significant. N rows count Core animals.
+  whether or not it is significant. N rows count Core animals. The row rules
+  per table are:
+  - **Body weights:** the first and last day, plus any day between that is
+    significant in both the trend and a pairwise test, as NIEHS-12 prints
+    them;
+  - **Organ weights:** each organ has an absolute row (g) and a relative row
+    (mg/g), with terminal body weight as context.
 - **Attrition.** An animal whose terminal flag falls before the scheduled
   sacrifice is attrition. Attrition footnotes give the day from the data.
   Mortality counts Core deaths only, so scheduled biosample sacrifices aren't
@@ -813,9 +819,23 @@ The rules come from the profile's `internal_dose` settings:
 - Values print to 3 significant figures (`sig_figs`). Normalized rows divide
   each animal's concentration by its group's nominal dose or exposure
   concentration.
-- **Plasma half-lives** use the two-point formula t½ = ln 2 · Δt / ln(C₁/C₂).
-  They are computed only with exactly two time points and a falling
-  concentration.
+- **Plasma concentration table** (studies with timepoints after dosing,
+  e.g. NIEHS-10):
+  - rows are the sampling times ("2 h postdose");
+  - columns are the dose groups that have biosample animals;
+  - values are the mean ± SE of the biosample animals, with values below the
+    limit of quantification counted as half the limit;
+  - it has no statistics or BMDs.
+- **Toxicokinetics** (`tables/toxicokinetics.py`) uses the group-mean
+  concentrations at two time points:
+  - elimination rate k = ln(C₁/C₂) / Δt and half-life t½ = ln 2 / k,
+    computed only with exactly two time points and a falling concentration;
+  - dose proportionality: the high-to-low concentration ratio against the
+    dose ratio;
+  - a bioaccumulation flag when t½ > 24 h.
+
+  These numbers reproduce NIEHS-10's to the decimal, and the Abstract's
+  internal-dose paragraph reports them.
 
 **Transcriptomics (Integrate, Process)**
 
@@ -837,7 +857,73 @@ The rules come from the profile's `internal_dose` settings:
 - **Mismatch check.** At integration these recorded settings are compared with
   `genomics.recorded` (BMR 25 % relative deviation, model averaging). A
   disagreement is a `method_mismatch` warning; neither side wins.
-- **Appendix C.1 PCA** is computed from the integrated expression matrix.
+- **Appendix C.1 PCA** is drawn per tissue and sex from the integrated
+  expression matrix: one dot per animal, coloured by dose. Columns are
+  mean-centred without scaling and decomposed by SVD, with scikit-learn's
+  sign convention. This reproduces NIEHS-10's figures exactly when given the
+  full matrix.
+- **Organ order.** Genomics sections come one per organ, both sexes stacked:
+  liver, then kidney, then the rest alphabetically.
+- **Genomics prose** has two layers:
+  - an intro and one findings paragraph per organ, built without a model from
+    the ranked tables, using the reliability rules below;
+  - the LLM interpretation per organ and sex, grounded in the knowledge base
+    (`bmdx.duckdb`).
+- **Charts.** The UMAP and cluster charts are off: the template's `charts: []`
+  matches the NIEHS report, which has no main-body genomics figures. Turned
+  on, clusters are labelled with the study's own GO terms, or with Enrichr
+  terms only if `BMDX_ALLOW_ENRICHR=1`. New chart types can be declared in the
+  template (`chart_types`) over the GO table columns, without code.
+- **References.** The genomics prose may cite only the `[Pn]` papers it was
+  given, and the Background only its numbered sources. `citation_check` drops
+  any citation that points at nothing given. The reference list is built from
+  the papers actually cited.
+
+**What appears, and where (render)**
+
+- **Sections follow the data.** The template lists every possible section.
+  Each one renders with what the session has:
+  - a platform the study didn't measure reads "not evaluated";
+  - content not yet produced is a visible `[… pending]`;
+  - a genomics section appears for each organ the expression data has.
+- **Numbering and captions.** Tables and figures are numbered by their
+  position in the tree, and appendix tables per appendix ("Table B-1").
+  Captions are built from the design facts and the sexes in the data.
+- **Views narrow the report without recomputing.** A study overlay
+  (`templates/studies/<id>/view.yaml`) or a saved view selects what is shown,
+  and changes neither the data nor the statistics. NIEHS-10's overlay, for
+  instance, keeps the liver-only, male-only organ weight table and the
+  hand-picked "Select" endpoints. The shared template selects nothing, so a
+  study is reported in full unless its overlay says otherwise. The axes are:
+  - `organs` (per area: genomics, organ weight);
+  - `sex` (apical, genomics);
+  - `assays` (clinical chemistry, hematology; hormones always in full);
+  - `genes`;
+  - `gene_sets`;
+  - `charts`.
+
+**The animal report and Appendix B (Approve data)**
+
+- **The animal report** (`animal_report.json`) traces every animal ID across
+  every file. It has five parts:
+  - the study design, as dose × sex × cohort counts;
+  - the roster, with each animal's presence per platform;
+  - platform coverage;
+  - attrition, giving who dropped out and why;
+  - sex and dose consistency checks.
+- **Appendix B** lists each animal with its number, sex, dose and tissue, and
+  the FASTQ name of its expression sample.
+
+**The workflow itself**
+
+- **Phase.** The phase (`EMPTY → UPLOADED → VALIDATED → INTEGRATED →
+  APPROVED`) is derived from which artifacts exist, never set.
+- **Caches.** Every cache is keyed by a hash of its inputs: the data, the view
+  and the method signature. A change recomputes only what depends on it.
+- **Stale sections.** When the data changes under an approved section, the
+  section is kept but marked `stale`, and it blocks publishing until accepted
+  again (§7). The list of sections that need approval is itself derived from
+  the document tree.
 
 **Prose built from the data (Process)**
 
@@ -846,7 +932,8 @@ The rules come from the profile's `internal_dose` settings:
   - the Abstract (except its Background sentence);
   - the Summary;
   - the Animal Condition, Clinical Pathology and Internal Dose narratives;
-  - Methods' Study Design, Dose Selection and Chemistry.
+  - Methods' Study Design, Dose Selection and Chemistry;
+  - the genomics intros and per-organ findings.
 - **"Most sensitive" lists** in the Abstract and Summary take reliable BMDs
   only:
   - the BMD must be viable and not NVM;
@@ -894,7 +981,9 @@ The rules come from the profile's `internal_dose` settings:
 | Apical BMD summary | Data + profile | `.bm2` results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics | The BMR is inferred from the profile and footnoted; NOEL is "ND" |
 | Apical BMD analytical paragraph | LLM | The summary rows | — |
 | Gene set and gene BMD tables | Data + profile | BMDExpress gene-level and GO analyses from the `.bm2`; ranking statistic and cutoffs from the profile; fold change is the mean over probes | — |
-| Gene set and gene narratives, References | LLM + knowledge base | Grounded in `bmdx.duckdb`; may cite only the papers it is given | — |
+| Gene set and gene narratives | Data, then LLM + knowledge base | Intro and per-organ findings built from the ranked tables; then the per-organ, per-sex interpretation grounded in `bmdx.duckdb` | Findings drop out without dose groups |
+| References | Knowledge base, Background sources | The papers the narratives actually cite; `citation_check` drops citations to anything not given | — |
+| Genomics charts | Data | UMAP and cluster charts from the GO tables; off in the shipped template (`charts: []`) | — |
 | Summary | Data | Built from the same inputs as the Abstract, without a model | — |
 | Appendix A (internal dose method), F (supplemental files) | Stated | Study overlay HTML/TeX (PFHxSAm only) | Pending |
 | Appendix B animal roster | Data | Animal report joined to the FASTQ sample names | — |
@@ -941,7 +1030,7 @@ The rules come from the profile's `internal_dose` settings:
 | G7 | Experiment metadata (organ, sex, species) | Inferred from experiment names (LLM) unless approved; the source-of-truth `.xlsx` is primary only for classification | Read the workbook's Key and Data sheets first (ADR-0017/0019) |
 | G8 | Multi-species studies (NIEHS-13: rats and mice) | One gene-expression `.bm2` per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only | Key genomics by species and keep every expression project |
 | G9 | Animal report counts NIEHS-13's biosample animals as Core | The animal report's Core count is too high; the tables use the right cohort | Use the cohort rule the tables use |
-| G10 | The UI's Process step sends `mg/kg` when no unit is set | Hides the recorded-unit and logged fallback | Send nothing and let the server resolve it |
+| G10 | The UI's Process step sends `mg/kg` when no unit is set, and a few render helpers (the Appendix B dose header, the genomics table labels) fall back to `mg/kg` when no unit is passed | Hides the recorded unit and the logged fallback | Send nothing and let the server resolve it; pass the resolved unit everywhere |
 | G11 | A text or CSV file's platform is read from its file name | A file not named to NTP conventions is unassigned or misclassified until overridden | Classify by content (endpoint names), as `.bm2` files are |
 | G12 | Apical outlier exclusion (NIEHS staff judgement) | Not represented; the profile says `outliers: null` | A per-study exclusion list in the overlay |
 | G13 | NIEHS-10's apical engine (BMDS 2.7) and `all_endpoints` | Listed as profile deviations; the substitute runs | Implement, or accept as recorded |
@@ -965,3 +1054,4 @@ The rules come from the profile's `internal_dose` settings:
 | # | Gap | Today | To close it |
 |---|---|---|---|
 | G23 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
+| G24 | Genomics organs are ordered liver, kidney, then alphabetical | NIEHS-10's order, fixed in code; another study's published order may differ | Order by the template or the study overlay |

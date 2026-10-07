@@ -734,7 +734,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   <li><b>LOEL</b> is the lowest dose with a significant pairwise difference from control.</li>
   <li><b>NOEL</b> is the highest tested dose below the LOEL. It is "ND" when there is no LOEL or no dose below it, never the control or the top dose.</li>
   <li><b>Direction</b> (up or down) is shown only when the trend test is significant.</li>
-  <li><b>Which rows appear.</b> Every measured endpoint appears in the tables, whether or not it is significant. N rows count Core animals.</li>
+  <li><b>Which rows appear.</b> Every measured endpoint appears in the tables, whether or not it is significant. N rows count Core animals. The row rules per table are:<ul><li><b>Body weights:</b> the first and last day, plus any day between that is significant in both the trend and a pairwise test, as NIEHS-12 prints them;</li><li><b>Organ weights:</b> each organ has an absolute row (g) and a relative row (mg/g), with terminal body weight as context.</li></ul></li>
   <li><b>Attrition.</b> An animal whose terminal flag falls before the scheduled sacrifice is attrition. Attrition footnotes give the day from the data. Mortality counts Core deaths only, so scheduled biosample sacrifices aren't counted as deaths.</li>
   <li><b>Clinical observations.</b> Incidence counts Core animals. The onset of signs is the first day they were recorded. Without clinical-observation data the narrative says nothing about overt toxicity.</li>
   <li><b>Decimals.</b> Every mean ± SE in a row prints at one precision, chosen by the endpoint. The precision NIEHS's published summary tables use comes first; an endpoint they don't list uses the precision its values are recorded with (at least one decimal).</li>
@@ -755,8 +755,10 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   <li>Outliers are removed by the Dixon r10 test at α = 0.01 (<code>outliers</code>).</li>
   <li>Pairwise markers use Shirley or Dunn, and only when the control has a mean.</li>
   <li>Values print to 3 significant figures (<code>sig_figs</code>). Normalized rows divide each animal's concentration by its group's nominal dose or exposure concentration.</li>
-  <li><b>Plasma half-lives</b> use the two-point formula t½ = ln 2 · Δt / ln(C₁/C₂). They are computed only with exactly two time points and a falling concentration.</li>
+  <li><b>Plasma concentration table</b> (studies with timepoints after dosing, e.g. NIEHS-10):<ul><li>rows are the sampling times ("2 h postdose");</li><li>columns are the dose groups that have biosample animals;</li><li>values are the mean ± SE of the biosample animals, with values below the limit of quantification counted as half the limit;</li><li>it has no statistics or BMDs.</li></ul></li>
+  <li><b>Toxicokinetics</b> (<code>tables/toxicokinetics.py</code>) uses the group-mean concentrations at two time points:<ul><li>elimination rate k = ln(C₁/C₂) / Δt and half-life t½ = ln 2 / k, computed only with exactly two time points and a falling concentration;</li><li>dose proportionality: the high-to-low concentration ratio against the dose ratio;</li><li>a bioaccumulation flag when t½ &gt; 24 h.</li></ul></li>
 </ul>
+<p>These numbers reproduce NIEHS-10's to the decimal, and the Abstract's internal-dose paragraph reports them.</p>
 <p><b>Transcriptomics (Integrate, Process)</b></p>
 <ul>
   <li><b>Experiments.</b> Organ and sex come from each experiment's metadata: approved metadata, else inferred.</li>
@@ -766,11 +768,32 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   <li><b>Gene tables.</b> The top genes come from BMDExpress's gene-level (GENE) analysis, sorted by BMD. Fold change is the mean over each gene's probes.</li>
   <li><b>Methods.</b> The transcriptomic Methods prompt takes the analysis settings the <code>.bm2</code> records: version, prefilter, models, BMR and GO filters.</li>
   <li><b>Mismatch check.</b> At integration these recorded settings are compared with <code>genomics.recorded</code> (BMR 25 % relative deviation, model averaging). A disagreement is a <code>method_mismatch</code> warning; neither side wins.</li>
-  <li><b>Appendix C.1 PCA</b> is computed from the integrated expression matrix.</li>
+  <li><b>Appendix C.1 PCA</b> is drawn per tissue and sex from the integrated expression matrix: one dot per animal, coloured by dose. Columns are mean-centred without scaling and decomposed by SVD, with scikit-learn's sign convention. This reproduces NIEHS-10's figures exactly when given the full matrix.</li>
+  <li><b>Organ order.</b> Genomics sections come one per organ, both sexes stacked: liver, then kidney, then the rest alphabetically.</li>
+  <li><b>Genomics prose</b> has two layers:<ul><li>an intro and one findings paragraph per organ, built without a model from the ranked tables, using the reliability rules below;</li><li>the LLM interpretation per organ and sex, grounded in the knowledge base (<code>bmdx.duckdb</code>).</li></ul></li>
+  <li><b>Charts.</b> The UMAP and cluster charts are off: the template's <code>charts: []</code> matches the NIEHS report, which has no main-body genomics figures. Turned on, clusters are labelled with the study's own GO terms, or with Enrichr terms only if <code>BMDX_ALLOW_ENRICHR=1</code>. New chart types can be declared in the template (<code>chart_types</code>) over the GO table columns, without code.</li>
+  <li><b>References.</b> The genomics prose may cite only the <code>[Pn]</code> papers it was given, and the Background only its numbered sources. <code>citation_check</code> drops any citation that points at nothing given. The reference list is built from the papers actually cited.</li>
+</ul>
+<p><b>What appears, and where (render)</b></p>
+<ul>
+  <li><b>Sections follow the data.</b> The template lists every possible section. Each one renders with what the session has:<ul><li>a platform the study didn't measure reads "not evaluated";</li><li>content not yet produced is a visible <code>[… pending]</code>;</li><li>a genomics section appears for each organ the expression data has.</li></ul></li>
+  <li><b>Numbering and captions.</b> Tables and figures are numbered by their position in the tree, and appendix tables per appendix ("Table B-1"). Captions are built from the design facts and the sexes in the data.</li>
+  <li><b>Views narrow the report without recomputing.</b> A study overlay (<code>templates/studies/&lt;id&gt;/view.yaml</code>) or a saved view selects what is shown, and changes neither the data nor the statistics. NIEHS-10's overlay, for instance, keeps the liver-only, male-only organ weight table and the hand-picked "Select" endpoints. The shared template selects nothing, so a study is reported in full unless its overlay says otherwise. The axes are:<ul><li><code>organs</code> (per area: genomics, organ weight);</li><li><code>sex</code> (apical, genomics);</li><li><code>assays</code> (clinical chemistry, hematology; hormones always in full);</li><li><code>genes</code>;</li><li><code>gene_sets</code>;</li><li><code>charts</code>.</li></ul></li>
+</ul>
+<p><b>The animal report and Appendix B (Approve data)</b></p>
+<ul>
+  <li><b>The animal report</b> (<code>animal_report.json</code>) traces every animal ID across every file. It has five parts:<ul><li>the study design, as dose × sex × cohort counts;</li><li>the roster, with each animal's presence per platform;</li><li>platform coverage;</li><li>attrition, giving who dropped out and why;</li><li>sex and dose consistency checks.</li></ul></li>
+  <li><b>Appendix B</b> lists each animal with its number, sex, dose and tissue, and the FASTQ name of its expression sample.</li>
+</ul>
+<p><b>The workflow itself</b></p>
+<ul>
+  <li><b>Phase.</b> The phase (<code>EMPTY → UPLOADED → VALIDATED → INTEGRATED → APPROVED</code>) is derived from which artifacts exist, never set.</li>
+  <li><b>Caches.</b> Every cache is keyed by a hash of its inputs: the data, the view and the method signature. A change recomputes only what depends on it.</li>
+  <li><b>Stale sections.</b> When the data changes under an approved section, the section is kept but marked <code>stale</code>, and it blocks publishing until accepted again (§7). The list of sections that need approval is itself derived from the document tree.</li>
 </ul>
 <p><b>Prose built from the data (Process)</b></p>
 <ul>
-  <li><b>No model involved.</b> These are assembled from the numbers above, so they can't disagree with the tables:<ul><li>the Abstract (except its Background sentence);</li><li>the Summary;</li><li>the Animal Condition, Clinical Pathology and Internal Dose narratives;</li><li>Methods' Study Design, Dose Selection and Chemistry.</li></ul></li>
+  <li><b>No model involved.</b> These are assembled from the numbers above, so they can't disagree with the tables:<ul><li>the Abstract (except its Background sentence);</li><li>the Summary;</li><li>the Animal Condition, Clinical Pathology and Internal Dose narratives;</li><li>Methods' Study Design, Dose Selection and Chemistry;</li><li>the genomics intros and per-organ findings.</li></ul></li>
   <li><b>"Most sensitive" lists</b> in the Abstract and Summary take reliable BMDs only:<ul><li>the BMD must be viable and not NVM;</li><li>it must be at or above the lower limit of extrapolation (⅓ of the lowest nonzero dose);</li><li>it must not be anomalous: a BMD below NOEL/10, or LOEL/10 without a NOEL, is left out.</li></ul></li>
   <li><b>LLM-written prose</b> is given only the session's numbers, and only through the NIEHS gateway. Genomics narratives may cite only the papers the knowledge base supplies. That prose covers:<ul><li>the apical BMD paragraph;</li><li>the genomics narratives;</li><li>the remaining Methods subsections;</li><li>the Background.</li></ul></li>
 </ul>
@@ -806,7 +829,9 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
     <tr><td class="wrap">Apical BMD summary</td><td>Data + profile</td><td><code>.bm2</code> results reconciled with ToxicR; profile acceptance filter (NVM); LOEL/NOEL from the statistics</td><td>The BMR is inferred from the profile and footnoted; NOEL is "ND"</td></tr>
     <tr><td class="wrap">Apical BMD analytical paragraph</td><td>LLM</td><td>The summary rows</td><td>—</td></tr>
     <tr><td class="wrap">Gene set and gene BMD tables</td><td>Data + profile</td><td>BMDExpress gene-level and GO analyses from the <code>.bm2</code>; ranking statistic and cutoffs from the profile; fold change is the mean over probes</td><td>—</td></tr>
-    <tr><td class="wrap">Gene set and gene narratives, References</td><td>LLM + knowledge base</td><td>Grounded in <code>bmdx.duckdb</code>; may cite only the papers it is given</td><td>—</td></tr>
+    <tr><td class="wrap">Gene set and gene narratives</td><td>Data, then LLM + knowledge base</td><td>Intro and per-organ findings built from the ranked tables; then the per-organ, per-sex interpretation grounded in <code>bmdx.duckdb</code></td><td>Findings drop out without dose groups</td></tr>
+    <tr><td class="wrap">References</td><td>Knowledge base, Background sources</td><td>The papers the narratives actually cite; <code>citation_check</code> drops citations to anything not given</td><td>—</td></tr>
+    <tr><td class="wrap">Genomics charts</td><td>Data</td><td>UMAP and cluster charts from the GO tables; off in the shipped template (<code>charts: []</code>)</td><td>—</td></tr>
     <tr><td class="wrap">Summary</td><td>Data</td><td>Built from the same inputs as the Abstract, without a model</td><td>—</td></tr>
     <tr><td class="wrap">Appendix A (internal dose method), F (supplemental files)</td><td>Stated</td><td>Study overlay HTML/TeX (PFHxSAm only)</td><td>Pending</td></tr>
     <tr><td class="wrap">Appendix B animal roster</td><td>Data</td><td>Animal report joined to the FASTQ sample names</td><td>—</td></tr>
@@ -855,7 +880,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
     <tr><td class="wrap">G7</td><td>Experiment metadata (organ, sex, species)</td><td>Inferred from experiment names (LLM) unless approved; the source-of-truth <code>.xlsx</code> is primary only for classification</td><td>Read the workbook's Key and Data sheets first (ADR-0017/0019)</td></tr>
     <tr><td class="wrap">G8</td><td>Multi-species studies (NIEHS-13: rats and mice)</td><td>One gene-expression <code>.bm2</code> per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only</td><td>Key genomics by species and keep every expression project</td></tr>
     <tr><td class="wrap">G9</td><td>Animal report counts NIEHS-13's biosample animals as Core</td><td>The animal report's Core count is too high; the tables use the right cohort</td><td>Use the cohort rule the tables use</td></tr>
-    <tr><td class="wrap">G10</td><td>The UI's Process step sends <code>mg/kg</code> when no unit is set</td><td>Hides the recorded-unit and logged fallback</td><td>Send nothing and let the server resolve it</td></tr>
+    <tr><td class="wrap">G10</td><td>The UI's Process step sends <code>mg/kg</code> when no unit is set, and a few render helpers (the Appendix B dose header, the genomics table labels) fall back to <code>mg/kg</code> when no unit is passed</td><td>Hides the recorded unit and the logged fallback</td><td>Send nothing and let the server resolve it; pass the resolved unit everywhere</td></tr>
     <tr><td class="wrap">G11</td><td>A text or CSV file's platform is read from its file name</td><td>A file not named to NTP conventions is unassigned or misclassified until overridden</td><td>Classify by content (endpoint names), as <code>.bm2</code> files are</td></tr>
     <tr><td class="wrap">G12</td><td>Apical outlier exclusion (NIEHS staff judgement)</td><td>Not represented; the profile says <code>outliers: null</code></td><td>A per-study exclusion list in the overlay</td></tr>
     <tr><td class="wrap">G13</td><td>NIEHS-10's apical engine (BMDS 2.7) and <code>all_endpoints</code></td><td>Listed as profile deviations; the substitute runs</td><td>Implement, or accept as recorded</td></tr>
@@ -881,6 +906,7 @@ post /api/session/approve "$(jq -nc --arg d $ID --argjson x "$data" \
   <thead><tr><th>#</th><th>Gap</th><th>Today</th><th>To close it</th></tr></thead>
   <tbody>
     <tr><td class="wrap">G23</td><td>NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order</td><td>Missing; the order differs</td><td>Template changes, checked against the reference fixtures</td></tr>
+    <tr><td class="wrap">G24</td><td>Genomics organs are ordered liver, kidney, then alphabetical</td><td>NIEHS-10's order, fixed in code; another study's published order may differ</td><td>Order by the template or the study overlay</td></tr>
   </tbody>
 </table></div>
 
