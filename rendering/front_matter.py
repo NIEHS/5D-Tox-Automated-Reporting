@@ -16,8 +16,9 @@ Persisted shape (front_matter.json):
     {
       "authors":      [ {"name","affiliation","role"} , ... ],   # ordered = author order
       "contributors": [ {"name","role"} , ... ],
-      "publication":  { "report_number", "doi", "report_date" }  # any subset
-    }
+      "publication":  { "report_number", "doi", "report_date" },  # any subset
+      "strain_designation": "(Hsd:Sprague Dawley® SD®)"   # the title's supplier
+    }                                                        # designation, optional
 
 Render shape for about_report — the LABELED `sections` form the front-matter resolver
 (render_common.front_matter_plan → labeled_section_parts) renders on all three
@@ -108,13 +109,41 @@ def apply_publication_overrides(publication_details: dict, front_matter: dict) -
     return {**publication_details, "paragraphs": lines}
 
 
+def clean_front_matter(fm: dict) -> dict:
+    """The persisted shape of a front-matter submission (the Configure UI's save, the
+    CLI's --front-matter): known keys only, strings stripped, blanks dropped."""
+    def _people(rows, keys):
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            if isinstance(r, dict):
+                out.append({k: str(r.get(k, "")).strip() for k in keys})
+        return out
+
+    clean = {
+        "authors": _people(fm.get("authors"), ("name", "affiliation", "role")),
+        "contributors": _people(fm.get("contributors"), ("name", "role")),
+        "publication": {
+            k: str(v).strip()
+            for k, v in (fm.get("publication") or {}).items()
+            if k in _PUBLICATION_OVERRIDES and str(v).strip()
+        },
+    }
+    designation = str(fm.get("strain_designation") or "").strip()
+    if designation:
+        clean["strain_designation"] = designation
+    return clean
+
+
 def overlay_front_matter(data: dict, front_matter: dict) -> None:
     """Overlay persisted front-matter onto the render `data` in place: the About This
-    Report authors/contributors and the Publication Details overrides. A no-op when
-    front_matter is empty. Used by both the marshal and session-reload export paths so
-    they agree."""
+    Report authors/contributors, the Publication Details overrides and the title's
+    supplier strain designation. A no-op when front_matter is empty. Used by both the
+    marshal and session-reload export paths so they agree."""
     if not front_matter:
         return
+    designation = (front_matter.get("strain_designation") or "").strip()
+    if designation:
+        data["strain"] = designation
     about = build_about_report(front_matter)
     if about:
         data["about_report"] = about

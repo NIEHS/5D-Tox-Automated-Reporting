@@ -114,6 +114,8 @@ export interface FrontMatter {
     doi?: string;
     report_date?: string;
   };
+  // The title's supplier strain designation, e.g. "(Hsd:Sprague Dawley® SD®)".
+  strain_designation?: string;
 }
 
 // Configurator: a saved report VIEW — a render-time lens (structure + data

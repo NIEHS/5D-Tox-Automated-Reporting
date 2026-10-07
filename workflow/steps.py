@@ -456,6 +456,11 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
     # Cache in memory for the process-integrated endpoint
     store.set_integrated(dtxsid, integrated)
 
+    # Study-design facts a person stated (generate_report --design): integration
+    # re-infers every experiment's metadata, and the stated design must win.
+    # After the cache is set, so the design lands on this integration, not the last.
+    reapply_study_design(dtxsid, store)
+
     # Measurement units onto the sidecars from any original study workbook in
     # the pool (the truth CSVs they were derived from carry none).
     from pipeline.sidecar_units import stamp_sidecar_units
@@ -512,6 +517,32 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             for exp in experiments
         ],
     }
+
+
+def reapply_study_design(dtxsid: str, store: PoolStore) -> int:
+    """Put the session's stated design (study_design.json) on every experiment of
+    the integrated project and save it, keeping the .bm2 copy in step as the
+    metadata step does.  Returns the experiments updated (0: no stated design)."""
+    from pipeline.integrated_io import load_integrated, save_integrated
+    from pipeline.study_design import DESIGN_FILE, apply_design_fields
+
+    stated = store.read_json(dtxsid, DESIGN_FILE)
+    fields = stated.get("fields") if isinstance(stated, dict) else None
+    if not fields:
+        return 0
+    integrated = load_integrated(dtxsid)
+    if integrated is None:
+        return 0
+    count = apply_design_fields(integrated, fields)
+    save_integrated(dtxsid, integrated)
+    try:
+        from bmdx_pipe import export_integrated_bm2
+        sd = store.session_dir(dtxsid)
+        export_integrated_bm2(str(sd / "integrated.json"), str(sd / "integrated.bm2"))
+    except Exception as e:  # noqa: BLE001 — the JSON is the source of truth
+        logger.warning("integrated.bm2 not re-exported after the study design: %s", e)
+    logger.info("Study design restored on %d experiment(s): %s", count, fields)
+    return count
 
 
 def _pin_and_check_method(dtxsid: str, integrated: dict, store: PoolStore) -> dict:

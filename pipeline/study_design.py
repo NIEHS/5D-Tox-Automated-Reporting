@@ -19,12 +19,23 @@ route and vehicle fallback follows the dose unit: a concentration in air (ppm)
 means inhalation, never gavage or corn oil; an oral dose (mg/kg) means gavage
 in corn oil; any other unit gets no route fallback.  The dose unit itself is
 resolved by ``resolve_dose_unit``: stated > recorded > mg/kg.
+
+Facts a person states for a study whose data does not record them (``generate_report
+--design``) are kept in ``sessions/<id>/study_design.json`` and put back on every
+experiment at each integration (``apply_design_fields``), so re-integration, which
+re-infers the metadata, does not lose them.
 """
 
 from __future__ import annotations
 
 _FIELDS = ("species", "strain", "articleRoute", "administrationMeans", "articleVehicle",
            "studyDuration")
+
+# The experimentDescription fields a stated design may set: the facts above, nothing else.
+DESIGN_FIELDS = _FIELDS
+
+# The session file holding a stated design: {"fields": {...}, "recorded_at": ...}.
+DESIGN_FILE = "study_design.json"
 
 # NIEHS spelling of the controlled-vocabulary strain names.
 _STRAIN_DISPLAY = {"Sprague-Dawley": "Sprague Dawley"}
@@ -82,6 +93,33 @@ def resolve_dose_unit(stated: str | None, recorded: list[str] | None = None) -> 
     if len(units) == 1:
         return units[0], "recorded"
     return "mg/kg", "fallback"
+
+
+def design_field_errors(fields: dict, vocabularies: dict) -> list[str]:
+    """Why a stated design is unusable: a field outside DESIGN_FIELDS, or a value
+    outside its controlled vocabulary.  Empty when it is fine."""
+    if not isinstance(fields, dict):
+        return ["the design must be a JSON object of field: value"]
+    errors = [f"unsupported field {k!r}; use {list(DESIGN_FIELDS)}"
+              for k in sorted(set(fields) - set(DESIGN_FIELDS))]
+    for key, value in fields.items():
+        vocab = vocabularies.get(key)
+        allowed = ([v for vs in vocab.values() for v in vs] if isinstance(vocab, dict)
+                   else vocab or [])
+        if value is not None and allowed and value not in allowed:
+            errors.append(f"{key}={value!r} is not in the vocabulary {allowed}")
+    return errors
+
+
+def apply_design_fields(integrated: dict, fields: dict) -> int:
+    """Put stated design facts on every experiment's experimentDescription, in
+    place; returns how many experiments were updated."""
+    experiments = integrated.get("doseResponseExperiments") or []
+    for exp in experiments:
+        if not isinstance(exp.get("experimentDescription"), dict):
+            exp["experimentDescription"] = {}
+        exp["experimentDescription"].update(fields)
+    return len(experiments)
 
 
 def _duration_days(value: str | None) -> int | None:

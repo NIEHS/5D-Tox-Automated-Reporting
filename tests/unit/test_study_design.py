@@ -157,3 +157,25 @@ def test_apical_caption_for_an_inhalation_study():
                          {"Female": [{"label": "x"}]}, "1,4-Dichlorobenzene", design)
     assert cap == ("Summary of Body Weights of Female Rats "
                    "Exposed to 1,4-Dichlorobenzene for Five Days")
+
+
+def test_stated_design_fields_are_checked_against_the_vocabulary():
+    from pipeline.study_design import design_field_errors
+
+    vocab = {"strain": {"rat": ["Sprague-Dawley", "Wistar"]}, "articleVehicle": ["corn oil"]}
+    assert design_field_errors({"strain": "Sprague-Dawley", "articleVehicle": "corn oil"},
+                               vocab) == []
+    errors = design_field_errors({"strain": "SD", "supplier": "Envigo"}, vocab)
+    assert any("supplier" in e for e in errors) and any("'SD'" in e for e in errors)
+
+
+def test_a_stated_design_replaces_the_fallback():
+    from pipeline.study_design import apply_design_fields
+
+    integrated = _integrated(species="rat")
+    assert apply_design_fields(integrated, {"strain": "Wistar", "administrationMeans": "gavage",
+                                            "articleVehicle": "water", "studyDuration": "5d"}) == 2
+    f = study_design_facts(integrated, "mg/kg")
+    assert (f["strain"], f["route"], f["vehicle"], f["duration_days"]) == (
+        "Wistar", "gavage", "water", 5)
+    assert f["fallback"] == []

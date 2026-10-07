@@ -96,6 +96,7 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
           authors: f.authors ?? [],
           contributors: f.contributors ?? [],
           publication: f.publication ?? {},
+          strain_designation: f.strain_designation ?? "",
         });
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
@@ -282,6 +283,16 @@ function FrontMatterEditor({ dtxsid }: { dtxsid: string }) {
             <input
               value={pub.report_date ?? ""}
               onChange={(e) => setPub({ report_date: e.target.value })}
+            />
+          </label>
+        </div>
+        <div className="field-row">
+          <label>
+            Strain designation (title)
+            <input
+              placeholder="(Hsd:Sprague Dawley® SD®)"
+              value={fm.strain_designation ?? ""}
+              onChange={(e) => setFm((f) => ({ ...f, strain_designation: e.target.value }))}
             />
           </label>
         </div>

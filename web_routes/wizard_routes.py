@@ -95,7 +95,7 @@ async def api_get_front_matter(dtxsid: Dtxsid):
     overrides) for the Configure surface. Returns {} when none is saved yet.
 
     Shape: {authors:[{name,affiliation,role}], contributors:[{name,role}],
-    publication:{report_number,doi,report_date}}.
+    publication:{report_number,doi,report_date}, strain_designation}.
     """
     store = DiskPoolStore()
     fm = store.read_json(dtxsid, "front_matter.json")
@@ -118,22 +118,9 @@ async def api_save_front_matter(dtxsid: Dtxsid, request: Request):
     if not isinstance(fm, dict):
         return JSONResponse({"error": "front_matter object required"}, status_code=400)
 
-    def _people(rows, keys):
-        out = []
-        for r in rows if isinstance(rows, list) else []:
-            if isinstance(r, dict):
-                out.append({k: str(r.get(k, "")).strip() for k in keys})
-        return out
+    from rendering.front_matter import clean_front_matter
 
-    clean = {
-        "authors": _people(fm.get("authors"), ("name", "affiliation", "role")),
-        "contributors": _people(fm.get("contributors"), ("name", "role")),
-        "publication": {
-            k: str(v).strip()
-            for k, v in (fm.get("publication") or {}).items()
-            if k in ("report_number", "doi", "report_date") and str(v).strip()
-        },
-    }
+    clean = clean_front_matter(fm)
     DiskPoolStore().write_json(dtxsid, "front_matter.json", clean)
     return JSONResponse({"ok": True, "front_matter": clean})
 

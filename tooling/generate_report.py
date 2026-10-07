@@ -229,46 +229,40 @@ def confirm_metadata(dtxsid: str, corrections_path: Path | None, store) -> None:
     _log(f"  {len(corrections)} override(s) applied, {result.get('updated')} header(s) written")
 
 
-# The experimentDescription fields --design may set: the study-design facts
-# the report states (pipeline.study_design) and nothing else.
-_DESIGN_FIELDS = ("species", "strain", "articleRoute", "administrationMeans",
-                  "articleVehicle", "studyDuration")
-
-
-def apply_design(dtxsid: str, design_path: Path) -> None:
+def apply_design(dtxsid: str, design_path: Path, store) -> None:
     """Record study-design facts the data does not carry (route, vehicle,
-    strain, …) on every experiment, as the UI's metadata step does.  Values
-    must be from the controlled vocabulary; the schema-validating writer
-    rejects anything else before touching disk."""
+    strain, …): kept in the session's study_design.json, which every later
+    integration re-applies, and put on every experiment now.  Values must be
+    from the controlled vocabulary; nothing is written otherwise."""
     from bmdx_pipe import VOCABULARIES
-    from pipeline.integrated_io import load_integrated, save_integrated
+    from common.clock import now_iso
+    from pipeline.study_design import DESIGN_FILE, design_field_errors
+    from workflow.steps import reapply_study_design
 
     fields = json.loads(design_path.read_text())
-    unknown = sorted(set(fields) - set(_DESIGN_FIELDS))
-    if unknown:
-        raise SystemExit(f"--design: unsupported field(s) {unknown}; use {list(_DESIGN_FIELDS)}")
-    for key, value in fields.items():
-        vocab = VOCABULARIES.get(key)
-        allowed = ([v for vs in vocab.values() for v in vs] if isinstance(vocab, dict)
-                   else vocab or [])
-        if value is not None and allowed and value not in allowed:
-            raise SystemExit(f"--design: {key}={value!r} is not in the vocabulary {allowed}")
-    integrated = load_integrated(dtxsid)
-    if integrated is None:
+    errors = design_field_errors(fields, VOCABULARIES)
+    if errors:
+        raise SystemExit("--design: " + "; ".join(errors))
+    if not store.artifact_exists(dtxsid, "integrated.json"):
         raise SystemExit("--design needs an integrated session")
-    for exp in integrated.get("doseResponseExperiments", []):
-        exp.setdefault("experimentDescription", {}).update(fields)
-    save_integrated(dtxsid, integrated)
-    # Keep the .bm2 copy in step, as the UI's metadata step does.
-    try:
-        from bmdx_pipe import export_integrated_bm2
-        from pipeline.session_store import session_dir
-        sd = session_dir(dtxsid)
-        export_integrated_bm2(str(sd / "integrated.json"), str(sd / "integrated.bm2"))
-    except Exception as e:  # noqa: BLE001 — the JSON is the source of truth
-        _log(f"  WARNING: integrated.bm2 not re-exported: {e}")
-    _log(f"  study design recorded on {len(integrated.get('doseResponseExperiments', []))} "
-         f"experiment(s): {fields}")
+    store.write_json(dtxsid, DESIGN_FILE, {"fields": fields, "recorded_at": now_iso()})
+    count = reapply_study_design(dtxsid, store)
+    _log(f"  study design recorded on {count} experiment(s): {fields}")
+
+
+def apply_front_matter(dtxsid: str, path: Path, store) -> None:
+    """Merge human-set front matter (authors, contributors, publication details,
+    the title's strain designation) into the session's front_matter.json, as the
+    Configure screen saves it; keys the file gives replace the saved ones."""
+    from rendering.front_matter import clean_front_matter
+
+    given = json.loads(path.read_text())
+    if not isinstance(given, dict):
+        raise SystemExit("--front-matter: the file must be a JSON object")
+    saved = store.read_json(dtxsid, "front_matter.json")
+    merged = {**(saved if isinstance(saved, dict) else {}), **given}
+    store.write_json(dtxsid, "front_matter.json", clean_front_matter(merged))
+    _log(f"  front matter recorded: {sorted(given)}")
 
 
 def integrate(dtxsid: str, identity: dict, store) -> None:
@@ -469,10 +463,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--metadata", type=Path,
                     help="JSON {filename: {platform, data_type}} classification overrides")
     ap.add_argument("--design", type=Path,
-                    help="JSON of study-design facts the data does not record, applied to "
-                         "every experiment's metadata: species, strain, articleRoute, "
+                    help="JSON of study-design facts the data does not record, kept with the "
+                         "session and applied to every experiment's metadata at each "
+                         "integration: species, strain, articleRoute, "
                          "administrationMeans, articleVehicle, studyDuration "
                          "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
+    ap.add_argument("--front-matter", type=Path,
+                    help="JSON of front matter, as the Configure screen saves it: authors, "
+                         "contributors, publication {report_number, doi, report_date}, "
+                         "strain_designation (the title's, e.g. \"(Hsd:Sprague Dawley® SD®)\")")
     ap.add_argument("--method-profile",
                     help="fix the study on this analysis method profile (profiles/<name>.yaml, "
                          "ADR-0027), or 'newest' to track the newest profile as profiles are "
@@ -519,6 +518,7 @@ def main(argv: list[str] | None = None) -> int:
     files = [p.resolve() for p in args.files]
     metadata = args.metadata.resolve() if args.metadata else None
     design = args.design.resolve() if args.design else None
+    front_matter = args.front_matter.resolve() if args.front_matter else None
     out_dir = (args.out.resolve() if args.out else REPO_ROOT / "output" / args.dtxsid)
     os.chdir(REPO_ROOT)
     sys.path.insert(0, str(REPO_ROOT))
@@ -540,6 +540,8 @@ def main(argv: list[str] | None = None) -> int:
     dtxsid = validate_dtxsid(args.dtxsid)
     store = DiskPoolStore()
     _log(f"session: {store.session_dir(dtxsid)}")
+    if front_matter:
+        apply_front_matter(dtxsid, front_matter, store)
 
     try:
         if not args.render_only:
@@ -565,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
                 _log("▶ integrate — skipped, integrated.json exists (--reintegrate to force)")
             if design:
                 with _Timer("study design"):
-                    apply_design(dtxsid, design)
+                    apply_design(dtxsid, design, store)
             method_profile(dtxsid, args.method_profile)
             with _Timer("animal report"):
                 animal_report(dtxsid, store)

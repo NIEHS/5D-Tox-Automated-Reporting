@@ -105,3 +105,15 @@ def test_status_about_filled_when_authored():
     assert st["about_report"]["has_content"] is True
     assert st["about_report"]["paragraphs"] >= 1
     assert st["abstract"]["has_content"] is True
+
+
+def test_strain_designation_reaches_the_title_data():
+    from rendering.front_matter import clean_front_matter
+
+    fm = clean_front_matter({"strain_designation": " (Hsd:Sprague Dawley® SD®) ",
+                             "publication": {"doi": " ", "bogus": "x"}, "junk": 1})
+    assert fm == {"authors": [], "contributors": [], "publication": {},
+                  "strain_designation": "(Hsd:Sprague Dawley® SD®)"}
+    data = {"strain": ""}
+    overlay_front_matter(data, fm)
+    assert data["strain"] == "(Hsd:Sprague Dawley® SD®)"
