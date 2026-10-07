@@ -1009,6 +1009,26 @@ def extract_xlsx_value_map(path: str) -> dict[tuple[str, str, str, str], dict]:
 # ---------------------------------------------------------------------------
 
 
+def _apply_approved_metadata(experiments: list[dict], approved: dict[str, dict]) -> int:
+    """Put each approved ExperimentDescription back on its experiment.
+
+    Approval is the user's sign-off on an experiment's metadata; integration
+    re-infers metadata from names (and the LLM) every time, which must not undo
+    it — NIEHS-13's heart experiment "rat_4D_HE_No0" re-inferred as "blood".
+    Runs before the genomics sidecar and the .bm2 are written, so both carry
+    the approved values.  Experiments the approval does not name keep their
+    inferred metadata.  Returns how many experiments were restored."""
+    restored = 0
+    for exp in experiments:
+        desc = approved.get(exp.get("name", ""))
+        if isinstance(desc, dict):
+            exp["experimentDescription"] = dict(desc)
+            restored += 1
+    if restored:
+        logger.info("Approved metadata restored on %d experiment(s)", restored)
+    return restored
+
+
 def integrate_pool(
     dtxsid: str,
     session_dir: str,
@@ -1018,6 +1038,7 @@ def integrate_pool(
     *,
     test_article: dict | None = None,
     llm_generate_json: Any = None,
+    approved_metadata: dict[str, dict] | None = None,
 ) -> dict:
     """
     Merge all pool files into a single unified BMDProject JSON.
@@ -1040,6 +1061,10 @@ def integrate_pool(
         precedence:        List of user conflict resolutions.
         test_article:      Dict with 'name', 'casrn', 'dsstox' for metadata.
         llm_generate_json: Callable for LLM metadata inference.
+        approved_metadata: {experiment name: ExperimentDescription} the user
+                           approved for an earlier integration of this pool.
+                           Wins over inference for every experiment it names
+                           (see _apply_approved_metadata).
 
     Returns:
         The merged BMDProject dict, also saved to sessions/{dtxsid}/integrated.json.
@@ -1350,6 +1375,9 @@ def integrate_pool(
             llm_generate_json=llm_generate_json,
         )
         attach_metadata(all_experiments, descriptions)
+
+    if approved_metadata:
+        _apply_approved_metadata(integrated.get("doseResponseExperiments", []), approved_metadata)
 
     # --- Write _category_lookup to a separate sidecar file ---
     # The category lookup can be 10+ MB of JSON.  Keeping it out of
