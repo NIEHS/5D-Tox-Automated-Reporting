@@ -68,3 +68,23 @@ def test_rows_and_cells_match_the_published_summary(reference_session, report, s
             assert (published[row][i], ours[row][i]) == (theirs, mine)
             published[row][i] = mine
     assert ours == published
+
+
+def test_niehs02_database_export_body_weights(reference_session):
+    """NIEHS-02 publishes the CEBS database-export layout: only the "Original
+    Animals" count (the second, month-later cohort is dropped), and an animal
+    found dead keeps its row with no value.  Oracle: the I04 summary, cells
+    "mean ± SE [*]" per dose across its pages."""
+    pdf = REFERENCE_DIR / "NIEHS-02" / "C10674_I04_Mean_Body_Weight_Summary.pdf"
+    published: dict[str, list[str]] = {}
+    for page in pypdf.PdfReader(pdf).pages:
+        for line in unicodedata.normalize("NFKC", page.extract_text(extraction_mode="layout")).splitlines():
+            m = re.match(r"\s*SD(\d+)\s", line)
+            if m:
+                published.setdefault(m.group(1), []).extend(
+                    f"{a}{NB}{b}{mk}" for a, b, mk in re.findall(r"([\d.]+)\s*±\s*([\d.]+)\s*(\**)", line))
+    assert {k: len(v) for k, v in published.items()} == {"0": 6, "4": 6}
+    session = reference_session("NIEHS-02", "DTXSID9000002")
+    ours = _ours(session)
+    assert {day: ours[day] for day in published} == published
+

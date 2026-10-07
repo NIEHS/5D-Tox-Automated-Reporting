@@ -465,9 +465,13 @@ def _extract_core_group_sizes(session_dir: str) -> tuple[int | None, int | None]
         except (json.JSONDecodeError, OSError):
             continue
         sex = str(sc.get("sex") or "")
-        for aid, rec in (sc.get("animals") or {}).items():
+        recs = sc.get("animals") or {}
+        # Core Animals when the study marks that cohort; otherwise (no
+        # Selection: NIEHS-02 … 06, RR-8) every animal is the core group.
+        core_marked = any("core" in str(r.get("selection") or "").lower() for r in recs.values())
+        for aid, rec in recs.items():
             sel = str(rec.get("selection") or "").lower()
-            if "core" not in sel:
+            if core_marked and "core" not in sel:
                 continue
             try:
                 animals[(sex, str(aid))] = float(rec.get("dose"))

@@ -57,7 +57,11 @@ _TABLE_KIND = {
 # "mean ± SE (N) marker"; a group of one animal prints "mean (N)" with no SE.
 _CELL = re.compile(
     r"(-?\d[\d,]*\.?\d*)\s*(?:±\s*(\d[\d,]*\.?\d*)\s*)?\(\s*(\d+)\s*\)\s*(\*{0,2})")
-_SEX = re.compile(r"^\s*(Males?|Females?)\s*:\s*(.+?)\s*$")
+# "Males: Core Animals" (NIEHS-07 on), "Males: Original Animals" (NIEHS-02/03),
+# or a bare "Males" (NIEHS-04 … 06: the whole study is one cohort).
+_SEX = re.compile(r"^\s*(Males?|Females?)\s*(?::\s*(.+?))?\s*$")
+# The cohort the summaries count, by the words NIEHS used for it.
+_COUNTED_COHORT = ("core", "original")
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
 
 
@@ -89,7 +93,7 @@ def parse_pa_table(pdf_path: str) -> dict:
         m = _SEX.match(ln)
         if m:
             sex = "Male" if m.group(1).lower().startswith("male") else "Female"
-            selection = m.group(2).strip()
+            selection = (m.group(2) or "").strip() or None
             group = None
             continue
         if "Treatment Groups" in ln:
@@ -140,7 +144,7 @@ def _num(v) -> float | None:
         return None
 
 
-def load_endpoints(csv_path: str, selection: str, phase_day: str | None) -> dict[str, dict[float, list[float]]]:
+def load_endpoints(csv_path: str, selection: str | None, phase_day: str | None) -> dict[str, dict[float, list[float]]]:
     """{endpoint: {dose: [values]}} for one truth CSV, one selection (and phase
     day, when given).  Organ-weight CSVs gain '<organ> Relative' endpoints
     (mg organ / g terminal body weight, per animal)."""
@@ -154,7 +158,9 @@ def load_endpoints(csv_path: str, selection: str, phase_day: str | None) -> dict
     endpoints = [c for c in cols[meta_end + 1:] if c not in ("Terminal Flag",)]
     out: dict[str, dict[float, list[float]]] = defaultdict(lambda: defaultdict(list))
     for r in rd:
-        if (r.get("Selection") or "").strip().lower() != selection.lower():
+        # A CSV without a Selection column holds one cohort (NIEHS-02 … 06);
+        # an unlabelled published table counts the whole study.
+        if selection and "Selection" in r and (r["Selection"] or "").strip().lower() != selection.lower():
             continue
         day = (r.get("Observation Day") or "").replace(" ", "")
         if phase_day and day and day != phase_day:
@@ -255,10 +261,10 @@ def compare_package(package: str, work: str) -> list[dict]:
             csv_path = os.path.join(study_dir, f"{stem}_truth_{row['sex'].lower()}.csv")
             base = {"package": os.path.basename(package), "study": table["study"],
                     "table": table["kind"], "sex": row["sex"], "label": row["label"]}
-            if not os.path.exists(csv_path) or "core" not in (row["selection"] or "").lower():
+            sel = row["selection"]
+            if not os.path.exists(csv_path) or (sel and not any(w in sel.lower() for w in _COUNTED_COHORT)):
                 continue
-            endpoints = load_endpoints(csv_path, row["selection"].split(":")[0].strip()
-                                       if ":" in row["selection"] else row["selection"],
+            endpoints = load_endpoints(csv_path, sel.split(":")[0].strip() if sel and ":" in sel else sel,
                                        row["phase_day"])
             hits = [ep for ep, data in endpoints.items() if _matches(row["cells"], data)]
             if not hits:

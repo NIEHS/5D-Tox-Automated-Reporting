@@ -285,6 +285,11 @@ def build_body_weight_table_from_sidecar(
         sc = _load_sidecar(sc_path)
         sex_vals: dict[str, dict[float, list[float]]] = {}
         attrition: dict[float, list[dict]] = {}
+        # Core Animals only when the study marks that cohort; a study whose
+        # files carry no Selection (NIEHS-02 … 06, RR-8: every animal
+        # "Unknown") is one cohort — the same rule as bmdx-pipe's pivot.
+        core_marked = any("core" in str(r.get("selection", "")).lower()
+                          for r in sc.get("animals", {}).values())
 
         for aid, rec in sc.get("animals", {}).items():
             dose = rec["dose"]
@@ -296,7 +301,7 @@ def build_body_weight_table_from_sidecar(
             # Biosampling Animals are sampled mid-study for tissue collection
             # and are NOT included in the endpoint body weight stats (their
             # inclusion would inflate N from 5 to 8 at 4/37 mg/kg).
-            if "core" not in selection.lower():
+            if core_marked and "core" not in selection.lower():
                 continue
 
             terminal_day = _detect_terminal_day(rec.get("observations", []))

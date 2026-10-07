@@ -16,6 +16,10 @@ they differ by study (plasma ng/ml in NIEHS-07 – -09, ug/ml in NIEHS-10).  Eac
 CSV gets a companion `<stem>_truth_<sex>.units.json` ({column: unit},
 bmdx_pipe.key_sheet_units) that the pool's ingest records in the sidecar.
 
+NIEHS-02 … 05 publish the CEBS database-export layout instead of Key/Data
+(one row per animal per measurement); tooling.cebs_db_export converts it to
+the same Key/Data columns first.
+
 The 2025 (DTT) workbooks changed the schema: the `Data` sheet has NO `Sex`
 column (the studies are single-sex) and says `Study Number` instead of
 `NTP Study Number`.  The sex is stated only in the Key sheet's study title
@@ -50,6 +54,8 @@ from pathlib import Path
 
 import openpyxl
 from bmdx_pipe import key_sheet_units
+
+from tooling import cebs_db_export
 
 # Individual-animal workbook → truth-CSV stem (the pool's filename patterns:
 # bmdx_pipe.file_integrator._PLATFORM_PATTERNS).  Order matters: "Clinical
@@ -107,6 +113,16 @@ def convert_workbook(path: str, out_dir: str) -> dict:
         return {"file": name, "status": "skipped", "reason": "no apical platform"}
 
     wb = openpyxl.load_workbook(path, data_only=True)
+    if "Data" not in wb.sheetnames:
+        # NIEHS-02 … 05: the CEBS database-export layout (tooling.cebs_db_export).
+        sheet = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
+        export_header = [_cell(c) for c in sheet[0]]
+        if not cebs_db_export.is_db_export(export_header):
+            return {"file": name, "status": "error", "reason": "no Data sheet and not a CEBS database export"}
+        export_rows = [r for r in sheet[1:] if any(c is not None and str(c).strip() for c in r)]
+        header, body, export_units, notes = cebs_db_export.to_key_data(stem, export_header, export_rows)
+        return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), export_units,
+                           notes + ["CEBS database export converted to Key/Data columns"], None)
     rows = [list(r) for r in wb["Data"].iter_rows(values_only=True)]
     header = [_cell(c) for c in rows[0]]
     body = [r for r in rows[1:] if any(c is not None and str(c).strip() for c in r)]
@@ -130,11 +146,15 @@ def convert_workbook(path: str, out_dir: str) -> dict:
         body = [r[:sex_idx] + [filled] + r[sex_idx:] for r in body]
         notes.append(f"Sex column absent — filled '{filled}' from the Key sheet title (inferred)")
 
+    units = {col: u for col, u in key_sheet_units(path).items() if col in header}
+    return _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled)
+
+
+def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled) -> dict:
+    """One `<stem>_truth_<sex>.csv` (+ `.units.json`) per sex."""
     by_sex: dict[str, list[list]] = {}
     for r in body:
         by_sex.setdefault(_cell(r[sex_idx]).strip().lower(), []).append(r)
-
-    units = {col: u for col, u in key_sheet_units(path).items() if col in header}
 
     written = []
     for sex, sex_rows in sorted(by_sex.items()):

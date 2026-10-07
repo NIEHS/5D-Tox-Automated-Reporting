@@ -12,7 +12,7 @@ Run 2026-10-05 with `python -m tooling.ntp_stats_conformance assets/cebs/NIEHS-{
 - **Published side:** the PA06 (organ weights), PA41 (clinical chemistry) and PA43 (hematology) summary tables of each package.
 - **Data side:** each package's Individual Animal workbooks.
 - **Row matching:** each published row is matched to a data endpoint by value. Every dose group must have the same N, and the same mean at the published precision. A row the NTP staff edited (outlier excluded) therefore stays **unmatched** and is not compared on different data.
-- **Packages not covered:** NIEHS-02..06 use an older long-format workbook with no Key/Data sheets, so the harness cannot read them.
+- **NIEHS-02..05** publish the CEBS database export (one row per animal per measurement), not the Key/Data workbook; `tooling.cebs_db_export` converts it (2026-10-07). Their tables count the "Original Animals" (NIEHS-02/03; a second, month-later cohort is left out) or the whole study (NIEHS-04/05, unlabelled). NIEHS-06 has Key/Data workbooks with no Selection column.
 
 ## Result: 3636 / 3649 marker cells agree (99.6%)
 
@@ -24,6 +24,13 @@ Run 2026-10-05 with `python -m tooling.ntp_stats_conformance assets/cebs/NIEHS-{
 | NIEHS-10 | 638 / 640 | 2 |
 | NIEHS-12 | 255 / 256 | 13 |
 | NIEHS-13 | 371 / 371 | 7 |
+| NIEHS-02 | 101 / 102 | 2 |
+| NIEHS-03 | 102 / 102 | 2 |
+| NIEHS-04 | 102 / 102 | 2 |
+| NIEHS-05 | 85 / 85 | 2 |
+| NIEHS-06 | 100 / 102 | 2 |
+
+NIEHS-02..06 (run 2026-10-07, `… assets/cebs/NIEHS-0{2,3,4,5,6}`): 490 / 493 marker cells and 492 / 493 printed cells agree. Their unmatched rows are Globulin and A/G Ratio, which NTP derives. Their 3 disagreements are also at 0.01: NIEHS-02 Brain Relative 2.7 (Williams p = 0.0133, published `**`), NIEHS-06 Liver Absolute 2.7 (p = 0.0124, `**`), NIEHS-06 Albumin 0.675 (p = 0.0097, published `*`). The printed-cell difference is NIEHS-03 Sorbitol dehydrogenase 2.7, 22.1 ± 13.8 vs published 22.0.
 
 Relative organ weights (organ / terminal body weight × 1000, per animal) are included in PA06 and agree like the absolute weights.
 

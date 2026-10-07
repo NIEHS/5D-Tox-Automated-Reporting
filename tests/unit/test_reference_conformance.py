@@ -26,6 +26,11 @@ from tooling.ntp_stats_conformance import compare_package
 
 # report -> ({(table, sex, label, dose, column): (published, ours)}, {unmatched (table, sex, label)})
 KNOWN = {
+    # NIEHS-02 publishes the CEBS database-export layout (tooling.cebs_db_export).
+    "NIEHS-02": (
+        {("PA06", "Male", "Brain Relative", 2.7, "pairwise"): ("**", "*")},  # Williams p = 0.0133
+        {("PA41", "Male", "Globulin"), ("PA41", "Male", "A/G Ratio")},       # derived; not computed
+    ),
     "NIEHS-10": (
         {("PA41", "Male", "Cholesterol", 0.0, "trend"): ("**", "*"),       # J p = 0.0105
          ("PA41", "Male", "Cholesterol", 111.0, "pairwise"): ("**", "*")},  # Dunn p = 0.0486
@@ -40,10 +45,11 @@ KNOWN = {
          ("PA41", "Female", "Aspartate Aminotransferase"), ("PA41", "Female", "Creatine Kinase")},
     ),
 }
-COMPARED = {"NIEHS-10": 640, "NIEHS-13": 252}
+COMPARED = {"NIEHS-02": 102, "NIEHS-10": 640, "NIEHS-13": 252}
 
 # report -> {(sex, endpoint, dose): (published cell, ours)} — the known printed-cell edges
 KNOWN_CELLS = {
+    "NIEHS-02": {},
     "NIEHS-10": {("Male", "Monocyte count", 0.15): ("0.24 ± 0.09", "0.24 ± 0.10")},  # SE 0.095 (n = 2)
     "NIEHS-13": {},
 }

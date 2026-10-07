@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 26  # bumped: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 27  # bumped: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -406,7 +406,7 @@ _METHODS_VOLATILE_FP_FIELDS = frozenset({
 #    concentrations, no vehicle or formulations.
 # 4: the biosampling cohort is recognized in either CEBS spelling ("Biosample
 #    Animals" in NIEHS-07/-12/-13), so its doses reach Study Design.
-_METHODS_CACHE_SCHEMA_VERSION = 4
+_METHODS_CACHE_SCHEMA_VERSION = 5  # bumped: group sizes count every animal of a study that marks no Core cohort
 
 
 def _hash_methods(dtxsid: str, fingerprints: dict, design: dict | None = None) -> str:
