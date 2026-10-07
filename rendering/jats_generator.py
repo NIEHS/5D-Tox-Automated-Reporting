@@ -434,13 +434,15 @@ def _emit_apical_table(node: DocNode, data: dict) -> list:
     headers = (
         [plan.first_col]
         + [_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + [f"BMD1Std ({plan.dose_unit})", f"BMDL1Std ({plan.dose_unit})"]
+        + ([f"BMD1Std ({plan.dose_unit})", f"BMDL1Std ({plan.dose_unit})"]
+           if plan.bmd_columns else [])
     )
     rows: list[list[str]] = []
     for block in plan.sex_blocks:
         rows.append([f"**{block.sex_label}**"])
         for r in block.rows:
-            rows.append(r.cells)
+            # A sub-heading spans the table like the sex separator.
+            rows.append([f"**{r.cells[0]}**"] if r.is_heading else r.cells)
     return [_table_wrap(node.id, plan.caption, headers, rows, plan.footnotes)]
 
 

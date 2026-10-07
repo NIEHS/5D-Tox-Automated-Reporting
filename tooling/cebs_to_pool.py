@@ -20,6 +20,12 @@ NIEHS-02 … 05 publish the CEBS database-export layout instead of Key/Data
 (one row per animal per measurement); tooling.cebs_db_export converts it to
 the same Key/Data columns first.
 
+NIEHS-12 and -13 publish blood and tissue concentrations only in the Bookshelf
+bundle, as the analytical lab's results workbook (one sheet per species);
+tooling.cebs_lab_concentration converts the sheet of the package's species —
+named by its sibling workbooks' "_Rats"/"_Mice" suffix — and `--bundle` adds
+the bundle directory to the workbooks converted.
+
 The 2025 (DTT) workbooks changed the schema: the `Data` sheet has NO `Sex`
 column (the studies are single-sex) and says `Study Number` instead of
 `NTP Study Number`.  The sex is stated only in the Key sheet's study title
@@ -38,6 +44,7 @@ ExperimentDescription map ({name: {organ, sex, species, …}}) for the
 Usage:
     python -m tooling.cebs_to_pool --package assets/cebs/NIEHS-13 \\
         --prefix 108020004 --out sessions/<id>/files \\
+        [--bundle assets/cebs/_bookshelf/NIEHS-13] \\
         [--genomic-bm2-json assets/cebs/NIEHS-13/_bm2json/108020004_4D_Genomic_Rats.json] \\
         [--metadata-out /tmp/metadata.json]
 """
@@ -55,7 +62,7 @@ from pathlib import Path
 import openpyxl
 from bmdx_pipe import key_sheet_units
 
-from tooling import cebs_db_export
+from tooling import cebs_db_export, cebs_lab_concentration
 
 # Individual-animal workbook → truth-CSV stem (the pool's filename patterns:
 # bmdx_pipe.file_integrator._PLATFORM_PATTERNS).  Order matters: "Clinical
@@ -105,14 +112,37 @@ def key_sheet_sex(wb) -> str | None:
     return sexes.pop() if len(sexes) == 1 else None
 
 
-def convert_workbook(path: str, out_dir: str) -> dict:
-    """Write one `<stem>_truth_<sex>.csv` per sex.  Returns a summary dict."""
+_SPECIES_SUFFIX = {"rats": "rat", "mice": "mouse"}
+
+
+def package_species(filenames: list[str]) -> str | None:
+    """The one species the workbook names' "_Rats"/"_Mice" suffix states, or None."""
+    found = {_SPECIES_SUFFIX[m.group(1).lower()] for f in filenames
+             if (m := re.search(r"_(Rats|Mice)\.xlsx$", f, re.I))}
+    return found.pop() if len(found) == 1 else None
+
+
+def convert_workbook(path: str, out_dir: str, species: str | None = None) -> dict:
+    """Write one `<stem>_truth_<sex>.csv` per sex.  Returns a summary dict.
+    `species` picks the sheet of a multi-species lab results workbook."""
     name = os.path.basename(path)
     stem = workbook_stem(name)
     if stem is None:
         return {"file": name, "status": "skipped", "reason": "no apical platform"}
 
     wb = openpyxl.load_workbook(path, data_only=True)
+    if cebs_lab_concentration.is_lab_results(wb.sheetnames):
+        if species is None:
+            return {"file": name, "status": "error", "reason": "lab results workbook: species unknown"}
+        sheets = {ws.title: [list(r) for r in ws.iter_rows(values_only=True)] for ws in wb.worksheets}
+        try:
+            sheet = cebs_lab_concentration.species_sheet(sheets, species)
+            header, body, lab_units, notes = cebs_lab_concentration.to_key_data(
+                sheets[sheet], name.split("_", 1)[0])
+        except ValueError as e:
+            return {"file": name, "status": "error", "reason": str(e)}
+        return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), lab_units,
+                           [f"sheet '{sheet}'"] + notes, None)
     if "Data" not in wb.sheetnames:
         # NIEHS-02 … 05: the CEBS database-export layout (tooling.cebs_db_export).
         sheet = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
@@ -213,14 +243,20 @@ def main() -> None:
     ap.add_argument("--package", required=True, help="CEBS package dir (assets/cebs/<ID>)")
     ap.add_argument("--prefix", default="", help="study-number filename prefix to select one species")
     ap.add_argument("--out", required=True, help="output dir (a session's files/)")
+    ap.add_argument("--bundle", help="Bookshelf bundle dir with more Individual Animal workbooks")
     ap.add_argument("--genomic-bm2-json")
     ap.add_argument("--metadata-out")
     a = ap.parse_args()
 
     os.makedirs(a.out, exist_ok=True)
     sexes = set()
-    for path in sorted(glob.glob(os.path.join(a.package, f"{a.prefix}*Individual_Animal_*.xlsx"))):
-        s = convert_workbook(path, a.out)
+    pattern = f"{a.prefix}*Individual_Animal_*.xlsx"
+    paths = sorted(glob.glob(os.path.join(a.package, pattern)))
+    species = package_species(paths)
+    if a.bundle:
+        paths += sorted(glob.glob(os.path.join(a.bundle, pattern)))
+    for path in paths:
+        s = convert_workbook(path, a.out, species)
         print(json.dumps(s))
         if s.get("status") == "ok":
             sexes.update(w.rsplit("_", 1)[1][:-4] for w in s["written"])

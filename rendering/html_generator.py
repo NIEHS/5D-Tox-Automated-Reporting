@@ -818,7 +818,8 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     headers = (
         [plan.first_col]
         + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + [f"BMD₁Std ({plan.dose_unit})", f"BMDL₁Std ({plan.dose_unit})"]
+        + ([f"BMD₁Std ({plan.dose_unit})", f"BMDL₁Std ({plan.dose_unit})"]
+           if plan.bmd_columns else [])
     )
 
     body_rows: list[str] = []
@@ -829,6 +830,12 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
             f"<strong>{_esc(block.sex_label)}</strong></td></tr>"
         )
         for row in block.rows:
+            if row.is_heading:
+                body_rows.append(
+                    f'<tr class="subheading"><td colspan="{plan.ncols}">'
+                    f"<em>{_esc(row.cells[0])}</em></td></tr>"
+                )
+                continue
             tr_class = "n-row" if row.is_n_row else ""
             body_rows.append(_emit_table_row(row.cells, tr_class=tr_class))
 

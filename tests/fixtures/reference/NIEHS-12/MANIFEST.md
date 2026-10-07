@@ -23,3 +23,14 @@ report itself in `assets/cebs/_bookshelf/NIEHS-12/` (Table 2).
 - **Which study days the body weight table shows** (first, last, and every
   responsive day between) and each cell's mean ± SE and marker —
   `tests/unit/test_reference_body_weight_days.py`.
+
+## Internal concentration (added 2026-10-07)
+
+| file | what |
+|---|---|
+| `108020006_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx` | the analytical lab's blood/lung/liver results, rat and mouse sheets (Bookshelf bundle only; not in the CEBS package) |
+| `bookshelf_Table_18.json`, `bookshelf_Table_19.json` | the published rat and mouse concentration tables (`tooling.bookshelf_breakdown`) |
+
+Reference for `tests/unit/test_reference_internal_concentration.py`
+(`tooling.cebs_lab_concentration` → `tables.blood_tissue_concentration_table`).
+The bundle's `108020007_…` workbook holds the same data and is not copied.

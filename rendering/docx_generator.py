@@ -1238,13 +1238,15 @@ def _render_apical_table(doc: Document, node: DocNode, data: dict) -> None:
     headers = (
         [plan.first_col]
         + [_format_dose_label(d, plan.dose_unit) for d in plan.doses]
-        + [f"BMD 1Std ({plan.dose_unit})", f"BMDL 1Std ({plan.dose_unit})"]
+        + ([f"BMD 1Std ({plan.dose_unit})", f"BMDL 1Std ({plan.dose_unit})"]
+           if plan.bmd_columns else [])
     )
     rows: list[list[str]] = []
     for block in plan.sex_blocks:
         rows.append([f"**{block.sex_label}**"])
         for row in block.rows:
-            rows.append(row.cells)
+            # A sub-heading spans the table like the sex separator.
+            rows.append([f"**{row.cells[0]}**"] if row.is_heading else row.cells)
     _booktabs_table(
         doc, headers, rows,
         caption=plan.caption, footnotes=plan.footnotes, merged_label_rows=True,

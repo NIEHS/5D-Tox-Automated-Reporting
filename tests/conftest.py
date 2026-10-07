@@ -164,7 +164,7 @@ def reference_session(tmp_path, monkeypatch):
     Returns the session directory.
     """
     from pipeline.pool_fingerprints import ensure_fingerprints
-    from tooling.cebs_to_pool import convert_workbook
+    from tooling.cebs_to_pool import convert_workbook, package_species
 
     sessions_path = tmp_path / "sessions"
     _patch_sessions_dir(monkeypatch, sessions_path)
@@ -174,8 +174,12 @@ def reference_session(tmp_path, monkeypatch):
               units: bool = True, study: str = "") -> Path:
         files = sessions_path / dtxsid / "files"
         files.mkdir(parents=True, exist_ok=True)
-        for xlsx in sorted((REFERENCE_DIR / report).glob(f"{study}*Individual_Animal_*.xlsx")):
-            summary = convert_workbook(str(xlsx), str(files))
+        workbooks = sorted((REFERENCE_DIR / report).glob(f"{study}*Individual_Animal_*.xlsx"))
+        for xlsx in workbooks:
+            # The species of a multi-species lab workbook: its study's siblings say.
+            prefix = xlsx.name.split("_", 1)[0]
+            species = package_species([w.name for w in workbooks if w.name.startswith(prefix)])
+            summary = convert_workbook(str(xlsx), str(files), species)
             assert summary["status"] in ("ok", "skipped"), summary
             if with_workbooks:
                 shutil.copy2(xlsx, files / xlsx.name)

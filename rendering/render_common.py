@@ -643,9 +643,12 @@ class ApicalRow:
               this (to tag the <tr> with class="n-row"); the LaTeX emitter
               ignores it — a pre-existing divergence preserved by carrying the
               flag in the plan rather than acting on it here.
+    is_heading: a label-only sub-heading row ("Study Day 4", "Blood"); cells
+              holds just the label and every emitter spans it across the table.
     """
     cells: list[str]
     is_n_row: bool
+    is_heading: bool = False
 
 
 @dataclass(frozen=True)
@@ -673,6 +676,9 @@ class ApicalTablePlan:
         doses:     RAW dose values (emitter formats the column labels).
         ncols:     total column count = 1 (label) + len(doses) + 2 (BMD, BMDL);
                    the value rows are already padded to this.
+        bmd_columns: False for a table with no BMD/BMDL columns (the internal
+                   concentration tables, table_type "pharmacokinetic"); ncols
+                   then counts no BMD columns and rows carry no BMD cells.
         sex_blocks: present sexes in Male, Female order (empty sexes dropped).
         footnotes: raw footnote dicts; the emitter renders the markup.
     """
@@ -684,6 +690,7 @@ class ApicalTablePlan:
     ncols: int
     sex_blocks: list[ApicalSexBlock]
     footnotes: list
+    bmd_columns: bool = True
 
 
 def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
@@ -712,8 +719,10 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
     # from the first row that carries one.
     ref_row = (male_rows or female_rows)[0]
     doses = ref_row.get("doses", []) or []
-    # Columns: label + one per dose + the two BMD/BMDL trailing columns.
-    ncols = 1 + len(doses) + 2
+    # Columns: label + one per dose + the two BMD/BMDL trailing columns — none
+    # for a concentration table, which models no dose response.
+    bmd_columns = section.get("table_type") != "pharmacokinetic"
+    ncols = 1 + len(doses) + (2 if bmd_columns else 0)
 
     sex_blocks: list[ApicalSexBlock] = []
     for sex_label, rows in (("Male", male_rows), ("Female", female_rows)):
@@ -722,6 +731,9 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
         built: list[ApicalRow] = []
         for row in rows:
             label = row.get("endpoint") or row.get("day_label") or row.get("label") or ""
+            if row.get("is_heading"):
+                built.append(ApicalRow(cells=[str(label)], is_n_row=False, is_heading=True))
+                continue
             values = row.get("values", []) or []
             bmd = row.get("bmd", "—") or "—"
             bmdl = row.get("bmdl", "—") or "—"
@@ -736,8 +748,7 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
             cells = [
                 str(label),
                 *[format_mean_se_display(str(v), decimals, sig_figs) for v in values],
-                str(bmd),
-                str(bmdl),
+                *([str(bmd), str(bmdl)] if bmd_columns else []),
             ]
             while len(cells) < ncols:
                 cells.append("—")
@@ -747,7 +758,7 @@ def apical_table_plan(node: DocNode, data: dict) -> ApicalTablePlan | None:
     caption = table_caption(node, section.get("caption", ""), sexes=_present_sexes(section))
     return ApicalTablePlan(
         node.id, caption, first_col, dose_unit, doses, ncols, sex_blocks,
-        section.get("footnotes", []) or [],
+        section.get("footnotes", []) or [], bmd_columns,
     )
 
 

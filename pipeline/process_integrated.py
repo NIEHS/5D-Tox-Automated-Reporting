@@ -77,6 +77,7 @@ from pipeline.cache_plumbing import (
     _restore_category_lookup,
 )
 from pipeline.processing_helpers import (
+    _drop_internal_dose,
     _filter_gene_expression,
     _partition_by_platform,
     _build_section_cards,
@@ -707,7 +708,7 @@ async def _build_ntp_stats(ctx):
         platform_tables = _deserialize_platform_tables(ntp_cached)
     else:
         cat_lookup = _restore_category_lookup(integrated, bmd_stat)
-        apical_integrated = _filter_gene_expression(integrated)
+        apical_integrated = _drop_internal_dose(_filter_gene_expression(integrated))
         # NOTE: legacy-vs-truth deduplication used to happen here via
         # _dedup_legacy_apical_experiments().  As of ADR-0001 step 4
         # that responsibility moved into the BMDProject schema —
@@ -800,8 +801,8 @@ async def _get_sections(ctx):
             sections.append(clin_obs)
 
         # ── Tissue Concentration (Table 7): pharmacokinetic table ──────
-        # Tissue Concentration data only exists for Biosampling Animals
-        # and is NOT processed through NTP stats or BMDExpress.  It has
+        # Plasma concentrations of the Biosampling Animals (G2), or blood and
+        # tissue concentrations by study day (G3) — NOT modeled by BMDExpress.  It has
         # no entries in platform_tables, so it must be built separately
         # from sidecar data (similar to Clinical Observations).  Built as the
         # full superset (no sex prune); pruned in the presentation step below.
@@ -823,10 +824,11 @@ async def _get_sections(ctx):
                     # (generate_platform_narrative returns list[str]). A bare string
                     # here made downstream paragraph-counting read its characters as
                     # paragraphs — keep it a one-element list like its siblings.
-                    narrative = [
+                    # The builder states what the data hold (matrices and study
+                    # days) when it can; the G2 plasma table is biosampling-only.
+                    narrative = [tc_result.get("summary") or (
                         f"Plasma concentrations of {compound_name} were "
-                        f"measured in biosampling animals."
-                    ]
+                        f"measured in biosampling animals.")]
                     sections.append({
                         "platform": "Tissue Concentration",
                         "title": "Tissue Concentration",
@@ -962,6 +964,12 @@ async def _get_sections(ctx):
             if _id_paths:
                 _tk = compute_toxicokinetics(_id_paths)
                 _id_paras = build_internal_dose_narrative(_tk, compound_name, dose_unit, _design)
+                if not _id_paras:
+                    # No plasma time course to model (the G3 blood/tissue table by
+                    # study day): say what was measured, from the table's card.
+                    _id_paras = next((list(c.get("narrative") or []) for c in sections
+                                      if c.get("platform") == "Tissue Concentration"
+                                      and c.get("table_type") == "pharmacokinetic"), [])
                 if _id_paras:
                     unified_narratives["internal_dose"] = {
                         "title": "Internal Dose Assessment",

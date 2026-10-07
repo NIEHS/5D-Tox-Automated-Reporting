@@ -154,7 +154,7 @@ def _save_cache(dtxsid: str, unit: str, hash_val: str, data: dict) -> None:
 # not experiment names — is invisible to the hash and would otherwise
 # serve a stale cache.  Bumping this forces a miss.  Because _hash_sections
 # folds in ntp_hash, bumping here also cascades the sections cache.
-_NTP_CACHE_SCHEMA_VERSION = 8  # bumped: NOEL None (ND) when no LOEL or no dose below it. Was 7: rows carry the unrounded mean/SE (mean_se_by_dose)
+_NTP_CACHE_SCHEMA_VERSION = 9  # bumped: internal-dose (Tissue Concentration) experiments left out. Was 8: NOEL None (ND) when no LOEL or no dose below it. Was 7: rows carry the unrounded mean/SE (mean_se_by_dose)
 
 
 # The BMDS *modeling method* version — the algorithm/settings that turn raw
@@ -201,7 +201,7 @@ def _hash_ntp(integrated: dict, bmd_stat: str) -> str:
 # Bump when the sections cache schema changes (new fields on row dicts,
 # renamed keys, etc.).  Changing this forces all existing sections caches
 # to miss on the next reprocess even if NTP inputs are unchanged.
-_SECTIONS_CACHE_SCHEMA_VERSION = 27  # bumped: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
+_SECTIONS_CACHE_SCHEMA_VERSION = 28  # bumped: blood/tissue concentration by study day (G3 table). Was 27: body weight table keeps every animal of a study that marks no Core cohort. Was 26: body weight rows = first + responsive intermediate + last day, per-sex markers/BMDs; a rounded zero prints unsigned. Was 25: Body Weight Gain row
 
 
 def _fingerprint_files(paths) -> list[list]:
@@ -373,7 +373,7 @@ def _hash_genomics(
 
 
 # Bump when the cached BMD summary's content rules change.
-_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 5  # bumped: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
+_BMD_SUMMARY_CACHE_SCHEMA_VERSION = 6  # bumped: no internal-dose endpoints. Was 5: Body Weight Gain listed. Was 4: NOEL ND (not determined) instead of control/highest dose. Was 3: apical rows carry the ToxicR fills (viable, NVM, UREP) + provenance
 
 
 def _hash_bmd_summary(ntp_hash: str, bmds_hash: str) -> str:

@@ -51,14 +51,14 @@ def test_niehs10_unit_comes_from_the_study_workbook_at_integration(reference_ses
     paths = find_sidecar_paths(str(session), "Tissue Concentration")
 
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
-    assert scan_pending_markers(tc["footnotes"][0]) == [
+    assert scan_pending_markers(tc["footnotes"][0]["text"]) == [
         "[Placeholder: concentration unit not recorded in the data]"]
     assert compute_toxicokinetics(paths)["unit"] is None
 
     fps = ensure_fingerprints("DTXSID50469320")
     assert stamp_sidecar_units(fps, session)  # every platform with a workbook
     tc = build_tissue_concentration_table_from_sidecar(paths, compound_name=CHEM)
-    assert tc["footnotes"][0].endswith("plasma concentration data are presented in µg/mL.")
+    assert tc["footnotes"][0]["text"].endswith("plasma concentration data are presented in µg/mL.")
     tk = compute_toxicokinetics(paths)
     assert tk["unit"] == "µg/mL"
     assert "(in µg/mL)" in build_internal_dose_narrative(tk, CHEM)[0]

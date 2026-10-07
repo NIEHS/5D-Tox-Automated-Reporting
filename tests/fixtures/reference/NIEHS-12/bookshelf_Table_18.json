@@ -1,0 +1,338 @@
+{
+ "report": "NIEHS-12",
+ "id": "t-2-18",
+ "label": "Table 18",
+ "title": "Summary of Blood, Lung, and Liver Concentration Data for Female Rats Exposed to 1,2-Dichlorobenzene for Five Days",
+ "caption": [],
+ "part": "Results",
+ "section": [
+  "Internal Concentration Assessment",
+  "Rats"
+ ],
+ "source": "bp3.nxml",
+ "columns": 8,
+ "header": [
+  [
+   "Endpoint<sup>a,b</sup>",
+   "0 ppm",
+   "1 ppm",
+   "10 ppm",
+   "30 ppm",
+   "100 ppm",
+   "250 ppm",
+   "500 ppm"
+  ]
+ ],
+ "rows": [
+  [
+   "Study Day 4",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "n",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3"
+  ],
+  [
+   "Blood",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Blood concentration (ng/mL)",
+   "BD<sup>c</sup>",
+   "11.1 ± 0.742",
+   "80.6 ± 11.9",
+   "216 ± 9.07",
+   "816 ± 18.4",
+   "19,500 ± 700",
+   "98,300 ± 16,700"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/(mg/kg/day)]<sup>d,e</sup>",
+   "−<sup>f</sup>",
+   "6.86 ± 0.458",
+   "5.01 ± 0.740",
+   "4.46 ± 0.187",
+   "5.03 ± 0.113",
+   "48.4 ± 1.74",
+   "122 ± 20.6"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/ppm]<sup>e</sup>",
+   "−",
+   "11.1 ± 0.742",
+   "8.06 ± 1.19",
+   "7.20 ± 0.302",
+   "8.16 ± 0.184",
+   "78.0 ± 2.80",
+   "197 ± 33.3"
+  ],
+  [
+   "Liver",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Liver concentration (ng/g)",
+   "BD",
+   "15.4 ± 1.82",
+   "77.7 ± 18.3",
+   "237 ± 17.5",
+   "881 ± 57.0",
+   "36,000 ± 4,720",
+   "213,000 ± 45,200"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/(mg/kg/day)]<sup>d,e</sup>",
+   "−",
+   "9.54 ± 1.12",
+   "4.82 ± 1.14",
+   "4.89 ± 0.361",
+   "5.43 ± 0.352",
+   "89.4 ± 11.7",
+   "264 ± 55.9"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/ppm]<sup>e</sup>",
+   "−",
+   "15.4 ± 1.82",
+   "7.77 ± 1.83",
+   "7.90 ± 0.582",
+   "8.81 ± 0.570",
+   "144 ± 18.9",
+   "427 ± 90.5"
+  ],
+  [
+   "Lung",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Lung concentration (ng/g)",
+   "BD",
+   "18.1 ± 4.45",
+   "63.0 ± 20.0",
+   "543 ± 187",
+   "1,120 ± 306",
+   "7,410 ± 1,770",
+   "95,400 ± 54,300"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/(mg/kg/day)]<sup>d,e</sup>",
+   "−",
+   "11.2 ± 2.75",
+   "3.91 ± 1.24",
+   "11.2 ± 3.87",
+   "6.92 ± 1.89",
+   "18.4 ± 4.39",
+   "118 ± 67.1"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/ppm]<sup>e</sup>",
+   "−",
+   "18.1 ± 4.45",
+   "6.30 ± 2.00",
+   "18.1 ± 6.24",
+   "11.2 ± 3.06",
+   "29.6 ± 7.08",
+   "191 ± 109"
+  ],
+  [
+   "Study Day 5",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "n",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3",
+   "3"
+  ],
+  [
+   "Blood",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Blood concentration (ng/mL)",
+   "BD",
+   "BD",
+   "0.491 ± 0.104",
+   "1.25 ± 0.379",
+   "6.80 ± 0.586",
+   "41.1 ± 4.05",
+   "434 ± 155"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/(mg/kg/day)]",
+   "−",
+   "BD",
+   "0.0305 ± 0.00647",
+   "0.0258 ± 0.00782",
+   "0.0419 ± 0.00361",
+   "0.102 ± 0.0101",
+   "0.537 ± 0.192"
+  ],
+  [
+   "Normalized blood concentration [(ng/mL)/ppm]",
+   "−",
+   "BD",
+   "0.0491 ± 0.0104",
+   "0.0416 ± 0.0126",
+   "0.0680 ± 0.00586",
+   "0.164 ± 0.0162",
+   "0.868 ± 0.310"
+  ],
+  [
+   "Liver",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Liver concentration (ng/g)",
+   "BD",
+   "BD",
+   "1.10 ± 0.519",
+   "1.65 ± 0.124",
+   "6.92 ± 0.698",
+   "24.3 ± 2.11",
+   "156 ± 65.8"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/(mg/kg/day)]",
+   "−",
+   "BD",
+   "0.0680 ± 0.0322",
+   "0.0340 ± 0.00257",
+   "0.0427 ± 0.00431",
+   "0.0603 ± 0.00523",
+   "0.193 ± 0.0813"
+  ],
+  [
+   "Normalized liver concentration [(ng/g)/ppm]",
+   "−",
+   "BD",
+   "0.110 ± 0.0519",
+   "0.0549 ± 0.00415",
+   "0.0692 ± 0.00698",
+   "0.0972 ± 0.00843",
+   "0.313 ± 0.132"
+  ],
+  [
+   "Lung",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  [
+   "Lung concentration (ng/g)",
+   "BD",
+   "BD",
+   "BD",
+   "1.32 ± 0.692",
+   "6.57 ± 2.24",
+   "24.2 ± 7.02",
+   "231 ± 114"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/(mg/kg/day)]",
+   "−",
+   "BD",
+   "BD",
+   "0.0272 ± 0.0143",
+   "0.0405 ± 0.0138",
+   "0.0599 ± 0.0174",
+   "0.286 ± 0.141"
+  ],
+  [
+   "Normalized lung concentration [(ng/g)/ppm]",
+   "−",
+   "BD",
+   "BD",
+   "0.0439 ± 0.0231",
+   "0.0657 ± 0.0224",
+   "0.0967 ± 0.0281",
+   "0.462 ± 0.227"
+  ]
+ ],
+ "footnotes": [
+  {
+   "label": "",
+   "text": "BD = below detection; group did not have more than 20% of its values above the limit of detection (LOD)."
+  },
+  {
+   "label": "<sup>a</sup>",
+   "text": "Data are presented as mean ± standard error."
+  },
+  {
+   "label": "<sup>b</sup>",
+   "text": "If over 20% of the animals in a group were above the LOD, one-half of the LOD was substituted for values below the LOD. LOD for blood = 0.157 ng/mL; LOD for liver = 0.471 ng/g; LOD for lung = 0.471 ng/g."
+  },
+  {
+   "label": "<sup>c</sup>",
+   "text": "When the 0 ppm group did not have over 20% of its values above the LOD, no mean or standard error was calculated, and no statistical analysis was performed."
+  },
+  {
+   "label": "<sup>d</sup>",
+   "text": "Theoretical inhaled doses estimated for the 1, 10, 30, 100, 250, and 500 ppm groups are 1.62, 16.11, 48.42, 162.13, 403.23, and 808.75 mg/kg/day, respectively."
+  },
+  {
+   "label": "<sup>e</sup>",
+   "text": "Normalized concentrations were calculated by dividing the measured concentration in either ng/mL for blood or ng/g for tissues by either the theoretical inhaled dose (mg/kg/day) or nominal exposure concentration (ppm). No statistical analysis was performed on normalized endpoints."
+  },
+  {
+   "label": "<sup>f</sup>",
+   "text": "Not applicable."
+  }
+ ]
+}

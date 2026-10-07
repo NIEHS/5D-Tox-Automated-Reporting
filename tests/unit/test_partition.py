@@ -183,3 +183,19 @@ class TestPartitionByPlatform:
         for platform_data in result.values():
             for sex_rows in platform_data.values():
                 assert len(sex_rows) == 0
+
+
+def test_internal_dose_experiments_left_out_of_the_stats_pipeline():
+    """Tissue Concentration is a measured internal dose: its table comes from the
+    sidecars, and it must reach neither the apical tables nor the BMD summary."""
+    from pipeline.processing_helpers import _drop_internal_dose
+
+    integrated = {"doseResponseExperiments": [
+        {"name": "body_weight_truth_female", "experimentDescription": {"platform": "Body Weight"}},
+        {"name": "tissue_conc_truth_female",
+         "experimentDescription": {"platform": "Tissue Concentration"}},
+        {"name": "tissue_conc_truth_male"},                      # legacy: no description
+    ]}
+    kept = _drop_internal_dose(integrated)["doseResponseExperiments"]
+    assert [e["name"] for e in kept] == ["body_weight_truth_female"]
+    assert len(integrated["doseResponseExperiments"]) == 3      # input untouched

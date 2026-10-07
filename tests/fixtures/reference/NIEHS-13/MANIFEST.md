@@ -65,3 +65,16 @@ Session-level comparison of the whole report: `assets/cebs/NIEHS-13-comparison.m
 | `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Liver_Rats.pdf` | 255,424 | `0da64dbaf09a5ab7` |
 | `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Lung_Rats.pdf` | 203,098 | `40bd7c145efc3d3a` |
 | `108020004_Top_10_Genes_Ranked_by_Potency_of_Perturbation_Ovary_Rats.pdf` | 148,280 | `69b1adda6f5a733f` |
+
+## Internal concentration (added 2026-10-07)
+
+| file | what |
+|---|---|
+| `108020004_Individual_Animal_Blood_and_Tissue_Concentration_Data.xlsx` | the analytical lab's blood/lung/liver results, rat and mouse sheets (Bookshelf bundle only; not in the CEBS package) |
+| `bookshelf_Table_19.json`, `bookshelf_Table_20.json` | the published rat and mouse concentration tables (`tooling.bookshelf_breakdown`) |
+
+Reference for `tests/unit/test_reference_internal_concentration.py`
+(`tooling.cebs_lab_concentration` → `tables.blood_tissue_concentration_table`).
+Every published cell reproduces, including the three Dixon–Massey outlier
+exclusions of the mouse table.  The bundle's `108020005_…` workbook holds the
+same data and is not copied.

@@ -146,6 +146,30 @@ def _filter_gene_expression(integrated: dict) -> dict:
     }
 
 
+# Measured internal dose, not a dose response: no NTP statistics, no BMD.  Its
+# table is built from the sidecars (tables.tissue_concentration_table).
+_INTERNAL_DOSE_PLATFORMS = frozenset({"Tissue Concentration"})
+
+
+def _drop_internal_dose(integrated: dict) -> dict:
+    """A copy of the integrated project without its internal-dose (Tissue
+    Concentration) experiments — they must not reach the apical tables, the
+    BMD modeling or the BMD summary."""
+    def internal(exp: dict) -> bool:
+        desc = exp.get("experimentDescription") or {}
+        platform = desc.get("platform") or desc.get("domain") if isinstance(desc, dict) else None
+        return platform in _INTERNAL_DOSE_PLATFORMS or \
+            exp.get("name", "").lower().startswith("tissue_conc")
+
+    experiments = integrated.get("doseResponseExperiments", [])
+    kept = [e for e in experiments if not internal(e)]
+    if len(kept) == len(experiments):
+        return integrated
+    logger.info("Left %d internal-dose experiment(s) out of the NTP stats pipeline",
+                len(experiments) - len(kept))
+    return {**integrated, "doseResponseExperiments": kept}
+
+
 def _partition_by_platform(
     apical_integrated: dict,
     source_files: dict,

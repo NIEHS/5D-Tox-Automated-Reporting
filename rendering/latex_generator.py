@@ -753,10 +753,10 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
     if plan is None:
         return _emit_table_placeholder(node)
 
-    headers = [plan.first_col] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + [
+    headers = [plan.first_col] + [_format_dose_label(d, plan.dose_unit) for d in plan.doses] + ([
         f"BMD\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
         f"BMDL\\textsubscript{{1Std}} ({_escape_latex(plan.dose_unit)})",
-    ]
+    ] if plan.bmd_columns else [])
     colspec = "l" + "c" * (plan.ncols - 1)
 
     lines = [f"\\begin{{tabular}}{{{colspec}}}", "\\toprule",
@@ -768,6 +768,11 @@ def _render_apical_table(node: DocNode, data: dict) -> str:
             f"\\multicolumn{{{plan.ncols}}}{{l}}{{\\textbf{{{block.sex_label}}}}} \\\\"
         )
         for row in block.rows:
+            if row.is_heading:
+                lines.append(
+                    f"\\multicolumn{{{plan.ncols}}}{{l}}{{\\textit{{{_escape_latex(row.cells[0])}}}}} \\\\"
+                )
+                continue
             # n-row distinction is HTML-only; LaTeX emits every row the same.
             lines.append(_emit_tabular_row(row.cells))
 

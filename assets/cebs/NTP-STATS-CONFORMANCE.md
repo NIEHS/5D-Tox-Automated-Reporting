@@ -37,7 +37,7 @@ Relative organ weights (organ / terminal body weight × 1000, per animal) are in
 ## Choices the published markers decided
 
 - **Jonckheere variance:** the tie-corrected normal approximation (Hollander–Wolfe). It agreed with the published markers best. The no-tie and continuity-corrected variants were each worse by 2 cells, and a Monte-Carlo exact p did not fix the borderline cells.
-- **Williams / Shirley critical values:** simulated for the exact design. There are 200k null draws, with the seed derived from the design. The simulation reproduces Williams' tables (k = 1..6, df = ∞).
+- **Williams / Shirley critical values:** simulated for the exact design. There are 200k null draws, with the seed derived from the design. The simulation reproduces Williams' tables (k = 1..6, df = ∞). A step with one treatment group left is exact instead (normal for Shirley, t for Williams; bmdx-pipe 2026-10-07): the simulation put NIEHS-13 Table 19's 1 ppm blood at p = 0.0500 + noise, the exact p is 0.0495 (published `*`). The totals above did not change.
 - **Two-sided reporting:** the step-down p-value is one-sided in the Jonckheere direction, doubled.
 - **Groups of one animal are left out of every test:** NIEHS-07 male has 1000 mg/kg with N = 1. The cell is shown without a marker, and lower doses keep their Williams/Shirley markers. With the group included, the step-down stops at it and loses 28 cells (760/790).
 
@@ -65,3 +65,7 @@ None points to a different procedure.
 ## Not reproduced: outlier removal
 
 NTP staff examine values flagged by the Dixon and Massey test, and remove some by judgement. The removed values are visible only as published Ns smaller than the data's. We do not remove outliers. Rows where NTP did are listed as unmatched above. In our reports those endpoints are computed on all animals.
+
+## Internal concentration tables (G3, 2026-10-07)
+
+NIEHS-12 Tables 18/19 and NIEHS-13 Tables 19/20 (blood, liver and lung by study day) come from the lab's results workbook in each Bookshelf bundle (`tooling.cebs_lab_concentration` → `tables.blood_tissue_concentration_table`). Nonparametric family (Jonckheere, Shirley or Dunn), tested only when the control has a mean. 359 / 364 compared cells agree, markers and BD included (`tests/unit/test_reference_internal_concentration.py`). The 5 differences are NIEHS-12 Table 19 SEs printed at 2 significant figures ("0.80"). Every exclusion reproduces with Dixon's r10 outlier test at α = 0.01 (the reports' "outlier test of Dixon and Massey"), values below the LOD at ½ LOD. Not built: the rows normalized by the theoretical inhaled dose, which no data file records.

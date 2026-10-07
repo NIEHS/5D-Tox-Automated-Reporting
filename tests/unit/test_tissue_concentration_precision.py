@@ -56,4 +56,4 @@ def test_niehs10_table7_cells_match_published(reference_session):
            for b in plan.sex_blocks for r in b.rows if not r.is_n_row}
     assert got == published
     # The unit is the Key sheet's (ug/ml), not a literal.
-    assert tc["footnotes"][0].endswith("plasma concentration data are presented in µg/mL.")
+    assert tc["footnotes"][0]["text"].endswith("plasma concentration data are presented in µg/mL.")

@@ -38,6 +38,7 @@ import re
 
 from tables.table_builder_common import (
     apical_caption,
+    definition_footnote,
     js_dose_key,
     mean_se,
     format_mean_se_sig,
@@ -181,6 +182,13 @@ def build_tissue_concentration_table_from_sidecar(
 
     if not sidecar_data:
         return {}
+
+    # The 2025 studies' blood/tissue concentrations by study day are a
+    # different table (tables.blood_tissue_concentration_table).
+    from tables.blood_tissue_concentration_table import build_day_layout_table, is_day_layout
+
+    if is_day_layout(sidecar_data.values()):
+        return build_day_layout_table(sidecar_data, compound_name, dose_unit, design)
 
     # ── Extract per-timepoint, per-dose concentration values ──────────────
     # Only Biosampling Animals.  Group by (sex, timepoint, dose).
@@ -336,9 +344,8 @@ def build_tissue_concentration_table_from_sidecar(
     else:
         unit_clause = "; plasma concentration data are presented in " + \
             UNIT_NOT_RECORDED.format(what="concentration") + "."
-    footnotes = [
-        "Data are displayed as mean \u00b1 standard error of the mean" + unit_clause,
-    ]
+    footnotes = [definition_footnote(
+        "Data are displayed as mean \u00b1 standard error of the mean" + unit_clause)]
 
     return {
         "title": "Tissue Concentration",
