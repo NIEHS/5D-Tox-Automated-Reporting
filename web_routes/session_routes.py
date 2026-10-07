@@ -1511,8 +1511,12 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     then re-exports integrated.bm2 so the .bm2 file reflects the
     user-approved metadata.
 
-    Also writes a metadata_approved.json marker so the UI knows the
-    user has explicitly reviewed and approved the metadata.
+    Also writes metadata_approved.json: the approval marker the UI reads,
+    and the approved descriptions themselves — integration re-infers
+    metadata from experiment names, and re-applies these over it
+    (workflow.steps.integrate_step), so a re-integration keeps them.  The
+    genomics sidecar's organ/sex are reconciled with the approved metadata
+    here, so the next process run reports the approved organ.
     """
     # Route the read through the schema-validating loader (ADR-0001).
     # Returns None when no integrated.json exists; raises
@@ -1544,6 +1548,13 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
             exp["experimentDescription"] = metadata_by_name[name]
             updated_count += 1
 
+    # The genomics sidecar was written at integration from the metadata of
+    # that moment; carry the approved organ/sex onto it (rewritten only when
+    # something changed — its mtime keys the genomics cache).
+    from bmdx_pipe.genomics_metadata import reconcile_genomics_sidecar
+    from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
+    reconcile_genomics_sidecar(integrated, str(sess_path / GENOMICS_SIDECAR_NAME))
+
     # Write through the schema-validating writer (ADR-0001 step 3).
     # If the user submitted metadata that violates the schema (e.g. a
     # mistyped sex value), validation fails BEFORE disk is touched and
@@ -1571,6 +1582,12 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     meta_approved = {
         "approved_at": now_iso(),
         "experiments_updated": updated_count,
+        # The approved descriptions, re-applied by every later integration.
+        "metadata": {
+            exp.get("name", ""): exp.get("experimentDescription")
+            for exp in integrated.get("doseResponseExperiments", [])
+            if exp.get("name", "") in metadata_by_name
+        },
     }
     (sess_path / "metadata_approved.json").write_text(
         json.dumps(meta_approved, indent=2), encoding="utf-8",

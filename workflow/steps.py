@@ -433,6 +433,11 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
                 }
                 break
 
+    # Metadata the user approved for an earlier integration: integration
+    # re-infers every experiment's metadata, and the approval must win.
+    approval = store.read_json(dtxsid, "metadata_approved.json")
+    approved_metadata = approval.get("metadata") if isinstance(approval, dict) else None
+
     try:
         integrated = integrate_pool(
             dtxsid,
@@ -442,6 +447,7 @@ def integrate_step(dtxsid: str, identity: dict | None, store: PoolStore) -> dict
             precedence,
             test_article=test_article,
             llm_generate_json=_llm_generate_json,
+            approved_metadata=approved_metadata or None,
         )
     except Exception as e:
         logger.exception("Pool integration failed for %s", dtxsid)
