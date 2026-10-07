@@ -30,8 +30,9 @@ continued the other way, or opened in the browser.
 8. [Re-running, caching and resetting](#8-re-running-caching-and-resetting)
 9. [Troubleshooting](#9-troubleshooting)
 10. [Known gaps](#10-known-gaps)
-- [Appendix A. What in the report comes from the data](#appendix-a-what-in-the-report-comes-from-the-data)
-- [Appendix B. The YAML files and what they can do](#appendix-b-the-yaml-files-and-what-they-can-do)
+- [Appendix A. Render surfaces](#appendix-a-render-surfaces)
+- [Appendix B. What in the report comes from the data](#appendix-b-what-in-the-report-comes-from-the-data)
+- [Appendix C. The YAML files and what they can do](#appendix-c-the-yaml-files-and-what-they-can-do)
 
 ---
 
@@ -171,7 +172,7 @@ the same session finishes in seconds.
 | `--files F …` | Import these files first. Leave it out to use the files already in the session. Adding files to a session that has already progressed invalidates its downstream artifacts, just like an upload |
 | `--name`, `--casrn` | Test-article identity. If you don't give them, `identity.json` is used. If that has no name, the script tries the PubChem/CTX resolver (needs network) |
 | `--compound-name` | Short name used in captions and narratives (default: the identity name) |
-| `--dose-unit` | The study's dose unit, used on every surface: table headers, Methods, Abstract, Summary, the Appendix B roster and the LLM narratives. **State it explicitly.** If you leave it out, the unit the data records is used, else `mg/kg`, and the log says which (`dose unit: ppm (stated)`). A concentration in air (`ppm`, `ppb`, `mg/m3`) makes it an inhalation study: "exposed to … by inhalation", "exposure concentrations", "chamber control", title "(Inhalation Studies)", and no vehicle or dose formulations |
+| `--dose-unit` | The study's dose unit, used on every surface: table headers, Methods, Abstract, Summary, the report's Appendix B roster and the LLM narratives. **State it explicitly.** If you leave it out, the unit the data records is used, else `mg/kg`, and the log says which (`dose unit: ppm (stated)`). A concentration in air (`ppm`, `ppb`, `mg/m3`) makes it an inhalation study: "exposed to … by inhalation", "exposure concentrations", "chamber control", title "(Inhalation Studies)", and no vehicle or dose formulations |
 | `--metadata FILE.json` | Classification overrides, keyed by **filename**: `{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}` |
 | `--design FILE.json` | Study-design facts the data does not record, set on every experiment's metadata (as the UI metadata step does) and kept in `sessions/<id>/study_design.json`, so every later integration (`--reintegrate`) puts them back: `{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}`. Fields: `species`, `strain`, `articleRoute`, `administrationMeans`, `articleVehicle`, `studyDuration`, controlled vocabulary only. A fact the metadata does not record takes the standard design as a **fallback**: Sprague Dawley rats for five days (`studyDuration`, e.g. `"28d"`, overrides it), by gavage in corn oil for an oral (mg/kg) unit, by inhalation for an air concentration (ppm), no route fallback for other units. These facts also set the apical table captions: "…of Male Rats Administered X for Five Days", or "Exposed to X" for inhalation. The log prints `NOTE: not recorded in the data, standard design used: …`; record the real values with `--design` whenever they differ. Recorded values that disagree across experiments get no fallback. Facts the data never holds (animal source, quarantine, test-article lot and purity, dose rationale) appear as a `[Placeholder: …]` in Materials and Methods, which `--strict` refuses to ship |
 | `--front-matter FILE.json` | Front matter, as the Configure screen saves it to `front_matter.json`: `authors`, `contributors`, `publication` (`report_number`, `doi`, `report_date`) and `strain_designation`, the supplier designation the title prints after the strain, e.g. `{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}`. Keys the file gives replace the saved ones |
@@ -612,7 +613,7 @@ Reopen a section with `release_section_step` or `POST /api/session/unapprove`.
 
 ## 10. Known gaps
 
-These hold as of 2026-10-05. Appendix A.4 lists every place the report still
+These hold as of 2026-10-05. Appendix B.4 lists every place the report still
 lacks data, with what would close it.
 
 - **About This Report** (authors, contributors) is human-set front matter
@@ -620,7 +621,7 @@ lacks data, with what would close it.
 - **Background** needs ATSDR and IRIS. Where either is unreachable (the sandbox
   firewall), `--background` saves nothing and says so, rather than writing a
   Background that reports the unreachable sources as data gaps.
-- **Appendix C.2 (empirical FDR)** needs the study's synthetic-null analysis,
+- **The report's Appendix C.2 (empirical FDR)** needs the study's synthetic-null analysis,
   which is not ingested; its figure stays pending.
 - **Materials & Methods** in the deliverable comes from Process
   (`_cache_methods_*`). The browser's separate *Generate M&M* button saves
@@ -637,14 +638,203 @@ lacks data, with what would close it.
 
 ---
 
-## Appendix A. What in the report comes from the data
+## Appendix A. Render surfaces
+
+> The report has appendices of its own (A–F). This manual's appendices are
+> referred to as A, B and C, or by section (A.1, B.2, C.3); the report's
+> are always written "the report's Appendix …".
+
+A **render surface** is one output format of the report. Every surface is a
+projection of the same two inputs, and none of them is a source of truth.
+This appendix explains the idea, lists the surfaces, explains BITS and JATS,
+and says how each surface is checked. It holds as of 2026-10-07.
+
+### A.1 The idea: one description, many projections
+
+```
+session (integrated.json + sidecars + section files + front matter)
+        │  assemble the render data            rendering/report_data.py,
+        ▼                                      rendering/latex_export.load_session_data
+render data  +  document tree (template / view; Appendix C below)
+        │  EXTRACT: what to show, in what order rendering/render_common.py
+        ▼
+markup-free plans (tables, captions, rows, narrative sources, numbering)
+        │  EMIT: one emitter per surface
+        ├─▶ HTML      html_generator.py
+        ├─▶ LaTeX     latex_generator.py   → Overleaf bundle → PDF (tect)
+        ├─▶ Word      docx_generator.py    → PDF (LibreOffice)
+        └─▶ BITS XML  jats_generator.py    → Bookshelf facsimile
+```
+
+- **One description.** The data assembly and the document tree are shared,
+  so every surface reports the same study: the same sections in the same
+  order, the same tables with the same numbers, rows, footnotes and captions,
+  and the same text.
+- **Extract, then emit** (ADR-0006). The decision about what a node shows
+  is made once, in `render_common`, as a plan with no markup in it. Each
+  emitter only turns plans into its own format and applies its own escaping.
+  A bug in what a table contains is therefore fixed once, for every surface.
+- **Shared, surface-independent decisions:**
+  - table and figure numbers, counted by position in the tree;
+  - captions, built from the design facts;
+  - "not evaluated" statements and `[… pending]` placeholders;
+  - the per-node page breaks and layout styles (`styles`; see C.2 below);
+  - cross-references.
+- **Cross-references.** Narrative text names a target, not a number
+  (`[[xref:bmd-summary]]`), so reordering the tree can't leave a stale
+  "Table 3" behind. An unknown target shows as `[[xref:??id]]`, and only table
+  references are wired so far. Each surface resolves the token to its own form:
+  - LaTeX: `Table~\ref{tab:bmd-summary}`;
+  - HTML: a link reading "Table 8";
+  - BITS: `<xref ref-type="table" rid="bmd-summary">Table 8</xref>`.
+- **Outputs are one-way.** A surface is never read back. Edits made in Word or
+  Overleaf stay there; the app is not an editor (ADR-0018). The only way in
+  for authored text is a freeform node (C.2 below), which can import a
+  `.docx` block.
+
+### A.2 The surfaces
+
+| Surface (`--surfaces`) | Output | Built by | Role |
+|---|---|---|---|
+| `html` | One self-contained `.html` | `html_generator.generate_html` | The on-screen view: the browser's preview frame and a quick check |
+| `docx` | `.docx` | `docx_generator.generate_docx` | The default deliverable, for Word-based review. Styles come from the NIEHS-10 reference (`assets/templates/niehs-10-base.docx`) |
+| `latex` | `-overleaf.zip`: `main.tex`, `report.tex`, `niehs.cls`, `figures/`, a README | `latex_generator.generate_latex` + `latex_export.build_overleaf_bundle` | For Overleaf: drop the zip into a new project and compile |
+| `pdf` | `.pdf` | The `latex` bundle compiled locally with `tect` | A typeset PDF |
+| `jats` | `.xml`: a BITS 2.0 `<book>` | `jats_generator.generate_bits` | **The submission format** for NCBI Bookshelf (A.3) |
+| `bookshelf` | `.bookshelf.html` | `bookshelf_preview.render_book_xml` over the BITS book | A lookalike of the Bookshelf reader, built from the exact XML we would submit |
+
+**Surface details:**
+
+- **Word** is an object model rather than markup. Its handlers modify a
+  document instead of returning strings, and it walks the tree itself. What
+  each section contains still comes from the shared plans (ADR-0008).
+  - Its page breaks follow `styles`.
+  - Its other typography comes from the Word base styles, not the per-node
+    layout styles.
+  - Pages are numbered in roman in the front matter, then in arabic from the
+    body.
+- **PDF** is produced two ways, which typeset differently. For a Bookshelf
+  submission, the PDF is the one rendition we supply alongside the XML.
+  - the `pdf` surface compiles the LaTeX bundle;
+  - `GET /Bookshelf/{id}/report.pdf` converts the Word file with LibreOffice
+    (`docx2pdf`).
+- **The JATS article** (`jats_generator.generate_jats`) emits a PMC journal
+  `<article>` instead of a book. It covers the prose only and exists for
+  PMC's article tools. Reports publish as books, so it is not a deliverable.
+- **Typst**, an earlier PDF route, was abandoned in the 2026-05 move to LaTeX.
+  `report.typ` is a leftover.
+
+**Where each surface is reached:**
+
+| Surface | Command line (Route A) | Server (Route B) |
+|---|---|---|
+| `html` | `--surfaces html` | `POST /api/preview/{id}/materialize`, always written alongside the chosen surface; `GET …/view` |
+| `docx` | `--surfaces docx` | Materialize with `surface: docx` (the default), then `GET …/download`; `GET /Bookshelf/{id}/report.docx` |
+| `latex` | `--surfaces latex` | Not per session (§10). `POST /api/export-overleaf-bundle` takes a full report body from the legacy UI |
+| `pdf` | `--surfaces pdf` (`--strict` refuses placeholders) | `GET /Bookshelf/{id}/report.pdf` (from Word) |
+| `jats` | `--surfaces jats` | Materialize with `surface: jats` |
+| `bookshelf` | `--surfaces bookshelf` | `GET /Bookshelf/{id}` (the shelf of sessions: `GET /Bookshelf`) |
+
+**Materialized previews.** A materialized preview is written to
+`sessions/<id>/preview/<view>/`, and the previous set is archived under
+`history/`. A restyle re-renders the same content without creating a new
+content version. The command line writes only to `--out`.
+
+### A.3 BITS and JATS
+
+- **JATS**, the Journal Article Tag Suite, is the NISO standard XML vocabulary
+  for journal articles (Z39.96). PubMed Central archives articles in it.
+- **BITS**, the Book Interchange Tag Suite, is JATS extended for books. It
+  adds:
+  - book metadata;
+  - book parts (chapters);
+  - front and back matter;
+  - appendix groups.
+
+  NCBI's Bookshelf ingests books as BITS. NIEHS's 5-day reports are published
+  there as books: NIEHS-10 is NBK589955. **A BITS `<book>` is therefore the
+  report's ultimate deliverable**, and the other surfaces exist for review and
+  editing along the way.
+
+**How our report maps onto a BITS book:**
+
+| Our document | BITS 2.0 |
+|---|---|
+| The report | `<book dtd-version="2.0">` |
+| Title, CASRN, ISSN, publisher, abstract | `<book-meta>`: `book-id`, `book-title-group`, `pub-date`, `issn`, `publisher`, `abstract` |
+| `front` region: Foreword, About, Peer Review, Publication Details, Acknowledgments | `<front-matter>`: `foreword`, `front-matter-part`, `ack` |
+| `body` region: Background, Materials and Methods, Results, Summary | `<book-body>`, one `<book-part book-part-type="chapter">` per top-level section, with `<sec>` inside |
+| Tables, with their footnotes | `<table-wrap>`, `<caption>`, `<table>`, `<table-wrap-foot>`, `<fn>` |
+| Figures | `<fig>` |
+| References | `<book-back>` › `<ref-list>` of `<ref>` / `<mixed-citation>` |
+| The report's Appendices A–F | `<book-back>` › `<book-app-group>` › `<book-app>`; authored HTML becomes `<sec>`, `<p>`, `<table-wrap>` and `<list>` |
+| `[[xref:id]]` | `<xref ref-type="table" rid="id">` |
+
+The document grammar itself is a BITS profile (ADR-0025): each node type's
+role ("sec", "table-wrap", "fig", "app", …) is a BITS element, and the
+template's regions are BITS's three book divisions.
+
+**The submission package** (NCBI's specification NBK554845) holds:
+
+- the BITS XML;
+- at least one PDF, which we supply (A.2);
+- the images.
+
+NCBI renders the HTML book page from the XML on its own servers after
+acceptance. We never hold their production stylesheet. The
+`bookshelf` surface is our lookalike of that page:
+
+- It reproduces the reader content: a contents landing page, one page per
+  section with Previous/Next, tables and figures as thumbnail cards that open
+  in a lightbox, and cross-references that work across pages.
+- It deliberately leaves out NCBI's site chrome, and a banner marks every page
+  as a preview.
+
+### A.4 How surfaces are checked
+
+| Check | What it guards | Where |
+|---|---|---|
+| Dispatch parity | HTML, LaTeX and Word handle every renderable node type. Checked at import and by test | `render_common.assert_dispatch_covers`, `tests/unit/test_renderer_dispatch_parity.py` |
+| Semantic parity | Surfaces agree on table and figure numbers, cross-references and BMD summary endpoints | `tests/unit/test_render_semantic_parity.py` |
+| DTD validity | The BITS book and the JATS article validate against the vendored BITS 2.0 and JATS 1.3 DTDs (`assets/bits-dtd`, `assets/jats-dtd`) | `tests/unit/test_jats_stylecheck.py` |
+| PMC StyleChecker | Zero errors from NLM's StyleChecker (style `book` and `article`), run offline from the vendored v5.48 transforms (`assets/stylechecker`) | `rendering/jats_stylecheck.py`, the same test |
+| BITS grammar | The template and the reference report's structure instantiate as a valid BITS profile | `tests/unit/test_bits_profile.py` |
+| No placeholders | `--strict` refuses a LaTeX or PDF build while any `[… pending]` remains | `tooling/generate_report.py` |
+
+**Previewing a book online.** NCBI's online tools are the PMC Article Previewer
+and the online StyleChecker. The sandbox firewall blocks them, so use them from
+the host.
+
+**BITS sits outside the dispatch-parity guard by design.** A node type it
+doesn't yet project emits a visible `<!-- TODO -->` in the XML, never nothing.
+
+### A.5 Limits
+
+- **Charts in BITS.** Genomics chart images aren't packaged into the book yet:
+  a tree `figure` projects to `<fig>`, but data-driven chart images don't. The
+  shipped template draws no charts, so this doesn't affect current reports.
+- **Citations.** References are `<mixed-citation>` text, not structured
+  `<element-citation>` records.
+- **Cross-references** to sections and figures fall through to the
+  broken-reference marker. Only table references resolve.
+- **LaTeX over HTTP.** There is no per-session LaTeX route, and the preview's
+  `latex` surface returns 501. Use the command line.
+- **Word typography.** Word applies page breaks from `styles` but not the
+  per-node fonts and spacing.
+- **Checking Word output.** Converting a `.docx` in the sandbox uses
+  LibreOffice. The project's fidelity reference for Word is OnlyOffice, which
+  runs on the host.
+
+---
+
+## Appendix B. What in the report comes from the data
 
 This appendix sets out everything in a report that is driven by the data:
-the rules (A.1), how each fact is worked out from the files (A.2), where each
-part of the report comes from (A.3), and where it still falls short (A.4). It
+the rules (B.1), how each fact is worked out from the files (B.2), where each
+part of the report comes from (B.3), and where it still falls short (B.4). It
 holds as of 2026-10-07.
 
-### A.1 The rules
+### B.1 The rules
 
 - **The integrated dataset is the source of truth.** Every number and study
   fact in the report is read from `integrated.json` (the BMDExpress project
@@ -659,7 +849,7 @@ holds as of 2026-10-07.
 - **The method profile sets how the data is analysed.** The statistical
   tests, thresholds, BMD acceptance criteria, internal-dose rules, GO ranking
   and number formats come from the study's pinned profile (`profiles/*.yaml`,
-  ADR-0027). The footnotes, Methods text and Appendix D that describe the
+  ADR-0027). The footnotes, Methods text and the report's Appendix D that describe the
   method are generated from those same settings, so the text can't claim a
   test that didn't run.
 - **A fact the data doesn't hold is never invented.** It takes one of three
@@ -673,7 +863,7 @@ holds as of 2026-10-07.
   matter, experiment-metadata approval and section approval. Each is kept in
   the session and re-applied when integration runs again.
 
-### A.2 How the data is read
+### B.2 How the data is read
 
 Each fact below is worked out from the files at the step named. Where a rule
 is a method setting, the setting's name in the profile is given, with its
@@ -688,7 +878,7 @@ is a method setting, the setting's name in the profile is given, with its
 | `profile.yaml` | The pinned method profile, `profiles/<name>.yaml` | Statistical tests and thresholds, BMD engine, eligibility, BMR fallback and acceptance, internal-dose rules, GO ranking and display, the settings expected in a `.bm2` |
 
 An item without a label is computed from the data or fixed in code. Stated
-facts (`study_design.json`, `front_matter.json`) are JSON, not YAML. A.4 lists
+facts (`study_design.json`, `front_matter.json`) are JSON, not YAML. B.4 lists
 the code-fixed settings that belong in a YAML file.
 
 **Files (Validate, Integrate)**
@@ -812,7 +1002,7 @@ the code-fixed settings that belong in a YAML file.
 - **BMR.** [`profile.yaml`] The BMR is the one the `.bm2` analysis records. Where it records
   none, `bmr_when_unrecorded` (1 SD) is used and footnoted as inferred.
 - **Acceptance** [`profile.yaml`] (`acceptance`) applies to every BMD, whatever its source.
-  Appendix D-1 prints these values:
+  The report's Appendix D-1 prints these values:
   - R² < 0.6, BMD/BMDL > 10, or a BMD above the highest dose → "NVM" (no
     viable model);
   - a BMD below ⅓ of the lowest nonzero dose → "<LNZD/3".
@@ -871,7 +1061,7 @@ The rules come from the profile's `internal_dose` settings [`profile.yaml`], exc
 - **Mismatch check.** [`profile.yaml`] At integration these recorded settings are compared with
   `genomics.recorded` (BMR 25 % relative deviation, model averaging). A
   disagreement is a `method_mismatch` warning; neither side wins.
-- **Appendix C.1 PCA** is drawn per tissue and sex from the integrated
+- **The report's Appendix C.1 PCA** is drawn per tissue and sex from the integrated
   expression matrix: one dot per animal, coloured by dose. Columns are
   mean-centred without scaling and decomposed by SVD, with scikit-learn's
   sign convention. This reproduces NIEHS-10's figures exactly when given the
@@ -916,13 +1106,13 @@ The rules come from the profile's `internal_dose` settings [`profile.yaml`], exc
   - `gene_sets`;
   - `charts`.
 - **Page breaks and appendix text.** [`template.yaml`] The template's `styles` block sets
-  where pages break, matching NIEHS-10. Appendix C, D and E prose comes from
+  where pages break, matching NIEHS-10. The report's Appendix C, D and E prose comes from
   the files the template names (`templates/freeform/appendix-{c,d,e}.*`).
-  Appendix A and F come from the study's own files
+  Its Appendix A and F come from the study's own files
   (`templates/studies/<id>/appendix-{a,f}.*`), so no other study inherits
   them.
 
-**The animal report and Appendix B (Approve data)**
+**The animal report and the report's Appendix B (Approve data)**
 
 - **The animal report** (`animal_report.json`) traces every animal ID across
   every file. It has five parts:
@@ -931,7 +1121,7 @@ The rules come from the profile's `internal_dose` settings [`profile.yaml`], exc
   - platform coverage;
   - attrition, giving who dropped out and why;
   - sex and dose consistency checks.
-- **Appendix B** lists each animal with its number, sex, dose and tissue, and
+- **The report's Appendix B** lists each animal with its number, sex, dose and tissue, and
   the FASTQ name of its expression sample.
 
 **The workflow itself**
@@ -972,10 +1162,10 @@ The rules come from the profile's `internal_dose` settings [`profile.yaml`], exc
     prompts are built from the profile;
   - the Background.
 
-### A.3 Where each part of the report comes from
+### B.3 Where each part of the report comes from
 
 Every row's place and heading come from `template.yaml`. The YAML column
-names the files that also shape its content (see the labels in A.2).
+names the files that also shape its content (see the labels in B.2).
 
 **Kinds of source:**
 
@@ -1029,7 +1219,7 @@ names the files that also shape its content (see the labels in A.2).
 | Apical BMR | Recorded in the `.bm2` > the profile's `bmr_when_unrecorded` (footnoted as inferred) |
 | `.bm2` setting vs profile | Neither wins. A disagreement is a `method_mismatch` warning |
 
-### A.4 Gap analysis
+### B.4 Gap analysis
 
 **Status values:**
 
@@ -1045,7 +1235,7 @@ names the files that also shape its content (see the labels in A.2).
 | G1 | Strain, route, vehicle and duration aren't in the BMDExpress project or the STQ weight extracts | The standard design (logged), or `--design`. BPAF and Triclosan were stated as the standard design on 2026-10-07 | Ingest the study's protocol record (CEBS study metadata or the source-of-truth `.xlsx` Key sheet) |
 | G2 | Animal source, age, quarantine, randomization, dose rationale, test-article lot and purity, formulation analyses | `[Placeholder]` in Methods; `--strict` blocks | A study-facts input, or text authored in Word (ADR-0018) |
 | G3 | Supplier strain designation | Front matter only; the title leaves it out if unset | The same protocol record as G1 |
-| G4 | eFDR (synthetic-null analysis) | Appendix C.2 is pending; Methods says it isn't included | Ingest the synthetic-null BMDExpress results |
+| G4 | eFDR (synthetic-null analysis) | The report's Appendix C.2 is pending; Methods says it isn't included | Ingest the synthetic-null BMDExpress results |
 | G5 | Theoretical inhaled dose (inhalation studies) | Rows normalized by inhaled dose aren't built | A file recording the inhaled-dose calculation |
 | G6 | Authors, report number, DOI, Background sources | Front matter and `--background` on the host | Human input; host network |
 
@@ -1056,7 +1246,7 @@ names the files that also shape its content (see the labels in A.2).
 | G7 | Experiment metadata (organ, sex, species) | Inferred from experiment names (LLM) unless approved; the source-of-truth `.xlsx` is primary only for classification | Read the workbook's Key and Data sheets first (ADR-0017/0019) |
 | G8 | Multi-species studies (NIEHS-13: rats and mice) | One gene-expression `.bm2` per pool, and genomics keyed by organ and sex, so species collide. Our NIEHS-13 session holds the rat data only | Key genomics by species and keep every expression project |
 | G9 | Animal report counts NIEHS-13's biosample animals as Core | The animal report's Core count is too high; the tables use the right cohort | Use the cohort rule the tables use |
-| G10 | The UI's Process step sends `mg/kg` when no unit is set, and a few render helpers (the Appendix B dose header, the genomics table labels) fall back to `mg/kg` when no unit is passed | Hides the recorded unit and the logged fallback | Send nothing and let the server resolve it; pass the resolved unit everywhere |
+| G10 | The UI's Process step sends `mg/kg` when no unit is set, and a few render helpers (the report's Appendix B dose header, the genomics table labels) fall back to `mg/kg` when no unit is passed | Hides the recorded unit and the logged fallback | Send nothing and let the server resolve it; pass the resolved unit everywhere |
 | G11 | A text or CSV file's platform is read from its file name | A file not named to NTP conventions is unassigned or misclassified until overridden | Classify by content (endpoint names), as `.bm2` files are |
 | G12 | Apical outlier exclusion (NIEHS staff judgement) | Not represented; the profile says `outliers: null` | A per-study exclusion list in the overlay |
 | G13 | NIEHS-10's apical engine (BMDS 2.7) and `all_endpoints` | Listed as profile deviations; the substitute runs | Implement, or accept as recorded |
@@ -1067,8 +1257,8 @@ names the files that also shape its content (see the labels in A.2).
 |---|---|---|---|
 | G14 | Methods guides for internal dose ("LC-MS/MS"), sample collection, RNA, sequencing, QC and instruments are fixed text | The LLM writes plausible, older-era protocol text | Move the guides into the profile, or build them from data |
 | G15 | The transcriptomic BMD guide fixes "5th percentile", "≥3 genes, ≥5 %" and "median over probes" | Can disagree with the profile's GO ranking | Generate from the profile, as the statistics guide is |
-| G16 | Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text | Generate from the profile and the recorded configuration |
-| G17 | Appendix E describes liver, kidney and heart whatever was weighed | Can describe organs the study didn't weigh, and miss ones it did | Select descriptions by the organs in the data |
+| G16 | The report's Appendix D prose (ToxicR, Laplace model averaging) and Appendix C prose | Fixed text | Generate from the profile and the recorded configuration |
+| G17 | The report's Appendix E describes liver, kidney and heart whatever was weighed | Can describe organs the study didn't weigh, and miss ones it did | Select descriptions by the organs in the data |
 | G18 | The "most sensitive" filters use a fixed lower limit of extrapolation (⅓ of the lowest nonzero dose) and anomaly ratio (10) | Fixed in code, not the profile | Read them from the profile, as the acceptance criteria are |
 | G19 | BMD precision (1 or 3 decimals) is inferred from whether the `.bm2` has gene-level analyses | A data heuristic standing in for a method setting | A profile setting |
 | G20 | The transcriptomics Methods guides name TempO-Seq and the S1500+ platform | Wrong for an Affymetrix or Illumina study, although the assay is detected from the chip | Build the guides from the detected assay |
@@ -1080,18 +1270,18 @@ names the files that also shape its content (see the labels in A.2).
 
 | # | Gap | Today | To close it |
 |---|---|---|---|
-| G24 | NIEHS-13's "most potent GO per tissue" table, the Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
+| G24 | NIEHS-13's "most potent GO per tissue" table, the report's Appendix E gene-set definitions and NIEHS-13's appendix order | Missing; the order differs | Template changes, checked against the reference fixtures |
 | G25 | Genomics organs are ordered liver, kidney, then alphabetical | NIEHS-10's order, fixed in code; another study's published order may differ | Order by the template or the study overlay |
 
 ---
 
-## Appendix B. The YAML files and what they can do
+## Appendix C. The YAML files and what they can do
 
-Appendix A says which parts of a report each YAML file sets. This appendix
+Appendix B says which parts of a report each YAML file sets. This appendix
 covers the files themselves: where they live, what each key can do, how they
 combine, and how they are checked. It holds as of 2026-10-07.
 
-### B.1 The files
+### C.1 The files
 
 | File | Scope | Edited with | Takes effect |
 |---|---|---|---|
@@ -1111,14 +1301,14 @@ combine, and how they are checked. It holds as of 2026-10-07.
 - A route save of the template rewrites only its `document:` block. That
   drops the file's comments, so review the diff before committing.
 
-### B.2 The report template
+### C.2 The report template
 
 **Top-level keys:**
 
 | Key | What it sets |
 |---|---|
 | `document` | The structure: three region containers (`front`, `body`, `back`), each with `children` node entries |
-| `organs`, `sex`, `assays`, `genes`, `gene_sets` | Shared selections. The shipped template sets none, so every study is reported in full; a study's choices go in its overlay (B.3) |
+| `organs`, `sex`, `assays`, `genes`, `gene_sets` | Shared selections. The shipped template sets none, so every study is reported in full; a study's choices go in its overlay (C.3) |
 | `charts` | The genomics chart types to draw. The shipped `[]` draws none, as the NIEHS report has none |
 | `chart_style` | Chart styling, merged in four layers: built-in, then `defaults`, then `types.<type>`, then `instances."<organ>\|<sex>\|<type>"`. Keys follow `genomics/chart_style.STYLE_KEY_SCHEMA`: size, colours, palette, marker, legend, margins and axes |
 | `chart_types` | New chart types declared without code (below) |
@@ -1188,7 +1378,7 @@ second column is what each needs):
   - or `content: {latex: …, html: …}` with no representation, when the two
     surfaces need different markup.
 - A single-surface node shows a short pending note on the other surface.
-- Appendix C, D and E use this mechanism. Their text is in
+- The report's Appendix C, D and E use this mechanism. Their text is in
   `templates/freeform/`.
 
 **Data-driven chart types** (`chart_types`):
@@ -1233,7 +1423,7 @@ second column is what each needs):
 - **Precedence:** the template, then the session's `styles.yaml`, then the
   request.
 
-### B.3 Study overlays and saved views
+### C.3 Study overlays and saved views
 
 A study overlay (`templates/studies/<id>/view.yaml`) and a saved view
 (`sessions/<id>/views/<name>.yaml`) share one format:
@@ -1249,7 +1439,7 @@ filters:
   genes:     [egr1, ddit4]
   gene_sets: ["GO:1902893", "cell division"]
 charts: [umap, cluster]        # or [] for none; leave out to use the template's
-methods:                       # study overlay only: method overrides (B.4)
+methods:                       # study overlay only: method overrides (C.4)
   apical: {statistics: {alpha: 0.05}}
 ```
 
@@ -1283,7 +1473,7 @@ NIEHS-10's overlay is the worked example: the liver-only, male-only organ
 weight table and the hand-picked "Select" endpoints of its published Tables
 4–6.
 
-### B.4 Method profiles
+### C.4 Method profiles
 
 A profile (`profiles/<name>.yaml`) states the whole analysis method.
 
@@ -1337,12 +1527,12 @@ A profile (`profiles/<name>.yaml`) states the whole analysis method.
   `methods:` block, then the request (CLI or UI). A study overlay or request
   may state any subset of keys. Every resolved value carries its source.
 - **Text follows the profile.** Footnotes, the Methods statistics and BMD
-  text, and Appendix D-1 are generated from the resolved values.
+  text, and the report's Appendix D-1 are generated from the resolved values.
 
 The shipped profiles are `ntp-5day-2025` (NIEHS-12/13, the reference
 NIEHS-13) and `ntp-5day-2021` (NIEHS-07 to -10, the reference NIEHS-10).
 
-### B.5 Style vocabularies
+### C.5 Style vocabularies
 
 `vocab/<name>.yaml` maps the report's semantic roles (report title, section
 heading, table title, …) to Word paragraph styles. It has two layers:
@@ -1354,9 +1544,9 @@ heading, table title, …) to Word paragraph styles. It has two layers:
 A render uses a vocabulary only when the render data names one
 (`vocabulary`); otherwise Word output uses its built-in styling.
 
-### B.6 What YAML can't change yet
+### C.6 What YAML can't change yet
 
-These are fixed in code; Appendix A.4 tracks each one:
+These are fixed in code; Appendix B.4 tracks each one:
 
 - the boilerplate text: Foreword, Peer Review, Acknowledgments;
 - the set of Methods subsections and their LLM instructions;

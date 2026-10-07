@@ -33,6 +33,12 @@ while i < len(lines):
         out.append("<!-- ============================================================ -->")
         out.append(f'<h2 id="{anchor}"><span class="num">{letter}</span>{inline(title)}</h2>')
         toc.append((letter, anchor, title))
+    elif ln.startswith("> "):
+        quote = []
+        while i < len(lines) and lines[i].startswith(">"):
+            quote.append(lines[i][1:].strip()); i += 1
+        out.append('<div class="callout"><p>' + inline(" ".join(quote)) + "</p></div>")
+        continue
     elif ln.startswith("### "):
         out.append("<h3>" + inline(ln[4:]) + "</h3>")
     elif ln.startswith("```"):
@@ -79,7 +85,7 @@ while i < len(lines):
         continue
     elif ln.strip() and ln.strip() != "---":
         para = [ln]
-        while i + 1 < len(lines) and lines[i + 1].strip() and not re.match(r"(#|\||- |```)", lines[i + 1]):
+        while i + 1 < len(lines) and lines[i + 1].strip() and not re.match(r"(#|\||- |```|> )", lines[i + 1]):
             i += 1; para.append(lines[i])
         out.append("<p>" + inline(" ".join(p.strip() for p in para)) + "</p>")
     i += 1
