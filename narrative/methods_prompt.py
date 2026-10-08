@@ -226,6 +226,72 @@ def _dose_spacing_phrase(ctx: MethodsContext) -> str:
     return f"approximately {r:.1f}-fold spacing {between}"
 
 
+def _assay_guides(ctx: MethodsContext) -> dict[str, str]:
+    """The transcriptomics subsections for the assay the project's chip names:
+    TempO-Seq (S1500+) is sequenced, an Affymetrix GeneChip is hybridized and
+    scanned — RR-8 and NIEHS-02 … 06 are microarray studies, and their Methods
+    must not describe sequencing.  An assay the chip does not identify gets no
+    platform-specific text."""
+    organs = ", ".join(ctx.ge_organs) if ctx.ge_organs else "target organs"
+    assay = (ctx.genomics_assay or "").lower()
+    chip = ctx.genomics_chip or ""
+    if "tempo" in assay:
+        return {
+            "transcriptomics": (
+                f"Brief introductory paragraph: transcriptomic profiling was performed on "
+                f"{organs} using the TempO-Seq targeted RNA sequencing platform (BioSpyder "
+                f"Technologies)."),
+            "txomics_rna": (
+                "One paragraph. TempO-Seq S1500+ platform (BioSpyder Technologies), "
+                "library preparation with detector oligos, ligation, amplification, "
+                "multiplexed sequencing on Illumina platform."),
+            "txomics_seq_processing": (
+                "One paragraph. Demultiplexing, alignment to probe reference sequences, "
+                "count table generation using the TempO-SeqR pipeline."),
+            "txomics_normalization": (
+                "One paragraph. The current NIEHS TempO-Seq normalization: aligned read counts "
+                "of attenuated probes were readjusted to unattenuated equivalents using the "
+                "platform manifest's attenuation factors; counts were normalized per probe to "
+                "reads per million; a pseudo-count of 1.0 was added and values were "
+                "log2-transformed. Do NOT mention DESeq2, TMM or differential-expression models."),
+        }
+    if "affymetrix" in assay:
+        no_seq = ("This is a microarray study: do NOT mention sequencing, TempO-Seq, "
+                  "libraries, reads, alignment or counts.")
+        return {
+            "transcriptomics": (
+                f"Brief introductory paragraph: gene expression in {organs} was measured with "
+                f"Affymetrix GeneChip microarrays ({chip}). {no_seq}"),
+            "txomics_rna": (
+                f"One paragraph. Total RNA was isolated, labeled and hybridized to {chip} "
+                f"arrays, which were washed, stained and scanned to give one intensity (CEL) "
+                f"file per sample. Name no kits or instruments. {no_seq}"),
+            "txomics_seq_processing": (
+                f"One or two sentences: the scanned array images were summarized to probe-set "
+                f"intensities. {no_seq}"),
+            "txomics_normalization": (
+                "One sentence: the array normalization and any batch correction are not "
+                "recorded in the study data; write exactly "
+                "'[Placeholder: the array normalization method is not in the study data]'. "
+                + no_seq),
+        }
+    named = f" ({chip})" if chip else ""
+    unknown = ("The assay platform is not identified by the data: do NOT name TempO-Seq, "
+               "a microarray or a sequencing method.")
+    return {
+        "transcriptomics": (
+            f"Brief introductory paragraph: gene expression was measured in {organs}{named}. "
+            + unknown),
+        "txomics_rna": f"One sentence: RNA was isolated from each sample. {unknown}",
+        "txomics_seq_processing": (
+            "One sentence: '[Placeholder: the expression data processing is not in the study "
+            f"data]'. {unknown}"),
+        "txomics_normalization": (
+            "One sentence: '[Placeholder: the normalization method is not in the study data]'. "
+            + unknown),
+    }
+
+
 def _genomic_workflow_phrase(ctx: MethodsContext) -> str:
     """The transcriptomic prefilter and BMD-modeling steps as the .bm2 records
     them: a BMDExpress 3 project runs the Curve Fit Prefilter and ToxicR model
@@ -420,36 +486,16 @@ def _build_subsection_guidelines(
             "blood/serum and tissue samples collected at necropsy, stored at -80°C, "
             "analyzed by LC-MS/MS for parent compound and/or metabolite concentrations."
         ),
-        "transcriptomics": (
-            f"Brief introductory paragraph: transcriptomic profiling was performed on "
-            f"{', '.join(ctx.ge_organs) if ctx.ge_organs else 'target organs'} "
-            f"using the TempO-Seq targeted RNA sequencing platform (BioSpyder Technologies)."
-        ),
+        **_assay_guides(ctx),
         "txomics_sample": (
             "One paragraph. RNA was isolated from flash-frozen tissue samples. "
             "Describe tissue homogenization, RNA extraction method (e.g., RNeasy), "
             "RNA quality assessment (RIN values)."
         ),
-        "txomics_rna": (
-            "One paragraph. TempO-Seq S1500+ platform (BioSpyder Technologies), "
-            "library preparation with detector oligos, ligation, amplification, "
-            "multiplexed sequencing on Illumina platform."
-        ),
-        "txomics_seq_processing": (
-            "One paragraph. Demultiplexing, alignment to probe reference sequences, "
-            "count table generation using the TempO-SeqR pipeline."
-        ),
         "txomics_qc": (
             "One paragraph. Outlier detection by principal component analysis and "
             "total read count thresholds. Samples below quality thresholds were excluded "
             "from downstream analysis."
-        ),
-        "txomics_normalization": (
-            "One paragraph. The current NIEHS TempO-Seq normalization: aligned read counts "
-            "of attenuated probes were readjusted to unattenuated equivalents using the "
-            "platform manifest's attenuation factors; counts were normalized per probe to "
-            "reads per million; a pseudo-count of 1.0 was added and values were "
-            "log2-transformed. Do NOT mention DESeq2, TMM or differential-expression models."
         ),
         "data_analysis": (
             "Brief introductory paragraph: overview of the statistical and dose-response "

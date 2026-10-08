@@ -710,11 +710,13 @@ def _extract_genomics_assay(integrated: dict) -> tuple[str | None, str | None]:
             continue
         chip_id = str(chip.get("chipId", "") or "")
         chip_name = str(chip.get("name", "") or "")
+        provider = str(chip.get("provider", "") or "")
         # Skip placeholder "generic" chips attached to apical experiments
         if chip_id.lower() in ("generic", "") and chip_name.lower() in ("generic", ""):
             continue
         # Compare case-insensitively against known signatures
-        probe = (chip_id + " " + chip_name).lower()
+        # The provider names the vendor when the chip name doesn't ("Rat230_2").
+        probe = (chip_id + " " + chip_name + " " + provider).lower()
         if "s1500" in probe or "tempo" in probe or "biospyder" in probe:
             return ("TempO-Seq", chip_name or chip_id)
         if "affy" in probe or "hg-u133" in probe or "ht_mg" in probe:
