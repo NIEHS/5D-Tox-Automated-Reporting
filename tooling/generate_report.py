@@ -250,6 +250,32 @@ def apply_design(dtxsid: str, design_path: Path, store) -> None:
     _log(f"  study design recorded on {count} experiment(s): {fields}")
 
 
+def apply_experiment_metadata(dtxsid: str, path: Path) -> None:
+    """Record stated experiment metadata ({experiment name: {organ, sex, …}})
+    the data does not carry — e.g. the tissue of a project whose experiment is
+    named "EDHP mg_kg".  Laid over each named experiment's description and kept
+    as the approval (metadata_approved.json), which every later integration
+    re-applies — the same record the browser's approval writes."""
+    from bmdx_pipe import VOCABULARIES
+    from pipeline.integrated_io import load_integrated
+    from pipeline.metadata_approval import approve_experiment_metadata
+
+    given = json.loads(path.read_text())
+    if not isinstance(given, dict) or not all(isinstance(v, dict) for v in given.values()):
+        raise SystemExit("--experiment-metadata: expected {experiment name: {field: value}}")
+    names = {e.get("name") for e in (load_integrated(dtxsid) or {}).get("doseResponseExperiments") or []}
+    errors = [f"unknown experiment {n!r}" for n in given if n not in names]
+    for n, fields in given.items():
+        for k, v in fields.items():
+            allowed = VOCABULARIES.get(k)
+            if allowed and v not in allowed:
+                errors.append(f"{n}: {k}={v!r} is not in the vocabulary")
+    if errors:
+        raise SystemExit("--experiment-metadata: " + "; ".join(errors))
+    result = approve_experiment_metadata(dtxsid, given, merge=True)
+    _log(f"  experiment metadata recorded on {result['updated']} experiment(s): {given}")
+
+
 def apply_front_matter(dtxsid: str, path: Path, store) -> None:
     """Merge human-set front matter (authors, contributors, publication details,
     the title's strain designation) into the session's front_matter.json, as the
@@ -468,6 +494,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          "integration: species, strain, articleRoute, "
                          "administrationMeans, articleVehicle, studyDuration "
                          "(controlled vocabulary; e.g. {\"strain\": \"Sprague-Dawley\"})")
+    ap.add_argument("--experiment-metadata", type=Path,
+                    help="JSON {experiment name: {organ, sex, …}} of experiment metadata the "
+                         "data does not record (e.g. the tissue of a genomic experiment named "
+                         "\"EDHP mg_kg\"); laid over each named experiment and kept as the "
+                         "metadata approval, re-applied at every integration")
     ap.add_argument("--front-matter", type=Path,
                     help="JSON of front matter, as the Configure screen saves it: authors, "
                          "contributors, publication {report_number, doi, report_date}, "
@@ -568,6 +599,9 @@ def main(argv: list[str] | None = None) -> int:
             if design:
                 with _Timer("study design"):
                     apply_design(dtxsid, design, store)
+            if args.experiment_metadata:
+                with _Timer("experiment metadata"):
+                    apply_experiment_metadata(dtxsid, args.experiment_metadata)
             method_profile(dtxsid, args.method_profile)
             with _Timer("animal report"):
                 animal_report(dtxsid, store)

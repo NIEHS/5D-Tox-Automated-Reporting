@@ -1518,15 +1518,6 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
     genomics sidecar's organ/sex are reconciled with the approved metadata
     here, so the next process run reports the approved organ.
     """
-    # Route the read through the schema-validating loader (ADR-0001).
-    # Returns None when no integrated.json exists; raises
-    # BMDProjectValidationError on a malformed file (→ 422 globally).
-    integrated = load_integrated(dtxsid)
-    if integrated is None:
-        return JSONResponse(
-            {"error": "No integrated data found"}, status_code=404,
-        )
-
     body = await request.json()
     metadata_by_name = body.get("metadata", {})
 
@@ -1535,68 +1526,17 @@ async def api_save_experiment_metadata(dtxsid: Dtxsid, request: Request):
             {"error": "No metadata provided"}, status_code=400,
         )
 
-    # sess_path is still needed below for sibling artifacts (the .bm2
-    # re-export target and the approval marker).
-    sess_path = session_dir(dtxsid)
-    json_path = sess_path / "integrated.json"
-
-    # Apply user-edited metadata to each experiment
-    updated_count = 0
-    for exp in integrated.get("doseResponseExperiments", []):
-        name = exp.get("name", "")
-        if name in metadata_by_name:
-            exp["experimentDescription"] = metadata_by_name[name]
-            updated_count += 1
-
-    # The genomics sidecar was written at integration from the metadata of
-    # that moment; carry the approved organ/sex onto it (rewritten only when
-    # something changed — its mtime keys the genomics cache).
-    from bmdx_pipe.genomics_metadata import reconcile_genomics_sidecar
-    from pipeline.processing_helpers import GENOMICS_SIDECAR_NAME
-    reconcile_genomics_sidecar(integrated, str(sess_path / GENOMICS_SIDECAR_NAME))
-
-    # Write through the schema-validating writer (ADR-0001 step 3).
-    # If the user submitted metadata that violates the schema (e.g. a
-    # mistyped sex value), validation fails BEFORE disk is touched and
-    # the global handler returns a structured 422 — the on-disk file
-    # is left untouched.
-    save_integrated(dtxsid, integrated)
-
-    # Re-export .bm2 with the approved metadata
-    bm2_path = sess_path / "integrated.bm2"
-    bm2_ok = False
+    # pipeline.metadata_approval: onto integrated.json (schema-validated —
+    # a malformed description → 422 globally, disk untouched), the genomics
+    # sidecar reconciled, .bm2 re-exported, metadata_approved.json written.
+    from pipeline.metadata_approval import approve_experiment_metadata
+    loop = asyncio.get_running_loop()
     try:
-        from bmdx_pipe import export_integrated_bm2
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            None,
-            export_integrated_bm2,
-            str(json_path),
-            str(bm2_path),
-        )
-        bm2_ok = True
-    except Exception as e:
-        logger.warning("Failed to re-export .bm2 after metadata edit: %s", e)
-
-    # Write approval marker
-    meta_approved = {
-        "approved_at": now_iso(),
-        "experiments_updated": updated_count,
-        # The approved descriptions, re-applied by every later integration.
-        "metadata": {
-            exp.get("name", ""): exp.get("experimentDescription")
-            for exp in integrated.get("doseResponseExperiments", [])
-            if exp.get("name", "") in metadata_by_name
-        },
-    }
-    (sess_path / "metadata_approved.json").write_text(
-        json.dumps(meta_approved, indent=2), encoding="utf-8",
-    )
-
-    logger.info(
-        "Metadata approved for %s: %d experiments updated, bm2=%s",
-        dtxsid, updated_count, "ok" if bm2_ok else "failed",
-    )
+        result = await loop.run_in_executor(
+            None, approve_experiment_metadata, dtxsid, metadata_by_name)
+    except LookupError as e:
+        return JSONResponse({"error": str(e)}, status_code=404)
+    updated_count, bm2_ok = result["updated"], result["bm2_exported"]
 
     return JSONResponse({
         "ok": True,
