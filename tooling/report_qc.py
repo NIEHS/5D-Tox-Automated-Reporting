@@ -440,7 +440,7 @@ _TOP_GO = re.compile(r"Top \d+ (?:(.+?) )?Gene Ontology", re.I)
 
 
 def _first_num(s: str) -> float | None:
-    m = re.search(r"\d+(?:\.\d+)?", s or "")
+    m = re.search(r"\d+(?:\.\d+)?", (s or "").replace(",", ""))   # "1,033"
     return float(m.group()) if m else None
 
 

@@ -131,6 +131,25 @@ NIEHS-12 and -13 publish their blood and tissue concentrations only there, as
 the lab's results workbook. The sheet for the package's species is the one
 converted.
 
+`--mg-per-kg-from PROJECT.json` handles RR-8 and NIEHS-02 … 06, which record
+apical doses in mmol/kg. It converts each dose to the genomic project's mg/kg
+level, provided the levels share one ratio (the molecular weight). The
+converter exits non-zero if any workbook fails.
+
+**Every downloaded study at once.** `tooling/build_published_reports.py` builds
+a report for each published package (RR-8, NIEHS-02 … 10, NIEHS-12 rat) into
+`sessions/<DTXSID>` and `output/<DTXSID>`, so each one is on the Bookshelf. It
+uses the design, strain designation, genomic tissue/sex and method profile the
+published report states. Each build starts from a fresh session: the old one
+moves to `output/_session_backups/` and a Background written on the host is
+kept. `tooling/report_qc.py` then checks the rendered deliverables, including
+against the published tables, and writes `output/QC/qc-report.md`:
+
+```bash
+python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
+python -m tooling.report_qc                             # every report on the shelf
+```
+
 ---
 
 ## 4. Route A — Python
@@ -175,6 +194,7 @@ the same session finishes in seconds.
 | `--dose-unit` | The study's dose unit, used on every surface: table headers, Methods, Abstract, Summary, the report's Appendix B roster and the LLM narratives. **State it explicitly.** If you leave it out, the unit the data records is used, else `mg/kg`, and the log says which (`dose unit: ppm (stated)`). A concentration in air (`ppm`, `ppb`, `mg/m3`) makes it an inhalation study: "exposed to … by inhalation", "exposure concentrations", "chamber control", title "(Inhalation Studies)", and no vehicle or dose formulations |
 | `--metadata FILE.json` | Classification overrides, keyed by **filename**: `{"organ_weights_truth_male.txt": {"platform": "Organ Weight", "data_type": "tox_study"}}` |
 | `--design FILE.json` | Study-design facts the data does not record, set on every experiment's metadata (as the UI metadata step does) and kept in `sessions/<id>/study_design.json`, so every later integration (`--reintegrate`) puts them back: `{"strain": "Sprague-Dawley", "administrationMeans": "gavage", "articleVehicle": "corn oil"}`. Fields: `species`, `strain`, `articleRoute`, `administrationMeans`, `articleVehicle`, `studyDuration`, controlled vocabulary only. A fact the metadata does not record takes the standard design as a **fallback**: Sprague Dawley rats for five days (`studyDuration`, e.g. `"28d"`, overrides it), by gavage in corn oil for an oral (mg/kg) unit, by inhalation for an air concentration (ppm), no route fallback for other units. These facts also set the apical table captions: "…of Male Rats Administered X for Five Days", or "Exposed to X" for inhalation. The log prints `NOTE: not recorded in the data, standard design used: …`; record the real values with `--design` whenever they differ. Recorded values that disagree across experiments get no fallback. Facts the data never holds (animal source, quarantine, test-article lot and purity, dose rationale) appear as a `[Placeholder: …]` in Materials and Methods, which `--strict` refuses to ship |
+| `--experiment-metadata FILE.json` | Experiment metadata the data doesn't record, as `{experiment name: {field: value}}` (vocabulary-checked), e.g. `{"EDHP mg_kg": {"organ": "liver", "sex": "male"}}` for a genomic experiment named by chemical and unit. The fields are laid over the named experiments and kept as the metadata approval (`metadata_approved.json`), the same record the browser's approval writes, so every later integration re-applies them |
 | `--front-matter FILE.json` | Front matter, as the Configure screen saves it to `front_matter.json`: `authors`, `contributors`, `publication` (`report_number`, `doi`, `report_date`) and `strain_designation`, the supplier designation the title prints after the strain, e.g. `{"strain_designation": "(Hsd:Sprague Dawley® SD®)"}`. Keys the file gives replace the saved ones |
 | `--method-profile NAME` | The analysis method profile (`profiles/<name>.yaml`, ADR-0027): test family per platform, thresholds, BMD acceptance, internal-dose rules, GO ranking. `NAME` fixes the study on that profile; `newest` makes it track the newest profile as profiles are added, which is also the default for a study with no pin. A change of profile archives the old pin and recomputes. The log prints the profile, anything it asks for that the tool does not implement (`NOTE`), and every setting a `.bm2` analysis records differently (`WARNING`, also a `method_mismatch` in the validation report) |
 | `--bmd-stats`, `--go-pct`, `--go-min-genes`, `--go-max-genes`, `--go-min-bmd` | GO gene-set table settings for this run, overriding the method profile's (ntp-5day-2025: `fifth_pct,median`, 5, 20, 500, 3). Omit them to use the profile |
