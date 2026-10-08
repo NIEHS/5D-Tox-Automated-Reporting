@@ -1117,13 +1117,15 @@ async def _extract_genomics(
     # the published reports print.  Absent ⇒ the per-probe fallbacks below.
     from genomics.bmdexpress_categories import (
         category_analyses_by_experiment, chip_species_by_experiment, gene_level_top_genes,
-        genomic_bmr, go_direction_counts, report_bmd_decimals,
+        display_symbols, genomic_bmr, go_direction_counts, prefilter_fold_changes,
+        report_bmd_decimals,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
     # Every BMD in the report prints at one precision; stamped on each section
     # so the narrative builders read it from the payload they already get.
     bmd_decimals = report_bmd_decimals(integrated)
     chip_species = chip_species_by_experiment(integrated)
+    prefilter_fc = prefilter_fold_changes(integrated)
 
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
@@ -1138,6 +1140,13 @@ async def _extract_genomics(
             exp.get("genes", []),
             key=lambda g: _safe_float(g.get("bmd")),
         )
+        # BMDExpress 2.x stat results record no fold change (exported as 0.0);
+        # take the probe's from the Williams prefilter the analysis ran on.
+        recorded_fc = prefilter_fc.get(exp.get("name", ""), {})
+        if recorded_fc:
+            for g in genes:
+                if not _safe_float(g.get("fold_change"), 0.0) and g.get("probe_id") in recorded_fc:
+                    g["fold_change"] = recorded_fc[g["probe_id"]]
 
         # Filter GO terms by user-configured cutoffs
         raw_go = exp.get("go_bp", [])
@@ -1214,7 +1223,8 @@ async def _extract_genomics(
                     "n_up": n_up,
                     "n_down": n_down,
                     "fishers_p": g.get("fishers_two_tail"),
-                    "genes": g.get("gene_symbols", ""),
+                    "genes": display_symbols(g.get("gene_symbols", ""),
+                                             chip_species.get(exp.get("name"))),
                 })
 
             # Full list for charts — no cap, no rank (rank is table-specific).

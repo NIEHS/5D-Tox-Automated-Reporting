@@ -122,6 +122,62 @@ def _display_symbol(symbol: str, species: str | None) -> str:
     return symbol[:1].upper() + symbol[1:]
 
 
+def display_symbols(symbols: str, species: str | None) -> str:
+    """A ";"-separated symbol list (a GO set's active genes) in display case."""
+    return ";".join(_display_symbol(x.strip(), species) for x in str(symbols or "").split(";") if x.strip())
+
+
+def _ref_index(node, index: dict) -> dict:
+    """Every serialized object carrying an ``@ref`` id, by that id."""
+    if isinstance(node, dict):
+        if isinstance(node.get("@ref"), int) and len(node) > 1:
+            index.setdefault(node["@ref"], node)
+        for v in node.values():
+            _ref_index(v, index)
+    elif isinstance(node, list):
+        for v in node:
+            _ref_index(v, index)
+    return index
+
+
+def prefilter_fold_changes(integrated: dict) -> dict[str, dict[str, float]]:
+    """{experiment name: {probe id: signed best fold change}} from the Williams
+    prefilter each experiment's BMD analysis ran on.
+
+    A BMDExpress 2.x project's BMD stat results carry no fold change to the top
+    dose (the export reads 0.0); its Williams result records each probe's
+    ``bestFoldChange``, which is what the published NIEHS-02 … 10 top-genes
+    tables print (NIEHS-10 liver: Egr1 −4.218 → 4.2).  When an experiment has
+    several Williams results, the one a BMD analysis names as its work source
+    is used."""
+    index = _ref_index(integrated.get("doseResponseExperiments") or [], {})
+    resolve = lambda v: index.get(v) if isinstance(v, int) else v  # noqa: E731
+    work_sources = {n.partition(": ")[2] for b in integrated.get("bMDResult") or [] if isinstance(b, dict)
+                    for n in (b.get("analysisInfo") or {}).get("notes") or []
+                    if str(n).startswith("Work Source: ")}
+    out: dict[str, dict[str, float]] = {}
+    chosen: dict[str, bool] = {}
+    for w in integrated.get("williamsTrendResults") or []:
+        if not isinstance(w, dict):
+            continue
+        exp = resolve(w.get("doseResponseExperiement") or w.get("doseResponseExperiment"))
+        name = exp.get("name") if isinstance(exp, dict) else None
+        if not name:
+            continue
+        is_source = w.get("name") in work_sources
+        if name in out and (chosen[name] or not is_source):
+            continue
+        fcs: dict[str, float] = {}
+        for item in w.get("williamsTrendResults") or []:
+            pr = resolve(item.get("probeResponse")) if isinstance(item, dict) else None
+            probe = resolve(pr.get("probe")) if isinstance(pr, dict) else None
+            fc = _float(item.get("bestFoldChange"))
+            if isinstance(probe, dict) and probe.get("id") and fc:
+                fcs[probe["id"]] = fc
+        out[name], chosen[name] = fcs, is_source
+    return out
+
+
 def gene_level_top_genes(
     gene_items: list[dict],
     probe_fold_change: dict[str, float],

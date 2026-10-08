@@ -63,3 +63,31 @@ def test_genomic_bmr_is_read_from_the_bmd_analysis_notes():
         "BMR Type: Relative Deviation", "BMR Factor: 0.25"]}}]}
     assert genomic_bmr(integrated, "rat_LI_No0") == {"type": "Relative Deviation", "factor": 0.25}
     assert genomic_bmr(integrated, "rat_KI_No0") is None
+
+
+def test_prefilter_fold_changes_reads_the_williams_result_the_bmd_ran_on():
+    """BMDExpress 2.x stat results carry no fold change; the Williams result
+    records each probe's (published NIEHS-10 liver: Egr1 −4.218 → 4.2)."""
+    from genomics.bmdexpress_categories import prefilter_fold_changes
+
+    probe = {"@ref": 48, "@type": "Probe", "id": "EGR1_8533"}
+    integrated = {
+        "doseResponseExperiments": [{"@ref": 1, "name": "Liver_PFHxSAm_Male", "probeResponses": [
+            {"@ref": 99, "@type": "ProbeResponse", "probe": probe, "responses": [1.0]}]}],
+        "williamsTrendResults": [
+            {"name": "Liver_PFHxSAm_Male_williams_other", "doseResponseExperiement": 1,
+             "williamsTrendResults": [{"probeResponse": 99, "bestFoldChange": 9.9}]},
+            {"name": "Liver_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5", "doseResponseExperiement": 1,
+             "williamsTrendResults": [{"probeResponse": 99, "bestFoldChange": -4.2182856}]},
+        ],
+        "bMDResult": [{"analysisInfo": {"notes": [
+            "Work Source: Liver_PFHxSAm_Male_williams_0.05_NOMTC_foldfilter1.5"]}}],
+    }
+    assert prefilter_fold_changes(integrated) == {"Liver_PFHxSAm_Male": {"EGR1_8533": -4.2182856}}
+
+
+def test_display_symbols_cases_a_go_gene_list():
+    from genomics.bmdexpress_categories import display_symbols
+
+    assert display_symbols("zfp36;pik3r1;loc100911814", "Rattus norvegicus") == "Zfp36;Pik3r1;Loc100911814"
+    assert display_symbols("cyp2b6;egr1", "Homo sapiens") == "CYP2B6;EGR1"
