@@ -20,6 +20,14 @@ NIEHS-02 … 05 publish the CEBS database-export layout instead of Key/Data
 (one row per animal per measurement); tooling.cebs_db_export converts it to
 the same Key/Data columns first.
 
+Dose unit: RR-8 and NIEHS-02 … 06 record apical doses in mmol/kg (the Key
+sheet's "Dose in mMol/kg", or the export's DOSE_UNIT), while their genomic
+BMDExpress project and published tables use mg/kg (EHDP: 0.169 mmol/kg =
+61.2 mg/kg).  `--mg-per-kg-from <project .json>` converts a molar dose to the
+project's own mg/kg dose level: the nonzero levels are paired by rank and must
+share one ratio (the molecular weight, within 1%), or the workbook is refused.
+Without it the doses are left as recorded and the summary reports the unit.
+
 NIEHS-12 and -13 publish blood and tissue concentrations only in the Bookshelf
 bundle, as the analytical lab's results workbook (one sheet per species);
 tooling.cebs_lab_concentration converts the sheet of the package's species —
@@ -115,6 +123,71 @@ def key_sheet_sex(wb) -> str | None:
 _SPECIES_SUFFIX = {"rats": "rat", "mice": "mouse"}
 
 
+_DOSE_IN = re.compile(r"\b(?:dose|concentration)\s+in\s+(\S+)", re.I)
+
+
+def key_sheet_dose_unit(wb) -> str | None:
+    """The dose unit the Key sheet states for the Concentration column
+    ("Dose in mMol/kg"), or None."""
+    if "Key to Column Labels" not in wb.sheetnames:
+        return None
+    for row in wb["Key to Column Labels"].iter_rows(values_only=True):
+        if row and _cell(row[0]).strip() == "Concentration" and len(row) > 1:
+            m = _DOSE_IN.search(_cell(row[1]))
+            return m.group(1) if m else None
+    return None
+
+
+def project_dose_levels(project_json: str) -> list[float]:
+    """The nonzero dose levels of a BMDExpress project's gene-expression
+    experiments (mg/kg), ascending."""
+    project = json.load(open(project_json))
+    levels = set()
+    for e in project.get("doseResponseExperiments") or []:
+        for t in e.get("treatments") or []:
+            if isinstance(t, dict) and t.get("dose"):
+                levels.add(float(t["dose"]))
+    return sorted(levels)
+
+
+def molar_to_mg_per_kg(doses: list[str], mg_levels: list[float]) -> tuple[dict[str, str], float]:
+    """{molar dose text: mg/kg dose text} pairing nonzero levels by rank, and
+    the ratio (g/mol).  Raises ValueError unless the counts match and every
+    level shares one ratio within 1%."""
+    molar = sorted({float(d) for d in doses if d and float(d) > 0})
+    if len(molar) != len(mg_levels):
+        raise ValueError(f"{len(molar)} molar dose level(s) vs {len(mg_levels)} in the project")
+    ratios = [m / d for d, m in zip(molar, mg_levels)]
+    mean = sum(ratios) / len(ratios)
+    if any(abs(r - mean) > 0.01 * mean for r in ratios):
+        raise ValueError(f"molar → mg/kg ratios differ: {[round(r, 1) for r in ratios]}")
+    by_value = {d: m for d, m in zip(molar, mg_levels)}
+    out = {}
+    for d in doses:
+        if d and float(d) > 0:
+            out[d] = f"{by_value[float(d)]:g}"
+        elif d:
+            out[d] = "0"
+    return out, mean
+
+
+def _convert_doses(header, body, unit, mg_levels, notes) -> str | None:
+    """Rewrite a molar Concentration column to mg/kg in place; returns the
+    unit the doses are now in."""
+    if not unit or "mol" not in unit.lower():
+        return unit
+    if mg_levels is None:
+        notes.append(f"doses recorded in {unit}; not converted (no --mg-per-kg-from)")
+        return unit
+    i = header.index("Concentration")
+    mapping, ratio = molar_to_mg_per_kg([_cell(r[i]).strip() for r in body], mg_levels)
+    for r in body:
+        r[i] = mapping.get(_cell(r[i]).strip(), r[i])
+    notes.append(f"doses converted from {unit} to mg/kg by the project's dose levels "
+                 f"(×{ratio:.1f} g/mol)")
+    return "mg/kg"
+
+
 def package_species(filenames: list[str]) -> str | None:
     """The one species the workbook names' "_Rats"/"_Mice" suffix states, or None."""
     found = {_SPECIES_SUFFIX[m.group(1).lower()] for f in filenames
@@ -122,9 +195,11 @@ def package_species(filenames: list[str]) -> str | None:
     return found.pop() if len(found) == 1 else None
 
 
-def convert_workbook(path: str, out_dir: str, species: str | None = None) -> dict:
+def convert_workbook(path: str, out_dir: str, species: str | None = None,
+                     mg_levels: list[float] | None = None) -> dict:
     """Write one `<stem>_truth_<sex>.csv` per sex.  Returns a summary dict.
-    `species` picks the sheet of a multi-species lab results workbook."""
+    `species` picks the sheet of a multi-species lab results workbook;
+    `mg_levels` (project_dose_levels) converts molar doses to mg/kg."""
     name = os.path.basename(path)
     stem = workbook_stem(name)
     if stem is None:
@@ -151,8 +226,17 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None) -> dic
             return {"file": name, "status": "error", "reason": "no Data sheet and not a CEBS database export"}
         export_rows = [r for r in sheet[1:] if any(c is not None and str(c).strip() for c in r)]
         header, body, export_units, notes = cebs_db_export.to_key_data(stem, export_header, export_rows)
+        notes = notes + ["CEBS database export converted to Key/Data columns"]
+        unit_col = export_header.index("DOSE_UNIT") if "DOSE_UNIT" in export_header else None
+        export_dose_units = {_cell(r[unit_col]).strip() for r in export_rows} - {""} \
+            if unit_col is not None else set()
+        try:
+            dose_unit = _convert_doses(header, body, next(iter(export_dose_units), None)
+                                       if len(export_dose_units) == 1 else None, mg_levels, notes)
+        except ValueError as e:
+            return {"file": name, "status": "error", "reason": f"dose conversion: {e}"}
         return _write_csvs(name, out_dir, stem, header, body, header.index("Sex"), export_units,
-                           notes + ["CEBS database export converted to Key/Data columns"], None)
+                           notes, None, dose_unit)
     rows = [list(r) for r in wb["Data"].iter_rows(values_only=True)]
     header = [_cell(c) for c in rows[0]]
     body = [r for r in rows[1:] if any(c is not None and str(c).strip() for c in r)]
@@ -177,10 +261,16 @@ def convert_workbook(path: str, out_dir: str, species: str | None = None) -> dic
         notes.append(f"Sex column absent — filled '{filled}' from the Key sheet title (inferred)")
 
     units = {col: u for col, u in key_sheet_units(path).items() if col in header}
-    return _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled)
+    body = [list(r) for r in body]
+    try:
+        dose_unit = _convert_doses(header, body, key_sheet_dose_unit(wb), mg_levels, notes)
+    except ValueError as e:
+        return {"file": name, "status": "error", "reason": f"dose conversion: {e}"}
+    return _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled, dose_unit)
 
 
-def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled) -> dict:
+def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled,
+                dose_unit=None) -> dict:
     """One `<stem>_truth_<sex>.csv` (+ `.units.json`) per sex."""
     by_sex: dict[str, list[list]] = {}
     for r in body:
@@ -198,7 +288,7 @@ def _write_csvs(name, out_dir, stem, header, body, sex_idx, units, notes, filled
         if units:
             Path(out).with_suffix(".units.json").write_text(json.dumps(units, indent=2) + "\n")
     return {"file": name, "status": "ok", "written": written, "notes": notes,
-            "sex_filled": filled, "units": len(units)}
+            "sex_filled": filled, "units": len(units), "dose_unit": dose_unit}
 
 
 def genomic_metadata(bm2_json_path: str, package_dir: str, sex: str | None) -> dict:
@@ -246,7 +336,10 @@ def main() -> None:
     ap.add_argument("--bundle", help="Bookshelf bundle dir with more Individual Animal workbooks")
     ap.add_argument("--genomic-bm2-json")
     ap.add_argument("--metadata-out")
+    ap.add_argument("--mg-per-kg-from", help="the genomic BMDExpress project (.json) whose mg/kg "
+                    "dose levels a molar workbook dose is converted to")
     a = ap.parse_args()
+    mg_levels = project_dose_levels(a.mg_per_kg_from) if a.mg_per_kg_from else None
 
     os.makedirs(a.out, exist_ok=True)
     sexes = set()
@@ -256,7 +349,7 @@ def main() -> None:
     if a.bundle:
         paths += sorted(glob.glob(os.path.join(a.bundle, pattern)))
     for path in paths:
-        s = convert_workbook(path, a.out, species)
+        s = convert_workbook(path, a.out, species, mg_levels)
         print(json.dumps(s))
         if s.get("status") == "ok":
             sexes.update(w.rsplit("_", 1)[1][:-4] for w in s["written"])

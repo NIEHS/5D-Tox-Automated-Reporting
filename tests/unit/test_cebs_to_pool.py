@@ -107,3 +107,22 @@ def test_genomic_metadata_matches_samples_and_uses_vocabulary(tmp_path):
         "platform": "S1500+_rat", "subjectType": "in vivo", "dataType": "gene_expression",
     }
     assert meta["rat_4D_KI_No0"]["organ"] == "kidney"
+
+
+def test_molar_doses_map_to_the_projects_mg_per_kg_levels():
+    """NIEHS-02 records apical doses in mmol/kg; its genomic project and the
+    published tables use mg/kg (EHDP 362.4 g/mol: 0.169 → 61.2)."""
+    import pytest
+
+    from tooling.cebs_to_pool import molar_to_mg_per_kg
+
+    mapping, ratio = molar_to_mg_per_kg(
+        ["0", "0.169", "0.338", "0.675", "1.35", "2.70", "0.169"],
+        [61.2, 122.5, 244.6, 489.2, 978.5])
+    assert mapping == {"0": "0", "0.169": "61.2", "0.338": "122.5", "0.675": "244.6",
+                       "1.35": "489.2", "2.70": "978.5"}
+    assert 360 < ratio < 365
+    with pytest.raises(ValueError):            # no single molecular weight
+        molar_to_mg_per_kg(["0.169", "0.338"], [61.2, 300.0])
+    with pytest.raises(ValueError):            # level counts differ
+        molar_to_mg_per_kg(["0.169", "0.338"], [61.2])
