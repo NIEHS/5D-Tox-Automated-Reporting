@@ -178,6 +178,34 @@ def prefilter_fold_changes(integrated: dict) -> dict[str, dict[str, float]]:
     return out
 
 
+def probe_gene_annotations(integrated: dict) -> dict[str, dict[str, tuple[str, str]]]:
+    """{experiment name: {probe id: (gene symbol(s), Entrez id(s))}} from each
+    experiment's chip annotation (referenceGeneAnnotations).
+
+    A TempO-Seq probe id carries its gene ("CYP2B1_24300"); an Affymetrix
+    probe-set id does not ("1368025_at"), so RR-8 and NIEHS-02 … 06 need the
+    annotation the project ships.  A probe mapping to two genes reads
+    "Car3/Ca3" and "54232;100360695"."""
+    index = _ref_index(integrated.get("doseResponseExperiments") or [], {})
+    resolve = lambda v: index.get(v) if isinstance(v, int) else v  # noqa: E731
+    out: dict[str, dict[str, tuple[str, str]]] = {}
+    for e in integrated.get("doseResponseExperiments") or []:
+        anns = e.get("referenceGeneAnnotations") if isinstance(e, dict) else None
+        if not anns:
+            continue
+        by_probe: dict[str, tuple[str, str]] = {}
+        for a in anns:
+            a = resolve(a)
+            probe = resolve(a.get("probe")) if isinstance(a, dict) else None
+            genes = [resolve(g) for g in (a.get("referenceGenes") or [])] if isinstance(a, dict) else []
+            genes = [g for g in genes if isinstance(g, dict) and g.get("geneSymbol")]
+            if isinstance(probe, dict) and probe.get("id") and genes:
+                by_probe[probe["id"]] = ("/".join(g["geneSymbol"] for g in genes),
+                                         ";".join(str(g.get("id") or "") for g in genes))
+        out[e.get("name")] = by_probe
+    return out
+
+
 def gene_level_top_genes(
     gene_items: list[dict],
     probe_fold_change: dict[str, float],

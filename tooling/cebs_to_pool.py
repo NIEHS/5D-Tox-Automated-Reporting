@@ -24,8 +24,10 @@ Dose unit: RR-8 and NIEHS-02 … 06 record apical doses in mmol/kg (the Key
 sheet's "Dose in mMol/kg", or the export's DOSE_UNIT), while their genomic
 BMDExpress project and published tables use mg/kg (EHDP: 0.169 mmol/kg =
 61.2 mg/kg).  `--mg-per-kg-from <project .json>` converts a molar dose to the
-project's own mg/kg dose level: the nonzero levels are paired by rank and must
-share one ratio (the molecular weight, within 1%), or the workbook is refused.
+project's own mg/kg dose level: the project's nonzero levels are aligned with
+a run of the molar levels and must share one ratio (the molecular weight,
+within 1%), or the workbook is refused; a level the project lacks (NIEHS-05's
+top dose) is computed at that ratio.
 Without it the doses are left as recorded and the summary reports the unit.
 
 NIEHS-12 and -13 publish blood and tissue concentrations only in the Bookshelf
@@ -150,25 +152,41 @@ def project_dose_levels(project_json: str) -> list[float]:
     return sorted(levels)
 
 
-def molar_to_mg_per_kg(doses: list[str], mg_levels: list[float]) -> tuple[dict[str, str], float]:
-    """{molar dose text: mg/kg dose text} pairing nonzero levels by rank, and
-    the ratio (g/mol).  Raises ValueError unless the counts match and every
-    level shares one ratio within 1%."""
+def molar_to_mg_per_kg(doses: list[str], mg_levels: list[float]) -> tuple[dict[str, str], float, list[str]]:
+    """{molar dose text: mg/kg dose text}, the ratio (g/mol), and the molar
+    levels the project lacks.
+
+    The project's nonzero levels are aligned with a contiguous run of the
+    molar levels (a genomic project may omit a dose — NIEHS-05 has no
+    2.7 mmol/kg arrays) and must share one ratio within 1%.  Aligned levels
+    take the project's mg/kg value; a level it lacks is computed at the ratio,
+    to the project's decimals.  Raises ValueError when no alignment shares a
+    ratio."""
     molar = sorted({float(d) for d in doses if d and float(d) > 0})
-    if len(molar) != len(mg_levels):
-        raise ValueError(f"{len(molar)} molar dose level(s) vs {len(mg_levels)} in the project")
-    ratios = [m / d for d, m in zip(molar, mg_levels)]
-    mean = sum(ratios) / len(ratios)
-    if any(abs(r - mean) > 0.01 * mean for r in ratios):
-        raise ValueError(f"molar → mg/kg ratios differ: {[round(r, 1) for r in ratios]}")
-    by_value = {d: m for d, m in zip(molar, mg_levels)}
+    k = len(mg_levels)
+    if not k or k > len(molar):
+        raise ValueError(f"{len(molar)} molar dose level(s) vs {k} in the project")
+    for offset in range(len(molar) - k + 1):
+        window = molar[offset:offset + k]
+        ratios = [m / d for d, m in zip(window, mg_levels)]
+        mean = sum(ratios) / k
+        if all(abs(r - mean) <= 0.01 * mean for r in ratios):
+            break
+    else:
+        raise ValueError(f"no run of the molar levels {molar} shares one ratio with the "
+                         f"project's {mg_levels}")
+    decimals = max(len(f"{m:g}".partition(".")[2]) for m in mg_levels)
+    by_value = dict(zip(window, mg_levels))
+    missing = [d for d in molar if d not in by_value]
+    for d in missing:
+        by_value[d] = round(d * mean, decimals)
     out = {}
     for d in doses:
         if d and float(d) > 0:
             out[d] = f"{by_value[float(d)]:g}"
         elif d:
             out[d] = "0"
-    return out, mean
+    return out, mean, [f"{d:g}" for d in missing]
 
 
 def _convert_doses(header, body, unit, mg_levels, notes) -> str | None:
@@ -180,11 +198,13 @@ def _convert_doses(header, body, unit, mg_levels, notes) -> str | None:
         notes.append(f"doses recorded in {unit}; not converted (no --mg-per-kg-from)")
         return unit
     i = header.index("Concentration")
-    mapping, ratio = molar_to_mg_per_kg([_cell(r[i]).strip() for r in body], mg_levels)
+    mapping, ratio, missing = molar_to_mg_per_kg([_cell(r[i]).strip() for r in body], mg_levels)
     for r in body:
         r[i] = mapping.get(_cell(r[i]).strip(), r[i])
     notes.append(f"doses converted from {unit} to mg/kg by the project's dose levels "
-                 f"(×{ratio:.1f} g/mol)")
+                 f"(×{ratio:.1f} g/mol)"
+                 + (f"; {', '.join(missing)} {unit} not in the project, computed at that ratio"
+                    if missing else ""))
     return "mg/kg"
 
 
@@ -348,9 +368,11 @@ def main() -> None:
     species = package_species(paths)
     if a.bundle:
         paths += sorted(glob.glob(os.path.join(a.bundle, pattern)))
+    failed = 0
     for path in paths:
         s = convert_workbook(path, a.out, species, mg_levels)
         print(json.dumps(s))
+        failed += s.get("status") == "error"
         if s.get("status") == "ok":
             sexes.update(w.rsplit("_", 1)[1][:-4] for w in s["written"])
     if a.genomic_bm2_json and a.metadata_out:
@@ -358,6 +380,8 @@ def main() -> None:
         meta = genomic_metadata(a.genomic_bm2_json, a.package, study_sex)
         Path(a.metadata_out).write_text(json.dumps(meta, indent=2))
         print(json.dumps({"metadata": {k: v["organ"] for k, v in meta.items()}, "sex": study_sex}))
+    if failed:
+        raise SystemExit(f"{failed} workbook(s) failed to convert")
 
 
 if __name__ == "__main__":

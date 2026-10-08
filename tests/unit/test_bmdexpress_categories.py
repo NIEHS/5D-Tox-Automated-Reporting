@@ -91,3 +91,22 @@ def test_display_symbols_cases_a_go_gene_list():
 
     assert display_symbols("zfp36;pik3r1;loc100911814", "Rattus norvegicus") == "Zfp36;Pik3r1;Loc100911814"
     assert display_symbols("cyp2b6;egr1", "Homo sapiens") == "CYP2B6;EGR1"
+
+
+def test_probe_gene_annotations_name_affymetrix_probe_sets():
+    """An Affymetrix probe-set id names no gene; the chip annotation does
+    (NIEHS-02: 1368025_at → Ddit4, Entrez 140942)."""
+    from genomics.bmdexpress_categories import probe_gene_annotations
+
+    integrated = {"doseResponseExperiments": [{
+        "name": "EDHP mg_kg",
+        "probeResponses": [{"@ref": 7, "probe": {"@ref": 114, "@type": "Probe", "id": "1368025_at"}},
+                           {"@ref": 8, "probe": {"@ref": 116, "@type": "Probe", "id": "1370000_at"}}],
+        "referenceGeneAnnotations": [
+            {"@ref": 1, "probe": 114, "referenceGenes": [{"@ref": 2, "id": "140942", "geneSymbol": "Ddit4"}]},
+            {"@ref": 3, "probe": 116, "referenceGenes": [
+                {"@ref": 4, "id": "54232", "geneSymbol": "Car3"}, {"@ref": 5, "id": "1", "geneSymbol": "Ca3"}]},
+        ],
+    }]}
+    assert probe_gene_annotations(integrated) == {"EDHP mg_kg": {
+        "1368025_at": ("Ddit4", "140942"), "1370000_at": ("Car3/Ca3", "54232;1")}}

@@ -1118,7 +1118,7 @@ async def _extract_genomics(
     from genomics.bmdexpress_categories import (
         category_analyses_by_experiment, chip_species_by_experiment, gene_level_top_genes,
         display_symbols, genomic_bmr, go_direction_counts, prefilter_fold_changes,
-        report_bmd_decimals,
+        probe_gene_annotations, report_bmd_decimals,
     )
     cat_by_exp = category_analyses_by_experiment(integrated)
     # Every BMD in the report prints at one precision; stamped on each section
@@ -1126,6 +1126,7 @@ async def _extract_genomics(
     bmd_decimals = report_bmd_decimals(integrated)
     chip_species = chip_species_by_experiment(integrated)
     prefilter_fc = prefilter_fold_changes(integrated)
+    probe_genes = probe_gene_annotations(integrated)
 
     # Reshape into the format the UI expects: keyed by organ_sex
     for exp in ge_result.get("experiments", []):
@@ -1147,6 +1148,11 @@ async def _extract_genomics(
             for g in genes:
                 if not _safe_float(g.get("fold_change"), 0.0) and g.get("probe_id") in recorded_fc:
                     g["fold_change"] = recorded_fc[g["probe_id"]]
+        # A probe-set id names no gene ("1368025_at"); the chip annotation does.
+        annotated = probe_genes.get(exp.get("name", ""), {})
+        for g in genes:
+            if g.get("gene_symbol") == g.get("probe_id") and g.get("probe_id") in annotated:
+                g["gene_symbol"], g["entrez_id"] = annotated[g["probe_id"]]
 
         # Filter GO terms by user-configured cutoffs
         raw_go = exp.get("go_bp", [])
@@ -1262,6 +1268,7 @@ async def _extract_genomics(
                 {
                     "rank": i + 1,
                     "gene_symbol": g["gene_symbol"],
+                    "entrez_id": g.get("entrez_id", ""),
                     "probe_id": g.get("probe_id", ""),
                     "bmd": g.get("bmd"),
                     "bmdl": g.get("bmdl"),

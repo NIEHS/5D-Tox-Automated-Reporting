@@ -116,13 +116,17 @@ def test_molar_doses_map_to_the_projects_mg_per_kg_levels():
 
     from tooling.cebs_to_pool import molar_to_mg_per_kg
 
-    mapping, ratio = molar_to_mg_per_kg(
+    mapping, ratio, missing = molar_to_mg_per_kg(
         ["0", "0.169", "0.338", "0.675", "1.35", "2.70", "0.169"],
         [61.2, 122.5, 244.6, 489.2, 978.5])
     assert mapping == {"0": "0", "0.169": "61.2", "0.338": "122.5", "0.675": "244.6",
                        "1.35": "489.2", "2.70": "978.5"}
-    assert 360 < ratio < 365
+    assert 360 < ratio < 365 and missing == []
+    # NIEHS-05's project has no 2.7 mmol/kg arrays; the level is computed.
+    mapping, ratio, missing = molar_to_mg_per_kg(
+        ["0", "0.169", "0.338", "0.675", "1.35", "2.70"], [76.5, 153.0, 305.5, 611.0])
+    assert mapping["2.70"] == "1222.1" and missing == ["2.7"]
     with pytest.raises(ValueError):            # no single molecular weight
         molar_to_mg_per_kg(["0.169", "0.338"], [61.2, 300.0])
-    with pytest.raises(ValueError):            # level counts differ
-        molar_to_mg_per_kg(["0.169", "0.338"], [61.2])
+    with pytest.raises(ValueError):            # more project levels than molar ones
+        molar_to_mg_per_kg(["0.169"], [61.2, 122.5])
