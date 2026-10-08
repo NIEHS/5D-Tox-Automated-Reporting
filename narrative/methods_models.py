@@ -187,6 +187,17 @@ class MethodsContext:
     # GO gene-set analysis filter settings, verbatim from the GO_BP category
     # analysis notes ("Remove BMD with R^2 < Cutoff: 0.6", ...).
     go_filter_settings: list[str] | None = None
+    # How the BMD was chosen: BMDExpress 3 records "Model Averaging Method:
+    # Laplace Model Averaging"; BMDExpress 2.x records "Best Model Selection:
+    # Lowest AIC" over the BMDS models.
+    model_averaging: str | None = None
+    best_model_selection: str | None = None
+    # Whether the Curve Fit Prefilter ran, and the Williams fold-change
+    # filter BMDExpress 2.x applied ("Used Fold Filter with cuttoff: 1.5").
+    curve_fit_prefilter: bool | None = None
+    prefilter_fold_change: float | None = None
+    # True when no expression probe has a zero response in any sample.
+    zero_count_excluded: bool | None = None
 
     # --- Table 1: sample counts for genomics BMD analysis ---
     # Structure: {organ: {sex: {dose_float: count}}}

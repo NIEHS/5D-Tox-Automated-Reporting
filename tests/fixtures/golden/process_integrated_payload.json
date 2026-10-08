@@ -56,6 +56,7 @@
   "genomics_sections": {},
   "methods": {
     "context": {
+      "best_model_selection": null,
       "biosampling_doses": [],
       "bmdexpress_version": null,
       "bmds_version": null,
@@ -65,6 +66,7 @@
       "chemical_name": "the test chemical",
       "clin_chem_endpoints": [],
       "constant_variance": null,
+      "curve_fit_prefilter": null,
       "design_fallback": [
         "route",
         "vehicle",
@@ -139,6 +141,7 @@
         "internal_dose.pairwise": "shirley_or_dunn",
         "internal_dose.sig_figs": 3
       },
+      "model_averaging": null,
       "models_fit": null,
       "n_biosampling": 0,
       "n_control": null,
@@ -147,13 +150,15 @@
       "pk_concentrations": null,
       "pk_half_lives": null,
       "pk_timepoints": [],
+      "prefilter_fold_change": null,
       "prefilter_method": null,
       "prefilter_pvalue": null,
       "route": "gavage",
       "sexes": [],
       "species": null,
       "strain": null,
-      "vehicle": "corn oil"
+      "vehicle": "corn oil",
+      "zero_count_excluded": null
     },
     "model_used": "claude-sonnet-4-6",
     "section_key": "methods",

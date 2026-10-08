@@ -329,15 +329,18 @@ def no_real_session_dirs_created():
     Fail a test that creates a directory in the REAL sessions/ (instead of its
     tmp sessions_dir).  Leaked test sessions (DTXSID_VC, DTXSID_TEST_NO_SESSION,
     …) listed on the Bookshelf as if they were reports.
+
+    It never deletes: a report build running alongside the tests creates real
+    session dirs too, and removing those destroyed the builds.  A leak is
+    removed by hand once the failure names it.
     """
     before = _real_session_dirs()
     yield
     leaked = _real_session_dirs() - before
     if leaked:
-        for name in leaked:
-            shutil.rmtree(_REAL_SESSIONS / name, ignore_errors=True)
-        pytest.fail(f"test created session dir(s) in the real sessions/: {sorted(leaked)} "
-                    "— use the sessions_dir fixture")
+        pytest.fail(f"session dir(s) appeared in the real sessions/ during this test: "
+                    f"{sorted(leaked)} — a test should use the sessions_dir fixture "
+                    "(or a report build was running alongside the tests)")
 
 
 @pytest.fixture(autouse=True)

@@ -226,6 +226,37 @@ def _dose_spacing_phrase(ctx: MethodsContext) -> str:
     return f"approximately {r:.1f}-fold spacing {between}"
 
 
+def _genomic_workflow_phrase(ctx: MethodsContext) -> str:
+    """The transcriptomic prefilter and BMD-modeling steps as the .bm2 records
+    them: a BMDExpress 3 project runs the Curve Fit Prefilter and ToxicR model
+    averaging; a BMDExpress 2.x project picks each probe's best BMDS model."""
+    steps = []
+    if ctx.zero_count_excluded:
+        steps.append("probes with a zero count in any sample were excluded")
+    williams = "a Williams trend prefilter"
+    if ctx.prefilter_pvalue:
+        williams += f" (p < {ctx.prefilter_pvalue:g})"
+    if ctx.prefilter_fold_change:
+        williams += f" with a {ctx.prefilter_fold_change:g}-fold change filter"
+    if ctx.curve_fit_prefilter:
+        williams += " followed by the Curve Fit Prefilter"
+    steps.append(williams)
+    models = f" of {', '.join(ctx.models_fit)}" if ctx.models_fit else ""
+    if ctx.model_averaging:
+        modeling = f"BMD modeling by {ctx.model_averaging} (ToxicR){models}"
+    elif ctx.best_model_selection:
+        modeling = (f"BMD modeling by fitting the BMDS models{models}, each probe's best "
+                    f"model selected by {ctx.best_model_selection} (as recorded)")
+    else:
+        modeling = f"BMD modeling{models} (model selection not recorded)"
+    if ctx.bmr_type:
+        modeling += f", BMR {_genomic_bmr_phrase(ctx)}"
+    if ctx.constant_variance is not None:
+        modeling += ", constant variance" if ctx.constant_variance else ", non-constant variance"
+    steps.append(modeling)
+    return "; ".join(steps) + "."
+
+
 def _genomic_bmr_phrase(ctx: MethodsContext) -> str:
     """The genomic BMR as recorded in the .bm2 ("25% relative deviation")."""
     t, f = (ctx.bmr_type or "").lower(), ctx.bmr_factor
@@ -428,12 +459,8 @@ def _build_subsection_guidelines(
         "bmd_apical": _bmd_apical_guideline(ctx),
         "bmd_genomics": (
             f"One or two paragraphs. Transcriptomic BMD analysis in "
-            f"{ctx.bmdexpress_version or 'BMDExpress 3'}: probes with a zero count in any "
-            f"sample were excluded; a Williams trend prefilter"
-            f"{' (p < ' + str(ctx.prefilter_pvalue) + ')' if ctx.prefilter_pvalue else ''} "
-            f"followed by the Curve Fit Prefilter; BMD modeling with ToxicR Laplace model "
-            f"averaging{' of ' + ', '.join(ctx.models_fit) if ctx.models_fit else ''}"
-            f"{', BMR ' + _genomic_bmr_phrase(ctx) if ctx.bmr_type else ''}, constant variance. "
+            f"{ctx.bmdexpress_version or 'BMDExpress (version not recorded)'}: "
+            f"{_genomic_workflow_phrase(ctx)} "
             f"GO biological process gene-set analysis with these recorded settings: "
             f"{'; '.join(ctx.go_filter_settings) if ctx.go_filter_settings else 'not recorded'}. "
             f"Gene sets were reported when at least 3 genes passed all filters and at least 5% "

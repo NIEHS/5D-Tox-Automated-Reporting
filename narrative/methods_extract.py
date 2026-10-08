@@ -86,7 +86,8 @@ def _parse_bm2_analysis_info(notes_list: list[str]) -> dict:
         Dict with parsed fields.  Missing fields are absent (not None).
         Possible keys: bmdexpress_version, bmds_version, bmr_type, bmr_factor,
         models_fit, constant_variance, prefilter_method, prefilter_pvalue,
-        fold_change_filter.
+        fold_change_filter, model_averaging, best_model_selection,
+        prefilter_fold_change.
     """
     result = {}
     for note in notes_list:
@@ -105,8 +106,19 @@ def _parse_bm2_analysis_info(notes_list: list[str]) -> dict:
         key = key.strip()
         value = value.strip()
 
-        if key == "BMDExpress3 Version":
+        if re.fullmatch(r"BMDExpress\d* Version", key):
+            # "BMDExpress3 Version: BMDExpress 3.20.0119 BETA";
+            # BMDExpress 2.x projects write "BMDExpress2 Version".
             result["bmdexpress_version"] = value
+        elif key == "Model Averaging Method":
+            result["model_averaging"] = value
+        elif key == "Best Model Selection":
+            result["best_model_selection"] = value
+        elif key == "Used Fold Filter with cuttoff":   # sic, BMDExpress 2.x
+            try:
+                result["prefilter_fold_change"] = float(value)
+            except ValueError:
+                pass
         elif key == "BMDS Major Version":
             result["bmds_version"] = value
         elif key == "BMR Type":
@@ -174,6 +186,20 @@ def _collect_bm2_analysis_metadata(bm2_json: dict) -> dict:
         if notes:
             parsed = _parse_bm2_analysis_info(notes)
             merged.update(parsed)
+
+    # Whether the project ran the Curve Fit Prefilter at all (BMDExpress 2.x
+    # projects went straight from the Williams test to BMD modeling).
+    merged["curve_fit_prefilter"] = bool(bm2_json.get("curveFitPrefilterResults"))
+
+    # Zero-count probes were excluded when no gene-expression probe has a
+    # zero in any sample (TempO-Seq counts are log2(count + 1), so a probe
+    # with a zero count anywhere carries a 0 response).
+    expr = [e for e in bm2_json.get("doseResponseExperiments") or []
+            if isinstance(e, dict) and e.get("chip") and e.get("probeResponses")]
+    if expr:
+        merged["zero_count_excluded"] = not any(
+            v == 0 for e in expr for pr in e["probeResponses"] if isinstance(pr, dict)
+            for v in pr.get("responses") or [])
 
     # The GO gene-set filters, from a GO_BP category analysis (the first
     # category analysis may be a GENE one, which has no gene-set size limits).
@@ -392,6 +418,12 @@ def extract_methods_context(
                 ctx.prefilter_pvalue = meta["prefilter_pvalue"]
             if meta.get("fold_change_filter") is not None and ctx.fold_change_filter is None:
                 ctx.fold_change_filter = meta["fold_change_filter"]
+            for k in ("model_averaging", "best_model_selection", "prefilter_fold_change",
+                      "zero_count_excluded"):
+                if meta.get(k) is not None and getattr(ctx, k) is None:
+                    setattr(ctx, k, meta[k])
+            if meta.get("bmdexpress_version"):
+                ctx.curve_fit_prefilter = bool(ctx.curve_fit_prefilter) or meta["curve_fit_prefilter"]
             if meta.get("go_filter_settings") and not ctx.go_filter_settings:
                 ctx.go_filter_settings = meta["go_filter_settings"]
 
