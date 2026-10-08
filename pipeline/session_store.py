@@ -85,6 +85,13 @@ def session_dir(dtxsid: str) -> Path:
     return d
 
 
+def session_path(dtxsid: str) -> Path:
+    """The session directory for a DTXSID, WITHOUT creating it — for readers.
+    A render or lookup for a study that has no session must not leave an empty
+    session directory behind (it would list as a session)."""
+    return SESSIONS_DIR / validate_dtxsid(dtxsid)
+
+
 def bm2_slug(filename: str) -> str:
     """
     Slugify a .bm2 filename for use as a JSON key / filename stem.

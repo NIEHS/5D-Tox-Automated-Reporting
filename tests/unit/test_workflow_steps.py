@@ -171,7 +171,9 @@ def test_integrate_step_no_coverage_matrix_raises_400():
     assert ei.value.status_code == 400
 
 
-def test_integrate_step_success_caches_and_summarizes():
+def test_integrate_step_success_caches_and_summarizes(sessions_dir):
+    # sessions_dir: integration pins the method profile on disk (ADR-0027),
+    # which must land in the test's directory, not the real sessions/.
     store = FakeStore(
         fingerprints={"f1": object()},
         docs={"validation_report.json": {"coverage_matrix": {"Body Weight|tox_study": {}}}},

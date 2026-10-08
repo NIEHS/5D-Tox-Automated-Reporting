@@ -313,6 +313,33 @@ def mock_bmdx_pipe():
         p.stop()
 
 
+_REAL_SESSIONS = Path(__file__).resolve().parent.parent / "sessions"
+
+
+def _real_session_dirs() -> set[str]:
+    try:
+        return {p.name for p in _REAL_SESSIONS.iterdir() if p.is_dir()}
+    except OSError:
+        return set()
+
+
+@pytest.fixture(autouse=True)
+def no_real_session_dirs_created():
+    """
+    Fail a test that creates a directory in the REAL sessions/ (instead of its
+    tmp sessions_dir).  Leaked test sessions (DTXSID_VC, DTXSID_TEST_NO_SESSION,
+    …) listed on the Bookshelf as if they were reports.
+    """
+    before = _real_session_dirs()
+    yield
+    leaked = _real_session_dirs() - before
+    if leaked:
+        for name in leaked:
+            shutil.rmtree(_REAL_SESSIONS / name, ignore_errors=True)
+        pytest.fail(f"test created session dir(s) in the real sessions/: {sorted(leaked)} "
+                    "— use the sessions_dir fixture")
+
+
 @pytest.fixture(autouse=True)
 def mock_http(monkeypatch):
     """

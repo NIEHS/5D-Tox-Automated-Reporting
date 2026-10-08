@@ -390,7 +390,7 @@ def marshal_export_data(
         _dtxsid = body.get("dtxsid")
         if _dtxsid:
             from rendering.front_matter import overlay_front_matter
-            from pipeline.session_store import session_dir as _sdir
+            from pipeline.session_store import session_path as _sdir
             import json as _json
             fm_path = _sdir(_dtxsid) / "front_matter.json"
             try:
@@ -406,7 +406,7 @@ def marshal_export_data(
     _dtxsid_roster = body.get("dtxsid")
     if _dtxsid_roster and "appendix_animals_matrix" not in data:
         try:
-            from pipeline.session_store import session_dir as _sdir_roster
+            from pipeline.session_store import session_path as _sdir_roster
             from rendering.latex_export import _load_animal_identifiers
             from rendering.render_common import build_animal_roster_matrix
             _animals = _load_animal_identifiers(_sdir_roster(_dtxsid_roster))
@@ -437,7 +437,7 @@ def marshal_export_data(
     _dtxsid_cfg = body.get("dtxsid")
     if _dtxsid_cfg and "appendix_bmd_config_matrix" not in data:
         try:
-            from pipeline.session_store import session_dir as _sdir_cfg
+            from pipeline.session_store import session_path as _sdir_cfg
             from rendering.render_common import build_bmd_config_matrix
             import json as _json_cfg
             _integ_path = _sdir_cfg(_dtxsid_cfg) / "integrated.json"

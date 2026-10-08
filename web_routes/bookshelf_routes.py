@@ -27,7 +27,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from common.paths import SESSIONS_DIR
+import common.paths
 from rendering.latex_export import _load_json
 from rendering.preview_surface import render_preview
 from web_routes.dtxsid_param import Dtxsid
@@ -49,10 +49,34 @@ def _download_links(dtxsid: str) -> list[dict]:
     ]
 
 
+def _sessions_root() -> Path:
+    # Read at call time, so a redirected SESSIONS_DIR (tests) is honoured.
+    return common.paths.SESSIONS_DIR
+
+
+def has_generated_report(dtxsid: str) -> bool:
+    """Whether the session holds a generated report: it was integrated and
+    processed (integrated.json plus a processed-sections cache).  An empty,
+    abandoned or test-made session directory is not a report, so it is neither
+    shelved nor served."""
+    sess = _sessions_root() / dtxsid
+    return (sess / "integrated.json").is_file() and any(sess.glob("_cache_sections_*.json"))
+
+
+def generated_reports() -> list[str]:
+    """The sessions on disk that hold a generated report, sorted."""
+    try:
+        return sorted(p.name for p in _sessions_root().iterdir()
+                      if p.is_dir() and not p.name.startswith(".")
+                      and has_generated_report(p.name))
+    except OSError:
+        return []
+
+
 def _session_title(dtxsid: str) -> str:
     """A display title for a session's shelf card: the chemical name from
     identity.json / meta.json when present, else the dtxsid itself."""
-    sess = SESSIONS_DIR / dtxsid
+    sess = _sessions_root() / dtxsid
     for name in ("identity.json", "meta.json"):
         data = _load_json(sess / name)
         if isinstance(data, dict):
@@ -70,8 +94,7 @@ def _session_title(dtxsid: str) -> str:
 def bookshelf_facsimile(dtxsid: Dtxsid):
     """Render one session's report as a Bookshelf reader-view facsimile page, with
     a right-rail Download panel (PDF + DOCX previews)."""
-    sess = SESSIONS_DIR / dtxsid
-    if not sess.exists():
+    if not has_generated_report(dtxsid):
         return HTMLResponse(_not_found_page(dtxsid), status_code=404)
     try:
         page = render_preview(dtxsid, surface="bookshelf", downloads=_download_links(dtxsid))
@@ -86,8 +109,8 @@ def bookshelf_facsimile(dtxsid: Dtxsid):
 def bookshelf_docx(dtxsid: Dtxsid):
     """Download the DOCX preview — the actual Word deliverable, rendered on demand
     (no prior materialize needed; not the gated final export)."""
-    if not (SESSIONS_DIR / dtxsid).exists():
-        return JSONResponse({"error": f"No such session: {dtxsid}"}, status_code=404)
+    if not has_generated_report(dtxsid):
+        return JSONResponse({"error": f"No generated report for {dtxsid}"}, status_code=404)
     try:
         docx = render_preview(dtxsid, surface="docx")
     except Exception:
@@ -105,8 +128,8 @@ def bookshelf_docx(dtxsid: Dtxsid):
 def bookshelf_pdf(dtxsid: Dtxsid):
     """Download the PDF preview — the DOCX deliverable converted to PDF on demand
     (LibreOffice/docx2pdf, offline).  503 if the conversion tool fails."""
-    if not (SESSIONS_DIR / dtxsid).exists():
-        return JSONResponse({"error": f"No such session: {dtxsid}"}, status_code=404)
+    if not has_generated_report(dtxsid):
+        return JSONResponse({"error": f"No generated report for {dtxsid}"}, status_code=404)
     try:
         docx = render_preview(dtxsid, surface="docx")
         assert isinstance(docx, bytes)
@@ -129,15 +152,8 @@ def bookshelf_pdf(dtxsid: Dtxsid):
 
 @router.get("/Bookshelf", response_class=HTMLResponse)
 def bookshelf_shelf():
-    """The shelf: list the sessions on disk, each linked to its facsimile."""
-    try:
-        dtxsids = sorted(
-            p.name for p in SESSIONS_DIR.iterdir()
-            if p.is_dir() and not p.name.startswith(".")
-        )
-    except OSError:
-        dtxsids = []
-    return HTMLResponse(_shelf_page(dtxsids))
+    """The shelf: the generated reports on disk, each linked to its facsimile."""
+    return HTMLResponse(_shelf_page(generated_reports()))
 
 
 def _docx_to_pdf(docx_bytes: bytes) -> bytes | None:
@@ -197,7 +213,7 @@ def _shelf_page(dtxsids: list[str]) -> str:
         )
         body = f'<ul class="shelf">{cards}</ul>'
     else:
-        body = '<p class="empty">No sessions on disk yet.</p>'
+        body = '<p class="empty">No generated reports yet.</p>'
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -214,8 +230,8 @@ def _not_found_page(dtxsid: str) -> str:
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Not found — Bookshelf</title><style>{_SHELF_CSS}</style></head>
-<body><div class="wrap"><h1>No such session</h1>
-<p class="sub">No session <code>{_html.escape(dtxsid)}</code> exists on disk.
+<body><div class="wrap"><h1>No report</h1>
+<p class="sub">There is no generated report for <code>{_html.escape(dtxsid)}</code>.
 <a class="home" href="/Bookshelf">← back to the shelf</a></p></div></body></html>"""
 
 
