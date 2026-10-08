@@ -1454,6 +1454,29 @@ def integrate_pool(
     return integrated
 
 
+def subset_bm2(bm2_path: str, out_path: str, token: str) -> str:
+    """
+    Write a copy of a BMDExpress project keeping only the experiments whose
+    name contains ``token`` (case-insensitive), with their analyses.
+
+    NIEHS-07 … 10 publish one shared project holding four chemicals'
+    experiments; a report must ingest only its own.  SubsetBm2.java edits the
+    deserialized object graph, so shared objects (chip, probes) stay intact.
+
+    Raises:
+        RuntimeError: when no experiment matches or Java fails.
+    """
+    classpath = build_classpath()
+    result = subprocess.run(
+        ["java", "-cp", classpath, "SubsetBm2", bm2_path, out_path, token],
+        capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"SubsetBm2 failed (exit {result.returncode}): {result.stderr[-2000:]}")
+    logger.info("%s", result.stdout.strip().splitlines()[-1] if result.stdout.strip() else out_path)
+    return out_path
+
+
 def export_integrated_bm2(json_path: str, bm2_path: str) -> str:
     """
     Convert a metadata-enriched integrated.json back to .bm2 format.
