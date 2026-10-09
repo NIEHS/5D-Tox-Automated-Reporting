@@ -44,7 +44,7 @@ def test_one_page_per_part_in_reading_order(page):
 def test_labels_come_from_the_book(page):
     app_c = _article(page, "app-appendix-c")
     assert '<span class="label">Appendix C</span>' in app_c
-    assert '<span class="label">C.1</span> Gene Expression Quality Control' in app_c
+    assert '<span class="label">C.1.</span> Gene Expression Quality Control' in app_c
 
 
 def test_a_part_page_does_not_repeat_its_title(page):
@@ -55,7 +55,7 @@ def test_a_part_page_does_not_repeat_its_title(page):
 
 def test_references_page_is_the_numbered_list(page):
     refs = _article(page, "bp-references")
-    assert '<li id="ref1" value="1">First ref.</li>' in refs
+    assert '<dt>1.</dt><dd><div class="bk_ref" id="ref1">First ref.</div></dd>' in refs
 
 
 def test_contents_has_the_abstract_and_nested_sections(page):
@@ -100,7 +100,7 @@ def test_published_bundle_renders():
     assert len(slugs) == 1 + 17
     authors = _article(html, "fm-authors")
     assert '<div class="author">Scott S. Auerbach' in authors
-    assert '<div class="bk-formula" id="e-2-01"><math' in html
+    assert re.search(r'<div class="bk-formula" id="e-2-01">.*?<math.*?\(1\)</span>', html, re.S)
     assert 'class="bk-media"' in _article(html, "a-2-F")
     assert "data:image/jpeg;base64," in _article(html, "a-2-C")
 
@@ -159,12 +159,22 @@ def _part_page_facts(root) -> dict:
     text and its simple lists' lines) and the page's citation."""
     banner = root.xpath(".//div[contains(@class,'iconblock')]")[0]
     body = root.xpath(".//div[contains(@class,'body-content')]")[0]
+    # Not read on the page: the real page's hidden figure stash, the
+    # facsimile's lightbox copies and its table thumbnails (a shrunken copy of
+    # the table, where the real card shows an image).
+    for el in body.xpath(".//*[contains(@style,'display:none') or contains(@class,'bk-object')"
+                         " or contains(@class,'bk-thumb')]"):
+        el.getparent().remove(el)
+    # Nor NCBI's own lookups: the [PMC free article] / [PubMed] links Bookshelf
+    # adds to references by matching them against its databases (a ref with no
+    # PMID in the book can get one).  The book's DOIs ([CrossRef]) are compared.
+    text = re.sub(r"\s*\[(PMC free article|PubMed)(: \w+)?\]", "", _txt(body))
     return {
         "banner": _txt(banner.xpath(".//h2")[0]),
         "details": [_txt(d) for d in banner.xpath(".//div[contains(@class,'ui-widget')]/div"
                                                    " | .//details/div")],
         "heading": _txt(root.xpath(".//div[contains(@class,'meta-content')]//h1")[0]),
-        "text": _txt(body),
+        "text": text,
         "lists": [[_txt(d) for d in li.xpath("div")]
                   for li in body.xpath(".//ul[contains(@class,'simple-list')]/li")],
         "cite": _txt(root.xpath(".//div[@class='bk_tt'] | .//div[starts-with(@id,'obj-cite-')]/p")[0]),

@@ -146,7 +146,8 @@ def citation(m: dict, part: str = "") -> str:
     """The "Cite this Page" text.  The landing page cites the book with its DOI
     ("Auerbach SS, … et al. Title: Subtitle [Internet]. Loc: Publisher;
     2023 Mar. doi: 10.22427/…"); a part's page cites the book without it,
-    followed by the part's title ("…; 2023 Mar. Foreword.")."""
+    followed by the part's title ("…; 2023 Mar. Foreword."), an appendix's
+    with its label ("…; 2023 Mar. Appendix A, Internal Dose Assessment.")."""
     out = [_cite_authors(m), f"{_internet_title(m)}."]
     if _pub_line(m):
         out.append(f"{_pub_line(m)}.")

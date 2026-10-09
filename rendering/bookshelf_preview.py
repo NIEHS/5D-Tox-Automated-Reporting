@@ -54,6 +54,7 @@ from __future__ import annotations
 import html
 import itertools
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -75,6 +76,7 @@ MATHML = "http://www.w3.org/1998/Math/MathML"
 # object has a stable lightbox target within one document.  Reset at the top of
 # _build_html (rendering is single-pass per document).
 _OBJ_COUNTER = {"seq": itertools.count(1)}
+_FORMULA_COUNTER = {"n": 0}     # display formulas on the page being rendered
 
 
 def _next_obj_id() -> str:
@@ -116,6 +118,12 @@ def _inline_child(child) -> str:
     if tag == "xref":
         rid = child.get("rid", "")
         return f'<a class="xref bk_pop" href="#{_esc(rid)}">{inner}</a>'
+    if tag == "related-object":
+        # A chunked bundle's link into another part file (a reference in the
+        # References part, an appendix, a table): the object, else the part.
+        target = child.get("object-id") or child.get("document-id") or ""
+        if target:
+            return f'<a class="bk_pop" href="#{_esc(target)}">{inner}</a>'
     if tag in ("italic", "i"):
         return f"<i>{inner}</i>"
     if tag in ("bold", "b"):
@@ -128,6 +136,18 @@ def _inline_child(child) -> str:
         return f'<code class="bk_tt">{inner}</code>'
     # Unknown inline element: keep its text content, drop the wrapper.
     return inner
+
+
+def _inline_no_fn(el) -> str:
+    """An element's inline content without its <fn>s (a caption paragraph whose
+    footnotes Bookshelf lists under the figure instead)."""
+    parts = [_esc(el.text)] if el.text else []
+    for child in el:
+        if _ln(child) != "fn":
+            parts.append(_inline_child(child))
+        if child.tail:
+            parts.append(_esc(child.tail))
+    return "".join(parts)
 
 
 def _ws_text(el) -> str:
@@ -180,6 +200,23 @@ def _temp_labeled(inner_html: str) -> str:
             f'{inner_html}</div></dd></dl></div>')
 
 
+def _fn_list(fns, p_class: str) -> str:
+    """Footnotes as Bookshelf lists them: one ``dt`` (the footnote's label, empty
+    when it has none) and ``dd`` per <fn>."""
+    items = []
+    for fn in fns:
+        lab = fn.find("label")
+        dt = _inline(lab) if lab is not None else ""
+        paras = "".join(f'<p class="{p_class}">{_inline(p)}</p>' for p in fn.findall("p"))
+        items.append(f'<dt>{dt}</dt><dd><div{_id_attr(fn.get("id"))}>{paras}</div></dd>')
+    return (f'<div><dl class="temp-labeled-list small">{"".join(items)}</dl></div>'
+            if items else "")
+
+
+def _id_attr(i: str | None) -> str:
+    return f' id="{_esc(i)}"' if i else ""
+
+
 def _caption_html(obj) -> str:
     """The caption heading of a table/figure/media object: its <caption><title>
     (how the published books title a table), else its first <caption><p> (a
@@ -211,14 +248,26 @@ def _render_table_wrap(el) -> str:
         if notes:
             foot = _temp_labeled("".join(notes))
     lab = _esc(label) if label else "Table"
+    if el.get("position") == "anchor":
+        # An anchored table stands in the text in full, as Bookshelf shows it
+        # (the appendices' tables); a floating one is a card (below).
+        if twf is not None:
+            foot = _fn_list(twf.findall("fn"), "no_margin") + "".join(
+                _temp_labeled(f'<p class="no_margin">{_inline(p)}</p>') for p in twf.findall("p"))
+        title = f'<span class="title">{caption_html}</span>' if caption_html else ""
+        return (f'<div id="{_esc(tid)}" class="table"><h3><span class="label">{lab}</span>'
+                f'{title}</h3><div class="large_tbl">{table_html}</div>{foot}</div>')
     # Full object — opens in the lightbox / hover preview; hidden in-flow.
     obj_head = (f'<h3><span class="label">{lab}</span> '
                 f'<span class="title">{caption_html}</span></h3>') if (label or caption_html) else ""
     obj = (f'<div class="bk-object" id="{_esc(obj_id)}">{obj_head}'
            f'<div class="large_tbl">{table_html}</div>{foot}</div>')
     # Thumbnail card in the reading column (real Bookshelf renders data tables as
-    # a floated thumbnail that opens the full table on click).
-    caption_card = f'<p class="float-caption">{caption_html}</p>' if caption_html else ""
+    # a floated thumbnail that opens the full table on click), its caption closed
+    # with a full stop as Bookshelf does ("…Data. ").
+    stop = "" if re.search(r"[.?!:]\s*$", _ws_text(el.find("caption/title"))) else "."
+    caption_card = (f'<p class="float-caption">{caption_html}{stop} </p>'
+                    if caption_html else "")
     card = (f'<div class="iconblock table-wrap clearfix" id="{_esc(tid)}">'
             f'<a class="icnblk_img figpopup bk-figpopup" data-obj="{_esc(obj_id)}" '
             f'title="{lab}" role="button" tabindex="0">'
@@ -273,6 +322,16 @@ def _render_fig(el, base_dir: Path | None, images: dict | None) -> str:
         have_img = False
     lab = _esc(label) if label else "Figure"
     lab_h3 = f'<h3><span class="label">{lab}</span></h3>' if label else ""
+    if el.get("position") == "anchor":
+        # An anchored figure stands in the text: the image, its label, the
+        # caption's paragraphs, the source line (<attrib>) and the caption's
+        # footnotes listed under it — Bookshelf's figure block.
+        cap = el.find("caption")
+        paras = "".join(f"<p>{_inline_no_fn(p)}</p>" for p in cap.findall("p")) if cap is not None else ""
+        attrib = "".join(f"<p>{_inline(a)}</p>" for a in el.findall("attrib"))
+        notes = _fn_list(cap.iter("fn"), "no_top_margin") if cap is not None else ""
+        return (f'<div id="{_esc(fid)}" class="figure bk_fig"><div class="graphic">{img}</div>'
+                f'{lab_h3}<div class="caption">{paras}</div>{attrib}{notes}</div>')
     caption_div = f'<div class="caption"><p>{caption_html}</p></div>' if caption_html else ""
     # Full object (lightbox / hover), hidden in-flow.
     obj = (f'<div class="bk-object" id="{_esc(obj_id)}"><div class="figure bk_fig">'
@@ -311,7 +370,8 @@ def _render_blocks(children, level: int, out: list[str], base_dir: Path | None,
         elif tag in ("media", "supplementary-material"):
             out.append(_render_media(el))
         elif tag == "disp-formula":
-            out.append(_render_formula(el))
+            _FORMULA_COUNTER["n"] += 1
+            out.append(_render_formula(el, _FORMULA_COUNTER["n"]))
         elif tag == "ref-list":
             out.append(_render_ref_list(el))
         elif tag == "boxed-text":
@@ -336,7 +396,7 @@ def _render_list(el) -> str:
                 f'<div{_class_attr(p.get("content-type"))}>{_inline(p)}</div>' for p in paras)
         else:
             inner = _inline(li)
-        items.append(f'<li class="half_rhythm">{inner}</li>' if simple else f"<li>{inner}</li>")
+        items.append(f'<li class="half_rhythm">{inner if paras else f"<div>{inner}</div>"}</li>')
     return f'<{tag} class="{cls}">{"".join(items)}</{tag}>'
 
 
@@ -357,9 +417,10 @@ def _render_media(el) -> str:
     return f'<div class="bk-media" id="{_esc(el.get("id", ""))}">{link}{kind_html}</div>'
 
 
-def _render_formula(el) -> str:
+def _render_formula(el, number: int = 0) -> str:
     """<disp-formula>: its MathML passed through as HTML <math> (browsers render
-    MathML Core), with its label when it has one."""
+    MathML Core), with its label — Bookshelf numbers an unlabeled formula
+    "(n)" by its place on the page."""
     math = el.find(f"{{{MATHML}}}math")
     body = ""
     if math is not None:
@@ -369,23 +430,53 @@ def _render_formula(el) -> str:
                 node.tag = etree.QName(node).localname
         etree.cleanup_namespaces(math)
         body = etree.tostring(math, encoding="unicode", method="xml")
-    label = _ws_text(el.find("label"))
-    lab = f'<span class="formula-label">{_esc(label)}</span>' if label else ""
-    return f'<div class="bk-formula" id="{_esc(el.get("id", ""))}">{body}{lab}</div>'
+    label = _ws_text(el.find("label")) or (f"({number})" if number else "")
+    lab = (f'<div class="bk_equ_label"><span class="nowrap">{_esc(label)}</span></div>'
+           if label else "")
+    return (f'<div class="bk-formula" id="{_esc(el.get("id", ""))}">'
+            f'<div class="bk-formula-math">\n{body}\n</div>{lab}</div>')
 
 
 def _render_ref_list(rl) -> str:
-    """<ref-list>: a numbered list of citations; a <ref>'s <label> is its number."""
+    """<ref-list>: Bookshelf's labeled list — ``dt`` the ref's <label> ("1."),
+    ``dd`` the citation; a labelless list (ours, before ADR-0028) numbers by
+    position.  The citation's DOI stays as text; its identifiers become the
+    bracketed links after it ([PubMed: n] [CrossRef]).  The [PMC free article]
+    link NCBI adds by its own lookup is not in the book and not shown."""
     items: list[str] = []
-    for ref in rl.findall("ref"):
-        anchor = f' id="{_esc(ref.get("id"))}"' if ref.get("id") else ""
-        label = _ws_text(ref.find("label"))
-        value = f' value="{_esc(label)}"' if label.isdigit() else ""
-        mc = ref.find("mixed-citation")
-        text = _inline(mc) if mc is not None else _esc(_ws_text(ref))
-        items.append(f"<li{anchor}{value}>{text}</li>")
+    for n, ref in enumerate(rl.findall("ref"), 1):
+        label = _ws_text(ref.find("label")) or str(n)
+        dt = label if label.endswith(".") else f"{label}."
+        cit = ref.find("mixed-citation")
+        if cit is None:
+            cit = ref.find("element-citation")
+        text = _citation_html(cit) if cit is not None else _esc(_ws_text(ref))
+        items.append(f'<dt>{_esc(dt)}</dt><dd><div class="bk_ref"{_id_attr(ref.get("id"))}>'
+                     f'{text}</div></dd>')
     rest = "".join(f"<p>{_inline(p)}</p>" for p in rl.findall("p"))
-    return (f'<ol class="ref-list">{"".join(items)}</ol>' if items else "") + rest
+    return (f'<dl class="temp-labeled-list">{"".join(items)}</dl>' if items else "") + rest
+
+
+def _citation_html(cit) -> str:
+    parts = [_esc(cit.text)] if cit.text else []
+    ids: dict[str, str] = {}
+    for child in cit:
+        if _ln(child) == "pub-id":
+            kind, val = child.get("pub-id-type", ""), _ws_text(child)
+            ids.setdefault(kind, val)
+            if kind == "doi":
+                parts.append(_esc(val))
+        else:
+            parts.append(_inline_child(child))
+        if child.tail:
+            parts.append(_esc(child.tail))
+    links = []
+    if ids.get("pmid"):
+        links.append(f'[<a href="https://pubmed.ncbi.nlm.nih.gov/{_esc(ids["pmid"])}">PubMed'
+                     f'<span class="bk_prnt">: {_esc(ids["pmid"])}</span></a>]')
+    if ids.get("doi"):
+        links.append(f'[<a href="https://doi.org/{_esc(ids["doi"])}">CrossRef</a>]')
+    return "".join(parts).rstrip() + (" " + " ".join(links) if links else "")
 
 
 def _render_sec(sec_el, level: int, out: list[str], base_dir: Path | None,
@@ -396,7 +487,9 @@ def _render_sec(sec_el, level: int, out: list[str], base_dir: Path | None,
     label = _ws_text(sec_el.find("label"))
     anchor = f' id="{_esc(sid)}"' if sid else ""
     if title is not None or label:
-        lab = f'<span class="label">{_esc(label)}</span> ' if label else ""
+        # "C.1. Gene Expression…" — Bookshelf closes a section label with a stop.
+        stop = "" if label.endswith(".") else "."
+        lab = f'<span class="label">{_esc(label)}{stop}</span> ' if label else ""
         text = _inline(title) if title is not None else ""
         out.append(f'<h{hl}{anchor}>{lab}{text}</h{hl}>')
     elif anchor:
@@ -441,6 +534,7 @@ def _part_page(part_el, base_dir, images, *, kind: str, n: int = 0) -> _Page:
         containers = [part_el]
     out: list[str] = []
     subnav: list[tuple[str, str]] = []
+    _FORMULA_COUNTER["n"] = 0
     for container in containers:
         children = [c for c in container if _ln(c) in _BLOCK_TAGS]
         for c in children:
@@ -501,7 +595,7 @@ def _collect_pages(root, base_dir, images) -> list[_Page]:
 # ---------------------------------------------------------------------------
 
 def _page_article(page: _Page, banner: str = "", cite: str = "") -> str:
-    label = f'<span class="label">{_esc(page.label)}</span> ' if page.label else ""
+    label = f'<span class="label">{_esc(page.label)}</span>' if page.label else ""
     h1 = (f'<div class="meta-content fm-sec"><h1 id="{_esc(page.slug)}">'
           f'{label}<span class="title">{_esc(page.title)}</span></h1></div>')
     inthis = ""
@@ -552,7 +646,7 @@ def _build_html(root, base_dir, images: dict | None, downloads: list[dict] | Non
 
     banner = landing.book_banner(m)
     articles = landing.contents_article(pages, m) + "".join(
-        _page_article(p, banner, landing.cite_object(m, p.slug, p.title)) for p in pages)
+        _page_article(p, banner, landing.cite_object(m, p.slug, f"{p.label}, {p.title}" if p.label else p.title)) for p in pages)
 
     bits = [x for x in (m["subtitle"], m["publisher"], m["loc"], m["year"]) if x]
     if m["issn"]:
@@ -790,9 +884,12 @@ table.no_margin td:first-child, table.no_margin th:first-child{text-align:left;}
 table.no_margin tr td.grouprow{
   background:var(--grouprow); font-weight:700; text-align:left;
   color:#22333f; border-bottom:1px solid #c7d0d7;}
-.temp-labeled-list{margin:8px 0 0; font-size:.78rem; color:var(--muted); line-height:1.45;}
-.temp-labeled-list dt{display:none;}
-.temp-labeled-list dd{margin:0;}
+.temp-labeled-list{display:grid; grid-template-columns:auto 1fr; column-gap:.5em;
+  margin:8px 0 0; line-height:1.5;}
+.temp-labeled-list.small{font-size:.78rem; color:var(--muted); line-height:1.45;}
+.temp-labeled-list dt{text-align:right;}
+.temp-labeled-list dd{margin:0 0 6px;}
+.bk_ref .bk_prnt{display:none;}
 .temp-labeled-list p{margin:2px 0;}
 /* figures */
 .figure.bk_fig{margin:22px 0; text-align:center;}
@@ -802,11 +899,10 @@ table.no_margin tr td.grouprow{
 .figure.bk_fig h3{font-size:.95rem; font-weight:700; color:#22333f; margin:8px 0 2px;}
 .figure.bk_fig .caption{font-size:.86rem; color:#333; text-align:left;}
 .figure.bk_fig .caption p{margin:4px 0;}
+.figure.bk_fig .temp-labeled-list, .figure.bk_fig>p{text-align:left;}
 .boxed{border:1px solid var(--rule); background:#fafbfc; padding:12px 16px;
   margin:16px 0; border-radius:4px;}
 ul.bk-list{margin:0 0 12px 22px;}
-ol.ref-list{font-size:.9rem; line-height:1.5; padding-left:26px;}
-ol.ref-list li{margin:0 0 8px;}
 /* contents landing */
 ul.bk-contents{list-style:none; margin:0; padding:0;}
 ul.bk-contents li{margin:5px 0; font-size:.98rem;}
@@ -830,7 +926,7 @@ ul.simple-list>li>div{margin:2px 0;}
 .bk-media{margin:4px 0;}
 .bk-media .media-kind{color:var(--muted); font-size:.88rem;}
 .bk-formula{display:flex; align-items:center; justify-content:space-between; margin:10px 0;}
-.bk-formula .formula-label{color:var(--muted); margin-left:1em;}
+.bk-formula .bk_equ_label{color:var(--muted); margin-left:1em;}
 /* right rail */
 .bk-rail{flex:0 0 260px; align-self:flex-start; position:sticky; top:14px;
   max-height:calc(100vh - 28px); overflow:auto;}

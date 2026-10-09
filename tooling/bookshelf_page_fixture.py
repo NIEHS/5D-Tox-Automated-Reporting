@@ -68,6 +68,10 @@ def main() -> int:
     for path in args.pages:
         page = path.read_text(encoding="utf-8")
         info = page_info(page)
+        if not (info["acc"] and info["domain"]) or 'class="main-content' not in page:
+            print(f"{path}: not a saved Bookshelf book page (no accession or content)",
+                  file=sys.stderr)
+            return 1
         report = args.report or report_name(info["domain"])
         out = FIXTURES / report / "bookshelf-pages" / f"{info['page']}.html"
         out.parent.mkdir(parents=True, exist_ok=True)
