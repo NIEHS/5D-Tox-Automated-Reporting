@@ -420,7 +420,14 @@ def build_book(data: dict) -> etree._Element:
         region = _REGION_CONTAINER.get(node.region or "body", "book-body")
         if region not in containers:
             containers[region] = E(region)
+        # The published books float the body's tables and figures (Bookshelf
+        # shows a card that opens the object) and anchor the appendices' in the
+        # text (shown in full).
+        position = "anchor" if node.element == "book-app" else "float"
         for part in parts:
+            for obj in part.iter("table-wrap", "fig"):
+                if obj.get("position") is None:
+                    obj.set("position", position)
             containers[region].append(part)
     for region in ("front-matter", "book-body", "book-back"):
         if region in containers:
