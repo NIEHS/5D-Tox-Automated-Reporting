@@ -95,6 +95,7 @@ from rendering.render_common import (
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
+    section_heading_text,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -385,7 +386,7 @@ def _render_narrative_family(node: DocNode, data: dict, pending_word: str) -> st
     body = _emit_narrative_body(rc)
     if not body:
         body = f"\\emph{{[{pending_word} pending: {_escape_latex(node.title)}]}}"
-    return f"{_heading(node.level, node.title)}\n\n{body}"
+    return f"{_heading(node.level, section_heading_text(node))}\n\n{body}"
 
 
 def _render_front_matter(node: DocNode, data: dict) -> str:
@@ -494,10 +495,10 @@ def _render_heading_only(node: DocNode, data: dict) -> str:
     """
     if node.appendix_scope and node.level > 0:
         cmd = _HEADING_BY_LEVEL.get(node.level, r"\paragraph")
-        title = _escape_latex(node.title)
+        title = _escape_latex(section_heading_text(node))
         toc_level = cmd.lstrip("\\")
         return f"{cmd}*{{{title}}}\n\\addcontentsline{{toc}}{{{toc_level}}}{{{title}}}"
-    return _heading(node.level, node.title)
+    return _heading(node.level, section_heading_text(node))
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
@@ -609,7 +610,7 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     """
     if node.appendix_scope:
         return _scoped_list(node, data, "table_entries", "Table")
-    return f"{_heading(node.level, node.title)}\n\n\\listoftables"
+    return f"{_heading(node.level, section_heading_text(node))}\n\n\\listoftables"
 
 
 def _scoped_list(node: DocNode, data: dict, key: str, kind: str | None) -> str:
@@ -622,7 +623,7 @@ def _scoped_list(node: DocNode, data: dict, key: str, kind: str | None) -> str:
     table entry gets \pageref{tab:<id>} where the tree node carries a label.
     """
     entries = list_entries(node, data, key)
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     if not entries:
         return f"{heading}\n\n\\emph{{[List pending: {_escape_latex(node.title)}]}}"
     lines = [heading, "", "\\begin{itemize}"]
@@ -895,7 +896,7 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     # render_common.bmd_summary_plan EXTRACT; this only EMITs the LaTeX (the
     # column-alignment spec stays here — it's presentation).
     plan = bmd_summary_plan(node, data)
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     prose = _render_paragraphs(plan.paragraphs)
 
     if plan.rows is None:
@@ -985,7 +986,7 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     # \includegraphics chart, the landscape wrap, and the ADR-0005 override +
     # anchor (transport) are LaTeX emit.
     role = genomics_role(node)
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
     resolved = resolve_content_items(node, data)
@@ -1252,7 +1253,7 @@ def _render_freeform_page(node: DocNode, data: dict) -> str:
     so the page is isolated, an optional heading (skipped when title is empty),
     then the resolved LaTeX content verbatim (or a pending note).
     """
-    heading = _heading(node.level, node.title) if node.title else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
     body = _freeform_body_latex(node)
     parts = ["\\clearpage"]
     if heading:
@@ -1266,7 +1267,7 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     Freeform AUTHORED content rendered inline (no forced page break).  Optional
     heading + the resolved LaTeX content verbatim (or a pending note).
     """
-    heading = _heading(node.level, node.title) if node.title else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
     body = _freeform_body_latex(node)
     if heading:
         return f"{heading}\n\n{body}"
@@ -1472,7 +1473,7 @@ def _render_unimplemented(node: DocNode, data: dict) -> str:
     a future session can grep the output to verify the right placeholders
     appeared in the right places.
     """
-    heading = _heading(node.level, node.title) if node.level > 0 else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.level > 0 else ""
     placeholder = _pending_placeholder(node.node_type)
     if heading:
         return f"{heading}\n\n{placeholder}"
@@ -1494,6 +1495,7 @@ _DISPATCH: dict[str, object] = {
     "title-page":        _render_title_page,
     "front-matter":      _render_front_matter,
     "narrative":         _render_narrative,
+    "reference-list":    _render_narrative,   # ADR-0028: laid out as the References narrative
     "heading-only":      _render_heading_only,
     "appendix":          _render_appendix,
     "tables-list":       _render_tables_list,

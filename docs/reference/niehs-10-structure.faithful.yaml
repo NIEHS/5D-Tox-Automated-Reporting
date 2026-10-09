@@ -34,17 +34,16 @@ document:
   - id: tables
     type: tables-list
     title: Tables
-  - id: about-this-report
+  - id: authors
     type: front-matter
-    title: About This Report
-    data_key: about_report
-    children:
-    - id: authors
-      type: heading-only
-      title: Authors
-    - id: contributors
-      type: heading-only
-      title: Contributors
+    title: Authors
+    data_key: authors
+    book_part_type: authors
+  - id: contributors
+    type: front-matter
+    title: Contributors
+    data_key: contributors
+    book_part_type: contributors
   - id: peer-review
     type: front-matter
     title: Peer Review
@@ -140,10 +139,11 @@ document:
         title: Sequencing Quality Checks and Outlier Removal
         data_key: methods
         methods_key: txomics_qc
-      - id: table-1-sample-counts
-        type: sample-counts-table
-        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
-        data_key: sample_counts
+        children:
+        - id: table-1-sample-counts
+          type: sample-counts-table
+          title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+          data_key: sample_counts
       - id: data-normalization
         type: narrative
         title: Data Normalization
@@ -249,10 +249,9 @@ document:
     title: Summary
     data_key: summary
   - id: references
-    type: narrative
+    type: reference-list
     title: References
     data_key: references
-    binding: derived
 - region: back
   children:
   - id: appendix-a

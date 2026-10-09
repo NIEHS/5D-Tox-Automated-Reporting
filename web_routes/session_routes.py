@@ -657,11 +657,11 @@ async def api_session_load(dtxsid: Dtxsid):
         # generated" (the prior behavior), never fails the whole session load.
         pass
 
-    # Front-matter section STATUS for the Sections screen. The 6 authored/boilerplate
-    # front-matter sections (foreword, about_report, peer_review, publication_details,
-    # acknowledgments, abstract) are display-only workflow rows; the screen needs their
+    # Front-matter section STATUS for the Sections screen. The 7 authored/boilerplate
+    # front-matter sections (foreword, authors, contributors, peer_review,
+    # publication_details, acknowledgments, abstract) are display-only workflow rows; the screen needs their
     # filled-vs-pending status without rendering the whole report. Resolve it from the
-    # two per-session variables: front_matter.json (About authors/contributors) and
+    # two per-session variables: front_matter.json (authors/contributors) and
     # whether processing produced abstract content (a background abstract sentence or a
     # bmd summary). Boilerplate sections are always present. Keyed by data_key so the
     # UI's session[key] read finds each row's content, same as the group narratives.
@@ -696,7 +696,7 @@ async def api_session_load(dtxsid: Dtxsid):
         # by tree narrative_key so the Sections screen's session[key] read finds
         # them. Absent when the session hasn't been processed yet.
         **group_narratives,
-        # Front-matter section status (foreword/about_report/…); display-only rows.
+        # Front-matter section status (foreword/authors/contributors/…); display-only rows.
         **front_matter_status,
         "bm2_sections": bm2_sections,
         "pending_files": pending_files,

@@ -29,7 +29,8 @@ const SECTION_COPY: Record<string, { label: string; note: string }> = {
   internal_dose: { label: "Internal Dose Assessment", note: "Deterministic narrative from the processed data." },
   // Front-matter content sections (display-only status rows).
   foreword: { label: "Foreword", note: "Fixed NIEHS boilerplate." },
-  about_report: { label: "About This Report", note: "Authors & contributors — set externally; pending until authored." },
+  authors: { label: "Authors", note: "Author roster — set externally; pending until authored." },
+  contributors: { label: "Contributors", note: "Contributor roster — set externally; pending until authored." },
   peer_review: { label: "Peer Review", note: "Boilerplate peer-review statement." },
   publication_details: { label: "Publication Details", note: "Publisher/DOI — DOI assigned at publication." },
   acknowledgments: { label: "Acknowledgments", note: "Boilerplate acknowledgment." },
@@ -130,7 +131,7 @@ function SectionRow({
   // derived BMD summary table).
   unit?: string;
   // Explicit filled-vs-pending override for rows whose content object is present
-  // but may be empty (front-matter status rows: an empty About This Report is still
+  // but may be empty (front-matter status rows: an empty Authors part is still
   // an object). When set, it decides "generated" vs "not generated" instead of the
   // generic `!!content` heuristic.
   hasContentOverride?: boolean;
@@ -419,7 +420,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
   //   results         — the apical bm2_* instances
   //   genomics        — the genomics_* instances (deterministic, read-only)
   //
-  // The front-matter content sections (Foreword, About This Report, Peer Review,
+  // The front-matter content sections (Foreword, Authors, Contributors, Peer Review,
   // Publication Details, Acknowledgments, Abstract) are display-only: the app is not
   // an editor (ADR-0018), so the row reflects filled-vs-pending (via each section's
   // has_content flag), with no generate/approve control.
@@ -498,7 +499,7 @@ export function Sections({ dtxsid, state, next, back }: StepProps) {
                 blockedBy={s.blocked_by}
                 content={c}
                 // Front-matter content is boilerplate/authored — a present-but-empty
-                // object (an unauthored About This Report) must read as "not
+                // object (an unauthored Authors part) must read as "not
                 // generated", so trust the server's explicit has_content flag.
                 hasContentOverride={c?.has_content === true}
               />

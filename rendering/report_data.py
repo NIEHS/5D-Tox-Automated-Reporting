@@ -35,7 +35,8 @@ Usage:
     #
     # Front matter:
     #   "foreword":            {"paragraphs": [...]}
-    #   "about_report":        {"authors": {"paragraphs": [...]}, "contributors": {"paragraphs": [...]}}
+    #   "authors":             {"paragraphs": [...]}
+    #   "contributors":        {"paragraphs": [...]}
     #   "peer_review":         {"paragraphs": [...]}
     #   "publication_details": {"paragraphs": [...]}
     #   "acknowledgments":     {"paragraphs": [...]}
@@ -379,13 +380,13 @@ def marshal_export_data(
     if foreword:
         data["foreword"] = _ensure_paragraphs(foreword)
 
-    about = body.get("about_report")
-    if about:
-        data["about_report"] = about
+    supplied = {k: body[k] for k in ("authors", "contributors") if body.get(k)}
+    if supplied:
+        data.update(supplied)
     else:
-        # No about_report in the body → overlay the session's persisted front-matter
+        # No authors/contributors in the body → overlay the session's persisted front-matter
         # (authors/contributors + publication overrides) from disk, so the export
-        # paths (Overleaf bundle, compile-pdf) fill the same About/Publication
+        # paths (Overleaf bundle, compile-pdf) fill the same Authors/Contributors/Publication
         # sections the preview does. Keyed by the body's dtxsid.
         _dtxsid = body.get("dtxsid")
         if _dtxsid:
@@ -1082,13 +1083,10 @@ def scaffold_report_data(
             ],
         ]},
 
-        # --- About This Report ---
-        # Structure is boilerplate (Authors heading + Contributors heading).
-        # Actual names are study-specific → empty.
-        "about_report": {
-            "authors": {"paragraphs": []},
-            "contributors": {"paragraphs": []},
-        },
+        # --- Authors / Contributors (ADR-0028: two front-matter parts) ---
+        # Names are study-specific (front_matter.json) → empty until supplied.
+        "authors": {"paragraphs": []},
+        "contributors": {"paragraphs": []},
 
         # --- Peer Review ---
         # Boilerplate template text from NIEHS Report 10 page viii.

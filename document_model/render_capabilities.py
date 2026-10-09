@@ -158,6 +158,10 @@ ROLE_PROFILE: dict[str, RoleSpec] = {
     "fig": RoleSpec("fig"),
     # One supplied data file (title + file name) — the reference's Appendix F.
     "supplementary-material": RoleSpec("supplementary-material"),
+    # The reference list (ADR-0028 §5): the published book's References part,
+    # a <book-part> whose <back> holds the <ref-list>.  A leaf: its refs come
+    # from data, not child nodes.
+    "ref-list": RoleSpec("ref-list"),
     # An appendix: a structured document part in its own right.
     "app": RoleSpec(
         "app", ("toc", "sec", "table-wrap", "fig", "supplementary-material", "page-break"),
@@ -504,6 +508,15 @@ COMPONENT_CATALOG: dict[str, ComponentType] = {
         role="supplementary-material", bindings=("authored", "derived"),
         emits=("supplementary_material_title", "supplementary_material_filename"),
     ),
+    # ── The reference list (ADR-0028 §5): one citation per paragraph of
+    #    data[data_key], DERIVED from the citation inventory.  Print surfaces lay
+    #    it out exactly as a narrative; BITS projects it to the References part,
+    #    a <book-part> whose <back><ref-list> numbers each <ref>.
+    "reference-list": ComponentType(
+        capabilities=_PROSE, content_kinds=("text",), requires=("data_key",),
+        role="ref-list", bindings=("derived",),
+        emits=("section_heading", "body_para"),
+    ),
 }
 
 # Fallback for a node_type not in the catalog: an inert component (no
@@ -563,6 +576,7 @@ CANONICAL_PRESETS: dict[tuple[str, str], str] = {
     ("supplementary-material", "authored"): "supplementary-material",
     ("supplementary-material", "derived"): "supplementary-material",
     ("page-break", "derived"): "page-break",
+    ("ref-list", "derived"): "reference-list",
 }
 
 # (role, binding) pairs some preset ADMITS but that have no single natural
@@ -664,7 +678,8 @@ def emits_for(node_type: str) -> tuple[str, ...]:
 FRONT_MATTER_ROLES_BY_DATA_KEY: dict[str, tuple[str, str]] = {
     "foreword":            ("foreword_title", "foreword_text"),
     "abstract":            ("abstract_head", "abstract"),
-    "about_report":        ("about_this_report_head", "frontmatter_para"),
+    "authors":             ("author_head", "author"),
+    "contributors":        ("contrib_head", "contributor"),
     "peer_review":         ("peer_review_desc_head", "peer_review_desc_text"),
     "acknowledgments":     ("acknowledgement_headfront", "acknowledgement"),
     "publication_details": ("frontmatter_head1", "frontmatter_para"),
@@ -712,6 +727,44 @@ def figure_graphic_role(subtype: str | None) -> str:
     """The graphic-paragraph role for a figure of this subtype: `logo_graphic`
     for a logo, `fig_graphic` for a chart / content image."""
     return _FIGURE_GRAPHIC_ROLE.get(subtype or "", _FIGURE_GRAPHIC_DEFAULT)
+
+
+# ADR-0028 §1: the BITS element a TOP-LEVEL node projects to.  The closed set of
+# part-level elements a template may name in `element:`; nested nodes project by
+# role (sec / table-wrap / fig / …) and carry no element.
+BITS_PART_ELEMENTS: frozenset[str] = frozenset(
+    {"book-meta", "abstract", "foreword", "front-matter-part", "book-part", "book-app"}
+)
+
+# The @book-part-type a part gets when the template names none.  BITS leaves
+# the value open; these are the values the published NIEHS books use.
+_DEFAULT_BOOK_PART_TYPE = {
+    "foreword": "foreword",
+    "front-matter-part": "section",
+    "book-part": "section",
+    "book-app": "appendix",
+}
+
+
+def default_element(node_type: str, region: str | None) -> str | None:
+    """The BITS element a top-level node of this type projects to when its
+    template entry names none (ADR-0028 §1): the title page / cover → book-meta,
+    an appendix → book-app, a front-region part → front-matter-part, anything
+    else in a region → book-part.  Print-only roles (toc, page-break) and
+    region-less scaffold nodes → None (no BITS element)."""
+    role = role_for(node_type)
+    if role == "book-meta":
+        return "book-meta"
+    if role in ("toc", "page-break") or region is None:
+        return None
+    if role == "app":
+        return "book-app"
+    return "front-matter-part" if region == "front" else "book-part"
+
+
+def default_book_part_type(element: str | None) -> str | None:
+    """The @book-part-type for a part element when the template names none."""
+    return _DEFAULT_BOOK_PART_TYPE.get(element or "")
 
 
 def is_headingless(node_type: str) -> bool:

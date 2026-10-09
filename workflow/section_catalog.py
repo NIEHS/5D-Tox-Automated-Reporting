@@ -68,11 +68,12 @@ KIND_UNLOCK: dict[str, tuple[str, ...]] = {
     "internal_dose": (),
     # Authored/boilerplate front-matter content sections — display-only status rows.
     # Boilerplate (foreword/peer_review/publication_details/acknowledgments) is always
-    # populated from the render scaffold; about_report is human-set (front_matter.json,
-    # empty until authored); abstract is study-specific. None gate on approval — they
+    # populated from the render scaffold; authors/contributors are human-set
+    # (front_matter.json, empty until authored); abstract is study-specific. None gate on approval — they
     # are always "available", the row just reflects filled-vs-pending.
     "foreword": (),
-    "about_report": (),
+    "authors": (),
+    "contributors": (),
     "peer_review": (),
     "publication_details": (),
     "acknowledgments": (),
@@ -117,14 +118,15 @@ _GROUP_NARRATIVE_KEYS: frozenset[str] = frozenset(
 )
 
 # AUTHORED / boilerplate front-matter CONTENT sections — these DO get a display-only
-# workflow row (their content can be pending: About This Report is empty until authored,
+# workflow row (their content can be pending: Authors/Contributors are empty until authored,
 # the abstract until processed). Kept out of the singleton branch below and emitted via
 # their own visit clause so they are display-only (approvable=False), not authored-
 # approvable like background/methods.
 _FRONT_MATTER_CONTENT_DATA_KEYS: frozenset[str] = frozenset(
     {
         "foreword",
-        "about_report",
+        "authors",
+        "contributors",
         "peer_review",
         "publication_details",
         "acknowledgments",

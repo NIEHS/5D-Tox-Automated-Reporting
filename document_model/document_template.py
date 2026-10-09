@@ -52,10 +52,13 @@ from document_model.render_capabilities import (
     COMPONENT_CATALOG,
     CONTENT_KINDS,
     FIGURE_SUBTYPES,
+    BITS_PART_ELEMENTS,
     ROLE_PROFILE,
     bindings_for,
     capabilities_for,
     default_binding_for,
+    default_book_part_type,
+    default_element,
     is_allowed_child,
     is_captionable,
     is_headingless,
@@ -91,8 +94,9 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 _COMPUTED_OR_SPECIAL = frozenset(
     {"level", "node_type", "children", "content_items", "table_number",
      "figure_number", "region", "resolved_content",
-     # ADR-0025 §5: numbering products, never authored.
-     "appendix_letter", "appendix_scope", "table_label", "figure_label"}
+     # ADR-0025 §5 / ADR-0028 §3: numbering products, never authored.
+     "appendix_letter", "appendix_scope", "table_label", "figure_label",
+     "sec_label"}
 )
 
 # The component types whose content is AUTHORED (in the template or an external
@@ -312,6 +316,61 @@ def _validate_entry(entry: dict, parent_type: str | None) -> None:
     # ADR-0003 Part B: validate an authored content_items list (if any).
     if entry.get("content_items"):
         _validate_content_items(entry["content_items"], node_id)
+
+    _validate_bits_part_fields(entry, node_id, parent_type)
+    _validate_flow_before_sections(entry, node_id)
+
+
+# Roles that are FLOW content (BITS blocks) and so must precede any titled
+# sub-section among their siblings — the (blocks)*, sec* content model.
+_FLOW_ROLES = frozenset({"table-wrap", "fig", "supplementary-material"})
+
+
+def _validate_bits_part_fields(entry: dict, node_id: str, parent_type: str | None) -> None:
+    """ADR-0028 §1/§6: `element` / `book_part_type` name a top-level PART, so they
+    are refused on nested nodes; `element` must be a part-level BITS element;
+    `parts` is a list of part labels."""
+    for key in ("element", "book_part_type"):
+        if entry.get(key) is not None and parent_type is not None:
+            raise ValueError(
+                f"template node {node_id!r}: {key!r} names a top-level part "
+                f"and is not valid on a nested node"
+            )
+    element = entry.get("element")
+    if element is not None and element not in BITS_PART_ELEMENTS:
+        raise ValueError(
+            f"template node {node_id!r}: element {element!r} is not a part-level "
+            f"BITS element (known: {sorted(BITS_PART_ELEMENTS)})"
+        )
+    parts = entry.get("parts")
+    if parts is not None and (
+        not isinstance(parts, list) or not all(isinstance(p, str) and p.strip() for p in parts)
+    ):
+        raise ValueError(
+            f"template node {node_id!r}: parts must be a list of non-empty labels"
+        )
+
+
+def _validate_flow_before_sections(entry: dict, node_id: str) -> None:
+    """ADR-0028 §4 (the ADR-0025 §6 rule, now enforced): among a node's
+    children, flow content — a table, a figure, a supplied file — may not follow
+    a TITLED sub-section, because BITS containers are (blocks)*, sec* and the
+    projection keeps document order.  An untitled authored block (a
+    freeform-block with no title) is flow, not a sub-section."""
+    seen_section: str | None = None
+    for child in entry.get("children", []) or []:
+        if not isinstance(child, dict):
+            continue  # reported by the child's own validation
+        child_role = role_for(_resolve_type(child))
+        if child_role in _FLOW_ROLES and seen_section is not None:
+            raise ValueError(
+                f"template node {node_id!r}: {child.get('id')!r} ({child_role}) follows "
+                f"the sub-section {seen_section!r}; tables, figures and supplied files "
+                f"must come before a section's sub-sections — nest it in the section "
+                f"it belongs to"
+            )
+        if child_role == "sec" and (child.get("title") or "").strip():
+            seen_section = child.get("id")
 
 
 def _validate_content_items(items, node_id: str) -> None:
@@ -541,6 +600,15 @@ def _instantiate_node(
     # the authored choice or the preset's default.
     bindings["role"] = role_for(node_type)
     bindings["binding"] = entry.get("binding") or default_binding_for(node_type)
+    # ADR-0028 §1: a top-level node carries the BITS part it projects to — the
+    # authored `element` / `book_part_type`, else the defaults for its type and
+    # region.  Nested nodes project by role and carry neither.
+    if parent_type is None:
+        element = entry.get("element") or default_element(node_type, region)
+        bindings["element"] = element
+        bindings["book_part_type"] = (
+            entry.get("book_part_type") or default_book_part_type(element)
+        )
     node = DocNode(
         node_type=node_type, level=level, children=children,
         content_items=content_items, region=region, **bindings
@@ -634,6 +702,38 @@ def load_chart_style(name: str) -> dict:
                 f"got {type(cfg[sub]).__name__}"
             )
     return cfg
+
+
+_BOOK_META_KEYS = frozenset({"collection", "series", "publisher", "permissions"})
+
+
+def load_book_meta(name: str) -> dict:
+    """
+    Load the ``book_meta`` block (ADR-0028 §6): the facts that belong to the
+    report SERIES rather than the study — the Bookshelf collection, the series
+    title + ISSN, the publisher, the permissions statement — which the BITS
+    projection writes into <collection-meta> / <book-meta>.  Returns ``{}`` for a
+    bare-list template or one without the block.  Shape-checked loudly: a mapping
+    whose known sub-blocks are mappings; an unknown key is an authoring error.
+    """
+    data = _load_raw(name)
+    raw = data.get("book_meta") if isinstance(data, dict) else None
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"template {name!r}: 'book_meta' must be a mapping, got {type(raw).__name__}"
+        )
+    unknown = set(raw) - _BOOK_META_KEYS
+    if unknown:
+        raise ValueError(f"template {name!r}: book_meta has unknown key(s): {sorted(unknown)}")
+    for key, value in raw.items():
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"template {name!r}: book_meta.{key} must be a mapping, "
+                f"got {type(value).__name__}"
+            )
+    return raw
 
 
 def load_chart_types(name: str):

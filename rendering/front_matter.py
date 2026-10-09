@@ -1,7 +1,7 @@
 """
 front_matter.py — human-set report front-matter (authors, contributors, publication).
 
-The "About This Report" (authors + contributors) and parts of "Publication Details"
+The Authors and Contributors parts and parts of "Publication Details"
 (report number, DOI, date) are STUDY-SPECIFIC metadata a human supplies — the study
 pipeline can't derive personnel names or an as-yet-unassigned DOI. They are persisted
 per session in `sessions/<dtxsid>/front_matter.json` (written by the Configure UI) and
@@ -20,10 +20,14 @@ Persisted shape (front_matter.json):
       "strain_designation": "(Hsd:Sprague Dawley® SD®)"   # the title's supplier
     }                                                        # designation, optional
 
-Render shape for about_report — the LABELED `sections` form the front-matter resolver
-(render_common.front_matter_plan → labeled_section_parts) renders on all three
-surfaces, so no emitter change is needed:
-    {"sections": [{"label": "Authors", "text": "..."}, {"label": "Contributors", "text": "..."}]}
+Render shape: the `authors` and `contributors` keys (ADR-0028 — two front-matter
+parts, as the published book has them; formerly one labeled `about_report`) are
+plain paragraph lists, one roster line per paragraph, which every surface's
+front-matter resolver already renders:
+    {"paragraphs": ["Name, Role, Affiliation", ...]}
+The structured roster itself is kept on `data["front_matter"]` (cleaned) for the
+BITS projection, which groups names by affiliation and role and builds the
+book-meta <contrib-group>.
 """
 
 from __future__ import annotations
@@ -54,27 +58,22 @@ def _contributor_line(c: dict) -> str:
     return name or role
 
 
-def build_about_report(front_matter: dict) -> dict | None:
-    """Build the `about_report` render value (labeled sections) from persisted
-    front-matter, or None when there are no authors/contributors to show.
-
-    One section per non-empty group; each roster entry becomes one line of the
-    section's text (newline-joined, which the renderers split into lines)."""
+def build_authors(front_matter: dict) -> dict | None:
+    """The `authors` render value — one 'Name, Role, Affiliation' paragraph per
+    roster entry, in author order — or None when no authors are set."""
     if not isinstance(front_matter, dict):
         return None
-    sections = []
+    lines = [ln for ln in (_author_line(a) for a in front_matter.get("authors") or []) if ln]
+    return {"paragraphs": lines} if lines else None
 
-    authors = [ln for ln in (_author_line(a) for a in front_matter.get("authors") or []) if ln]
-    if authors:
-        sections.append({"label": "Authors", "text": "\n".join(authors)})
 
-    contributors = [
-        ln for ln in (_contributor_line(c) for c in front_matter.get("contributors") or []) if ln
-    ]
-    if contributors:
-        sections.append({"label": "Contributors", "text": "\n".join(contributors)})
-
-    return {"sections": sections} if sections else None
+def build_contributors(front_matter: dict) -> dict | None:
+    """The `contributors` render value — one 'Name — Role' paragraph per roster
+    entry — or None when no contributors are set."""
+    if not isinstance(front_matter, dict):
+        return None
+    lines = [ln for ln in (_contributor_line(c) for c in front_matter.get("contributors") or []) if ln]
+    return {"paragraphs": lines} if lines else None
 
 
 # The publication_details scaffold lines this overrides, keyed by their "Prefix:".
@@ -135,8 +134,8 @@ def clean_front_matter(fm: dict) -> dict:
 
 
 def overlay_front_matter(data: dict, front_matter: dict) -> None:
-    """Overlay persisted front-matter onto the render `data` in place: the About This
-    Report authors/contributors, the Publication Details overrides and the title's
+    """Overlay persisted front-matter onto the render `data` in place: the Authors and
+    Contributors parts (plus the cleaned roster on `data["front_matter"]`), the Publication Details overrides and the title's
     supplier strain designation. A no-op when front_matter is empty. Used by both the
     marshal and session-reload export paths so they agree."""
     if not front_matter:
@@ -144,9 +143,11 @@ def overlay_front_matter(data: dict, front_matter: dict) -> None:
     designation = (front_matter.get("strain_designation") or "").strip()
     if designation:
         data["strain"] = designation
-    about = build_about_report(front_matter)
-    if about:
-        data["about_report"] = about
+    for key, build in (("authors", build_authors), ("contributors", build_contributors)):
+        value = build(front_matter)
+        if value:
+            data[key] = value
+    data["front_matter"] = clean_front_matter(front_matter)
     if isinstance(data.get("publication_details"), dict):
         data["publication_details"] = apply_publication_overrides(
             data["publication_details"], front_matter
@@ -156,18 +157,19 @@ def overlay_front_matter(data: dict, front_matter: dict) -> None:
 # ---------------------------------------------------------------------------
 # Front-matter workflow status (for the Sections screen)
 # ---------------------------------------------------------------------------
-# The workflow Sections screen lists the 6 authored/boilerplate front-matter sections
-# (foreword, about_report, peer_review, publication_details, acknowledgments, abstract)
+# The workflow Sections screen lists the 7 authored/boilerplate front-matter sections
+# (foreword, authors, contributors, peer_review, publication_details, acknowledgments,
+# abstract)
 # as display-only rows and needs their FILLED-vs-PENDING status. It must NOT run the
 # full ~1.5s report render just to learn that — this resolves the same content the
 # render does, but cheaply, from the two inputs that actually vary per session:
-#   * about_report ← front_matter.json (authors/contributors) — empty until authored;
+#   * authors / contributors ← front_matter.json — empty until authored;
 #   * abstract     ← processing outputs — empty until the session is processed;
 #   * the other four are fixed boilerplate → always present.
 
 # The keys the Sections screen surfaces, in document order.
 FRONT_MATTER_STATUS_KEYS: tuple[str, ...] = (
-    "foreword", "about_report", "peer_review",
+    "foreword", "authors", "contributors", "peer_review",
     "publication_details", "acknowledgments", "abstract",
 )
 
@@ -177,12 +179,12 @@ def resolve_front_matter_status(
     *,
     abstract_filled: bool,
 ) -> dict[str, dict]:
-    """Return `{data_key: {"has_content": bool, "paragraphs": int}}` for the six
+    """Return `{data_key: {"has_content": bool, "paragraphs": int}}` for the
     front-matter sections, WITHOUT rendering the report.
 
     Inputs are the only two per-session variables:
-      * `front_matter` — the session's `front_matter.json` (or None); gives About
-        This Report its authors/contributors. Empty/None → About is pending.
+      * `front_matter` — the session's `front_matter.json` (or None); gives the
+        Authors and Contributors parts their rosters. Empty/None → both pending.
       * `abstract_filled` — whether processing has produced abstract content (the
         caller derives this from the presence of processed results, e.g. a background
         `abstract_background` sentence or a bmd summary). The abstract is boilerplate-
@@ -194,17 +196,14 @@ def resolve_front_matter_status(
     "N paragraphs" label (the boilerplate lengths are stable).
     """
     fm = front_matter or {}
-    about = build_about_report(fm)  # None when no authors/contributors
-    about_units = 0
-    if about:
-        about_units = sum(
-            1 for s in about.get("sections", []) if (s.get("text") or "").strip()
-        )
+    authors = len((build_authors(fm) or {}).get("paragraphs") or [])
+    contributors = len((build_contributors(fm) or {}).get("paragraphs") or [])
     # Boilerplate paragraph counts (stable scaffold lengths) for the row label; the
     # exact number is cosmetic — what matters is has_content True/False.
     return {
         "foreword": {"has_content": True, "paragraphs": 3},
-        "about_report": {"has_content": about_units > 0, "paragraphs": about_units},
+        "authors": {"has_content": authors > 0, "paragraphs": authors},
+        "contributors": {"has_content": contributors > 0, "paragraphs": contributors},
         "peer_review": {"has_content": True, "paragraphs": 1},
         "publication_details": {"has_content": True, "paragraphs": 6},
         "acknowledgments": {"has_content": True, "paragraphs": 1},

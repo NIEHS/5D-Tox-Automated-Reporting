@@ -3,10 +3,19 @@
 # Top-level is THREE region containers (ADR-0004 amendment d) that project
 # directly to BITS <front-matter> / <book-body> / <book-back>:
 #
-#   - region: front   — cover, title page, ToC, foreword, ..., abstract
-#   - region: body    — background, methods, results, summary
-#   - region: back    — references + appendices A–F
+#   - region: front   — title page, foreword, ToC, authors, ..., abstract
+#   - region: body    — background, methods, results, summary, references
+#   - region: back    — appendices A–F
 #
+# ADR-0028: the structure corresponds one-to-one with the published BITS book.
+# Each top-level node names the BITS part it becomes — `element` (book-meta,
+# abstract, foreword, front-matter-part, book-part, book-app) and
+# `book_part_type` (the @book-part-type) — so this file reads like the book's
+# part list.  Print-only nodes (toc, tables-list) name no element: Bookshelf
+# generates its own table of contents.  Nested nodes project by their role
+# (sec, table-wrap, fig); flow content (tables, figures) must come before a
+# section's sub-sections, and section labels inside appendices ("C.1") are
+# computed, never written into titles.
 # Each region's `children` are the node entries; the instantiator inherits
 # `region` from the container onto every descendant (so any node knows its
 # region without a separate type lookup).  The page-numbering switch
@@ -14,15 +23,19 @@
 #
 # Node-entry fields (everything else is computed):
 #   id, type, title, data_key, platform, narrative_key, ready_key,
-#   methods_key, orientation, caption, children.
+#   methods_key, orientation, caption, children, element, book_part_type, parts.
 # Computed: level (depth or 0 if headingless), table_number/figure_number
-# (positional), region (inherited from the container).
+# (positional), sec_label (appendix sections), region (inherited from the
+# container).
 #
 # The golden-tree test (tests/unit/test_document_template.py) asserts that
 # instantiating this file reproduces the frozen DOCUMENT_TREE byte-for-byte.
 #
-# This file is a MAPPING with three top-level keys:
+# This file is a MAPPING whose top-level keys are:
 #   document:    the region containers + node entries (the document structure);
+#   book_meta:   the report SERIES facts BITS writes into <collection-meta> /
+#                <book-meta> (ADR-0028 §6) — collection, series + ISSN,
+#                publisher, permissions; study facts come from the data;
 #   chart_style: optional per-instance chart styling (see chart_style.py);
 #   chart_types: optional data-driven chart-type declarations (chart_registry).
 # load_template() returns the `document` list unchanged, so the golden tree is
@@ -40,6 +53,7 @@ document:
     type: title-page
     title: Title Page
     subtype: niehs-5d-tox
+    element: book-meta        # the book title + subtitle (ADR-0028 §6)
   # Page breaks are NOT structural nodes — they are declared in the `styles`
   # block below as `break_before: page` on the node that should start a new page
   # (see the header note there).  This keeps pagination a single surface-agnostic
@@ -48,42 +62,68 @@ document:
     type: front-matter
     title: Foreword
     data_key: foreword
+    element: foreword
+    book_part_type: foreword
   - id: toc
     type: toc
     title: Table of Contents
   - id: tables-list
     type: tables-list
     title: Tables
-  - id: about
+  # Authors and Contributors are two front-matter parts in the published book
+  # (fm-authors / fm-contribs), filled from the session's front_matter.json.
+  - id: authors
     type: front-matter
-    title: About This Report
-    data_key: about_report
+    title: Authors
+    data_key: authors
+    element: front-matter-part
+    book_part_type: authors
+  - id: contributors
+    type: front-matter
+    title: Contributors
+    data_key: contributors
+    element: front-matter-part
+    book_part_type: contributors
   - id: peer-review
     type: front-matter
     title: Peer Review
     data_key: peer_review
+    element: front-matter-part
+    book_part_type: peer-review
   - id: publication
     type: front-matter
     title: Publication Details
     data_key: publication_details
+    element: front-matter-part
+    book_part_type: section
   - id: acknowledgments
     type: front-matter
     title: Acknowledgments
     data_key: acknowledgments
+    element: front-matter-part
+    book_part_type: acknowledgments
+  # The abstract lives in <book-meta>; its four parts are declared, so a part
+  # with no text yet shows as pending instead of silently vanishing.
   - id: abstract
     type: front-matter
     title: Abstract
     data_key: abstract
+    element: abstract
+    parts: [Background, Methods, Results, Summary]
 - region: body
   children:
   - id: background
     type: narrative
     title: Background
     data_key: background
+    element: book-part
+    book_part_type: section
   - id: methods
     type: heading-only
     title: Materials and Methods
     data_key: methods
+    element: book-part
+    book_part_type: section
     binding: llm   # the section's prose (its subsections) is LLM-generated (ADR-0025)
     children:
     - id: mm-study-design
@@ -163,11 +203,14 @@ document:
         title: Sequencing Quality Checks and Outlier Removal
         data_key: methods
         methods_key: txomics_qc
-      - id: table-sample-counts
-        type: sample-counts-table
-        title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
-        data_key: sample_counts
-        caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+        children:
+        # Table 1 sits inside the section that reports the sample QC, as in
+        # the published book (a table may not follow a sibling sub-section).
+        - id: table-sample-counts
+          type: sample-counts-table
+          title: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
+          data_key: sample_counts
+          caption: Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data
       - id: mm-tx-norm
         type: narrative
         title: Data Normalization
@@ -215,6 +258,8 @@ document:
   - id: results
     type: heading-only
     title: Results
+    element: book-part
+    book_part_type: section
     children:
     - id: animal-condition
       type: narrative+tables
@@ -291,12 +336,18 @@ document:
     type: narrative
     title: Summary
     data_key: summary
-- region: back
-  children:
+    element: book-part
+    book_part_type: section
+  # References is the last BODY part in the published book: a book-part whose
+  # <back> holds the numbered <ref-list> (ADR-0028 §5).
   - id: references
-    type: narrative
+    type: reference-list
     title: References
     data_key: references
+    element: book-part
+    book_part_type: section
+- region: back
+  children:
   # Appendices D/E carry AUTHORED static content shared by every study (BMD
   # rules table, organ descriptions) as a freeform-block child — dual-surface,
   # one .tex + one .html per appendix under templates/freeform/.  Appendices A/F
@@ -310,6 +361,8 @@ document:
   # the letter into the title.
   - id: appendix-a
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Internal Dose Assessment
     children:
     - id: appendix-a-body
@@ -322,6 +375,8 @@ document:
       not_collected_text: "Internal dose was not assessed in this study."
   - id: appendix-b
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Animal Identifiers
     children:
     # The animal roster is an ordinary programmatic matrix table (ADR-0025):
@@ -333,6 +388,8 @@ document:
       data_key: appendix_animals_matrix
   - id: appendix-c
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Transcriptomic Quality Control and Empirical False Discovery Rate
     children:
     # C.1: PCA of the modeled expression matrix, computed from the integrated
@@ -340,7 +397,7 @@ document:
     # of three panels per tissue x sex.
     - id: appendix-c-qc
       type: heading-only
-      title: C.1. Gene Expression Quality Control
+      title: Gene Expression Quality Control
       children:
       - id: appendix-c-qc-text
         type: freeform-block
@@ -358,7 +415,7 @@ document:
     # the pipeline does not ingest it yet, so the figure shows its pending note.
     - id: appendix-c-efdr
       type: heading-only
-      title: C.2. Empirical False Discovery Rate
+      title: Empirical False Discovery Rate
       children:
       - id: figure-c-efdr
         type: figure
@@ -372,6 +429,8 @@ document:
   # BMDS 2.7 model-selection rules here; this pipeline never runs BMDS 2.7.)
   - id: appendix-d
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Benchmark Dose Modeling and Acceptance Criteria
     children:
     - id: appendix-d-body
@@ -390,6 +449,8 @@ document:
       data_key: appendix_bmd_config_matrix
   - id: appendix-e
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Organ Weight Descriptions
     children:
     - id: appendix-e-body
@@ -400,6 +461,8 @@ document:
         html: freeform/appendix-e.html
   - id: appendix-f
     type: appendix
+    element: book-app
+    book_part_type: appendix
     title: Supplemental Data
     children:
     - id: appendix-f-body
@@ -553,6 +616,22 @@ document:
 # Appendix D BMDS flowcharts, which belong to a method this pipeline does not
 # run) — so we ship `charts: []` to suppress the UMAP semantic maps and
 # BMD/cluster scatters.  Set to `[umap, cluster]` to bring them back.
+# ADR-0028 §6: facts of the report SERIES (not the study), written into the BITS
+# <collection-meta> and <book-meta>.  Study facts — the report number (subtitle),
+# DOI, publication date and authors — come from the session's front matter.
+book_meta:
+  collection:
+    title: NIEHS Report Series
+  series:
+    title: NIEHS Report
+    issn: 2768-5632
+  publisher:
+    name: National Institute of Environmental Health Sciences
+    loc: Research Triangle Park (NC)
+  permissions:
+    license_href: https://creativecommons.org/publicdomain/zero/1.0/
+    statement: This is a work of the US government and distributed under the terms of the Public Domain
+
 charts: []
 
 
@@ -674,7 +753,7 @@ styles:
   instances:
     # Front matter — new page before each of these sections.
     toc: { break_before: page }
-    about: { break_before: page }
+    authors: { break_before: page }
     peer-review: { break_before: page }
     publication: { break_before: page }
     abstract: { break_before: page }

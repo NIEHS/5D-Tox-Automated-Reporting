@@ -40,7 +40,8 @@ def test_global_tree_yields_expected_workflow_units():
         "bm2",
         "genomics",
         "foreword",
-        "about_report",
+        "authors",
+        "contributors",
         "peer_review",
         "publication_details",
         "acknowledgments",
@@ -51,7 +52,7 @@ def test_global_tree_yields_expected_workflow_units():
 def test_front_matter_content_sections_are_display_only_front_region():
     specs = _by_key(DOCUMENT_TREE)
     for key in (
-        "foreword", "about_report", "peer_review",
+        "foreword", "authors", "contributors", "peer_review",
         "publication_details", "acknowledgments", "abstract",
     ):
         spec = specs[key]

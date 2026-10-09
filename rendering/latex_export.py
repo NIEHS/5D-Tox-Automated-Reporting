@@ -150,7 +150,7 @@ to find every gap; each one will be filled in as the migration progresses.
 
 Currently rendered with real content (when session data exists):
 
-  - Foreword, About This Report, Peer Review, Publication Details,
+  - Foreword, Authors, Contributors, Peer Review, Publication Details,
     Acknowledgments
   - Background
   - Summary, References

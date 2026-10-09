@@ -226,7 +226,7 @@ export interface SectionData {
   wording_review?: string[];
   // Front-matter status rows carry an explicit filled-vs-pending flag: their content
   // is boilerplate/authored, so a non-null object does NOT imply real content (an
-  // empty About This Report is still an object). The row reads this, not `!!content`.
+  // empty Authors part is still an object). The row reads this, not `!!content`.
   has_content?: boolean;
   [k: string]: unknown;
 }

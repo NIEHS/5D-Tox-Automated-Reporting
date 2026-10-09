@@ -163,8 +163,28 @@ def _number_scoped(nodes: list[DocNode], scope: str | None, counters: dict) -> N
             # A new numbering scope: the appendix letter (assigned by
             # compute_appendix_letters before this walk) prefixes every number.
             _number_scoped(node.children, node.appendix_letter, {"table": 0, "figure": 0})
+            _label_sections(node.children, node.appendix_letter)
         else:
             _number_scoped(node.children, scope, counters)
+
+
+def _label_sections(nodes: list[DocNode], prefix: str | None) -> None:
+    """ADR-0028 §3: number the TITLED sections of an appendix — "C.1", "C.2",
+    and "C.2.1" one level down — into `sec_label`.  Titles never carry the
+    label; BITS emits it as <label>, print composes "C.1. Title".  Untitled
+    sections (an authored block) take no number and pass the prefix through."""
+    from document_model.render_capabilities import role_for
+
+    n = 0
+    for node in nodes:
+        is_sec = (node.role or role_for(node.node_type)) == "sec"
+        if is_sec and (node.title or "").strip() and prefix:
+            n += 1
+            node.sec_label = f"{prefix}.{n}"
+            _label_sections(node.children, node.sec_label)
+        else:
+            node.sec_label = None
+            _label_sections(node.children, prefix)
 
 
 def _scoped_label(scope: str | None, number: int) -> str:
@@ -229,7 +249,9 @@ def study_tree(base, collected, authored=None):
     3. Study-bound authored content (`session_content`): freeform nodes take THIS
        study's text (`authored`), else `missing_content_text`, else pending.
 
-    Any copy is renumbered (numbering is positional)."""
+    The result is always (re)numbered — numbering is positional and idempotent,
+    and the emitters read its products (labels, appendix scopes) — so a render
+    never depends on some earlier caller having numbered the shared tree."""
     nodes = base
     if collected:
         nodes = prune_uncollected_tables(base, collected)
@@ -239,8 +261,7 @@ def study_tree(base, collected, authored=None):
             nodes = copy.deepcopy(base)
         _resolve_study_bound(nodes, authored or {},
                              set(collected) if collected is not None else None)
-    if nodes is not base:
-        compute_table_numbers(nodes)
+    compute_table_numbers(nodes)
     return nodes
 
 

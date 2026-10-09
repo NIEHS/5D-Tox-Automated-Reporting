@@ -997,6 +997,7 @@ def _emit_supplementary_material(parent: etree._Element, node: DocNode, data: di
 _DISPATCH: dict[str, object] = {
     "narrative":           _emit_narrative,
     "narrative+tables":    _emit_narrative,
+    "reference-list":      _emit_narrative,
     "heading-only":        _emit_heading_only,
     "table":               _emit_raw_table_blocks,
     "incidence-table":     _emit_raw_table_blocks,

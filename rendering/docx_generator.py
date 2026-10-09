@@ -69,6 +69,7 @@ from rendering.render_common import (
     gene_table_headers,
     apical_table_plan,
     appendix_heading_text,
+    section_heading_text,
     assert_dispatch_covers,
     bmd_summary_plan,
     NarrativeContent,
@@ -670,7 +671,7 @@ def _render_front_matter(doc: Document, node: DocNode, data: dict) -> None:
     if heading_style and node.title and heading_style in {s.name for s in doc.styles}:
         head = doc.add_paragraph(_clean(node.title), style=doc.styles[heading_style])
     else:
-        head = _add_heading(doc, node.level, node.title, data)
+        head = _add_heading(doc, node.level, section_heading_text(node), data)
     # Front-matter section headers get the reference front-matter heading look
     # (Arial 16pt bold, centered, 12pt after — matching the TOC/Tables headers).
     # Body sections (Background/Summary/References are `narrative` nodes that ALSO
@@ -727,7 +728,7 @@ def _render_narrative(doc: Document, node: DocNode, data: dict) -> None:
     `narrative` body sections keep the generic heading (a role style is only used
     for genuine `front-matter` nodes — see _render_front_matter), and their prose
     is the canonical body_para style."""
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
     body_style = _pstyle_or_default(doc, data, "body_para")
     rc = resolve_narrative_content(node, data)
     if not _emit_narrative_body(doc, rc, body_style):
@@ -765,7 +766,7 @@ def _render_sample_counts_table(doc: Document, node: DocNode, data: dict) -> Non
 
 def _render_heading_only(doc: Document, node: DocNode, data: dict) -> None:
     """Structural heading; children rendered separately by the walker."""
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
 
 
 # The Word style the reference uses for an appendix TITLE (the "Appendix A."
@@ -857,7 +858,7 @@ def _render_tables_list(doc: Document, node: DocNode, data: dict) -> None:
     won't auto-refresh a Word-origin field); _mark_fields_dirty flips updateFields
     so Word offers to rebuild it, at which point it re-collects the real captions
     with real page numbers."""
-    head = _add_heading(doc, node.level, node.title, data)
+    head = _add_heading(doc, node.level, section_heading_text(node), data)
     _style_front_matter_heading(head)  # reference front-matter heading look
     entries = list_entries(node, data, "table_entries")
     if not entries:
@@ -1222,7 +1223,7 @@ def _render_narrative_tables(doc: Document, node: DocNode, data: dict) -> None:
     The narrative-paragraph selection is the shared resolve_narrative_content
     dispatch; heading + body_para styling and the pending fallback stay Word EMIT.
     """
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
     body_style = _pstyle_or_default(doc, data, "body_para")
     rc = resolve_narrative_content(node, data)
     if not _emit_narrative_body(doc, rc, body_style):
@@ -1268,7 +1269,7 @@ def _render_incidence_table(doc: Document, node: DocNode, data: dict) -> None:
 def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
     """Apical Endpoint BMD Summary — prose + one row per endpoint."""
     plan = bmd_summary_plan(node, data)
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
     prose = _add_paragraphs(doc, plan.paragraphs, style=_pstyle_or_default(doc, data, "body_para"))
     if plan.rows is None:
         if not prose:
@@ -1280,7 +1281,7 @@ def _render_bmd_summary(doc: Document, node: DocNode, data: dict) -> None:
 
 def _render_genomics_section(doc: Document, node: DocNode, data: dict) -> None:
     """Gene Set / Gene BMD section — per-(organ, sex) subsections."""
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
     _body_style = _pstyle_or_default(doc, data, "body_para")
     intro = _add_paragraphs(doc, genomics_intro_paragraphs(node, data), style=_body_style)
 
@@ -1610,14 +1611,14 @@ def _render_freeform_page(doc: Document, node: DocNode, data: dict) -> None:
     """Freeform authored page — forces its own page, then heading + body text."""
     _add_page_break(doc)
     if node.title:
-        _add_heading(doc, node.level, node.title, data)
+        _add_heading(doc, node.level, section_heading_text(node), data)
     _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
 
 
 def _render_freeform_block(doc: Document, node: DocNode, data: dict) -> None:
     """Freeform authored block — inline, no forced page break."""
     if node.title:
-        _add_heading(doc, node.level, node.title, data)
+        _add_heading(doc, node.level, section_heading_text(node), data)
     _add_paragraphs(doc, _freeform_text(node).split("\n\n"))
 
 
@@ -1632,7 +1633,7 @@ def _render_figures_list(doc: Document, node: DocNode, data: dict) -> None:
     list's scope (data["figure_entries"]: tree figures + genomics charts).  Plain
     paragraphs rather than a Word field: figure captions are literal text, not
     SEQ-numbered, so a `TOC \\c "Figure"` field would collect nothing."""
-    head = _add_heading(doc, node.level, node.title, data)
+    head = _add_heading(doc, node.level, section_heading_text(node), data)
     if head is not None:
         _style_front_matter_heading(head)
     entries = list_entries(node, data, "figure_entries")
@@ -1679,7 +1680,7 @@ def _render_supplementary_material(doc: Document, node: DocNode, data: dict) -> 
 
 def _render_unimplemented(doc: Document, node: DocNode, data: dict) -> None:
     """Catch-all — heading (if any) + a visible pending placeholder."""
-    _add_heading(doc, node.level, node.title, data)
+    _add_heading(doc, node.level, section_heading_text(node), data)
     _add_pending(doc, f"Section pending: {node.node_type} rendering not yet implemented")
 
 
@@ -1701,6 +1702,7 @@ _DISPATCH: dict[str, object] = {
     "title-page":          _render_title_page,
     "front-matter":        _render_front_matter,
     "narrative":           _render_narrative,
+    "reference-list":      _render_narrative,   # ADR-0028: laid out as the References narrative
     "heading-only":        _render_heading_only,
     "appendix":            _render_appendix,
     "tables-list":         _render_tables_list,

@@ -123,7 +123,7 @@ def _build_toc_entries(
     # --- Readiness checks for each data_key ---
     # Front matter keys are always "ready" (scaffold provides boilerplate).
     _FRONT_KEYS = {
-        "foreword", "about_report", "peer_review",
+        "foreword", "authors", "contributors", "peer_review",
         "publication_details", "acknowledgments", "abstract",
         "table_of_contents",
     }
@@ -271,8 +271,9 @@ def _build_toc_entries(
                     ready = _is_narrative_tables_ready(node)
                 else:
                     ready = _is_ready(node)
+                from rendering.render_common import section_heading_text
                 toc_entries.append({
-                    "title": node.title,
+                    "title": section_heading_text(node),
                     "level": node.level,
                     "ready": ready,
                     "id": node.id,
@@ -393,7 +394,7 @@ def _apply_section_filter(data: dict, section_filter: str, tree: "list | None" =
         "summary", "references",
     }
     ALL_FRONT = {
-        "foreword", "about_report", "peer_review", "publication_details",
+        "foreword", "authors", "contributors", "peer_review", "publication_details",
         "acknowledgments", "abstract", "table_of_contents",
     }
 

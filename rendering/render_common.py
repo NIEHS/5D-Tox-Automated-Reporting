@@ -317,6 +317,21 @@ def appendix_heading_text(node: DocNode) -> str:
     return f"Appendix {letter}. {title}" if title else f"Appendix {letter}"
 
 
+def section_heading_text(node: DocNode) -> str:
+    """Compose a section heading's display text: "C.1. {title}" for a section
+    inside an appendix, else the bare title.
+
+    The label comes from ``node.sec_label`` (assigned by the numbering pass,
+    ADR-0028 §3 — titles no longer carry "C.1."), so the print surfaces keep
+    printing the numbered heading while BITS emits the label as its own
+    <label>.  The section sibling of appendix_heading_text."""
+    title = node.title or ""
+    label = getattr(node, "sec_label", None)
+    if not label:
+        return title
+    return f"{label}. {title}" if title else label
+
+
 def labeled_section_parts(sections) -> list[tuple[str, str]]:
     """
     Normalise a structured-abstract "sections" list into [(label, text)],
@@ -1769,6 +1784,8 @@ RENDERABLE_NODE_TYPES: frozenset[str] = frozenset({
     "data-table",
     "authored-table",
     "supplementary-material",
+    # ADR-0028: the References list (a narrative on print; a ref-list part in BITS).
+    "reference-list",
 })
 
 # Node types a renderer may legitimately NOT implement, with the structural

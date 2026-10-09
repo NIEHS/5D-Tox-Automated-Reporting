@@ -146,6 +146,25 @@ class DocNode:
                         preset lists (e.g. `binding: llm` on the abstract).  The
                         workflow reads this (readiness, approvability) instead of
                         inferring it from the type.
+        element:        The BITS element a top-level node projects to (ADR-0028):
+                        book-meta | abstract | foreword | front-matter-part |
+                        book-part | book-app.  Authored on the template's parts;
+                        when omitted the instantiator derives it from type and
+                        region (render_capabilities.default_element).  None for
+                        nested nodes and for print-only nodes (toc, tables-list,
+                        page-break), which have no BITS element.
+        book_part_type: The part's BITS @book-part-type (ADR-0028): foreword,
+                        authors, contributors, peer-review, acknowledgments,
+                        section, appendix.  Top-level parts only; defaulted by the
+                        instantiator like `element`.
+        parts:          The labeled parts a labeled node is declared to have, in
+                        order (ADR-0028 §6) — the abstract's Background / Methods /
+                        Results / Summary.  The BITS projection emits each one,
+                        with a visible pending paragraph for a part with no text.
+        sec_label:      COMPUTED by the numbering pass (ADR-0028 §3): the label of
+                        a titled section inside an appendix ("C.1", "C.2.1"); None
+                        elsewhere.  Titles never carry it; print surfaces compose
+                        "C.1. Title" through render_common.section_heading_text.
     """
     id: str
     title: str
@@ -178,3 +197,7 @@ class DocNode:
     appendix_scope: str | None = None
     table_label: str | None = None
     figure_label: str | None = None
+    element: str | None = None
+    book_part_type: str | None = None
+    parts: list | None = None
+    sec_label: str | None = None

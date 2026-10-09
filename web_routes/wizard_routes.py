@@ -108,7 +108,7 @@ async def api_get_front_matter(dtxsid: Dtxsid):
 async def api_save_front_matter(dtxsid: Dtxsid, request: Request):
     """Persist the session's front-matter. Validates the top-level shape (authors /
     contributors lists, publication object), drops junk, writes front_matter.json.
-    The About This Report + Publication Details sections fill from this on next
+    The Authors, Contributors and Publication Details sections fill from this on next
     render."""
     try:
         body = await request.json()

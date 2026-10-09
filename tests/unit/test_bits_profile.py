@@ -46,9 +46,9 @@ def test_shipped_template_is_an_instance_of_the_profile():
 
 
 def test_reference_report_is_an_instance_of_the_profile():
-    """The NIEHS-10 structure (nested front matter, structured appendices with
-    sub-sections two deep, data + authored tables, figures, per-appendix lists,
-    55 supplementary files) validates unchanged."""
+    """The NIEHS-10 structure (typed front-matter parts, structured appendices
+    with sub-sections two deep, data + authored tables, figures, per-appendix
+    lists, 55 supplementary files) validates unchanged."""
     document = yaml.safe_load(REFERENCE_YAML.read_text(encoding="utf-8"))["document"]
     tree = _tree_from_document_list(document)
     nodes = _nodes(tree)
@@ -56,15 +56,17 @@ def test_reference_report_is_an_instance_of_the_profile():
     # The constructs that used to be violations are all present.
     assert {"appendix", "figure", "data-table", "authored-table", "figures-list",
             "supplementary-material", "freeform-block"} <= types
-    about = next(n for n in nodes if n.id == "about-this-report")
-    assert [c.title for c in about.children] == ["Authors", "Contributors"]
+    # ADR-0028: Authors and Contributors are front-matter parts of their own.
+    parts = {n.id: (n.element, n.book_part_type) for n in tree}
+    assert parts["authors"] == ("front-matter-part", "authors")
+    assert parts["contributors"] == ("front-matter-part", "contributors")
     c22 = next(n for n in nodes if n.id == "c-2-2")
     assert c22.level == 3 and {c.node_type for c in c22.children} == {"figure", "data-table"}
     assert sum(1 for n in nodes if n.node_type == "supplementary-material") == 55
     # Honest bindings.
     by_id = {n.id: n for n in nodes}
     assert by_id["abstract"].binding == "llm"
-    assert by_id["references"].binding == "derived"
+    assert by_id["references"].binding == "derived" and by_id["references"].role == "ref-list"
     assert by_id["table-d-1"].binding == "authored"
     assert by_id["table-b-1"].binding == "programmatic"
     assert by_id["appendix-a"].binding == "container" and by_id["appendix-a"].role == "app"
@@ -326,7 +328,7 @@ def test_entries_carry_scope_and_figures_are_walked():
     tree = _listed_tree()
     toc, tables, figures = _build_toc_entries({"m": {"headers": ["h"], "rows": [["1"]]}}, tree=tree)
     assert [(e["title"], e["scope"]) for e in toc] == [
-        ("Results", None), ("Appendix A. Alpha", None), ("Alpha section", "A")]
+        ("Results", None), ("Appendix A. Alpha", None), ("A.1. Alpha section", "A")]
     assert [(e["label"], e["scope"], e["ready"]) for e in tables] == [("1", None, True), ("A-1", "A", True)]
     assert [(e["label"], e["scope"], e["ready"]) for e in figures] == [("1", None, False), ("A-1", "A", False)]
 
@@ -349,19 +351,19 @@ def test_list_nodes_show_only_their_scope_on_every_surface():
     a_tables = hg._render_tables_list(find_node("tables-a", tree), data)
     assert "Table A-1. Alpha table" in a_tables and "Body table" not in a_tables
     a_toc = hg._render_toc(find_node("toc-a", tree), data)
-    assert "Alpha section" in a_toc and "Results" not in a_toc
+    assert "A.1. Alpha section" in a_toc and "Results" not in a_toc
     # LaTeX: native commands for the body lists, an itemized list per appendix.
     assert lg._render_tables_list(find_node("tables", tree), data).endswith("\\listoftables")
     assert lg._render_toc(find_node("toc", tree), data) == "\\tableofcontents"
     a_tex = lg._render_tables_list(find_node("tables-a", tree), data)
     assert "\\item Table A-1. Alpha table" in a_tex and "Body table" not in a_tex
-    assert "\\item Alpha section" in lg._render_toc(find_node("toc-a", tree), data)
+    assert "\\item A.1. Alpha section" in lg._render_toc(find_node("toc-a", tree), data)
     assert "\\item Figure A-1. Alpha figure" in lg._render_figures_list(find_node("figures-a", tree), data)
     # Word: plain entries for the scoped lists.
     doc = Document(); dg._render_tables_list(doc, find_node("tables-a", tree), data)
     assert any("Table A-1. Alpha table" in p.text for p in doc.paragraphs)
     doc = Document(); dg._render_toc(doc, find_node("toc-a", tree), data)
-    assert any(p.text == "Alpha section" for p in doc.paragraphs)
+    assert any(p.text == "A.1. Alpha section" for p in doc.paragraphs)
 
 
 def test_appendix_tables_stay_out_of_the_front_latex_list():
@@ -384,5 +386,8 @@ def test_reference_lists_per_appendix_match_the_docx():
     assert [e["label"] for e in figures if e["scope"] == "C"] == [f"C-{n}" for n in range(1, 7)]
     assert [e["label"] for e in tables if e["scope"] == "D"] == ["D-1"]
     assert [e["title"] for e in figures if e["scope"] == "D"][0].startswith("Benchmark Dose Model")
+    # ADR-0028 §3: appendix section labels are computed, and the lists show
+    # them as the headings do.
     assert [e["title"] for e in toc if e["scope"] == "C"] == [
-        "Gene Expression Quality Control", "Empirical False Discovery Rate", "Methods", "Results"]
+        "C.1. Gene Expression Quality Control", "C.2. Empirical False Discovery Rate",
+        "C.2.1. Methods", "C.2.2. Results"]

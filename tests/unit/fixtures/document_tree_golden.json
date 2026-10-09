@@ -29,11 +29,19 @@
     "type": "tables-list"
   },
   {
-    "data_key": "about_report",
-    "id": "about",
+    "data_key": "authors",
+    "id": "authors",
     "level": 1,
     "region": "front",
-    "title": "About This Report",
+    "title": "Authors",
+    "type": "front-matter"
+  },
+  {
+    "data_key": "contributors",
+    "id": "contributors",
+    "level": 1,
+    "region": "front",
+    "title": "Contributors",
     "type": "front-matter"
   },
   {
@@ -171,23 +179,25 @@
             "type": "narrative"
           },
           {
+            "children": [
+              {
+                "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                "data_key": "sample_counts",
+                "id": "table-sample-counts",
+                "level": 0,
+                "region": "body",
+                "table_label": "1",
+                "table_number": 1,
+                "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
+                "type": "sample-counts-table"
+              }
+            ],
             "data_key": "methods",
             "id": "mm-tx-qc",
             "level": 3,
             "region": "body",
             "title": "Sequencing Quality Checks and Outlier Removal",
             "type": "narrative"
-          },
-          {
-            "caption": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-            "data_key": "sample_counts",
-            "id": "table-sample-counts",
-            "level": 0,
-            "region": "body",
-            "table_label": "1",
-            "table_number": 1,
-            "title": "Final Sample Counts for Benchmark Dose Analysis of the Transcriptomics Data",
-            "type": "sample-counts-table"
           },
           {
             "data_key": "methods",
@@ -420,9 +430,9 @@
     "data_key": "references",
     "id": "references",
     "level": 1,
-    "region": "back",
+    "region": "body",
     "title": "References",
-    "type": "narrative"
+    "type": "reference-list"
   },
   {
     "appendix_letter": "A",
@@ -487,7 +497,7 @@
         "id": "appendix-c-qc",
         "level": 2,
         "region": "back",
-        "title": "C.1. Gene Expression Quality Control",
+        "title": "Gene Expression Quality Control",
         "type": "heading-only"
       },
       {
@@ -506,7 +516,7 @@
         "id": "appendix-c-efdr",
         "level": 2,
         "region": "back",
-        "title": "C.2. Empirical False Discovery Rate",
+        "title": "Empirical False Discovery Rate",
         "type": "heading-only"
       }
     ],

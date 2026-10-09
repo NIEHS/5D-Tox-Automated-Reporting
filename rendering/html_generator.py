@@ -76,6 +76,7 @@ from rendering.render_common import (
     bmd_summary_plan,
     BMD_SUMMARY_HEADERS,
     appendix_heading_text,
+    section_heading_text,
     sample_counts_table,
     genomics_role,
     genomics_intro_paragraphs,
@@ -616,7 +617,7 @@ def _render_narrative_family(node: DocNode, data: dict, pending_label: str) -> s
     body = _emit_narrative_body(rc)
     if not body:
         body = _pending(pending_label)
-    return f"{_heading(node.level, node.title)}\n{body}"
+    return f"{_heading(node.level, section_heading_text(node))}\n{body}"
 
 
 def _render_front_matter(node: DocNode, data: dict) -> str:
@@ -728,7 +729,7 @@ def _render_sample_counts_table(node: DocNode, data: dict) -> str:
 
 def _render_heading_only(node: DocNode, data: dict) -> str:
     """Structural heading; children rendered separately by the walker."""
-    return _heading(node.level, node.title)
+    return _heading(node.level, section_heading_text(node))
 
 
 def _render_appendix(node: DocNode, data: dict) -> str:
@@ -754,7 +755,7 @@ def _render_tables_list(node: DocNode, data: dict) -> str:
     data["table_entries"] when marshal_export_data has populated it;
     otherwise fall back to a stub message.
     """
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     entries = list_entries(node, data, "table_entries")
     if not entries:
         return f"{heading}\n{_pending('List of tables: pending.')}"
@@ -907,7 +908,7 @@ def _render_bmd_summary(node: DocNode, data: dict) -> str:
     render_common.bmd_summary_plan EXTRACT; this only EMITs the HTML.
     """
     plan = bmd_summary_plan(node, data)
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     prose = _render_paragraphs(plan.paragraphs)
 
     if plan.rows is None:
@@ -972,7 +973,7 @@ def _render_genomics_section(node: DocNode, data: dict) -> str:
     base64 chart figure, and the landscape wrap are HTML emit.
     """
     role = genomics_role(node)
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     intro = _render_paragraphs(genomics_intro_paragraphs(node, data))
 
     resolved = resolve_content_items(node, data)
@@ -1220,7 +1221,7 @@ def _render_freeform_page(node: DocNode, data: dict) -> str:
     Freeform authored page — forces its own page (break-before:page) and
     carries an optional heading plus the authored HTML body.
     """
-    heading = _heading(node.level, node.title) if node.title else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
     body = _freeform_body_html(node)
     inner = f"{heading}\n{body}" if heading else body
     return f'<section class="freeform-page" style="break-before:page">{inner}</section>'
@@ -1230,7 +1231,7 @@ def _render_freeform_block(node: DocNode, data: dict) -> str:
     """
     Freeform authored block — inline insert with NO forced page break.
     """
-    heading = _heading(node.level, node.title) if node.title else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.title else ""
     body = _freeform_body_html(node)
     inner = f"{heading}\n{body}" if heading else body
     return f'<section class="freeform-block">{inner}</section>'
@@ -1254,7 +1255,7 @@ def _render_figures_list(node: DocNode, data: dict) -> str:
     one appendix's figures inside that appendix.  An empty scope shows a
     visible pending note — never a silent empty list.
     """
-    heading = _heading(node.level, node.title)
+    heading = _heading(node.level, section_heading_text(node))
     entries = list_entries(node, data, "figure_entries")
     if not entries:
         return f"{heading}\n{_pending('List of figures: pending.')}"
@@ -1302,7 +1303,7 @@ def _render_unimplemented(node: DocNode, data: dict) -> str:
     Catch-all for node_types we haven't ported.  Emits this node's
     heading (if any) plus a visible pending placeholder.
     """
-    heading = _heading(node.level, node.title) if node.level > 0 else ""
+    heading = _heading(node.level, section_heading_text(node)) if node.level > 0 else ""
     placeholder = _pending(
         f"Section pending: {node.node_type} rendering not yet implemented"
     )
@@ -1317,6 +1318,7 @@ _DISPATCH: dict[str, object] = {
     "title-page":       _render_title_page,
     "front-matter":     _render_front_matter,
     "narrative":        _render_narrative,
+    "reference-list":   _render_narrative,   # ADR-0028: laid out as the References narrative
     "heading-only":     _render_heading_only,
     "appendix":         _render_appendix,
     "tables-list":      _render_tables_list,
