@@ -1,0 +1,67 @@
+# eras/niehs-2023 — the NIEHS Report as published in March 2023 (NIEHS-07 … 10,
+# chunked Bookshelf bundles).  ADR-0029: the shared template plus what the
+# published books do differently.  A published study of this generation
+# extends this file (templates/studies/<DTXSID>/document.yaml).
+extends: niehs-5day-report
+changes:
+  # C.2 Empirical False Discovery Rate has its own Methods and Results; the
+  # boxplots are in Results.  (The synthetic-null analysis behind them is not
+  # ingested yet: the sections stand, their content is pending.)
+  - insert:
+    - id: appendix-c-efdr-methods
+      type: heading-only
+      title: Methods
+    - id: appendix-c-efdr-results
+      type: heading-only
+      title: Results
+    into: appendix-c-efdr
+  - move: figure-c-efdr
+    into: appendix-c-efdr-results
+
+  # Appendix D prints the BMDS model recommendation/selection rules and the two
+  # model-selection flowcharts (apical endpoints, gene sets), with no text.
+  - set: appendix-d
+    title: Benchmark Dose Model Recommendation and Selection Methodologies
+  - remove: appendix-d-body
+  - remove: table-d-2
+  - insert:
+    - id: figure-d-1
+      type: figure
+      subtype: chart
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Automated Benchmark Dose Execution of Apical Endpoints
+      data_key: appendix_bmd_flowchart_apical
+    - id: figure-d-2
+      type: figure
+      subtype: chart
+      title: Benchmark Dose Model Recommendation/Selection Methodology for Benchmark Dose Execution of Gene Sets with Expression Changes Enacted by Chemical Exposure
+      data_key: appendix_bmd_flowchart_gene_sets
+    after: table-d-1
+
+  # Appendix F lists the supplemental files in four groups.  Each group's list
+  # is the study's own (templates/studies/<DTXSID>/appendix-f-<n>.json|html).
+  - insert:
+    - id: appendix-f-apical
+      type: heading-only
+      title: Apical Benchmark Dose Analysis
+      children:
+      - {id: appendix-f-apical-files, type: freeform-block, title: "", session_content: appendix-f-1,
+         missing_content_text: "The apical supplemental files are not listed for this study."}
+    - id: appendix-f-genomic
+      type: heading-only
+      title: Genomic Benchmark Dose Analysis
+      children:
+      - {id: appendix-f-genomic-files, type: freeform-block, title: "", session_content: appendix-f-2,
+         missing_content_text: "The genomic supplemental files are not listed for this study."}
+    - id: appendix-f-tables
+      type: heading-only
+      title: Study Tables
+      children:
+      - {id: appendix-f-tables-files, type: freeform-block, title: "", session_content: appendix-f-3,
+         missing_content_text: "The study tables are not listed for this study."}
+    - id: appendix-f-animals
+      type: heading-only
+      title: Individual Animal Data
+      children:
+      - {id: appendix-f-animals-files, type: freeform-block, title: "", session_content: appendix-f-4,
+         missing_content_text: "The individual animal data files are not listed for this study."}
+    into: appendix-f

@@ -124,52 +124,42 @@ def test_reference_fixture_has_the_published_parts():
 # Ours against the published book
 # ---------------------------------------------------------------------------
 
-# What our NIEHS-10 book still lacks or has differently, as `-` (published only)
-# / `+` (ours only) outline lines.  CONTENT gaps only — each needs data or
-# authored content the pipeline does not produce yet:
+# What our NIEHS-10 book, built from its document definition (ADR-0029:
+# templates/studies/DTXSID50469320/document.yaml, the 2023 era), still lacks or
+# has differently, as `-` (published only) / `+` (ours only) outline lines.
+# CONTENT gaps only — each needs data or authored content the pipeline does not
+# produce yet:
 KNOWN_CONTENT_GAPS: list[str] = [
     # Front matter not supplied for the session (front_matter.json has no
     # report number and no author roster): no subtitle, no <contrib-group>.
     "-subtitle NIEHS Report 10",
     "-contrib-group [authors]",
     # Appendix C: we plot one PCA figure (all tissues) where the book has one per
-    # tissue x sex (C-1..C-4), and one eFDR figure where the book has the eFDR
-    # methods (two formulas), results (two figures) and a table.
-    "+  sec <C.2> Empirical False Discovery Rate",
+    # tissue x sex (C-1..C-4); our one eFDR figure is therefore C-2, where the
+    # book has the eFDR formulas, two figures and a table.
+    "-    fig <Figure C-2>",
     "-    fig <Figure C-3>",
     "-    fig <Figure C-4>",
-    "-  sec <C.2> Empirical False Discovery Rate",
-    "-    sec <C.2.1> Methods",
     "-      disp-formula <(1)>",
     "-      disp-formula <(2)>",
-    "-    sec <C.2.2> Results",
     "-      fig <Figure C-5>",
     "-      fig <Figure C-6>",
     "-      table-wrap <Table C-1>",
-    # Appendix D: our acceptance-criteria + configuration tables, where the book
-    # has the model-selection rules table and two methodology flowcharts.
-    "-book-app [appendix] <Appendix D> Benchmark Dose Model Recommendation and Selection Methodologies",
-    "+book-app [appendix] <Appendix D> Benchmark Dose Modeling and Acceptance Criteria",
-    "-  fig <Figure D-1>",
-    "-  fig <Figure D-2>",
-    "+  table-wrap <Table D-2>",
+    "+      fig <Figure C-2>",
     # Appendix F: the book lists the 55 supplied data files as <media> under
-    # F.1-F.4; ours has the F.1 text and no file list.
-    *["-    media"] * 13,
-    "-  sec <F.2> Genomic Benchmark Dose Analysis",
-    *["-    media"] * 28,
-    "-  sec <F.3> Study Tables",
-    *["-    media"] * 7,
-    "-  sec <F.4> Individual Animal Data",
-    *["-    media"] * 7,
+    # F.1-F.4; ours has the sections and no file lists.
+    *["-    media"] * 55,
 ]
 
 
 def test_niehs10_structure_matches_published(real_session_50469320):
+    from document_model.view_config import build_view_tree, study_document_facts
     from rendering.jats_generator import generate_bits
     from rendering.latex_export import load_session_data
     data = load_session_data(dtxsid="DTXSID50469320",
                              chemical_name="Perfluorohexanesulfonamide",
                              casrn="41997-13-1")
-    ours = outline(parse_book(generate_bits(data)))
+    for k, v in study_document_facts("DTXSID50469320").items():
+        data.setdefault(k, v)
+    ours = outline(parse_book(generate_bits(data, build_view_tree("DTXSID50469320", "default"))))
     assert structure_diff(load_fixture("NIEHS-10"), ours) == KNOWN_CONTENT_GAPS
