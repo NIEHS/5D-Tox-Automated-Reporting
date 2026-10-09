@@ -90,6 +90,11 @@ def main() -> int:
         if not xml.exists():
             print(f"== {dtxsid} ({report}): no generated BITS ({xml.relative_to(REPO_ROOT)})")
             continue
+        if read_bundle(BOOKSHELF / report).tag != "book":
+            # RR-8 and NIEHS-02 … 06 are one book-part with sections inside —
+            # the pre-NIEHS-07 layout, which ours (ADR-0028) does not follow.
+            print(f"== {dtxsid} ({report}): single-part book (pre-NIEHS-07 layout), not compared")
+            continue
         diff = structure_diff(published_outline(report), generated_outline(dtxsid))
         print(f"== {dtxsid} ({report}): {len(diff)} differing line(s)")
         for ln in diff:

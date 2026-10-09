@@ -143,11 +143,17 @@ uses the design, strain designation, genomic tissue/sex and method profile the
 published report states. Each build starts from a fresh session: the old one
 moves to `output/_session_backups/` and a Background written on the host is
 kept. `tooling/report_qc.py` then checks the rendered deliverables, including
-against the published tables, and writes `output/QC/qc-report.md`:
+against the published tables and the published book's structure, and writes
+`output/QC/qc-report.md`. `tooling/bits_structure.py` prints the structure
+diff alone (`-` published only, `+` ours only), and `tooling/bookshelf_preview.py`
+renders a published bundle through our Bookshelf facsimile for a side-by-side
+read:
 
 ```bash
 python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
 python -m tooling.report_qc                             # every report on the shelf
+python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
+python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html
 ```
 
 ---
@@ -202,7 +208,7 @@ the same session finishes in seconds.
 | `--background` | Also generate and save the Background section (LLM over ATSDR, IRIS and PubChem; needs network). `--model` picks the model |
 | `--stop-after validate\|integrate\|process` | Stop after that step and render nothing |
 | `--render-only` | Skip the pipeline and render the session as it is now on disk |
-| `--surfaces` | Comma-separated list from `docx, html, jats, bookshelf, latex, pdf` (default `docx,html`) |
+| `--surfaces` | Comma-separated list from `docx, html, jats, bookshelf, bits, latex, pdf` (default `docx,html`) |
 | `--view NAME` | Render a saved report view (its filters and chart selection). Default: the default view |
 | `--strict` | `latex`/`pdf` only: refuse to build while any `[… pending]` placeholder remains. This is the check the Overleaf export route applies |
 | `--draft` | Render even when the publish gate is closed (see §7) |
@@ -722,6 +728,7 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
 | `pdf` | `.pdf` | The `latex` bundle compiled locally with `tect` | A typeset PDF |
 | `jats` | `.xml`: a BITS 2.0 `<book>` | `jats_generator.generate_bits` | **The submission format** for NCBI Bookshelf (A.3) |
 | `bookshelf` | `.bookshelf.html` | `bookshelf_preview.render_book_xml` over the BITS book | A lookalike of the Bookshelf reader, built from the exact XML we would submit |
+| `bits` | `-bits.zip`: `TOC.nxml`, one file per part, the figure files | `bits_bundle.bundle_zip` over the BITS book | The book chunked as Bookshelf holds it (NIEHS-07 onward): the submission package's XML |
 
 **Surface details:**
 
@@ -776,23 +783,29 @@ content version. The command line writes only to `--out`.
   report's ultimate deliverable**, and the other surfaces exist for review and
   editing along the way.
 
-**How our report maps onto a BITS book:**
+**How our report maps onto a BITS book.** The structure is the published
+book's (ADR-0028), and the template declares it: each top-level node names its
+BITS `element` and `book_part_type`, so the YAML reads like the book's part list.
 
 | Our document | BITS 2.0 |
 |---|---|
 | The report | `<book dtd-version="2.0">` |
-| Title, CASRN, ISSN, publisher, abstract | `<book-meta>`: `book-id`, `book-title-group`, `pub-date`, `issn`, `publisher`, `abstract` |
-| `front` region: Foreword, About, Peer Review, Publication Details, Acknowledgments | `<front-matter>`: `foreword`, `front-matter-part`, `ack` |
-| `body` region: Background, Materials and Methods, Results, Summary | `<book-body>`, one `<book-part book-part-type="chapter">` per top-level section, with `<sec>` inside |
-| Tables, with their footnotes | `<table-wrap>`, `<caption>`, `<table>`, `<table-wrap-foot>`, `<fn>` |
-| Figures | `<fig>` |
-| References | `<book-back>` › `<ref-list>` of `<ref>` / `<mixed-citation>` |
-| The report's Appendices A–F | `<book-back>` › `<book-app-group>` › `<book-app>`; authored HTML becomes `<sec>`, `<p>`, `<table-wrap>` and `<list>` |
+| The series (template `book_meta:`) | `<collection-meta>`: the Bookshelf collection; the book series with its ISSN |
+| Title page, front matter (report number, DOI, date, authors), abstract | `<book-meta>`: `book-id` (DOI), `book-title-group` (the title page's title + the report number as `subtitle`), `contrib-group` + `aff`, `pub-date`, `publisher`, `permissions`, `abstract` with one `<sec>` per declared part |
+| Foreword; Authors, Contributors, Peer Review, Publication Details, Acknowledgments | `<front-matter>`: `<foreword>`; `<front-matter-part book-part-type="authors" / "contributors" / "peer-review" / "section" / "acknowledgments">` |
+| Background, Materials and Methods, Results, Summary | `<book-body>`: one `<book-part book-part-type="section">` each; its `<body>` holds the content directly |
+| References | the last `<book-part>`: `<back><ref-list>` of `<ref><label>n</label><mixed-citation>` |
+| Sections | `<sec>`; inside an appendix it carries its computed `<label>` (C.1, C.2.1) |
+| Tables, with their footnotes | `<table-wrap>`: `<label>`, `<caption><title>`, `<table>`, `<table-wrap-foot>`, `<fn>`; always a block in its section |
+| Figures | `<fig>`: `<label>`, `<caption><p>`, `<graphic>` |
+| Appendices A–F | `<book-back>`: `<book-app book-part-type="appendix">` with `<label>Appendix A</label>`; authored HTML becomes `<sec>`, `<p>`, `<table-wrap>` and `<list>` |
 | `[[xref:id]]` | `<xref ref-type="table" rid="id">` |
 
-The document grammar itself is a BITS profile (ADR-0025): each node type's
-role ("sec", "table-wrap", "fig", "app", …) is a BITS element, and the
-template's regions are BITS's three book divisions.
+Print-only nodes (the table of contents, the list of tables) have no BITS
+element: Bookshelf builds its own contents. The `bits` surface cuts the book
+into the chunked bundle the published books use: `TOC.nxml` (collection-meta,
+book-meta with the abstract, and a `<toc>`), plus one `<book-part-wrapper>` per
+part.
 
 **The submission package** (NCBI's specification NBK554845) holds:
 
@@ -804,9 +817,14 @@ NCBI renders the HTML book page from the XML on its own servers after
 acceptance. We never hold their production stylesheet. The
 `bookshelf` surface is our lookalike of that page:
 
-- It reproduces the reader content: a contents landing page, one page per
-  section with Previous/Next, tables and figures as thumbnail cards that open
-  in a lightbox, and cross-references that work across pages.
+- It reproduces the reader content: a contents landing page (title block,
+  abstract, the parts with their sections nested), one page per part with
+  Previous/Next, tables and figures as thumbnail cards that open in a
+  lightbox, and cross-references that work across pages.
+- It renders what the book says: labels and headings come from the BITS.
+  It also renders a chunked bundle directory, including a published book
+  from `assets/cebs/_bookshelf/<REPORT>`, so ours and the published report
+  of a study read side by side.
 - It deliberately leaves out NCBI's site chrome, and a banner marks every page
   as a preview.
 
@@ -818,7 +836,8 @@ acceptance. We never hold their production stylesheet. The
 | Semantic parity | Surfaces agree on table and figure numbers, cross-references and BMD summary endpoints | `tests/unit/test_render_semantic_parity.py` |
 | DTD validity | The BITS book and the JATS article validate against the vendored BITS 2.0 and JATS 1.3 DTDs (`assets/bits-dtd`, `assets/jats-dtd`) | `tests/unit/test_jats_stylecheck.py` |
 | PMC StyleChecker | Zero errors from NLM's StyleChecker (style `book` and `article`), run offline from the vendored v5.48 transforms (`assets/stylechecker`) | `rendering/jats_stylecheck.py`, the same test |
-| BITS grammar | The template and the reference report's structure instantiate as a valid BITS profile | `tests/unit/test_bits_profile.py` |
+| BITS grammar | The template and the reference report's structure instantiate as a valid BITS profile; part declarations and flow-before-sub-sections are enforced | `tests/unit/test_bits_profile.py`, `tests/unit/test_bits_part_declaration.py` |
+| Published structure | The NIEHS-10 book's outline equals the published book's, apart from a listed set of content gaps; the chunked bundle round-trips | `tests/unit/test_bits_published_structure.py`, `tests/unit/test_bits_book.py`; `report_qc` `structure` for every study |
 | No placeholders | `--strict` refuses a LaTeX or PDF build while any `[… pending]` remains | `tooling/generate_report.py` |
 
 **Previewing a book online.** NCBI's online tools are the PMC Article Previewer

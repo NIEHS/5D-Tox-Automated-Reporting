@@ -337,9 +337,11 @@ WorkflowEngine("DTXSID50469320").state().to_dict()</pre></div>
     --bundle assets/cebs/_bookshelf/NIEHS-13</pre></div>
 <p><code>--bundle</code> also converts the workbooks of the report's Bookshelf bundle. NIEHS-12 and -13 publish their blood and tissue concentrations only there, as the lab's results workbook. The sheet for the package's species is the one converted.</p>
 <p><code>--mg-per-kg-from PROJECT.json</code> handles RR-8 and NIEHS-02 … 06, which record apical doses in mmol/kg. It converts each dose to the genomic project's mg/kg level, provided the levels share one ratio (the molecular weight). The converter exits non-zero if any workbook fails.</p>
-<p><b>Every downloaded study at once.</b> <code>tooling/build_published_reports.py</code> builds a report for each published package (RR-8, NIEHS-02 … 10, NIEHS-12 rat) into <code>sessions/&lt;DTXSID&gt;</code> and <code>output/&lt;DTXSID&gt;</code>, so each one is on the Bookshelf. It uses the design, strain designation, genomic tissue/sex and method profile the published report states. Each build starts from a fresh session: the old one moves to <code>output/_session_backups/</code> and a Background written on the host is kept. <code>tooling/report_qc.py</code> then checks the rendered deliverables, including against the published tables, and writes <code>output/QC/qc-report.md</code>:</p>
+<p><b>Every downloaded study at once.</b> <code>tooling/build_published_reports.py</code> builds a report for each published package (RR-8, NIEHS-02 … 10, NIEHS-12 rat) into <code>sessions/&lt;DTXSID&gt;</code> and <code>output/&lt;DTXSID&gt;</code>, so each one is on the Bookshelf. It uses the design, strain designation, genomic tissue/sex and method profile the published report states. Each build starts from a fresh session: the old one moves to <code>output/_session_backups/</code> and a Background written on the host is kept. <code>tooling/report_qc.py</code> then checks the rendered deliverables, including against the published tables and the published book&rsquo;s structure, and writes <code>output/QC/qc-report.md</code>. <code>tooling/bits_structure.py</code> prints the structure diff alone (<code>-</code> published only, <code>+</code> ours only), and <code>tooling/bookshelf_preview.py</code> renders a published bundle through our Bookshelf facsimile for a side-by-side read:</p>
 <div class="code"><div class="bar"><span>bash</span><button type="button">Copy</button></div><pre>python -m tooling.build_published_reports --jobs 3      # or name reports: RR-8 NIEHS-10
-python -m tooling.report_qc                             # every report on the shelf</pre></div>
+python -m tooling.report_qc                             # every report on the shelf
+python -m tooling.bits_structure DTXSID50469320         # outline vs the published NIEHS-10
+python -m tooling.bookshelf_preview assets/cebs/_bookshelf/NIEHS-10 -o output/NIEHS-10-published.html</pre></div>
 
 <!-- ============================================================ -->
 <h2 id="python"><span class="num">4</span>Route A — Python</h2>
@@ -381,7 +383,7 @@ DTXSID50469320.pdf             <span class="c">that bundle compiled locally with
     <tr><td><code>--background</code></td><td>Also generate and save the Background section. <code>--model</code> picks the model.</td></tr>
     <tr><td><code>--stop-after STEP</code></td><td><code>validate</code>, <code>integrate</code> or <code>process</code>: stop there and render nothing.</td></tr>
     <tr><td><code>--render-only</code></td><td>Skip the pipeline; render the session as it is on disk.</td></tr>
-    <tr><td><code>--surfaces</code></td><td>Comma list from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>latex</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
+    <tr><td><code>--surfaces</code></td><td>Comma list from <code>docx</code>, <code>html</code>, <code>jats</code>, <code>bookshelf</code>, <code>bits</code>, <code>latex</code>, <code>pdf</code>. Default <code>docx,html</code>.</td></tr>
     <tr><td><code>--view NAME</code></td><td>Render a saved report view (its filters and chart selection).</td></tr>
     <tr><td><code>--strict</code></td><td><code>latex</code>/<code>pdf</code>: refuse to build while any <code>[… pending]</code> placeholder remains.</td></tr>
     <tr><td><code>--draft</code></td><td>Render even when the publish gate is closed (§7).</td></tr>
@@ -739,6 +741,7 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
     <tr><td class="wrap"><code>pdf</code></td><td><code>.pdf</code></td><td>The <code>latex</code> bundle compiled locally with <code>tect</code></td><td>A typeset PDF</td></tr>
     <tr><td class="wrap"><code>jats</code></td><td><code>.xml</code>: a BITS 2.0 <code>&lt;book&gt;</code></td><td><code>jats_generator.generate_bits</code></td><td><b>The submission format</b> for NCBI Bookshelf (A.3)</td></tr>
     <tr><td class="wrap"><code>bookshelf</code></td><td><code>.bookshelf.html</code></td><td><code>bookshelf_preview.render_book_xml</code> over the BITS book</td><td>A lookalike of the Bookshelf reader, built from the exact XML we would submit</td></tr>
+    <tr><td class="wrap"><code>bits</code></td><td><code>-bits.zip</code>: <code>TOC.nxml</code>, one file per part, the figure files</td><td><code>bits_bundle.bundle_zip</code> over the BITS book</td><td>The book chunked as Bookshelf holds it (NIEHS-07 onward): the submission package's XML</td></tr>
   </tbody>
 </table></div>
 <p><b>Surface details:</b></p>
@@ -767,22 +770,24 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
   <li><b>BITS</b>, the Book Interchange Tag Suite, is JATS extended for books. It adds:<ul><li>book metadata;</li><li>book parts (chapters);</li><li>front and back matter;</li><li>appendix groups.</li></ul></li>
 </ul>
 <p>NCBI's Bookshelf ingests books as BITS. NIEHS's 5-day reports are published there as books: NIEHS-10 is NBK589955. <b>A BITS <code>&lt;book&gt;</code> is therefore the report's ultimate deliverable</b>, and the other surfaces exist for review and editing along the way.</p>
-<p><b>How our report maps onto a BITS book:</b></p>
+<p><b>How our report maps onto a BITS book.</b> The structure is the published book's (ADR-0028), and the template declares it: each top-level node names its BITS <code>element</code> and <code>book_part_type</code>, so the YAML reads like the book's part list.</p>
 <div class="tablewrap"><table>
   <thead><tr><th>Our document</th><th>BITS 2.0</th></tr></thead>
   <tbody>
     <tr><td class="wrap">The report</td><td><code>&lt;book dtd-version="2.0"&gt;</code></td></tr>
-    <tr><td class="wrap">Title, CASRN, ISSN, publisher, abstract</td><td><code>&lt;book-meta&gt;</code>: <code>book-id</code>, <code>book-title-group</code>, <code>pub-date</code>, <code>issn</code>, <code>publisher</code>, <code>abstract</code></td></tr>
-    <tr><td class="wrap"><code>front</code> region: Foreword, About, Peer Review, Publication Details, Acknowledgments</td><td><code>&lt;front-matter&gt;</code>: <code>foreword</code>, <code>front-matter-part</code>, <code>ack</code></td></tr>
-    <tr><td class="wrap"><code>body</code> region: Background, Materials and Methods, Results, Summary</td><td><code>&lt;book-body&gt;</code>, one <code>&lt;book-part book-part-type="chapter"&gt;</code> per top-level section, with <code>&lt;sec&gt;</code> inside</td></tr>
-    <tr><td class="wrap">Tables, with their footnotes</td><td><code>&lt;table-wrap&gt;</code>, <code>&lt;caption&gt;</code>, <code>&lt;table&gt;</code>, <code>&lt;table-wrap-foot&gt;</code>, <code>&lt;fn&gt;</code></td></tr>
-    <tr><td class="wrap">Figures</td><td><code>&lt;fig&gt;</code></td></tr>
-    <tr><td class="wrap">References</td><td><code>&lt;book-back&gt;</code> › <code>&lt;ref-list&gt;</code> of <code>&lt;ref&gt;</code> / <code>&lt;mixed-citation&gt;</code></td></tr>
-    <tr><td class="wrap">The report's Appendices A–F</td><td><code>&lt;book-back&gt;</code> › <code>&lt;book-app-group&gt;</code> › <code>&lt;book-app&gt;</code>; authored HTML becomes <code>&lt;sec&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;table-wrap&gt;</code> and <code>&lt;list&gt;</code></td></tr>
+    <tr><td class="wrap">The series (template <code>book_meta:</code>)</td><td><code>&lt;collection-meta&gt;</code>: the Bookshelf collection; the book series with its ISSN</td></tr>
+    <tr><td class="wrap">Title page, front matter (report number, DOI, date, authors), abstract</td><td><code>&lt;book-meta&gt;</code>: <code>book-id</code> (DOI), <code>book-title-group</code> (the title page's title + the report number as <code>subtitle</code>), <code>contrib-group</code> + <code>aff</code>, <code>pub-date</code>, <code>publisher</code>, <code>permissions</code>, <code>abstract</code> with one <code>&lt;sec&gt;</code> per declared part</td></tr>
+    <tr><td class="wrap">Foreword; Authors, Contributors, Peer Review, Publication Details, Acknowledgments</td><td><code>&lt;front-matter&gt;</code>: <code>&lt;foreword&gt;</code>; <code>&lt;front-matter-part book-part-type="authors" / "contributors" / "peer-review" / "section" / "acknowledgments"&gt;</code></td></tr>
+    <tr><td class="wrap">Background, Materials and Methods, Results, Summary</td><td><code>&lt;book-body&gt;</code>: one <code>&lt;book-part book-part-type="section"&gt;</code> each; its <code>&lt;body&gt;</code> holds the content directly</td></tr>
+    <tr><td class="wrap">References</td><td>the last <code>&lt;book-part&gt;</code>: <code>&lt;back&gt;&lt;ref-list&gt;</code> of <code>&lt;ref&gt;&lt;label&gt;n&lt;/label&gt;&lt;mixed-citation&gt;</code></td></tr>
+    <tr><td class="wrap">Sections</td><td><code>&lt;sec&gt;</code>; inside an appendix it carries its computed <code>&lt;label&gt;</code> (C.1, C.2.1)</td></tr>
+    <tr><td class="wrap">Tables, with their footnotes</td><td><code>&lt;table-wrap&gt;</code>: <code>&lt;label&gt;</code>, <code>&lt;caption&gt;&lt;title&gt;</code>, <code>&lt;table&gt;</code>, <code>&lt;table-wrap-foot&gt;</code>, <code>&lt;fn&gt;</code>; always a block in its section</td></tr>
+    <tr><td class="wrap">Figures</td><td><code>&lt;fig&gt;</code>: <code>&lt;label&gt;</code>, <code>&lt;caption&gt;&lt;p&gt;</code>, <code>&lt;graphic&gt;</code></td></tr>
+    <tr><td class="wrap">Appendices A–F</td><td><code>&lt;book-back&gt;</code>: <code>&lt;book-app book-part-type="appendix"&gt;</code> with <code>&lt;label&gt;Appendix A&lt;/label&gt;</code>; authored HTML becomes <code>&lt;sec&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;table-wrap&gt;</code> and <code>&lt;list&gt;</code></td></tr>
     <tr><td class="wrap"><code>[[xref:id]]</code></td><td><code>&lt;xref ref-type="table" rid="id"&gt;</code></td></tr>
   </tbody>
 </table></div>
-<p>The document grammar itself is a BITS profile (ADR-0025): each node type's role ("sec", "table-wrap", "fig", "app", …) is a BITS element, and the template's regions are BITS's three book divisions.</p>
+<p>Print-only nodes (the table of contents, the list of tables) have no BITS element: Bookshelf builds its own contents. The <code>bits</code> surface cuts the book into the chunked bundle the published books use: <code>TOC.nxml</code> (collection-meta, book-meta with the abstract, and a <code>&lt;toc&gt;</code>), plus one <code>&lt;book-part-wrapper&gt;</code> per part.</p>
 <p><b>The submission package</b> (NCBI's specification NBK554845) holds:</p>
 <ul>
   <li>the BITS XML;</li>
@@ -791,7 +796,8 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
 </ul>
 <p>NCBI renders the HTML book page from the XML on its own servers after acceptance. We never hold their production stylesheet. The <code>bookshelf</code> surface is our lookalike of that page:</p>
 <ul>
-  <li>It reproduces the reader content: a contents landing page, one page per section with Previous/Next, tables and figures as thumbnail cards that open in a lightbox, and cross-references that work across pages.</li>
+  <li>It reproduces the reader content: a contents landing page (title block, abstract, the parts with their sections nested), one page per part with Previous/Next, tables and figures as thumbnail cards that open in a lightbox, and cross-references that work across pages.</li>
+  <li>It renders what the book says: labels and headings come from the BITS. It also renders a chunked bundle directory, including a published book from <code>assets/cebs/_bookshelf/&lt;REPORT&gt;</code>, so ours and the published report of a study read side by side.</li>
   <li>It deliberately leaves out NCBI's site chrome, and a banner marks every page as a preview.</li>
 </ul>
 <h3>A.4 How surfaces are checked</h3>
@@ -802,7 +808,8 @@ markup-free plans (tables, captions, rows, narrative sources, numbering)
     <tr><td class="wrap">Semantic parity</td><td>Surfaces agree on table and figure numbers, cross-references and BMD summary endpoints</td><td><code>tests/unit/test_render_semantic_parity.py</code></td></tr>
     <tr><td class="wrap">DTD validity</td><td>The BITS book and the JATS article validate against the vendored BITS 2.0 and JATS 1.3 DTDs (<code>assets/bits-dtd</code>, <code>assets/jats-dtd</code>)</td><td><code>tests/unit/test_jats_stylecheck.py</code></td></tr>
     <tr><td class="wrap">PMC StyleChecker</td><td>Zero errors from NLM's StyleChecker (style <code>book</code> and <code>article</code>), run offline from the vendored v5.48 transforms (<code>assets/stylechecker</code>)</td><td><code>rendering/jats_stylecheck.py</code>, the same test</td></tr>
-    <tr><td class="wrap">BITS grammar</td><td>The template and the reference report's structure instantiate as a valid BITS profile</td><td><code>tests/unit/test_bits_profile.py</code></td></tr>
+    <tr><td class="wrap">BITS grammar</td><td>The template and the reference report's structure instantiate as a valid BITS profile; part declarations and flow-before-sub-sections are enforced</td><td><code>tests/unit/test_bits_profile.py</code>, <code>tests/unit/test_bits_part_declaration.py</code></td></tr>
+    <tr><td class="wrap">Published structure</td><td>The NIEHS-10 book's outline equals the published book's, apart from a listed set of content gaps; the chunked bundle round-trips</td><td><code>tests/unit/test_bits_published_structure.py</code>, <code>tests/unit/test_bits_book.py</code>; <code>report_qc</code> <code>structure</code> for every study</td></tr>
     <tr><td class="wrap">No placeholders</td><td><code>--strict</code> refuses a LaTeX or PDF build while any <code>[… pending]</code> remains</td><td><code>tooling/generate_report.py</code></td></tr>
   </tbody>
 </table></div>

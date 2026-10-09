@@ -56,6 +56,37 @@ the Bookshelf. The QC then compared the rendered reports with the published ones
 
 Apical BMDs differ from G0–G2 as expected: those reports used modified BMDS 2.7 and we run ToxicR model averaging. That deviation is stated in each run log.
 
+## Book structure against the published Bookshelf books (2026-10-09)
+
+The structure YAML now matches the published BITS book one-to-one (ADR-0028), and the BITS emitter and Bookshelf facsimile follow it. All 14 reports were re-rendered. `report_qc` has a `structure` check, and `python -m tooling.bits_structure` prints the same diff.
+
+- **Every book and every file of its chunked bundle** (the new `bits` surface, `<DTXSID>-bits.zip`) is DTD-valid and StyleChecker-clean.
+- **NIEHS-07 … 10 have the published parts exactly.** That covers:
+  - the full title;
+  - the Foreword;
+  - Authors / Contributors / Peer Review / Publication Details / Acknowledgments as typed front-matter parts;
+  - five body parts with no repeated heading, and References last with numbered refs;
+  - Table 1 inside "Sequencing Quality Checks";
+  - appendices labelled "Appendix A" … with section labels C.1, C.2;
+  - the abstract's four parts.
+
+  The remaining 76–78 differing lines are content we do not produce:
+  - no front matter supplied (report number → subtitle, author roster → contrib-group);
+  - Appendix C (one PCA figure instead of four; no eFDR methods/results);
+  - Appendix D (our acceptance/configuration tables instead of the model-selection rules and flowcharts);
+  - Appendix F (55 supplied files as `<media>`; ours has F.1 text only);
+  - NIEHS-07 … 09 have no Appendix A text.
+- **NIEHS-12 and -13 (G3) differ in body structure, not only content (≈300 lines).** They have:
+  - rat and mouse subsections;
+  - exposure-system and vapor-monitoring sections;
+  - per-organ genomics sections;
+  - theoretical inhaled dose;
+  - five appendices of chemistry and internal concentration.
+
+  This is G3 conformance gap 8 ("structure") and needs a 2026 report-type template.
+- **RR-8 and NIEHS-02 … 06 are not compared.** They are older single-part books (one `book-part` with sections inside), a layout ours does not follow.
+- **Abstract Methods shows as pending in every report.** The abstract-overlay call that builds it never produces text. This is a content fix.
+
 ## Still open (ranked)
 
 1. **G0/G1 genomic reporting rules are not implemented.**

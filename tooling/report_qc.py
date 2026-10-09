@@ -23,7 +23,11 @@ Checks:
   duplicates   paragraphs repeated verbatim
   bmd_summary  BMDL <= BMD, NOEL < LOEL; and, where the published report is
                downloaded, its BMD/LOEL/NOEL summary compared row by row
-  bits         the BITS book against the BITS 2.0 DTD and the PMC StyleChecker
+  bits         the BITS book against the BITS 2.0 DTD and the PMC StyleChecker,
+               the book and every file of its chunked Bookshelf bundle
+  structure    the BITS book's outline (parts, part types, labels, section
+               titles, object placement) against the published Bookshelf book
+               of the same study, where that bundle is downloaded (ADR-0028)
 
 Usage:
     python -m tooling.report_qc [DTXSID ...] [--out output/QC]
@@ -690,6 +694,7 @@ def check_top_genes(qc: ReportQC, soup, sexes: set[str]) -> None:
 
 
 def check_bits(qc: ReportQC, xml_path: Path) -> None:
+    from rendering.bits_bundle import split_book
     from rendering.jats_stylecheck import dtd_validate, stylecheck
     if not xml_path.exists():
         return
@@ -702,6 +707,36 @@ def check_bits(qc: ReportQC, xml_path: Path) -> None:
         qc.add("bits", "error", f"StyleChecker: {len(sc.errors)} error(s)", list(sc.errors))
     if getattr(sc, "warnings", None):
         qc.add("bits", "info", f"StyleChecker: {len(sc.warnings)} warning(s)", list(sc.warnings))
+    # The chunked bundle (the `bits` surface): every file must pass too.
+    bad = []
+    for name, content in split_book(xml).items():
+        problems = dtd_validate(content, "book") + stylecheck(content, "book").errors
+        if problems:
+            bad.append(f"{name}: {list(problems[:3])}")
+    if bad:
+        qc.add("bits", "error", f"bundle: {len(bad)} invalid file(s)", bad)
+
+
+def check_structure(qc: ReportQC, xml_path: Path) -> None:
+    """Our BITS outline against the published book's (tooling.bits_structure).
+    Only the chunked published books (NIEHS-07 onward) share our part
+    structure; the older single-part books (RR-8, NIEHS-02 … 06) are recorded,
+    not compared."""
+    from rendering.bits_bundle import outline, read_bundle
+    from tooling.bits_structure import BOOKSHELF, published_outline, structure_diff
+    report = qc.published
+    toc = BOOKSHELF / (report or "") / "TOC.nxml"
+    if not report or not toc.exists() or not xml_path.exists():
+        return
+    if read_bundle(toc.parent).tag != "book":
+        qc.add("structure", "info",
+               f"{report} is a single-part book (the pre-NIEHS-07 layout): not compared")
+        return
+    diff = structure_diff(published_outline(report), outline(read_bundle(xml_path)))
+    if diff:
+        qc.add("structure", "warn",
+               f"outline differs from the published {report} in {len(diff)} line(s) "
+               f"(- published only, + ours only)", diff)
 
 
 # ---------------------------------------------------------------------------
@@ -747,6 +782,7 @@ def qc_report(dtxsid: str) -> ReportQC:
     check_go(qc, soup, sexes)
     check_top_genes(qc, soup, sexes)
     check_bits(qc, out / f"{dtxsid}.xml")
+    check_structure(qc, out / f"{dtxsid}.xml")
     return qc
 
 
