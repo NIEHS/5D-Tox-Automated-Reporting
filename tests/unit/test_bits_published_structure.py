@@ -127,10 +127,44 @@ def test_reference_fixture_has_the_published_parts():
 # What our NIEHS-10 book still lacks or has differently, as `-` (published only)
 # / `+` (ours only) outline lines.  CONTENT gaps only — each needs data or
 # authored content the pipeline does not produce yet:
-KNOWN_CONTENT_GAPS: list[str] = []
+KNOWN_CONTENT_GAPS: list[str] = [
+    # Front matter not supplied for the session (front_matter.json has no
+    # report number and no author roster): no subtitle, no <contrib-group>.
+    "-subtitle NIEHS Report 10",
+    "-contrib-group [authors]",
+    # Appendix C: we plot one PCA figure (all tissues) where the book has one per
+    # tissue x sex (C-1..C-4), and one eFDR figure where the book has the eFDR
+    # methods (two formulas), results (two figures) and a table.
+    "+  sec <C.2> Empirical False Discovery Rate",
+    "-    fig <Figure C-3>",
+    "-    fig <Figure C-4>",
+    "-  sec <C.2> Empirical False Discovery Rate",
+    "-    sec <C.2.1> Methods",
+    "-      disp-formula <(1)>",
+    "-      disp-formula <(2)>",
+    "-    sec <C.2.2> Results",
+    "-      fig <Figure C-5>",
+    "-      fig <Figure C-6>",
+    "-      table-wrap <Table C-1>",
+    # Appendix D: our acceptance-criteria + configuration tables, where the book
+    # has the model-selection rules table and two methodology flowcharts.
+    "-book-app [appendix] <Appendix D> Benchmark Dose Model Recommendation and Selection Methodologies",
+    "+book-app [appendix] <Appendix D> Benchmark Dose Modeling and Acceptance Criteria",
+    "-  fig <Figure D-1>",
+    "-  fig <Figure D-2>",
+    "+  table-wrap <Table D-2>",
+    # Appendix F: the book lists the 55 supplied data files as <media> under
+    # F.1-F.4; ours has the F.1 text and no file list.
+    *["-    media"] * 13,
+    "-  sec <F.2> Genomic Benchmark Dose Analysis",
+    *["-    media"] * 28,
+    "-  sec <F.3> Study Tables",
+    *["-    media"] * 7,
+    "-  sec <F.4> Individual Animal Data",
+    *["-    media"] * 7,
+]
 
 
-@pytest.mark.xfail(strict=True, reason="ADR-0028 structure refactor in progress")
 def test_niehs10_structure_matches_published(real_session_50469320):
     from rendering.jats_generator import generate_bits
     from rendering.latex_export import load_session_data

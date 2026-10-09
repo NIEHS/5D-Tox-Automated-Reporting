@@ -16,6 +16,8 @@ only as a deliberate, documented triage step, then drive it back to empty.
 """
 
 
+import re
+
 import pytest
 
 from rendering.jats_generator import generate_bits, generate_jats
@@ -224,37 +226,40 @@ def test_bits_real_session_valid_and_clean(real_session_50469320):
 
 
 def test_bits_emits_front_matter_sections(real_session_50469320):
-    """The five front-matter sections that were dropped in the article <body>
-    now appear as BITS front-matter (foreword / front-matter-part / ack).  About
-    This Report is empty in this session, so 3 of 4 populated sections show."""
+    """The front-matter sections appear as the published book's parts: a
+    <foreword> and typed <front-matter-part>s (ADR-0028; Acknowledgments is a
+    front-matter-part, not <ack>).  Authors/Contributors are unsupplied in this
+    session and show as pending, not dropped."""
     xml = _real_session_bits()
-    assert "<foreword" in xml and "<ack" in xml and "<front-matter-part" in xml
-    for title in ("Foreword", "Peer Review", "Publication Details", "Acknowledgments"):
+    assert "<foreword" in xml and "<front-matter-part" in xml and "<ack" not in xml
+    for title in ("Foreword", "Authors", "Contributors", "Peer Review",
+                  "Publication Details", "Acknowledgments"):
         assert title in xml, f"front-matter section missing: {title}"
 
 
 def test_bits_body_is_book_parts_with_tables(real_session_50469320):
-    """The body is chapters (<book-part>), and all 12 data tables survive.
+    """The body is the published book's five section parts (<book-part>,
+    References last), and all 12 data tables survive.
 
     The table count is scoped to the body (before <book-back>) so it stays stable
     as the back matter's appendix tables (roster, rules) come and go."""
     xml = _real_session_bits()
-    assert xml.count("<book-part ") == 4, "expected 4 body chapters"
+    assert len(re.findall(r'<book-part [^>]*book-part-type="section"', xml)) == 5, "expected 5 body parts"
     body, _sep, _back = xml.partition("<book-back>")
     assert body.count("<table-wrap ") == 12, "expected 12 data tables in the body"
 
 
 def test_bits_emits_back_matter(real_session_50469320):
-    """ADR-0025 §8: the back region now projects to <book-back> — the References
-    list and the appendices — instead of being dropped.  Previously generate_bits
-    built no <book-back> at all, so appendices A–F never shipped."""
+    """ADR-0025 §8 / ADR-0028: the appendices project to <book-back> as
+    <book-app book-part-type="appendix">, and References is the last body part
+    with a numbered <ref-list> in its <back>, as in the published book."""
     xml = _real_session_bits()
     assert "<book-back>" in xml, "back matter dropped — no <book-back>"
-    _body, _sep, back = xml.partition("<book-back>")
-    # References → <ref-list> of <ref><mixed-citation>.
-    assert "<ref-list" in back and back.count("<ref ") >= 1, "references missing"
-    # Appendices → <book-app> inside <book-app-group> (≥6: A–F, plus any extras).
-    assert "<book-app-group" in back, "appendix group missing"
-    assert back.count("<book-app ") >= 6, "expected the appendices in book-back"
+    body, _sep, back = xml.partition("<book-back>")
+    # References → the last body part's <back><ref-list> of labeled <ref>s.
+    assert "<ref-list" in body and body.count("<ref ") >= 1, "references missing"
+    assert "<label>1</label>" in body
+    # Appendices → <book-app> directly in book-back (≥6: A–F, plus any extras).
+    assert back.count('<book-app id=') >= 6, "expected the appendices in book-back"
     # Appendix data/authored tables (the animal roster, model-rules) now ship.
     assert back.count("<table-wrap ") >= 1, "appendix tables missing from book-back"

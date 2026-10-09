@@ -11,9 +11,8 @@ Coverage: metadata (journal-meta / article-meta), the narrative spine (title,
 structured abstract, and every body narrative section via the shared
 resolve_narrative_content dispatch), DATA TABLES — apical / incidence /
 sample-counts / bmd-summary plus the genomics gene-set & gene GRIDS — projected
-to BITS <table-wrap>, and (BITS <book> path) the BACK MATTER: the References
-list (<ref-list> of <mixed-citation>) and the appendices (<book-app> inside
-<book-app-group>), whose authored freeform prose is projected HTML→JATS
+to BITS <table-wrap>, and (BITS <book> path) the appendices (<book-app>), whose
+authored freeform prose is projected HTML→JATS
 (headings → <sec>, prose → <p> with inline emphasis / super- & subscripts /
 links, tables → <table-wrap>, lists → <list>).  Still deferred (each emits a
 visible <!-- TODO --> comment so a gap is never silent): genomics CHARTS as BITS
@@ -24,8 +23,8 @@ Two entry points over the same tree walk + shared plans: generate_jats emits a
 PMC journal <article> (the self-service Article Previewer + StyleChecker path),
 generate_bits emits a Bookshelf <book> (front-matter / book-body / book-back).
 The reports publish as books (NBK589955), so generate_bits is the primary
-deliverable; the element vocabulary differs (region containers, book-app) but the
-tree-walk + plan reuse are shared.
+deliverable.  Its shell — book-meta and the published parts (ADR-0028) — lives
+in rendering.bits_book; the block emitters here are shared by both.
 
 The tree numbering (compute_table_numbers) is positional, so in-text references
 are authored as [[xref:id]] tokens (cross_references.py) and materialize here to
@@ -240,8 +239,9 @@ def table_wrap_id(node_id: str) -> str:
 def _split_label(caption: str) -> tuple[str, str]:
     """Split a "Table N. <descriptive>" caption into (label, descriptive).
 
-    BITS models the number as a separate <label> from the <caption><p> text, so
-    a positional "Table 8. Foo" becomes <label>Table 8</label> + <p>Foo</p>.
+    BITS models the number as a separate <label> from the caption text, so a
+    positional "Table 8. Foo" becomes <label>Table 8</label> + <caption><title>
+    Foo</title></caption>.
     When the caption carries no leading "Table N" locator, label is "" and the
     whole string is the descriptive text."""
     m = re.match(r"\s*(Table\s+[^.]+?)\.\s*(.*)", caption or "", re.S)
@@ -276,7 +276,9 @@ def _table_wrap(
     if label:
         tw.append(E.label(label))
     if descriptive:
-        tw.append(E.caption(E.p(descriptive)))
+        # The published books title a table in <caption><title> (a figure's
+        # caption is <p>), so the caption heads the table as its title.
+        tw.append(E.caption(E.title(descriptive)))
 
     table = E.table()
     if headers:
@@ -641,9 +643,7 @@ def _narrative_sec(node: DocNode, data: dict) -> etree._Element:
     Content order is title → prose <p>s → child table <table-wrap>s, which is
     DTD-valid (all block content, no child <sec>) and matches document order."""
     rc = resolve_narrative_content(node, data)
-    sec = E.sec({"id": f"sec-{node.id}"})
-    if node.title:
-        sec.append(E.title(node.title))
+    sec = _titled_sec(node)
     if rc.kind in ("paragraphs", "methods"):
         for para in rc.paragraphs:
             if not inline_plain_text(para).strip():
@@ -707,30 +707,39 @@ def _emit_narrative(parent: etree._Element, node: DocNode, data: dict) -> None:
     parent.append(_narrative_sec(node, data))
 
 
-def _emit_heading_only(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """heading-only → a titled <sec> that nests its children."""
+def _titled_sec(node: DocNode) -> etree._Element:
+    """A <sec> for `node`: its id, its computed <label> (an appendix section's
+    "C.1", ADR-0028 §3 — never part of the title) and its <title>."""
     sec = E.sec({"id": f"sec-{node.id}"})
+    if node.sec_label:
+        sec.append(E.label(node.sec_label))
     if node.title:
         sec.append(E.title(node.title))
+    return sec
+
+
+def _emit_heading_only(parent: etree._Element, node: DocNode, data: dict) -> None:
+    """heading-only → a titled <sec> that nests its children."""
+    sec = _titled_sec(node)
     for child in node.children:
         _append_node(sec, child, data)
     parent.append(sec)
 
 
 def _emit_raw_table_blocks(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """table / incidence-table → raw <table-wrap> block(s) inside the parent
-    narrative <sec> (they sit among blocks, never among <sec> siblings)."""
+    """A table-wrap-role node (table, incidence-table, sample-counts-table,
+    data-table) → raw <table-wrap> block(s) in its parent container.  The
+    template's flow-before-sub-sections rule (ADR-0028 §4) guarantees they never
+    follow a <sec> sibling."""
     for block in _TABLE_EMITTERS[node.node_type](node, data):
         parent.append(block)
 
 
 def _emit_titled_table_bundle(parent: etree._Element, node: DocNode, data: dict) -> None:
-    """sample-counts-table / bmd-summary / genomics-section → a titled block
-    bundle that sits among <sec> siblings, so it gets its OWN <sec> to keep the
-    container DTD-valid while holding its document-order slot."""
-    sec = E.sec({"id": f"sec-{node.id}"})
-    if node.title:
-        sec.append(E.title(node.title))
+    """bmd-summary / genomics-section → a titled section (role sec) holding its
+    prose and tables: "Apical Endpoint Benchmark Dose Summary", "Gene Set
+    Benchmark Dose Analysis"."""
+    sec = _titled_sec(node)
     for block in _TABLE_EMITTERS[node.node_type](node, data):
         sec.append(block)
     parent.append(sec)
@@ -764,23 +773,29 @@ def _emit_figure(parent: etree._Element, node: DocNode, data: dict) -> None:
 
 def _emit_appendix(parent: etree._Element, node: DocNode, data: dict) -> None:
     """appendix → BITS <book-app>: a titled document part that nests its children
-    (freeform prose, data tables, figures, supplied files).  BITS names the
-    book-context appendix <book-app> (inside <book-app-group>) and gives it the
-    SAME shape as a chapter — (book-part-meta?, body?) — so the title lives in
-    <book-part-meta><title-group> and the content in <body>, mirroring
-    _build_book_body.  An appendix with no children (a pending stub, e.g.
+    (freeform prose, data tables, figures, supplied files), with the published
+    books' shape — book-part-type "appendix", and a title-group holding
+    <label>Appendix A</label> (the computed letter) + the bare <title>; the
+    content goes in <body>.  An appendix with no children (a pending stub, e.g.
     Appendix C) keeps a visible tracer in its body so the gap is explicit."""
-    meta = E("book-part-meta", E("title-group", E.title(node.title or "")))
+    title_group = E("title-group")
+    if node.appendix_letter:
+        title_group.append(E.label(f"Appendix {node.appendix_letter}"))
+    title_group.append(E.title(node.title or ""))
+    meta = E("book-part-meta", title_group)
     inner = E.body()
-    if not node.children:
-        # A stub appendix (e.g. Appendix C, whose QC/eFDR figures need data the
-        # pipeline does not retain): a VISIBLE pending paragraph, not a comment —
-        # BITS <body> must not be empty, and the gap should read as content.
-        inner.append(E.p(f"[{node.title or 'Appendix'}: content pending — "
-                         f"source data not retained by the pipeline.]"))
     for child in node.children:
         _append_node(inner, child, data)
-    parent.append(E("book-app", {"id": f"app-{node.id}"}, meta, inner))
+    if not any(isinstance(c.tag, str) for c in inner):
+        # A stub appendix, or one whose only content is still pending (a data
+        # table whose data has not been built leaves just a tracer comment): a
+        # VISIBLE pending paragraph — BITS <body> must not be empty, and the gap
+        # should read as content.
+        inner.append(E.p(f"[{node.title or 'Appendix'}: content pending.]"))
+    attrs = {"id": f"app-{node.id}"}
+    if node.book_part_type:
+        attrs["book-part-type"] = node.book_part_type
+    parent.append(E("book-app", attrs, meta, inner))
 
 
 def _emit_freeform(parent: etree._Element, node: DocNode, data: dict) -> None:
@@ -902,6 +917,9 @@ def _freeform_blocks(node: DocNode) -> list:
             current = E.sec({"id": f"sec-{node.id}-{len(blocks) + 1}"})
             title = E.title()
             _convert_inline(el, title)
+            label = _split_heading_label(title)
+            if label:
+                current.append(E.label(label))
             current.append(title)
             blocks.append(current)
         elif tag == "p":
@@ -927,6 +945,22 @@ def _freeform_blocks(node: DocNode) -> list:
             if text:
                 add(E.p(text))
     return blocks
+
+
+# An authored heading's own section number ("A.1.", "C.2.1") — split into the
+# BITS <label> (ADR-0028 §3); the authored text keeps its numbering, BITS keeps
+# label and title apart.
+_HEADING_LABEL_RE = re.compile(r"^\s*([A-Z](?:\.\d+)+)\.?\s+(?=\S)")
+
+
+def _split_heading_label(title: etree._Element) -> str:
+    """Remove a leading section number from a converted heading <title> and
+    return it ("" when the heading carries none)."""
+    m = _HEADING_LABEL_RE.match(title.text or "")
+    if not m:
+        return ""
+    title.text = title.text[m.end():]
+    return m.group(1)
 
 
 def _freeform_blocks_from_element(el, node: DocNode, offset: int) -> list:
@@ -978,7 +1012,7 @@ def _emit_authored_table(parent: etree._Element, node: DocNode, data: dict) -> N
     if label:
         tw.append(E.label(label))
     if descriptive:
-        tw.append(E.caption(E.p(descriptive)))
+        tw.append(E.caption(E.title(descriptive)))
     tw.append(_todo(node, "authored table body (LaTeX-only source) not projected"))
     parent.append(tw)
 
@@ -1001,8 +1035,10 @@ _DISPATCH: dict[str, object] = {
     "heading-only":        _emit_heading_only,
     "table":               _emit_raw_table_blocks,
     "incidence-table":     _emit_raw_table_blocks,
-    "sample-counts-table": _emit_titled_table_bundle,
-    "data-table":          _emit_titled_table_bundle,
+    # Table-wrap role (ADR-0028 §4): always a block inside its section, never
+    # wrapped in a <sec> of its own — the template places it where it belongs.
+    "sample-counts-table": _emit_raw_table_blocks,
+    "data-table":          _emit_raw_table_blocks,
     "bmd-summary":         _emit_titled_table_bundle,
     "genomics-section":    _emit_titled_table_bundle,
     "figure":              _emit_figure,
@@ -1059,221 +1095,17 @@ def _build_body(data: dict) -> etree._Element:
 
 
 # ---------------------------------------------------------------------------
-# BITS <book> projection — the reports publish as Bookshelf books (NBK589955),
-# not journal articles.  BITS reuses the JATS content modules, so ALL of the
-# above (_p, xref, _table_wrap, the table emitters, _append_node's nested-<sec>
-# discipline) is reused verbatim; only the top-level shell + metadata + front
-# matter differ.  Element homes below are per the vendored BITS 2.0 DTD and match
-# the published reference's part structure (foreword1 / fm-peer / fm1 / ack1).
+# BITS <book> — the Bookshelf deliverable.  The book SHELL (book-meta, the
+# front-matter / book-body / book-back parts) lives in rendering.bits_book
+# (ADR-0028); it reuses every block emitter above.  Imported lazily: bits_book
+# imports this module.
 # ---------------------------------------------------------------------------
 
-_BITS_DOCTYPE = (
-    '<!DOCTYPE book PUBLIC '
-    '"-//NLM//DTD BITS Book Interchange DTD v2.0 20151225//EN" '
-    '"BITS-book2.dtd">'
-)
-
-# Which BITS front-matter element each front-matter node projects to (by data_key):
-# Foreword has its own <foreword> element; Acknowledgments is an <ack>; everything
-# else is a generic <front-matter-part> (the reference serves About This Report /
-# Peer Review / Publication Details as front-matter parts — fm1 / fm-peer).
-_FOREWORD_KEYS = frozenset({"foreword"})
-_ACK_KEYS = frozenset({"acknowledgments"})
-
-
-def _build_book_meta(data: dict) -> etree._Element:
-    """<book-meta>: book-id, title, pub-date, issn, publisher, and the structured
-    <abstract>.  Reuses the same data fields the journal metadata layer read, in
-    the order the BITS book-meta content model requires."""
-    title = str(data.get("chemical_name") or data.get("title") or "Untitled Report")
-    issn = str(data.get("issn") or "")
-    publisher = str(data.get("publisher")
-                    or "National Institute of Environmental Health Sciences")
-
-    bm = E("book-meta",
-        E("book-id", {"book-id-type": "publisher-id"}, "niehs-report"),
-        E("book-title-group", E("book-title", title)),
-    )
-    bm.append(_build_pub_date(data))
-    if issn:
-        bm.append(E.issn({"publication-format": "electronic"}, issn))
-    publisher_loc = str(data.get("publisher_loc") or "Research Triangle Park, NC")
-    bm.append(E.publisher(E("publisher-name", publisher),
-                          E("publisher-loc", publisher_loc)))
-
-    # Structured abstract — same IR + @id pattern the article path uses (PMC keys
-    # abstract-body rendering off @id; see _build_front).
-    abstract_node = find_node("abstract")
-    if abstract_node is not None:
-        plan = front_matter_plan(abstract_node, data)
-        if plan.kind == "labeled" and plan.labeled_parts:
-            abstract = E.abstract({"id": "abstract1"})
-            for i, (label, body) in enumerate(plan.labeled_parts, start=1):
-                if not (body or "").strip():
-                    continue
-                sec = E.sec({"id": f"Sabs{i}"})
-                if label:
-                    sec.append(E.title(label))
-                para = _p(body)
-                para.set("id", f"Pabs{i}")
-                sec.append(para)
-                abstract.append(sec)
-            if len(abstract):
-                bm.append(abstract)
-    return bm
-
-
-def _fm_prose_blocks(node: DocNode, data: dict) -> list:
-    """The prose blocks of a front-matter node, resolved via the shared dispatch:
-    a list of <p> (and, for a labeled node, run-in <sec>s).  Shared by the
-    foreword / front-matter-part / ack emitters, which differ only in wrapper."""
-    rc = resolve_narrative_content(node, data)
-    out: list = []
-    if rc.kind in ("paragraphs", "methods"):
-        for para in rc.paragraphs:
-            if not inline_plain_text(para).strip():
-                continue
-            out.append(_p_inline(para))
-    elif rc.kind == "labeled":
-        for label, btext in rc.labeled_parts:
-            if (btext or "").strip():
-                out.append(E.sec(E.title(label) if label else E.title(), _p(btext)))
-    return out
-
-
-def _build_front_matter(data: dict) -> etree._Element | None:
-    """<front-matter> holding the prose front-matter sections in tree order.
-
-    Per the BITS DTD + the published reference: <foreword> for the foreword,
-    <ack> for acknowledgments, <front-matter-part> for the rest (About This
-    Report, Peer Review, Publication Details).  foreword/front-matter-part carry
-    their prose inside <named-book-part-body> (which has no title slot, so the
-    title becomes a leading <sec><title>); <ack> takes a <title> directly.
-    Returns None when nothing has content (front-matter-model requires ≥1 child).
-    """
-    fm = E("front-matter")
-    for node in _render_nodes(data):
-        if node.region != "front" or node.node_type != "front-matter":
-            continue
-        if node.data_key == "abstract":
-            continue  # the abstract lives in <book-meta>
-        blocks = _fm_prose_blocks(node, data)
-        if not blocks:
-            continue
-        if node.data_key in _ACK_KEYS:
-            # <ack> takes a <title> directly (sec-opt-title-model).
-            fm.append(E.ack({"id": f"fm-{node.id}"}, E.title(node.title), *blocks))
-        else:
-            # foreword / front-matter-part use named-book-part-model: the title
-            # lives in <book-part-meta><title-group>, the prose in
-            # <named-book-part-body> (which has no title slot of its own).
-            meta = E("book-part-meta", E("title-group", E.title(node.title)))
-            body = E("named-book-part-body", *blocks)
-            tag = "foreword" if node.data_key in _FOREWORD_KEYS else "front-matter-part"
-            fm.append(E(tag, {"id": f"fm-{node.id}"}, meta, body))
-    return fm if len(fm) else None
-
-
-def _build_book_body(data: dict) -> etree._Element:
-    """<book-body>: the body-region tree grouped into <book-part>s.  Each
-    top-level body node (Materials and Methods, Results, Summary — the reference's
-    bp2/bp3/bp4) becomes a <book-part> whose <body> holds that node's rendered
-    subtree via the shared _append_node (all table/narrative emit reused)."""
-    book_body = E("book-body")
-    for node in _render_nodes(data):
-        if node.region != "body":
-            continue
-        inner = E.body()
-        _append_node(inner, node, data)
-        # The chapter title goes in <book-part-meta><title-group> (StyleChecker
-        # "book main unit check").  A heading-only container node (Methods,
-        # Results) already emits its own inner <sec><title>; hoisting the title
-        # to the part-meta is what the book model wants, so drop the now-duplicate
-        # leading inner heading is unnecessary — the part-meta title is the
-        # chapter head, the inner sec titles are its sub-sections.
-        meta = E("book-part-meta", E("title-group", E.title(node.title)))
-        book_body.append(
-            E("book-part", {"book-part-type": "chapter", "id": f"bp-{node.id}"},
-              meta, inner)
-        )
-    return book_body
-
-
-def _build_ref_list(node: DocNode, data: dict) -> etree._Element | None:
-    """<ref-list> for the References node: a <title> + one <ref><mixed-citation>
-    per reference paragraph.  mixed-citation is the unstructured citation form
-    (structured <element-citation> is the future refinement, project_bits_export);
-    it is a valid, lossless home for the citation strings we hold today.  Returns
-    None when there are no references so an empty <ref-list> is never emitted."""
-    rc = resolve_narrative_content(node, data)
-    if rc.kind in ("paragraphs", "methods"):
-        texts = [inline_plain_text(p) for p in rc.paragraphs]
-    elif rc.kind == "labeled":
-        texts = [btext for _label, btext in rc.labeled_parts]
-    else:
-        texts = []
-    texts = [t.strip() for t in texts if t and t.strip()]
-    if not texts:
-        return None
-    rl = E("ref-list", {"id": "ref-list1"}, E.title(node.title or "References"))
-    for i, text in enumerate(texts, start=1):
-        rl.append(E.ref({"id": f"ref{i}"}, E("mixed-citation", text)))
-    return rl
-
-
-def _build_book_back(data: dict) -> etree._Element | None:
-    """<book-back>: the back-region tree — the References list and the appendices.
-
-    References (a `narrative` node with data_key "references") projects to a
-    <ref-list>; each `appendix` node projects to an <app> (via the shared
-    _append_node dispatch), all grouped under one <app-group> as the reference
-    report serves them (a-2-A … a-2-F).  Any other back-region node falls through
-    to the normal dispatch.  Returns None when the back region is empty, so the
-    book shell only grows a <book-back> when there is one — this is the element
-    generate_bits previously omitted entirely, dropping every appendix.
-    """
-    back = E("book-back")
-    appendices: list[DocNode] = []
-    for node in _render_nodes(data):
-        if node.region != "back":
-            continue
-        if node.node_type == "appendix":
-            appendices.append(node)
-        elif node.data_key == "references":
-            ref_list = _build_ref_list(node, data)
-            if ref_list is not None:
-                back.append(ref_list)
-        else:
-            _append_node(back, node, data)
-    if appendices:
-        app_group = E("book-app-group", {"id": "app-group1"})
-        for node in appendices:
-            _append_node(app_group, node, data)
-        back.append(app_group)
-    return back if len(back) else None
-
-
 def generate_bits(data: dict) -> str:
-    """Project the report to a BITS <book> XML string (the Bookshelf submission
-    format).  Numbering first (positional xref labels), then book-meta +
-    front-matter + book-body.  Returns XML decl + BITS 2.0 DOCTYPE + book."""
-    compute_table_numbers(_render_nodes(data))
-    # Declare the xlink prefix on the root so <ext-link xlink:href> serializes
-    # with the literal "xlink" prefix the BITS/JATS DTD fixes (an auto-assigned
-    # ns0 prefix is rejected: "No declaration for attribute href").
-    book = etree.Element("book", {"dtd-version": "2.0"}, nsmap={"xlink": _XLINK})
-    book.append(_build_book_meta(data))
-    fm = _build_front_matter(data)
-    if fm is not None:
-        book.append(fm)
-    book.append(_build_book_body(data))
-    back = _build_book_back(data)
-    if back is not None:
-        book.append(back)
-    return etree.tostring(
-        book, xml_declaration=True, encoding="UTF-8", pretty_print=True,
-        doctype=_BITS_DOCTYPE,
-    ).decode("utf-8")
+    """Project the report to a BITS <book> XML string — see
+    rendering.bits_book.generate_bits."""
+    from rendering.bits_book import generate_bits as _generate_bits
+    return _generate_bits(data)
 
 
 # ---------------------------------------------------------------------------
