@@ -78,6 +78,7 @@ _REGION_CONTAINER = {
 # roster key and the content-type prefix the published books use on its <p>s).
 _ROSTER_PARTS = {
     "authors": ("authors", "author", "author-affiliation"),
+    "collaborators": ("collaborators", "collaborator", "collab-affiliation"),
     "contributors": ("contributors", "contributor", "contrib-affiliation"),
 }
 
@@ -126,7 +127,11 @@ def _collection_meta(decl: dict) -> list:
     if series.get("title") or series.get("issn"):
         cm = E("collection-meta", {"collection-type": "book-series"})
         if series.get("title"):
-            cm.append(E("title-group", E.title(str(series["title"]))))
+            tg = E("title-group", E.title(str(series["title"])))
+            if series.get("acronym"):     # e.g. the NTP Research Report's "RR-CS"
+                tg.append(E("alt-title", {"alt-title-type": "pub-acronym-title"},
+                            str(series["acronym"])))
+            cm.append(tg)
         if series.get("issn"):
             cm.append(E.issn({"publication-format": "electronic"}, str(series["issn"])))
         out.append(cm)
@@ -205,7 +210,9 @@ def _abstract(node: DocNode, data: dict) -> etree._Element:
     """<abstract> with one <sec> per DECLARED part (node.parts) in order — the
     published Background / Methods / Results / Summary.  A part with no text
     yet gets a visible pending paragraph; a labeled part the data holds but the
-    template does not declare is kept, after the declared ones."""
+    template does not declare is kept, after the declared ones.  A definition
+    that declares no parts (RR-8) has an unstructured abstract: one paragraph
+    per text, its label run in bold ("Background: …")."""
     plan = front_matter_plan(node, data)
     texts: dict[str, list[str]] = {}
     current = ""
@@ -213,6 +220,8 @@ def _abstract(node: DocNode, data: dict) -> etree._Element:
         current = label or current
         if (body or "").strip():
             texts.setdefault(current, []).append(body)
+    if not node.parts:
+        return _unstructured_abstract(node, texts)
     declared = list(node.parts or [])
     order = declared + [lbl for lbl in texts if lbl not in declared]
     abstract = E.abstract({"id": "abstract1"}, E.title(node.title or "Abstract"))
@@ -230,6 +239,25 @@ def _abstract(node: DocNode, data: dict) -> etree._Element:
             para.set("id", f"Pabs{n}")
             sec.append(para)
         abstract.append(sec)
+    return abstract
+
+
+def _unstructured_abstract(node: DocNode, texts: dict[str, list[str]]) -> etree._Element:
+    abstract = E.abstract({"id": "abstract1"}, E.title(node.title or "Abstract"))
+    n = 0
+    for label, bodies in texts.items():
+        for i, body in enumerate(bodies):
+            n += 1
+            para = _p(body)
+            para.set("id", f"Pabs{n}")
+            if label and i == 0:
+                run_in = E.bold(f"{label}:")
+                run_in.tail = " " + (para.text or "")
+                para.text = None
+                para.insert(0, run_in)
+            abstract.append(para)
+    if not n:
+        abstract.append(_pending(node, "not yet generated for this study"))
     return abstract
 
 
@@ -333,7 +361,8 @@ def _roster_blocks(node: DocNode, data: dict) -> list:
 
 def _front_part(node: DocNode, data: dict) -> etree._Element:
     """<foreword> / <front-matter-part>: title in <book-part-meta>, content in
-    <named-book-part-body>."""
+    <named-book-part-body> — its prose (or roster), then its own sections (the
+    RR-8 Peer Review's "Peer Reviewers")."""
     blocks: list = []
     if node.book_part_type in _ROSTER_PARTS:
         blocks = _roster_blocks(node, data)
@@ -342,8 +371,10 @@ def _front_part(node: DocNode, data: dict) -> etree._Element:
                 _pending(node, "not supplied for this study")]
     else:
         blocks = _prose_blocks(node, data) or [_pending(node)]
-    return E(node.element, _part_attrs(node, "fm"), _part_meta(node),
-             E("named-book-part-body", *blocks))
+    body = E("named-book-part-body", *blocks)
+    for child in node.children:
+        _append_node(body, child, data)
+    return E(node.element, _part_attrs(node, "fm"), _part_meta(node), body)
 
 
 _REF_NUMBER_RE = re.compile(r"^\s*\[(\d+)\]\s*")
