@@ -4,6 +4,17 @@
 # extends this file (templates/studies/<DTXSID>/document.yaml).
 extends: niehs-5day-report
 changes:
+  # Appendix A's one section is the plasma method, named for the test article;
+  # its text is the study's own (appendix-a).
+  - insert:
+    - id: appendix-a-quantitation
+      type: heading-only
+      title: "Quantitation of ${chemical_name} in Plasma"
+    into: appendix-a
+    at: first
+  - move: appendix-a-body
+    into: appendix-a-quantitation
+
   # C.2 Empirical False Discovery Rate has its own Methods and Results; the
   # boxplots are in Results.  (The synthetic-null analysis behind them is not
   # ingested yet: the sections stand, their content is pending.)

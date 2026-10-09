@@ -54,14 +54,49 @@ PUBLISHED_ISSN = {
     "NIEHS-10": "2768-5632", "NIEHS-12": "2768-5632", "NIEHS-13": "2768-5632",
 }
 
-# Published lines our build lacks (or has) for want of CONTENT, not structure.
-KNOWN_CONTENT_GAPS = {
-    # A.1 is the study's plasma analytical method, a heading inside its authored
-    # appendix-a content; supplied for NIEHS-10 only.
-    "NIEHS-07": ["-  sec <A.1> Quantitation of 6:1 Fluorotelomer Alcohol in Plasma"],
-    "NIEHS-08": ["-  sec <A.1> Quantitation of 1,1,2,2-Tetrahydroperfluoro-1-dodecanol in Plasma"],
-    "NIEHS-09": ["-  sec <A.1> Quantitation of 2,3-Benzofluorene in Plasma"],
-}
+# Published lines our build lacks (`-`) or has instead (`+`), for want of
+# CONTENT or DATA the pipeline does not supply — never structure a definition
+# could state.
+_SPECIES = ["      sec Rats", "      sec Mice"]
+_TISSUES = [ln for t in ("Heart", "Kidney", "Liver", "Lung", "Ovary")
+            for ln in (f"    sec {t}", *_SPECIES)]
+_G3_GAPS = [
+    # Per-species and per-tissue sections are the study's data, and the
+    # pipeline does not model a second species yet (G3 conformance gap 5): one
+    # Study Design, and no Rats / Mice / tissue sections in the Results.
+    "-  sec Study Design for Rats",
+    "-  sec Study Design for Mice",
+    "+  sec Study Design",
+    *[f"-{ln}" for ln in _SPECIES * 2],          # animal condition, clinical pathology
+    *[f"-{ln}" for ln in _TISSUES * 2],          # gene set, gene analyses
+    *[f"-{ln[2:]}" for ln in _SPECIES],          # internal concentration
+    # Appendix B's sections are the study's analytical method (its appendix-a
+    # content), not supplied for NIEHS-12/13.
+    "-  sec <B.1> Validation of Analytical Method",
+    "-  sec <B.2> Study Sample Collection",
+    "-    sec <B.2.1> Blood",
+    "-    sec <B.2.2> Lung and Liver",
+    "-    sec <B.2.3> Study Sample Preparation",
+    "-  sec <B.3> Instrumentation and Quantitation",
+    # Supplemental Data groups its file lists per species (G.3 Rats, G.4 Mice);
+    # ours lists them once, so Software follows as G.7.
+    *[f"-  sec <G.{n}> {sp}" if i == 0 else f"-    sec <G.{n}.{i}> {t}"
+      for n, sp in ((3, "Rats"), (4, "Mice"))
+      for i, t in enumerate(("", "Apical Benchmark Dose Analysis",
+                             "Genomic Benchmark Dose Analysis", "Study Tables",
+                             "Individual Animal Data"))],
+    "-  sec <G.5> Software",
+    "-    sec <G.5.1> Analysis Pipeline Evaluation",
+    "-    sec <G.5.2> BMDExpress Preview Software",
+    "+  sec <G.3> Apical Benchmark Dose Analysis",
+    "+  sec <G.4> Genomic Benchmark Dose Analysis",
+    "+  sec <G.5> Study Tables",
+    "+  sec <G.6> Individual Animal Data",
+    "+  sec <G.7> Software",
+    "+    sec <G.7.1> Analysis Pipeline Evaluation",
+    "+    sec <G.7.2> BMDExpress Preview Software",
+]
+KNOWN_CONTENT_GAPS = {"NIEHS-12": _G3_GAPS, "NIEHS-13": _G3_GAPS}
 
 
 def _keys(entries) -> list[str]:

@@ -238,7 +238,24 @@ def prune_uncollected_tables(tree, collected):
     return _prune(copy.deepcopy(tree))
 
 
-def study_tree(base, collected, authored=None):
+# The study facts a node title may name (ADR-0029: "Procurement and
+# Characterization of ${chemical_name}"), filled per study by study_tree.
+TITLE_FIELDS = ("chemical_name",)
+
+
+def _has_title_fields(nodes) -> bool:
+    return any("${" in (n.title or "") or _has_title_fields(n.children or []) for n in nodes)
+
+
+def _fill_titles(nodes, values: dict) -> None:
+    from string import Template
+    for n in nodes:
+        if "${" in (n.title or ""):
+            n.title = Template(n.title).safe_substitute(values)
+        _fill_titles(n.children or [], values)
+
+
+def study_tree(base, collected, authored=None, facts=None):
     """THIS study's view of the document tree — the single builder every data
     layer and emitter uses, so the body, the table numbers and the List of Tables
     cannot diverge.  On a copy (the shared tree is never mutated); returns `base`
@@ -251,6 +268,8 @@ def study_tree(base, collected, authored=None):
        (`not_collected_text`).
     3. Study-bound authored content (`session_content`): freeform nodes take THIS
        study's text (`authored`), else `missing_content_text`, else pending.
+    4. Study facts in titles: `${chemical_name}` (TITLE_FIELDS) from `facts`
+       (the report data); a field the facts lack stays as written.
 
     The result is always (re)numbered — numbering is positional and idempotent,
     and the emitters read its products (labels, appendix scopes) — so a render
@@ -264,6 +283,12 @@ def study_tree(base, collected, authored=None):
             nodes = copy.deepcopy(base)
         _resolve_study_bound(nodes, authored or {},
                              set(collected) if collected is not None else None)
+    values = {k: str((facts or {}).get(k)) for k in TITLE_FIELDS if (facts or {}).get(k)}
+    if values and _has_title_fields(nodes):
+        if nodes is base:
+            import copy
+            nodes = copy.deepcopy(base)
+        _fill_titles(nodes, values)
     compute_table_numbers(nodes)
     return nodes
 
@@ -273,7 +298,7 @@ def render_nodes(data: dict, tree=None):
     passed tree (or DOCUMENT_TREE) with the data layer's `collected_platforms`
     and `authored` content."""
     base = tree if tree is not None else DOCUMENT_TREE
-    return study_tree(base, data.get("collected_platforms"), data.get("authored"))
+    return study_tree(base, data.get("collected_platforms"), data.get("authored"), data)
 
 
 def platform_gate_closed(node, collected) -> bool:

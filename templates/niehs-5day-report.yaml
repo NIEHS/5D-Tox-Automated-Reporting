@@ -453,12 +453,16 @@ document:
     book_part_type: appendix
     title: Organ Weight Descriptions
     children:
-    - id: appendix-e-body
-      type: freeform-block
-      title: ""
-      content_file:
-        latex: freeform/appendix-e.tex
-        html: freeform/appendix-e.html
+    - id: appendix-e-descriptions
+      type: heading-only
+      title: Organ Weight Descriptions
+      children:
+      - id: appendix-e-body
+        type: freeform-block
+        title: ""
+        content_file:
+          latex: freeform/appendix-e.tex
+          html: freeform/appendix-e.html
   - id: appendix-f
     type: appendix
     element: book-app

@@ -921,7 +921,7 @@ def load_session_data(
     # shared template's.
     from document_model.view_config import DEFAULT_VIEW, build_view_tree
     _base_tree = build_view_tree(dtxsid, view or DEFAULT_VIEW) or DOCUMENT_TREE
-    render_tree = study_tree(_base_tree, _collected, data["authored"])
+    render_tree = study_tree(_base_tree, _collected, data["authored"], data)
     assign_genomics_table_numbers(render_tree, data.get("genomics_sections"))
 
     # ── Genomics charts (base64 PNG) attached to the gene_set entries ──

@@ -167,3 +167,17 @@ def test_an_empty_part_type_means_none(templates):
     nodes = {n.id: n for n in dt.instantiate(dt.load_template("e"))}
     assert nodes["foreword"].book_part_type is None
     assert nodes["methods"].element == "sec" and nodes["methods"].book_part_type is None
+
+
+def test_a_title_names_the_study_chemical():
+    """`${chemical_name}` in a title is the study's (study_tree, every surface);
+    the shared tree keeps the placeholder, and a study without the fact keeps it
+    as written."""
+    from document_model.document_node import DocNode
+    from document_model.document_tree import study_tree
+
+    base = [DocNode(id="a", node_type="heading-only", title="Quantitation of ${chemical_name} in Plasma")]
+    ours = study_tree(base, None, None, {"chemical_name": "PFHxSAm"})
+    assert ours[0].title == "Quantitation of PFHxSAm in Plasma"
+    assert base[0].title == "Quantitation of ${chemical_name} in Plasma"
+    assert study_tree(base, None, None, {})[0].title == base[0].title

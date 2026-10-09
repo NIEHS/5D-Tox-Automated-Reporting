@@ -575,7 +575,7 @@ def marshal_export_data(
     # This study's tree: uncollected tables dropped, data gates applied, study
     # content resolved — the same builder render_nodes uses, so the TOC/numbers
     # computed here match the body exactly.
-    _study = study_tree(active_tree, _collected, data["authored"])
+    _study = study_tree(active_tree, _collected, data["authored"], data)
     if _study is not active_tree:
         active_tree = tree = _study  # overlays + find_node use it too
 

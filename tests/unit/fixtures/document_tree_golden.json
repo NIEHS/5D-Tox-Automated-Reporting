@@ -567,11 +567,20 @@
     "appendix_letter": "E",
     "children": [
       {
-        "id": "appendix-e-body",
+        "children": [
+          {
+            "id": "appendix-e-body",
+            "level": 3,
+            "region": "back",
+            "title": "",
+            "type": "freeform-block"
+          }
+        ],
+        "id": "appendix-e-descriptions",
         "level": 2,
         "region": "back",
-        "title": "",
-        "type": "freeform-block"
+        "title": "Organ Weight Descriptions",
+        "type": "heading-only"
       }
     ],
     "id": "appendix-e",

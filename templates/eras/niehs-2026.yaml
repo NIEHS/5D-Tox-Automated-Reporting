@@ -1,0 +1,153 @@
+# eras/niehs-2026 — the NIEHS Report as published in 2026 (NIEHS-12, 13: whole-
+# body inhalation studies, NBK621711 / NBK621744).  ADR-0029: the 2023
+# generation (eras/niehs-2023, chunked) plus what these books do differently.
+# A published study of this generation extends this file.
+#
+# What this file cannot state is the books' per-SPECIES and per-TISSUE
+# sections (Study Design for Rats / for Mice; Rats and Mice under each apical
+# result; Heart … Ovary under the gene set and gene analyses; Supplemental Data
+# G.3 Rats / G.4 Mice): which species and tissues a study has are its data, not
+# its document, and the pipeline does not model more than one species yet
+# (G3 conformance gap 5).  tests/unit/test_report_definitions.py lists them.
+extends: eras/niehs-2023
+
+changes:
+  # ── Materials and Methods: Chemistry first, with the test article's
+  # procurement and the vapor generation, monitoring and chamber atmosphere.
+  - move: mm-chemistry
+    before: mm-study-design
+  - insert:
+    - {id: mm-chem-procurement, type: narrative, data_key: methods,
+       title: "Procurement and Characterization of ${chemical_name}",
+       methods_key: chemistry_procurement}
+    - {id: mm-chem-vapor-generation, type: narrative, data_key: methods,
+       title: Vapor Generation and Exposure System, methods_key: vapor_generation}
+    - {id: mm-chem-vapor-monitoring, type: narrative, data_key: methods,
+       title: Vapor Concentration Monitoring, methods_key: vapor_monitoring}
+    - {id: mm-chem-chamber, type: narrative, data_key: methods,
+       title: Chamber Atmosphere Characterization, methods_key: chamber_atmosphere}
+    into: mm-chemistry
+  - set: mm-dose-rationale
+    title: Exposure Concentration Selection Rationale
+  - set: mm-internal-dose
+    title: Internal Concentration Assessment
+
+  # ── Results: the apical results grouped; a summary closing the gene set
+  # analysis; the theoretical inhaled dose, then the internal concentrations.
+  - insert:
+    - {id: apical-analysis, type: heading-only, title: Apical Endpoint Analysis}
+    into: results
+    at: first
+  - move: animal-condition
+    into: apical-analysis
+  - move: clinical-path
+    into: apical-analysis
+  - move: bmd-summary
+    into: apical-analysis
+  - insert:
+    - {id: gene-set-summary, type: narrative, title: Gene Set Benchmark Dose Summary,
+       data_key: gene_set_summary}
+    into: gene-sets
+  - insert:
+    - {id: theoretical-inhaled-dose, type: narrative+tables, title: Theoretical Inhaled Dose,
+       narrative_key: theoretical_inhaled_dose}
+    after: gene-bmd
+  - move: internal-dose
+    after: theoretical-inhaled-dose
+  - set: internal-dose
+    title: Internal Concentration Assessment
+
+  # ── Appendices A–G ───────────────────────────────────────────────────────
+  # A: how the chamber concentrations were generated (the study's own text).
+  - insert:
+    - id: appendix-chamber
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Chemical Characterization and Generation of Chamber Concentrations
+      children:
+      - id: appendix-chamber-procurement
+        type: heading-only
+        title: "Procurement and Characterization of ${chemical_name}"
+        children:
+        - {id: appendix-chamber-procurement-text, type: freeform-block, title: "",
+           session_content: chamber-procurement,
+           missing_content_text: "The test article's procurement and characterization are not supplied for this study."}
+      - id: appendix-chamber-vapor-generation
+        type: heading-only
+        title: Vapor Generation and Exposure System
+        children:
+        - {id: appendix-chamber-vapor-generation-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-generation,
+           missing_content_text: "The vapor generation and exposure system are not supplied for this study."}
+      - id: appendix-chamber-vapor-monitoring
+        type: heading-only
+        title: Vapor Concentration Monitoring
+        children:
+        - {id: appendix-chamber-vapor-monitoring-text, type: freeform-block, title: "",
+           session_content: chamber-vapor-monitoring,
+           missing_content_text: "The vapor concentration monitoring is not supplied for this study."}
+      - id: appendix-chamber-atmosphere
+        type: heading-only
+        title: Chamber Atmosphere Characterization
+        children:
+        - {id: appendix-chamber-atmosphere-text, type: freeform-block, title: "",
+           session_content: chamber-atmosphere,
+           missing_content_text: "The chamber atmosphere characterization is not supplied for this study."}
+    before: appendix-a
+  # B: the internal concentration method (the study's appendix-a content, with
+  # its own sections), C: Animal Identifiers, D: transcriptomic QC and eFDR.
+  - set: appendix-a
+    title: Internal Concentration Assessment
+  - move: appendix-a-body
+    into: appendix-a
+  - remove: appendix-a-quantitation
+  # No BMDS model-selection appendix; E defines the top gene sets' genes.
+  - remove: appendix-d
+  - insert:
+    - id: appendix-gene-definitions
+      type: appendix
+      element: book-app
+      book_part_type: appendix
+      title: Gene Set and Gene Definitions
+      children:
+      - {id: table-gene-definitions, type: data-table,
+         title: Active Genes and Definitions within the Top 10 Gene Ontology Biological Process Gene Sets,
+         data_key: appendix_gene_definitions_matrix}
+    after: appendix-c
+  # G: Supplemental Data opens with the materials and methods and the
+  # theoretical inhaled dose, and closes with the software.
+  - insert:
+    - id: appendix-f-methods
+      type: heading-only
+      title: Materials and Methods
+      children:
+      - {id: appendix-f-methods-files, type: freeform-block, title: "", session_content: supplemental-methods,
+         missing_content_text: "The supplemental materials and methods are not listed for this study."}
+    - id: appendix-f-inhaled-dose
+      type: heading-only
+      title: Theoretical Inhaled Dose
+      children:
+      - {id: appendix-f-inhaled-dose-files, type: freeform-block, title: "", session_content: supplemental-inhaled-dose,
+         missing_content_text: "The theoretical inhaled dose files are not listed for this study."}
+    after: appendix-f-body
+  - insert:
+    - id: appendix-f-software
+      type: heading-only
+      title: Software
+      children:
+      - id: appendix-f-pipeline-evaluation
+        type: heading-only
+        title: Analysis Pipeline Evaluation
+        children:
+        - {id: appendix-f-pipeline-evaluation-text, type: freeform-block, title: "",
+           session_content: supplemental-pipeline-evaluation,
+           missing_content_text: "The analysis pipeline evaluation is not supplied for this study."}
+      - id: appendix-f-bmdexpress-preview
+        type: heading-only
+        title: BMDExpress Preview Software
+        children:
+        - {id: appendix-f-bmdexpress-preview-text, type: freeform-block, title: "",
+           session_content: supplemental-bmdexpress-preview,
+           missing_content_text: "The BMDExpress preview software is not supplied for this study."}
+    into: appendix-f

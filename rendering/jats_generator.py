@@ -738,10 +738,13 @@ def _emit_raw_table_blocks(parent: etree._Element, node: DocNode, data: dict) ->
 def _emit_titled_table_bundle(parent: etree._Element, node: DocNode, data: dict) -> None:
     """bmd-summary / genomics-section → a titled section (role sec) holding its
     prose and tables: "Apical Endpoint Benchmark Dose Summary", "Gene Set
-    Benchmark Dose Analysis"."""
+    Benchmark Dose Analysis" — then its own sub-sections (the 2026 books'
+    "Gene Set Benchmark Dose Summary")."""
     sec = _titled_sec(node)
     for block in _TABLE_EMITTERS[node.node_type](node, data):
         sec.append(block)
+    for child in node.children:
+        _append_node(sec, child, data)
     parent.append(sec)
 
 
